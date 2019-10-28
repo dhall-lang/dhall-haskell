@@ -45,7 +45,7 @@ module Dhall
     , Type (..)
     , RecordType(..)
     , UnionType(..)
-    , InputType(..)
+    , Encoder(..)
     , FromDhall(..)
     , Interpret
     , InvalidType(..)
@@ -94,11 +94,11 @@ module Dhall
     , Inject
     , inject
     , genericToDhall
-    , RecordInputType(..)
+    , RecordEncoder(..)
     , inputFieldWith
     , inputField
     , inputRecord
-    , UnionInputType(..)
+    , UnionEncoder(..)
     , inputConstructorWith
     , inputConstructor
     , inputUnion
@@ -1137,7 +1137,7 @@ instance (ToDhall a, FromDhall b) => FromDhall (a -> b) where
 
         expectedOut = Pi "_" declared expectedIn
 
-        InputType {..} = injectWith opts
+        Encoder {..} = injectWith opts
 
         Type extractIn expectedIn = autoWith opts
 
@@ -1662,18 +1662,18 @@ instance (Selector s, FromDhall a) => GenericFromDhall (M1 S s (K1 i a)) where
 
         return (Type {..})
 
-{-| An @(InputType a)@ represents a way to marshal a value of type @\'a\'@ from
+{-| An @(Encoder a)@ represents a way to marshal a value of type @\'a\'@ from
     Haskell into Dhall
 -}
-data InputType a = InputType
+data Encoder a = Encoder
     { embed    :: a -> Expr Src Void
     -- ^ Embeds a Haskell value as a Dhall expression
     , declared :: Expr Src Void
     -- ^ Dhall type of the Haskell value
     }
 
-instance Contravariant InputType where
-    contramap f (InputType embed declared) = InputType embed' declared
+instance Contravariant Encoder where
+    contramap f (Encoder embed declared) = Encoder embed' declared
       where
         embed' x = embed (f x)
 
@@ -1692,9 +1692,9 @@ instance Contravariant InputType where
     * Marshaling the resulting Dhall expression back into a Haskell value
 -}
 class ToDhall a where
-    injectWith :: InterpretOptions -> InputType a
+    injectWith :: InterpretOptions -> Encoder a
     default injectWith
-        :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> InputType a
+        :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> Encoder a
     injectWith options
         = contramap GHC.Generics.from (evalState (genericToDhallWith options) 1)
 
@@ -1708,7 +1708,7 @@ type Inject = ToDhall
 
 > inject = injectWith defaultInterpretOptions
 -}
-inject :: ToDhall a => InputType a
+inject :: ToDhall a => Encoder a
 inject = injectWith defaultInterpretOptions
 
 {-| Use the default options for injecting a value, whose structure is
@@ -1718,26 +1718,26 @@ This can be used when you want to use 'ToDhall' on types that you don't
 want to define orphan instances for.
 -}
 genericToDhall
-  :: (Generic a, GenericToDhall (Rep a)) => InputType a
+  :: (Generic a, GenericToDhall (Rep a)) => Encoder a
 genericToDhall
     = contramap GHC.Generics.from (evalState (genericToDhallWith defaultInterpretOptions) 1)
 
 instance ToDhall Void where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = Data.Void.absurd
 
         declared = Union mempty
 
 instance ToDhall Bool where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = BoolLit
 
         declared = Bool
 
 instance ToDhall Data.Text.Lazy.Text where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed text =
             TextLit (Chunks [] (Data.Text.Lazy.toStrict text))
@@ -1745,7 +1745,7 @@ instance ToDhall Data.Text.Lazy.Text where
         declared = Text
 
 instance ToDhall Text where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed text = TextLit (Chunks [] text)
 
@@ -1753,24 +1753,24 @@ instance ToDhall Text where
 
 instance {-# OVERLAPS #-} ToDhall String where
     injectWith options =
-        contramap Data.Text.pack (injectWith options :: InputType Text)
+        contramap Data.Text.pack (injectWith options :: Encoder Text)
 
 instance ToDhall Natural where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = NaturalLit
 
         declared = Natural
 
 instance ToDhall Integer where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = IntegerLit
 
         declared = Integer
 
 instance ToDhall Int where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = IntegerLit . toInteger
 
@@ -1783,7 +1783,7 @@ NaturalLit 12
 -}
 
 instance ToDhall Word where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = NaturalLit . fromIntegral
 
@@ -1796,7 +1796,7 @@ NaturalLit 12
 -}
 
 instance ToDhall Word8 where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = NaturalLit . fromIntegral
 
@@ -1809,7 +1809,7 @@ NaturalLit 12
 -}
 
 instance ToDhall Word16 where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = NaturalLit . fromIntegral
 
@@ -1822,7 +1822,7 @@ NaturalLit 12
 -}
 
 instance ToDhall Word32 where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = NaturalLit . fromIntegral
 
@@ -1835,14 +1835,14 @@ NaturalLit 12
 -}
 
 instance ToDhall Word64 where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = NaturalLit . fromIntegral
 
         declared = Natural
 
 instance ToDhall Double where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = DoubleLit . DhallDouble
 
@@ -1850,27 +1850,27 @@ instance ToDhall Double where
 
 instance ToDhall Scientific where
     injectWith options =
-        contramap Data.Scientific.toRealFloat (injectWith options :: InputType Double)
+        contramap Data.Scientific.toRealFloat (injectWith options :: Encoder Double)
 
 instance ToDhall () where
-    injectWith _ = InputType {..}
+    injectWith _ = Encoder {..}
       where
         embed = const (RecordLit mempty)
 
         declared = Record mempty
 
 instance ToDhall a => ToDhall (Maybe a) where
-    injectWith options = InputType embedOut declaredOut
+    injectWith options = Encoder embedOut declaredOut
       where
         embedOut (Just x ) = Some (embedIn x)
         embedOut  Nothing  = App None declaredIn
 
-        InputType embedIn declaredIn = injectWith options
+        Encoder embedIn declaredIn = injectWith options
 
         declaredOut = App Optional declaredIn
 
 instance ToDhall a => ToDhall (Seq a) where
-    injectWith options = InputType embedOut declaredOut
+    injectWith options = Encoder embedOut declaredOut
       where
         embedOut xs = ListLit listType (fmap embedIn xs)
           where
@@ -1880,7 +1880,7 @@ instance ToDhall a => ToDhall (Seq a) where
 
         declaredOut = App List declaredIn
 
-        InputType embedIn declaredIn = injectWith options
+        Encoder embedIn declaredIn = injectWith options
 
 instance ToDhall a => ToDhall [a] where
     injectWith = fmap (contramap Data.Sequence.fromList) injectWith
@@ -1920,7 +1920,7 @@ instance (ToDhall a, ToDhall b) => ToDhall (a, b)
 
 -}
 instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
-    injectWith options = InputType embedOut declaredOut
+    injectWith options = Encoder embedOut declaredOut
       where
         embedOut m = ListLit listType (mapEntries m)
           where
@@ -1935,8 +1935,8 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
         recordPair (k, v) = RecordLit (Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)])
 
-        InputType embedK declaredK = injectWith options
-        InputType embedV declaredV = injectWith options
+        Encoder embedK declaredK = injectWith options
+        Encoder embedV declaredV = injectWith options
 
 {-| Embed a `Data.HashMap` as a @Prelude.Map.Type@
 
@@ -1948,7 +1948,7 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
 
 -}
 instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
-    injectWith options = InputType embedOut declaredOut
+    injectWith options = Encoder embedOut declaredOut
       where
         embedOut m = ListLit listType (mapEntries m)
           where
@@ -1963,14 +1963,14 @@ instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
         recordPair (k, v) = RecordLit (Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)])
 
-        InputType embedK declaredK = injectWith options
-        InputType embedV declaredV = injectWith options
+        Encoder embedK declaredK = injectWith options
+        Encoder embedV declaredV = injectWith options
 
 {-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
 class GenericToDhall f where
-    genericToDhallWith :: InterpretOptions -> State Int (InputType (f a))
+    genericToDhallWith :: InterpretOptions -> State Int (Encoder (f a))
 
 instance GenericToDhall f => GenericToDhall (M1 D d f) where
     genericToDhallWith options = do
@@ -1984,7 +1984,7 @@ instance GenericToDhall f => GenericToDhall (M1 C c f) where
 
 instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
     genericToDhallWith options@InterpretOptions{..} = do
-        let InputType { embed = embed', declared = declared' } =
+        let Encoder { embed = embed', declared = declared' } =
                 injectWith options
 
         let n :: M1 S s (K1 i a) r
@@ -2012,10 +2012,10 @@ instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
                     _ ->
                         Record (Dhall.Map.singleton name declared')
 
-        return (InputType {..})
+        return (Encoder {..})
 
 instance (Constructor c1, Constructor c2, GenericToDhall f1, GenericToDhall f2) => GenericToDhall (M1 C c1 f1 :+: M1 C c2 f2) where
-    genericToDhallWith options@(InterpretOptions {..}) = pure (InputType {..})
+    genericToDhallWith options@(InterpretOptions {..}) = pure (Encoder {..})
       where
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
@@ -2048,11 +2048,11 @@ instance (Constructor c1, Constructor c2, GenericToDhall f1, GenericToDhall f2) 
         keyL = constructorModifier (Data.Text.pack (conName nL))
         keyR = constructorModifier (Data.Text.pack (conName nR))
 
-        InputType embedL declaredL = evalState (genericToDhallWith options) 1
-        InputType embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
 
 instance (Constructor c, GenericToDhall (f :+: g), GenericToDhall h) => GenericToDhall ((f :+: g) :+: M1 C c h) where
-    genericToDhallWith options@(InterpretOptions {..}) = pure (InputType {..})
+    genericToDhallWith options@(InterpretOptions {..}) = pure (Encoder {..})
       where
         embed (L1 l) =
             case maybeValL of
@@ -2073,13 +2073,13 @@ instance (Constructor c, GenericToDhall (f :+: g), GenericToDhall h) => GenericT
 
         declared = Union (Dhall.Map.insert keyR (notEmptyRecord declaredR) ktsL)
 
-        InputType embedL declaredL = evalState (genericToDhallWith options) 1
-        InputType embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
 
         ktsL = unsafeExpectUnion "genericToDhallWith (:+:)" declaredL
 
 instance (Constructor c, GenericToDhall f, GenericToDhall (g :+: h)) => GenericToDhall (M1 C c f :+: (g :+: h)) where
-    genericToDhallWith options@(InterpretOptions {..}) = pure (InputType {..})
+    genericToDhallWith options@(InterpretOptions {..}) = pure (Encoder {..})
       where
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
@@ -2100,13 +2100,13 @@ instance (Constructor c, GenericToDhall f, GenericToDhall (g :+: h)) => GenericT
 
         declared = Union (Dhall.Map.insert keyL (notEmptyRecord declaredL) ktsR)
 
-        InputType embedL declaredL = evalState (genericToDhallWith options) 1
-        InputType embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
 
         ktsR = unsafeExpectUnion "genericToDhallWith (:+:)" declaredR
 
 instance (GenericToDhall (f :+: g), GenericToDhall (h :+: i)) => GenericToDhall ((f :+: g) :+: (h :+: i)) where
-    genericToDhallWith options = pure (InputType {..})
+    genericToDhallWith options = pure (Encoder {..})
       where
         embed (L1 l) =
             case maybeValL of
@@ -2125,16 +2125,16 @@ instance (GenericToDhall (f :+: g), GenericToDhall (h :+: i)) => GenericToDhall 
 
         declared = Union (Dhall.Map.union ktsL ktsR)
 
-        InputType embedL declaredL = evalState (genericToDhallWith options) 1
-        InputType embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
 
         ktsL = unsafeExpectUnion "genericToDhallWith (:+:)" declaredL
         ktsR = unsafeExpectUnion "genericToDhallWith (:+:)" declaredR
 
 instance (GenericToDhall (f :*: g), GenericToDhall (h :*: i)) => GenericToDhall ((f :*: g) :*: (h :*: i)) where
     genericToDhallWith options = do
-        InputType embedL declaredL <- genericToDhallWith options
-        InputType embedR declaredR <- genericToDhallWith options
+        Encoder embedL declaredL <- genericToDhallWith options
+        Encoder embedR declaredR <- genericToDhallWith options
 
         let embed (l :*: r) =
                 RecordLit (Dhall.Map.union mapL mapR)
@@ -2150,7 +2150,7 @@ instance (GenericToDhall (f :*: g), GenericToDhall (h :*: i)) => GenericToDhall 
                 mapL = unsafeExpectRecord "genericToDhallWith (:*:)" declaredL
                 mapR = unsafeExpectRecord "genericToDhallWith (:*:)" declaredR
 
-        pure (InputType {..})
+        pure (Encoder {..})
 
 instance (GenericToDhall (f :*: g), Selector s, ToDhall a) => GenericToDhall ((f :*: g) :*: M1 S s (K1 i a)) where
     genericToDhallWith options@InterpretOptions{..} = do
@@ -2159,9 +2159,9 @@ instance (GenericToDhall (f :*: g), Selector s, ToDhall a) => GenericToDhall ((f
 
         nameR <- fmap fieldModifier (getSelName nR)
 
-        InputType embedL declaredL <- genericToDhallWith options
+        Encoder embedL declaredL <- genericToDhallWith options
 
-        let InputType embedR declaredR = injectWith options
+        let Encoder embedR declaredR = injectWith options
 
         let embed (l :*: M1 (K1 r)) =
                 RecordLit (Dhall.Map.insert nameR (embedR r) mapL)
@@ -2173,7 +2173,7 @@ instance (GenericToDhall (f :*: g), Selector s, ToDhall a) => GenericToDhall ((f
               where
                 mapL = unsafeExpectRecord "genericToDhallWith (:*:)" declaredL
 
-        return (InputType {..})
+        return (Encoder {..})
 
 instance (Selector s, ToDhall a, GenericToDhall (f :*: g)) => GenericToDhall (M1 S s (K1 i a) :*: (f :*: g)) where
     genericToDhallWith options@InterpretOptions{..} = do
@@ -2182,9 +2182,9 @@ instance (Selector s, ToDhall a, GenericToDhall (f :*: g)) => GenericToDhall (M1
 
         nameL <- fmap fieldModifier (getSelName nL)
 
-        let InputType embedL declaredL = injectWith options
+        let Encoder embedL declaredL = injectWith options
 
-        InputType embedR declaredR <- genericToDhallWith options
+        Encoder embedR declaredR <- genericToDhallWith options
 
         let embed (M1 (K1 l) :*: r) =
                 RecordLit (Dhall.Map.insert nameL (embedL l) mapR)
@@ -2196,7 +2196,7 @@ instance (Selector s, ToDhall a, GenericToDhall (f :*: g)) => GenericToDhall (M1
               where
                 mapR = unsafeExpectRecord "genericToDhallWith (:*:)" declaredR
 
-        return (InputType {..})
+        return (Encoder {..})
 
 instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
     genericToDhallWith options@InterpretOptions{..} = do
@@ -2209,8 +2209,8 @@ instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M
         nameL <- fmap fieldModifier (getSelName nL)
         nameR <- fmap fieldModifier (getSelName nR)
 
-        let InputType embedL declaredL = injectWith options
-        let InputType embedR declaredR = injectWith options
+        let Encoder embedL declaredL = injectWith options
+        let Encoder embedR declaredR = injectWith options
 
         let embed (M1 (K1 l) :*: M1 (K1 r)) =
                 RecordLit
@@ -2224,10 +2224,10 @@ instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M
                         [ (nameL, declaredL), (nameR, declaredR) ]
                     )
 
-        return (InputType {..})
+        return (Encoder {..})
 
 instance GenericToDhall U1 where
-    genericToDhallWith _ = pure (InputType {..})
+    genericToDhallWith _ = pure (Encoder {..})
       where
         embed _ = RecordLit mempty
 
@@ -2391,8 +2391,8 @@ constructor :: Text -> Type a -> UnionType a
 constructor key valueType = UnionType
     ( Data.Functor.Compose.Compose (Dhall.Map.singleton key valueType) )
 
-{-| The 'RecordInputType' divisible (contravariant) functor allows you to build
-    an 'InputType' injector for a Dhall record.
+{-| The 'RecordEncoder' divisible (contravariant) functor allows you to build
+    an 'Encoder' injector for a Dhall record.
 
     For example, let's take the following Haskell data type:
 
@@ -2415,12 +2415,12 @@ data Project = Project
 >     289
 > }
 
-    Our injector has type 'InputType' @Project@, but we can't build that out of any
-    smaller injectors, as 'InputType's cannot be combined (they are only 'Contravariant's).
-    However, we can use an 'InputRecordType' to build an 'InputType' for @Project@:
+    Our injector has type 'Encoder' @Project@, but we can't build that out of any
+    smaller injectors, as 'Encoder's cannot be combined (they are only 'Contravariant's).
+    However, we can use an 'InputRecordType' to build an 'Encoder' for @Project@:
 
 >>> :{
-injectProject :: InputType Project
+injectProject :: Encoder Project
 injectProject =
   inputRecord
     ( adapt >$< inputFieldWith "name" inject
@@ -2434,7 +2434,7 @@ injectProject =
     Or, since we are simply using the `ToDhall` instance to inject each field, we could write
 
 >>> :{
-injectProject :: InputType Project
+injectProject :: Encoder Project
 injectProject =
   inputRecord
     ( adapt >$< inputField "name"
@@ -2454,40 +2454,40 @@ injectProject =
 infixr 5 >*<
 
 -- | Intermediate type used for building a `ToDhall` instance for a record
-newtype RecordInputType a
-  = RecordInputType (Dhall.Map.Map Text (InputType a))
+newtype RecordEncoder a
+  = RecordEncoder (Dhall.Map.Map Text (Encoder a))
 
-instance Contravariant RecordInputType where
-  contramap f (RecordInputType inputTypeRecord) = RecordInputType $ contramap f <$> inputTypeRecord
+instance Contravariant RecordEncoder where
+  contramap f (RecordEncoder inputTypeRecord) = RecordEncoder $ contramap f <$> inputTypeRecord
 
-instance Divisible RecordInputType where
-  divide f (RecordInputType bInputTypeRecord) (RecordInputType cInputTypeRecord) =
-      RecordInputType
+instance Divisible RecordEncoder where
+  divide f (RecordEncoder bEncoderRecord) (RecordEncoder cEncoderRecord) =
+      RecordEncoder
     $ Dhall.Map.union
-      ((contramap $ fst . f) <$> bInputTypeRecord)
-      ((contramap $ snd . f) <$> cInputTypeRecord)
-  conquer = RecordInputType mempty
+      ((contramap $ fst . f) <$> bEncoderRecord)
+      ((contramap $ snd . f) <$> cEncoderRecord)
+  conquer = RecordEncoder mempty
 
 {-| Specify how to encode one field of a record by supplying an explicit
-    `InputType` for that field
+    `Encoder` for that field
 -}
-inputFieldWith :: Text -> InputType a -> RecordInputType a
-inputFieldWith name inputType = RecordInputType $ Dhall.Map.singleton name inputType
+inputFieldWith :: Text -> Encoder a -> RecordEncoder a
+inputFieldWith name inputType = RecordEncoder $ Dhall.Map.singleton name inputType
 
 {-| Specify how to encode one field of a record using the default `ToDhall`
     instance for that type
 -}
-inputField :: ToDhall a => Text -> RecordInputType a
+inputField :: ToDhall a => Text -> RecordEncoder a
 inputField name = inputFieldWith name inject
 
--- | Convert a `RecordInputType` into the equivalent `InputType`
-inputRecord :: RecordInputType a -> InputType a
-inputRecord (RecordInputType inputTypeRecord) = InputType makeRecordLit recordType
+-- | Convert a `RecordEncoder` into the equivalent `Encoder`
+inputRecord :: RecordEncoder a -> Encoder a
+inputRecord (RecordEncoder inputTypeRecord) = Encoder makeRecordLit recordType
   where
     recordType = Record $ declared <$> inputTypeRecord
     makeRecordLit x = RecordLit $ (($ x) . embed) <$> inputTypeRecord
 
-{-| 'UnionInputType' allows you to build an 'InputType' injector for a Dhall
+{-| 'UnionEncoder' allows you to build an 'Encoder' injector for a Dhall
     record.
 
     For example, let's take the following Haskell data type:
@@ -2506,12 +2506,12 @@ data Status = Queued Natural
 > | Errored : Text
 > >.Result "Finish successfully"
 
-    Our injector has type 'InputType' @Status@, but we can't build that out of any
-    smaller injectors, as 'InputType's cannot be combined.
-    However, we can use an 'UnionInputType' to build an 'InputType' for @Status@:
+    Our injector has type 'Encoder' @Status@, but we can't build that out of any
+    smaller injectors, as 'Encoder's cannot be combined.
+    However, we can use an 'UnionEncoder' to build an 'Encoder' for @Status@:
 
 >>> :{
-injectStatus :: InputType Status
+injectStatus :: Encoder Status
 injectStatus = adapt >$< inputUnion
   (   inputConstructorWith "Queued"  inject
   >|< inputConstructorWith "Result"  inject
@@ -2526,7 +2526,7 @@ injectStatus = adapt >$< inputUnion
     Or, since we are simply using the `ToDhall` instance to inject each branch, we could write
 
 >>> :{
-injectStatus :: InputType Status
+injectStatus :: Encoder Status
 injectStatus = adapt >$< inputUnion
   (   inputConstructor "Queued"
   >|< inputConstructor "Result"
@@ -2539,8 +2539,8 @@ injectStatus = adapt >$< inputUnion
 :}
 
 -}
-newtype UnionInputType a =
-  UnionInputType
+newtype UnionEncoder a =
+  UnionEncoder
     ( Data.Functor.Product.Product
         ( Control.Applicative.Const
             ( Dhall.Map.Map
@@ -2553,16 +2553,16 @@ newtype UnionInputType a =
     )
   deriving (Contravariant)
 
--- | Combines two 'UnionInputType' values.  See 'UnionInputType' for usage
+-- | Combines two 'UnionEncoder' values.  See 'UnionEncoder' for usage
 -- notes.
 --
 -- Ideally, this matches 'Data.Functor.Contravariant.Divisible.chosen';
--- however, this allows 'UnionInputType' to not need a 'Divisible' instance
+-- however, this allows 'UnionEncoder' to not need a 'Divisible' instance
 -- itself (since no instance is possible).
-(>|<) :: UnionInputType a -> UnionInputType b -> UnionInputType (Either a b)
-UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx))
-    >|< UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const my) (Op fy)) =
-    UnionInputType
+(>|<) :: UnionEncoder a -> UnionEncoder b -> UnionEncoder (Either a b)
+UnionEncoder (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx))
+    >|< UnionEncoder (Data.Functor.Product.Pair (Control.Applicative.Const my) (Op fy)) =
+    UnionEncoder
       ( Data.Functor.Product.Pair
           ( Control.Applicative.Const (mx <> my) )
           ( Op (either fx fy) )
@@ -2570,10 +2570,10 @@ UnionInputType (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx)
 
 infixr 5 >|<
 
--- | Convert a `UnionInputType` into the equivalent `InputType`
-inputUnion :: UnionInputType a -> InputType a
-inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
-    InputType
+-- | Convert a `UnionEncoder` into the equivalent `Encoder`
+inputUnion :: UnionEncoder a -> Encoder a
+inputUnion ( UnionEncoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
+    Encoder
       { embed = \x ->
           let (name, y) = embedF x
           in  case notEmptyRecordLit y of
@@ -2585,14 +2585,14 @@ inputUnion ( UnionInputType ( Data.Functor.Product.Pair ( Control.Applicative.Co
   where
     fields' = fmap notEmptyRecord fields
 
-{-| Specify how to encode an alternative by providing an explicit `InputType`
+{-| Specify how to encode an alternative by providing an explicit `Encoder`
     for that alternative
 -}
 inputConstructorWith
     :: Text
-    -> InputType a
-    -> UnionInputType a
-inputConstructorWith name inputType = UnionInputType $
+    -> Encoder a
+    -> UnionEncoder a
+inputConstructorWith name inputType = UnionEncoder $
     Data.Functor.Product.Pair
       ( Control.Applicative.Const
           ( Dhall.Map.singleton
@@ -2609,5 +2609,5 @@ inputConstructorWith name inputType = UnionInputType $
 inputConstructor
     :: ToDhall a
     => Text
-    -> UnionInputType a
+    -> UnionEncoder a
 inputConstructor name = inputConstructorWith name inject

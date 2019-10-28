@@ -111,10 +111,10 @@ shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit con
 
     () <- Dhall.input exampleType "< A >.A"
 
-    let exampleInputType :: Dhall.InputType ()
-        exampleInputType = Dhall.inputUnion (Dhall.inputConstructor "A")
+    let exampleEncoder :: Dhall.Encoder ()
+        exampleEncoder = Dhall.inputUnion (Dhall.inputConstructor "A")
 
-    Dhall.embed exampleInputType () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
+    Dhall.embed exampleEncoder () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
 
 shouldHaveWorkingRecursiveFromDhall :: TestTree
 shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
