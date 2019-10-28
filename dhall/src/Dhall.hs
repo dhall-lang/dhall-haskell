@@ -97,11 +97,11 @@ module Dhall
     , RecordEncoder(..)
     , encodeFieldWith
     , encodeField
-    , encodeRecord
+    , recordEncoder
     , UnionEncoder(..)
     , encodeConstructorWith
     , encodeConstructor
-    , encodeUnion
+    , unionEncoder
     , (>|<)
 
     -- * Miscellaneous
@@ -2421,7 +2421,7 @@ data Project = Project
 >>> :{
 injectProject :: Encoder Project
 injectProject =
-  encodeRecord
+  recordEncoder
     ( adapt >$< encodeFieldWith "name" inject
             >*< encodeFieldWith "description" inject
             >*< encodeFieldWith "stars" inject
@@ -2435,7 +2435,7 @@ injectProject =
 >>> :{
 injectProject :: Encoder Project
 injectProject =
-  encodeRecord
+  recordEncoder
     ( adapt >$< encodeField "name"
             >*< encodeField "description"
             >*< encodeField "stars"
@@ -2480,8 +2480,8 @@ encodeField :: ToDhall a => Text -> RecordEncoder a
 encodeField name = encodeFieldWith name inject
 
 -- | Convert a `RecordEncoder` into the equivalent `Encoder`
-encodeRecord :: RecordEncoder a -> Encoder a
-encodeRecord (RecordEncoder encodeTypeRecord) = Encoder makeRecordLit recordType
+recordEncoder :: RecordEncoder a -> Encoder a
+recordEncoder (RecordEncoder encodeTypeRecord) = Encoder makeRecordLit recordType
   where
     recordType = Record $ declared <$> encodeTypeRecord
     makeRecordLit x = RecordLit $ (($ x) . embed) <$> encodeTypeRecord
@@ -2510,7 +2510,7 @@ data Status = Queued Natural
 
 >>> :{
 injectStatus :: Encoder Status
-injectStatus = adapt >$< encodeUnion
+injectStatus = adapt >$< unionEncoder
   (   encodeConstructorWith "Queued"  inject
   >|< encodeConstructorWith "Result"  inject
   >|< encodeConstructorWith "Errored" inject
@@ -2525,7 +2525,7 @@ injectStatus = adapt >$< encodeUnion
 
 >>> :{
 injectStatus :: Encoder Status
-injectStatus = adapt >$< encodeUnion
+injectStatus = adapt >$< unionEncoder
   (   encodeConstructor "Queued"
   >|< encodeConstructor "Result"
   >|< encodeConstructor "Errored"
@@ -2569,8 +2569,8 @@ UnionEncoder (Data.Functor.Product.Pair (Control.Applicative.Const mx) (Op fx))
 infixr 5 >|<
 
 -- | Convert a `UnionEncoder` into the equivalent `Encoder`
-encodeUnion :: UnionEncoder a -> Encoder a
-encodeUnion ( UnionEncoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
+unionEncoder :: UnionEncoder a -> Encoder a
+unionEncoder ( UnionEncoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Op embedF ) ) ) =
     Encoder
       { embed = \x ->
           let (name, y) = embedF x

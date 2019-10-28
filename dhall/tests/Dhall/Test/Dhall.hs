@@ -112,7 +112,7 @@ shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit con
     () <- Dhall.input exampleType "< A >.A"
 
     let exampleEncoder :: Dhall.Encoder ()
-        exampleEncoder = Dhall.encodeUnion (Dhall.encodeConstructor "A")
+        exampleEncoder = Dhall.unionEncoder (Dhall.encodeConstructor "A")
 
     Dhall.embed exampleEncoder () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
 
