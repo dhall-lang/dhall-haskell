@@ -2233,7 +2233,7 @@ instance GenericToDhall U1 where
 
         declared = Record mempty
 
-{-| The 'RecordDecoder' applicative functor allows you to build a 'Decoder' parser
+{-| The 'RecordDecoder' applicative functor allows you to build a 'Decoder'
     from a Dhall record.
 
     For example, let's take the following Haskell data type:
@@ -2257,8 +2257,8 @@ data Project = Project
 >     289
 > }
 
-    Our parser has type 'Decoder' @Project@, but we can't build that out of any
-    smaller parsers, as 'Decoder's cannot be combined (they are only 'Functor's).
+    Our decoder has type 'Decoder' @Project@, but we can't build that out of any
+    smaller decoders, as 'Decoder's cannot be combined (they are only 'Functor's).
     However, we can use a 'RecordDecoder' to build a 'Decoder' for @Project@:
 
 >>> :{
@@ -2290,7 +2290,7 @@ newtype RecordDecoder a =
   deriving (Functor, Applicative)
 
 
--- | Run a 'RecordDecoder' parser to build a 'Decoder' parser.
+-- | Run a 'RecordDecoder' to build a 'Decoder'.
 record :: RecordDecoder a -> Dhall.Decoder a
 record ( RecordDecoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Data.Functor.Compose.Compose extractF ) ) ) =
   Decoder
@@ -2321,8 +2321,7 @@ field key valueDecoder@(Decoder extract expected) =
           ( Data.Functor.Compose.Compose extractBody )
       )
 
-{-| The 'UnionDecoder' monoid allows you to build a 'Decoder' parser
-    from a Dhall union
+{-| The 'UnionDecoder' monoid allows you to build a 'Decoder' from a Dhall union
 
     For example, let's take the following Haskell data type:
 
@@ -2340,8 +2339,8 @@ data Status = Queued Natural
 > | Errored : Text
 > >.Result "Finish successfully"
 
-    Our parser has type 'Decoder' @Status@, but we can't build that out of any
-    smaller parsers, as 'Decoder's cannot be combined (they are only 'Functor's).
+    Our decoder has type 'Decoder' @Status@, but we can't build that out of any
+    smaller decoders, as 'Decoder's cannot be combined (they are only 'Functor's).
     However, we can use a 'UnionDecoder' to build a 'Decoder' for @Status@:
 
 >>> :{
@@ -2366,7 +2365,7 @@ instance Monoid (UnionDecoder a) where
     mempty = coerce (mempty :: Dhall.Map.Map Text (Decoder a))
     mappend = (Data.Semigroup.<>)
 
--- | Run a 'UnionDecoder' parser to build a 'Decoder' parser.
+-- | Run a 'UnionDecoder' to build a 'Decoder'.
 union :: UnionDecoder a -> Decoder a
 union (UnionDecoder (Data.Functor.Compose.Compose mp)) = Decoder
     { extract  = extractF
