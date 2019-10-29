@@ -199,7 +199,6 @@ module Dhall.JSON (
       dhallToJSON
     , omitNull
     , omitEmpty
-    , parseOmission
     , parsePreservationAndOmission
     , Conversion(..)
     , convertToHomogeneousMaps
@@ -609,7 +608,7 @@ omitEmpty (Object object) =
 omitEmpty (Array array) =
     if null elems then Null else Array elems
   where
-    elems = (fmap omitEmpty array)
+    elems = Vector.filter (/= Null) (fmap omitEmpty array)
 omitEmpty (String string) =
     String string
 omitEmpty (Number number) =
@@ -623,16 +622,10 @@ omitEmpty Null =
 parseOmission :: Parser (Value -> Value)
 parseOmission =
         Options.Applicative.flag'
-            omitNull
-            (   Options.Applicative.long "omitNull"
-            <>  Options.Applicative.help "Omit record fields that are null"
-            )
-    <|> Options.Applicative.flag'
             omitEmpty
-            (   Options.Applicative.long "omitEmpty"
+            (   Options.Applicative.long "omit-empty"
             <>  Options.Applicative.help "Omit record fields that are null or empty records"
             )
-    <|> pure id
 
 -- | Parser for command-line options related to preserving null fields.
 parseNullPreservation :: Parser (Value -> Value)
@@ -640,13 +633,13 @@ parseNullPreservation =
         Options.Applicative.flag
             omitNull
             id
-            (   Options.Applicative.long "preserveNull"
+            (   Options.Applicative.long "preserve-null"
             <>  Options.Applicative.help "Preserve record fields that are null"
             )
 
 -- | Combines parsers for command-line options related to preserving & omitting null fields.
 parsePreservationAndOmission :: Parser (Value -> Value)
-parsePreservationAndOmission = parseNullPreservation <|> parseOmission <|> pure id
+parsePreservationAndOmission = parseOmission <|> parseNullPreservation
 
 {-| Specify whether or not to convert association lists of type
     @List { mapKey: Text, mapValue : v }@ to records
@@ -1044,7 +1037,7 @@ parseConversion =
     noConversion =
         Options.Applicative.flag'
             NoConversion
-            (   Options.Applicative.long "noMaps"
+            (   Options.Applicative.long "no-maps"
             <>  Options.Applicative.help "Disable conversion of association lists to homogeneous maps"
             )
 
