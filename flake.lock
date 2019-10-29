@@ -1,0 +1,17 @@
+{
+    "inputs": {
+        "nixpkgs": {
+            "inputs": {},
+            "narHash": "sha256-wJg4DA700SoQbEz61448sR6BgxRa1R92K3vvCV1g+HY=",
+            "originalUri": "git+https://github.com/nixos/nixpkgs.git?ref=18.09-beta&rev=1d4de0d552ae9aa66a5b8dee5fb0650a4372d148",
+            "uri": "git+https://github.com/nixos/nixpkgs.git?ref=18.09-beta&rev=1d4de0d552ae9aa66a5b8dee5fb0650a4372d148"
+        },
+        "nixpkgsStaticLinux": {
+            "inputs": {},
+            "narHash": "sha256-famU3pJZ4vkElV9qc71HmyRVSvcrAhfMZ0UJKpmmKP8=",
+            "originalUri": "git+https://github.com/nh2/nixpkgs.git?ref=static-haskell-nix-stack-dhall-working",
+            "uri": "git+https://github.com/nh2/nixpkgs.git?ref=static-haskell-nix-stack-dhall-working&rev=925aac04f4ca58aceb83beef18cb7dae0715421b"
+        }
+    },
+    "version": 3
+}

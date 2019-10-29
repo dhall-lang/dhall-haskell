@@ -3,11 +3,12 @@ let pinned = import ./nix/pinnedNixpkgs.nix;
 in { src ? { rev = ""; }
 , nixpkgs ? pinned.nixpkgs
 , nixpkgsStaticLinux ? pinned.nixpkgsStaticLinux
+, system ? builtins.currentSystem
 }:
 
 let
   callShared = args:
-    import ./nix/shared.nix ({ inherit nixpkgs nixpkgsStaticLinux; } // args);
+    import ./nix/shared.nix ({ inherit nixpkgs nixpkgsStaticLinux system; } // args);
 
   shared_7_10_3 = callShared { compiler = "ghc7103"; };
 
