@@ -787,6 +787,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.IntegerLit a ->
             Core.IntegerLit a
 
+        Core.IntegerClamp ->
+            Core.IntegerClamp
+
+        Core.IntegerNegate ->
+            Core.IntegerNegate
+
         Core.IntegerShow ->
             Core.IntegerShow
 

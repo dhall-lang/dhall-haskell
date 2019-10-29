@@ -47,6 +47,8 @@ module Dhall.Parser.Token (
     _NaturalToInteger,
     _NaturalShow,
     _NaturalSubtract,
+    _IntegerClamp,
+    _IntegerNegate,
     _IntegerShow,
     _IntegerToDouble,
     _DoubleShow,
@@ -837,6 +839,20 @@ _NaturalShow = builtin "Natural/show"
 -}
 _NaturalSubtract :: Parser ()
 _NaturalSubtract = builtin "Natural/subtract"
+
+{-| Parse the @Integer/clamp@ built-in
+
+    This corresponds to the @Integer-clamp@ rule from the official grammar
+-}
+_IntegerClamp :: Parser ()
+_IntegerClamp = builtin "Integer/clamp"
+
+{-| Parse the @Integer/negate@ built-in
+
+    This corresponds to the @Integer-negate@ rule from the official grammar
+-}
+_IntegerNegate :: Parser ()
+_IntegerNegate = builtin "Integer/negate"
 
 {-| Parse the @Integer/show@ built-in
 
