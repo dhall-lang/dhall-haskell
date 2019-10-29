@@ -15,7 +15,7 @@ import Data.Text (Text)
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
 import Dhall.Src (Src(..))
 import Dhall.Parser
-import Dhall.Parser.Token
+import Dhall.Parser.Token hiding (text)
 import Dhall.Parser.Expression (getSourcePos, importType_, importHash_, localOnly)
 import Text.Megaparsec (try, skipManyTill, lookAhead, anySingle,
   notFollowedBy, eof, takeRest)

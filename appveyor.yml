@@ -3,8 +3,9 @@ version: 1.0.{build}
 branches:
   only:
   - master
-  - /.*appveyor.*/
   - /\d*\.\d*\.\d*/
+  # For testing:
+  - /.*appveyor-build-branch.*/
 
 environment:
   STACK_ROOT: C:\sr
@@ -19,9 +20,12 @@ environment:
     - STACK_YAML: stack-lts-6.yaml
 
 install:
-  - choco install -y haskell-stack --version %STACK_VERSION%
+  # http://help.appveyor.com/discussions/problems/6312-curl-command-not-found
+  - set PATH=C:\Program Files\Git\mingw64\bin;%PATH%
+
+  - curl --silent --show-error --output stack.zip --location "https://github.com/commercialhaskell/stack/releases/download/v%STACK_VERSION%/stack-%STACK_VERSION%-windows-x86_64.zip"
+  - 7z x stack.zip stack.exe
   - stack setup > nul
-  - cd %APPVEYOR_BUILD_FOLDER%
   - git submodule update --init --recursive
 
 cache:

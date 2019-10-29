@@ -36,7 +36,7 @@ import qualified Dhall.Core      as Core
 import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators
-import Dhall.Parser.Token
+import Dhall.Parser.Token hiding (text)
 import Dhall.Parser.Expression
 
 -- | Parser for a top-level Dhall expression
