@@ -1137,6 +1137,18 @@ diffPrimitiveExpression l@Integer r =
     mismatch l r
 diffPrimitiveExpression l r@Integer =
     mismatch l r
+diffPrimitiveExpression IntegerClamp IntegerClamp =
+    "…"
+diffPrimitiveExpression l@IntegerClamp r =
+    mismatch l r
+diffPrimitiveExpression l r@IntegerClamp =
+    mismatch l r
+diffPrimitiveExpression IntegerNegate IntegerNegate =
+    "…"
+diffPrimitiveExpression l@IntegerNegate r =
+    mismatch l r
+diffPrimitiveExpression l r@IntegerNegate =
+    mismatch l r
 diffPrimitiveExpression IntegerShow IntegerShow =
     "…"
 diffPrimitiveExpression l@IntegerShow r =

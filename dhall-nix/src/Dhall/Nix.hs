@@ -321,6 +321,15 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NBinary NMult a' b'))
     loop Integer = return (Fix (NSet []))
     loop (IntegerLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
+    loop IntegerClamp = do
+        let e0 = Fix (NConstant (NInt 0))
+        let e1 = Fix (NBinary NLte (Fix (NConstant (NInt 0))) "x")
+        let e2 = Fix (NAbs "x" (Fix (NIf e1 "x" e0)))
+        return e2
+    loop IntegerNegate = do
+        let e0 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "x")
+        let e1 = Fix (NAbs "x" e0)
+        return e1
     loop IntegerShow = do
         let e0 = Fix (NBinary NApp "toString" "x")
         let e1 = Fix (NBinary NPlus (Fix (NStr "+")) e0)
