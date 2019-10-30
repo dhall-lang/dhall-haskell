@@ -50,7 +50,7 @@ library
     , containers           >= 0.5.11.0 && < 0.7
     , data-default         >= 0.7.1.1  && < 0.8
     , directory            >= 1.2.2.0  && < 1.4
-    , dhall                >= 1.26.0   && < 1.28
+    , dhall                >= 1.27.0   && < 1.28
     , dhall-json           >= 1.4      && < 1.6
     , filepath             >= 1.4.2    && < 1.5
     , haskell-lsp          >= 0.15.0.0 && < 0.17
