@@ -338,6 +338,10 @@ data Expr s a
     | Integer
     -- | > IntegerLit n                             ~  ±n
     | IntegerLit Integer
+    -- | IntegerClamp                               ~  Integer/clamp
+    | IntegerClamp
+    -- | IntegerNegate                              ~  Integer/negate
+    | IntegerNegate
     -- | > IntegerShow                              ~  Integer/show
     | IntegerShow
     -- | > IntegerToDouble                          ~  Integer/toDouble
@@ -486,6 +490,8 @@ instance Functor (Expr s) where
   fmap f (NaturalTimes e1 e2) = NaturalTimes (fmap f e1) (fmap f e2)
   fmap _ Integer = Integer
   fmap _ (IntegerLit i) = IntegerLit i
+  fmap _ IntegerClamp = IntegerClamp
+  fmap _ IntegerNegate = IntegerNegate
   fmap _ IntegerShow = IntegerShow
   fmap _ IntegerToDouble = IntegerToDouble
   fmap _ Double = Double
@@ -569,6 +575,8 @@ instance Monad (Expr s) where
     NaturalTimes a b     >>= k = NaturalTimes (a >>= k) (b >>= k)
     Integer              >>= _ = Integer
     IntegerLit a         >>= _ = IntegerLit a
+    IntegerClamp         >>= _ = IntegerClamp
+    IntegerNegate        >>= _ = IntegerNegate
     IntegerShow          >>= _ = IntegerShow
     IntegerToDouble      >>= _ = IntegerToDouble
     Double               >>= _ = Double
@@ -639,6 +647,8 @@ instance Bifunctor Expr where
     first k (NaturalTimes a b    ) = NaturalTimes (first k a) (first k b)
     first _  Integer               = Integer
     first _ (IntegerLit a        ) = IntegerLit a
+    first _  IntegerClamp          = IntegerClamp
+    first _  IntegerNegate         = IntegerNegate
     first _  IntegerShow           = IntegerShow
     first _  IntegerToDouble       = IntegerToDouble
     first _  Double                = Double
@@ -769,6 +779,8 @@ subExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
 subExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
 subExpressions _ Integer = pure Integer
 subExpressions _ (IntegerLit n) = pure (IntegerLit n)
+subExpressions _ IntegerClamp = pure IntegerClamp
+subExpressions _ IntegerNegate = pure IntegerNegate
 subExpressions _ IntegerShow = pure IntegerShow
 subExpressions _ IntegerToDouble = pure IntegerToDouble
 subExpressions _ Double = pure Double
@@ -1074,6 +1086,8 @@ denote (NaturalPlus a b     ) = NaturalPlus (denote a) (denote b)
 denote (NaturalTimes a b    ) = NaturalTimes (denote a) (denote b)
 denote  Integer               = Integer
 denote (IntegerLit a        ) = IntegerLit a
+denote  IntegerClamp          = IntegerClamp
+denote  IntegerNegate         = IntegerNegate
 denote  IntegerShow           = IntegerShow
 denote  IntegerToDouble       = IntegerToDouble
 denote  Double                = Double
@@ -1147,6 +1161,7 @@ reservedIdentifiers =
         , "Some"
         , "toMap"
         , "assert"
+        , "forall"
 
           -- Builtins according to the `builtin` rule in the grammar
         , "Natural/fold"
@@ -1156,6 +1171,11 @@ reservedIdentifiers =
         , "Natural/odd"
         , "Natural/toInteger"
         , "Natural/show"
+        , "Natural/subtract"
+        , "Integer"
+        , "Integer/clamp"
+        , "Integer/negate"
+        , "Integer/show"
         , "Integer/toDouble"
         , "Integer/show"
         , "Natural/subtract"
@@ -1183,7 +1203,4 @@ reservedIdentifiers =
         , "Type"
         , "Kind"
         , "Sort"
-
-          -- Technically just an `operator`
-        , "forall"
         ]

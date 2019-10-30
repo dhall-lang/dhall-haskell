@@ -510,6 +510,12 @@ infer typer = loop
         IntegerLit _ -> do
             return VInteger
 
+        IntegerClamp -> do
+            return (VInteger ~> VNatural)
+
+        IntegerNegate -> do
+            return (VInteger ~> VInteger)
+
         IntegerShow -> do
             return (VInteger ~> VText)
 
@@ -4252,26 +4258,13 @@ instance (Eq a, Pretty s, Pretty a, ToTerm a) => Show (TypeError s a) where
 instance (Eq a, Pretty s, Pretty a, ToTerm a, Typeable s, Typeable a) => Exception (TypeError s a)
 
 instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (TypeError s a) where
-    pretty (TypeError ctx expr msg)
+    pretty (TypeError _ expr msg)
         = Pretty.unAnnotate
             (   "\n"
-            <>  (   if null (Dhall.Context.toList ctx)
-                    then ""
-                    else prettyContext ctx <> "\n\n"
-                )
             <>  shortTypeMessage msg <> "\n"
             <>  source
             )
       where
-        prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
-
-        prettyContext =
-                Pretty.vsep
-            .   map prettyKV
-            .   reverse
-            .   Dhall.Context.toList
-
         source = case expr of
             Note s _ -> pretty s
             _        -> mempty

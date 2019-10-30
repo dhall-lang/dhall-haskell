@@ -34,7 +34,6 @@ import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
 import qualified Text.Megaparsec.Char    as Text.Megaparsec
 #endif
-import qualified Text.Parser.Char
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
@@ -350,8 +349,7 @@ parsers embedded = Parsers {..}
                     , alternative08
                     , alternative37
                     , alternative09
-
-                    , builtin <?> "built-in expression"
+                    , builtin
                     ]
                 )
             <|> alternative38
@@ -383,7 +381,7 @@ parsers embedded = Parsers {..}
 
                 _closeBrace
 
-                return a ) <?> "record type or literal"
+                return a ) <?> "literal"
 
             alternative05 = unionType
 
@@ -438,7 +436,9 @@ parsers embedded = Parsers {..}
                             ]
                     'I' ->
                         choice
-                            [ IntegerShow      <$ _IntegerShow
+                            [ IntegerClamp     <$ _IntegerClamp
+                            , IntegerNegate    <$ _IntegerNegate
+                            , IntegerShow      <$ _IntegerShow
                             , IntegerToDouble  <$ _IntegerToDouble
                             , Integer          <$ _Integer
                             ]
@@ -497,9 +497,9 @@ parsers embedded = Parsers {..}
                 ]
           where
             interpolation = do
-                _ <- Text.Parser.Char.text "${"
+                _ <- text "${"
                 e <- completeExpression_
-                _ <- Text.Parser.Char.char '}'
+                _ <- char '}'
                 return (Chunks [(mempty, e)] mempty)
 
             unescapedCharacterFast = do
@@ -513,11 +513,11 @@ parsers embedded = Parsers {..}
                     ) && c /= '$'
 
             unescapedCharacterSlow = do
-                _ <- Text.Parser.Char.char '$'
+                _ <- char '$'
                 return (Chunks [] "$")
 
             escapedCharacter = do
-                _ <- Text.Parser.Char.char '\\'
+                _ <- char '\\'
                 c <- choice
                     [ quotationMark
                     , dollarSign
@@ -532,26 +532,26 @@ parsers embedded = Parsers {..}
                     ]
                 return (Chunks [] (Data.Text.singleton c))
               where
-                quotationMark = Text.Parser.Char.char '"'
+                quotationMark = char '"'
 
-                dollarSign = Text.Parser.Char.char '$'
+                dollarSign = char '$'
 
-                backSlash = Text.Parser.Char.char '\\'
+                backSlash = char '\\'
 
-                forwardSlash = Text.Parser.Char.char '/'
+                forwardSlash = char '/'
 
-                backSpace = do _ <- Text.Parser.Char.char 'b'; return '\b'
+                backSpace = do _ <- char 'b'; return '\b'
 
-                formFeed = do _ <- Text.Parser.Char.char 'f'; return '\f'
+                formFeed = do _ <- char 'f'; return '\f'
 
-                lineFeed = do _ <- Text.Parser.Char.char 'n'; return '\n'
+                lineFeed = do _ <- char 'n'; return '\n'
 
-                carriageReturn = do _ <- Text.Parser.Char.char 'r'; return '\r'
+                carriageReturn = do _ <- char 'r'; return '\r'
 
-                tab = do _ <- Text.Parser.Char.char 't'; return '\t'
+                tab = do _ <- char 't'; return '\t'
 
                 unicode = do
-                    _  <- Text.Parser.Char.char 'u';
+                    _  <- char 'u';
 
                     let toNumber = Data.List.foldl' (\x y -> x * 16 + y) 0
 
@@ -559,7 +559,7 @@ parsers embedded = Parsers {..}
                             fmap toNumber (Control.Monad.replicateM 4 hexNumber)
 
                     let bracedEscapeSequence = do
-                            _  <- Text.Parser.Char.char '{'
+                            _  <- char '{'
                             ns <- some hexNumber
 
                             let number = toNumber ns
@@ -567,7 +567,7 @@ parsers embedded = Parsers {..}
                             Control.Monad.guard (number <= 0x10FFFF && validCodepoint (Char.chr number))
                                 <|> fail "Invalid Unicode code point"
 
-                            _  <- Text.Parser.Char.char '}'
+                            _  <- char '}'
 
                             return (toNumber ns)
 
@@ -576,9 +576,9 @@ parsers embedded = Parsers {..}
                     return (Char.chr n)
 
     doubleQuotedLiteral = do
-            _      <- Text.Parser.Char.char '"'
+            _      <- char '"'
             chunks <- Text.Megaparsec.many doubleQuotedChunk
-            _      <- Text.Parser.Char.char '"'
+            _      <- char '"'
             return (mconcat chunks)
 
     singleQuoteContinue =
@@ -599,19 +599,19 @@ parsers embedded = Parsers {..}
                     return ("''" <> b)
 
                 interpolation = do
-                    _ <- Text.Parser.Char.text "${"
+                    _ <- text "${"
                     a <- completeExpression_
-                    _ <- Text.Parser.Char.char '}'
+                    _ <- char '}'
                     b <- singleQuoteContinue
                     return (Chunks [(mempty, a)] mempty <> b)
 
                 escapeInterpolation = do
-                    _ <- Text.Parser.Char.text "''${"
+                    _ <- text "''${"
                     b <- singleQuoteContinue
                     return ("${" <> b)
 
                 endLiteral = do
-                    _ <- Text.Parser.Char.text "''"
+                    _ <- text "''"
                     return mempty
 
                 unescapedCharacterFast = do
@@ -635,25 +635,23 @@ parsers embedded = Parsers {..}
                     return (Chunks [] a <> b)
 
                 tab = do
-                    _ <- Text.Parser.Char.char '\t'
+                    _ <- char '\t' <?> "tab"
                     b <- singleQuoteContinue
                     return ("\t" <> b)
 
     singleQuoteLiteral = do
-            _ <- Text.Parser.Char.text "''"
+            _ <- text "''"
             _ <- endOfLine
             a <- singleQuoteContinue
 
             return (toDoubleQuoted a)
           where
-            endOfLine =
-                    void (Text.Parser.Char.char '\n'  )
-                <|> void (Text.Parser.Char.text "\r\n")
+            endOfLine = (void (char '\n') <|> void (text "\r\n")) <?> "newline"
 
     textLiteral = (do
             literal <- doubleQuotedLiteral <|> singleQuoteLiteral
             whitespace
-            return (TextLit literal) ) <?> "text literal"
+            return (TextLit literal) ) <?> "literal"
 
     recordTypeOrLiteral =
             choice
@@ -715,7 +713,7 @@ parsers embedded = Parsers {..}
 
             _closeAngle
 
-            return (Union m) ) <?> "union type"
+            return (Union m) ) <?> "literal"
 
     listLiteral = (do
             _openBracket
@@ -725,7 +723,7 @@ parsers embedded = Parsers {..}
             a <- Text.Megaparsec.sepBy expression _comma
 
             _closeBracket
-            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "list literal"
+            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "literal"
 
 {-| Parse an environment variable import
 
@@ -733,7 +731,7 @@ parsers embedded = Parsers {..}
 -}
 env :: Parser ImportType
 env = do
-    _ <- Text.Parser.Char.text "env:"
+    _ <- text "env:"
     a <- (alternative0 <|> alternative1)
     whitespace
     return (Env a)
@@ -741,9 +739,9 @@ env = do
     alternative0 = bashEnvironmentVariable
 
     alternative1 = do
-        _ <- Text.Parser.Char.char '"'
+        _ <- char '"'
         a <- posixEnvironmentVariable
-        _ <- Text.Parser.Char.char '"'
+        _ <- char '"'
         return a
 
 -- | Parse a local import without trailing whitespace
@@ -830,10 +828,10 @@ importType_ = do
 -}
 importHash_ :: Parser Dhall.Crypto.SHA256Digest
 importHash_ = do
-    _ <- Text.Parser.Char.text "sha256:"
-    text <- count 64 (satisfy hexdig <?> "hex digit")
+    _ <- text "sha256:"
+    t <- count 64 (satisfy hexdig <?> "hex digit")
     whitespace
-    let strictBytes16 = Data.Text.Encoding.encodeUtf8 text
+    let strictBytes16 = Data.Text.Encoding.encodeUtf8 t
     strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
         Left  string      -> fail string
         Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)

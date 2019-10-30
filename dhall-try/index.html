@@ -141,6 +141,8 @@
               <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-json/README.md"><img src = "./img/json-logo.svg" height="32px" alt="JSON logo"><span>JSON</span></a>
               <div class="dropdown-divider"></div>
+              <a class="nav-link" href="https://git.sr.ht/~singpolyma/dhall-xml-ruby"><img src = "./img/xml-logo.svg" height="32px" alt="XML logo"><span>XML</span></a>
+              <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-kubernetes/blob/master/README.md"><img src = "./img/kubernetes-logo.svg" height="32px" alt="Kubernetes logo"><span>Kubernetes</span></a>
               <div class="dropdown-divider"></div>
               <a class="nav-link" href="https://github.com/dhall-lang/dhall-haskell/blob/master/dhall-bash/README.md"><img src = "./img/bash-logo.png" height="32px" alt="Bash logo"><span>Bash</span></a>
@@ -312,20 +314,6 @@
         element.classList.remove("active");
       });
       document.getElementById(tabId).classList.toggle("active");
-    }
-
-    /* The Haskell yaml package doesn't support GHCJS, so we simulate the
-       dhall-to-yaml conversion in the browser in two steps:
-
-       * Convert Dhall to JSON using the `dhall-to-json` Haskell package
-         compiled with GHCJS
-       * Convert JSON to YAML using the `jsyaml` JavaScript package (this
-         function)
-    */
-    function jsonToYaml(json) {
-      let obj =JSON.parse(json);
-      let str = jsyaml.safeDump(obj);
-      return str;
     }
 
     let example0 = `{- This is an example Dhall configuration file
