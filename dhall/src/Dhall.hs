@@ -264,8 +264,8 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError
     function
 -}
 data InvalidDecoder s a = InvalidDecoder
-  { invalidTypeExpected   :: Expr s a
-  , invalidTypeExpression :: Expr s a
+  { invalidDecoderExpected   :: Expr s a
+  , invalidDecoderExpression :: Expr s a
   }
   deriving (Typeable)
 
@@ -290,8 +290,8 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidDecoder s 
         \" <> show txt1 <> "\n\
         \                                                                                \n"
         where
-          txt0 = Dhall.Util.insert invalidTypeExpected
-          txt1 = Dhall.Util.insert invalidTypeExpression
+          txt0 = Dhall.Util.insert invalidDecoderExpected
+          txt1 = Dhall.Util.insert invalidDecoderExpression
 
 -- | @since 1.16
 data InputSettings = InputSettings
@@ -404,7 +404,7 @@ True
 -}
 input
     :: Decoder a
-    -- ^ The type of value to decode from Dhall to Haskell
+    -- ^ The decoder for the Dhall value
     -> Text
     -- ^ The Dhall program
     -> IO a
@@ -421,7 +421,7 @@ input =
 inputWithSettings
     :: InputSettings
     -> Decoder a
-    -- ^ The type of value to decode from Dhall to Haskell
+    -- ^ The decoder for the Dhall value
     -> Text
     -- ^ The Dhall program
     -> IO a
@@ -465,7 +465,7 @@ inputWithSettings settings (Decoder {..}) txt = do
 -}
 inputFile
   :: Decoder a
-  -- ^ The type of value to decode from Dhall to Haskell
+  -- ^ The decoder for the Dhall value
   -> FilePath
   -- ^ The path to the Dhall program.
   -> IO a
@@ -481,7 +481,7 @@ inputFile =
 inputFileWithSettings
   :: EvaluateSettings
   -> Decoder a
-  -- ^ The type of value to decode from Dhall to Haskell
+  -- ^ The decoder for the Dhall value
   -> FilePath
   -- ^ The path to the Dhall program.
   -> IO a
@@ -547,7 +547,7 @@ inputExprWithSettings settings txt = do
 rawInput
     :: Alternative f
     => Decoder a
-    -- ^ The type of value to decode from Dhall to Haskell
+    -- ^ The decoder for the Dhall value
     -> Expr s Void
     -- ^ a closed form Dhall program, which evaluates to the expected type
     -> f a
