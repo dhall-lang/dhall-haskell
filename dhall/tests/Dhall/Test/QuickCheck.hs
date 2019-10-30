@@ -283,6 +283,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "NaturalTimes")
             % (1 :: W "Integer")
             % (7 :: W "IntegerLit")
+            % (1 :: W "IntegerClamp")
+            % (1 :: W "IntegerNegate")
             % (1 :: W "IntegerShow")
             % (1 :: W "IntegerToDouble")
             % (1 :: W "Double")

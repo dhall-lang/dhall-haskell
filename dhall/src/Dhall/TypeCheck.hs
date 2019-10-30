@@ -510,6 +510,12 @@ infer typer = loop
         IntegerLit _ -> do
             return VInteger
 
+        IntegerClamp -> do
+            return (VInteger ~> VNatural)
+
+        IntegerNegate -> do
+            return (VInteger ~> VInteger)
+
         IntegerShow -> do
             return (VInteger ~> VText)
 

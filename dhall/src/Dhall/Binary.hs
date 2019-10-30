@@ -132,6 +132,10 @@ instance ToTerm a => ToTerm (Expr Void a) where
         TString "Natural/subtract"
     encode IntegerToDouble =
         TString "Integer/toDouble"
+    encode IntegerClamp =
+        TString "Integer/clamp"
+    encode IntegerNegate =
+        TString "Integer/negate"
     encode IntegerShow =
         TString "Integer/show"
     encode DoubleShow =
@@ -513,6 +517,10 @@ instance FromTerm a => FromTerm (Expr s a) where
         return NaturalSubtract
     decode (TString "Integer/toDouble") =
         return IntegerToDouble
+    decode (TString "Integer/clamp") =
+        return IntegerClamp
+    decode (TString "Integer/negate") =
+        return IntegerNegate
     decode (TString "Integer/show") =
         return IntegerShow
     decode (TString "Double/show") =

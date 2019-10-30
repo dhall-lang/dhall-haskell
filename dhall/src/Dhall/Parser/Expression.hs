@@ -436,7 +436,9 @@ parsers embedded = Parsers {..}
                             ]
                     'I' ->
                         choice
-                            [ IntegerShow      <$ _IntegerShow
+                            [ IntegerClamp     <$ _IntegerClamp
+                            , IntegerNegate    <$ _IntegerNegate
+                            , IntegerShow      <$ _IntegerShow
                             , IntegerToDouble  <$ _IntegerToDouble
                             , Integer          <$ _Integer
                             ]

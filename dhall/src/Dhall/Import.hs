@@ -1052,6 +1052,8 @@ loadWith expr₀ = case expr₀ of
   NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
   Integer              -> pure Integer
   IntegerLit a         -> pure (IntegerLit a)
+  IntegerClamp         -> pure IntegerClamp
+  IntegerNegate        -> pure IntegerNegate
   IntegerShow          -> pure IntegerShow
   IntegerToDouble      -> pure IntegerToDouble
   Double               -> pure Double
