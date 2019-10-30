@@ -640,7 +640,7 @@ let
         pkgs.dockerTools.buildImage {
           inherit name;
 
-          contents = [ possibly-static."${name}" ];
+          contents = [ possibly-static."${name}", "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" ];
         };
 
     in
