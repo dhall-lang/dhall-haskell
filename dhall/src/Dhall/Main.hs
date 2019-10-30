@@ -737,7 +737,7 @@ command (Options {..}) = do
                     let invalidTypeExpression :: Expr Void Void
                         invalidTypeExpression = normalizedExpression
 
-                    Control.Exception.throwIO (Dhall.InvalidType {..})
+                    Control.Exception.throwIO (Dhall.InvalidDecoder {..})
 
         Tags {..} -> do
             tags <- Dhall.Tags.generate input suffixes followSymlinks
