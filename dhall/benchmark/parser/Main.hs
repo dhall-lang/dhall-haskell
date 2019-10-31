@@ -72,8 +72,8 @@ benchExprFromBytes name bytes = bench name (nf f bytes)
   where
     f bytes = do
         case Dhall.Binary.decodeExpression bytes of
-            Left  _          -> Nothing
-            Right expression -> return (expression :: Dhall.Expr Void Dhall.Import)
+            Left  exception  -> error (show exception)
+            Right expression -> expression :: Dhall.Expr Void Dhall.Import
 
 main :: IO ()
 main = do
