@@ -462,6 +462,10 @@ decodeExpressionInternal decodeEmbed = go
 
                                         return (NaturalLit (fromIntegral n))
 
+                                    TypeInteger -> do
+                                        n <- Decoding.decodeInteger
+                                        return (NaturalLit (fromIntegral n))
+
                                     _ -> do
                                         die ("Unexpected token type for Natural literal: " <> show tokenType₂)
 
