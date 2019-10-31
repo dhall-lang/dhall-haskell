@@ -6,7 +6,8 @@ module Main where
 import Control.Monad (forM)
 import Data.Map (Map, foldrWithKey, singleton, unions)
 import Data.Monoid ((<>))
-import Gauge (defaultMain, bgroup, bench, whnf, nfIO)
+import Data.Void (Void)
+import Gauge (defaultMain, bgroup, bench, nf, whnf, nfIO)
 
 import System.Directory
 
@@ -67,27 +68,25 @@ benchExprFromText name expr =
 
 benchExprFromBytes
     :: String -> Data.ByteString.Lazy.ByteString -> Gauge.Benchmark
-benchExprFromBytes name bytes = bench name (whnf f bytes)
+benchExprFromBytes name bytes = bench name (nf f bytes)
   where
     f bytes = do
-        term <- case Codec.Serialise.deserialiseOrFail bytes of
-            Left  _    -> Nothing
-            Right term -> return term
-        case Dhall.Binary.decodeExpression term
-          :: Either Dhall.Binary.DecodingFailure (Dhall.Expr () Dhall.Import) of
+        case Dhall.Binary.decodeExpression bytes of
             Left  _          -> Nothing
-            Right expression -> return expression
+            Right expression -> return (expression :: Dhall.Expr Void Dhall.Import)
 
 main :: IO ()
 main = do
     prelude <- loadPreludeFiles
     issue108Text  <- TIO.readFile "benchmark/examples/issue108.dhall"
     issue108Bytes <- Data.ByteString.Lazy.readFile "benchmark/examples/issue108.dhall.bin"
+    kubernetesExample <- Data.ByteString.Lazy.readFile "benchmark/examples/kubernetes.dhall.bin"
     defaultMain
         [ bgroup "Issue #108"
             [ benchExprFromText  "Text"   issue108Text
             , benchExprFromBytes "Binary" issue108Bytes
             ]
+        , benchExprFromBytes "Kubernetes/Binary" kubernetesExample
         , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
         , benchExprFromText "Large number of function arguments" (T.replicate 10000 "x ")
         , benchExprFromText "Long double-quoted strings" ("\"" <> T.replicate 1000000 "x" <> "\"")
