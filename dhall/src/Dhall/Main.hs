@@ -44,7 +44,6 @@ import Text.Dot ((.->.))
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
 import qualified Codec.CBOR.Write
-import qualified Codec.Serialise
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Aeson
@@ -673,9 +672,7 @@ command (Options {..}) = do
         Encode {..} -> do
             expression <- getExpression file
 
-            let term = Dhall.Binary.encodeExpression expression
-
-            let bytes = Codec.Serialise.serialise term
+            let bytes = Dhall.Binary.encodeExpression (Dhall.Core.denote expression)
 
             if json
                 then do
@@ -696,7 +693,7 @@ command (Options {..}) = do
                     InputFile f   -> Data.ByteString.Lazy.readFile f
                     StandardInput -> Data.ByteString.Lazy.getContents
 
-            term <- do
+            expression <- do
                 if json
                     then do
                         value <- case Data.Aeson.eitherDecode' bytes of
@@ -705,15 +702,14 @@ command (Options {..}) = do
 
                         let encoding = Codec.CBOR.JSON.encodeValue value
 
-                        let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
-                        Dhall.Core.throws (Codec.Serialise.deserialiseOrFail cborBytes)
+                        let cborgBytes = Codec.CBOR.Write.toLazyByteString encoding
+
+                        Dhall.Core.throws (Dhall.Binary.decodeExpression cborgBytes)
                     else do
-                        Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytes)
+                        Dhall.Core.throws (Dhall.Binary.decodeExpression bytes)
 
-            expression <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
-                :: IO (Expr Src Import)
 
-            let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
+            let doc = Dhall.Pretty.prettyCharacterSet characterSet (Dhall.Core.renote expression :: Expr Src Import)
 
             renderDoc System.IO.stdout doc
 

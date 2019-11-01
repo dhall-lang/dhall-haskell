@@ -567,9 +567,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     loop b₂
                 _ -> do
                   case App f' a' of
-                    -- build/fold fusion for `List`
-                    App (App ListBuild _) (App (App ListFold _) e') -> loop e'
-
                     App NaturalFold (NaturalLit n) -> do
                         let natural = Var (V "natural" 0)
                         let go 0  x = x
@@ -583,12 +580,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                     (Lam "zero"
                                         natural
                                         n')))
-
-                    -- build/fold fusion for `Natural`
-                    App NaturalBuild (App NaturalFold e') -> loop e'
-
-                    -- build/fold fusion for `Optional`
-                    App (App OptionalBuild _) (App (App OptionalFold _) e') -> loop e'
 
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
@@ -1056,16 +1047,6 @@ isNormalized e0 = loop (Syntax.denote e0)
       Pi _ a b -> loop a && loop b
       App f a -> loop f && loop a && case App f a of
           App (Lam _ _ _) _ -> False
-
-          -- build/fold fusion for `List`
-          App (App ListBuild _) (App (App ListFold _) _) -> False
-
-          -- build/fold fusion for `Natural`
-          App NaturalBuild (App NaturalFold _) -> False
-
-          -- build/fold fusion for `Optional`
-          App (App OptionalBuild _) (App (App OptionalFold _) _) -> False
-
           App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
           App NaturalFold (NaturalLit _) -> False
           App NaturalBuild _ -> False

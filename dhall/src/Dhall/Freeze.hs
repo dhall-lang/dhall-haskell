@@ -62,7 +62,7 @@ freezeImport directory import_ = do
             Dhall.Core.alphaNormalize (Dhall.Core.normalize expression)
 
     -- make sure the frozen import is present in the semantic cache
-    Dhall.Import.writeExpressionToSemanticCache expression
+    Dhall.Import.writeExpressionToSemanticCache (Dhall.Core.denote expression)
 
     let expressionHash = Dhall.Import.hashExpression normalizedExpression
 

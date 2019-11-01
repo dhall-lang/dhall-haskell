@@ -10,9 +10,6 @@ import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
-import qualified Codec.CBOR.Read      as CBOR
-import qualified Codec.CBOR.Term      as CBOR
-import qualified Codec.Serialise      as Serialise
 import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor
 import qualified Data.ByteString      as ByteString
@@ -26,6 +23,7 @@ import qualified Dhall.Parser         as Parser
 import qualified Dhall.Test.Util      as Test.Util
 import qualified Test.Tasty           as Tasty
 import qualified Test.Tasty.HUnit     as Tasty.HUnit
+import qualified Text.Printf          as Printf
 import qualified Turtle
 
 parseDirectory :: FilePath
@@ -124,7 +122,12 @@ shouldParse path = do
     let expectedFailures =
             -- This is a bug created by a parsing performance
             -- improvement
-            [ parseDirectory </> "success/unit/MergeParenAnnotation" ]
+            [ parseDirectory </> "success/unit/MergeParenAnnotation"
+
+            -- https://github.com/dhall-lang/dhall-haskell/issues/1454
+            , parseDirectory </> "success/preferMissingNoSpaces"
+            , parseDirectory </> "success/missingInParentheses"
+            ]
 
     let pathString = Text.unpack path
 
@@ -133,18 +136,20 @@ shouldParse path = do
 
         encoded <- ByteString.Lazy.readFile (pathString <> "B.dhallb")
 
-        expression <- Core.throws (Parser.exprFromText mempty text)
+        expression <- case Parser.exprFromText mempty text of
+            Left  exception  -> Tasty.HUnit.assertFailure (show exception)
+            Right expression -> return expression
 
-        let term = Binary.encodeExpression expression
+        let bytes = Binary.encodeExpression (Core.denote expression)
 
-        let bytes = Serialise.serialise term
+        let render =
+                  concatMap (Printf.printf "%02x ")
+                . ByteString.Lazy.unpack
 
         Monad.unless (encoded == bytes) $ do
-            ("", expected) <- Core.throws (CBOR.deserialiseFromBytes CBOR.decodeTerm encoded)
-
             let message = "The expected CBOR representation doesn't match the actual one\n"
-                          ++ "expected: " ++ show expected ++ "\n but got: " ++ show term
-                          ++ "\n expr: " ++ show expression
+                          ++ "expected: " ++ render encoded ++ "\n but got: " ++ render bytes
+                          ++ "\n expr: " ++ show (Core.denote expression :: Expr Void Import)
 
             Tasty.HUnit.assertFailure message
 
@@ -202,16 +207,29 @@ shouldNotParse path = do
 
 shouldDecode :: Text -> TestTree
 shouldDecode pathText = do
-    let expectedFailures = []
+    let expectedFailures =
+          [ {- Note that this test actually successfully decodes the value, but
+               mistakenly decodes the value to `_` instead of `x`.  This is
+               because the 55799 tag causes normal decoding to fail, so it falls
+               back to treating the `"x"` as a version tag instead of a label.
+
+               Either way, fixing 55799 decoding would cause this test to pass
+               again.
+            -}
+            binaryDecodeDirectory </> "success/unit/SelfDescribeCBORX2"
+          , binaryDecodeDirectory </> "success/unit/SelfDescribeCBORX3"
+          ]
 
     let pathString = Text.unpack pathText
 
     Test.Util.testCase pathText expectedFailures (do
         bytes <- ByteString.Lazy.readFile (pathString <> "A.dhallb")
 
-        term <- Core.throws (Serialise.deserialiseOrFail bytes)
-
-        decodedExpression <- Core.throws (Binary.decodeExpression term)
+        decodedExpression <- case Binary.decodeExpression bytes of
+            Left exception ->
+                Tasty.HUnit.assertFailure (show exception)
+            Right decodedExpression ->
+                return decodedExpression
 
         text <- Text.IO.readFile (pathString <> "B.dhall")
 
@@ -223,7 +241,7 @@ shouldDecode pathText = do
         let message =
                 "The decoded expression didn't match the parsed expression"
 
-        Tasty.HUnit.assertEqual message decodedExpression strippedExpression )
+        Tasty.HUnit.assertEqual message strippedExpression decodedExpression )
 
 shouldNotDecode :: Text -> TestTree
 shouldNotDecode pathText = do
@@ -234,8 +252,6 @@ shouldNotDecode pathText = do
     Test.Util.testCase pathText expectedFailures (do
         bytes <- ByteString.Lazy.readFile (pathString <> ".dhallb")
 
-        term <- Core.throws (Serialise.deserialiseOrFail bytes)
-
-        case Binary.decodeExpression term :: Either Binary.DecodingFailure (Expr Void Import) of
+        case Binary.decodeExpression bytes :: Either Binary.DecodingFailure (Expr Void Import) of
             Left _ -> return ()
             Right _ -> Tasty.HUnit.assertFailure "Unexpected successful decode" )

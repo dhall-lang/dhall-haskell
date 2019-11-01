@@ -211,7 +211,7 @@ newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
 --
 -- This instance is also consistent with with the binary encoding of Dhall @Double@s:
 --
--- >>> toBytes n = Codec.Serialise.serialise (Dhall.Binary.encode (n :: DhallDouble))
+-- >>> toBytes n = Dhall.Binary.encodeExpression (DoubleLit n :: Expr Void Import)
 --
 -- prop> \a b -> (a == b) == (toBytes a == toBytes b)
 instance Eq DhallDouble where

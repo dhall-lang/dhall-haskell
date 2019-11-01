@@ -165,5 +165,5 @@ normalize (WellTyped expr) = Normal $ Dhall.normalize expr
 --   Dhall's hash annotations (prefixed by "sha256:" and base-64 encoded).
 hashNormalToCode :: Normal -> Text
 hashNormalToCode (Normal expr) =
-  Dhall.hashExpressionToCode alphaNormal
+  Dhall.hashExpressionToCode (Dhall.denote alphaNormal)
   where alphaNormal = Dhall.alphaNormalize expr
