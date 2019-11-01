@@ -122,7 +122,12 @@ shouldParse path = do
     let expectedFailures =
             -- This is a bug created by a parsing performance
             -- improvement
-            [ parseDirectory </> "success/unit/MergeParenAnnotation" ]
+            [ parseDirectory </> "success/unit/MergeParenAnnotation"
+
+            -- https://github.com/dhall-lang/dhall-haskell/issues/1454
+            , parseDirectory </> "success/preferMissingNoSpaces"
+            , parseDirectory </> "success/missingInParentheses"
+            ]
 
     let pathString = Text.unpack path
 
@@ -131,7 +136,9 @@ shouldParse path = do
 
         encoded <- ByteString.Lazy.readFile (pathString <> "B.dhallb")
 
-        expression <- Core.throws (Parser.exprFromText mempty text)
+        expression <- case Parser.exprFromText mempty text of
+            Left  exception  -> Tasty.HUnit.assertFailure (show exception)
+            Right expression -> return expression
 
         let bytes = Binary.encodeExpression (Core.denote expression)
 
