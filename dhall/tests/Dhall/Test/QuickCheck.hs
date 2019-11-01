@@ -10,10 +10,10 @@
 
 module Dhall.Test.QuickCheck where
 
-import Codec.Serialise (DeserialiseFailure(..))
 import Data.Either (isRight)
 import Data.Either.Validation (Validation(..))
 import Data.Monoid ((<>))
+import Data.Void (Void)
 import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
@@ -53,8 +53,6 @@ import Test.Tasty.QuickCheck (QuickCheckTests(..))
 import Text.Megaparsec (SourcePos(..), Pos)
 
 import qualified Control.Spoon
-import qualified Codec.Serialise
-import qualified Data.Coerce
 import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.SpecialValues
@@ -77,13 +75,6 @@ import qualified Test.QuickCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck
 import qualified Text.Megaparsec       as Megaparsec
-
-newtype DeserialiseFailureWithEq = D DeserialiseFailure
-    deriving (Show)
-
-instance Eq DeserialiseFailureWithEq where
-    D (DeserialiseFailure aL bL) == D (DeserialiseFailure aR bR) =
-        aL == aR && bL == bR
 
 instance (Arbitrary a, Ord a) => Arbitrary (Set a) where
   arbitrary = Dhall.Set.fromList <$> arbitrary
@@ -283,6 +274,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "NaturalTimes")
             % (1 :: W "Integer")
             % (7 :: W "IntegerLit")
+            % (1 :: W "IntegerClamp")
+            % (1 :: W "IntegerNegate")
             % (1 :: W "IntegerShow")
             % (1 :: W "IntegerToDouble")
             % (1 :: W "Double")
@@ -410,21 +403,11 @@ instance Arbitrary Var where
 
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
-        wrap
-            (fmap
-                Dhall.Binary.decodeExpression
-                (Codec.Serialise.deserialiseOrFail
-                  (Codec.Serialise.serialise
-                    (Dhall.Binary.encodeExpression expression)
-                  )
-                )
-            )
-    === wrap (Right (Right (Dhall.Core.denote expression :: Expr () Import)))
+        Dhall.Binary.decodeExpression (Dhall.Binary.encodeExpression denotedExpression)
+    === Right denotedExpression
   where
-    wrap
-        :: Either DeserialiseFailure       a
-        -> Either DeserialiseFailureWithEq a
-    wrap = Data.Coerce.coerce
+    denotedExpression :: Expr Void Import
+    denotedExpression = Dhall.Core.denote expression
 
 everythingWellTypedNormalizes :: Expr () () -> Property
 everythingWellTypedNormalizes expression =

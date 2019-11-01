@@ -184,6 +184,8 @@ shift d v (NaturalTimes a b) = NaturalTimes a' b'
     b' = shift d v b
 shift _ _ Integer = Integer
 shift _ _ (IntegerLit a) = IntegerLit a
+shift _ _ IntegerClamp = IntegerClamp
+shift _ _ IntegerNegate = IntegerNegate
 shift _ _ IntegerShow = IntegerShow
 shift _ _ IntegerToDouble = IntegerToDouble
 shift _ _ Double = Double
@@ -357,6 +359,8 @@ subst x e (NaturalTimes a b) = NaturalTimes a' b'
     b' = subst x e b
 subst _ _ Integer = Integer
 subst _ _ (IntegerLit a) = IntegerLit a
+subst _ _ IntegerClamp = IntegerClamp
+subst _ _ IntegerNegate = IntegerNegate
 subst _ _ IntegerShow = IntegerShow
 subst _ _ IntegerToDouble = IntegerToDouble
 subst _ _ Double = Double
@@ -606,6 +610,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App (App NaturalSubtract (NaturalLit 0)) y -> pure y
                     App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
                     App (App NaturalSubtract x) y | Eval.judgmentallyEqual x y -> pure (NaturalLit 0)
+                    App IntegerClamp (IntegerLit n)
+                        | 0 <= n -> pure (NaturalLit (fromInteger n))
+                        | otherwise -> pure (NaturalLit 0)
+                    App IntegerNegate (IntegerLit n) ->
+                        pure (IntegerLit (negate n))
                     App IntegerShow (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
@@ -795,6 +804,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide  l              r             = NaturalTimes l r
     Integer -> pure Integer
     IntegerLit n -> pure (IntegerLit n)
+    IntegerClamp -> pure IntegerClamp
+    IntegerNegate -> pure IntegerNegate
     IntegerShow -> pure IntegerShow
     IntegerToDouble -> pure IntegerToDouble
     Double -> pure Double
@@ -1048,6 +1059,8 @@ isNormalized e0 = loop (Syntax.denote e0)
           App (App NaturalSubtract _) (NaturalLit 0) -> False
           App (App NaturalSubtract x) y -> not (Eval.judgmentallyEqual x y)
           App NaturalToInteger (NaturalLit _) -> False
+          App IntegerNegate (IntegerLit _) -> False
+          App IntegerClamp (IntegerLit _) -> False
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
           App DoubleShow (DoubleLit _) -> False
@@ -1120,6 +1133,8 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide  _              _             = True
       Integer -> True
       IntegerLit _ -> True
+      IntegerClamp -> True
+      IntegerNegate -> True
       IntegerShow -> True
       IntegerToDouble -> True
       Double -> True

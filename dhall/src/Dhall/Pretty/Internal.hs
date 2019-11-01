@@ -954,6 +954,10 @@ prettyCharacterSet characterSet expression =
         builtin "Natural/subtract"
     prettyPrimitiveExpression Integer =
         builtin "Integer"
+    prettyPrimitiveExpression IntegerClamp =
+        builtin "Integer/clamp"
+    prettyPrimitiveExpression IntegerNegate =
+        builtin "Integer/negate"
     prettyPrimitiveExpression IntegerShow =
         builtin "Integer/show"
     prettyPrimitiveExpression IntegerToDouble =

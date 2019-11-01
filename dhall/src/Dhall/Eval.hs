@@ -183,6 +183,8 @@ data Val a
 
     | VInteger
     | VIntegerLit !Integer
+    | VIntegerClamp !(Val a)
+    | VIntegerNegate !(Val a)
     | VIntegerShow !(Val a)
     | VIntegerToDouble !(Val a)
 
@@ -515,6 +517,16 @@ eval !env t0 =
             VInteger
         IntegerLit n ->
             VIntegerLit n
+        IntegerClamp ->
+            VPrim $ \case
+                VIntegerLit n
+                    | 0 <= n    -> VNaturalLit (fromInteger n)
+                    | otherwise -> VNaturalLit 0
+                n -> VIntegerClamp n
+        IntegerNegate ->
+            VPrim $ \case
+                VIntegerLit n -> VIntegerLit (negate n)
+                n             -> VIntegerNegate n
         IntegerShow ->
             VPrim $ \case
                 VIntegerLit n
@@ -850,6 +862,10 @@ conv !env t0 t0' =
             True
         (VIntegerLit t, VIntegerLit t') ->
             t == t'
+        (VIntegerClamp t, VIntegerClamp t') ->
+            conv env t t'
+        (VIntegerNegate t, VIntegerNegate t') ->
+            conv env t t'
         (VIntegerShow t, VIntegerShow t') ->
             conv env t t'
         (VIntegerToDouble t, VIntegerToDouble t') ->
@@ -1032,6 +1048,10 @@ quote !env !t0 =
             Integer
         VIntegerLit n ->
             IntegerLit n
+        VIntegerClamp t ->
+            IntegerClamp `qApp` t
+        VIntegerNegate t ->
+            IntegerNegate `qApp` t
         VIntegerShow t ->
             IntegerShow `qApp` t
         VIntegerToDouble t ->
@@ -1208,6 +1228,10 @@ alphaNormalize = goEnv EmptyNames
                 Integer
             IntegerLit n ->
                 IntegerLit n
+            IntegerClamp ->
+                IntegerClamp
+            IntegerNegate ->
+                IntegerNegate
             IntegerShow ->
                 IntegerShow
             IntegerToDouble ->

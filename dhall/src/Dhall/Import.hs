@@ -138,7 +138,6 @@ module Dhall.Import (
     ) where
 
 import Control.Applicative (Alternative(..))
-import Codec.CBOR.Term (Term(..))
 import Control.Exception (Exception, SomeException, IOException, toException)
 import Control.Monad (when)
 import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
@@ -180,6 +179,8 @@ import Dhall.Import.Types
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Lens.Family.State.Strict (zoom)
 
+import qualified Codec.CBOR.Encoding              as Encoding
+import qualified Codec.CBOR.Write                 as Write
 import qualified Codec.Serialise
 import qualified Control.Monad.Trans.Maybe        as Maybe
 import qualified Control.Monad.Trans.State.Strict as State
@@ -504,6 +505,7 @@ loadImportWithSemanticCache
     case mCached of
         Just bytesStrict -> do
             let actualHash = Dhall.Crypto.sha256Hash bytesStrict
+
             if semanticHash == actualHash
                 then return ()
                 else do
@@ -511,12 +513,10 @@ loadImportWithSemanticCache
                     throwMissingImport (Imported _stack (HashMismatch {expectedHash = semanticHash, ..}))
 
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-            term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
-                Left err -> throwMissingImport (Imported _stack err)
-                Right t -> return t
-            importSemantics <- case Dhall.Binary.decodeExpression term of
-                Left err -> throwMissingImport (Imported _stack err)
-                Right sem -> return sem
+
+            importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
+                Left  err -> throwMissingImport (Imported _stack err)
+                Right e   -> return e
 
             return (ImportSemantics {..})
 
@@ -544,7 +544,7 @@ fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
 
 -- | Ensure that the given expression is present in the semantic cache. The
 --   given expression should be alpha-beta-normal.
-writeExpressionToSemanticCache :: Expr Src Void -> IO ()
+writeExpressionToSemanticCache :: Expr Void Void -> IO ()
 writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
   where
     bytes = encodeExpression NoVersion expression
@@ -592,18 +592,14 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
     -- Check the semi-semantic cache. See
     -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
     -- behind semi-semantic caching.
-    let semisemanticHash = computeSemisemanticHash resolvedExpr
+    let semisemanticHash = computeSemisemanticHash (Dhall.Core.denote resolvedExpr)
     mCached <- lift $ fetchFromSemisemanticCache semisemanticHash
 
     importSemantics <- case mCached of
         Just bytesStrict -> do
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
-            term <- case Codec.Serialise.deserialiseOrFail bytesLazy of
-                Left err -> throwMissingImport (Imported _stack err)
-                Right t -> return t
-
-            importSemantics <- case Dhall.Binary.decodeExpression term of
+            importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
                 Left err -> throwMissingImport (Imported _stack err)
                 Right sem -> return sem
 
@@ -659,7 +655,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
 -- AST (without normalising or type-checking it first). See
 -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
 -- discussion.
-computeSemisemanticHash :: Expr Src Void -> Dhall.Crypto.SHA256Digest
+computeSemisemanticHash :: Expr Void Void -> Dhall.Crypto.SHA256Digest
 computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
@@ -1012,7 +1008,7 @@ loadWith expr₀ = case expr₀ of
     ImportSemantics {..} <- loadImport child
     zoom stack (State.put _stack)
 
-    return importSemantics
+    return (Dhall.Core.renote importSemantics)
 
   ImportAlt a b -> loadWith a `catch` handler₀
     where
@@ -1052,6 +1048,8 @@ loadWith expr₀ = case expr₀ of
   NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
   Integer              -> pure Integer
   IntegerLit a         -> pure (IntegerLit a)
+  IntegerClamp         -> pure IntegerClamp
+  IntegerNegate        -> pure IntegerNegate
   IntegerShow          -> pure IntegerShow
   IntegerToDouble      -> pure IntegerToDouble
   Double               -> pure Double
@@ -1107,33 +1105,30 @@ loadRelativeTo rootDirectory semanticCacheMode expression =
         (emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression
-    :: forall s
-    .  StandardVersion
+    :: StandardVersion
     -- ^ `NoVersion` means to encode without the version tag
-    -> Expr s Void
+    -> Expr Void Void
     -> Data.ByteString.ByteString
 encodeExpression _standardVersion expression = bytesStrict
   where
-    intermediateExpression :: Expr s Import
+    intermediateExpression :: Expr Void Import
     intermediateExpression = fmap absurd expression
 
-    term :: Term
-    term = Dhall.Binary.encodeExpression intermediateExpression
-
-    taggedTerm :: Term
-    taggedTerm =
+    encoding =
         case _standardVersion of
-            NoVersion -> term
-            s         -> TList [ TString v, term ]
+            NoVersion ->
+                Codec.Serialise.encode intermediateExpression
+            s ->
+                    Encoding.encodeListLen 2
+                <>  Encoding.encodeString v
+                <>  Codec.Serialise.encode intermediateExpression
               where
                 v = Dhall.Binary.renderStandardVersion s
 
-    bytesLazy = Codec.Serialise.serialise taggedTerm
-
-    bytesStrict = Data.ByteString.Lazy.toStrict bytesLazy
+    bytesStrict = Write.toStrictByteString encoding
 
 -- | Hash a fully resolved expression
-hashExpression :: Expr s Void -> Dhall.Crypto.SHA256Digest
+hashExpression :: Expr Void Void -> Dhall.Crypto.SHA256Digest
 hashExpression expression =
     Dhall.Crypto.sha256Hash (encodeExpression NoVersion expression)
 
@@ -1143,7 +1138,7 @@ hashExpression expression =
     In other words, the output of this function can be pasted into Dhall
     source code to add an integrity check to an import
 -}
-hashExpressionToCode :: Expr s Void -> Text
+hashExpressionToCode :: Expr Void Void -> Text
 hashExpressionToCode expr =
     "sha256:" <> Text.pack (show (hashExpression expr))
 
