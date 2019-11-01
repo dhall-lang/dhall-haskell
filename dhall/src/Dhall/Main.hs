@@ -731,11 +731,11 @@ command (Options {..}) = do
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do
                     Data.Text.IO.putStr text
                 _ -> do
-                    let invalidTypeExpected :: Expr Void Void
-                        invalidTypeExpected = Dhall.Core.Text
+                    let invalidDecoderExpected :: Expr Void Void
+                        invalidDecoderExpected = Dhall.Core.Text
 
-                    let invalidTypeExpression :: Expr Void Void
-                        invalidTypeExpression = normalizedExpression
+                    let invalidDecoderExpression :: Expr Void Void
+                        invalidDecoderExpression = normalizedExpression
 
                     Control.Exception.throwIO (Dhall.InvalidDecoder {..})
 
