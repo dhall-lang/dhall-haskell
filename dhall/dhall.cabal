@@ -51,6 +51,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/null
     dhall-lang/Prelude/JSON/number
     dhall-lang/Prelude/JSON/object
+    dhall-lang/Prelude/JSON/omitNullFields
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
     dhall-lang/Prelude/JSON/string
@@ -62,6 +63,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/concat
     dhall-lang/Prelude/List/concatMap
     dhall-lang/Prelude/List/default
+    dhall-lang/Prelude/List/drop
     dhall-lang/Prelude/List/empty
     dhall-lang/Prelude/List/filter
     dhall-lang/Prelude/List/fold
@@ -78,6 +80,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/replicate
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
+    dhall-lang/Prelude/List/take
     dhall-lang/Prelude/List/unzip
     dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Location/Type
