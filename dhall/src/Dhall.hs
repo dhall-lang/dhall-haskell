@@ -72,6 +72,7 @@ module Dhall
     , sequence
     , list
     , vector
+    , function
     , setFromDistinctList
     , setIgnoringDuplicates
     , hashSetFromDistinctList
@@ -820,6 +821,30 @@ list = fmap Data.Foldable.toList . sequence
 vector :: Decoder a -> Decoder (Vector a)
 vector = fmap Data.Vector.fromList . list
 
+{-| Decode a Dhall function into a Haskell function
+
+>>> f <- input (function defaultInterpretOptions inject bool) "Natural/even" :: IO (Natural -> Bool)
+>>> f 0
+True
+>>> f 1
+False
+-}
+function
+    :: InterpretOptions
+    -> Encoder a
+    -> Decoder b
+    -> Decoder (a -> b)
+function options (Encoder {..}) (Decoder extractIn expectedIn) =
+    Decoder extractOut expectedOut
+  where
+    normalizer_ = Just (inputNormalizer options)
+
+    extractOut e = pure (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
+        Success o  -> o
+        Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
+
+    expectedOut = Pi "_" declared expectedIn
+
 {-| Decode a `Set` from a `List`
 
 >>> input (setIgnoringDuplicates natural) "[1, 2, 3]"
@@ -1126,20 +1151,8 @@ instance (Eq k, Hashable k, FromDhall k, FromDhall v) => FromDhall (HashMap k v)
     autoWith opts = Dhall.hashMap (autoWith opts) (autoWith opts)
 
 instance (ToDhall a, FromDhall b) => FromDhall (a -> b) where
-    autoWith opts = Decoder extractOut expectedOut
-      where
-        normalizer_ = Just (inputNormalizer opts)
-
-        -- ToDo
-        extractOut e = pure (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
-            Success o  -> o
-            Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
-
-        expectedOut = Pi "_" declared expectedIn
-
-        Encoder {..} = injectWith opts
-
-        Decoder extractIn expectedIn = autoWith opts
+    autoWith opts =
+        function opts (injectWith opts) (autoWith opts)
 
 instance (FromDhall a, FromDhall b) => FromDhall (a, b)
 
