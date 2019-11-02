@@ -608,9 +608,7 @@ outputWithoutSpacing expr = do
   case outputHandle of
     Nothing     -> pure ()
     Just handle -> do
-      let stream =
-              Pretty.layoutSmart Dhall.Pretty.layoutOpts
-                  (Dhall.Pretty.prettyCharacterSet characterSet expr)
+      let stream = Dhall.Pretty.layout (Dhall.Pretty.prettyCharacterSet characterSet expr)
 
       supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
       let ansiStream =

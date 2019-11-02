@@ -234,7 +234,6 @@ import qualified Data.List
 import qualified Data.Map
 import qualified Data.Ord
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector                           as Vector
 import qualified Dhall.Core                            as Core
@@ -393,8 +392,7 @@ _ERROR :: Data.Text.Text
 _ERROR = Dhall.Util._ERROR
 
 insert :: Pretty a => a -> Text
-insert =
-    Pretty.renderStrict . Pretty.layoutPretty Dhall.Pretty.layoutOpts . Dhall.Util.insert
+insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
 
 instance Exception CompileError
 
