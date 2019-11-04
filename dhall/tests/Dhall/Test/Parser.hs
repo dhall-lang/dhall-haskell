@@ -89,7 +89,8 @@ notesInLetInLet = do
                       (Just " ")
                       Nothing
                       (Just " ")
-                      (Note "0" (NaturalLit 0)))
+                      (Note "0 " (Note "0" (NaturalLit 0)))
+                    )
                     -- This 'Let' isn't wrapped in a 'Note'!
                     (Let
                       (Binding
@@ -98,7 +99,7 @@ notesInLetInLet = do
                         (Just " ")
                         Nothing
                         (Just " ")
-                        (Note "1" (NaturalLit 1))
+                        (Note "1 " (Note "1" (NaturalLit 1)))
                       )
                       (Note "let z = 2 in x"
                         (Let
@@ -108,10 +109,14 @@ notesInLetInLet = do
                             (Just " ")
                             Nothing
                             (Just " ")
-                            (Note "2" (NaturalLit 2))
+                            (Note "2 " (Note "2" (NaturalLit 2)))
                           )
-                          (Note "x"
-                            (Var (V "x" 0))))))))
+                          (Note "x" (Var (V "x" 0)))
+                        )
+                      )
+                    )
+                  )
+                )
 
         let msg = "Unexpected parse result"
 

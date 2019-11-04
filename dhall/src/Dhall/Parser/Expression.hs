@@ -262,14 +262,14 @@ parsers embedded = Parsers {..}
             a <- operatorExpression
 
             let alternative4A = do
-                    try (whitespace *> _arrow)
+                    _arrow
                     whitespace
                     b <- expression
                     whitespace
                     return (Pi "_" a b)
 
             let alternative4B = do
-                    try (whitespace *> _colon)
+                    _colon
                     nonemptyWhitespace
                     b <- expression
                     case shallowDenote a of
@@ -289,9 +289,16 @@ parsers embedded = Parsers {..}
     makeOperatorExpression operatorParser subExpression =
             noted (do
                 a <- subExpression
+
+                whitespace
+
                 b <- Text.Megaparsec.many $ do
-                    op <- try (whitespace *> operatorParser)
+                    op <- operatorParser
+
                     r  <- subExpression
+
+                    whitespace
+
                     return (\l -> l `op` r)
                 return (foldl (\x f -> f x) a b) )
 
@@ -705,36 +712,70 @@ parsers embedded = Parsers {..}
     nonEmptyRecordTypeOrLiteral = do
             a <- anyLabel
 
+            whitespace
+
             let nonEmptyRecordType = do
-                    try (whitespace *> _colon)
+                    _colon
+
                     nonemptyWhitespace
+
                     b <- expression
+
+                    whitespace
+
                     e <- Text.Megaparsec.many (do
-                        try (whitespace *> _comma)
+                        _comma
+
                         whitespace
+
                         c <- anyLabel
+
                         whitespace
+
                         _colon
+
                         nonemptyWhitespace
+
                         d <- expression
+
+                        whitespace
+
                         return (c, d) )
+
                     m <- toMap ((a, b) : e)
+
                     return (Record m)
 
             let nonEmptyRecordLiteral = do
-                    try (whitespace *> _equal)
+                    _equal
+
                     whitespace
+
                     b <- expression
+
+                    whitespace
+
                     e <- Text.Megaparsec.many (do
-                        try (whitespace *> _comma)
+                        _comma
+
                         whitespace
+
                         c <- anyLabel
+
                         whitespace
+
                         _equal
+
                         whitespace
+
                         d <- expression
+
+                        whitespace
+
                         return (c, d) )
+
                     m <- toMap ((a, b) : e)
+
                     return (RecordLit m)
 
             nonEmptyRecordType <|> nonEmptyRecordLiteral
@@ -840,10 +881,8 @@ local = do
 http :: Parser ImportType
 http = do
     url <- httpRaw
-    headers <- optional (try $ do
-        whitespace
-        _using
-        nonemptyWhitespace
+    headers <- optional (do
+        try (whitespace *> _using *> nonemptyWhitespace)
         importExpression import_ )
     return (Remote (url { headers }))
 
@@ -905,10 +944,9 @@ import_ = (do
     importMode   <- alternative <|> pure Code
     return (Import {..}) ) <?> "import"
   where
-    alternative = try $ do
-      whitespace
-      _as
-      nonemptyWhitespace
+    alternative = do
+      try (whitespace *> _as *> nonemptyWhitespace)
+
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
 -- | Same as @Data.Text.splitOn@, except always returning a `NonEmpty` result
