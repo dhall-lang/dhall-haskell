@@ -1100,12 +1100,18 @@ prettyCharacterSet characterSet expression =
             <>  prettyExpression d
             <>  rbrace
 
-        prettyMultilineText text = literal (mconcat docs)
+        prettyMultilineText text = mconcat docs
           where
             lines_ = Text.splitOn "\n" (escapeSingleQuotedText text)
 
+            -- Annotate only non-empty lines so trailing whitespace can be
+            -- removed on empty ones.
+            prettyLine line =
+                (if Text.null line then id else literal)
+                    (Pretty.pretty line)
+
             docs =
-                Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lines_)
+                Data.List.intersperse Pretty.hardline (map prettyLine lines_)
 
         prettyChunk (c, d) =
                 prettyText c
