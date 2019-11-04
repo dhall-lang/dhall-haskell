@@ -10,11 +10,11 @@ import Turtle (FilePath)
 
 import qualified Data.Text                             as Text
 import qualified Data.Text.IO                          as Text.IO
-import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
 import qualified Dhall.Core                            as Core
 import qualified Dhall.Diff                            as Diff
 import qualified Dhall.Parser                          as Parser
+import qualified Dhall.Pretty
 import qualified Dhall.Test.Util                       as Test.Util
 import qualified Test.Tasty                            as Tasty
 import qualified Test.Tasty.HUnit                      as Tasty.HUnit
@@ -50,13 +50,8 @@ diffTest prefix =
         let actualDiffDocument =
                 Diff.doc (Diff.diffNormalized leftInput rightInput) <> "\n"
 
-        let options =
-                Pretty.LayoutOptions
-                    { Pretty.layoutPageWidth = Pretty.Unbounded }
-
-        let actualDiffText =
-                Pretty.Text.renderStrict
-                    (Pretty.layoutPretty options actualDiffDocument)
+        let actualDiffText = Pretty.Text.renderStrict
+                    (Dhall.Pretty.layout actualDiffDocument)
 
         let message = "The diffed expressions did not match the expected output"
 

@@ -80,7 +80,7 @@ main = do
 
     let prettyExpression =
               Pretty.renderStrict
-            . Pretty.layoutSmart Dhall.Pretty.layoutOpts
+            . Dhall.Pretty.layout
             . Dhall.Pretty.prettyExpr
 
     let interpret = do
