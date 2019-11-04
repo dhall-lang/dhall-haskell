@@ -26,7 +26,6 @@ import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
@@ -97,8 +96,7 @@ writeExpr inplace (header, expr) characterSet = do
     case inplace of
         InputFile f ->
             System.IO.withFile f System.IO.WriteMode (\handle -> do
-                Pretty.renderIO handle unAnnotated
-                Data.Text.IO.hPutStrLn handle "" )
+                Pretty.renderIO handle unAnnotated)
 
         StandardInput -> do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
