@@ -15,7 +15,7 @@ import Data.Text (Text)
 import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
 import Dhall.Src (Src(..))
 import Dhall.Parser
-import Dhall.Parser.Token
+import Dhall.Parser.Token hiding (text)
 import Dhall.Parser.Expression (getSourcePos, importType_, importHash_, localOnly)
 import Text.Megaparsec (try, skipManyTill, lookAhead, anySingle,
   notFollowedBy, eof, takeRest)
@@ -73,6 +73,7 @@ getLetIdentifier src@(Src left _ text) =
   where parseLetIdentifier = do
           setSourcePos left
           _let
+          whitespace
           begin <- getSourcePos
           (tokens, _) <- Megaparsec.match label
           end <- getSourcePos
@@ -86,7 +87,9 @@ getLamIdentifier (Src left _ text) =
   where parseLetIdentifier = do
           setSourcePos left
           _lambda
+          whitespace
           _openParens
+          whitespace
           begin <- getSourcePos
           (tokens, _) <- Megaparsec.match label
           end <- getSourcePos
@@ -100,7 +103,9 @@ getForallIdentifier (Src left _ text) =
   where parseLetIdentifier = do
           setSourcePos left
           _forall
+          whitespace
           _openParens
+          whitespace
           begin <- getSourcePos
           (tokens, _) <- Megaparsec.match label
           end <- getSourcePos
@@ -116,6 +121,7 @@ getImportHash (Src left _ text) =
   where parseImportHashPosition = do
           setSourcePos left
           _ <- importType_
+          whitespace
           begin <- getSourcePos
           (tokens, _) <- Megaparsec.match $ optional importHash_
           end <- getSourcePos
@@ -166,37 +172,57 @@ binderExprFromText txt =
 
     closedLet = do
       _let
+      nonemptyWhitespace
       _ <- label
+      whitespace
       _ <- optional (do
         _colon
+        nonemptyWhitespace
         expr)
       _equal
+      whitespace
       _ <- expr
+      whitespace
       (do
         _in
+        nonemptyWhitespace
         _ <- expr
         return ())
         <|> closedLet
 
     closedLambda = do
       _lambda
+      whitespace
       _openParens
+      whitespace
       _ <- label
+      whitespace
       _colon
+      nonemptyWhitespace
       _ <- expr
+      whitespace
       _closeParens
+      whitespace
       _arrow
+      whitespace
       _ <- expr
       return ()
 
     closedPi = do
       _forall
+      whitespace
       _openParens
+      whitespace
       _ <- label
+      whitespace
       _colon
+      nonemptyWhitespace
       _ <- expr
+      whitespace
       _closeParens
+      whitespace
       _arrow
+      whitespace
       _ <- expr
       return ()
 
@@ -219,33 +245,45 @@ binderExprFromText txt =
 
     letBinder = do
       _let
+      nonemptyWhitespace
       name <- label
-      mType <- optional (do _colon; _type <- expr; return (Nothing, _type))
+      whitespace
+      mType <- optional (do _colon; nonemptyWhitespace; _type <- expr; whitespace; return (Nothing, _type))
 
       -- if the bound value does not parse, skip and replace with 'hole'
-      value <- try (do _equal; expr)
+      value <- try (do _equal; whitespace; expr <* whitespace)
           <|> (do skipManyTill anySingle (lookAhead boundary <|> _in); return holeExpr)
       inner <- parseBinderExpr
       return (Let (Binding Nothing name Nothing mType Nothing value) inner)
 
     forallBinder = do
       _forall
+      whitespace
       _openParens
+      whitespace
       name <- label
+      whitespace
       _colon
+      nonemptyWhitespace
       -- if the bound type does not parse, skip and replace with 'hole'
-      typ <- try (do e <- expr; _closeParens; _arrow; return e)
+      typ <- try (do e <- expr; whitespace; _closeParens; whitespace; _arrow; return e)
           <|> (do skipManyTill anySingle _arrow; return holeExpr)
+      whitespace
       inner <- parseBinderExpr
       return (Pi name typ inner)
 
     lambdaBinder = do
       _lambda
+      whitespace
       _openParens
+      whitespace
       name <- label
+      whitespace
       _colon
+      nonemptyWhitespace
       -- if the bound type does not parse, skip and replace with 'hole'
-      typ <- try (do e <- expr; _closeParens; _arrow; return e)
+      typ <- try (do e <- expr; whitespace; _closeParens; whitespace; _arrow; return e)
           <|> (do skipManyTill anySingle _arrow; return holeExpr)
+      whitespace
       inner <- parseBinderExpr
       return (Lam name typ inner)

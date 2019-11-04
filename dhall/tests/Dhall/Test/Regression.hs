@@ -55,7 +55,7 @@ data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
 
 unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
-    let ty = Dhall.auto :: Dhall.Type Foo
+    let ty = Dhall.auto :: Dhall.Decoder Foo
     Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
         (Dhall.Core.Union
             (Dhall.Map.fromList
@@ -69,14 +69,14 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
             )
         )
 
-    let inj = Dhall.inject :: Dhall.InputType Foo
+    let inj = Dhall.inject :: Dhall.Encoder Foo
     Test.Tasty.HUnit.assertEqual "Good ToDhall" (Dhall.declared inj) (Dhall.expected ty)
 
-    let tu_ty = Dhall.auto :: Dhall.Type (Integer, Bool)
+    let tu_ty = Dhall.auto :: Dhall.Decoder (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Dhall.Core.Record (
             Dhall.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
 
-    let tu_in = Dhall.inject :: Dhall.InputType (Integer, Bool)
+    let tu_in = Dhall.inject :: Dhall.Encoder (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Dhall.declared tu_in) (Dhall.expected tu_ty)
 
     return () )
@@ -90,7 +90,7 @@ issue96 = Test.Tasty.HUnit.testCase "Issue #96" (do
 issue126 :: TestTree
 issue126 = Test.Tasty.HUnit.testCase "Issue #126" (do
     e <- Util.code "''\nfoo\nbar\n''"
-    Util.normalize' e @?= "\"foo\\nbar\\n\"" )
+    Util.normalize' e @?= "''\nfoo\nbar\n''" )
 
 issue151 :: TestTree
 issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do

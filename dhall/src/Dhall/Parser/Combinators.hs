@@ -24,7 +24,6 @@ import qualified Control.Monad.Fail
 import qualified Data.Char
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Pretty
@@ -49,7 +48,7 @@ instance Show e => Show (SourcedException e) where
         <>  "\n"
         <>  "\n"
         <>  Pretty.renderString
-                (Pretty.layoutPretty Dhall.Pretty.layoutOpts (pretty source))
+                (Dhall.Pretty.layout (pretty source))
 
 -- | Doesn't force the 'Text' part
 laxSrcEq :: Src -> Src -> Bool

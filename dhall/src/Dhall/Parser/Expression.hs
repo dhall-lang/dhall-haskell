@@ -14,7 +14,7 @@ import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
-import Dhall.Core
+import Dhall.Syntax
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
@@ -34,7 +34,6 @@ import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
 import qualified Text.Megaparsec.Char    as Text.Megaparsec
 #endif
-import qualified Text.Parser.Char
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
@@ -129,9 +128,7 @@ data Parsers a = Parsers
 parsers :: Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
-    completeExpression_ = do
-        whitespace
-        expression
+    completeExpression_ = whitespace *> expression <* whitespace
 
     expression =
         noted
@@ -147,53 +144,72 @@ parsers embedded = Parsers {..}
       where
         alternative0 = do
             _lambda
+            whitespace
             _openParens
+            whitespace
             a <- label
+            whitespace
             _colon
+            nonemptyWhitespace
             b <- expression
+            whitespace
             _closeParens
+            whitespace
             _arrow
+            whitespace
             c <- expression
             return (Lam a b c)
 
         alternative1 = do
             _if
+            nonemptyWhitespace
             a <- expression
+            whitespace
             _then
+            nonemptyWhitespace
             b <- expression
+            whitespace
             _else
+            nonemptyWhitespace
             c <- expression
             return (BoolIf a b c)
 
         alternative2 = do
             let binding = do
-                    _letOnly
+                    _let
 
                     src0 <- src nonemptyWhitespace
 
-                    c <- labelOnly
+                    c <- label
 
                     src1 <- src whitespace
 
                     d <- optional (do
-                        _colonOnly
+                        _colon
 
                         src2 <- src nonemptyWhitespace
 
                         e <- expression
+
+                        whitespace
+
                         return (Just src2, e) )
 
-                    _equalOnly
+                    _equal
 
                     src3 <- src whitespace
 
                     f <- expression
+
+                    whitespace
 
                     return (Binding (Just src0) c (Just src1) d (Just src3) f)
 
             as <- Data.List.NonEmpty.some1 binding
 
             _in
+
+            nonemptyWhitespace
 
             b <- expression
 
@@ -214,22 +230,31 @@ parsers embedded = Parsers {..}
             --     (Let y …
             --       (Note …
             --         (Let z …
-            return (Dhall.Core.wrapInLets as b)
+            return (Dhall.Syntax.wrapInLets as b)
 
         alternative3 = do
             _forall
+            whitespace
             _openParens
+            whitespace
             a <- label
+            whitespace
             _colon
+            nonemptyWhitespace
             b <- expression
+            whitespace
             _closeParens
+            whitespace
             _arrow
+            whitespace
             c <- expression
             return (Pi a b c)
 
         alternative4 = do
             _assert
+            whitespace
             _colon
+            nonemptyWhitespace
             a <- expression
             return (Assert a)
 
@@ -238,14 +263,15 @@ parsers embedded = Parsers {..}
 
             let alternative4A = do
                     _arrow
+                    whitespace
                     b <- expression
+                    whitespace
                     return (Pi "_" a b)
 
             let alternative4B = do
                     _colon
-
+                    nonemptyWhitespace
                     b <- expression
-
                     case shallowDenote a of
                         ListLit _ [] ->
                             return (ListLit (Just b) [])
@@ -257,56 +283,47 @@ parsers embedded = Parsers {..}
 
             alternative4A <|> alternative4B <|> pure a
 
-    operatorExpression = precedence0Expression
+    operatorExpression =
+        foldr makeOperatorExpression applicationExpression operatorParsers
 
-    makeOperatorExpression subExpression operatorParser =
+    makeOperatorExpression operatorParser subExpression =
             noted (do
                 a <- subExpression
+
+                whitespace
+
                 b <- Text.Megaparsec.many $ do
                     op <- operatorParser
+
                     r  <- subExpression
+
+                    whitespace
 
                     return (\l -> l `op` r)
                 return (foldl (\x f -> f x) a b) )
 
-    precedence0Operator =
-                ImportAlt   <$ _importAlt
-            <|> BoolOr      <$ _or
-            <|> TextAppend  <$ _textAppend
-            <|> NaturalPlus <$ _plus
-            <|> ListAppend  <$ _listAppend
-
-    precedence1Operator =
-                BoolAnd     <$ _and
-            <|> Combine     <$ _combine
-
-    precedence2Operator =
-                CombineTypes <$ _combineTypes
-            <|> Prefer       <$ _prefer
-            <|> NaturalTimes <$ _times
-            <|> BoolEQ       <$ _doubleEqual
-
-    precedence3Operator
-            =   BoolNE     <$ _notEqual
-            <|> Equivalent <$ _equivalent
-
-    precedence0Expression =
-            makeOperatorExpression precedence1Expression precedence0Operator
-
-    precedence1Expression =
-            makeOperatorExpression precedence2Expression precedence1Operator
-
-    precedence2Expression =
-            makeOperatorExpression precedence3Expression precedence2Operator
-
-    precedence3Expression =
-            makeOperatorExpression applicationExpression precedence3Operator
+    operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
+    operatorParsers =
+        [ ImportAlt    <$ _importAlt    <* nonemptyWhitespace
+        , BoolOr       <$ _or           <* whitespace
+        , NaturalPlus  <$ _plus         <* nonemptyWhitespace
+        , TextAppend   <$ _textAppend   <* whitespace
+        , ListAppend   <$ _listAppend   <* whitespace
+        , BoolAnd      <$ _and          <* whitespace
+        , Combine      <$ _combine      <* whitespace
+        , Prefer       <$ _prefer       <* whitespace
+        , CombineTypes <$ _combineTypes <* whitespace
+        , NaturalTimes <$ _times        <* whitespace
+        , BoolEQ       <$ _doubleEqual  <* whitespace
+        , BoolNE       <$ _notEqual     <* whitespace
+        , Equivalent   <$ _equivalent   <* whitespace
+        ]
 
     applicationExpression = do
-            f <-    (do _Some; return Some)
+            f <-    (Some <$ _Some <* nonemptyWhitespace)
                 <|> return id
             a <- noted importExpression_
-            b <- Text.Megaparsec.many (noted importExpression_)
+            b <- Text.Megaparsec.many (try (nonemptyWhitespace *> noted importExpression_))
             return (foldl app (f a) b)
           where
             app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
@@ -337,7 +354,7 @@ parsers embedded = Parsers {..}
     selectorExpression = noted (do
             a <- primitiveExpression
 
-            let recordType = _openParens *> expression <* _closeParens
+            let recordType = _openParens *> whitespace *> expression <* whitespace <* _closeParens
 
             let field               x  e = Field   e  x
             let projectBySet        xs e = Project e (Left  xs)
@@ -348,7 +365,7 @@ parsers embedded = Parsers {..}
                     <|> fmap projectBySet        labels
                     <|> fmap projectByExpression recordType
 
-            b <- Text.Megaparsec.many (try (do _dot; alternatives))
+            b <- Text.Megaparsec.many (try (whitespace *> _dot *> whitespace *> alternatives))
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
@@ -365,8 +382,7 @@ parsers embedded = Parsers {..}
                     , alternative08
                     , alternative37
                     , alternative09
-
-                    , builtin <?> "built-in expression"
+                    , builtin
                     ]
                 )
             <|> alternative38
@@ -392,13 +408,17 @@ parsers embedded = Parsers {..}
             alternative04 = (do
                 _openBrace
 
-                _ <- optional _comma
+                whitespace
+
+                _ <- optional (_comma *> whitespace)
 
                 a <- recordTypeOrLiteral
 
+                whitespace
+
                 _closeBrace
 
-                return a ) <?> "record type or literal"
+                return a ) <?> "literal"
 
             alternative05 = unionType
 
@@ -406,12 +426,15 @@ parsers embedded = Parsers {..}
 
             alternative07 = do
                 _merge
+                nonemptyWhitespace
                 a <- importExpression_
+                nonemptyWhitespace
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative08 = do
                 _toMap
+                nonemptyWhitespace
                 a <- importExpression_
                 return (ToMap a Nothing)
 
@@ -453,7 +476,9 @@ parsers embedded = Parsers {..}
                             ]
                     'I' ->
                         choice
-                            [ IntegerShow      <$ _IntegerShow
+                            [ IntegerClamp     <$ _IntegerClamp
+                            , IntegerNegate    <$ _IntegerNegate
+                            , IntegerShow      <$ _IntegerShow
                             , IntegerToDouble  <$ _IntegerToDouble
                             , Integer          <$ _Integer
                             ]
@@ -499,7 +524,9 @@ parsers embedded = Parsers {..}
 
             alternative38 = do
                 _openParens
+                whitespace
                 a <- expression
+                whitespace
                 _closeParens
                 return a
 
@@ -512,9 +539,9 @@ parsers embedded = Parsers {..}
                 ]
           where
             interpolation = do
-                _ <- Text.Parser.Char.text "${"
+                _ <- text "${"
                 e <- completeExpression_
-                _ <- Text.Parser.Char.char '}'
+                _ <- char '}'
                 return (Chunks [(mempty, e)] mempty)
 
             unescapedCharacterFast = do
@@ -528,11 +555,11 @@ parsers embedded = Parsers {..}
                     ) && c /= '$'
 
             unescapedCharacterSlow = do
-                _ <- Text.Parser.Char.char '$'
+                _ <- char '$'
                 return (Chunks [] "$")
 
             escapedCharacter = do
-                _ <- Text.Parser.Char.char '\\'
+                _ <- char '\\'
                 c <- choice
                     [ quotationMark
                     , dollarSign
@@ -547,26 +574,26 @@ parsers embedded = Parsers {..}
                     ]
                 return (Chunks [] (Data.Text.singleton c))
               where
-                quotationMark = Text.Parser.Char.char '"'
+                quotationMark = char '"'
 
-                dollarSign = Text.Parser.Char.char '$'
+                dollarSign = char '$'
 
-                backSlash = Text.Parser.Char.char '\\'
+                backSlash = char '\\'
 
-                forwardSlash = Text.Parser.Char.char '/'
+                forwardSlash = char '/'
 
-                backSpace = do _ <- Text.Parser.Char.char 'b'; return '\b'
+                backSpace = do _ <- char 'b'; return '\b'
 
-                formFeed = do _ <- Text.Parser.Char.char 'f'; return '\f'
+                formFeed = do _ <- char 'f'; return '\f'
 
-                lineFeed = do _ <- Text.Parser.Char.char 'n'; return '\n'
+                lineFeed = do _ <- char 'n'; return '\n'
 
-                carriageReturn = do _ <- Text.Parser.Char.char 'r'; return '\r'
+                carriageReturn = do _ <- char 'r'; return '\r'
 
-                tab = do _ <- Text.Parser.Char.char 't'; return '\t'
+                tab = do _ <- char 't'; return '\t'
 
                 unicode = do
-                    _  <- Text.Parser.Char.char 'u';
+                    _  <- char 'u';
 
                     let toNumber = Data.List.foldl' (\x y -> x * 16 + y) 0
 
@@ -574,7 +601,7 @@ parsers embedded = Parsers {..}
                             fmap toNumber (Control.Monad.replicateM 4 hexNumber)
 
                     let bracedEscapeSequence = do
-                            _  <- Text.Parser.Char.char '{'
+                            _  <- char '{'
                             ns <- some hexNumber
 
                             let number = toNumber ns
@@ -582,7 +609,7 @@ parsers embedded = Parsers {..}
                             Control.Monad.guard (number <= 0x10FFFF && validCodepoint (Char.chr number))
                                 <|> fail "Invalid Unicode code point"
 
-                            _  <- Text.Parser.Char.char '}'
+                            _  <- char '}'
 
                             return (toNumber ns)
 
@@ -591,9 +618,9 @@ parsers embedded = Parsers {..}
                     return (Char.chr n)
 
     doubleQuotedLiteral = do
-            _      <- Text.Parser.Char.char '"'
+            _      <- char '"'
             chunks <- Text.Megaparsec.many doubleQuotedChunk
-            _      <- Text.Parser.Char.char '"'
+            _      <- char '"'
             return (mconcat chunks)
 
     singleQuoteContinue =
@@ -614,19 +641,19 @@ parsers embedded = Parsers {..}
                     return ("''" <> b)
 
                 interpolation = do
-                    _ <- Text.Parser.Char.text "${"
+                    _ <- text "${"
                     a <- completeExpression_
-                    _ <- Text.Parser.Char.char '}'
+                    _ <- char '}'
                     b <- singleQuoteContinue
                     return (Chunks [(mempty, a)] mempty <> b)
 
                 escapeInterpolation = do
-                    _ <- Text.Parser.Char.text "''${"
+                    _ <- text "''${"
                     b <- singleQuoteContinue
                     return ("${" <> b)
 
                 endLiteral = do
-                    _ <- Text.Parser.Char.text "''"
+                    _ <- text "''"
                     return mempty
 
                 unescapedCharacterFast = do
@@ -650,25 +677,22 @@ parsers embedded = Parsers {..}
                     return (Chunks [] a <> b)
 
                 tab = do
-                    _ <- Text.Parser.Char.char '\t'
+                    _ <- char '\t' <?> "tab"
                     b <- singleQuoteContinue
                     return ("\t" <> b)
 
     singleQuoteLiteral = do
-            _ <- Text.Parser.Char.text "''"
+            _ <- text "''"
             _ <- endOfLine
             a <- singleQuoteContinue
 
             return (toDoubleQuoted a)
           where
-            endOfLine =
-                    void (Text.Parser.Char.char '\n'  )
-                <|> void (Text.Parser.Char.text "\r\n")
+            endOfLine = (void (char '\n') <|> void (text "\r\n")) <?> "newline"
 
     textLiteral = (do
             literal <- doubleQuotedLiteral <|> singleQuoteLiteral
-            whitespace
-            return (TextLit literal) ) <?> "text literal"
+            return (TextLit literal) ) <?> "literal"
 
     recordTypeOrLiteral =
             choice
@@ -688,28 +712,70 @@ parsers embedded = Parsers {..}
     nonEmptyRecordTypeOrLiteral = do
             a <- anyLabel
 
+            whitespace
+
             let nonEmptyRecordType = do
                     _colon
+
+                    nonemptyWhitespace
+
                     b <- expression
+
+                    whitespace
+
                     e <- Text.Megaparsec.many (do
                         _comma
+
+                        whitespace
+
                         c <- anyLabel
+
+                        whitespace
+
                         _colon
+
+                        nonemptyWhitespace
+
                         d <- expression
+
+                        whitespace
+
                         return (c, d) )
+
                     m <- toMap ((a, b) : e)
+
                     return (Record m)
 
             let nonEmptyRecordLiteral = do
                     _equal
+
+                    whitespace
+
                     b <- expression
+
+                    whitespace
+
                     e <- Text.Megaparsec.many (do
                         _comma
+
+                        whitespace
+
                         c <- anyLabel
+
+                        whitespace
+
                         _equal
+
+                        whitespace
+
                         d <- expression
+
+                        whitespace
+
                         return (c, d) )
+
                     m <- toMap ((a, b) : e)
+
                     return (RecordLit m)
 
             nonEmptyRecordType <|> nonEmptyRecordLiteral
@@ -717,30 +783,36 @@ parsers embedded = Parsers {..}
     unionType = (do
             _openAngle
 
-            _ <- optional _bar
+            whitespace
+
+            _ <- optional (_bar *> whitespace)
 
             let unionTypeEntry = do
                     a <- anyLabel
-                    b <- optional (do _colon; expression)
+                    whitespace
+                    b <- optional (_colon *> nonemptyWhitespace *> expression <* whitespace)
                     return (a, b)
 
-            kvs <- Text.Megaparsec.sepBy unionTypeEntry _bar
+            kvs <- Text.Megaparsec.sepBy unionTypeEntry (_bar *> whitespace)
 
             m <- toMap kvs
 
             _closeAngle
 
-            return (Union m) ) <?> "union type"
+            return (Union m) ) <?> "literal"
 
     listLiteral = (do
             _openBracket
 
-            _ <- optional _comma
+            whitespace
 
-            a <- Text.Megaparsec.sepBy expression _comma
+            _ <- optional (_comma *> whitespace)
+
+            a <- Text.Megaparsec.sepBy (expression <* whitespace) (_comma *> whitespace)
 
             _closeBracket
-            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "list literal"
+
+            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "literal"
 
 {-| Parse an environment variable import
 
@@ -748,17 +820,16 @@ parsers embedded = Parsers {..}
 -}
 env :: Parser ImportType
 env = do
-    _ <- Text.Parser.Char.text "env:"
+    _ <- text "env:"
     a <- (alternative0 <|> alternative1)
-    whitespace
     return (Env a)
   where
     alternative0 = bashEnvironmentVariable
 
     alternative1 = do
-        _ <- Text.Parser.Char.char '"'
+        _ <- char '"'
         a <- posixEnvironmentVariable
-        _ <- Text.Parser.Char.char '"'
+        _ <- char '"'
         return a
 
 -- | Parse a local import without trailing whitespace
@@ -801,7 +872,6 @@ localOnly =
 local :: Parser ImportType
 local = do
     a <- localOnly
-    whitespace
     return a
 
 {-| Parse an HTTP(S) import
@@ -811,9 +881,8 @@ local = do
 http :: Parser ImportType
 http = do
     url <- httpRaw
-    whitespace
     headers <- optional (do
-        _using
+        try (whitespace *> _using *> nonemptyWhitespace)
         importExpression import_ )
     return (Remote (url { headers }))
 
@@ -845,10 +914,9 @@ importType_ = do
 -}
 importHash_ :: Parser Dhall.Crypto.SHA256Digest
 importHash_ = do
-    _ <- Text.Parser.Char.text "sha256:"
-    text <- count 64 (satisfy hexdig <?> "hex digit")
-    whitespace
-    let strictBytes16 = Data.Text.Encoding.encodeUtf8 text
+    _ <- text "sha256:"
+    t <- count 64 (satisfy hexdig <?> "hex digit")
+    let strictBytes16 = Data.Text.Encoding.encodeUtf8 t
     strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
         Left  string      -> fail string
         Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
@@ -863,7 +931,7 @@ importHash_ = do
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
     importType <- importType_
-    hash       <- optional importHash_
+    hash       <- optional (try (nonemptyWhitespace *> importHash_))
     return (ImportHashed {..})
 
 {-| Parse an `Import`
@@ -877,7 +945,8 @@ import_ = (do
     return (Import {..}) ) <?> "import"
   where
     alternative = do
-      _as
+      try (whitespace *> _as *> nonemptyWhitespace)
+
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
 -- | Same as @Data.Text.splitOn@, except always returning a `NonEmpty` result

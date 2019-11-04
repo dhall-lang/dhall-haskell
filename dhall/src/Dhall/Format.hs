@@ -14,7 +14,7 @@ module Dhall.Format
 import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle)
-import Dhall.Util (Censor, Input(..))
+import Dhall.Util (Censor, Input(..), Header(..))
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
@@ -51,16 +51,16 @@ format
     :: Format
     -> IO ()
 format (Format {..}) = do
-    let layoutHeaderAndExpr header expr =
+    let layoutHeaderAndExpr (Header header, expr) =
             Dhall.Pretty.layout
                 (   Pretty.pretty header
                 <>  Dhall.Pretty.prettyCharacterSet characterSet expr 
                 <>  "\n")
 
     let layoutInput input = do
-            (header, expr) <- Dhall.Util.getExpressionAndHeader censor input
+            headerAndExpr <- Dhall.Util.getExpressionAndHeader censor input
 
-            return (layoutHeaderAndExpr header expr)
+            return (layoutHeaderAndExpr headerAndExpr)
 
     case formatMode of
         Modify {..} -> do
@@ -85,7 +85,11 @@ format (Format {..}) = do
                 InputFile file -> Data.Text.IO.readFile file
                 StandardInput  -> Data.Text.IO.getContents
 
-            docStream <- layoutInput path
+            docStream <- case path of
+                InputFile _    -> layoutInput path
+                StandardInput  -> do
+                    headerAndExpr <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+                    return (layoutHeaderAndExpr headerAndExpr)
 
             let formattedText = Pretty.Text.renderStrict docStream
 

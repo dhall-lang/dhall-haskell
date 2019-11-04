@@ -51,6 +51,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/null
     dhall-lang/Prelude/JSON/number
     dhall-lang/Prelude/JSON/object
+    dhall-lang/Prelude/JSON/omitNullFields
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
     dhall-lang/Prelude/JSON/string
@@ -62,6 +63,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/concat
     dhall-lang/Prelude/List/concatMap
     dhall-lang/Prelude/List/default
+    dhall-lang/Prelude/List/drop
     dhall-lang/Prelude/List/empty
     dhall-lang/Prelude/List/filter
     dhall-lang/Prelude/List/fold
@@ -74,9 +76,11 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/map
     dhall-lang/Prelude/List/null
     dhall-lang/Prelude/List/package.dhall
+    dhall-lang/Prelude/List/partition
     dhall-lang/Prelude/List/replicate
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
+    dhall-lang/Prelude/List/take
     dhall-lang/Prelude/List/unzip
     dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Location/Type
@@ -100,10 +104,15 @@ Extra-Source-Files:
     dhall-lang/Prelude/Natural/isZero
     dhall-lang/Prelude/Natural/lessThan
     dhall-lang/Prelude/Natural/lessThanEqual
+    dhall-lang/Prelude/Natural/listMax
+    dhall-lang/Prelude/Natural/listMin
+    dhall-lang/Prelude/Natural/max
+    dhall-lang/Prelude/Natural/min
     dhall-lang/Prelude/Natural/odd
     dhall-lang/Prelude/Natural/package.dhall
     dhall-lang/Prelude/Natural/product
     dhall-lang/Prelude/Natural/show
+    dhall-lang/Prelude/Natural/sort
     dhall-lang/Prelude/Natural/subtract
     dhall-lang/Prelude/Natural/sum
     dhall-lang/Prelude/Natural/toDouble
@@ -484,41 +493,42 @@ Library
             TemplateHaskell
 
     Exposed-Modules:
-        Dhall,
-        Dhall.Binary,
-        Dhall.Context,
-        Dhall.Core,
-        Dhall.Crypto,
-        Dhall.Diff,
-        Dhall.Tags,
-        Dhall.Format,
-        Dhall.Freeze,
-        Dhall.Import,
-        Dhall.Lint,
-        Dhall.Main,
-        Dhall.Map,
-        Dhall.Optics,
-        Dhall.Set,
-        Dhall.Src,
-        Dhall.Parser,
-        Dhall.Parser.Expression,
-        Dhall.Parser.Token,
-        Dhall.Pretty,
-        Dhall.Repl,
-        Dhall.Tutorial,
-        Dhall.TypeCheck,
+        Dhall
+        Dhall.Binary
+        Dhall.Context
+        Dhall.Core
+        Dhall.Crypto
+        Dhall.Diff
+        Dhall.Format
+        Dhall.Freeze
+        Dhall.Import
+        Dhall.Lint
+        Dhall.Main
+        Dhall.Map
+        Dhall.Optics
+        Dhall.Parser
+        Dhall.Parser.Expression
+        Dhall.Parser.Token
+        Dhall.Pretty
+        Dhall.Repl
+        Dhall.Set
+        Dhall.Src
+        Dhall.Tags
+        Dhall.Tutorial
+        Dhall.TypeCheck
         Dhall.Util
         Dhall.Version
     if !flag(cross)
         Exposed-Modules:
             Dhall.TH
     Other-Modules:
-        Dhall.Pretty.Internal,
-        Dhall.Parser.Combinators,
-        Dhall.URL,
-        Dhall.Import.Types,
-        Dhall.Syntax,
-        Dhall.Eval,
+        Dhall.Eval
+        Dhall.Import.Types
+        Dhall.Normalize
+        Dhall.Parser.Combinators
+        Dhall.Pretty.Internal
+        Dhall.Syntax
+        Dhall.URL
         Paths_dhall
     Autogen-Modules:
         Paths_dhall

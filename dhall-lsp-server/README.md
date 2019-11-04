@@ -87,3 +87,11 @@ See [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blo
   2. Use `npm install -g vsce` to install the *vsce* executable.
   3. Run `vsce package` inside the git repo to package the extension, resulting in a file `vscode-dhall-lsp-server-x.x.x.vsix`.
   4. You can install the packaged extension directly by opening the `.vsix` file from within VSCod/ium.
+  
+**Integration tests**
+
+The `dhall-lsp-server:tests` testsuite depends on the `dhall-lsp-server` executable. Since `stack` isn't aware of this dependency, `stack test dhall-lsp-server:tests` may use an old executable version. Run these tests with
+
+    stack test dhall-lsp-server:tests dhall-lsp-server:dhall-lsp-server
+    
+to ensure that the executable is up-to-date.

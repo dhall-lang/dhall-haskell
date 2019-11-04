@@ -1,7 +1,9 @@
 module Dhall.LSP.Backend.Formatting (formatExpr, formatExprWithHeader) where
 
 import Dhall.Core (Expr)
-import Dhall.Pretty (CharacterSet(..), layout, prettyCharacterSet)
+import Dhall.Pretty (CharacterSet(..))
+import Dhall.Parser (Header(..))
+import qualified Dhall.Pretty
 import Dhall.Src (Src)
 
 import Data.Monoid ((<>))
@@ -11,15 +13,16 @@ import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
 
 -- | Pretty-print the given Dhall expression.
 formatExpr :: Pretty.Pretty b => Expr Src b -> Text
-formatExpr expr = formatExprWithHeader expr ""
+formatExpr expr = formatExprWithHeader expr (Header "")
 
 -- | Pretty-print the given Dhall expression, prepending the given a "header"
 --   (usually consisting of comments and whitespace).
-formatExprWithHeader :: Pretty.Pretty b => Expr Src b -> Text -> Text
-formatExprWithHeader expr header = Pretty.renderStrict (layout doc)
+formatExprWithHeader :: Pretty.Pretty b => Expr Src b -> Header -> Text
+formatExprWithHeader expr (Header header) = Pretty.renderStrict
+  (Dhall.Pretty.layout doc)
   where
     doc =
       Pretty.pretty header
-        <> Pretty.unAnnotate (prettyCharacterSet Unicode expr)
+        <> Pretty.unAnnotate (Dhall.Pretty.prettyCharacterSet Unicode expr)
         <> "\n"
 

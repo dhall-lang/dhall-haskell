@@ -8,11 +8,13 @@ module Dhall.Parser (
       exprFromText
     , exprAndHeaderFromText
     , censor
+    , createHeader
 
     -- * Parsers
     , expr, exprA
 
     -- * Types
+    , Header(..)
     , Src(..)
     , SourcedException(..)
     , ParseError(..)
@@ -23,7 +25,7 @@ import Control.Exception (Exception)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (Void)
-import Dhall.Core
+import Dhall.Syntax
 import Dhall.Src (Src(..))
 import Prelude hiding (const, pi)
 import Text.Megaparsec (ParseErrorBundle(..), PosState(..))
@@ -34,7 +36,7 @@ import qualified Dhall.Core      as Core
 import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators
-import Dhall.Parser.Token
+import Dhall.Parser.Token hiding (text)
 import Dhall.Parser.Expression
 
 -- | Parser for a top-level Dhall expression
@@ -92,6 +94,17 @@ exprFromText
   -> Either ParseError (Expr Src Import)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
 
+-- | A header corresponds to the leading comment at the top of a Dhall file.
+--
+-- The header includes comment characters but is stripped of leading spaces and
+-- trailing newlines
+newtype Header = Header Text deriving Show
+
+-- | Create a header with stripped leading spaces and trailing newlines
+createHeader :: Text -> Header
+createHeader =
+    Header . Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')
+
 {-| Like `exprFromText` but also returns the leading comments and whitespace
     (i.e. header) up to the last newline before the code begins
 
@@ -108,10 +121,10 @@ exprAndHeaderFromText
     :: String -- ^ User-friendly name describing the input expression,
               --   used in parsing error messages
     -> Text   -- ^ Input expression to parse
-    -> Either ParseError (Text, Expr Src Import)
+    -> Either ParseError (Header, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
-    Right (txt, r) -> Right (stripHeader txt, r)
+    Right (txt, r) -> Right (createHeader txt, r)
   where
     parser = do
         (bytes, _) <- Text.Megaparsec.match whitespace
@@ -120,5 +133,3 @@ exprAndHeaderFromText delta text = case result of
         return (bytes, r)
 
     result = Text.Megaparsec.parse (unParser parser) delta text
-
-    stripHeader = Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')

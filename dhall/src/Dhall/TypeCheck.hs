@@ -37,12 +37,11 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
-import Dhall.Binary (ToTerm(..))
 import Dhall.Context (Context)
-import Dhall.Core (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
+import Dhall.Syntax (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Eval
     (Environment(..), Names(..), Val(..), (~>))
-import Dhall.Pretty (Ann, layoutOpts)
+import Dhall.Pretty (Ann)
 import Dhall.Src (Src)
 import Lens.Family (over)
 
@@ -60,6 +59,7 @@ import qualified Dhall.Diff
 import qualified Dhall.Eval                              as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
 import qualified Lens.Family
@@ -509,6 +509,12 @@ infer typer = loop
 
         IntegerLit _ -> do
             return VInteger
+
+        IntegerClamp -> do
+            return (VInteger ~> VNatural)
+
+        IntegerNegate -> do
+            return (VInteger ~> VInteger)
 
         IntegerShow -> do
             return (VInteger ~> VText)
@@ -1324,13 +1330,13 @@ data TypeMessage s a
     | CantMultiply (Expr s a) (Expr s a)
     deriving (Show)
 
-shortTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
+shortTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
 shortTypeMessage msg =
     "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
-longTypeMessage :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> Doc Ann
+longTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
 longTypeMessage msg =
         "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
     <>  "\n"
@@ -1351,8 +1357,7 @@ _NOT = "\ESC[1mnot\ESC[0m"
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
 
-prettyTypeMessage
-    :: (Eq a, Pretty a, ToTerm a) => TypeMessage s a -> ErrorMessages
+prettyTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
@@ -4246,32 +4251,19 @@ data TypeError s a = TypeError
     , typeMessage :: TypeMessage s a
     }
 
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Show (TypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+instance (Eq a, Pretty s, Pretty a) => Show (TypeError s a) where
+    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
 
-instance (Eq a, Pretty s, Pretty a, ToTerm a, Typeable s, Typeable a) => Exception (TypeError s a)
+instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeError s a)
 
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (TypeError s a) where
-    pretty (TypeError ctx expr msg)
+instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
+    pretty (TypeError _ expr msg)
         = Pretty.unAnnotate
             (   "\n"
-            <>  (   if null (Dhall.Context.toList ctx)
-                    then ""
-                    else prettyContext ctx <> "\n\n"
-                )
             <>  shortTypeMessage msg <> "\n"
             <>  source
             )
       where
-        prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
-
-        prettyContext =
-                Pretty.vsep
-            .   map prettyKV
-            .   reverse
-            .   Dhall.Context.toList
-
         source = case expr of
             Note s _ -> pretty s
             _        -> mempty
@@ -4284,7 +4276,7 @@ data Censored
     | Censored (TypeError Src X)
 
 instance Show Censored where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
 
 instance Exception Censored
 
@@ -4432,12 +4424,12 @@ messageExpressions f m = case m of
 newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Show (DetailedTypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+instance (Eq a, Pretty s, Pretty a) => Show (DetailedTypeError s a) where
+    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
 
-instance (Eq a, Pretty s, Pretty a, ToTerm a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
+instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
 
-instance (Eq a, Pretty s, Pretty a, ToTerm a) => Pretty (DetailedTypeError s a) where
+instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
     pretty (DetailedTypeError (TypeError ctx expr msg))
         = Pretty.unAnnotate
             (   "\n"

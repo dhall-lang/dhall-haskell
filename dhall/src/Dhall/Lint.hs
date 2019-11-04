@@ -9,7 +9,7 @@ module Dhall.Lint
     ) where
 
 import Control.Applicative ((<|>))
-import Dhall.Core (Binding(..), Expr(..), Import, Var(..), subExpressions)
+import Dhall.Syntax (Binding(..), Expr(..), Import, Var(..), subExpressions)
 
 import qualified Dhall.Core
 import qualified Dhall.Optics

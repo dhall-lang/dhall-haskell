@@ -30,6 +30,7 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/ln --symbolic ${logo.nix} $out/img/nix-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.stackOverflow} $out/img/stack-overflow-logo.svg
   ${coreutils}/bin/ln --symbolic '${logo.twitter}/Twitter Logos/Twitter Logos/Twitter_Logo_Blue/Twitter_Logo_Blue.svg' $out/img/twitter-logo.svg
+  ${coreutils}/bin/ln --symbolic ${logo.xml} $out/img/xml-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.yaml} $out/img/yaml-logo.png
   ${coreutils}/bin/mkdir $out/nix-support
   ${coreutils}/bin/echo "doc none $out/index.html" > $out/nix-support/hydra-build-products

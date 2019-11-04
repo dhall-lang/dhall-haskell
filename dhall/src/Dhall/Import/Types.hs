@@ -49,7 +49,7 @@ instance Pretty Chained where
 
 -- | An import that has been fully interpeted
 data ImportSemantics = ImportSemantics
-    { importSemantics :: Expr Src Void
+    { importSemantics :: Expr Void Void
     -- ^ The fully resolved import, typechecked and beta-normal.
     }
 

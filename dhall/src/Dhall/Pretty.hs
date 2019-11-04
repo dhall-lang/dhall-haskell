@@ -10,23 +10,8 @@ module Dhall.Pretty
     , CharacterSet(..)
     , prettyCharacterSet
 
-    , layout
-    , layoutOpts
+    , Dhall.Pretty.Internal.layout
+    , Dhall.Pretty.Internal.layoutOpts
     ) where
 
 import Dhall.Pretty.Internal
-import qualified Data.Text.Prettyprint.Doc as Pretty
-
--- | Layout using 'layoutOpts'
---
--- Tries hard to fit the document into 80 columns.
---
--- Removes trailing whitespace.
-layout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
-layout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart layoutOpts
-
--- | Default layout options
-layoutOpts :: Pretty.LayoutOptions
-layoutOpts =
-    Pretty.defaultLayoutOptions
-        { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
