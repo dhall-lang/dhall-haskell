@@ -1082,7 +1082,7 @@ prettyCharacterSet characterSet expression =
       where
         long =
             Pretty.align
-            (   literal ("''" <> Pretty.hardline)
+            (   literal "''" <> Pretty.hardline
             <>  Pretty.align
                 (foldMap prettyMultilineChunk a <> prettyMultilineText b)
             <>  literal "''"
