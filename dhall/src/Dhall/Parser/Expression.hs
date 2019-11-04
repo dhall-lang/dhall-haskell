@@ -882,8 +882,7 @@ http :: Parser ImportType
 http = do
     url <- httpRaw
     headers <- optional (do
-        try (whitespace *> _using)
-        nonemptyWhitespace
+        try (whitespace *> _using *> nonemptyWhitespace)
         importExpression import_ )
     return (Remote (url { headers }))
 
