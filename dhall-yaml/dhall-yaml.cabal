@@ -3,7 +3,7 @@ Version: 0.1.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
-License: GPL3
+License: GPL-3
 License-File: LICENSE
 Copyright: 2019 Gabriel Gonzalez
 Author: Gabriel Gonzalez
@@ -76,6 +76,7 @@ Executable yaml-to-dhall
         ansi-terminal               >= 0.6.3.1  && < 0.11,
         bytestring                                 < 0.11,
         dhall                                            ,
+        dhall-json                                       ,
         dhall-yaml                                       ,
         exceptions                  >= 0.8.3    && < 0.11,
         optparse-applicative                             ,
@@ -85,5 +86,5 @@ Executable yaml-to-dhall
     if !impl(ghc >= 8.0) && !impl(eta >= 0.8.4)
       Build-Depends: semigroups == 0.18.*
     Other-Modules:
-        Paths_dhall_json
+        Paths_dhall_yaml
     GHC-Options: -Wall
