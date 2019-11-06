@@ -30,7 +30,7 @@ import qualified Options.Applicative                       as Options
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.Exit
 import qualified System.IO                                 as IO
-import qualified Paths_dhall_json                          as Meta
+import qualified Paths_dhall_yaml                          as Meta
 
 -- ---------------
 -- Command options
