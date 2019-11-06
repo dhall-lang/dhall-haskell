@@ -4,7 +4,7 @@ Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
-License-Files: LICENSE.BSD3, LICENSE.GPLv3
+License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez
 Author: Gabriel Gonzalez
 Maintainer: Gabriel439@gmail.com
@@ -33,17 +33,13 @@ Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
 
-Flag gpl
-  Description: Use GPL-licensed components like HsYAML, and enable yaml-to-dhall binary
-  Default: False
-  Manual: True
-
 Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.8.0.0  && < 5   ,
         aeson                     >= 1.0.0.0  && < 1.5 ,
         aeson-pretty                             < 0.9 ,
+        aeson-yaml >= 1.0.2 && < 1.1                   ,
         bytestring                               < 0.11,
         containers                                     ,
         dhall                     >= 1.27.0   && < 1.28,
@@ -59,20 +55,9 @@ Library
         Dhall.JSON
         Dhall.JSONToDhall
         Dhall.Yaml
-    if flag(gpl)
-      Exposed-Modules:
-          Dhall.YamlToDhall
     Other-Modules:
         Dhall.JSON.Util
     GHC-Options: -Wall
-    if flag(gpl)
-      CPP-Options: -DGPL
-      Build-Depends:
-          HsYAML       >= 0.2 && < 0.3,
-          HsYAML-aeson >= 0.2 && < 0.3
-    else
-      Build-Depends:
-          aeson-yaml >= 1.0.2 && < 1.1
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json

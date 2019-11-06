@@ -47,7 +47,7 @@ install:
 
 script:
   - export PATH="${PATH}:$(pwd)/bin"
-  - stack build --flag dhall-json:gpl --copy-bins --local-bin-path ./bin
+  - stack build --flag dhall-json --copy-bins --local-bin-path ./bin
   - source .travis-functions.sh
   - tar -jcvf $(mk_release_name dhall) bin/dhall
   - tar -jcvf $(mk_release_name dhall-json) bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall bin/yaml-to-dhall

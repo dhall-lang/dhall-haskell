@@ -15,7 +15,7 @@ import Data.Text (Text)
 import Data.Version (showVersion)
 import Dhall.JSONToDhall (Conversion, parseConversion)
 import Dhall.Pretty (CharacterSet(..))
-import Dhall.YamlToDhall (Options(..), dhallFromYaml)
+import Dhall.YAMLToDhall (Options(..), dhallFromYaml)
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
