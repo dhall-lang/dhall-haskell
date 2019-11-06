@@ -1,1 +1,1 @@
-packages: ./dhall ./dhall-bash ./dhall-json ./dhall-lsp-server ./dhall-nix
+packages: ./dhall ./dhall-bash ./dhall-json ./dhall-json-yaml-common ./dhall-yaml ./dhall-lsp-server ./dhall-nix
