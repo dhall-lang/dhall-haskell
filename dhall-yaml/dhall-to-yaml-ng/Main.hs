@@ -6,7 +6,8 @@ import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Dhall.JSON (parsePreservationAndOmission, parseConversion)
-import Dhall.Yaml (Options(..), dhallToYaml, parseDocuments, parseQuoted)
+import Dhall.Yaml (Options(..), parseDocuments, parseQuoted)
+import Dhall.YAML (dhallToYaml)
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
