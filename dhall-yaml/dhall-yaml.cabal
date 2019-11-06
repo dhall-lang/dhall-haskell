@@ -60,6 +60,7 @@ Executable dhall-to-yaml-ng
         aeson                                  ,
         bytestring                       < 0.11,
         dhall                                  ,
+        dhall-json                             ,
         dhall-yaml                             ,
         optparse-applicative                   ,
         text
