@@ -26,8 +26,6 @@ Extra-Source-Files:
     CHANGELOG.md
     tasty/data/*.dhall
     tasty/data/*.json
-    tasty/data/*.txt
-    tasty/data/*.yaml
 
 Source-Repository head
     Type: git

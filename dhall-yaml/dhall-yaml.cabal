@@ -21,6 +21,9 @@ Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
     README.md
+    tasty/data/*.dhall
+    tasty/data/*.yaml
+    tasty/data/*.txt
 
 Source-Repository head
     Type: git

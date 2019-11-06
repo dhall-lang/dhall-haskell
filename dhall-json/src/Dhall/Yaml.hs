@@ -16,10 +16,8 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), codeToValue)
 import Options.Applicative (Parser)
-import Data.ByteString.Lazy (toStrict)
 
 import qualified Data.Aeson
-import qualified Data.ByteString
 import qualified Data.Vector
 import qualified Dhall
 import qualified Options.Applicative
