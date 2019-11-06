@@ -30,6 +30,7 @@ in
           # of the compiler
           shared_7_10_3.dhall
           shared_7_10_3.dhall-bash
+          shared_7_10_3.dhall-yaml
           # shared_7_10_3.dhall-json
           # `base-noprelude` depends on a specific version of `base`
           # shared_7_10_3.dhall-lsp-server
@@ -41,6 +42,7 @@ in
           shared_8_6_1.dhall
           shared_8_6_1.dhall-bash
           shared_8_6_1.dhall-json
+          shared_8_6_1.dhall-yaml
           # `base-noprelude` depends on a specific version of `base`
           # shared_8_6_1.dhall-lsp-server
           # `hnix` depends on `unix-2.7.*` and doesn't work with GHC 8.6
@@ -55,12 +57,14 @@ in
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix
+          shared.tarball-dhall-yaml
 
           shared_ghcjs.tarball-website
 
           # This is the only `dhall` build that runs the test suite
           coverage.dhall
           coverage.dhall-json
+          coverage.dhall-yaml
 
           # Check that the package builds with HTTP support compiled out
           shared.dhall-no-http
@@ -79,6 +83,7 @@ in
       tarball-dhall-json
       tarball-dhall-lsp-server
       tarball-dhall-nix
+      tarball-dhall-yaml
     ;
 
     linux-dhall            = shared_linux.possibly-static.dhall;
@@ -86,6 +91,7 @@ in
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
+    linux-dhall-json       = shared_linux.possibly-static.dhall-yaml;
 
     inherit (shared_linux)
       image-dhall
@@ -93,5 +99,6 @@ in
       image-dhall-json
       image-dhall-lsp-server
       image-dhall-nix
+      image-dhall-yaml
     ;
   }
