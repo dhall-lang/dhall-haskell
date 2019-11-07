@@ -3687,7 +3687,7 @@ prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
-    short = "Missing record field"
+    short = "Missing record field: " <> Pretty.pretty k
 
     long =
         "Explanation: You can only access fields on records, like this:                  \n\
