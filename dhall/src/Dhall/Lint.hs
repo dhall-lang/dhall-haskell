@@ -27,7 +27,8 @@ lint :: Expr s Import -> Expr t Import
 lint =
       Dhall.Optics.rewriteOf
         subExpressions
-        (\e -> fixAsserts e <|> removeUnusedBindings e)
+        -- (\e -> fixAsserts e <|> removeUnusedBindings e)
+        fixAsserts
     . removeLetInLet
 
 -- | Remove unused `Let` bindings.
@@ -44,6 +45,8 @@ removeUnusedBindings _ = Nothing
 fixAsserts :: Expr s a -> Maybe (Expr s a)
 fixAsserts (Let (Binding { value = Equivalent x y, ..}) body) =
     Just (Let (Binding { value = Assert (Equivalent x y), .. }) body)
+fixAsserts (Let (Binding {..}) (Equivalent x y)) =
+    Just (Let (Binding {..}) (Assert (Equivalent x y)))
 fixAsserts _ =
     Nothing
 
