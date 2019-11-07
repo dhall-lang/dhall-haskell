@@ -12,6 +12,7 @@ the following packages:
 * [`dhall-json`](./dhall-json) - [![Hackage](https://img.shields.io/hackage/v/dhall-json.svg)](https://hackage.haskell.org/package/dhall-json)
 * [`dhall-yaml`](./dhall-yaml) - [![Hackage](https://img.shields.io/hackage/v/dhall-yaml.svg)](https://hackage.haskell.org/package/dhall-yaml)
 * [`dhall-nix`](./dhall-nix) - [![Hackage](https://img.shields.io/hackage/v/dhall-nix.svg)](https://hackage.haskell.org/package/dhall-nix)
+* [`dhall-lsp-server`](./dhall-lsp-server) - [![Hackage](https://img.shields.io/hackage/v/dhall-lsp-server.svg)](https://hackage.haskell.org/package/dhall-lsp-server)
 
 Navigate to each package's directory for their respective `README`s
 
