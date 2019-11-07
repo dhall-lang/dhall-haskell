@@ -10,6 +10,7 @@ the following packages:
 * [`dhall`](./dhall) - [![Hackage](https://img.shields.io/hackage/v/dhall.svg)](https://hackage.haskell.org/package/dhall)
 * [`dhall-bash`](./dhall-bash) - [![Hackage](https://img.shields.io/hackage/v/dhall-bash.svg)](https://hackage.haskell.org/package/dhall-bash)
 * [`dhall-json`](./dhall-json) - [![Hackage](https://img.shields.io/hackage/v/dhall-json.svg)](https://hackage.haskell.org/package/dhall-json)
+* [`dhall-yaml`](./dhall-yaml) - [![Hackage](https://img.shields.io/hackage/v/dhall-yaml.svg)](https://hackage.haskell.org/package/dhall-yaml)
 * [`dhall-nix`](./dhall-nix) - [![Hackage](https://img.shields.io/hackage/v/dhall-nix.svg)](https://hackage.haskell.org/package/dhall-nix)
 
 Navigate to each package's directory for their respective `README`s
@@ -38,6 +39,7 @@ visit one of the following links:
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-bash/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-bash/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-json/latest)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-yaml/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-yaml/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-nix/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-nix/latest)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-lsp-server/latest](https://hydra.dhall-lang.org/job/dhall-haskell/master/linux-dhall-lsp-server/latest)
 
@@ -67,6 +69,7 @@ download image archives for each package using the following URLs:
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall/latest/download/1/docker-image-dhall.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-bash/latest/download/1/docker-image-dhall-bash.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-json/latest/download/1/docker-image-dhall-json.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-json/latest/download/1/docker-image-dhall-json.tar.gz)
+* [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-yaml/latest/download/1/docker-image-dhall-yaml.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-yaml/latest/download/1/docker-image-dhall-yaml.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-lsp-server/latest/download/1/docker-image-dhall-lsp-server.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-lsp-server/latest/download/1/docker-image-dhall-lsp-server.tar.gz)
 * [https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-nix/latest/download/1/docker-image-dhall-nix.tar.gz](https://hydra.dhall-lang.org/job/dhall-haskell/master/image-dhall-nix/latest/download/1/docker-image-dhall-nix.tar.gz)
 

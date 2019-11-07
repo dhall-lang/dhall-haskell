@@ -49,14 +49,16 @@ for:
     - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-json-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-to-json.exe")
     - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-json-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-to-yaml.exe")
     - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-json-%DEPLOY_TAG%" "%DEPLOY_DIR%\json-to-dhall.exe")
-    - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-json-%DEPLOY_TAG%" "%DEPLOY_DIR%\yaml-to-dhall.exe")
     - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-bash-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-to-bash.exe")
     - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-lsp-server-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-lsp-server.exe")
+    - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-yaml-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-to-yaml-ng.exe")
+    - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-yaml-%DEPLOY_TAG%" "%DEPLOY_DIR%\yaml-to-dhall.exe")
 
   test_script:
     # chcp 65001 (utf-8) needed to make doctest work
     - chcp 65001 && stack test dhall
     - stack test dhall-json
+    - stack test dhall-yaml
     - stack test dhall-bash
     - stack test dhall-lsp-server
     - stack bench dhall --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
@@ -79,6 +81,8 @@ artifacts:
     name: dhall
   - path: bin\dhall-json-%DEPLOY_TAG%
     name: dhall-json
+  - path: bin\dhall-yaml-%DEPLOY_TAG%
+    name: dhall-yaml
   - path: bin\dhall-bash-%DEPLOY_TAG%
     name: dhall-bash
   - path: bin\dhall-lsp-server-%DEPLOY_TAG%
@@ -88,7 +92,7 @@ deploy:
   - provider: GitHub
     auth_token:
       secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
-    artifact: dhall, dhall-json, dhall-bash, dhall-lsp-server
+    artifact: dhall, dhall-json, dhall-yaml, dhall-bash, dhall-lsp-server
     on:
       APPVEYOR_REPO_TAG: true
       STACK_YAML: stack.yaml
