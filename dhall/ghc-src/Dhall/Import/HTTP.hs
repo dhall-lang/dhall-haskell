@@ -2,7 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Dhall.Import.HTTP where
+module Dhall.Import.HTTP
+    ( fetchFromHttpUrl
+    ) where
 
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
@@ -169,17 +171,27 @@ renderPrettyHttpException url e = case e of
         <>  show e' <> "\n"
 #endif
 
-newManager :: IO Manager
+newManager :: StateT Status IO Manager
 newManager = do
     let settings = HTTP.tlsManagerSettings
-#ifdef MIN_VERSION_http_client
 #if MIN_VERSION_http_client(0,5,0)
           { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
 #else
           { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
 #endif
-#endif
-    HTTP.newManager settings
+
+    Status { _manager = oldManager, ..} <- State.get
+
+    case oldManager of
+        Nothing -> do
+            manager <- liftIO (HTTP.newManager settings)
+
+            State.put (Status { _manager = Just manager , ..})
+
+            return manager
+
+        Just manager -> do
+            return manager
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
@@ -260,7 +272,7 @@ type HTTPHeader = Network.HTTP.Types.Header
 
 fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
 fetchFromHttpUrl childURL mheaders = do
-    manager <- liftIO $ newManager
+    manager <- newManager
 
     let childURLString = Text.unpack (renderURL childURL)
 
