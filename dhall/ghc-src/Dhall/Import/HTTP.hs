@@ -174,12 +174,10 @@ renderPrettyHttpException url e = case e of
 newManager :: StateT Status IO Manager
 newManager = do
     let settings = HTTP.tlsManagerSettings
-#ifdef MIN_VERSION_http_client
 #if MIN_VERSION_http_client(0,5,0)
           { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
 #else
           { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
-#endif
 #endif
 
     Status { _manager = oldManager, ..} <- State.get
