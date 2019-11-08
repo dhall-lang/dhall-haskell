@@ -44,6 +44,8 @@ removeUnusedBindings _ = Nothing
 fixAsserts :: Expr s a -> Maybe (Expr s a)
 fixAsserts (Let (Binding { value = Equivalent x y, ..}) body) =
     Just (Let (Binding { value = Assert (Equivalent x y), .. }) body)
+fixAsserts (Let binding (Equivalent x y)) =
+    Just (Let binding (Assert (Equivalent x y)))
 fixAsserts _ =
     Nothing
 
