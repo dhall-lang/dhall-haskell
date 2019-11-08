@@ -1,5 +1,7 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 module Dhall.Import.Types where
@@ -25,7 +27,9 @@ import Dhall.Core
   , ReifiedNormalizer(..)
   , URL
   )
+#ifdef WITH_HTTP
 import Dhall.Import.Manager (Manager)
+#endif
 import Dhall.Parser (Src)
 import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
@@ -76,7 +80,11 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
+#ifdef WITH_HTTP
     , _manager :: Maybe Manager
+#else
+    , _manager :: Maybe Void
+#endif
     -- ^ Used to cache the `Manager` when making multiple requests
 
     , _remote :: URL -> StateT Status IO Data.Text.Text
