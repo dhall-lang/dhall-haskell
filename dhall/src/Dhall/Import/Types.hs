@@ -25,6 +25,7 @@ import Dhall.Core
   , ReifiedNormalizer(..)
   , URL
   )
+import Dhall.Import.Manager (Manager)
 import Dhall.Parser (Src)
 import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
@@ -75,6 +76,9 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
+    , _manager :: Maybe Manager
+    -- ^ Used to cache the `Manager` when making multiple requests
+
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
 
@@ -95,6 +99,8 @@ emptyStatusWith _remote rootDirectory = Status {..}
     _graph = []
 
     _cache = Map.empty
+
+    _manager = Nothing
 
     _normalizer = Nothing
 
