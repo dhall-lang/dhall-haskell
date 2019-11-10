@@ -38,6 +38,8 @@ foreign import javascript unsafe "yamlTab.onclick = $1" registerYAMLOutput :: Ca
 
 foreign import javascript unsafe "typeTab.onclick = $1" registerTypeOutput :: Callback (IO ()) -> IO ()
 
+foreign import javascript unsafe "hashTab.onclick = $1" registerHashOutput :: Callback (IO ()) -> IO ()
+
 foreign import javascript unsafe "output.setValue($1)" setOutput_ :: JSString -> IO ()
 
 foreign import javascript unsafe "output.setOption('mode', $1)" setMode_ :: JSString -> IO ()
@@ -58,6 +60,7 @@ setMode Dhall = setMode_ "haskell"
 setMode Type  = setMode_ "haskell"
 setMode JSON  = setMode_ "javascript"
 setMode YAML  = setMode_ "yaml"
+setMode Hash  = setMode_ "null"
 
 jsonConfig :: Data.Aeson.Encode.Pretty.Config
 jsonConfig =
@@ -72,7 +75,7 @@ jsonConfig =
             False
         }
 
-data Mode = Dhall | Type | JSON | YAML deriving (Show)
+data Mode = Dhall | Type | JSON | YAML | Hash deriving (Show)
 
 main :: IO ()
 main = do
@@ -140,6 +143,9 @@ main = do
                                                       Right yamlText -> do
                                                           setOutput yamlText
 
+                                      Hash -> do
+                                          setOutput (Dhall.Import.hashExpressionToCode (Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)))
+
     interpret
 
     interpretAsync <- GHCJS.Foreign.Callback.asyncCallback interpret
@@ -164,3 +170,4 @@ main = do
     registerTabCallback Type  "type-tab"  registerTypeOutput
     registerTabCallback JSON  "json-tab"  registerJSONOutput
     registerTabCallback YAML  "yaml-tab"  registerYAMLOutput
+    registerTabCallback Hash  "hash-tab"  registerHashOutput
