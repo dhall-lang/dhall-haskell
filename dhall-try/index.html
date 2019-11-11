@@ -226,10 +226,17 @@
     </div>
     <div class="container jumbotron" style="background-color: #c5eccf">
       <h1 class="display-4">Don't repeat yourself</h1>
-      <hr class="my-4">
       <p class="lead">Struggling with configuration drift?  Create a <a href="https://en.wikipedia.org/wiki/Single_source_of_truth">single source of truth</a> you can reference everywhere.</p>
+      <hr class="my-4">
+      <blockquote class="blockquote">
+      <p>"Configuration drift occurs when a standardized group of IT resources, be they virtual servers, standard router configurations in VNF deployments, or any other deployment group that is built from a standard template, diverge in configuration over time. … The Infrastructure as Code methodology from DevOps is designed to combat Configuration Drift and other infrastructure management problems."</p>
+      <footer class="blockquote-footer"><a href="https://kemptechnologies.com/glossary/configuration-drift/">Kemp Technologies in <cite title="Configuration Drift">Configuration Drift</cite></a></footer>
+      <hr class="my-4">
+      </blockquote>
+      <p>Create a single authoritative configuration file:</p>
       <textarea rows="30" id="highlight0"></textarea>
-      <p>Read the same Dhall configuration file directly into several languages or convert Dhall to YAML, JSON, or other formats</p>
+      <p>… that you can read directly into several languages or convert Dhall to YAML, JSON, or other formats</p>
+      <textarea rows="30" id="highlight1"></textarea>
       <a href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-integrate-Dhall" class="btn btn-lg btn-outline-dark bg-light">Supported integrations <i class="fas fa-cogs" ></i></a>
     </div>
     <div class="container jumbotron" style="background-color: #cfebfb">
@@ -268,7 +275,7 @@
       <p class="lead">Hold your configuration files to the same standard of
       quality as the rest of your code
       <hr class="my-4">
-      <textarea id="highlight1"></textarea>
+      <textarea id="highlight2"></textarea>
       <blockquote class="blockquote">
       <p>"Configuration bugs, not code bugs, are the most common cause I've seen of really bad outages. … As with error handling, I'm often told that it's obvious that config changes are scary, but it's not so obvious that most companies test and stage config changes like they do code changes."</p>
       <footer class="blockquote-footer"><a href="https://danluu.com/postmortem-lessons/">Dan Luu in <cite title="Reading postmortems">Reading postmortems</cite></a></footer>
@@ -308,6 +315,14 @@
       readOnly: true
     });
 
+    let highlight1 = document.getElementById("highlight1");
+
+    h1 = CodeMirror.fromTextArea(highlight1, {
+      lineNumbers: true,
+      mode: "shell",
+      readOnly: true
+    });
+
     let diff = document.getElementById("diff");
 
     d0 = CodeMirror.fromTextArea(diff, {
@@ -316,9 +331,9 @@
       readOnly: true
     });
 
-    let highlight1 = document.getElementById("highlight1");
+    let highlight2 = document.getElementById("highlight2");
 
-    h1 = CodeMirror.fromTextArea(highlight1, {
+    h2 = CodeMirror.fromTextArea(highlight2, {
       lineNumbers: true,
       mode: "haskell",
       readOnly: true
@@ -461,32 +476,65 @@ in  {- Try generating 20 users instead of 10 -}
 
     input.setValue(example0);
 
-    h0.setValue(`-- ./curated-dependencies.dhall
+    h0.setValue(`-- ./example.dhall
 
-let dependencies = ./available-dependencies.dhall
+let Prelude =
+      https://prelude.dhall-lang.org/v11.1.0/package.dhall sha256:99462c205117931c0919f155a6046aec140c70fb8876d208c7c77027ab19c2fa
 
-let universal =
-      [ dependencies.base
-      , dependencies.relude
+let companyName = "Example Dot Com"
+
+let User = { name : Text, account : Text, age : Natural }
+
+let users
+    : List User
+    = [ { name = "John Doe", account = "john", age = 23 }
+      , { name = "Jane Smith", account = "jane", age = 29 }
+      , { name = "William Allen", account = "bill", age = 41 }
       ]
 
-let server =
-      [ dependencies.servant
-      , dependencies.servant-server
-      , dependencies.warp
-      ]
+let toEmail = \\(user : User) -> "\${user.account}@example.com"
 
-let shell =
-      [ dependencies.foldl
-      , dependencies.turtle
-      , dependencies.optparse-applicative
-      , dependencies.optparse-generic
-      ]
+let Bio = { name : Text, age : Natural }
 
-in  { universal = universal
-    , server = server
-    , shell = shell
-    }`);
+let toBio = \\(user : User) -> user.(Bio)
+
+let companySize = Prelude.List.length User users
+
+let greetingPage =
+      ''
+      <html>
+      <title>Welcome to \${companyName}!</title>
+      <body>
+      <p>Welcome to our humble company of \${Natural/show companySize} people!</p>
+      </body>
+      </html>
+        ''
+
+in  { emails = Prelude.List.map User Text toEmail users
+    , bios = Prelude.List.map User Bio toBio users
+    , greetingPage = greetingPage
+    }
+`);
+
+    h1.setValue(`$ dhall-to-yaml <<< '(./company.dhall).bios'
+- age: 23
+  name: John Doe
+- age: 29
+  name: Jane Smith
+- age: 41
+  name: William Allen
+
+$ dhall-to-bash --declare EMAILS <<< '(./company.dhall).emails'
+declare -r -a EMAILS=(john@example.com jane@example.com bill@example.com)
+
+$ dhall text <<< '(./company.dhall).greetingPage'
+<html>
+<title>Welcome to Example Dot Com!</title>
+<body>
+<p>Welcome to our humble company of 3 people!</p>
+</body>
+</html>
+`);
 
     d0.setValue(`$ dhall diff \\
     'https://prelude.dhall-lang.org/v9.0.0/package.dhall' \\
@@ -505,7 +553,7 @@ in  { universal = universal
 , …
 }`);
 
-    h1.setValue(`-- Import packages
+    h2.setValue(`-- Import packages
 let JSON = https://prelude.dhall-lang.org/v11.1.0/JSON/package.dhall
 
 -- Use precise types like enums instead of strings
