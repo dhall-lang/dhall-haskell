@@ -2693,10 +2693,10 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
 
 prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {..} 
  where
-   short = "You can only complete records" 
+   short = "The completion schema must be a record" 
 
    long = 
-        "Explanation: You can only complete records using the ❰::❱ operator:             \n\
+        "Explanation: You can complete records using the ❰::❱ operator:                  \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────────┐ \n\
         \    │ {Type = {foo : Bool, bar : Natural}, default = {bar = 2}::{foo = True}} │ \n\
