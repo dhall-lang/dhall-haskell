@@ -3403,7 +3403,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
 
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
-    short = "Handler "<> Dhall.Pretty.Internal.prettyLabel k <> " is not a function"
+    short = "Handler for "<> Dhall.Pretty.Internal.prettyLabel k <> " is not a function"
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
