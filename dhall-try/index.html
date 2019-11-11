@@ -264,13 +264,13 @@
       <a href="https://github.com/dhall-lang/dhall-lang/wiki/Safety-guarantees"class="btn btn-lg btn-outline-dark bg-light">Safety Guarantees<i class="fas fa-shield-alt"></i></a>
     </div>
     <div class="container jumbotron" style="background-color: #fbf3c8">
-      <h1 class="display-4">Use a real programming language</h1>
-      <p class="lead">Tired of being a "YAML engineer"?  Migrate your existing
-      YAML (or JSON) files to Dhall
+      <h1 class="display-4">Use programming language features</h1>
+      <p class="lead">Hold your configuration files to the same standard of
+      quality as the rest of your code
       <hr class="my-4">
       <textarea id="highlight1"></textarea>
       <blockquote class="blockquote">
-      <p>"Configuration bugs, not code bugs, are the most common cause I've seen of really bad outages. When I looked at publicly available postmortems, searching for “global outage postmortem” returned about 50% outages caused by configuration changes. Publicly available postmortems aren't a representative sample of all outages, but a random sampling of postmortem databases also reveals that config changes are responsible for a disproportionate fraction of extremely bad outages. As with error handling, I'm often told that it's obvious that config changes are scary, but it's not so obvious that most companies test and stage config changes like they do code changes."</p>
+      <p>"Configuration bugs, not code bugs, are the most common cause I've seen of really bad outages. … As with error handling, I'm often told that it's obvious that config changes are scary, but it's not so obvious that most companies test and stage config changes like they do code changes."</p>
       <footer class="blockquote-footer"><a href="https://danluu.com/postmortem-lessons/">Dan Luu in <cite title="Reading postmortems">Reading postmortems</cite></a></footer>
       </blockquote>
       <blockquote class="twitter-tweet"><p lang="en" dir="ltr">Configs are code are configs are code <a href="https://t.co/fVBs7T7P3j">https://t.co/fVBs7T7P3j</a></p>&mdash; Charity Majors (@mipsytipsy) <a href="https://twitter.com/mipsytipsy/status/1184673208491864064?ref_src=twsrc%5Etfw">October 17, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
@@ -320,7 +320,7 @@
 
     h1 = CodeMirror.fromTextArea(highlight1, {
       lineNumbers: true,
-      mode: "shell",
+      mode: "haskell",
       readOnly: true
     });
   </script>
@@ -505,43 +505,52 @@ in  { universal = universal
 , …
 }`);
 
-    h1.setValue(`$ cat ./Package.dhall 
-< Local : { relativePath : Text }
-| GitHub : { repository : Text, revision : Text }
-| Hackage : { package : Text, version : Text }
->
+    h1.setValue(`-- Import packages
+let JSON = https://prelude.dhall-lang.org/v11.1.0/JSON/package.dhall
 
-$ cat ./packages.dhall 
-let Package = ./Package.dhall
+-- Use precise types like enums instead of strings
+let Zone = < us-east-1 | us-west-1 >
 
-in  [ Package.GitHub
-        { repository =
-            "https://github.com/Gabriel439/Haskell-Turtle-Library.git"
-        , revision = "ae5edf227b515b34c1cb6c89d9c58ea0eece12d5"
-        }
-    , Package.Local { relativePath = "~/proj/optparse-applicative" }
-    , Package.Local { relativePath = "~/proj/discrimination" }
-    , Package.Hackage { package = "lens", version = "4.15.4" }
-    , Package.GitHub
-        { repository = "https://github.com/haskell/text.git"
-        , revision = "ccbfabedea1cf5b38ff19f37549feaf01225e537"
-        }
-    , Package.Local { relativePath = "~/proj/servant-swagger" }
-    , Package.Hackage { package = "aeson", version = "1.2.3.0" }
-    ]
+let InstanceType = < \`m5.large\` | \`m5.xlarge\` >
 
-$ dhall-to-yaml --file ./packages.dhall 
-- repository: https://github.com/Gabriel439/Haskell-Turtle-Library.git
-  revision: ae5edf227b515b34c1cb6c89d9c58ea0eece12d5
-- relativePath: ~/proj/optparse-applicative
-- relativePath: ~/proj/discrimination
-- package: lens
-  version: 4.15.4
-- repository: https://github.com/haskell/text.git
-  revision: ccbfabedea1cf5b38ff19f37549feaf01225e537
-- relativePath: ~/proj/servant-swagger
-- package: aeson
-  version: 1.2.3.0
+let Instance = { type : InstanceType, zone : Zone }
+
+-- JSON rendering can optionally be implemented entirely within the language
+let Zone/toJSON =
+          \\(zone : Zone)
+      ->  merge
+            { us-east-1 = JSON.string "us-east-1"
+            , us-west-1 = JSON.string "us-west-1"
+            }
+            zone
+
+let InstanceType/toJSON =
+          \\(type : InstanceType)
+      ->  merge
+            { \`m5.large\` = JSON.string "m5.large"
+            , \`m5.xlarge\` = JSON.string "m5.xlarge"
+            }
+            type
+
+let Instance/toJSON =
+          \\(instance : Instance)
+      ->  JSON.object
+            ( toMap
+                { type = InstanceType/toJSON instance.type
+                , zone = Zone/toJSON instance.zone
+                }
+            )
+
+-- Use language support for tests to safely verify code ahead of time
+let test =
+        let example =
+              { type = InstanceType.\`m5.xlarge\`, zone = Zone.us-east-1 }
+
+        in    assert
+	    :      JSON.render (Instance/toJSON example)
+              ===  "{ \\"type\\": \\"m5.xlarge\\", \\"zone\\": \\"us-east-1\\" }"
+
+in  Instance/toJSON
 `);
   </script>
   <script defer language="javascript" src="./js/all.min.js"></script>
