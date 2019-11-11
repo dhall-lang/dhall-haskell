@@ -913,7 +913,7 @@ infer typer = loop
                      -> die (InvalidRecordCompletion "Type" l)
                   | otherwise
                      -> loop ctx (Annot (Prefer (Field l "default") r) (Field l "Type"))
-                _ -> die (MustCompleteARecord l (quote names _L'))
+                _ -> die (CompletionSchemaMustBeARecord l (quote names _L'))
 
         Merge t u mT₁ -> do
             _T' <- loop ctx t
@@ -1301,7 +1301,7 @@ data TypeMessage s a
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
-    | MustCompleteARecord (Expr s a) (Expr s a)
+    | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
@@ -2040,7 +2040,9 @@ prettyTypeMessage Untyped = ErrorMessages {..}
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
   where
-    short = "Invalid predicate for ❰if❱: "<>pretty expr1
+    short = "Invalid predicate for ❰if❱: "
+        <>  "\n"
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized Bool expr1)
 
     long =
         "Explanation: Every ❰if❱ expression begins with a predicate which must have type \n\
@@ -2689,7 +2691,7 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = insert expr1
 
-prettyTypeMessage (MustCompleteARecord expr0 expr1) = ErrorMessages {..} 
+prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {..} 
  where
    short = "You can only complete records" 
 
@@ -2715,7 +2717,7 @@ prettyTypeMessage (MustCompleteARecord expr0 expr1) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..} 
  where
-   short = "Completion record is missing a field: " <> pretty fieldName
+   short = "Completion schema is missing a field: " <> pretty fieldName
 
    long = 
         "Explanation: You can complete records using the ❰::❱ operator like this:\n\
@@ -2724,10 +2726,10 @@ prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..}
         \    │ {Type = {foo : Bool, bar : Natural}, default = {bar = 2}::{foo = True}} │ \n\
         \    └─────────────────────────────────────────────────────────────────────────┘ \n\
         \                                                                                \n\
-        \... but you need to have both Type and default fields in the record you are         \n\
-        \    completing.                                                                 \n\
+        \... but you need to have both Type and default fields in the completion schema  \n\
+        \    (the record on the left of the the ::).                                     \n\
         \                                                                                \n\
-        \You tried to record complete the following value:                               \n\
+        \You tried to do record completion using the schema:                             \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
@@ -2886,7 +2888,7 @@ prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
 
 prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
-    short = "Field collision" <> pretty k
+    short = "Field collision on: " <> Dhall.Pretty.Internal.prettyLabel k
 
     long =
         "Explanation: You can combine records or record types if they don't share any    \n\
@@ -4408,8 +4410,8 @@ messageExpressions f m = case m of
         MustCombineARecord <$> pure a <*> f b <*> f c
     InvalidRecordCompletion a l -> 
         InvalidRecordCompletion a <$> f l
-    MustCompleteARecord l r -> 
-        MustCompleteARecord <$> f l <*> f r
+    CompletionSchemaMustBeARecord l r -> 
+        CompletionSchemaMustBeARecord <$> f l <*> f r
     CombineTypesRequiresRecordType a b ->
         CombineTypesRequiresRecordType <$> f a <*> f b
     RecordTypeMismatch a b c d ->
