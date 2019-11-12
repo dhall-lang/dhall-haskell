@@ -1498,7 +1498,7 @@ import Dhall
 -- We'll use this trick to test changes to the protected import in the following
 -- examples.
 --
--- Now, supose you add a comment to the @./bar@ file:
+-- Now, suppose you add a comment to the @./bar@ file:
 --
 -- > $ cat ./bar
 -- > -- This comment does not change the hash
