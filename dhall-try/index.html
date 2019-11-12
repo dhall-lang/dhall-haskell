@@ -235,7 +235,7 @@
       </blockquote>
       <p>Create a single authoritative configuration file:</p>
       <textarea rows="30" id="highlight0"></textarea>
-      <p>… that you can read directly into several languages or convert Dhall to YAML, JSON, or other formats</p>
+      <p>… that you can read directly into several languages or convert to other file formats (including YAML or JSON).</p>
       <textarea rows="30" id="highlight1"></textarea>
       <a href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-integrate-Dhall" class="btn btn-lg btn-outline-dark bg-light">Supported integrations <i class="fas fa-cogs" ></i></a>
     </div>
@@ -603,7 +603,7 @@ let test =
               { type = InstanceType.\`m5.xlarge\`, zone = Zone.us-east-1 }
 
         in    assert
-	    :      JSON.render (Instance/toJSON example)
+            :      JSON.render (Instance/toJSON example)
               ===  "{ \\"type\\": \\"m5.xlarge\\", \\"zone\\": \\"us-east-1\\" }"
 
 in  Instance/toJSON
