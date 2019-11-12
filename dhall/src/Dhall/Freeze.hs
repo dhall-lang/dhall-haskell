@@ -17,7 +17,7 @@ module Dhall.Freeze
 import Data.Monoid ((<>))
 import Data.Text
 import Dhall.Parser (Src)
-import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
+import Dhall.Pretty (CharacterSet, annToAnsiStyle, prettyCharacterSet)
 import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
@@ -30,6 +30,7 @@ import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
+import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified System.FilePath
@@ -88,7 +89,7 @@ writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
 
-    let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
+    let unAnnotated = Dhall.Pretty.layout (Pretty.unAnnotate doc)
 
     case inplace of
         InputFile f ->
@@ -100,7 +101,7 @@ writeExpr inplace (header, expr) characterSet = do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI
                then
-                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Pretty.layoutSmart layoutOpts doc)
+                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Dhall.Pretty.layout doc)
                else
                  Pretty.renderIO System.IO.stdout unAnnotated
 

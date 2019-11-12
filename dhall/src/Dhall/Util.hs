@@ -77,7 +77,7 @@ snip text
 snipDoc :: Doc Ann -> Doc a
 snipDoc doc = Pretty.align (Pretty.pretty (snip text))
   where
-    stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts doc
+    stream = Dhall.Pretty.layout doc
 
     ansiStream = fmap Dhall.Pretty.annToAnsiStyle stream
 

@@ -15,7 +15,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.JSON
-import qualified Dhall.Yaml
+import qualified Dhall.JSON.Yaml
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
@@ -83,7 +83,7 @@ main = do
 
     let prettyExpression =
               Pretty.renderStrict
-            . Pretty.layoutSmart Dhall.Pretty.layoutOpts
+            . Dhall.Pretty.layout
             . Dhall.Pretty.prettyExpr
 
     let interpret = do
@@ -136,7 +136,7 @@ main = do
                                               Left exception -> do
                                                   errOutput exception
                                               Right value -> do
-                                                  let yamlBytes = Dhall.Yaml.jsonToYaml value False False
+                                                  let yamlBytes = Dhall.JSON.Yaml.jsonToYaml value False False
                                                   case Data.Text.Encoding.decodeUtf8' yamlBytes of
                                                       Left exception -> do
                                                           errOutput exception

@@ -2,7 +2,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Dhall.Yaml
+{-| Convert Dhall to YAML via JSON
+
+    Since JSON is only a subset of YAML, the functionality offered here is more
+    limited than what the @dhall-yaml@ package can offer.
+-}
+module Dhall.JSON.Yaml
   ( Options(..)
   , parseDocuments
   , parseQuoted
@@ -16,24 +21,13 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), codeToValue)
 import Options.Applicative (Parser)
-import Data.ByteString.Lazy (toStrict)
 
 import qualified Data.Aeson
-import qualified Data.ByteString
+import qualified Data.Aeson.Yaml
+import qualified Data.ByteString.Lazy
 import qualified Data.Vector
 import qualified Dhall
 import qualified Options.Applicative
-#if defined(GPL)
-import qualified Data.YAML.Aeson
-import qualified Data.YAML as Y
-import qualified Data.YAML.Event as YE
-import qualified Data.YAML.Token as YT
-import qualified Data.YAML.Schema as YS
-import qualified Data.Text as Text
-#else
-import qualified Data.Aeson.Yaml
-import qualified Data.ByteString.Lazy
-#endif
 
 data Options = Options
     { explain    :: Bool
@@ -93,24 +87,6 @@ jsonToYaml
     -> Bool
     -> ByteString
 jsonToYaml json documents quoted =
-#if defined(GPL)
-  case (documents, json) of
-    (True, Data.Aeson.Array elems)
-      -> Data.ByteString.intercalate "\n---\n"
-         $ fmap (Data.ByteString.Lazy.toStrict. (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8). (:[]))
-         $ Data.Vector.toList elems
-    _ -> Data.ByteString.Lazy.toStrict (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 [json])
-  where
-    style (Y.SStr s)
-        | "\n" `Text.isInfixOf` s =
-            Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-        | quoted =
-            Right (YE.untagged, YE.SingleQuoted, s)
-    style s =
-        YS.schemaEncoderScalar Y.coreSchemaEncoder s
-
-    schemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
-#else
   Data.ByteString.Lazy.toStrict $ case (documents, json) of
     (True, Data.Aeson.Array elems)
       -> (if quoted
@@ -121,4 +97,3 @@ jsonToYaml json documents quoted =
             then Data.Aeson.Yaml.encodeQuoted
             else Data.Aeson.Yaml.encode
          ) json
-#endif

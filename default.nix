@@ -13,6 +13,7 @@ in
       dhall-json
       dhall-lsp-server
       dhall-nix
+      dhall-yaml
     ;
 
     inherit (shared_ghcjs) dhall-try;

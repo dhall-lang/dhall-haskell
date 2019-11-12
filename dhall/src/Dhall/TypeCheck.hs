@@ -41,7 +41,7 @@ import Dhall.Context (Context)
 import Dhall.Syntax (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Eval
     (Environment(..), Names(..), Val(..), (~>))
-import Dhall.Pretty (Ann, layoutOpts)
+import Dhall.Pretty (Ann)
 import Dhall.Src (Src)
 import Lens.Family (over)
 
@@ -59,6 +59,7 @@ import qualified Dhall.Diff
 import qualified Dhall.Eval                              as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Util
 import qualified Lens.Family
@@ -3686,7 +3687,7 @@ prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
 
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
-    short = "Missing record field"
+    short = "Missing record field: " <> Dhall.Pretty.Internal.prettyLabel k
 
     long =
         "Explanation: You can only access fields on records, like this:                  \n\
@@ -4251,7 +4252,7 @@ data TypeError s a = TypeError
     }
 
 instance (Eq a, Pretty s, Pretty a) => Show (TypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
 
 instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeError s a)
 
@@ -4275,7 +4276,7 @@ data Censored
     | Censored (TypeError Src X)
 
 instance Show Censored where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
 
 instance Exception Censored
 
@@ -4424,7 +4425,7 @@ newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
 instance (Eq a, Pretty s, Pretty a) => Show (DetailedTypeError s a) where
-    show = Pretty.renderString . Pretty.layoutPretty layoutOpts . Pretty.pretty
+    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
 
 instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
 
