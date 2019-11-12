@@ -7,7 +7,7 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/mkdir $out/{css,img,js}
   ${coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
   ${coreutils}/bin/cp ${../dhall-try/hash.gif} $out/img/hash.gif
-  ${coreutils}/bin/cp ${../dhall-try/completion.png} $out/img/completion.png
+  ${coreutils}/bin/cp ${../dhall-try/completion.gif} $out/img/completion.gif
   ${coreutils}/bin/ln --symbolic ${nodePackages.js-yaml}/lib/node_modules/js-yaml/dist/js-yaml.min.js $out/js
   ${coreutils}/bin/ln --symbolic ${jQuery} $out/js/jquery.min.js
   ${coreutils}/bin/ln --symbolic ${twitterBootstrap}/js/bootstrap.min.js $out/js
