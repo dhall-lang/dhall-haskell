@@ -1,4 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards     #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 -- | This module contains the implementation of the @dhall lint@ command
 
@@ -6,11 +9,26 @@ module Dhall.Lint
     ( -- * Lint
       lint
     , removeUnusedBindings
+    , fixAssert
+    , fixParentPath
     ) where
 
 import Control.Applicative ((<|>))
-import Dhall.Syntax (Binding(..), Expr(..), Import, Var(..), subExpressions)
 
+import Dhall.Syntax
+    ( Binding(..)
+    , Directory(..)
+    , Expr(..)
+    , File(..)
+    , FilePrefix(..)
+    , Import(..)
+    , ImportHashed(..)
+    , ImportType(..)
+    , Var(..)
+    , subExpressions
+    )
+
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Dhall.Core
 import qualified Dhall.Optics
 import qualified Lens.Family
@@ -22,12 +40,13 @@ import qualified Lens.Family
     * removes unused @let@ bindings with 'removeUnusedBindings'.
     * fixes @let a = x ≡ y@ to be @let a = assert : x ≡ y@
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
+    * fixes paths of the form @.\/..\/foo@ to @..\/foo@
 -}
 lint :: Expr s Import -> Expr t Import
 lint =
       Dhall.Optics.rewriteOf
         subExpressions
-        (\e -> fixAsserts e <|> removeUnusedBindings e)
+        (\e -> fixAssert e <|> removeUnusedBindings e <|> fixParentPath e)
     . removeLetInLet
 
 -- | Remove unused `Let` bindings.
@@ -40,14 +59,41 @@ removeUnusedBindings (Let (Binding _ a _ _ _ _) d)
         Just (Dhall.Core.shift (-1) (V a 0) d)
 removeUnusedBindings _ = Nothing
 
--- Fix `Let` bindings  that the user probably meant to be `assert`s
-fixAsserts :: Expr s a -> Maybe (Expr s a)
-fixAsserts (Let (Binding { value = Equivalent x y, ..}) body) =
+-- | Fix `Let` bindings  that the user probably meant to be `assert`s
+fixAssert :: Expr s a -> Maybe (Expr s a)
+fixAssert (Let (Binding { value = Equivalent x y, ..}) body) =
     Just (Let (Binding { value = Assert (Equivalent x y), .. }) body)
-fixAsserts (Let binding (Equivalent x y)) =
+fixAssert (Let binding (Equivalent x y)) =
     Just (Let binding (Assert (Equivalent x y)))
-fixAsserts _ =
+fixAssert _ =
     Nothing
+
+-- | This transforms @./../foo@ into @../foo@
+fixParentPath :: Expr s Import -> Maybe (Expr s Import)
+fixParentPath (Embed oldImport) = do
+    let Import{..} = oldImport
+
+    let ImportHashed{..} = importHashed
+
+    case importType of
+        Local Here File{ directory = Directory { components }, .. }
+            | Just nonEmpty <- NonEmpty.nonEmpty components
+            , NonEmpty.last nonEmpty == ".." -> do
+                let newDirectory =
+                        Directory { components = NonEmpty.init nonEmpty }
+
+                let newImportType =
+                        Local Parent File{ directory = newDirectory, .. }
+
+                let newImportHashed =
+                        ImportHashed { importType = newImportType, .. }
+
+                let newImport = Import { importHashed = newImportHashed, .. }
+
+                Just (Embed newImport)
+        _ ->
+            Nothing
+fixParentPath _  = Nothing
 
 isOrContainsAssert :: Expr s a -> Bool
 isOrContainsAssert (Assert _) = True
