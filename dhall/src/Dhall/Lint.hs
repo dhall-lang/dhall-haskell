@@ -68,7 +68,7 @@ fixAssert (Let binding (Equivalent x y)) =
 fixAssert _ =
     Nothing
 
--- | This transforms @./../foo@ into @../foo@
+-- | This transforms @.\/..\/foo@ into @..\/foo@
 fixParentPath :: Expr s Import -> Maybe (Expr s Import)
 fixParentPath (Embed oldImport) = do
     let Import{..} = oldImport
