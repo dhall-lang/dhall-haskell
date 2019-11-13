@@ -1,4 +1,4 @@
-packages: ./dhall ./dhall-bash ./dhall-json ./dhall-lsp-server ./dhall-nix
+packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-lsp-server ./dhall-nix
 
 -- While hnix doesn't allow prettyprinter > 1.3
 -- https://github.com/haskell-nix/hnix/issues/524

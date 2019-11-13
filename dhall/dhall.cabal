@@ -535,6 +535,7 @@ Library
     if flag(with-http)
       Other-Modules:
         Dhall.Import.HTTP
+        Dhall.Import.Manager
 
     GHC-Options: -Wall -fwarn-incomplete-uni-patterns
     Default-Language: Haskell2010

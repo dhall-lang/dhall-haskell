@@ -273,11 +273,11 @@ parsers embedded = Parsers {..}
                     nonemptyWhitespace
                     b <- expression
                     case shallowDenote a of
-                        ListLit _ [] ->
+                        ListLit Nothing [] ->
                             return (ListLit (Just b) [])
-                        Merge c d _ ->
+                        Merge c d Nothing ->
                             return (Merge c d (Just b))
-                        ToMap c _ ->
+                        ToMap c Nothing ->
                             return (ToMap c (Just b))
                         _ -> return (Annot a b)
 

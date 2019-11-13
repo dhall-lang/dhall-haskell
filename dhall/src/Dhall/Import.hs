@@ -172,7 +172,7 @@ import Dhall.Syntax
     , chunkExprs
     )
 #ifdef WITH_HTTP
-import Dhall.Import.HTTP hiding (HTTPHeader)
+import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Types
 
