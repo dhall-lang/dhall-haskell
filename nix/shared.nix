@@ -393,6 +393,10 @@ let
                           haskellPackagesNew.semigroups
                         ];
 
+                    hnix =
+                      pkgsNew.haskell.lib.doJailbreak
+                        haskellPackagesOld.hnix;
+
                     megaparsec =
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.megaparsec
