@@ -7,7 +7,9 @@ import qualified Language.Haskell.LSP.Types as J
 
 import Control.Lens.TH (makeLenses)
 import Lens.Family (LensLike')
+import Data.Aeson (FromJSON(..), withObject, (.:), (.:?), (.!=))
 import Data.Map.Strict (Map, empty)
+import Data.Default (Default(def))
 import Data.Dynamic (Dynamic)
 import Dhall.LSP.Backend.Dhall (DhallError, Cache, emptyCache)
 import Data.Text (Text)
@@ -28,22 +30,39 @@ data Severity = Error
               | Log
               -- ^ Log message, not displayed by default.
 
+data ServerConfig = ServerConfig
+  { asciiOnly :: Bool
+  -- ^ Use ASCII symbols rather than fancy unicode when formatting and linting
+  -- code. TODO!
+  } deriving Show
+
+instance Default ServerConfig where
+  def = ServerConfig { asciiOnly = True }
+
+-- We need to derive the FromJSON instance manually in order to provide defaults
+-- for absent fields.
+instance FromJSON ServerConfig where
+  parseJSON = withObject "settings" $ \v -> do
+    s <- v .: "vscode-dhall-lsp-server"
+    flip (withObject "vscode-dhall-lsp-server") s $ \o -> ServerConfig
+      <$> o .:? "asciiOnly" .!= asciiOnly def
+
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache
   , _errors :: Map J.Uri DhallError  -- ^ Map from dhall files to their errors
   , _httpManager :: Maybe Dynamic
   -- ^ The http manager used by dhall's import infrastructure
-  , _lspFuncs :: LSP.LspFuncs ()
+  , _lspFuncs :: LSP.LspFuncs ServerConfig
   -- ^ Access to the lsp functions supplied by haskell-lsp
   }
 
 makeLenses ''ServerState
 
 sendFunc :: Functor f =>
-  LensLike' f (LSP.LspFuncs ()) (LSP.FromServerMessage -> IO ())
+  LensLike' f (LSP.LspFuncs ServerConfig) (LSP.FromServerMessage -> IO ())
 sendFunc k s = fmap (\x -> s {LSP.sendFunc = x}) (k (LSP.sendFunc s))
 
-initialState :: LSP.LspFuncs () -> ServerState
+initialState :: LSP.LspFuncs ServerConfig -> ServerState
 initialState lsp = ServerState {..}
   where
     _importCache = emptyCache

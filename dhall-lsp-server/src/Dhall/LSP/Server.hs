@@ -2,11 +2,14 @@
 module Dhall.LSP.Server(run) where
 
 import           Control.Concurrent.MVar
+import           Control.Lens ((^.))
+import           Data.Aeson (fromJSON, Result(Success))
 import           Data.Default
 import qualified Language.Haskell.LSP.Control as LSP.Control
 import qualified Language.Haskell.LSP.Core as LSP.Core
 
 import qualified Language.Haskell.LSP.Types as J
+import qualified Language.Haskell.LSP.Types.Lens as J
 
 import Data.Text (Text)
 import qualified System.Log.Logger
@@ -23,15 +26,23 @@ run mlog = do
   setupLogger mlog
   state <- newEmptyMVar
 
-  -- these two are stubs since we do not use a config
-  let onInitialConfiguration :: J.InitializeRequest -> Either Text ()
-      onInitialConfiguration _ = Right ()
-  let onConfigurationChange :: J.DidChangeConfigurationNotification -> Either Text ()
-      onConfigurationChange _ = Right ()
+  let onInitialConfiguration :: J.InitializeRequest -> Either Text ServerConfig
+      onInitialConfiguration req
+        | Just initOpts <- req ^. J.params . J.initializationOptions
+        , Success config <- fromJSON initOpts
+        = Right config
+      onInitialConfiguration _ = Right def
+
+  let onConfigurationChange :: J.DidChangeConfigurationNotification -> Either Text ServerConfig
+      onConfigurationChange notification
+        | preConfig <- notification ^. J.params . J.settings
+        , Success config <- fromJSON preConfig
+        = Right config
+      onConfigurationChange _ = Right def
 
   -- Callback that is called when the LSP server is started; makes the lsp
   -- state (LspFuncs) available to the message handlers through the `state` MVar.
-  let onStartup :: LSP.Core.LspFuncs () -> IO (Maybe J.ResponseError)
+  let onStartup :: LSP.Core.LspFuncs ServerConfig -> IO (Maybe J.ResponseError)
       onStartup lsp = do
         putMVar state (initialState lsp)
         return Nothing
