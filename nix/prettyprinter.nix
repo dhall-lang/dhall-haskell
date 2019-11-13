@@ -5,8 +5,8 @@
 }:
 mkDerivation {
   pname = "prettyprinter";
-  version = "1.4.0";
-  sha256 = "7f1d9224f9e577eb24dda695beb6bc2f074e93a84a3c9f11bb578aa6ed39cb45";
+  version = "1.5.1";
+  sha256 = "fb66b498cdd46aa7f36abdaf0b49e88444a3e6ed9d04bec8924ed6355f393794";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [ base text ];
