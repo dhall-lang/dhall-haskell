@@ -209,8 +209,8 @@ parsers embedded = Parsers {..}
 
             -- A let binder is either followed by its 'payload', separated by
             -- `in` (e.g. `let a = 1 in b`), or it is followed immediately by
-            -- another let binder as part of a 'multi-let' (e.g. `let a = 1 let
-            -- b = 2 ... in c).
+            -- another let binder as part of a 'multi-let' (e.g.
+            -- `let a = 1 let b = 2 ... in c`).
             let payload = do
                     _in
 
