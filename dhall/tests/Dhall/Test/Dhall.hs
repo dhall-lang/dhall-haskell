@@ -57,8 +57,8 @@ tests =
 
 data MyType = MyType { foo :: String , bar :: Natural }
 
-wrongDhallType :: Dhall.Type MyType
-wrongDhallType = Dhall.Type { .. }
+wrongDhallType :: Dhall.Decoder MyType
+wrongDhallType = Dhall.Decoder { .. }
   where expected =
           Dhall.Core.Record
             ( Dhall.Map.fromList
@@ -74,12 +74,12 @@ shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
         try ( Dhall.input wrongDhallType "{  bar = 0, foo = \"foo\" }")
 
   let expectedMsg =
-        "\ESC[1;31mError\ESC[0m: Invalid Dhall.Type                                                  \n\
+        "\ESC[1;31mError\ESC[0m: Invalid Dhall.Decoder                                               \n\
         \                                                                                \n\
-        \Every Type must provide an extract function that succeeds if an expression      \n\
-        \matches the expected type.  You provided a Type that disobeys this contract     \n\
+        \Every Decoder must provide an extract function that succeeds if an expression   \n\
+        \matches the expected type.  You provided a Decoder that disobeys this contract  \n\
         \                                                                                \n\
-        \The Type provided has the expected dhall type:                                  \n\
+        \The Decoder provided has the expected dhall type:                               \n\
         \                                                                                \n\
         \↳ { bar : Natural, foo : Text }\n\
         \                                                                                \n\
@@ -97,7 +97,7 @@ shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
 -- https://github.com/dhall-lang/dhall-haskell/issues/915
 shouldHandleUnionLiteral :: TestTree
 shouldHandleUnionLiteral = testCase "Marshal union literals" $ do
-    let example :: Dhall.Type Bool
+    let example :: Dhall.Decoder Bool
         example = Dhall.union (Dhall.constructor "Test" Dhall.bool)
 
     _ <- Dhall.input example "< Test : Bool >.Test True"
@@ -106,15 +106,15 @@ shouldHandleUnionLiteral = testCase "Marshal union literals" $ do
 
 shouldTreatAConstructorStoringUnitAsEmptyAlternative :: TestTree
 shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit constructors" $ do
-    let exampleType :: Dhall.Type ()
+    let exampleType :: Dhall.Decoder ()
         exampleType = Dhall.union (Dhall.constructor "A" Dhall.unit)
 
     () <- Dhall.input exampleType "< A >.A"
 
-    let exampleInputType :: Dhall.InputType ()
-        exampleInputType = Dhall.inputUnion (Dhall.inputConstructor "A")
+    let exampleEncoder :: Dhall.Encoder ()
+        exampleEncoder = Dhall.unionEncoder (Dhall.encodeConstructor "A")
 
-    Dhall.embed exampleInputType () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
+    Dhall.embed exampleEncoder () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
 
 shouldHaveWorkingRecursiveFromDhall :: TestTree
 shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"

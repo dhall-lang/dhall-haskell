@@ -199,7 +199,6 @@ module Dhall.JSON (
       dhallToJSON
     , omitNull
     , omitEmpty
-    , parseOmission
     , parsePreservationAndOmission
     , Conversion(..)
     , convertToHomogeneousMaps
@@ -235,7 +234,6 @@ import qualified Data.List
 import qualified Data.Map
 import qualified Data.Ord
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector                           as Vector
 import qualified Dhall.Core                            as Core
@@ -394,8 +392,7 @@ _ERROR :: Data.Text.Text
 _ERROR = Dhall.Util._ERROR
 
 insert :: Pretty a => a -> Text
-insert =
-    Pretty.renderStrict . Pretty.layoutPretty Dhall.Pretty.layoutOpts . Dhall.Util.insert
+insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
 
 instance Exception CompileError
 
@@ -609,7 +606,7 @@ omitEmpty (Object object) =
 omitEmpty (Array array) =
     if null elems then Null else Array elems
   where
-    elems = (fmap omitEmpty array)
+    elems = Vector.filter (/= Null) (fmap omitEmpty array)
 omitEmpty (String string) =
     String string
 omitEmpty (Number number) =
@@ -623,16 +620,10 @@ omitEmpty Null =
 parseOmission :: Parser (Value -> Value)
 parseOmission =
         Options.Applicative.flag'
-            omitNull
-            (   Options.Applicative.long "omitNull"
-            <>  Options.Applicative.help "Omit record fields that are null"
-            )
-    <|> Options.Applicative.flag'
             omitEmpty
-            (   Options.Applicative.long "omitEmpty"
+            (   Options.Applicative.long "omit-empty"
             <>  Options.Applicative.help "Omit record fields that are null or empty records"
             )
-    <|> pure id
 
 -- | Parser for command-line options related to preserving null fields.
 parseNullPreservation :: Parser (Value -> Value)
@@ -640,13 +631,13 @@ parseNullPreservation =
         Options.Applicative.flag
             omitNull
             id
-            (   Options.Applicative.long "preserveNull"
+            (   Options.Applicative.long "preserve-null"
             <>  Options.Applicative.help "Preserve record fields that are null"
             )
 
 -- | Combines parsers for command-line options related to preserving & omitting null fields.
 parsePreservationAndOmission :: Parser (Value -> Value)
-parsePreservationAndOmission = parseNullPreservation <|> parseOmission <|> pure id
+parsePreservationAndOmission = parseOmission <|> parseNullPreservation
 
 {-| Specify whether or not to convert association lists of type
     @List { mapKey: Text, mapValue : v }@ to records
@@ -793,6 +784,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
 
         Core.IntegerLit a ->
             Core.IntegerLit a
+
+        Core.IntegerClamp ->
+            Core.IntegerClamp
+
+        Core.IntegerNegate ->
+            Core.IntegerNegate
 
         Core.IntegerShow ->
             Core.IntegerShow
@@ -1038,7 +1035,7 @@ parseConversion =
     noConversion =
         Options.Applicative.flag'
             NoConversion
-            (   Options.Applicative.long "noMaps"
+            (   Options.Applicative.long "no-maps"
             <>  Options.Applicative.help "Disable conversion of association lists to homogeneous maps"
             )
 

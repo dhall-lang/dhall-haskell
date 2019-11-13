@@ -10,10 +10,9 @@ Full documentation here:
 
 ## Introduction
 
-This `dhall-json` package provides a Dhall to JSON compiler and a Dhall to YAML
-compiler.  The reason this package is called `dhall-json` is that the Haskell
-`yaml` library uses the same data structure as Haskell's `aeson` library for
-JSON
+This `dhall-json` package provides a Dhall to JSON compiler, and a Dhall to YAML
+compiler based on that. The `dhall-to-yaml` executable is a "basic" version of
+the `dhall-to-yaml-ng` executable in the `dhall-yaml` package.
 
 ## Example
 
@@ -30,3 +29,9 @@ foo:
 bar:
   baz: true
 ```
+
+## Development
+
+This package's `dhall-to-yaml` and `dhall-yaml`'s `dhall-to-yaml-ng` should be
+kept as closely in sync as possible. Common code for these executables lives
+in this package, tests live in `dhall-yaml`.

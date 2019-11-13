@@ -17,7 +17,7 @@ main = do
     prefix <- System.Directory.makeAbsolute pwd
 
     Test.Mockery.Directory.inTempDirectory $ do
-        writeFile "makeBools" "λ(n : Bool) → [ n && True, n && False, n || True, n || False ]"
+        writeFile "makeBools.dhall" "λ(n : Bool) → [ n && True, n && False, n || True, n || False ]"
         writeFile "bool1" "True"
         writeFile "bool2" "False"
         writeFile "both" "./bool1 && ./bool2"

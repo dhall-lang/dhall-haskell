@@ -1,1 +1,11 @@
-{ inner = "\none\n\ntwo\n\nthree\n\n" }
+{ inner =
+    ''
+    
+    one
+    
+    two
+    
+    three
+    
+    ''
+}

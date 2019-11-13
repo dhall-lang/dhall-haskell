@@ -1,0 +1,6 @@
+bool_value: true
+int_value: 1
+string_value: "2000-01-01"
+text: |
+  Plain text
+yes: y

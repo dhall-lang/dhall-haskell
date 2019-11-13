@@ -19,6 +19,7 @@ let
     "dhall-json"
     "dhall-lsp-server"
     "dhall-nix"
+    "dhall-yaml"
   ];
 
   mass = function: names: haskellPackagesNew: haskellPackagesOld:
@@ -101,6 +102,12 @@ let
 
       twitter = pkgsNew.callPackage ./twitterLogo.nix { };
 
+      xml =
+        pkgsNew.fetchurl {
+          url    = "https://www.svgrepo.com/download/106090/xml.svg";
+          sha256 = "0ncjr3sxn40ml5gxwv1iq5vd0zx0qgyy9rzqxi6j80b8wcy45czy";
+        };
+
       yaml =
         pkgsNew.fetchurl {
           url    = "https://raw.githubusercontent.com/yaml/yaml-spec/a6f764e13de58d5f753877f588a01b35dc9a5168/logo.png";
@@ -161,6 +168,7 @@ let
                           # to ../dhall/dhall-lang/
                           # "dhall-lsp-server"
                           "dhall-nix"
+                          "dhall-yaml"
                         ]
                         # Test suite doesn't work on GHCJS or GHC 7.10.3
                     ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
@@ -174,7 +182,9 @@ let
                     "dhall"
                     "dhall-bash"
                     "dhall-json"
+                    "dhall-lsp-server"
                     "dhall-nix"
+                    "dhall-yaml"
                   ];
 
                 failOnMissingHaddocksExtension =
@@ -209,6 +219,12 @@ let
                         (pkgsNew.sdist ../dhall-bash)
                         { };
 
+                    dhall-json =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-json"
+                        (pkgsNew.sdist ../dhall-json)
+                        { };
+
                     dhall-nix =
                       haskellPackagesNew.callCabal2nix
                         "dhall-nix"
@@ -221,39 +237,11 @@ let
                         (pkgsNew.sdist ../dhall-lsp-server)
                         { };
 
-                    dhall-json =
-                      # Replace this with
-                      # `haskellPackagesNew.callCabal2nixWithOptions` once we
-                      # upgrade to a newer version of Nixpkgs
-                      let
-                        src = pkgsNew.sdist ../dhall-json;
-
-                        filter = path: type:
-                          pkgsNew.lib.hasSuffix "dhall-json.cabal" path;
-
-                        expr =
-                          haskellPackagesNew.haskellSrc2nix {
-                            name = "dhall-json";
-
-                            src =
-                              if pkgsNew.lib.canCleanSource src
-                              then pkgsNew.lib.cleanSourceWith { inherit src filter; }
-                              else src;
-
-                            extraCabal2nixOptions = "-fgpl";
-                          };
-
-                        drv = haskellPackagesNew.callPackage expr {};
-
-                      in
-                        pkgsNew.haskell.lib.overrideCabal drv (old: {
-                          inherit src;
-
-                          preConfigure = ''
-                            # Generated from ${expr}
-                            ${old.preConfigure or ""}
-                          '';
-                        });
+                    dhall-yaml =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-yaml"
+                        (pkgsNew.sdist ../dhall-yaml)
+                        { };
 
                     dhall-try =
                       pkgsNew.haskell.lib.overrideCabal
@@ -580,6 +568,9 @@ let
 
                     dhall-nix-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nix;
+
+                    dhall-yaml-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-yaml;
                   };
 
               in
@@ -625,6 +616,7 @@ let
     dhall-json       = makeStaticIfPossible "dhall-json"      ;
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
+    dhall-yaml       = makeStaticIfPossible "dhall-yaml"      ;
   };
 
   toDockerImage = name:
@@ -633,7 +625,7 @@ let
         pkgs.dockerTools.buildImage {
           inherit name;
 
-          contents = [ possibly-static."${name}" ];
+          contents = [ possibly-static."${name}" pkgs.cacert ];
         };
 
     in
@@ -652,6 +644,7 @@ in
     tarball-dhall-json       = makeTarball "dhall-json"      ;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
     tarball-dhall-nix        = makeTarball "dhall-nix"       ;
+    tarball-dhall-yaml       = makeTarball "dhall-yaml"      ;
 
     inherit (pkgs) tarball-website website;
 
@@ -663,6 +656,7 @@ in
       dhall-lsp-server
       dhall-nix
       dhall-try
+      dhall-yaml
     ;
 
     inherit (pkgs.releaseTools) aggregate;
@@ -673,12 +667,14 @@ in
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
+    shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;
     image-dhall-json       = toDockerImage "dhall-json"      ;
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
+    image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
     test-dhall =
       pkgs.mkShell

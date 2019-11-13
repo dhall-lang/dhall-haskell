@@ -32,9 +32,9 @@ import Dhall.Core (Expr(Annot), Import, pretty)
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
 import Dhall.Parser (Src)
-import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle, layoutOpts)
+import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle)
 import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
-import Dhall.Util (Censor(..), Input(..), Output(..))
+import Dhall.Util (Censor(..), Header (..), Input(..), Output(..))
 import Dhall.Version (dhallVersionString)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode, exitFailure)
@@ -44,7 +44,6 @@ import Text.Dot ((.->.))
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
 import qualified Codec.CBOR.Write
-import qualified Codec.Serialise
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Aeson
@@ -61,7 +60,6 @@ import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Format
 import qualified Dhall.Freeze
-import qualified Dhall.Hash
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
@@ -91,6 +89,7 @@ data Options = Options
 ignoreSemanticCache :: Mode -> Bool
 ignoreSemanticCache Default {..} = semanticCacheMode == IgnoreSemanticCache
 ignoreSemanticCache Resolve {..} = semanticCacheMode == IgnoreSemanticCache
+ignoreSemanticCache Type {..}    = semanticCacheMode == IgnoreSemanticCache
 ignoreSemanticCache _            = False
 
 -- | The subcommands for the @dhall@ executable
@@ -109,12 +108,16 @@ data Mode
           , resolveMode :: Maybe ResolveMode
           , semanticCacheMode :: SemanticCacheMode
           }
-    | Type { file :: Input, quiet :: Bool }
+    | Type
+          { file :: Input
+          , quiet :: Bool
+          , semanticCacheMode :: SemanticCacheMode
+          }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
     | Format { formatMode :: Dhall.Format.FormatMode }
     | Freeze { inplace :: Input, all_ :: Bool, cache :: Bool }
-    | Hash
+    | Hash { file :: Input }
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { inplace :: Input }
     | Tags
@@ -180,7 +183,7 @@ parseMode =
     <|> subcommand
             "type"
             "Infer an expression's type"
-            (Type <$> parseFile <*> parseQuiet)
+            (Type <$> parseFile <*> parseQuiet <*> parseSemanticCacheMode)
     <|> subcommand
             "normalize"
             "Normalize an expression"
@@ -196,7 +199,7 @@ parseMode =
     <|> subcommand
             "hash"
             "Compute semantic hashes for Dhall expressions"
-            (pure Hash)
+            (Hash <$> parseFile)
     <|> subcommand
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
@@ -466,7 +469,7 @@ command (Options {..}) = do
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
         renderDoc h doc = do
-            let stream = Pretty.layoutSmart layoutOpts doc
+            let stream = Dhall.Pretty.layout doc
 
             supportsANSI <- System.Console.ANSI.hSupportsANSI h
             let ansiStream =
@@ -598,7 +601,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -632,11 +635,21 @@ command (Options {..}) = do
 
             Dhall.Freeze.freeze inplace scope intent characterSet censor
 
-        Hash -> do
-            Dhall.Hash.hash censor
+        Hash {..} -> do
+            expression <- getExpression file
+
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+
+            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
+            let normalizedExpression =
+                    Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+
+            Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
         Lint {..} -> do
-            (header, expression) <- getExpressionAndHeader inplace
+            (Header header, expression) <- getExpressionAndHeader inplace
 
             case inplace of
                 InputFile file -> do
@@ -659,9 +672,7 @@ command (Options {..}) = do
         Encode {..} -> do
             expression <- getExpression file
 
-            let term = Dhall.Binary.encodeExpression expression
-
-            let bytes = Codec.Serialise.serialise term
+            let bytes = Dhall.Binary.encodeExpression (Dhall.Core.denote expression)
 
             if json
                 then do
@@ -682,7 +693,7 @@ command (Options {..}) = do
                     InputFile f   -> Data.ByteString.Lazy.readFile f
                     StandardInput -> Data.ByteString.Lazy.getContents
 
-            term <- do
+            expression <- do
                 if json
                     then do
                         value <- case Data.Aeson.eitherDecode' bytes of
@@ -691,15 +702,14 @@ command (Options {..}) = do
 
                         let encoding = Codec.CBOR.JSON.encodeValue value
 
-                        let cborBytes = Codec.CBOR.Write.toLazyByteString encoding
-                        Dhall.Core.throws (Codec.Serialise.deserialiseOrFail cborBytes)
+                        let cborgBytes = Codec.CBOR.Write.toLazyByteString encoding
+
+                        Dhall.Core.throws (Dhall.Binary.decodeExpression cborgBytes)
                     else do
-                        Dhall.Core.throws (Codec.Serialise.deserialiseOrFail bytes)
+                        Dhall.Core.throws (Dhall.Binary.decodeExpression bytes)
 
-            expression <- Dhall.Core.throws (Dhall.Binary.decodeExpression term)
-                :: IO (Expr Src Import)
 
-            let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
+            let doc = Dhall.Pretty.prettyCharacterSet characterSet (Dhall.Core.renote expression :: Expr Src Import)
 
             renderDoc System.IO.stdout doc
 
@@ -717,13 +727,13 @@ command (Options {..}) = do
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do
                     Data.Text.IO.putStr text
                 _ -> do
-                    let invalidTypeExpected :: Expr Void Void
-                        invalidTypeExpected = Dhall.Core.Text
+                    let invalidDecoderExpected :: Expr Void Void
+                        invalidDecoderExpected = Dhall.Core.Text
 
-                    let invalidTypeExpression :: Expr Void Void
-                        invalidTypeExpression = normalizedExpression
+                    let invalidDecoderExpression :: Expr Void Void
+                        invalidDecoderExpression = normalizedExpression
 
-                    Control.Exception.throwIO (Dhall.InvalidType {..})
+                    Control.Exception.throwIO (Dhall.InvalidDecoder {..})
 
         Tags {..} -> do
             tags <- Dhall.Tags.generate input suffixes followSymlinks

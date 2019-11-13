@@ -14,13 +14,11 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
-import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Text
-import Data.Void (Void)
-import Dhall.Core (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Parser (Src)
-import Dhall.Pretty (CharacterSet, annToAnsiStyle, layoutOpts, prettyCharacterSet)
+import Dhall.Pretty (CharacterSet, annToAnsiStyle, prettyCharacterSet)
+import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
 
@@ -32,6 +30,7 @@ import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
+import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified System.FilePath
@@ -54,15 +53,7 @@ freezeImport directory import_ = do
 
     let status = Dhall.Import.emptyStatus directory
 
-    let download =
-            State.evalStateT (Dhall.Import.loadWith (Embed import_)) status
-
-    -- Try again without the semantic integrity check if decoding fails
-    let handler :: SomeException -> IO (Expr Src Void)
-        handler _ = do
-            State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
-
-    expression <- Control.Exception.handle handler download
+    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
     case Dhall.TypeCheck.typeOf expression of
         Left  exception -> Control.Exception.throwIO exception
@@ -72,7 +63,7 @@ freezeImport directory import_ = do
             Dhall.Core.alphaNormalize (Dhall.Core.normalize expression)
 
     -- make sure the frozen import is present in the semantic cache
-    Dhall.Import.writeExpressionToSemanticCache expression
+    Dhall.Import.writeExpressionToSemanticCache (Dhall.Core.denote expression)
 
     let expressionHash = Dhall.Import.hashExpression normalizedExpression
 
@@ -98,7 +89,7 @@ writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
 
-    let unAnnotated = Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc)
+    let unAnnotated = Dhall.Pretty.layout (Pretty.unAnnotate doc)
 
     case inplace of
         InputFile f ->
@@ -110,7 +101,7 @@ writeExpr inplace (header, expr) characterSet = do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI
                then
-                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Pretty.layoutSmart layoutOpts doc)
+                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Dhall.Pretty.layout doc)
                else
                  Pretty.renderIO System.IO.stdout unAnnotated
 
@@ -145,7 +136,8 @@ freeze inplace scope intent characterSet censor = do
             StandardInput  -> "."
             InputFile file -> System.FilePath.takeDirectory file
 
-    (header, parsedExpression) <- Dhall.Util.getExpressionAndHeader censor inplace
+    (Dhall.Util.Header header, parsedExpression) <-
+        Dhall.Util.getExpressionAndHeader censor inplace
 
     let freezeScope =
             case scope of

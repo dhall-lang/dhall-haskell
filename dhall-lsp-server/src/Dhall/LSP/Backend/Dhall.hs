@@ -128,7 +128,7 @@ parse = fmap snd . parseWithHeader
 
 -- | Parse a Dhall expression along with its "header", i.e. whitespace and
 --   comments prefixing the actual code.
-parseWithHeader :: Text -> Either DhallError (Text, Expr Src Dhall.Import)
+parseWithHeader :: Text -> Either DhallError (Dhall.Header, Expr Src Dhall.Import)
 parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
 
 -- | Resolve all imports in an expression.
@@ -165,5 +165,5 @@ normalize (WellTyped expr) = Normal $ Dhall.normalize expr
 --   Dhall's hash annotations (prefixed by "sha256:" and base-64 encoded).
 hashNormalToCode :: Normal -> Text
 hashNormalToCode (Normal expr) =
-  Dhall.hashExpressionToCode alphaNormal
+  Dhall.hashExpressionToCode (Dhall.denote alphaNormal)
   where alphaNormal = Dhall.alphaNormalize expr

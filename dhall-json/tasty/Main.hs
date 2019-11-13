@@ -9,7 +9,6 @@ import Dhall.JSON (Conversion(..))
 import Test.Tasty (TestTree)
 
 import qualified Data.Aeson           as Aeson
-import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Text.IO
 import qualified Dhall.Core           as Core
@@ -18,7 +17,6 @@ import qualified Dhall.JSON
 import qualified Dhall.JSONToDhall    as JSONToDhall
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
-import qualified Dhall.Yaml
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
@@ -33,12 +31,6 @@ testTree :: TestTree
 testTree =
     Test.Tasty.testGroup "dhall-json"
         [ testDhallToJSON "./tasty/data/issue48"
-        , testDhallToYaml
-            Dhall.Yaml.defaultOptions
-            "./tasty/data/normal"
-        , testDhallToYaml
-            (Dhall.Yaml.defaultOptions { Dhall.Yaml.quoted = True })
-            "./tasty/data/quoted"
         , testJSONToDhall "./tasty/data/emptyAlternative"
         , testJSONToDhall "./tasty/data/emptyObject"
         , testJSONToDhall "./tasty/data/emptyList"
@@ -137,19 +129,3 @@ testCustomConversionJSONToDhall conv prefix =
 
 testJSONToDhall :: String -> TestTree
 testJSONToDhall = testCustomConversionJSONToDhall JSONToDhall.defaultConversion
-
-testDhallToYaml :: Dhall.Yaml.Options -> String -> TestTree
-testDhallToYaml options prefix = Test.Tasty.HUnit.testCase prefix $ do
-    let inputFile = prefix <> ".dhall"
-    let outputFile = prefix <> ".yaml"
-
-    text <- Data.Text.IO.readFile inputFile
-
-    actualValue <- do
-        Dhall.Yaml.dhallToYaml options (Just inputFile) text
-
-    expectedValue <- Data.ByteString.readFile outputFile
-
-    let message = "Conversion to YAML did not generate the expected output"
-
-    Test.Tasty.HUnit.assertEqual message expectedValue actualValue

@@ -49,6 +49,7 @@ module Dhall.Eval (
   , Environment(..)
   , Val(..)
   , (~>)
+  , textShow
   ) where
 
 import Data.Foldable (foldr', toList)
@@ -57,7 +58,7 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
 
-import Dhall.Core
+import Dhall.Syntax
   ( Binding(..)
   , Expr(..)
   , Chunks(..)
@@ -71,12 +72,14 @@ import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Prelude hiding (succ)
 
+import qualified Data.Char
 import qualified Data.Sequence   as Sequence
 import qualified Data.Set
 import qualified Data.Text       as Text
-import qualified Dhall.Core      as Core
+import qualified Dhall.Syntax    as Syntax
 import qualified Dhall.Map       as Map
 import qualified Dhall.Set
+import qualified Text.Printf
 
 data Environment a
     = Empty
@@ -130,15 +133,6 @@ data HLamInfo a
   -- ^ Don't store any information
   | Typed !Text (Val a)
   -- ^ Store the original name and type of the variable bound by the `Lam`
-  | NaturalFoldCl (Val a)
-  -- ^ The original function was a @Natural/fold@.  We need to preserve this
-  --   information in order to implement @Natural/{build,fold}@ fusion
-  | ListFoldCl (Val a)
-  -- ^ The original function was a @List/fold@.  We need to preserve this
-  --   information in order to implement @List/{build,fold}@ fusion
-  | OptionalFoldCl (Val a)
-  -- ^ The original function was an @Optional/fold@.  We need to preserve this
-  --   information in order to implement @Optional/{build,fold}@ fusion
   | NaturalSubtractZero
   -- ^ The original function was a @Natural/subtract 0@.  We need to preserve
   --   this information in case the @Natural/subtract@ ends up not being fully
@@ -189,6 +183,8 @@ data Val a
 
     | VInteger
     | VIntegerLit !Integer
+    | VIntegerClamp !(Val a)
+    | VIntegerNegate !(Val a)
     | VIntegerShow !(Val a)
     | VIntegerToDouble !(Val a)
 
@@ -465,14 +461,12 @@ eval !env t0 =
                         go  acc m = go (vApp succ acc) (m - 1)
                     in  go zero (fromIntegral n :: Integer)
                 n ->
-                    VHLam (NaturalFoldCl n) $ \natural ->
+                    VPrim $ \natural ->
                     VPrim $ \succ ->
                     VPrim $ \zero ->
                     VNaturalFold n natural succ zero
         NaturalBuild ->
             VPrim $ \case
-                VHLam (NaturalFoldCl x) _ ->
-                    x
                 VPrimVar ->
                     VNaturalBuild VPrimVar
                 t ->       t
@@ -523,6 +517,16 @@ eval !env t0 =
             VInteger
         IntegerLit n ->
             VIntegerLit n
+        IntegerClamp ->
+            VPrim $ \case
+                VIntegerLit n
+                    | 0 <= n    -> VNaturalLit (fromInteger n)
+                    | otherwise -> VNaturalLit 0
+                n -> VIntegerClamp n
+        IntegerNegate ->
+            VPrim $ \case
+                VIntegerLit n -> VIntegerLit (negate n)
+                n             -> VIntegerNegate n
         IntegerShow ->
             VPrim $ \case
                 VIntegerLit n
@@ -554,7 +558,7 @@ eval !env t0 =
             eval env (TextLit (Chunks [("", t), ("", u)] ""))
         TextShow ->
             VPrim $ \case
-                VTextLit (VChunks [] x) -> VTextLit (VChunks [] (Core.textShow x))
+                VTextLit (VChunks [] x) -> VTextLit (VChunks [] (textShow x))
                 t                       -> VTextShow t
         List ->
             VPrim VList
@@ -565,8 +569,6 @@ eval !env t0 =
         ListBuild ->
             VPrim $ \a ->
             VPrim $ \case
-                VHLam (ListFoldCl x) _ ->
-                    x
                 VPrimVar ->
                     VListBuild a VPrimVar
                 t ->       t
@@ -585,7 +587,7 @@ eval !env t0 =
                     VHLam (Typed "nil"  list) $ \nil ->
                     foldr' (\x b -> cons `vApp` x `vApp` b) nil as
                 as ->
-                    VHLam (ListFoldCl as) $ \t ->
+                    VPrim $ \t ->
                     VPrim $ \c ->
                     VPrim $ \n ->
                     VListFold a as t c n
@@ -664,14 +666,13 @@ eval !env t0 =
                     VHLam (Typed "none" optional) $ \_none ->
                     some `vApp` t
                 opt ->
-                    VHLam (OptionalFoldCl opt) $ \o ->
+                    VPrim $ \o ->
                     VPrim $ \s ->
                     VPrim $ \n ->
                     VOptionalFold a opt o s n
         OptionalBuild ->
             VPrim $ \ ~a ->
             VPrim $ \case
-                VHLam (OptionalFoldCl x) _ -> x
                 VPrimVar -> VOptionalBuild a VPrimVar
                 t ->       t
                     `vApp` VOptional a
@@ -771,6 +772,21 @@ eqMaybeBy f = go
     go _        _        = False
 {-# INLINE eqMaybeBy #-}
 
+-- | Utility that powers the @Text/show@ built-in
+textShow :: Text -> Text
+textShow text = "\"" <> Text.concatMap f text <> "\""
+  where
+    f '"'  = "\\\""
+    f '$'  = "\\u0024"
+    f '\\' = "\\\\"
+    f '\b' = "\\b"
+    f '\n' = "\\n"
+    f '\r' = "\\r"
+    f '\t' = "\\t"
+    f '\f' = "\\f"
+    f c | c <= '\x1F' = Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
+        | otherwise   = Text.singleton c
+
 conv :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 conv !env t0 t0' =
     case (t0, t0') of
@@ -846,6 +862,10 @@ conv !env t0 t0' =
             True
         (VIntegerLit t, VIntegerLit t') ->
             t == t'
+        (VIntegerClamp t, VIntegerClamp t') ->
+            conv env t t'
+        (VIntegerNegate t, VIntegerNegate t') ->
+            conv env t t'
         (VIntegerShow t, VIntegerShow t') ->
             conv env t t'
         (VIntegerToDouble t, VIntegerToDouble t') ->
@@ -945,7 +965,7 @@ conv !env t0 t0' =
     {-# INLINE convSkip #-}
 
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
-judgmentallyEqual (Core.denote -> t) (Core.denote -> u) =
+judgmentallyEqual (Syntax.denote -> t) (Syntax.denote -> u) =
     conv Empty (eval Empty t) (eval Empty u)
 
 data Names
@@ -980,9 +1000,6 @@ quote !env !t0 =
             case i of
                 Typed (fresh -> (x, v)) a -> Lam x (quote env a) (quoteBind x (t v))
                 Prim                      -> quote env (t VPrimVar)
-                NaturalFoldCl{}           -> quote env (t VPrimVar)
-                ListFoldCl{}              -> quote env (t VPrimVar)
-                OptionalFoldCl{}          -> quote env (t VPrimVar)
                 NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
 
         VPi a (freshClosure -> (x, v, b)) ->
@@ -1031,6 +1048,10 @@ quote !env !t0 =
             Integer
         VIntegerLit n ->
             IntegerLit n
+        VIntegerClamp t ->
+            IntegerClamp `qApp` t
+        VIntegerNegate t ->
+            IntegerNegate `qApp` t
         VIntegerShow t ->
             IntegerShow `qApp` t
         VIntegerToDouble t ->
@@ -1132,7 +1153,7 @@ quote !env !t0 =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env = Core.renote . quote (envNames env) . eval env . Core.denote
+nf !env = Syntax.renote . quote (envNames env) . eval env . Syntax.denote
 
 normalize :: Eq a => Expr s a -> Expr t a
 normalize = nf Empty
@@ -1207,6 +1228,10 @@ alphaNormalize = goEnv EmptyNames
                 Integer
             IntegerLit n ->
                 IntegerLit n
+            IntegerClamp ->
+                IntegerClamp
+            IntegerNegate ->
+                IntegerNegate
             IntegerShow ->
                 IntegerShow
             IntegerToDouble ->

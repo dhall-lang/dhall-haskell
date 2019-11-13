@@ -5,6 +5,7 @@ packages:
   - dhall-json
   - dhall-nix
   - dhall-lsp-server
+  - dhall-yaml
 extra-deps:
   - th-lift-instances-0.1.13@sha256:2852e468511805cb25d9e3923c9e91647d008ab4a764ec0921e5e40ff8a8e874,2625
   - th-lift-0.8.0.1@sha256:cceb81b12c0580e02a7a3898b6d60cca5e1be080741f69ddde4f12210d8ba7ca,1960
@@ -21,7 +22,7 @@ extra-deps:
   - HsYAML-aeson-0.2.0.0@sha256:04796abfc01cffded83f37a10e6edba4f0c0a15d45bef44fc5bb4313d9c87757,1791
   - ordered-containers-0.2.2@sha256:ebf2be3f592d9cf148ea6b8375f8af97148d44f82d8d04476899285e965afdbf,810
   - lsp-test-0.6.1.0@sha256:df0fc403c03b6d036be13de3ff23d9951ae2506080135cd6862eded2c969a6da,3483
-  - aeson-yaml-1.0.2.0@sha256:c578472845478a35756131f4f4a6a929a9021aa2e494e6efe610c033e09868d0,1975
+  - aeson-yaml-1.0.4.0@sha256:72d91a4a2ade87b8a4bdf73937d2c62bd2c60053df1841f8bf1e6204387959b8,1975
 nix:
   packages:
     - ncurses

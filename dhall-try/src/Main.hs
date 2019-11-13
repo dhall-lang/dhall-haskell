@@ -4,10 +4,10 @@ module Main where
 
 import qualified Control.Exception
 import qualified Data.Aeson.Encode.Pretty
-import qualified Data.Char
 import qualified Data.IORef
 import qualified Data.JSString
 import qualified Data.Text
+import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
 import qualified Data.Text.Prettyprint.Doc             as Pretty
@@ -15,6 +15,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.JSON
+import qualified Dhall.JSON.Yaml
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
@@ -24,9 +25,6 @@ import Control.Exception (Exception, SomeException)
 import Data.JSString (JSString)
 import Data.Text (Text)
 import GHCJS.Foreign.Callback (Callback)
-
--- Work around the `yaml` package not working for GHCJS
-foreign import javascript unsafe "jsonToYaml($1)" jsonToYaml_ :: JSString -> JSString
 
 foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
 
@@ -61,15 +59,6 @@ setMode Type  = setMode_ "haskell"
 setMode JSON  = setMode_ "javascript"
 setMode YAML  = setMode_ "yaml"
 
-jsonToYaml :: Text -> Text
-jsonToYaml =
-        Data.Text.dropWhileEnd Data.Char.isSpace
-    .   Data.Text.pack
-    .   Data.JSString.unpack
-    .   jsonToYaml_
-    .   Data.JSString.pack
-    .   Data.Text.unpack
-
 jsonConfig :: Data.Aeson.Encode.Pretty.Config
 jsonConfig =
     Data.Aeson.Encode.Pretty.Config
@@ -91,7 +80,7 @@ main = do
 
     let prettyExpression =
               Pretty.renderStrict
-            . Pretty.layoutSmart Dhall.Pretty.layoutOpts
+            . Dhall.Pretty.layout
             . Dhall.Pretty.prettyExpr
 
     let interpret = do
@@ -144,12 +133,12 @@ main = do
                                               Left exception -> do
                                                   errOutput exception
                                               Right value -> do
-                                                  let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty' jsonConfig value
-                                                  case Data.Text.Lazy.Encoding.decodeUtf8' jsonBytes of
+                                                  let yamlBytes = Dhall.JSON.Yaml.jsonToYaml value False False
+                                                  case Data.Text.Encoding.decodeUtf8' yamlBytes of
                                                       Left exception -> do
                                                           errOutput exception
-                                                      Right jsonText -> do
-                                                          setOutput (jsonToYaml (Data.Text.Lazy.toStrict jsonText))
+                                                      Right yamlText -> do
+                                                          setOutput yamlText
 
     interpret
 

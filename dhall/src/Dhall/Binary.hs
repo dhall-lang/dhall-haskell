@@ -1,7 +1,10 @@
+{-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE OverloadedStrings  #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {-| This module contains logic for converting Dhall expressions to and from
     CBOR expressions which can in turn be converted to and from a binary
@@ -14,8 +17,6 @@ module Dhall.Binary
     , renderStandardVersion
 
     -- * Encoding and decoding
-    , ToTerm(..)
-    , FromTerm(..)
     , encodeExpression
     , decodeExpression
 
@@ -23,10 +24,13 @@ module Dhall.Binary
     , DecodingFailure(..)
     ) where
 
-import Codec.CBOR.Term (Term(..))
+import Codec.CBOR.Decoding (Decoder, TokenType(..))
+import Codec.CBOR.Encoding (Encoding)
+import Codec.Serialise (Serialise(encode, decode))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
-import Dhall.Core
+import Data.ByteString.Lazy (ByteString)
+import Dhall.Syntax
     ( Binding(..)
     , Chunks(..)
     , Const(..)
@@ -51,14 +55,21 @@ import Data.Text (Text)
 import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
 
-import qualified Control.Monad       as Monad
+import qualified Codec.CBOR.Decoding  as Decoding
+import qualified Codec.CBOR.Encoding  as Encoding
+import qualified Codec.CBOR.Read      as Read
+import qualified Codec.Serialise      as Serialise
+import qualified Control.Monad        as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
+import qualified Data.ByteString.Lazy
 import qualified Data.Sequence
-import qualified Dhall.Core
+import qualified Data.Text            as Text
+import qualified Dhall.Syntax
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Text.Printf          as Printf
 
 {-| Supported version strings
 
@@ -105,852 +116,1112 @@ unApply e₀ = (baseFunction₀, diffArguments₀ [])
 
     go baseFunction = (baseFunction, id)
 
--- | Types that can be encoded as a CBOR `Term`
-class ToTerm a where
-    encode :: a -> Term
+decodeExpressionInternal :: (Int -> Decoder s a) -> Decoder s (Expr t a)
+decodeExpressionInternal decodeEmbed = go
+  where
+    go = do
+        let die message = fail ("Dhall.Binary.decodeExpressionInternal: " <> message)
 
-instance ToTerm a => ToTerm (Expr Void a) where
-    encode (Var (V "_" n)) =
-        TInt n
-    encode (Var (V x n)) =
-        TList [ TString x, TInt n ]
-    encode NaturalBuild =
-        TString "Natural/build"
-    encode NaturalFold =
-        TString "Natural/fold"
-    encode NaturalIsZero =
-        TString "Natural/isZero"
-    encode NaturalEven =
-        TString "Natural/even"
-    encode NaturalOdd =
-        TString "Natural/odd"
-    encode NaturalToInteger =
-        TString "Natural/toInteger"
-    encode NaturalShow =
-        TString "Natural/show"
-    encode NaturalSubtract =
-        TString "Natural/subtract"
-    encode IntegerToDouble =
-        TString "Integer/toDouble"
-    encode IntegerShow =
-        TString "Integer/show"
-    encode DoubleShow =
-        TString "Double/show"
-    encode ListBuild =
-        TString "List/build"
-    encode ListFold =
-        TString "List/fold"
-    encode ListLength =
-        TString "List/length"
-    encode ListHead =
-        TString "List/head"
-    encode ListLast =
-        TString "List/last"
-    encode ListIndexed =
-        TString "List/indexed"
-    encode ListReverse =
-        TString "List/reverse"
-    encode OptionalFold =
-        TString "Optional/fold"
-    encode OptionalBuild =
-        TString "Optional/build"
-    encode Bool =
-        TString "Bool"
-    encode Optional =
-        TString "Optional"
-    encode None =
-        TString "None"
-    encode Natural =
-        TString "Natural"
-    encode Integer =
-        TString "Integer"
-    encode Double =
-        TString "Double"
-    encode Text =
-        TString "Text"
-    encode TextShow =
-        TString "Text/show"
-    encode List =
-        TString "List"
-    encode (Const Type) =
-        TString "Type"
-    encode (Const Kind) =
-        TString "Kind"
-    encode (Const Sort) =
-        TString "Sort"
-    encode e@(App _ _) =
-        TList ([ TInt 0, f₁ ] ++ map encode arguments)
-      where
-        (f₀, arguments) = unApply e
+        tokenType₀ <- Decoding.peekTokenType
 
-        f₁ = encode f₀
-    encode (Lam "_" _A₀ b₀) =
-        TList [ TInt 1, _A₁, b₁ ]
-      where
-        _A₁ = encode _A₀
-        b₁  = encode b₀
-    encode (Lam x _A₀ b₀) =
-        TList [ TInt 1, TString x, _A₁, b₁ ]
-      where
-        _A₁ = encode _A₀
-        b₁  = encode b₀
-    encode (Pi "_" _A₀ _B₀) =
-        TList [ TInt 2, _A₁, _B₁ ]
-      where
-        _A₁ = encode _A₀
-        _B₁ = encode _B₀
-    encode (Pi x _A₀ _B₀) =
-        TList [ TInt 2, TString x, _A₁, _B₁ ]
-      where
-        _A₁ = encode _A₀
-        _B₁ = encode _B₀
-    encode (BoolOr l₀ r₀) =
-        TList [ TInt 3, TInt 0, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (BoolAnd l₀ r₀) =
-        TList [ TInt 3, TInt 1, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (BoolEQ l₀ r₀) =
-        TList [ TInt 3, TInt 2, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (BoolNE l₀ r₀) =
-        TList [ TInt 3, TInt 3, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (NaturalPlus l₀ r₀) =
-        TList [ TInt 3, TInt 4, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (NaturalTimes l₀ r₀) =
-        TList [ TInt 3, TInt 5, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (TextAppend l₀ r₀) =
-        TList [ TInt 3, TInt 6, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (ListAppend l₀ r₀) =
-        TList [ TInt 3, TInt 7, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (Combine l₀ r₀) =
-        TList [ TInt 3, TInt 8, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (Prefer l₀ r₀) =
-        TList [ TInt 3, TInt 9, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (CombineTypes l₀ r₀) =
-        TList [ TInt 3, TInt 10, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (ImportAlt l₀ r₀) =
-        TList [ TInt 3, TInt 11, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (Equivalent l₀ r₀) =
-        TList [ TInt 3, TInt 12, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (RecordCompletion l₀ r₀) =
-        TList [ TInt 3, TInt 13, l₁, r₁ ]
-      where
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (ListLit _T₀ xs₀)
-        | null xs₀  = TList [ TInt label, _T₁ ]
-        | otherwise = TList ([ TInt 4, TNull ] ++ xs₁)
-      where
-        (label, _T₁) = case _T₀ of
-            Nothing           -> (4 , TNull)
-            Just (App List t) -> (4 , encode t)
-            Just t            -> (28, encode t)
+        case tokenType₀ of
+            TypeUInt -> do
+                !n <- Decoding.decodeWord
 
-        xs₁ = map encode (Data.Foldable.toList xs₀)
-    encode (Some t₀) =
-        TList [ TInt 5, TNull, t₁ ]
-      where
-        t₁ = encode t₀
-    encode (Merge t₀ u₀ Nothing) =
-        TList [ TInt 6, t₁, u₁ ]
-      where
-        t₁ = encode t₀
-        u₁ = encode u₀
-    encode (Merge t₀ u₀ (Just _T₀)) =
-        TList [ TInt 6, t₁, u₁, _T₁ ]
-      where
-        t₁  = encode t₀
-        u₁  = encode u₀
-        _T₁ = encode _T₀
-    encode (Record xTs₀) =
-        TList [ TInt 7, TMap xTs₁ ]
-      where
-        xTs₁ = do
-            (x₀, _T₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
-            let x₁  = TString x₀
-            let _T₁ = encode _T₀
-            return (x₁, _T₁)
-    encode (RecordLit xts₀) =
-        TList [ TInt 8, TMap xts₁ ]
-      where
-        xts₁ = do
-            (x₀, t₀) <- Dhall.Map.toList (Dhall.Map.sort xts₀)
-            let x₁ = TString x₀
-            let t₁ = encode t₀
-            return (x₁, t₁)
-    encode (Field t₀ x) =
-        TList [ TInt 9, t₁, TString x ]
-      where
-        t₁ = encode t₀
-    encode (Project t₀ (Left xs₀)) =
-        TList ([ TInt 10, t₁ ] ++ xs₁)
-      where
-        t₁  = encode t₀
-        xs₁ = map TString (Dhall.Set.toList xs₀)
-    encode (Project t₀ (Right _T₀)) =
-        TList [ TInt 10, t₁, TList [ _T₁ ] ]
-      where
-        _T₁ = encode _T₀
-        t₁  = encode t₀
-    encode (Union xTs₀) =
-        TList [ TInt 11, TMap xTs₁ ]
-      where
-        xTs₁ = do
-            (x₀, mT₀) <- Dhall.Map.toList (Dhall.Map.sort xTs₀)
+                return (Var (V "_" (fromIntegral n)))
 
-            let x₁  = TString x₀
+            TypeUInt64 -> do
+                !n <- Decoding.decodeWord64
 
-            let _T₁ = case mT₀ of
-                    Nothing  -> TNull
-                    Just _T₀ -> encode _T₀
+                return (Var (V "_" (fromIntegral n)))
 
-            return (x₁, _T₁)
-    encode (BoolLit b) =
-        TBool b
-    encode (BoolIf t₀ l₀ r₀) =
-        TList [ TInt 14, t₁, l₁, r₁ ]
-      where
-        t₁ = encode t₀
-        l₁ = encode l₀
-        r₁ = encode r₀
-    encode (NaturalLit n) =
-        TList [ TInt 15, TInteger (fromIntegral n) ]
-    encode (IntegerLit n) =
-        TList [ TInt 16, TInteger n ]
-    encode (DoubleLit d) =
-        encode d
-    encode (TextLit (Chunks xys₀ z₀)) =
-        TList ([ TInt 18 ] ++ xys₁ ++ [ z₁ ])
-      where
-        xys₁ = do
-            (x₀, y₀) <- xys₀
-            let x₁ = TString x₀
-            let y₁ = encode y₀
-            [ x₁, y₁ ]
+            TypeFloat16 -> do
+                !n <- Decoding.decodeFloat
 
-        z₁ = TString z₀
-    encode (Assert t₀) =
-        TList [ TInt 19, t₁ ]
-      where
-        t₁ = encode t₀
-    encode (Embed x) =
-        encode x
-    encode (Let a b) =
-        TList ([ TInt 25 ] ++ as₁ ++ [ b₁ ])
-      where
-        MultiLet as₀ b₀ = Dhall.Core.multiLet a b
+                return (DoubleLit (DhallDouble (float2Double n)))
 
-        as₁ = do
-            Binding _ x₀ _ mA₀ _ a₀ <- toList as₀
+            TypeFloat32 -> do
+                !n <- Decoding.decodeFloat
 
-            let mA₁ = case mA₀ of
-                    Nothing       -> TNull
-                    Just (_, _A₀) -> encode _A₀
+                return (DoubleLit (DhallDouble (float2Double n)))
 
-            let a₁ = encode a₀
+            TypeFloat64 -> do
+                !n <- Decoding.decodeDouble
 
-            [ TString x₀, mA₁, a₁ ]
+                return (DoubleLit (DhallDouble n))
 
-        b₁ = encode b₀
-    encode (Annot t₀ _T₀) =
-        TList [ TInt 26, t₁, _T₁ ]
-      where
-        t₁  = encode t₀
-        _T₁ = encode _T₀
-    encode (ToMap t₀ Nothing) =
-        TList [ TInt 27, t₁ ]
-      where
-        t₁ = encode t₀
-    encode (ToMap t₀ (Just _T₀)) =
-        TList [ TInt 27, t₁, _T₁ ]
-      where
-        t₁  = encode t₀
-        _T₁ = encode _T₀
-    encode (Note a _) = absurd a
+            TypeBool -> do
+                !b <- Decoding.decodeBool
 
-instance ToTerm Import where
-    encode import_ =
-        case importType of
-            Remote (URL { scheme = scheme₀, ..}) ->
-                TList
-                    (   prefix
-                    ++  [ TInt scheme₁, using, TString authority ]
-                    ++  map TString (reverse components)
-                    ++  [ TString file ]
-                    ++  (case query    of Nothing -> [ TNull ]; Just q -> [ TString q ])
-                    )
-              where
-                using = case headers of
-                    Nothing ->
-                        TNull
-                    Just h ->
-                        encodeExpression h
+                return (BoolLit b)
 
-                scheme₁ = case scheme₀ of
-                    HTTP  -> 0
-                    HTTPS -> 1
-                File {..} = path
+            TypeString -> do
+                s <- Decoding.decodeString
 
-                Directory {..} = directory
+                case s of
+                    "Natural/build"     -> return NaturalBuild
+                    "Natural/fold"      -> return NaturalFold
+                    "Natural/isZero"    -> return NaturalIsZero
+                    "Natural/even"      -> return NaturalEven
+                    "Natural/odd"       -> return NaturalOdd
+                    "Natural/toInteger" -> return NaturalToInteger
+                    "Natural/show"      -> return NaturalShow
+                    "Natural/subtract"  -> return NaturalSubtract
+                    "Integer/toDouble"  -> return IntegerToDouble
+                    "Integer/clamp"     -> return IntegerClamp
+                    "Integer/negate"    -> return IntegerNegate
+                    "Integer/show"      -> return IntegerShow
+                    "Double/show"       -> return DoubleShow
+                    "List/build"        -> return ListBuild
+                    "List/fold"         -> return ListFold
+                    "List/length"       -> return ListLength
+                    "List/head"         -> return ListHead
+                    "List/last"         -> return ListLast
+                    "List/indexed"      -> return ListIndexed
+                    "List/reverse"      -> return ListReverse
+                    "Optional/fold"     -> return OptionalFold
+                    "Optional/build"    -> return OptionalBuild
+                    "Bool"              -> return Bool
+                    "Optional"          -> return Optional
+                    "None"              -> return None
+                    "Natural"           -> return Natural
+                    "Integer"           -> return Integer
+                    "Double"            -> return Double
+                    "Text"              -> return Text
+                    "Text/show"         -> return TextShow
+                    "List"              -> return List
+                    "Type"              -> return (Const Type)
+                    "Kind"              -> return (Const Kind)
+                    "Sort"              -> return (Const Sort)
+                    _                   -> die ("Unrecognized built-in: " <> Text.unpack s)
 
-            Local prefix₀ path ->
-                    TList
-                        (   prefix
-                        ++  [ TInt prefix₁ ]
-                        ++  map TString components₁
-                        ++  [ TString file ]
-                        )
-              where
-                File {..} = path
+            TypeListLen -> do
+                len <- Decoding.decodeListLen
 
-                Directory {..} = directory
+                case len of
+                    0 -> die "Missing tag"
+                    _ -> return ()
 
-                prefix₁ = case prefix₀ of
-                  Absolute -> 2
-                  Here     -> 3
-                  Parent   -> 4
-                  Home     -> 5
+                tokenType₁ <- Decoding.peekTokenType
 
-                components₁ = reverse components
+                case tokenType₁ of
+                    TypeString -> do
+                        x <- Decoding.decodeString
 
-            Env x ->
-                TList (prefix ++ [ TInt 6, TString x ])
+                        if x == "_"
+                            then die "Non-standard encoding of an α-normalized variable"
+                            else return ()
 
-            Missing ->
-                TList (prefix ++ [ TInt 7 ])
-      where
-        prefix = [ TInt 24, h, m ]
-          where
-            h = case hash of
-                Nothing ->
-                    TNull
-                Just digest ->
-                    TBytes ("\x12\x20" <> Data.ByteArray.convert digest)
+                        tokenType₂ <- Decoding.peekTokenType
 
-            m = TInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
+                        case tokenType₂ of
+                            TypeUInt -> do
+                                !n <- Decoding.decodeWord
 
-        Import {..} = import_
+                                return (Var (V x (fromIntegral n)))
 
-        ImportHashed {..} = importHashed
+                            TypeUInt64 -> do
+                                !n <- Decoding.decodeWord64
 
-instance ToTerm Void where
-    encode = absurd
+                                return (Var (V x (fromIntegral n)))
 
-instance ToTerm DhallDouble where
-    encode (DhallDouble n64)
-        -- cborg always encodes NaN as a half-precision float of value "7e00"
-        | useHalf   = THalf n32
-        | useFloat  = TFloat n32
-        | otherwise = TDouble n64
-      where
-        n32      = double2Float n64
-        useFloat = n64 == float2Double n32
-        -- the other four cases for Half-floats are -0.0, 0.0 and the infinities
-        useHalf  = n64 == 0.0 || n64 == infinity || n64 == -infinity
-        infinity = 1/0 :: Double
+                            _ -> do
+                                die ("Unexpected token type for variable index: " <> show tokenType₂)
 
--- | Types that can be decoded from a CBOR `Term`
-class FromTerm a where
-    decode :: Term -> Maybe a
+                    TypeUInt -> do
+                        tag <- Decoding.decodeWord
 
-instance FromTerm a => FromTerm (Expr s a) where
-    decode (TInt n) =
-        return (Var (V "_" n))
-    decode (TInteger n) =
-        return (Var (V "_" (fromIntegral n)))
-    decode (TString "Natural/build") =
-        return NaturalBuild
-    decode (TString "Natural/fold") =
-        return NaturalFold
-    decode (TString "Natural/isZero") =
-        return NaturalIsZero
-    decode (TString "Natural/even") =
-        return NaturalEven
-    decode (TString "Natural/odd") =
-        return NaturalOdd
-    decode (TString "Natural/toInteger") =
-        return NaturalToInteger
-    decode (TString "Natural/show") =
-        return NaturalShow
-    decode (TString "Natural/subtract") =
-        return NaturalSubtract
-    decode (TString "Integer/toDouble") =
-        return IntegerToDouble
-    decode (TString "Integer/show") =
-        return IntegerShow
-    decode (TString "Double/show") =
-        return DoubleShow
-    decode (TString "List/build") =
-        return ListBuild
-    decode (TString "List/fold") =
-        return ListFold
-    decode (TString "List/length") =
-        return ListLength
-    decode (TString "List/head") =
-        return ListHead
-    decode (TString "List/last") =
-        return ListLast
-    decode (TString "List/indexed") =
-        return ListIndexed
-    decode (TString "List/reverse") =
-        return ListReverse
-    decode (TString "Optional/fold") =
-        return OptionalFold
-    decode (TString "Optional/build") =
-        return OptionalBuild
-    decode (TString "Bool") =
-        return Bool
-    decode (TString "Optional") =
-        return Optional
-    decode (TString "None") =
-        return None
-    decode (TString "Natural") =
-        return Natural
-    decode (TString "Integer") =
-        return Integer
-    decode (TString "Double") =
-        return Double
-    decode (TString "Text") =
-        return Text
-    decode (TString "Text/show") =
-        return TextShow
-    decode (TString "List") =
-        return List
-    decode (TString "Type") =
-        return (Const Type)
-    decode (TString "Kind") =
-        return (Const Kind)
-    decode (TString "Sort") =
-        return (Const Sort)
-    decode (TString "_") =
-        empty
-    decode (TList [ TString x, TInt n ]) = do
-        Monad.guard (x /= "_")
-        return (Var (V x n))
-    decode (TList [ TString x, TInteger n ]) = do
-        Monad.guard (x /= "_")
-        return (Var (V x (fromIntegral n)))
-    decode (TList (TInt 0 : f₁ : xs₁)) = do
-        f₀  <- decode f₁
-        xs₀ <- traverse decode xs₁
-        Monad.guard (not (null xs₀))
-        return (foldl App f₀ xs₀)
-    decode (TList [ TInt 1, _A₁, b₁ ]) = do
-        _A₀ <- decode _A₁
-        b₀  <- decode b₁
-        return (Lam "_" _A₀ b₀)
-    decode (TList [ TInt 1, TString x, _A₁, b₁ ]) = do
-        Monad.guard (x /= "_")
-        _A₀ <- decode _A₁
-        b₀  <- decode b₁
-        return (Lam x _A₀ b₀)
-    decode (TList [ TInt 2, _A₁, _B₁ ]) = do
-        _A₀ <- decode _A₁
-        _B₀ <- decode _B₁
-        return (Pi "_" _A₀ _B₀)
-    decode (TList [ TInt 2, TString x, _A₁, _B₁ ]) = do
-        Monad.guard (x /= "_")
-        _A₀ <- decode _A₁
-        _B₀ <- decode _B₁
-        return (Pi x _A₀ _B₀)
-    decode (TList [ TInt 3, TInt n, l₁, r₁ ]) = do
-        l₀ <- decode l₁
-        r₀ <- decode r₁
-        op <- case n of
-                0  -> return BoolOr
-                1  -> return BoolAnd
-                2  -> return BoolEQ
-                3  -> return BoolNE
-                4  -> return NaturalPlus
-                5  -> return NaturalTimes
-                6  -> return TextAppend
-                7  -> return ListAppend
-                8  -> return Combine
-                9  -> return Prefer
-                10 -> return CombineTypes
-                11 -> return ImportAlt
-                12 -> return Equivalent
-                13 -> return RecordCompletion
-                _  -> empty
-        return (op l₀ r₀)
-    decode (TList [ TInt 4, _T₁ ]) = do
-        _T₀ <- decode _T₁
-        return (ListLit (Just (App List _T₀)) empty)
-    decode (TList (TInt 4 : TNull : xs₁ )) = do
-        xs₀ <- traverse decode xs₁
-        return (ListLit Nothing (Data.Sequence.fromList xs₀))
-    decode (TList [ TInt 5, TNull, t₁ ]) = do
-        t₀ <- decode t₁
-        return (Some t₀)
-    decode (TList [ TInt 6, t₁, u₁ ]) = do
-        t₀ <- decode t₁
-        u₀ <- decode u₁
-        return (Merge t₀ u₀ Nothing)
-    decode (TList [ TInt 6, t₁, u₁, _T₁ ]) = do
-        t₀  <- decode t₁
-        u₀  <- decode u₁
-        _T₀ <- decode _T₁
-        return (Merge t₀ u₀ (Just _T₀))
-    decode (TList [ TInt 7, TMap xTs₁ ]) = do
-        let process (TString x, _T₁) = do
-                _T₀ <- decode _T₁
+                        case tag of
+                            0 -> do
+                                f <- go
 
-                return (x, _T₀)
-            process _ =
-                empty
+                                xs <- Monad.replicateM (len - 2) go
 
-        xTs₀ <- traverse process xTs₁
+                                if null xs
+                                    then die "Non-standard encoding of a function with no arguments"
+                                    else return ()
 
-        return (Record (Dhall.Map.fromList xTs₀))
-    decode (TList [ TInt 8, TMap xts₁ ]) = do
-        let process (TString x, t₁) = do
-               t₀ <- decode t₁
+                                return (foldl App f xs)
 
-               return (x, t₀)
-            process _ =
-                empty
+                            1 -> do
+                                case len of
+                                    3 -> do
+                                        _A <- go
 
-        xts₀ <- traverse process xts₁
+                                        b <- go
 
-        return (RecordLit (Dhall.Map.fromList xts₀))
-    decode (TList [ TInt 9, t₁, TString x ]) = do
-        t₀ <- decode t₁
+                                        return (Lam "_" _A b)
 
-        return (Field t₀ x)
-    decode (TList (TInt 10 : t₁ : xs₁)) = do
-        t₀ <- decode t₁
+                                    4 -> do
+                                        x <- Decoding.decodeString
 
-        let expectString (TString x) = return x
-            expectString  _          = empty
+                                        if x == "_"
+                                            then die "Non-standard encoding of a λ expression"
+                                            else return ()
 
-        let decodeLeft = do
-                strings <- traverse expectString xs₁
+                                        _A <- go
 
-                return (Left (Dhall.Set.fromList strings))
+                                        b <- go
 
-        let decodeRight =
-                case xs₁ of
-                    [ TList [ _T₁ ] ] -> do
-                        _T₀ <- decode _T₁
+                                        return (Lam x _A b)
 
-                        return (Right _T₀)
+                                    _ -> do
+                                        die ("Incorrect number of tokens used to encode a λ expression: " <> show len)
+
+                            2 -> do
+                                case len of
+                                    3 -> do
+                                        _A <- go
+
+                                        _B <- go
+
+                                        return (Pi "_" _A _B)
+
+                                    4 -> do
+                                        x <- Decoding.decodeString
+
+                                        if x == "_"
+                                            then die "Non-standard encoding of a ∀ expression"
+                                            else return ()
+
+                                        _A <- go
+
+                                        _B <- go
+
+                                        return (Pi x _A _B)
+
+                                    _ -> do
+                                        die ("Incorrect number of tokens used to encode a ∀ expression: " <> show len)
+
+                            3 -> do
+                                opcode <- Decoding.decodeWord
+
+                                op <- case opcode of
+                                    0  -> return BoolOr
+                                    1  -> return BoolAnd
+                                    2  -> return BoolEQ
+                                    3  -> return BoolNE
+                                    4  -> return NaturalPlus
+                                    5  -> return NaturalTimes
+                                    6  -> return TextAppend
+                                    7  -> return ListAppend
+                                    8  -> return Combine
+                                    9  -> return Prefer
+                                    10 -> return CombineTypes
+                                    11 -> return ImportAlt
+                                    12 -> return Equivalent
+                                    13 -> return RecordCompletion
+                                    _  -> die ("Unrecognized operator code: " <> show opcode)
+
+                                l <- go
+
+                                r <- go
+
+                                return (op l r)
+
+                            4 -> do
+                                case len of
+                                    2 -> do
+                                        _T <- go
+
+                                        return (ListLit (Just (App List _T)) empty)
+
+                                    _ -> do
+                                        Decoding.decodeNull
+
+                                        xs <- Monad.replicateM (len - 2) go
+                                        return (ListLit Nothing (Data.Sequence.fromList xs))
+
+                            5 -> do
+                                Decoding.decodeNull
+
+                                t <- go
+
+                                return (Some t)
+
+                            6 -> do
+                                t <- go
+
+                                u <- go
+
+                                case len of
+                                    3 -> do
+                                        return (Merge t u Nothing)
+
+                                    4 -> do
+                                        _T <- go
+
+                                        return (Merge t u (Just _T))
+
+                                    _ -> do
+                                        die ("Incorrect number of tokens used to encode a `merge` expression: " <> show len)
+
+                            7 -> do
+                                mapLength <- Decoding.decodeMapLen
+
+                                xTs <- Monad.replicateM mapLength $ do
+                                    x <- Decoding.decodeString
+
+                                    _T <- go
+
+                                    return (x, _T)
+
+                                return (Record (Dhall.Map.fromList xTs))
+
+                            8 -> do
+                                mapLength <- Decoding.decodeMapLen
+
+                                xts <- Monad.replicateM mapLength $ do
+                                    x <- Decoding.decodeString
+
+                                    t <- go
+
+                                    return (x, t)
+
+                                return (RecordLit (Dhall.Map.fromList xts))
+
+                            9 -> do
+                                t <- go
+
+                                x <- Decoding.decodeString
+
+                                return (Field t x)
+
+                            10 -> do
+                                t <- go
+
+                                xs <- case len of
+                                    3 -> do
+                                        tokenType₂ <- Decoding.peekTokenType
+
+                                        case tokenType₂ of
+                                            TypeListLen -> do
+                                                _ <- Decoding.decodeListLen
+
+                                                _T <- go
+
+                                                return (Right _T)
+
+                                            TypeString -> do
+                                                x <- Decoding.decodeString
+                                                return (Left (Dhall.Set.fromList [x]))
+
+                                            _ -> do
+                                                die ("Unexpected token type for projection: " <> show tokenType₂)
+
+                                    _ -> do
+                                        xs <- Monad.replicateM (len - 2) Decoding.decodeString
+
+                                        return (Left (Dhall.Set.fromList xs))
+
+                                return (Project t xs)
+
+                            11 -> do
+                                mapLength <- Decoding.decodeMapLen
+
+                                xTs <- Monad.replicateM mapLength $ do
+                                    x <- Decoding.decodeString
+
+                                    tokenType₂ <- Decoding.peekTokenType
+
+                                    mT <- case tokenType₂ of
+                                        TypeNull -> do
+                                            Decoding.decodeNull
+
+                                            return Nothing
+
+                                        _ -> do
+                                            _T <- go
+
+                                            return (Just _T)
+
+                                    return (x, mT)
+
+                                return (Union (Dhall.Map.fromList xTs))
+
+                            14 -> do
+                                t <- go
+
+                                l <- go
+
+                                r <- go
+
+                                return (BoolIf t l r)
+
+                            15 -> do
+                                tokenType₂ <- Decoding.peekTokenType
+
+                                case tokenType₂ of
+                                    TypeUInt -> do
+                                        n <- Decoding.decodeWord
+
+                                        return (NaturalLit (fromIntegral n))
+
+                                    TypeUInt64 -> do
+                                        n <- Decoding.decodeWord64
+
+                                        return (NaturalLit (fromIntegral n))
+
+                                    TypeInteger -> do
+                                        n <- Decoding.decodeInteger
+                                        return (NaturalLit (fromIntegral n))
+
+                                    _ -> do
+                                        die ("Unexpected token type for Natural literal: " <> show tokenType₂)
+
+                            16 -> do
+                                tokenType₂ <- Decoding.peekTokenType
+
+                                case tokenType₂ of
+                                    TypeUInt -> do
+                                        n <- Decoding.decodeWord
+
+                                        return (IntegerLit (fromIntegral n))
+
+                                    TypeUInt64 -> do
+                                        n <- Decoding.decodeWord64
+
+                                        return (IntegerLit (fromIntegral n))
+
+                                    TypeNInt -> do
+                                        n <- Decoding.decodeNegWord
+
+                                        return (IntegerLit (-1 - fromIntegral n))
+
+                                    TypeNInt64 -> do
+                                        n <- Decoding.decodeNegWord64
+
+                                        return (IntegerLit (-1 - fromIntegral n))
+                                    TypeInteger -> do
+                                        n <- Decoding.decodeInteger
+                                        return (IntegerLit n)
+
+                                    _ -> do
+                                        die ("Unexpected token type for Integer literal: " <> show tokenType₂)
+
+                            18 -> do
+                                xys <- Monad.replicateM ((len - 2) `quot` 2) $ do
+                                    x <- Decoding.decodeString
+
+                                    y <- go
+
+                                    return (x, y)
+
+                                z <- Decoding.decodeString
+
+                                return (TextLit (Chunks xys z))
+
+                            19 -> do
+                                t <- go
+
+                                return (Assert t)
+
+                            24 -> do
+                                fmap Embed (decodeEmbed len)
+
+                            25 -> do
+                                bindings <- Monad.replicateM ((len - 2) `quot` 3) $ do
+                                    x <- Decoding.decodeString
+
+                                    tokenType₂ <- Decoding.peekTokenType
+
+                                    mA <- case tokenType₂ of
+                                        TypeNull -> do
+                                            Decoding.decodeNull
+
+                                            return Nothing
+
+                                        _ -> do
+                                            _A <- go
+
+                                            return (Just (Nothing, _A))
+
+                                    a <- go
+
+                                    return (Binding Nothing x Nothing mA Nothing a)
+
+                                b <- go
+
+                                return (foldr Let b bindings)
+
+                            26 -> do
+                                t <- go
+
+                                _T <- go
+
+                                return (Annot t _T)
+
+                            27 -> do
+                                t <- go
+
+                                mT <- case len of
+                                    2 -> do
+                                        return Nothing
+
+                                    3 -> do
+                                        _T <- go
+
+                                        return (Just _T)
+
+                                    _ -> do
+                                        die ("Incorrect number of tokens used to encode a type annotation: " <> show len)
+
+                                return (ToMap t mT)
+
+                            28 -> do
+                                _T <- go
+
+                                return (ListLit (Just _T) empty)
+
+                            _ -> do
+                                die ("Unexpected tag: " <> show tag)
+
                     _ -> do
-                        empty
-
-        xs₀ <- decodeLeft <|> decodeRight
-
-        return (Project t₀ xs₀)
-    decode (TList [ TInt 11, TMap xTs₁ ]) = do
-        let process (TString x, _T₁) = do
-                mT₀ <- case _T₁ of
-                    TNull -> return Nothing
-                    _     -> fmap Just (decode _T₁)
-
-                return (x, mT₀)
-            process _ =
-                empty
-
-        xTs₀ <- traverse process xTs₁
-
-        return (Union (Dhall.Map.fromList xTs₀))
-    decode (TBool b) = do
-        return (BoolLit b)
-    decode (TList [ TInt 14, t₁, l₁, r₁ ]) = do
-        t₀ <- decode t₁
-        l₀ <- decode l₁
-        r₀ <- decode r₁
-
-        return (BoolIf t₀ l₀ r₀)
-    decode (TList [ TInt 15, TInt n ]) = do
-        Monad.guard (0 <= n)
-        return (NaturalLit (fromIntegral n))
-    decode (TList [ TInt 15, TInteger n ]) = do
-        return (NaturalLit (fromInteger n))
-    decode (TList [ TInt 16, TInt n ]) = do
-        return (IntegerLit (fromIntegral n))
-    decode (TList [ TInt 16, TInteger n ]) = do
-        return (IntegerLit n)
-    decode (THalf n) = do
-        return (DoubleLit (DhallDouble (float2Double n)))
-    decode (TFloat n) = do
-        return (DoubleLit (DhallDouble (float2Double n)))
-    decode (TDouble n) = do
-        return (DoubleLit (DhallDouble n))
-    decode (TList (TInt 18 : xs)) = do
-        let process (TString x : y₁ : zs) = do
-                y₀ <- decode y₁
-
-                ~(xys, z) <- process zs
-
-                return ((x, y₀) : xys, z)
-            process [ TString z ] = do
-                return ([], z)
-            process _ = do
-                empty
-
-        (xys, z) <- process xs
-
-        return (TextLit (Chunks xys z))
-    decode (TList [ TInt 19, t₁ ]) = do
-        t₀ <- decode t₁
-
-        return (Assert t₀)
-    decode e@(TList (TInt 24 : _)) = fmap Embed (decode e)
-    decode (TList (TInt 25 : xs)) = do
-        let process (TString x : _A₁ : a₁ : ls₁) = do
-                mA₀ <- case _A₁ of
-                    TNull -> return Nothing
-                    _     -> do
-                        _A₀ <- decode _A₁
-                        return (Just (Nothing, _A₀))
-
-                a₀  <- decode a₁
-
-                b₀ <- case ls₁ of
-                    [ b₁ ] -> decode b₁
-                    _      -> process ls₁
-
-                return (Let (Binding Nothing x Nothing mA₀ Nothing a₀) b₀)
-            process _ = do
-                empty
-
-        process xs
-    decode (TList [ TInt 26, t₁, _T₁ ]) = do
-        t₀  <- decode t₁
-        _T₀ <- decode _T₁
-        return (Annot t₀ _T₀)
-    decode (TList [ TInt 27, t₁ ]) = do
-        t₀ <- decode t₁
-        return (ToMap t₀ Nothing)
-    decode (TList [ TInt 27, t₁, _T₁ ]) = do
-        t₀ <- decode t₁
-        _T₀ <- decode _T₁
-        return (ToMap t₀ (Just _T₀))
-    decode (TList [ TInt 28, _T₁ ]) = do
-        _T₀ <- decode _T₁
-        return (ListLit (Just _T₀) empty)
-    decode _ =
-        empty
-
-instance FromTerm Import where
-    decode (TList (TInt 24 : h : TInt mode : TInt n : xs)) = do
-        hash <- case h of
-            TNull -> do
-                return Nothing
-
-            TBytes bytes -> do
-                let (prefix, suffix) = Data.ByteString.splitAt 2 bytes
-
-                case prefix of
-                    "\x12\x20" -> return ()
-                    _          -> empty
-
-                digest <- case Dhall.Crypto.sha256DigestFromByteString suffix of
-                    Nothing     -> empty
-                    Just digest -> return digest
-
-                return (Just digest)
+                        die ("Unexpected tag type: " <> show tokenType₁)
 
             _ -> do
-                empty
+                die ("Unexpected initial token: " <> show tokenType₀)
 
-        importMode <- case mode of
-            0 -> return Code
-            1 -> return RawText
-            2 -> return Location
-            _ -> empty
+encodeExpressionInternal :: (a -> Encoding) -> Expr Void a -> Encoding
+encodeExpressionInternal encodeEmbed = go
+  where
+    go e = case e of
+        Var (V "_" n) ->
+            Encoding.encodeInt n
 
-        let remote scheme = do
-                let process [ TString file, q ] = do
-                        query <- case q of
-                            TNull     -> return Nothing
-                            TString x -> return (Just x)
-                            _         -> empty
-                        return ([], file, query)
-                    process (TString path : ys) = do
-                        (paths, file, query) <- process ys
-                        return (path : paths, file, query)
-                    process _ = do
-                        empty
+        Var (V x n) ->
+                Encoding.encodeListLen 2
+            <>  Encoding.encodeString x
+            <>  Encoding.encodeInt n
 
-                (headers, authority, paths, file, query) <- case xs of
-                    headers₀ : TString authority : ys -> do
-                        headers₁ <- case headers₀ of
-                            TNull -> do
-                                return Nothing
-                            _     -> do
-                                headers <- decode headers₀
+        NaturalBuild ->
+            Encoding.encodeString "Natural/build"
 
-                                return (Just headers)
-                        (paths, file, query) <- process ys
-                        return (headers₁, authority, paths, file, query)
-                    _ -> do
-                        empty
+        NaturalFold ->
+            Encoding.encodeString "Natural/fold"
 
-                let components = reverse paths
-                let directory  = Directory {..}
-                let path       = File {..}
+        NaturalIsZero ->
+            Encoding.encodeString "Natural/isZero"
 
-                return (Remote (URL {..}))
+        NaturalEven ->
+            Encoding.encodeString "Natural/even"
 
-        let local prefix = do
-                let process [ TString file ] = do
-                        return ([], file)
-                    process (TString path : ys) = do
-                        (paths, file) <- process ys
-                        return (path : paths, file)
-                    process _ =
-                        empty
+        NaturalOdd ->
+            Encoding.encodeString "Natural/odd"
 
-                (paths, file) <- process xs
+        NaturalToInteger ->
+            Encoding.encodeString "Natural/toInteger"
 
-                let components = reverse paths
-                let directory  = Directory {..}
+        NaturalShow ->
+            Encoding.encodeString "Natural/show"
 
-                return (Local prefix (File {..}))
+        NaturalSubtract ->
+            Encoding.encodeString "Natural/subtract"
 
-        let env = do
-                case xs of
-                    [ TString x ] -> return (Env x)
-                    _             -> empty
+        IntegerToDouble ->
+            Encoding.encodeString "Integer/toDouble"
 
-        let missing = return Missing
+        IntegerClamp ->
+            Encoding.encodeString "Integer/clamp"
 
-        importType <- case n of
-            0 -> remote HTTP
-            1 -> remote HTTPS
-            2 -> local Absolute
-            3 -> local Here
-            4 -> local Parent
-            5 -> local Home
-            6 -> env
-            7 -> missing
-            _ -> empty
+        IntegerNegate ->
+            Encoding.encodeString "Integer/negate"
 
-        let importHashed = ImportHashed {..}
+        IntegerShow ->
+            Encoding.encodeString "Integer/show"
 
-        return (Import {..})
+        DoubleShow ->
+            Encoding.encodeString "Double/show"
 
-    decode _ = empty
+        ListBuild ->
+            Encoding.encodeString "List/build"
 
-instance FromTerm Void where
-    decode _ = empty
+        ListFold ->
+            Encoding.encodeString "List/fold"
 
-strip55799Tag :: Term -> Term
-strip55799Tag term =
-    case term of
-        TInt a ->
-            TInt a
-        TInteger a ->
-            TInteger a
-        TBytes a ->
-            TBytes a
-        TBytesI a ->
-            TBytesI a
-        TString a ->
-            TString a
-        TStringI a ->
-            TStringI a
-        TList as ->
-            TList (fmap strip55799Tag as)
-        TListI as ->
-            TListI (fmap strip55799Tag as)
-        TMap as ->
-            TMap (fmap adapt as)
+        ListLength ->
+            Encoding.encodeString "List/length"
+
+        ListHead ->
+            Encoding.encodeString "List/head"
+
+        ListLast ->
+            Encoding.encodeString "List/last"
+
+        ListIndexed ->
+            Encoding.encodeString "List/indexed"
+
+        ListReverse ->
+            Encoding.encodeString "List/reverse"
+
+        OptionalFold ->
+            Encoding.encodeString "Optional/fold"
+
+        OptionalBuild ->
+            Encoding.encodeString "Optional/build"
+
+        Bool ->
+            Encoding.encodeString "Bool"
+
+        Optional ->
+            Encoding.encodeString "Optional"
+
+        None ->
+            Encoding.encodeString "None"
+
+        Natural ->
+            Encoding.encodeString "Natural"
+
+        Integer ->
+            Encoding.encodeString "Integer"
+
+        Double ->
+            Encoding.encodeString "Double"
+
+        Text ->
+            Encoding.encodeString "Text"
+
+        TextShow ->
+            Encoding.encodeString "Text/show"
+
+        List ->
+            Encoding.encodeString "List"
+
+        Const Type ->
+            Encoding.encodeString "Type"
+
+        Const Kind ->
+            Encoding.encodeString "Kind"
+
+        Const Sort ->
+            Encoding.encodeString "Sort"
+
+        a@App{} ->
+            encodeList
+                ( Encoding.encodeInt 0
+                : go function
+                : map go arguments
+                )
           where
-            adapt (a, b) = (strip55799Tag a, strip55799Tag b)
-        TMapI as ->
-            TMapI (fmap adapt as)
-          where
-            adapt (a, b) = (strip55799Tag a, strip55799Tag b)
-        TTagged 55799 b ->
-            strip55799Tag b
-        TTagged a b->
-            TTagged a (strip55799Tag b)
-        TBool a ->
-            TBool a
-        TNull ->
-            TNull
-        TSimple a ->
-            TSimple a
-        THalf a ->
-            THalf a
-        TFloat a ->
-            TFloat a
-        TDouble a ->
-            TDouble a
+            (function, arguments) = unApply a
 
--- | Encode a Dhall expression as a CBOR `Term`
---
--- This 'Dhall.Core.denote's the expression before encoding it. To encode an
--- already denoted expression, it is more efficient to directly use 'encode'.
-encodeExpression :: Expr s Import -> Term
-encodeExpression e = encode (Dhall.Core.denote e :: Expr Void Import)
+        Lam "_" _A b ->
+            encodeList3
+                (Encoding.encodeInt 1)
+                (go _A)
+                (go b)
+
+        Lam x _A b ->
+            encodeList4
+                (Encoding.encodeInt 1)
+                (Encoding.encodeString x)
+                (go _A)
+                (go b)
+
+        Pi "_" _A _B ->
+            encodeList3
+                (Encoding.encodeInt 2)
+                (go _A)
+                (go _B)
+
+        Pi x _A _B ->
+            encodeList4
+                (Encoding.encodeInt 2)
+                (Encoding.encodeString x)
+                (go _A)
+                (go _B)
+
+        BoolOr l r ->
+            encodeOperator 0 l r
+
+        BoolAnd l r ->
+            encodeOperator 1 l r
+
+        BoolEQ l r ->
+            encodeOperator 2 l r
+
+        BoolNE l r ->
+            encodeOperator 3 l r
+
+        NaturalPlus l r ->
+            encodeOperator 4 l r
+
+        NaturalTimes l r ->
+            encodeOperator 5 l r
+
+        TextAppend l r ->
+            encodeOperator 6 l r
+
+        ListAppend l r ->
+            encodeOperator 7 l r
+
+        Combine l r ->
+            encodeOperator 8 l r
+
+        Prefer l r ->
+            encodeOperator 9 l r
+
+        CombineTypes l r ->
+            encodeOperator 10 l r
+
+        ImportAlt l r ->
+            encodeOperator 11 l r
+
+        Equivalent l r ->
+            encodeOperator 12 l r
+
+        RecordCompletion l r ->
+            encodeOperator 13 l r
+
+        ListLit _T₀ xs
+            | null xs ->
+                encodeList2 (Encoding.encodeInt label) _T₁
+            | otherwise ->
+                encodeList
+                    ( Encoding.encodeInt 4
+                    : Encoding.encodeNull
+                    : map go (Data.Foldable.toList xs)
+                    )
+          where
+            (label, _T₁) = case _T₀ of
+                Nothing           -> (4 , Encoding.encodeNull)
+                Just (App List t) -> (4 , go t               )
+                Just  t           -> (28, go t               )
+
+        Some t ->
+            encodeList3
+                (Encoding.encodeInt 5)
+                Encoding.encodeNull
+                (go t)
+
+        Merge t u Nothing ->
+            encodeList3
+                (Encoding.encodeInt 6)
+                (go t)
+                (go u)
+
+        Merge t u (Just _T) ->
+            encodeList4
+                (Encoding.encodeInt 6)
+                (go t)
+                (go u)
+                (go _T)
+
+        Record xTs ->
+            encodeList2
+                (Encoding.encodeInt 7)
+                (encodeMapWith go xTs)
+
+        RecordLit xts ->
+            encodeList2
+                (Encoding.encodeInt 8)
+                (encodeMapWith go xts)
+
+        Field t x ->
+            encodeList3
+                (Encoding.encodeInt 9)
+                (go t)
+                (Encoding.encodeString x)
+
+        Project t (Left xs) ->
+            encodeList
+                ( Encoding.encodeInt 10
+                : go t
+                : map Encoding.encodeString (Dhall.Set.toList xs)
+                )
+
+        Project t (Right _T) ->
+            encodeList3
+                (Encoding.encodeInt 10)
+                (go t)
+                (encodeList1 (go _T))
+
+        Union xTs ->
+            encodeList2
+                (Encoding.encodeInt 11)
+                (encodeMapWith encodeValue xTs)
+          where
+            encodeValue  Nothing  = Encoding.encodeNull
+            encodeValue (Just _T) = go _T
+
+        BoolLit b ->
+            Encoding.encodeBool b
+
+        BoolIf t l r ->
+            encodeList4
+                (Encoding.encodeInt 14)
+                (go t)
+                (go l)
+                (go r)
+
+        NaturalLit n ->
+            encodeList2
+                (Encoding.encodeInt 15)
+                (Encoding.encodeInteger (fromIntegral n))
+
+        IntegerLit n ->
+            encodeList2
+                (Encoding.encodeInt 16)
+                (Encoding.encodeInteger (fromIntegral n))
+
+        DoubleLit (DhallDouble n64)
+            | useHalf   -> Encoding.encodeFloat16 n32
+            | useFloat  -> Encoding.encodeFloat n32
+            | otherwise -> Encoding.encodeDouble n64
+          where
+            n32 = double2Float n64
+
+            useFloat = n64 == float2Double n32
+
+            useHalf = n64 == 0.0 || n64 == infinity || n64 == -infinity
+
+            infinity = 1/0 :: Double
+
+        -- Fast path for the common case of an uninterpolated string
+        TextLit (Chunks [] z) ->
+            encodeList2
+                (Encoding.encodeInt 18)
+                (Encoding.encodeString z)
+
+        TextLit (Chunks xys z) ->
+            encodeList
+                ( Encoding.encodeInt 18
+                : concatMap encodePair xys ++ [ Encoding.encodeString z ]
+                )
+          where
+            encodePair (x, y) = [ Encoding.encodeString x, go y ]
+
+        Assert t ->
+            encodeList2
+                (Encoding.encodeInt 19)
+                (go t)
+
+        Embed x ->
+            encodeEmbed x
+
+        Let a₀ b₀ ->
+            encodeList
+                ( Encoding.encodeInt 25
+                : concatMap encodeBinding (toList as) ++ [ go b₁ ]
+                )
+          where
+            MultiLet as b₁ = Dhall.Syntax.multiLet a₀ b₀
+
+            encodeBinding (Binding _ x _ mA₀ _ a) =
+                [ Encoding.encodeString x
+                , mA₁
+                , go a
+                ]
+              where
+                mA₁ = case mA₀ of
+                    Nothing      -> Encoding.encodeNull
+                    Just (_, _A) -> go _A
+
+        Annot t _T ->
+            encodeList3
+                (Encoding.encodeInt 26)
+                (go t)
+                (go _T)
+
+        ToMap t Nothing ->
+            encodeList2
+                (Encoding.encodeInt 27)
+                (go t)
+
+        ToMap t (Just _T) ->
+            encodeList3
+                (Encoding.encodeInt 27)
+                (go t)
+                (go _T)
+
+        Note _ b ->
+            go b
+
+    encodeOperator n l r =
+        encodeList4
+            (Encoding.encodeInt 3)
+            (Encoding.encodeInt n)
+            (go l)
+            (go r)
+
+    encodeMapWith encodeValue m =
+            Encoding.encodeMapLen (fromIntegral (Dhall.Map.size m))
+        <>  foldMap encodeKeyValue (Dhall.Map.toList (Dhall.Map.sort m))
+      where
+        encodeKeyValue (k, v) = Encoding.encodeString k <> encodeValue v
+
+encodeList1 :: Encoding -> Encoding
+encodeList1 a = Encoding.encodeListLen 1 <> a
+{-# INLINE encodeList1 #-}
+
+encodeList2 :: Encoding -> Encoding -> Encoding
+encodeList2 a b = Encoding.encodeListLen 2 <> a <> b
+{-# INLINE encodeList2 #-}
+
+encodeList3 :: Encoding -> Encoding -> Encoding -> Encoding
+encodeList3 a b c = Encoding.encodeListLen 3 <> a <> b <> c
+{-# INLINE encodeList3 #-}
+
+encodeList4 :: Encoding -> Encoding -> Encoding -> Encoding -> Encoding
+encodeList4 a b c d = Encoding.encodeListLen 4 <> a <> b <> c <> d
+{-# INLINE encodeList4 #-}
+
+encodeList :: [ Encoding ] -> Encoding
+encodeList xs =
+    Encoding.encodeListLen (fromIntegral (length xs)) <> mconcat xs
+{-# INLINE encodeList #-}
+
+decodeImport :: Int -> Decoder s Import
+decodeImport len = do
+    let die message = fail ("Dhall.Binary.decodeImport: " <> message)
+
+    tokenType₀ <- Decoding.peekTokenType
+
+    hash <- case tokenType₀ of
+        TypeNull -> do
+            Decoding.decodeNull
+
+            return Nothing
+
+        TypeBytes -> do
+            bytes <- Decoding.decodeBytes
+
+            let (prefix, suffix) = Data.ByteString.splitAt 2 bytes
+
+            case prefix of
+                "\x12\x20" -> return ()
+                _          -> die ("Unrecognized multihash prefix: " <> show prefix)
+            case Dhall.Crypto.sha256DigestFromByteString suffix of
+                Nothing     -> die ("Invalid sha256 digest: " <> show bytes)
+                Just digest -> return (Just digest)
+
+        _ -> do
+            die ("Unexpected hash token: " <> show tokenType₀)
+
+    m <- Decoding.decodeWord
+
+    importMode <- case m of
+        0 -> return Code
+        1 -> return RawText
+        2 -> return Location
+        _ -> die ("Unexpected code for import mode: " <> show m)
+
+    let remote scheme = do
+            tokenType₁ <- Decoding.peekTokenType
+
+            headers <- case tokenType₁ of
+                TypeNull -> do
+                    Decoding.decodeNull
+                    return Nothing
+
+                _ -> do
+                    headers <- decodeExpressionInternal decodeImport
+
+                    return (Just headers)
+
+            authority <- Decoding.decodeString
+
+            paths <- Monad.replicateM (len - 8) Decoding.decodeString
+
+            file <- Decoding.decodeString
+
+            tokenType₂ <- Decoding.peekTokenType
+
+            query <- case tokenType₂ of
+                TypeNull -> do
+                    Decoding.decodeNull
+                    return Nothing
+                _ -> do
+                    fmap Just Decoding.decodeString
+
+            let components = reverse paths
+            let directory  = Directory {..}
+            let path       = File {..}
+
+            return (Remote (URL {..}))
+
+    let local prefix = do
+            paths <- Monad.replicateM (len - 5) Decoding.decodeString
+
+            file <- Decoding.decodeString
+
+            let components = reverse paths
+            let directory  = Directory {..}
+
+            return (Local prefix (File {..}))
+
+    let missing = return Missing
+
+    let env = do
+            x <- Decoding.decodeString
+
+            return (Env x)
+
+    n <- Decoding.decodeWord
+
+    importType <- case n of
+        0 -> remote HTTP
+        1 -> remote HTTPS
+        2 -> local Absolute
+        3 -> local Here
+        4 -> local Parent
+        5 -> local Home
+        6 -> env
+        7 -> missing
+        _ -> fail ("Unrecognized import type code: " <> show n)
+
+    let importHashed = ImportHashed {..}
+
+    return (Import {..})
+
+encodeImport :: Import -> Encoding
+encodeImport import_ =
+    case importType of
+        Remote (URL { scheme = scheme₀, .. }) ->
+            encodeList
+                (   prefix
+                ++  [ Encoding.encodeInt scheme₁
+                    , using
+                    , Encoding.encodeString authority
+                    ]
+                ++  map Encoding.encodeString (reverse components)
+                ++  [ Encoding.encodeString file ]
+                ++  [ case query of
+                         Nothing -> Encoding.encodeNull
+                         Just q  -> Encoding.encodeString q
+                    ]
+                )
+          where
+            using = case headers of
+                Nothing ->
+                    Encoding.encodeNull
+                Just h ->
+                    encodeExpressionInternal encodeImport (Dhall.Syntax.denote h)
+
+            scheme₁ = case scheme₀ of
+                HTTP  -> 0
+                HTTPS -> 1
+
+            File{..} = path
+
+            Directory {..} = directory
+
+        Local prefix₀ path ->
+            encodeList
+                (   prefix
+                ++  [ Encoding.encodeInt prefix₁ ]
+                ++  map Encoding.encodeString components₁
+                ++  [ Encoding.encodeString file ]
+                )
+          where
+            File{..} = path
+
+            Directory{..} = directory
+
+            prefix₁ = case prefix₀ of
+                Absolute -> 2
+                Here     -> 3
+                Parent   -> 4
+                Home     -> 5
+
+            components₁ = reverse components
+
+        Env x ->
+            encodeList
+                (prefix ++ [ Encoding.encodeInt 6, Encoding.encodeString x ])
+
+        Missing ->
+            encodeList (prefix ++ [ Encoding.encodeInt 7 ])
+  where
+    prefix = [ Encoding.encodeInt 24, h, m ]
+      where
+        h = case hash of
+            Nothing ->
+                Encoding.encodeNull
+
+            Just digest ->
+                Encoding.encodeBytes ("\x12\x20" <> Data.ByteArray.convert digest)
+
+        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
+
+    Import{..} = import_
+
+    ImportHashed{..} = importHashed
+
+decodeVoid :: Int -> Decoder s Void
+decodeVoid _ = fail "Dhall.Binary.decodeVoid: Cannot decode an uninhabited type"
+
+encodeVoid :: Void -> Encoding
+encodeVoid = absurd
+
+instance Serialise (Expr Void Void) where
+    encode = encodeExpressionInternal encodeVoid
+
+    decode = decodeExpressionInternal decodeVoid
+
+instance Serialise (Expr Void Import) where
+    encode = encodeExpressionInternal encodeImport
+
+    decode = decodeExpressionInternal decodeImport
+
+-- | Encode a Dhall expression as a CBOR-encoded `ByteString`
+encodeExpression :: Expr Void Import -> ByteString
+encodeExpression = Serialise.serialise
 
 -- | Decode a Dhall expression from a CBOR `Term`
-decodeExpression :: FromTerm a => Term -> Either DecodingFailure (Expr s a)
-decodeExpression term =
+decodeExpression
+    :: Serialise (Expr s a) => ByteString -> Either DecodingFailure (Expr s a)
+decodeExpression bytes =
     case decodeWithoutVersion <|> decodeWithVersion of
         Just expression -> Right expression
-        Nothing         -> Left (CBORIsNotDhall term)
+        Nothing         -> Left (CBORIsNotDhall bytes)
   where
-    strippedTerm = strip55799Tag term
+    adapt (Right ("", x)) = Just x
+    adapt  _              = Nothing
+
+    decode' = decodeWith55799Tag decode
+
     -- This is the behavior specified by the standard
-    decodeWithoutVersion = decode strippedTerm
+    decodeWithoutVersion = adapt (Read.deserialiseFromBytes decode' bytes)
 
-    -- For backwards compatibility with older expressions that have a version
     -- tag to ease the migration
-    decodeWithVersion = do
-        TList [ TString version, taggedTerm ] <- return strippedTerm
+    decodeWithVersion = adapt (Read.deserialiseFromBytes decodeWithTag bytes)
+      where
+        decodeWithTag = do
+            2 <- Decoding.decodeListLen
 
-        -- "_" has never been a valid version string, and this ensures that we
-        -- don't interpret `[ "_", 0 ]` as the expression `_` (encoded as `0`)
-        -- tagged with a version string of `"_"`
-        Monad.guard (version /= "_")
+            version <- Decoding.decodeString
 
-        decode taggedTerm
 
-{-| This indicates that a given CBOR expression did not correspond to a valid
-    Dhall expression
+            -- "_" has never been a valid version string, and this ensures that
+            -- we don't interpret `[ "_", 0 ]` as the expression `_` (encoded as
+            -- `0`) tagged with a version string of `"_"`
+            if (version == "_")
+                then fail "Dhall.Binary.decodeExpression: \"_\" is not a valid version string"
+                else return ()
+
+            decode'
+
+decodeWith55799Tag :: Decoder s a -> Decoder s a
+decodeWith55799Tag decoder = do
+    tokenType <- Decoding.peekTokenType
+
+    case tokenType of
+        TypeTag -> do
+            w <- Decoding.decodeTag
+
+            if w /= 55799
+                then fail ("Dhall.Binary.decodeWith55799Tag: Unexpected tag: " <> show w)
+                else return ()
+
+            decoder
+        _ -> do
+            decoder
+
+{-| This indicates that a given CBOR-encoded `ByteString` did not correspond to
+    a valid Dhall expression
 -}
-data DecodingFailure = CBORIsNotDhall Term
+newtype DecodingFailure = CBORIsNotDhall ByteString
     deriving (Eq)
 
 instance Exception DecodingFailure
@@ -959,9 +1230,11 @@ _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
 instance Show DecodingFailure where
-    show (CBORIsNotDhall term) =
+    show (CBORIsNotDhall bytes) =
             _ERROR <> ": Cannot decode CBOR to Dhall\n"
         <>  "\n"
-        <>  "The following CBOR expression does not encode a valid Dhall expression\n"
+        <>  "The following bytes do not encode a valid Dhall expression\n"
         <>  "\n"
-        <>  "↳ " <> show term <> "\n"
+        <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack bytes) <> "\n"
+      where
+        toHex = Printf.printf "%02x "

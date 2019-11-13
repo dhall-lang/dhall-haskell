@@ -32,6 +32,8 @@ module Dhall.Pretty.Internal (
     , prettyDouble
     , prettyToStrictText
     , prettyToString
+    , layout
+    , layoutOpts
 
     , docToStrictText
 
@@ -59,8 +61,6 @@ module Dhall.Pretty.Internal (
     , rparen
     ) where
 
-import Dhall.Core
-
 #if MIN_VERSION_base(4,8,0)
 #else
 import Control.Applicative (Applicative(..), (<$>))
@@ -72,6 +72,7 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
+import Dhall.Syntax
 import Numeric.Natural (Natural)
 import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
@@ -110,7 +111,7 @@ annToAnsiStyle Builtin  = Terminal.underlined
 annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 
 -- | This type determines whether to render code as `ASCII` or `Unicode`
-data CharacterSet = ASCII | Unicode
+data CharacterSet = ASCII | Unicode deriving Show
 
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
@@ -955,6 +956,10 @@ prettyCharacterSet characterSet expression =
         builtin "Natural/subtract"
     prettyPrimitiveExpression Integer =
         builtin "Integer"
+    prettyPrimitiveExpression IntegerClamp =
+        builtin "Integer/clamp"
+    prettyPrimitiveExpression IntegerNegate =
+        builtin "Integer/negate"
     prettyPrimitiveExpression IntegerShow =
         builtin "Integer/show"
     prettyPrimitiveExpression IntegerToDouble =
@@ -1068,36 +1073,39 @@ prettyCharacterSet characterSet expression =
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
     prettyChunks (Chunks a b) =
-        if any (\(builder, _) -> hasNewLine builder) a || hasNewLine b
-        then Pretty.flatAlt long short
+        if anyText (== '\n')
+        then
+            if anyText (/= '\n')
+            then long
+            else Pretty.flatAlt long short
         else short
       where
         long =
             Pretty.align
             (   literal ("''" <> Pretty.hardline)
             <>  Pretty.align
-                (foldMap prettyMultilineChunk a <> prettyMultilineBuilder b)
+                (foldMap prettyMultilineChunk a <> prettyMultilineText b)
             <>  literal "''"
             )
 
         short =
             literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
 
-        hasNewLine = Text.any (== '\n')
+        anyText predicate = any (\(text, _) -> Text.any predicate text) a || Text.any predicate b
 
         prettyMultilineChunk (c, d) =
-                prettyMultilineBuilder c
+                prettyMultilineText c
             <>  dollar
             <>  lbrace
             <>  prettyExpression d
             <>  rbrace
 
-        prettyMultilineBuilder builder = literal (mconcat docs)
+        prettyMultilineText text = literal (mconcat docs)
           where
-            lazyLines = Text.splitOn "\n" (escapeSingleQuotedText builder)
+            lines_ = Text.splitOn "\n" (escapeSingleQuotedText text)
 
             docs =
-                Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lazyLines)
+                Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lines_)
 
         prettyChunk (c, d) =
                 prettyText c
@@ -1109,18 +1117,14 @@ prettyCharacterSet characterSet expression =
 
 -- | Pretty-print a value
 pretty_ :: Pretty a => a -> Text
-pretty_ = Pretty.renderStrict . Pretty.layoutPretty options . Pretty.pretty
-  where
-   options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
+pretty_ = prettyToStrictText
 
 -- | Escape a `Text` literal using Dhall's escaping rules for single-quoted
 --   @Text@
 escapeSingleQuotedText :: Text -> Text
-escapeSingleQuotedText inputBuilder = outputBuilder
+escapeSingleQuotedText inputText = outputText
   where
-    outputText = substitute "${" "''${" (substitute "''" "'''" inputBuilder)
-
-    outputBuilder = outputText
+    outputText = substitute "${" "''${" (substitute "''" "'''" inputText)
 
     substitute before after = Text.intercalate after . Text.splitOn before
 
@@ -1161,14 +1165,22 @@ escapeText_ text = Text.concatMap adapt text
 
 prettyToString :: Pretty a => a -> String
 prettyToString =
-    Pretty.renderString . Pretty.layoutPretty options . Pretty.pretty
-  where
-   options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
+    Pretty.renderString . layout . Pretty.pretty
 
 docToStrictText :: Doc ann -> Text.Text
-docToStrictText = Pretty.renderStrict . Pretty.layoutPretty options
-  where
-   options = Pretty.LayoutOptions { Pretty.layoutPageWidth = Pretty.Unbounded }
+docToStrictText = Pretty.renderStrict . layout
 
 prettyToStrictText :: Pretty a => a -> Text.Text
 prettyToStrictText = docToStrictText . Pretty.pretty
+
+-- | Layout using 'layoutOpts'
+--
+-- Tries hard to fit the document into 80 columns.
+layout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
+layout = Pretty.layoutSmart layoutOpts
+
+-- | Default layout options
+layoutOpts :: Pretty.LayoutOptions
+layoutOpts =
+    Pretty.defaultLayoutOptions
+        { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
