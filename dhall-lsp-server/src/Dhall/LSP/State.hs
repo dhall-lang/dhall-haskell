@@ -33,11 +33,11 @@ data Severity = Error
 data ServerConfig = ServerConfig
   { asciiOnly :: Bool
   -- ^ Use ASCII symbols rather than fancy unicode when formatting and linting
-  -- code. TODO!
+  -- code.
   } deriving Show
 
 instance Default ServerConfig where
-  def = ServerConfig { asciiOnly = True }
+  def = ServerConfig { asciiOnly = False }
 
 -- We need to derive the FromJSON instance manually in order to provide defaults
 -- for absent fields.
