@@ -60,4 +60,5 @@ mkDerivation {
   homepage = "https://github.com/haskell-nix/hnix#readme";
   description = "Haskell implementation of the Nix language";
   license = stdenv.lib.licenses.bsd3;
+  doExactConfig = true;
 }
