@@ -2,7 +2,7 @@
 <html>
   <head>
     <title>The Dhall configuration language</title>
-    <meta name="description" content="A non-repetitive alternative to YAML">
+    <meta name="description" content="Maintainable configuration files">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -64,14 +64,14 @@
   </head>
   <body>
     <nav class="navbar sticky-top navbar-expand-lg navbar-light bg-light">
-      <a class="navbar-left" href="https://dhall-lang.org"><img src="./img/dhall-large-logo.png" height="31px" alt="Dhall logo"></a>
+      <a class="navbar-left" href="https://dhall-lang.org"><img src="./img/dhall-large-logo.svg" height="31px" alt="Dhall logo"></a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
 
       <div class="collapse navbar-collapse" id="navbarSupportedContent">
         <ul class="navbar-nav ml-auto">
-          <li class="nav-item mr-3 my-auto"><a href="https://github.com/dhall-lang/dhall-lang/wiki/Getting-started%3A-Generate-JSON-or-YAML" class="btn btn-primary">Get Started <i class="fas fa-running"></i></a></li>
+          <li class="nav-item mr-3 my-auto"><a href="https://github.com/dhall-lang/dhall-lang/wiki/Getting-started%3A-Generate-JSON-or-YAML" class="btn btn-primary">Get started <i class="fas fa-running"></i></a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="discussionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
               Discussion
@@ -174,7 +174,7 @@
     </nav>
     <header>
     <h1 class="text-center">The Dhall configuration language</h1>
-    <p class="lead text-center">The non-repetitive alternative to YAML</p>
+    <p class="lead text-center">Maintainable configuration files</p>
     </header>
     <div class="container">
     <p class="lead text-center">
@@ -212,6 +212,9 @@
             <a id="dhall-tab" class="nav-link mode-tab" href="#">Normalized</a>
           </li>
           <li class="nav-item">
+            <a id="hash-tab" class="nav-link mode-tab" href="#">Hash</a>
+          </li>
+          <li class="nav-item">
             <a id="json-tab" class="nav-link mode-tab" href="#">JSON</a>
           </li>
           <li class="nav-item">
@@ -222,50 +225,79 @@
       </div>
     </div>
     <div class="container jumbotron" style="background-color: #c5eccf">
-      <h1 class="display-4">Human-friendly</h1>
-      <p class="lead">Dhall supports comments, multi-line string literals and
-      string interpolation with non-technical users in mind.</p>
-      <textarea id="highlight0"></textarea>
-      <p>You can also automatically remove all indirection in any Dhall code,
-      converting the file to a logic-free normal form for non-programmers to
-      understand.</p>
-      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Programmable-configuration-files"class="btn btn-lg btn-outline-dark bg-light">Learn More <i class="fas fa-book"></i></a>
+      <h1 class="display-4">Don't repeat yourself</h1>
+      <p class="lead">Struggling with configuration drift?  Create a <a href="https://en.wikipedia.org/wiki/Single_source_of_truth">single source of truth</a> you can reference everywhere.</p>
+      <hr class="my-4">
+      <blockquote class="blockquote">
+      <p>"Configuration drift occurs when a standardized group of IT resources, be they virtual servers, standard router configurations in VNF deployments, or any other deployment group that is built from a standard template, diverge in configuration over time. … The Infrastructure as Code methodology from DevOps is designed to combat Configuration Drift and other infrastructure management problems."</p>
+      <footer class="blockquote-footer"><a href="https://kemptechnologies.com/glossary/configuration-drift/">Kemp Technologies on <cite title="Configuration Drift">Configuration Drift</cite></a></footer>
+      <hr class="my-4">
+      </blockquote>
+      <p>Create a single authoritative configuration file:</p>
+      <textarea rows="30" id="highlight0"></textarea>
+      <p>… that you can read directly into several languages or convert to other file formats (including YAML or JSON).</p>
+      <textarea rows="30" id="highlight1"></textarea>
+      <a href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-integrate-Dhall" class="btn btn-lg btn-outline-dark bg-light">Supported integrations <i class="fas fa-cogs" ></i></a>
+    </div>
+    <div class="container jumbotron" style="background-color: #cfebfb">
+      <h1 class="display-4">Fearlessly refactor</h1>
+      <p class="lead">Need to clean up a big mess?  Move fast without breaking things by leaning on Dhall's tooling.</p>
+      <hr class="my-4">
+      <p>Refactoring something mission-critical?  Use Dhall's support for
+      semantic hashes to guarantee that a refactor is behavior-preserving</p>
+      <img src="./img/hash.gif">
+      <hr class="my-4">
+      <p>What if you intend to make a change?  Use a semantic diff to verify that
+      you changed what you expected to:</p>
+      <textarea id="diff"></textarea>
+      <hr class="my-4">
+      <p>Did you inherit a messy configuration?  Use the type system and
+      integrated editor support to navigate more effectively.</p>
+      <img src="./img/completion.gif">
+      <p></p>
+      <a href="https://marketplace.visualstudio.com/items?itemName=panaeon.vscode-dhall-lsp-server" class="btn btn-lg btn-outline-dark bg-light">VSCode plugin <i class="fas fa-code" ></i></a>
     </div>
     <div class="container jumbotron" style="background-color: #fbecf1">
-      <h1 class="display-4">Turing-completeness is not a feature</h1>
-      <p class="lead">Dhall is programmable, but <b>NOT</b> Turing-complete.</p>
+      <h1 class="display-4">Safety first</h1>
+      <p class="lead">Sick of Turing-complete configuration languages?  Dhall is
+      a <a href="https://en.wikipedia.org/wiki/Total_functional_programming">
+      total programming language</a> that forbids arbitrary side effects.</p>
       <hr class="my-4">
       <p>We take language security seriously so that your Dhall programs
       never fail, hang, crash, leak secrets, or compromise your system.</p>
       <p>The language aims to support safely importing and evaluating untrusted
       Dhall code, even code authored by malicious users.  We treat the inability
       to do so as a specification bug.</p>
-      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Safety-guarantees"class="btn btn-lg btn-outline-dark bg-light">Safety Guarantees<i class="fas fa-shield-alt"></i></a>
-    </div>
-    <div class="container jumbotron" style="background-color: #cfebfb">
-      <h1 class="display-4">Integration friendly</h1>
-      <p class="lead">Dhall provides a smooth migration path for mature enterprise deployments.</p>
-      <hr class="my-4">
-      <p>You can convert both ways between Dhall and JSON/YAML or read Dhall
-      configuration files directly into a language that supports a native
-      language binding.</p>
-      <a href="https://github.com/dhall-lang/dhall-lang/wiki/How-to-integrate-Dhall" class="btn btn-lg btn-outline-dark bg-light">Integrations <i class="fas fa-cogs" ></i></a>
+      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Safety-guarantees"class="btn btn-lg btn-outline-dark bg-light">Safety guarantees<i class="fas fa-shield-alt"></i></a>
     </div>
     <div class="container jumbotron" style="background-color: #fbf3c8">
-      <h1 class="display-4">Tired of YAML?</h1>
-      <p class="lead">Dhall eliminates the YAML quirks that software engineers
-      dread.  The language standard learns from the mistakes of the past.</p>
-      <textarea id="highlight1"></textarea>
-      <p>You can also generate either YAML or JSON from Dhall configuration
-      files using tiny statically-linked binaries.  Dhall can cheaply fit right
-      in with your existing tools and infrastructure.</p>
-      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Getting-started%3A-Generate-JSON-or-YAML" class="btn btn-lg btn-outline-dark bg-light">Get Started <i class="fas fa-running"></i></a>
+      <h1 class="display-4">Use programming language features</h1>
+      <p class="lead">Hold your configuration files to the same standard of
+      quality as the rest of your code.
+      <hr class="my-4">
+      <textarea id="highlight2"></textarea>
+      <blockquote class="blockquote">
+      <p>"Configuration bugs, not code bugs, are the most common cause I've seen of really bad outages. … As with error handling, I'm often told that it's obvious that config changes are scary, but it's not so obvious that most companies test and stage config changes like they do code changes."</p>
+      <footer class="blockquote-footer"><a href="https://danluu.com/postmortem-lessons/">Dan Luu in <cite title="Reading postmortems">Reading postmortems</cite></a></footer>
+      </blockquote>
+      <div class="container">
+      <div class="row">
+      <div class="col-sm">
+      <blockquote class="twitter-tweet"><p lang="en" dir="ltr">Configs are code are configs are code <a href="https://t.co/fVBs7T7P3j">https://t.co/fVBs7T7P3j</a></p>&mdash; Charity Majors (@mipsytipsy) <a href="https://twitter.com/mipsytipsy/status/1184673208491864064?ref_src=twsrc%5Etfw">October 17, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+      </div>
+      <div class="col-sm">
+      <blockquote class="twitter-tweet"><p lang="en" dir="ltr">Configuration testing is quite underrated in an industry where the majority of work is becoming configuration.</p>&mdash; JBD (@rakyll) <a href="https://twitter.com/rakyll/status/1177324158956388352?ref_src=twsrc%5Etfw">September 26, 2019</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+      </div>
+      </div>
+      </div>
+      <a href="https://github.com/dhall-lang/dhall-lang/wiki/Getting-started%3A-Generate-JSON-or-YAML" class="btn btn-lg btn-outline-dark bg-light">Get started <i class="fas fa-running"></i></a>
     </div>
     <hr class="my-4">
     <p class="text-center">This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</p>
   </body>
   <script language="javascript" src="./js/codemirror.js"></script>
   <script language="javascript" src="./js/haskell.js"></script>
+  <script language="javascript" src="./js/shell.js"></script>
   <script language="javascript" src="./js/yaml.js"></script>
   <script language="javascript">
     let dhallInput  = document.getElementById("dhall-input");
@@ -295,6 +327,22 @@
 
     h1 = CodeMirror.fromTextArea(highlight1, {
       lineNumbers: true,
+      mode: "shell",
+      readOnly: true
+    });
+
+    let diff = document.getElementById("diff");
+
+    d0 = CodeMirror.fromTextArea(diff, {
+      lineNumbers: false,
+      mode: "shell",
+      readOnly: true
+    });
+
+    let highlight2 = document.getElementById("highlight2");
+
+    h2 = CodeMirror.fromTextArea(highlight2, {
+      lineNumbers: true,
       mode: "haskell",
       readOnly: true
     });
@@ -308,6 +356,7 @@
     let typeTab     = document.getElementById("type-tab");
     let jsonTab     = document.getElementById("json-tab");
     let yamlTab     = document.getElementById("yaml-tab");
+    let hashTab     = document.getElementById("hash-tab");
 
     function selectTab(tabClass, tabId) {
       Array.from(document.getElementsByClassName(tabClass)).forEach(element => {
@@ -320,7 +369,8 @@
 
    Can you spot the mistake?
 
-   Fix the typo, then move onto the "Definitions" example
+   Fix the typo, then move onto the "Definitions"
+   example
 -}
 
 { home       = "/home/bill"
@@ -434,32 +484,130 @@ in  {- Try generating 20 users instead of 10 -}
 
     input.setValue(example0);
 
-    h0.setValue(`let input =
-      { relative = "daughter"
-      , movies   = [ "Boss Baby", "Frozen", "Moana" ]
-      }
+    h0.setValue(`-- ./example.dhall
 
-let concatSep = https://prelude.dhall-lang.org/Text/concatSep
+let Prelude =
+      https://prelude.dhall-lang.org/v11.1.0/package.dhall sha256:99462c205117931c0919f155a6046aec140c70fb8876d208c7c77027ab19c2fa
 
-    -- Dhall strips leading indentation for you
-in  ''
-    My \${input.relative} loves to watch \${concatSep ", " input.movies}
-    
-    How about you?
-    ''`);
+let companyName = "Example Dot Com"
 
-    h1.setValue(`{ -- Unlike YAML, Dhall does not accept YES|NO|ON|OFF
-  validDhallBools = [ True, False ]
-    , someNumbers = [ 1
-  ,
--- Dhall is not indentation-sensitive
-2, 3 ]
-  -- Field names that conflict with reserved identifiers must be quoted
-, \`True\` = True
-, version = "9.3"  {- Strings must be quoted
+let User = { name : Text, account : Text, age : Natural }
 
-                      All Dhall literals have unambiguous types -}
+let users
+    : List User
+    = [ { name = "John Doe", account = "john", age = 23 }
+      , { name = "Jane Smith", account = "jane", age = 29 }
+      , { name = "William Allen", account = "bill", age = 41 }
+      ]
+
+let toEmail = \\(user : User) -> "\${user.account}@example.com"
+
+let Bio = { name : Text, age : Natural }
+
+let toBio = \\(user : User) -> user.(Bio)
+
+let companySize = Prelude.List.length User users
+
+let greetingPage =
+      ''
+      <html>
+      <title>Welcome to \${companyName}!</title>
+      <body>
+      <p>Welcome to our humble company of \${Natural/show companySize} people!</p>
+      </body>
+      </html>
+        ''
+
+in  { emails = Prelude.List.map User Text toEmail users
+    , bios = Prelude.List.map User Bio toBio users
+    , greetingPage = greetingPage
+    }
+`);
+
+    h1.setValue(`$ dhall-to-yaml <<< '(./company.dhall).bios'
+- age: 23
+  name: John Doe
+- age: 29
+  name: Jane Smith
+- age: 41
+  name: William Allen
+
+$ dhall-to-bash --declare EMAILS <<< '(./company.dhall).emails'
+declare -r -a EMAILS=(john@example.com jane@example.com bill@example.com)
+
+$ dhall text <<< '(./company.dhall).greetingPage'
+<html>
+<title>Welcome to Example Dot Com!</title>
+<body>
+<p>Welcome to our humble company of 3 people!</p>
+</body>
+</html>
+`);
+
+    d0.setValue(`$ dhall diff \\
+    'https://prelude.dhall-lang.org/v9.0.0/package.dhall' \\
+    'https://prelude.dhall-lang.org/v10.0.0/package.dhall'
+{ Natural = { + equal = …
+            , + greaterThan = …
+            , + greaterThanEqual = …
+            , + lessThan = …
+            , + lessThanEqual = …
+            , …
+            }
+, Text = { + default = …
+         , + defaultMap = …
+         , …
+         }
+, …
 }`);
+
+    h2.setValue(`-- Import packages
+let JSON = https://prelude.dhall-lang.org/v11.1.0/JSON/package.dhall
+
+-- Use precise types like enums instead of strings
+let Zone = < us-east-1 | us-west-1 >
+
+let InstanceType = < \`m5.large\` | \`m5.xlarge\` >
+
+let Instance = { type : InstanceType, zone : Zone }
+
+-- JSON rendering can optionally be implemented entirely within the language
+let Zone/toJSON =
+          \\(zone : Zone)
+      ->  merge
+            { us-east-1 = JSON.string "us-east-1"
+            , us-west-1 = JSON.string "us-west-1"
+            }
+            zone
+
+let InstanceType/toJSON =
+          \\(type : InstanceType)
+      ->  merge
+            { \`m5.large\` = JSON.string "m5.large"
+            , \`m5.xlarge\` = JSON.string "m5.xlarge"
+            }
+            type
+
+let Instance/toJSON =
+          \\(instance : Instance)
+      ->  JSON.object
+            ( toMap
+                { type = InstanceType/toJSON instance.type
+                , zone = Zone/toJSON instance.zone
+                }
+            )
+
+-- Use language support for tests to safely verify code ahead of time
+let test =
+        let example =
+              { type = InstanceType.\`m5.xlarge\`, zone = Zone.us-east-1 }
+
+        in    assert
+            :      JSON.render (Instance/toJSON example)
+              ===  "{ \\"type\\": \\"m5.xlarge\\", \\"zone\\": \\"us-east-1\\" }"
+
+in  Instance/toJSON
+`);
   </script>
   <script defer language="javascript" src="./js/all.min.js"></script>
 </html>
