@@ -3140,7 +3140,7 @@ prettyTypeMessage (MissingHandler exemplar ks) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt0 <> "\n"
       where
-        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = insert (Text.intercalate ", " (exemplar : Data.Set.toList ks))
 
 prettyTypeMessage MissingMergeType =
     ErrorMessages {..}
