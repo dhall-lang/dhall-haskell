@@ -950,7 +950,8 @@ infer typer = loop
 
             if Data.Set.null diffU
                 then return ()
-                else die (MissingHandler diffU)
+                else let (exemplar,rest) = Data.Set.deleteFindMin diffU
+                     in die (MissingHandler exemplar rest)
 
             let match _y _T₀' Nothing =
                     return _T₀'
@@ -1314,7 +1315,7 @@ data TypeMessage s a
     | MapTypeMismatch (Expr s a) (Expr s a)
     | MissingToMapType
     | UnusedHandler (Set Text)
-    | MissingHandler (Set Text)
+    | MissingHandler Text (Set Text)
     | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
     | DisallowedHandlerType Text (Expr s a) (Expr s a) Text
     | HandlerOutputTypeMismatch Text (Expr s a) Text (Expr s a)
@@ -2283,7 +2284,7 @@ prettyTypeMessage (ListLitInvariant) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for ❰List❱: " <> pretty expr0
+    short = "Invalid type for ❰List❱ "
 
     long =
         "Explanation: ❰List❱s can optionally document their type with a type annotation, \n\
@@ -3098,13 +3099,12 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
       where
         txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
 
-prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
+prettyTypeMessage (MissingHandler exemplar ks) = ErrorMessages {..}
   where
     short = case Data.Set.toList ks of
-         []       -> "Missing handler"
-         [x]      -> "Missing handler: " <> pretty x
+         []       -> "Missing handler: " <> Dhall.Pretty.Internal.prettyLabel exemplar
          xs@(_:_) -> "Missing handlers: " <> (Pretty.hsep . Pretty.punctuate Pretty.comma 
-                                             . map Dhall.Pretty.Internal.prettyLabel $ xs)
+                                             . map Dhall.Pretty.Internal.prettyLabel $ exemplar:xs)
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -4436,8 +4436,8 @@ messageExpressions f m = case m of
         pure MissingToMapType
     UnusedHandler a ->
         UnusedHandler <$> pure a
-    MissingHandler a ->
-        MissingHandler <$> pure a
+    MissingHandler e a ->
+        MissingHandler <$> pure e <*> pure a
     HandlerInputTypeMismatch a b c ->
         HandlerInputTypeMismatch <$> pure a <*> f b <*> f c
     DisallowedHandlerType a b c d ->
