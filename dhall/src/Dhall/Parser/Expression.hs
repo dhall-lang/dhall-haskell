@@ -124,7 +124,7 @@ data Parsers a = Parsers
     , importExpression_   :: Parser (Expr Src a)
     }
 
--- | Given a parser for imports, 
+-- | Given a parser for imports,
 parsers :: Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
@@ -205,32 +205,24 @@ parsers embedded = Parsers {..}
 
                     return (Binding (Just src0) c (Just src1) d (Just src3) f)
 
-            as <- Data.List.NonEmpty.some1 binding
+            a <- binding
 
-            _in
+            -- A let binder is either followed by its 'payload', separated by
+            -- `in` (e.g. `let a = 1 in b`), or it is followed immediately by
+            -- another let binder as part of a 'multi-let' (e.g. `let a = 1 let
+            -- b = 2 ... in c).
+            let payload = do
+                    _in
 
-            nonemptyWhitespace
+                    nonemptyWhitespace
 
-            b <- expression
+                    expression
 
-            -- 'Note's in let-in-let:
-            --
-            -- Subsequent @let@s that are not separated by an @in@ only get a
-            -- single surrounding 'Note'. For example:
-            --
-            -- let x = a
-            -- let y = b
-            -- in  let z = c
-            --     in x
-            --
-            -- is parsed as
-            --
-            -- (Note …
-            --   (Let x …
-            --     (Let y …
-            --       (Note …
-            --         (Let z …
-            return (Dhall.Syntax.wrapInLets as b)
+            let nested = noted alternative2
+
+            b <- payload <|> nested
+
+            return (Let a b)
 
         alternative3 = do
             _forall
