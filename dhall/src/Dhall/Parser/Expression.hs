@@ -343,7 +343,9 @@ parsers embedded = Parsers {..}
         a <- selectorExpression
 
         mb <- optional (do
-            _doubleColon
+            try (whitespace *> _doubleColon)
+
+            whitespace
 
             selectorExpression )
 
