@@ -10,7 +10,7 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Dynamic
 import Data.List.NonEmpty (NonEmpty)
-import Data.Map (Map)
+import Dhall.Map (Map)
 import Data.Semigroup ((<>))
 import Data.Text.Prettyprint.Doc (Pretty(..))
 import Data.Void (Void)
@@ -35,7 +35,7 @@ import Lens.Family (LensLike')
 import System.FilePath (isRelative, splitDirectories)
 
 import qualified Dhall.Context
-import qualified Data.Map      as Map
+import qualified Dhall.Map     as Map
 import qualified Data.Text
 
 -- | A fully 'chained' import, i.e. if it contains a relative path that path is

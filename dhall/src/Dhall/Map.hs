@@ -13,6 +13,7 @@ module Dhall.Map
       Map
 
       -- * Construction
+    , empty
     , singleton
     , fromList
     , fromListWithKey
@@ -160,6 +161,10 @@ instance Ord k => GHC.Exts.IsList (Map k v) where
     fromList = Dhall.Map.fromList
 
     toList = Dhall.Map.toList
+
+-- | Create an empty `Map`
+empty :: Ord k => Map k v
+empty = mempty
 
 {-| Create a `Map` from a single key-value pair
 
