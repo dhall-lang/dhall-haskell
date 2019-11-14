@@ -50,7 +50,7 @@ format characterSet (Header header, expr) =
             <> Pretty.prettyCharacterSet characterSet expr
             <> "\n"
 
-        docStream = Doc.layoutSmart Pretty.layoutOpts doc
+        docStream = Pretty.layout doc
     in
         Doc.Render.Text.renderStrict docStream
 

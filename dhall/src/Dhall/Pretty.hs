@@ -10,14 +10,8 @@ module Dhall.Pretty
     , CharacterSet(..)
     , prettyCharacterSet
 
-    , layoutOpts
+    , Dhall.Pretty.Internal.layout
+    , Dhall.Pretty.Internal.layoutOpts
     ) where
 
 import Dhall.Pretty.Internal
-import qualified Data.Text.Prettyprint.Doc as Pretty
-
--- | Default layout options
-layoutOpts :: Pretty.LayoutOptions
-layoutOpts =
-    Pretty.defaultLayoutOptions
-        { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }

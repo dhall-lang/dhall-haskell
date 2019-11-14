@@ -13,7 +13,7 @@ module Dhall.Format
 
 import Control.Exception (Exception)
 import Data.Monoid ((<>))
-import Dhall.Pretty (CharacterSet(..), annToAnsiStyle, layoutOpts)
+import Dhall.Pretty (CharacterSet(..), annToAnsiStyle)
 import Dhall.Util (Censor, Input(..))
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -63,7 +63,7 @@ format (Format {..}) =
                             <>  "\n"
 
                     System.IO.withFile file System.IO.WriteMode (\handle -> do
-                        Pretty.Terminal.renderIO handle (Pretty.layoutSmart layoutOpts doc))
+                        Pretty.Terminal.renderIO handle (Dhall.Pretty.layout doc))
                 StandardInput -> do
                     (Dhall.Util.Header header, expr) <-
                         Dhall.Util.getExpressionAndHeader censor StandardInput
@@ -78,11 +78,11 @@ format (Format {..}) =
                       then
                         Pretty.Terminal.renderIO
                           System.IO.stdout
-                          (fmap annToAnsiStyle (Pretty.layoutSmart layoutOpts doc))
+                          (fmap annToAnsiStyle (Dhall.Pretty.layout doc))
                       else
                         Pretty.Terminal.renderIO
                           System.IO.stdout
-                          (Pretty.layoutSmart layoutOpts (Pretty.unAnnotate doc))
+                          (Dhall.Pretty.layout (Pretty.unAnnotate doc))
         Check {..} -> do
             originalText <- case path of
                 InputFile file -> Data.Text.IO.readFile file
@@ -97,7 +97,7 @@ format (Format {..}) =
                     <>  "\n"
 
             let formattedText =
-                    Pretty.Text.renderStrict (Pretty.layoutSmart layoutOpts doc)
+                    Pretty.Text.renderStrict (Dhall.Pretty.layout doc)
 
             if originalText == formattedText
                 then return ()

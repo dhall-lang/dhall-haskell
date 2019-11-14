@@ -30,7 +30,7 @@ import qualified Options.Applicative                       as Options
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.Exit
 import qualified System.IO                                 as IO
-import qualified Paths_dhall_json                          as Meta
+import qualified Paths_dhall_yaml                          as Meta
 
 -- ---------------
 -- Command options
@@ -137,7 +137,7 @@ main = do
 
                 let document = Dhall.Pretty.prettyCharacterSet characterSet result
 
-                let stream = Pretty.layoutSmart Dhall.Pretty.layoutOpts document
+                let stream = Dhall.Pretty.layout document
 
                 case output of
                     Nothing -> do

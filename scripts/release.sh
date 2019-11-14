@@ -18,6 +18,7 @@ function release {
 
 release dhall-lsp-server 1.0.2
 release dhall-json 1.5.0
+release dhall-yaml 1.5.0
 release dhall-bash 1.0.24
 release dhall-nix 1.1.9
 release dhall 1.27.0

@@ -19,6 +19,7 @@ let
     "dhall-json"
     "dhall-lsp-server"
     "dhall-nix"
+    "dhall-yaml"
   ];
 
   mass = function: names: haskellPackagesNew: haskellPackagesOld:
@@ -54,14 +55,14 @@ let
 
       dhallLarge =
         pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
-          sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
+          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/28f4fb830f158bba6bb635bd29f1fd7075501b8f/img/dhall-logo.svg";
+          sha256 = "19hqz6ipyb7fw460gnz9wkjlzllw1hpls9kahis12p9xr7a6rfb1";
         };
 
       dhallSmall =
         pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-icon.png";
-          sha256 = "1lly3yb5szl9n3hszsfzv2mil98cvlidrzyci7vs4wi461s9bhxi";
+          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/28f4fb830f158bba6bb635bd29f1fd7075501b8f/img/dhall-icon.svg";
+          sha256 = "0cxwvvhay54fq908ncyfmvq6jyjrbq565g4vrzk97z7z4qv3h5hh";
         };
 
       discourse = ./img/discourse.svg;
@@ -167,6 +168,7 @@ let
                           # to ../dhall/dhall-lang/
                           # "dhall-lsp-server"
                           "dhall-nix"
+                          "dhall-yaml"
                         ]
                         # Test suite doesn't work on GHCJS or GHC 7.10.3
                     ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
@@ -182,6 +184,7 @@ let
                     "dhall-json"
                     "dhall-lsp-server"
                     "dhall-nix"
+                    "dhall-yaml"
                   ];
 
                 failOnMissingHaddocksExtension =
@@ -216,6 +219,12 @@ let
                         (pkgsNew.sdist ../dhall-bash)
                         { };
 
+                    dhall-json =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-json"
+                        (pkgsNew.sdist ../dhall-json)
+                        { };
+
                     dhall-nix =
                       haskellPackagesNew.callCabal2nix
                         "dhall-nix"
@@ -228,39 +237,11 @@ let
                         (pkgsNew.sdist ../dhall-lsp-server)
                         { };
 
-                    dhall-json =
-                      # Replace this with
-                      # `haskellPackagesNew.callCabal2nixWithOptions` once we
-                      # upgrade to a newer version of Nixpkgs
-                      let
-                        src = pkgsNew.sdist ../dhall-json;
-
-                        filter = path: type:
-                          pkgsNew.lib.hasSuffix "dhall-json.cabal" path;
-
-                        expr =
-                          haskellPackagesNew.haskellSrc2nix {
-                            name = "dhall-json";
-
-                            src =
-                              if pkgsNew.lib.canCleanSource src
-                              then pkgsNew.lib.cleanSourceWith { inherit src filter; }
-                              else src;
-
-                            extraCabal2nixOptions = "-fgpl";
-                          };
-
-                        drv = haskellPackagesNew.callPackage expr {};
-
-                      in
-                        pkgsNew.haskell.lib.overrideCabal drv (old: {
-                          inherit src;
-
-                          preConfigure = ''
-                            # Generated from ${expr}
-                            ${old.preConfigure or ""}
-                          '';
-                        });
+                    dhall-yaml =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-yaml"
+                        (pkgsNew.sdist ../dhall-yaml)
+                        { };
 
                     dhall-try =
                       pkgsNew.haskell.lib.overrideCabal
@@ -587,6 +568,9 @@ let
 
                     dhall-nix-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nix;
+
+                    dhall-yaml-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-yaml;
                   };
 
               in
@@ -632,6 +616,7 @@ let
     dhall-json       = makeStaticIfPossible "dhall-json"      ;
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
+    dhall-yaml       = makeStaticIfPossible "dhall-yaml"      ;
   };
 
   toDockerImage = name:
@@ -640,7 +625,7 @@ let
         pkgs.dockerTools.buildImage {
           inherit name;
 
-          contents = [ possibly-static."${name}" ];
+          contents = [ possibly-static."${name}" pkgs.cacert ];
         };
 
     in
@@ -659,6 +644,7 @@ in
     tarball-dhall-json       = makeTarball "dhall-json"      ;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
     tarball-dhall-nix        = makeTarball "dhall-nix"       ;
+    tarball-dhall-yaml       = makeTarball "dhall-yaml"      ;
 
     inherit (pkgs) tarball-website website;
 
@@ -670,6 +656,7 @@ in
       dhall-lsp-server
       dhall-nix
       dhall-try
+      dhall-yaml
     ;
 
     inherit (pkgs.releaseTools) aggregate;
@@ -680,12 +667,14 @@ in
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
+    shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;
     image-dhall-json       = toDockerImage "dhall-json"      ;
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
+    image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
     test-dhall =
       pkgs.mkShell
