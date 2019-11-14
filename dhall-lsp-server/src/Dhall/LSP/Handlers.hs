@@ -12,6 +12,7 @@ import Data.Void (Void)
 import Dhall.Core (Expr(Note, Embed), pretty, Import(..), ImportHashed(..), ImportType(..), headers)
 import Dhall.Import (localToPath)
 import Dhall.Parser (Src(..))
+import Dhall.Pretty (CharacterSet(..))
 
 import Dhall.LSP.Backend.Completion (Completion(..), completionQueryAt,
   completeEnvironmentImport, completeLocalImport, buildCompletionContext, completeProjections, completeFromContext)
@@ -19,7 +20,7 @@ import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
   rangeFromDhall, diagnose, embedsWithRanges)
-import Dhall.LSP.Backend.Formatting (formatExprWithHeader)
+import Dhall.LSP.Backend.Formatting (formatExpr, formatExprWithHeader)
 import Dhall.LSP.Backend.Freezing (computeSemanticHash, getImportHashPosition,
   stripHash, getAllImportsWithHashPositions)
 import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
@@ -34,6 +35,7 @@ import Control.Monad (guard, forM)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.Except (throwE, catchE, runExceptT)
 import Control.Monad.Trans.State.Strict (execStateT)
+import Data.Default (def)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map.Strict as Map
 import Data.Maybe (maybeToList)
@@ -56,6 +58,14 @@ wrapHandler vstate handle message =
   modifyMVar_ vstate $
     execStateT . runExceptT $
       catchE (handle message) lspUserMessage
+
+getServerConfig :: HandlerM ServerConfig
+getServerConfig = do
+  lsp <- use lspFuncs
+  mConfig <- liftIO (LSP.config lsp)
+  case mConfig of
+    Just config -> return config
+    Nothing -> return def
 
 lspUserMessage :: (Severity, Text) -> HandlerM ()
 lspUserMessage (Log, text) =
@@ -289,7 +299,11 @@ documentFormattingHandler request = do
     Right res -> return res
     _ -> throwE (Warning, "Failed to format dhall code; parse error.")
 
-  let formatted = formatExprWithHeader expr header
+  ServerConfig {..} <- getServerConfig
+  let charSet | asciiOnly = ASCII
+              | otherwise = Unicode
+
+  let formatted = formatExprWithHeader charSet expr header
       numLines = Text.length txt
       range = J.Range (J.Position 0 0) (J.Position numLines 0)
       edits = J.List [J.TextEdit range formatted]
@@ -327,7 +341,11 @@ executeLintAndFormat request = do
     Right res -> return res
     _ -> throwE (Warning, "Failed to lint dhall code; parse error.")
 
-  let linted = formatExprWithHeader (lint expr) header
+  ServerConfig {..} <- getServerConfig
+  let charSet | asciiOnly = ASCII
+              | otherwise = Unicode
+
+  let linted = formatExprWithHeader charSet (lint expr) header
       numLines = Text.length txt
       range = J.Range (J.Position 0 0) (J.Position numLines 0)
       edit = J.WorkspaceEdit
@@ -350,13 +368,18 @@ executeAnnotateLet request = do
     Left _ -> throwE (Warning, "Failed to annotate let binding; not well-typed.")
     Right e -> return e
 
-  (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, txt)
+  ServerConfig {..} <- getServerConfig
+  let charSet | asciiOnly = ASCII
+              | otherwise = Unicode
+
+  (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, annotExpr)
     <- case annotateLet (line, col) welltyped of
       Right x -> return x
       Left msg -> throwE (Warning, Text.pack msg)
 
   let range = J.Range (J.Position (unPos x1 - 1) (unPos y1 - 1))
                       (J.Position (unPos x2 - 1) (unPos y2 - 1))
+      txt = formatExpr charSet annotExpr
       edit = J.WorkspaceEdit
         (Just (HashMap.singleton uri (J.List [J.TextEdit range txt]))) Nothing
 

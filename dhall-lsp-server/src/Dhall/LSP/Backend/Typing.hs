@@ -1,13 +1,11 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
 import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Binding(..), Expr(..), subExpressions, normalize, shift, subst, Var(..), pretty)
+import Dhall.Core (Binding(..), Expr(..), subExpressions, normalize, shift, subst, Var(..))
 import Dhall.TypeCheck (typeWithA, TypeError(..))
 import Dhall.Parser (Src(..))
 
-import Data.Monoid ((<>))
 import Control.Lens (toListOf)
-import Data.Text (Text)
 import Control.Applicative ((<|>))
 import Data.Bifunctor (first)
 import Data.Void (absurd, Void)
@@ -89,14 +87,15 @@ srcAt pos expr = do Note src _ <- exprAt pos expr
 
 
 -- | Given a well-typed expression and a position find the let binder at that
---   position (if there is one) and return a textual update to the source code
---   that inserts the type annotation (or replaces the existing one). If
---   something goes wrong returns a textual error message.
-annotateLet :: Position -> WellTyped -> Either String (Src, Text)
+--   position (if there is one) and return the type annotation to be inserted
+--   (potentially replacing the existing one). If something goes wrong returns a
+--   textual error message.
+annotateLet :: Position -> WellTyped -> Either String (Src, Expr Src Void)
 annotateLet pos expr = do
   annotateLet' pos empty (fromWellTyped expr)
 
-annotateLet' :: Position -> Context (Expr Src Void) -> Expr Src Void -> Either String (Src, Text)
+annotateLet' :: Position -> Context (Expr Src Void) -> Expr Src Void
+             -> Either String (Src, Expr Src Void)
 -- the input only contains singleton lets
 annotateLet' pos ctx (Note src e@(Let (Binding { value = a }) _))
   | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]
@@ -105,7 +104,7 @@ annotateLet' pos ctx (Note src e@(Let (Binding { value = a }) _))
                      Just x -> return x
                      Nothing -> Left "The impossible happened: failed\
                                      \ to re-parse a Let expression."
-       return (srcAnnot, ": " <> pretty (normalize _A) <> " ")
+       return (srcAnnot, normalize _A)
 
 -- binders, see typeAt'
 annotateLet' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) | pos `inside` src = do
