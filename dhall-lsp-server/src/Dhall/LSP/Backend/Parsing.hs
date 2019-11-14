@@ -24,7 +24,6 @@ import Control.Applicative (optional, (<|>))
 import qualified Text.Megaparsec as Megaparsec
 import Text.Megaparsec (SourcePos(..))
 
-
 -- | Parse the outermost binding in a Src descriptor of a let-block and return
 --   the rest. Ex. on input `let a = 0 let b = a in b` parses `let a = 0 ` and
 --   returns the Src descriptor containing `let b = a in b`.
@@ -33,13 +32,20 @@ getLetInner (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetInnerOff
  where parseLetInnerOffset = do
           setSourcePos left
           _let
+          nonemptyWhitespace
           _ <- label
+          whitespace
           _ <- optional (do
             _ <- _colon
-            expr)
+            nonemptyWhitespace
+            _ <- expr
+            whitespace)
           _equal
+          whitespace
           _ <- expr
+          whitespace
           _ <- optional _in
+          whitespace
           begin <- getSourcePos
           tokens <- Megaparsec.takeRest
           end <- getSourcePos
@@ -53,11 +59,15 @@ getLetAnnot (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetAnnot) t
   where parseLetAnnot = do
           setSourcePos left
           _let
+          nonemptyWhitespace
           _ <- label
+          whitespace
           begin <- getSourcePos
           (tokens, _) <- Megaparsec.match $ optional (do
             _ <- _colon
-            expr)
+            nonemptyWhitespace
+            _ <- expr
+            whitespace)
           end <- getSourcePos
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
@@ -73,7 +83,7 @@ getLetIdentifier src@(Src left _ text) =
   where parseLetIdentifier = do
           setSourcePos left
           _let
-          whitespace
+          nonemptyWhitespace
           begin <- getSourcePos
           (tokens, _) <- Megaparsec.match label
           end <- getSourcePos
