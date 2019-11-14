@@ -10,7 +10,7 @@ import Control.Applicative ((<|>))
 import Data.Bifunctor (first)
 import Data.Void (absurd, Void)
 
-import Dhall.LSP.Backend.Parsing (getLetAnnot, getLetIdentifier,
+import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
   getLamIdentifier, getForallIdentifier)
 import Dhall.LSP.Backend.Diagnostics (Position, Range(..), rangeFromDhall)
 import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
@@ -20,7 +20,10 @@ import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
 --   that subexpression if possible.
 typeAt :: Position -> WellTyped -> Either String (Maybe Src, Expr Src Void)
 typeAt pos expr = do
-  let expr' = fromWellTyped expr
+  expr' <- case splitMultiLetSrc (fromWellTyped expr) of
+             Just e -> return e
+             Nothing -> Left "The impossible happened: failed to split let\
+                              \ blocks when preprocessing for typeAt'."
   (mSrc, typ) <- first show $ typeAt' pos empty expr'
   case mSrc of
     Just src -> return (Just src, normalize typ)
@@ -42,7 +45,6 @@ typeAt' pos _ctx (Note src (Pi _ _A _)) | Just src' <- getForallIdentifier src
                                         , pos `inside` src' =
   return (Just src', _A)
 
--- the input only contains singleton lets
 typeAt' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) | pos `inside` src = do
   _ <- typeWithA absurd ctx a
   let a' = shift 1 (V x 0) (normalize a)
@@ -72,12 +74,16 @@ typeAt' pos ctx expr = do
 
 -- | Find the smallest Note-wrapped expression at the given position.
 exprAt :: Position -> Expr Src a -> Maybe (Expr Src a)
-exprAt pos e@(Note _ expr) = exprAt pos expr <|> Just e
-exprAt pos expr =
+exprAt pos e = do e' <- splitMultiLetSrc e
+                  exprAt' pos e'
+
+exprAt' :: Position -> Expr Src a -> Maybe (Expr Src a)
+exprAt' pos e@(Note _ expr) = exprAt pos expr <|> Just e
+exprAt' pos expr =
   let subExprs = toListOf subExpressions expr
   in case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
     [] -> Nothing
-    ((src,e) : _) -> exprAt pos e <|> Just (Note src e)
+    ((src,e) : _) -> exprAt' pos e <|> Just (Note src e)
 
 
 -- | Find the smallest Src annotation containing the given position.
@@ -92,7 +98,12 @@ srcAt pos expr = do Note src _ <- exprAt pos expr
 --   textual error message.
 annotateLet :: Position -> WellTyped -> Either String (Src, Expr Src Void)
 annotateLet pos expr = do
-  annotateLet' pos empty (fromWellTyped expr)
+  expr' <- case splitMultiLetSrc (fromWellTyped expr) of
+             Just e -> return e
+             Nothing -> Left "The impossible happened: failed to split let\
+                              \ blocks when preprocessing for annotateLet'."
+  annotateLet' pos empty expr'
+
 
 annotateLet' :: Position -> Context (Expr Src Void) -> Expr Src Void
              -> Either String (Src, Expr Src Void)
@@ -132,6 +143,13 @@ annotateLet' pos ctx expr = do
   case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
     (e:[]) -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
+
+-- Make sure all lets in a multilet are annotated with their source information
+splitMultiLetSrc :: Expr Src a -> Maybe (Expr Src a)
+splitMultiLetSrc (Note src (Let b (Let b' e))) = do
+  src' <- getLetInner src
+  splitMultiLetSrc (Note src (Let b (Note src' (Let b' e))))
+splitMultiLetSrc expr = subExpressions splitMultiLetSrc expr
 
 -- Check if range lies completely inside a given subexpression.
 -- This version takes trailing whitespace into account
