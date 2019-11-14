@@ -1182,6 +1182,9 @@ prettyToStrictText = docToStrictText . Pretty.pretty
 -- | Layout using 'layoutOpts'
 --
 -- Tries hard to fit the document into 80 columns.
+--
+-- This also removes trailing space characters (@' '@) /unless/
+-- they are enclosed in an annotation.
 layout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
 layout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart layoutOpts
 
