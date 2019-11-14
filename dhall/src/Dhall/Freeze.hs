@@ -17,7 +17,7 @@ module Dhall.Freeze
 import Data.Monoid ((<>))
 import Data.Text
 import Dhall.Parser (Src)
-import Dhall.Pretty (CharacterSet, annToAnsiStyle, prettyCharacterSet)
+import Dhall.Pretty (CharacterSet)
 import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util (Censor, Input(..))
 import System.Console.ANSI (hSupportsANSI)
@@ -26,7 +26,6 @@ import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
@@ -88,20 +87,22 @@ writeExpr :: Input -> (Text, Expr Src Import) -> CharacterSet -> IO ()
 writeExpr inplace (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
+            <> "\n"
 
-    let unAnnotated = Dhall.Pretty.layout (Pretty.unAnnotate doc)
+    let stream = Dhall.Pretty.layout doc
+
+    let unAnnotated = Pretty.unAnnotateS stream
 
     case inplace of
         InputFile f ->
             System.IO.withFile f System.IO.WriteMode (\handle -> do
-                Pretty.renderIO handle unAnnotated
-                Data.Text.IO.hPutStrLn handle "" )
+                Pretty.renderIO handle unAnnotated)
 
         StandardInput -> do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
             if supportsANSI
                then
-                 Pretty.renderIO System.IO.stdout (annToAnsiStyle <$> Dhall.Pretty.layout doc)
+                 Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
                else
                  Pretty.renderIO System.IO.stdout unAnnotated
 
