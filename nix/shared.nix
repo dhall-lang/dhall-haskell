@@ -177,6 +177,11 @@ let
                 doBenchmarkExtension =
                   mass pkgsNew.haskell.lib.doBenchmark allDhallPackages;
 
+                doJailbreakExtension =
+                  mass pkgsNew.haskell.lib.doJailbreak [
+                    "hnix"
+                  ];
+
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
                     "dhall"
@@ -266,6 +271,7 @@ let
                     extension
                     doCheckExtension
                     doBenchmarkExtension
+                    doJailbreakExtension
                     failOnAllWarningsExtension
                     failOnMissingHaddocksExtension
                   ];

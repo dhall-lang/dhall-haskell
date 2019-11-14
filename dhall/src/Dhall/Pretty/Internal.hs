@@ -1082,7 +1082,7 @@ prettyCharacterSet characterSet expression =
       where
         long =
             Pretty.align
-            (   literal ("''" <> Pretty.hardline)
+            (   literal "''" <> Pretty.hardline
             <>  Pretty.align
                 (foldMap prettyMultilineChunk a <> prettyMultilineText b)
             <>  literal "''"
@@ -1100,12 +1100,18 @@ prettyCharacterSet characterSet expression =
             <>  prettyExpression d
             <>  rbrace
 
-        prettyMultilineText text = literal (mconcat docs)
+        prettyMultilineText text = mconcat docs
           where
             lines_ = Text.splitOn "\n" (escapeSingleQuotedText text)
 
+            -- Annotate only non-empty lines so trailing whitespace can be
+            -- removed on empty ones.
+            prettyLine line =
+                (if Text.null line then id else literal)
+                    (Pretty.pretty line)
+
             docs =
-                Data.List.intersperse Pretty.hardline (fmap Pretty.pretty lines_)
+                Data.List.intersperse Pretty.hardline (map prettyLine lines_)
 
         prettyChunk (c, d) =
                 prettyText c
@@ -1177,7 +1183,7 @@ prettyToStrictText = docToStrictText . Pretty.pretty
 --
 -- Tries hard to fit the document into 80 columns.
 layout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
-layout = Pretty.layoutSmart layoutOpts
+layout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart layoutOpts
 
 -- | Default layout options
 layoutOpts :: Pretty.LayoutOptions

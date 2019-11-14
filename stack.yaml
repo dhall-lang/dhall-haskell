@@ -23,7 +23,12 @@ extra-deps:
   - ordered-containers-0.2.2@sha256:ebf2be3f592d9cf148ea6b8375f8af97148d44f82d8d04476899285e965afdbf,810
   - lsp-test-0.6.1.0@sha256:df0fc403c03b6d036be13de3ff23d9951ae2506080135cd6862eded2c969a6da,3483
   - aeson-yaml-1.0.4.0@sha256:72d91a4a2ade87b8a4bdf73937d2c62bd2c60053df1841f8bf1e6204387959b8,1975
+  - prettyprinter-1.5.1@sha256:fca87c3e2611d3499a0341a59857e9b424a23f31646e4737d535a18582284f96,5375
 nix:
   packages:
     - ncurses
     - zlib
+
+# hnix doesn't allow prettyprinter >= 1.3
+# https://github.com/haskell-nix/hnix/issues/524
+allow-newer: true

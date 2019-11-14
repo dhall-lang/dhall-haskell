@@ -1,11 +1,11 @@
 { inner =
     ''
-    
+
     one
-    
+
     two
-    
+
     three
-    
+
     ''
 }

@@ -1,5 +1,5 @@
 let foo =
-    
+
     {- test -}
       "hello"
 
