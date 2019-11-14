@@ -308,7 +308,7 @@ parseMode =
           Options.Applicative.flag' (Just ListTransitiveDependencies)
               (   Options.Applicative.long "transitive-dependencies"
               <>  Options.Applicative.help
-                    "List transitive import dependencies"
+                    "List transitive import dependencies in post-order"
               )
         <|> pure Nothing
 
