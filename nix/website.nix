@@ -6,6 +6,8 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/mkdir $out
   ${coreutils}/bin/mkdir $out/{css,img,js}
   ${coreutils}/bin/cp ${../dhall-try/index.html} $out/index.html
+  ${coreutils}/bin/cp ${../dhall-try/hash.gif} $out/img/hash.gif
+  ${coreutils}/bin/cp ${../dhall-try/completion.gif} $out/img/completion.gif
   ${coreutils}/bin/ln --symbolic ${nodePackages.js-yaml}/lib/node_modules/js-yaml/dist/js-yaml.min.js $out/js
   ${coreutils}/bin/ln --symbolic ${jQuery} $out/js/jquery.min.js
   ${coreutils}/bin/ln --symbolic ${twitterBootstrap}/js/bootstrap.min.js $out/js
@@ -13,6 +15,7 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/ln --symbolic ${twitterBootstrap}/css/bootstrap.min.css $out/css
   ${coreutils}/bin/ln --symbolic ${npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.js $out/js
   ${coreutils}/bin/ln --symbolic ${npm.codemirror}/lib/node_modules/codemirror/mode/haskell/haskell.js $out/js
+  ${coreutils}/bin/ln --symbolic ${npm.codemirror}/lib/node_modules/codemirror/mode/shell/shell.js $out/js
   ${coreutils}/bin/ln --symbolic ${npm.codemirror}/lib/node_modules/codemirror/mode/javascript/javascript.js $out/js
   ${coreutils}/bin/ln --symbolic ${npm.codemirror}/lib/node_modules/codemirror/mode/yaml/yaml.js $out/js
   ${coreutils}/bin/ln --symbolic ${npm.codemirror}/lib/node_modules/codemirror/lib/codemirror.css $out/css
@@ -21,8 +24,8 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/ln --symbolic ${logo.clojure} $out/img/clojure-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.ruby} $out/img/ruby-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.discourse} $out/img/discourse-logo.svg
-  ${coreutils}/bin/ln --symbolic ${logo.dhallLarge} $out/img/dhall-large-logo.png
-  ${coreutils}/bin/ln --symbolic ${logo.dhallSmall} $out/img/dhall-small-logo.png
+  ${coreutils}/bin/ln --symbolic ${logo.dhallLarge} $out/img/dhall-large-logo.svg
+  ${coreutils}/bin/ln --symbolic ${logo.dhallSmall} $out/img/dhall-small-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.github}/PNG/GitHub-Mark-32px.png $out/img/github-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.haskell} $out/img/haskell-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.kubernetes} $out/img/kubernetes-logo.svg
