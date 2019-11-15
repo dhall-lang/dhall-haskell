@@ -12,6 +12,7 @@ extra-deps:
 - aeson-pretty-0.8.7
 - ansi-terminal-0.9.1
 - ansi-wl-pprint-0.6.8.2
+- atomic-write-0.2.0.7@sha256:3b626dfbc288cd070f1ac31b1c15ddd49822a923778ffe21f92b2116ffc72dc3,4584
 - attoparsec-0.13.2.2
 - base-compat-0.10.5
 - base-orphans-0.8.1
