@@ -1075,6 +1075,8 @@ prettyCharacterSet characterSet expression =
     prettyChunks (Chunks a b)
         | anyText (\c -> Data.Char.isControl c && not (Data.Char.isSpace c)) =
             short
+        | leadingWhitespaceBeforeClosing'' =
+            short
         | anyText (== '\n') =
             if anyText (/= '\n')
             then long
@@ -1082,6 +1084,25 @@ prettyCharacterSet characterSet expression =
         | otherwise =
             short
       where
+        anyText predicate = any (\(text, _) -> Text.any predicate text) a || Text.any predicate b
+
+        -- If we format the text literal as a multi-line string, would the last
+        -- line start with whitespace? (Leading whitespace on the line of the
+        -- closing @''@ is ignored by the parser, see #1545.)
+        leadingWhitespaceBeforeClosing'' =
+            case lineStarts of
+                []                -> False
+                ts | t <- last ts -> " " `Text.isPrefixOf` t || "\t" `Text.isPrefixOf` t
+          where
+            lineStarts =
+                    concatMap (Text.splitOn "\n") (take 1 texts)
+                ++  concatMap
+                        -- Each first line of these text chunks is preceded by a
+                        -- string interpolation, so we remove these with (drop 1).
+                        (drop 1 . (Text.splitOn "\n"))
+                        (drop 1 texts)
+            texts = map fst a ++ [b]
+
         long =
             Pretty.align
             (   literal "''" <> Pretty.hardline
@@ -1092,8 +1113,6 @@ prettyCharacterSet characterSet expression =
 
         short =
             literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
-
-        anyText predicate = any (\(text, _) -> Text.any predicate text) a || Text.any predicate b
 
         prettyMultilineChunk (c, d) =
                 prettyMultilineText c
