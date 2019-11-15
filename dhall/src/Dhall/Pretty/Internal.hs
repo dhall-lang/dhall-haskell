@@ -1072,13 +1072,15 @@ prettyCharacterSet characterSet expression =
         angles . map prettyAlternative . Dhall.Map.toList
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
-    prettyChunks (Chunks a b) =
-        if anyText (== '\n')
-        then
+    prettyChunks (Chunks a b)
+        | anyText (\c -> Data.Char.isControl c && not (Data.Char.isSpace c)) =
+            short
+        | anyText (== '\n') =
             if anyText (/= '\n')
             then long
             else Pretty.flatAlt long short
-        else short
+        | otherwise =
+            short
       where
         long =
             Pretty.align
