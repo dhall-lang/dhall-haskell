@@ -989,7 +989,7 @@ instance Pretty ImportType where
 
     pretty (Remote url) = Pretty.pretty url
 
-    pretty (Env env) = "env:" <> Pretty.pretty env
+    pretty (Env env) = "env:" <> prettyEnvironmentVariable env
 
     pretty Missing = "missing"
 
