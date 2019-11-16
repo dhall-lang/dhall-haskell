@@ -1089,7 +1089,7 @@ prettyCharacterSet characterSet expression =
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
     prettyChunks chunks@(Chunks a b)
         | anyText (== '\n') =
-            if anyText (/= '\n')
+            if not (null a) || anyText (/= '\n')
             then long
             else Pretty.flatAlt long short
         | otherwise =
@@ -1139,24 +1139,80 @@ prettyCharacterSet characterSet expression =
         prettyText t = literal (Pretty.pretty (escapeText_ t))
 
 
--- | Prepare 'Chunks' for multi-line formatting by interpolating characters that
--- may not appear in multi-line strings directly.
+-- | Prepare 'Chunks' for multi-line formatting by escaping problematic
+-- character sequences via string interpolations
 --
+-- >>> multilineChunks (Chunks [] "\n \tx")
+-- Chunks [("\n",TextLit (Chunks [] " \t"))] "x"
 -- >>> multilineChunks (Chunks [] "\n\NUL\b\f\t")
 -- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
-multilineChunks :: Chunks Src a -> Chunks Src a
-multilineChunks (Chunks as0 b0) = Chunks as1 b1
+multilineChunks :: Chunks s a -> Chunks s a
+multilineChunks = escapeControlCharacters . escapeLastLineLeadingWhitespace
+
+-- | Escape leading whitespace on the last line by moving it into a string
+-- string interpolation
+--
+-- Unescaped leading whitespace on the last line would otherwise be removed
+-- by the parser's dedentation logic.
+--
+-- >>> escapeLastLineLeadingWhitespace (Chunks [] "\n \tx")
+-- Chunks [("\n",TextLit (Chunks [] " \t"))] "x"
+-- >>> escapeLastLineLeadingWhitespace (Chunks [("\n",Var (V "x" 0))] " ")
+-- Chunks [("\n",Var (V "x" 0))] " "
+-- >>> escapeLastLineLeadingWhitespace (Chunks [("\n ",Var (V "x" 0))] "")
+-- Chunks [("\n",TextLit (Chunks [] " ")),("",Var (V "x" 0))] ""
+-- >>> escapeLastLineLeadingWhitespace (Chunks [("\n ",Var (V "x" 0))] "\n")
+-- Chunks [("\n ",Var (V "x" 0))] "\n"
+--
+-- We assume that there's at least one newline and may therefore ignore leading
+-- whitespace on the first line:
+--
+-- >>> escapeLastLineLeadingWhitespace (Chunks [] " ")
+-- Chunks [] " "
+escapeLastLineLeadingWhitespace :: Chunks s a -> Chunks s a
+escapeLastLineLeadingWhitespace (Chunks as0 b0) =
+    case escape1 b0 of
+        Nothing             -> Chunks (escapeChunks as0) b0
+        Just (Chunks cs b1) -> Chunks (as0 ++ cs) b1
   where
-    as1 = foldr f (map toPair bs) as0
+    -- Nothing: No newline found
+    -- Just chunks: Newline was found!
+    escape1 :: Text -> Maybe (Chunks s a)
+    escape1 t = case Text.breakOnEnd "\n" t of
+        ("", _) -> Nothing
+        (a , b) -> Just $ case Text.span predicate b of
+            ("", _) -> Chunks [] t
+            (c , d) -> Chunks [(a, TextLit (Chunks [] c))] d
+
+    predicate c = c == ' ' || c == '\t'
+
+    escapeChunks = snd . foldr f (NotDone, [])
+
+    f chunk  (Done   , chunks) = (Done, chunk : chunks)
+    f (t, e) (NotDone, chunks) = case escape1 t of
+        Nothing            -> (NotDone, (t, e) : chunks)
+        Just (Chunks as b) -> (Done, as ++ (b, e) : chunks)
+
+data Done = NotDone | Done
+
+-- | Escape control characters by moving them into string interpolations
+--
+-- >>> escapeControlCharacters (Chunks [] "\n\NUL\b\f\t")
+-- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
+escapeControlCharacters :: Chunks s a -> Chunks s a
+escapeControlCharacters (Chunks as0 b0) = Chunks as1 b1
+  where
+    as1 = foldr f (map toChunk bs) as0
 
     (bs, b1) = splitOnPredicate predicate b0
 
+    f (t0, e) chunks = map toChunk ts1 ++ (t1, e) : chunks
+      where
+        (ts1, t1) = splitOnPredicate predicate t0
+
     predicate c = Data.Char.isControl c && c /= ' ' && c /= '\t' && c /= '\n'
 
-    f (t0, e) pairs = case splitOnPredicate predicate t0 of
-        (ts1, t1) -> map toPair ts1 ++ (t1, e) : pairs
-
-    toPair (t0, t1) = (t0, TextLit (Chunks [] t1))
+    toChunk (t0, t1) = (t0, TextLit (Chunks [] t1))
 
 -- | Split `Text` on a predicate, preserving all parts of the original string.
 --
