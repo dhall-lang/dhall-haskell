@@ -1087,21 +1087,23 @@ prettyCharacterSet characterSet expression =
         angles . map prettyAlternative . Dhall.Map.toList
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
-    prettyChunks (Chunks a b) =
-        if anyText (== '\n')
-        then
+    prettyChunks chunks@(Chunks a b)
+        | anyText (== '\n') =
             if anyText (/= '\n')
             then long
             else Pretty.flatAlt long short
-        else short
+        | otherwise =
+            short
       where
         long =
             Pretty.align
             (   literal "''" <> Pretty.hardline
             <>  Pretty.align
-                (foldMap prettyMultilineChunk a <> prettyMultilineText b)
+                (foldMap prettyMultilineChunk a' <> prettyMultilineText b')
             <>  literal "''"
             )
+          where
+            Chunks a' b' = multilineChunks chunks
 
         short =
             literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
@@ -1135,6 +1137,43 @@ prettyCharacterSet characterSet expression =
             <>  syntax rbrace
 
         prettyText t = literal (Pretty.pretty (escapeText_ t))
+
+
+-- | Prepare 'Chunks' for multi-line formatting by interpolating characters that
+-- may not appear in multi-line strings directly.
+--
+-- >>> multilineChunks (Chunks [] "\n\NUL\b\f\t")
+-- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
+multilineChunks :: Chunks Src a -> Chunks Src a
+multilineChunks (Chunks as0 b0) = Chunks as1 b1
+  where
+    as1 = foldr f (map toPair bs) as0
+
+    (bs, b1) = splitOnPredicate predicate b0
+
+    predicate c = Data.Char.isControl c && c /= ' ' && c /= '\t' && c /= '\n'
+
+    f (t0, e) pairs = case splitOnPredicate predicate t0 of
+        (ts1, t1) -> map toPair ts1 ++ (t1, e) : pairs
+
+    toPair (t0, t1) = (t0, TextLit (Chunks [] t1))
+
+-- | Split `Text` on a predicate, preserving all parts of the original string.
+--
+-- >>> splitOnPredicate (== 'x') ""
+-- ([],"")
+-- >>> splitOnPredicate (== 'x') " xx "
+-- ([(" ","xx")]," ")
+-- >>> splitOnPredicate (== 'x') "xx"
+-- ([("","xx")],"")
+--
+-- prop> \(Fun _ p) s -> let {t = Text.pack s; (as, b) = splitOnPredicate p t} in foldMap (uncurry (<>)) as <> b == t
+splitOnPredicate :: (Char -> Bool) -> Text -> ([(Text, Text)], Text)
+splitOnPredicate p t = case Text.break p t of
+    (a, "") -> ([], a)
+    (a, b)  -> case Text.span p b of
+        (c, d) -> case splitOnPredicate p d of
+            (e, f) -> ((a, c) : e, f)
 
 -- | Pretty-print a value
 pretty_ :: Pretty a => a -> Text
@@ -1208,3 +1247,8 @@ layoutOpts :: Pretty.LayoutOptions
 layoutOpts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
+
+
+{- $setup
+>>> import Test.QuickCheck (Fun(..))
+-}
