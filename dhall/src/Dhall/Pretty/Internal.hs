@@ -21,6 +21,7 @@ module Dhall.Pretty.Internal (
     , prettyVar
     , pretty_
     , escapeText_
+    , prettyEnvironmentVariable
 
     , prettyConst
     , prettyLabel
@@ -409,11 +410,14 @@ alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
 digit :: Char -> Bool
 digit c = '\x30' <= c && c <= '\x39'
 
+alphaNum :: Char -> Bool
+alphaNum c = alpha c || digit c
+
 headCharacter :: Char -> Bool
 headCharacter c = alpha c || c == '_'
 
 tailCharacter :: Char -> Bool
-tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
+tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
 prettyLabelShared :: Bool -> Text -> Doc Ann
 prettyLabelShared allowReserved a = label doc
@@ -458,6 +462,17 @@ prettyConst Sort = builtin "Sort"
 prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
+
+prettyEnvironmentVariable :: Text -> Doc ann
+prettyEnvironmentVariable t
+  | validBashEnvVar t = Pretty.pretty t
+  | otherwise         = Pretty.pretty ("\"" <> escapeText_ t <> "\"")
+  where
+    validBashEnvVar v = case Text.uncons v of
+        Nothing      -> False
+        Just (c, v') ->
+                (alpha c || c == '_')
+            &&  Text.all (\c' -> alphaNum c' || c' == '_') v'
 
 {-  There is a close correspondence between the pretty-printers in 'prettyCharacterSet'
     and the sub-parsers in 'Dhall.Parser.Expression.parsers'.  Most pretty-printers are
