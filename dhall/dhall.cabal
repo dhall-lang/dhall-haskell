@@ -430,6 +430,7 @@ Library
         parsers                     >= 0.12.4   && < 0.13,
         prettyprinter               >= 1.5.1    && < 1.6 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
+        pretty-simple                              < 4   ,
         profunctors                 >= 3.1.2    && < 5.6 ,
         repline                     >= 0.2.1.0  && < 0.3 ,
         serialise                   >= 0.2.0.0  && < 0.3 ,

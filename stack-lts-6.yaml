@@ -47,6 +47,7 @@ extra-deps:
 - parser-combinators-1.0.0
 - prettyprinter-1.5.1@sha256:fca87c3e2611d3499a0341a59857e9b424a23f31646e4737d535a18582284f96,5375
 - prettyprinter-ansi-terminal-1.1.1.2
+- pretty-simple-3.1.0.0@sha256:d9d045de35be6a2d78a9b3b38d39b13caba96c0ef5ba9d4b44b9b7c2c50e7fa1
 - primitive-0.6.3.0
 - process-1.6.2.0
 - profunctors-5.4
