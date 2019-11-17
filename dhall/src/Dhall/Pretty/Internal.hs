@@ -1147,13 +1147,16 @@ prettyCharacterSet characterSet expression =
 -- >>> multilineChunks (Chunks [] "\n\NUL\b\f\t")
 -- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
 multilineChunks :: Chunks s a -> Chunks s a
-multilineChunks = escapeControlCharacters . escapeLastLineLeadingWhitespace
+multilineChunks =
+     escapeTrailingSingleQuote
+   . escapeControlCharacters
+   . escapeLastLineLeadingWhitespace
 
 -- | Escape leading whitespace on the last line by moving it into a string
--- string interpolation
+-- interpolation
 --
--- Unescaped leading whitespace on the last line would otherwise be removed
--- by the parser's dedentation logic.
+-- This ensures that the parser can find the correct indentation level, no matter
+-- what the other lines contain.-
 --
 -- >>> escapeLastLineLeadingWhitespace (Chunks [] "\n \tx")
 -- Chunks [("\n",TextLit (Chunks [] " \t"))] "x"
@@ -1230,6 +1233,19 @@ splitOnPredicate p t = case Text.break p t of
     (a, b)  -> case Text.span p b of
         (c, d) -> case splitOnPredicate p d of
             (e, f) -> ((a, c) : e, f)
+
+-- | Escape a trailing single quote by moving it into a string interpolation
+--
+-- Otherwise the multiline-string would end with @'''@, which would be parsed
+-- as an escaped @''@.
+--
+-- >>> escapeTrailingSingleQuote (Chunks [] "\n'")
+-- Chunks [("\n",TextLit (Chunks [] "'"))] ""
+escapeTrailingSingleQuote :: Chunks s a -> Chunks s a
+escapeTrailingSingleQuote chunks@(Chunks as b) =
+    case Text.unsnoc b of
+        Just (b', '\'') -> Chunks (as ++ [(b', TextLit (Chunks [] "'"))]) ""
+        _               -> chunks
 
 -- | Pretty-print a value
 pretty_ :: Pretty a => a -> Text
