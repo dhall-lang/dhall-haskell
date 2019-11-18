@@ -984,7 +984,7 @@ loadWith expr₀ = case expr₀ of
     let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
         local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
         local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
-        local (Chained (Import (ImportHashed _ (Missing {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
 
     let referentiallySane = not (local child) || local parent
 
