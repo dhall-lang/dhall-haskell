@@ -21,6 +21,7 @@ module Dhall.Pretty.Internal (
     , prettyVar
     , pretty_
     , escapeText_
+    , prettyEnvironmentVariable
 
     , prettyConst
     , prettyLabel
@@ -409,11 +410,14 @@ alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
 digit :: Char -> Bool
 digit c = '\x30' <= c && c <= '\x39'
 
+alphaNum :: Char -> Bool
+alphaNum c = alpha c || digit c
+
 headCharacter :: Char -> Bool
 headCharacter c = alpha c || c == '_'
 
 tailCharacter :: Char -> Bool
-tailCharacter c = alpha c || digit c || c == '_' || c == '-' || c == '/'
+tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
 prettyLabelShared :: Bool -> Text -> Doc Ann
 prettyLabelShared allowReserved a = label doc
@@ -458,6 +462,17 @@ prettyConst Sort = builtin "Sort"
 prettyVar :: Var -> Doc Ann
 prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
+
+prettyEnvironmentVariable :: Text -> Doc ann
+prettyEnvironmentVariable t
+  | validBashEnvVar t = Pretty.pretty t
+  | otherwise         = Pretty.pretty ("\"" <> escapeText_ t <> "\"")
+  where
+    validBashEnvVar v = case Text.uncons v of
+        Nothing      -> False
+        Just (c, v') ->
+                (alpha c || c == '_')
+            &&  Text.all (\c' -> alphaNum c' || c' == '_') v'
 
 {-  There is a close correspondence between the pretty-printers in 'prettyCharacterSet'
     and the sub-parsers in 'Dhall.Parser.Expression.parsers'.  Most pretty-printers are
@@ -1072,21 +1087,23 @@ prettyCharacterSet characterSet expression =
         angles . map prettyAlternative . Dhall.Map.toList
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
-    prettyChunks (Chunks a b) =
-        if anyText (== '\n')
-        then
-            if anyText (/= '\n')
+    prettyChunks chunks@(Chunks a b)
+        | anyText (== '\n') =
+            if not (null a) || anyText (/= '\n')
             then long
             else Pretty.flatAlt long short
-        else short
+        | otherwise =
+            short
       where
         long =
             Pretty.align
             (   literal "''" <> Pretty.hardline
             <>  Pretty.align
-                (foldMap prettyMultilineChunk a <> prettyMultilineText b)
+                (foldMap prettyMultilineChunk a' <> prettyMultilineText b')
             <>  literal "''"
             )
+          where
+            Chunks a' b' = multilineChunks chunks
 
         short =
             literal "\"" <> foldMap prettyChunk a <> literal (prettyText b <> "\"")
@@ -1120,6 +1137,115 @@ prettyCharacterSet characterSet expression =
             <>  syntax rbrace
 
         prettyText t = literal (Pretty.pretty (escapeText_ t))
+
+
+-- | Prepare 'Chunks' for multi-line formatting by escaping problematic
+-- character sequences via string interpolations
+--
+-- >>> multilineChunks (Chunks [] "\n \tx")
+-- Chunks [("\n",TextLit (Chunks [] " \t"))] "x"
+-- >>> multilineChunks (Chunks [] "\n\NUL\b\f\t")
+-- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
+multilineChunks :: Chunks s a -> Chunks s a
+multilineChunks =
+     escapeTrailingSingleQuote
+   . escapeControlCharacters
+   . escapeLastLineLeadingWhitespace
+
+-- | Escape leading whitespace on the last line by moving it into a string
+-- interpolation
+--
+-- This ensures that the parser can find the correct indentation level, no matter
+-- what the other lines contain.-
+--
+-- >>> escapeLastLineLeadingWhitespace (Chunks [] "\n \tx")
+-- Chunks [("\n",TextLit (Chunks [] " \t"))] "x"
+-- >>> escapeLastLineLeadingWhitespace (Chunks [("\n",Var (V "x" 0))] " ")
+-- Chunks [("\n",Var (V "x" 0))] " "
+-- >>> escapeLastLineLeadingWhitespace (Chunks [("\n ",Var (V "x" 0))] "")
+-- Chunks [("\n",TextLit (Chunks [] " ")),("",Var (V "x" 0))] ""
+-- >>> escapeLastLineLeadingWhitespace (Chunks [("\n ",Var (V "x" 0))] "\n")
+-- Chunks [("\n ",Var (V "x" 0))] "\n"
+--
+-- We assume that there's at least one newline and may therefore ignore leading
+-- whitespace on the first line:
+--
+-- >>> escapeLastLineLeadingWhitespace (Chunks [] " ")
+-- Chunks [] " "
+escapeLastLineLeadingWhitespace :: Chunks s a -> Chunks s a
+escapeLastLineLeadingWhitespace (Chunks as0 b0) =
+    case escape1 b0 of
+        Nothing             -> Chunks (escapeChunks as0) b0
+        Just (Chunks cs b1) -> Chunks (as0 ++ cs) b1
+  where
+    -- Nothing: No newline found
+    -- Just chunks: Newline was found!
+    escape1 :: Text -> Maybe (Chunks s a)
+    escape1 t = case Text.breakOnEnd "\n" t of
+        ("", _) -> Nothing
+        (a , b) -> Just $ case Text.span predicate b of
+            ("", _) -> Chunks [] t
+            (c , d) -> Chunks [(a, TextLit (Chunks [] c))] d
+
+    predicate c = c == ' ' || c == '\t'
+
+    escapeChunks = snd . foldr f (NotDone, [])
+
+    f chunk  (Done   , chunks) = (Done, chunk : chunks)
+    f (t, e) (NotDone, chunks) = case escape1 t of
+        Nothing            -> (NotDone, (t, e) : chunks)
+        Just (Chunks as b) -> (Done, as ++ (b, e) : chunks)
+
+data Done = NotDone | Done
+
+-- | Escape control characters by moving them into string interpolations
+--
+-- >>> escapeControlCharacters (Chunks [] "\n\NUL\b\f\t")
+-- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
+escapeControlCharacters :: Chunks s a -> Chunks s a
+escapeControlCharacters (Chunks as0 b0) = Chunks as1 b1
+  where
+    as1 = foldr f (map toChunk bs) as0
+
+    (bs, b1) = splitOnPredicate predicate b0
+
+    f (t0, e) chunks = map toChunk ts1 ++ (t1, e) : chunks
+      where
+        (ts1, t1) = splitOnPredicate predicate t0
+
+    predicate c = Data.Char.isControl c && c /= ' ' && c /= '\t' && c /= '\n'
+
+    toChunk (t0, t1) = (t0, TextLit (Chunks [] t1))
+
+-- | Split `Text` on a predicate, preserving all parts of the original string.
+--
+-- >>> splitOnPredicate (== 'x') ""
+-- ([],"")
+-- >>> splitOnPredicate (== 'x') " xx "
+-- ([(" ","xx")]," ")
+-- >>> splitOnPredicate (== 'x') "xx"
+-- ([("","xx")],"")
+--
+-- prop> \(Fun _ p) s -> let {t = Text.pack s; (as, b) = splitOnPredicate p t} in foldMap (uncurry (<>)) as <> b == t
+splitOnPredicate :: (Char -> Bool) -> Text -> ([(Text, Text)], Text)
+splitOnPredicate p t = case Text.break p t of
+    (a, "") -> ([], a)
+    (a, b)  -> case Text.span p b of
+        (c, d) -> case splitOnPredicate p d of
+            (e, f) -> ((a, c) : e, f)
+
+-- | Escape a trailing single quote by moving it into a string interpolation
+--
+-- Otherwise the multiline-string would end with @'''@, which would be parsed
+-- as an escaped @''@.
+--
+-- >>> escapeTrailingSingleQuote (Chunks [] "\n'")
+-- Chunks [("\n",TextLit (Chunks [] "'"))] ""
+escapeTrailingSingleQuote :: Chunks s a -> Chunks s a
+escapeTrailingSingleQuote chunks@(Chunks as b) =
+    case Text.unsnoc b of
+        Just (b', '\'') -> Chunks (as ++ [(b', TextLit (Chunks [] "'"))]) ""
+        _               -> chunks
 
 -- | Pretty-print a value
 pretty_ :: Pretty a => a -> Text
@@ -1193,3 +1319,8 @@ layoutOpts :: Pretty.LayoutOptions
 layoutOpts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
+
+
+{- $setup
+>>> import Test.QuickCheck (Fun(..))
+-}
