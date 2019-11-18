@@ -2284,7 +2284,7 @@ prettyTypeMessage (ListLitInvariant) = ErrorMessages {..}
 
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
-    short = "Invalid type for ❰List❱ "
+    short = "Invalid type for ❰List❱"
 
     long =
         "Explanation: ❰List❱s can optionally document their type with a type annotation, \n\
