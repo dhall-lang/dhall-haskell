@@ -2,6 +2,7 @@ module Dhall.Kubernetes.Convert
   ( toTypes
   , toDefault
   , getImportsMap
+  , mkImport
   ) where
 
 import qualified Data.List              as List

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedLists #-}
+
 module Main (main) where
 
 import qualified Data.Map.Strict                       as Data.Map
@@ -74,15 +76,32 @@ main = do
     let path = "./defaults" Turtle.</> Turtle.fromText (name <> ".dhall")
     writeDhall path expr
 
+  let toSchema (ModelName key) _ _ =
+        Dhall.RecordLit
+          [ ("Type", Dhall.Embed (Convert.mkImport ["types", ".."] (key <> ".dhall")))
+          , ("default", Dhall.Embed (Convert.mkImport ["defaults", ".."] (key <> ".dhall")))
+          ]
+
+  let schemas = Data.Map.intersectionWithKey toSchema types defaults
+
+  -- Output schemas that combine both the types and defaults
+  Turtle.mktree "schemas"
+  for_ (Data.Map.toList schemas) $ \(ModelName name, expr) -> do
+    let path = "./schemas" Turtle.</> Turtle.fromText (name <> ".dhall")
+    writeDhall path expr
+
   -- Output the types record, the defaults record, and the giant union type
   let objectNames = Data.Map.keys types
       typesMap = Convert.getImportsMap objectNames "types" $ Data.Map.keys types
       defaultsMap = Convert.getImportsMap objectNames "defaults" $ Data.Map.keys defaults
+      schemasMap = Convert.getImportsMap objectNames "schemas" $ Data.Map.keys schemas
 
       typesRecordPath = "./types.dhall"
       typesUnionPath = "./typesUnion.dhall"
       defaultsRecordPath = "./defaults.dhall"
+      schemasRecordPath = "./schemas.dhall"
 
   writeDhall typesUnionPath (Dhall.Union $ fmap Just typesMap)
   writeDhall typesRecordPath (Dhall.RecordLit typesMap)
   writeDhall defaultsRecordPath (Dhall.RecordLit defaultsMap)
+  writeDhall schemasRecordPath (Dhall.RecordLit schemasMap)
