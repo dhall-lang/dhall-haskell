@@ -5,7 +5,6 @@
 module Main where
 
 import Data.Monoid ((<>))
-import Dhall.JSON (Conversion(..))
 import Test.Tasty (TestTree)
 
 import qualified Data.Aeson           as Aeson
@@ -67,12 +66,8 @@ testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-    let mapKey     = "mapKey"
-    let mapValue   = "mapValue"
-    let conversion = Conversion {..}
-
     let convertedExpression =
-            Dhall.JSON.convertToHomogeneousMaps conversion resolvedExpression
+            Dhall.JSON.convertToHomogeneousMaps Dhall.JSON.defaultConversion resolvedExpression
 
     actualValue <- do
         Core.throws (Dhall.JSON.dhallToJSON convertedExpression)
