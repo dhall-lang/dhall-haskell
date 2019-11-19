@@ -903,7 +903,17 @@ infer typer = loop
             return (VRecord (Dhall.Map.union xRs' xLs'))
 
         RecordCompletion l r -> do
-            loop ctx (Annot (Prefer (Field l "default") r) (Field l "Type"))
+            _L' <- loop ctx l
+
+            case _L' of
+                VRecord xLs' 
+                  | not (Dhall.Map.member "default" xLs')
+                     -> die (InvalidRecordCompletion "default" l)
+                  | not (Dhall.Map.member "Type" xLs')
+                     -> die (InvalidRecordCompletion "Type" l)
+                  | otherwise
+                     -> loop ctx (Annot (Prefer (Field l "default") r) (Field l "Type"))
+                _ -> die (CompletionSchemaMustBeARecord l (quote names _L'))
 
         Merge t u mT₁ -> do
             _T' <- loop ctx t
@@ -940,7 +950,8 @@ infer typer = loop
 
             if Data.Set.null diffU
                 then return ()
-                else die (MissingHandler diffU)
+                else let (exemplar,rest) = Data.Set.deleteFindMin diffU
+                     in die (MissingHandler exemplar rest)
 
             let match _y _T₀' Nothing =
                     return _T₀'
@@ -1290,6 +1301,8 @@ data TypeMessage s a
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
+    | InvalidRecordCompletion Text (Expr s a)
+    | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | FieldCollision Text
@@ -1302,7 +1315,7 @@ data TypeMessage s a
     | MapTypeMismatch (Expr s a) (Expr s a)
     | MissingToMapType
     | UnusedHandler (Set Text)
-    | MissingHandler (Set Text)
+    | MissingHandler Text (Set Text)
     | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
     | DisallowedHandlerType Text (Expr s a) (Expr s a) Text
     | HandlerOutputTypeMismatch Text (Expr s a) Text (Expr s a)
@@ -2028,7 +2041,9 @@ prettyTypeMessage Untyped = ErrorMessages {..}
 
 prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
   where
-    short = "Invalid predicate for ❰if❱"
+    short = "Invalid predicate for ❰if❱: "
+        <>  "\n"
+        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized Bool expr1)
 
     long =
         "Explanation: Every ❰if❱ expression begins with a predicate which must have type \n\
@@ -2677,6 +2692,55 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = insert expr1
 
+prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {..} 
+ where
+   short = "The completion schema must be a record" 
+
+   long = 
+        "Explanation: You can complete records using the ❰::❱ operator:                  \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────────┐ \n\
+        \    │ {Type = {foo : Bool, bar : Natural}, default = {bar = 2}::{foo = True}} │ \n\
+        \    └─────────────────────────────────────────────────────────────────────────┘ \n\
+        \                                                                                \n\
+        \... The left-hand side of :: must be a record with 'Type' and 'default' keys    \n\
+        \                                                                                \n\
+        \You tried to record complete the following value:                               \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which is not a record. It is:                                               \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+
+prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..} 
+ where
+   short = "Completion schema is missing a field: " <> pretty fieldName
+
+   long = 
+        "Explanation: You can complete records using the ❰::❱ operator like this:\n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────────────────────────────────┐ \n\
+        \    │ {Type = {foo : Bool, bar : Natural}, default = {bar = 2}::{foo = True}} │ \n\
+        \    └─────────────────────────────────────────────────────────────────────────┘ \n\
+        \                                                                                \n\
+        \... but you need to have both Type and default fields in the completion schema  \n\
+        \    (the record on the left of the the ::).                                     \n\
+        \                                                                                \n\
+        \You tried to do record completion using the schema:                             \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which is missing the key:                                                   \n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n"
+      where
+        txt0 = insert expr0
+        txt1 = pretty fieldName
+
 prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only combine records"
@@ -2825,7 +2889,7 @@ prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
 
 prettyTypeMessage (FieldCollision k) = ErrorMessages {..}
   where
-    short = "Field collision"
+    short = "Field collision on: " <> Dhall.Pretty.Internal.prettyLabel k
 
     long =
         "Explanation: You can combine records or record types if they don't share any    \n\
@@ -3035,9 +3099,12 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
       where
         txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
 
-prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
+prettyTypeMessage (MissingHandler exemplar ks) = ErrorMessages {..}
   where
-    short = "Missing handler"
+    short = case Data.Set.toList ks of
+         []       -> "Missing handler: " <> Dhall.Pretty.Internal.prettyLabel exemplar
+         xs@(_:_) -> "Missing handlers: " <> (Pretty.hsep . Pretty.punctuate Pretty.comma 
+                                             . map Dhall.Pretty.Internal.prettyLabel $ exemplar:xs)
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3073,7 +3140,7 @@ prettyTypeMessage (MissingHandler ks) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt0 <> "\n"
       where
-        txt0 = insert (Text.intercalate ", " (Data.Set.toList ks))
+        txt0 = insert (Text.intercalate ", " (exemplar : Data.Set.toList ks))
 
 prettyTypeMessage MissingMergeType =
     ErrorMessages {..}
@@ -3336,7 +3403,7 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
 
 prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
-    short = "Handler is not a function"
+    short = "Handler for "<> Dhall.Pretty.Internal.prettyLabel k <> " is not a function"
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union using a record with one\n\
@@ -3729,7 +3796,7 @@ prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
 
 prettyTypeMessage (MissingConstructor k expr0) = ErrorMessages {..}
   where
-    short = "Missing constructor"
+    short = "Missing constructor: " <> Dhall.Pretty.Internal.prettyLabel k
 
     long =
         "Explanation: You can access constructors from unions, like this:                \n\
@@ -4343,6 +4410,10 @@ messageExpressions f m = case m of
         ListAppendMismatch <$> f a <*> f b
     MustCombineARecord a b c ->
         MustCombineARecord <$> pure a <*> f b <*> f c
+    InvalidRecordCompletion a l -> 
+        InvalidRecordCompletion a <$> f l
+    CompletionSchemaMustBeARecord l r -> 
+        CompletionSchemaMustBeARecord <$> f l <*> f r
     CombineTypesRequiresRecordType a b ->
         CombineTypesRequiresRecordType <$> f a <*> f b
     RecordTypeMismatch a b c d ->
@@ -4367,8 +4438,8 @@ messageExpressions f m = case m of
         pure MissingToMapType
     UnusedHandler a ->
         UnusedHandler <$> pure a
-    MissingHandler a ->
-        MissingHandler <$> pure a
+    MissingHandler e a ->
+        MissingHandler <$> pure e <*> pure a
     HandlerInputTypeMismatch a b c ->
         HandlerInputTypeMismatch <$> pure a <*> f b <*> f c
     DisallowedHandlerType a b c d ->
