@@ -330,7 +330,7 @@ defaultConversion = Conversion
 -- | The 'Expr' type concretization used throughout this module
 type ExprX = Expr Src Void
 
--- | Parse schema code to a valid Dhall expression and check that its type is actually Type
+-- | Parse schema code and resolve imports
 resolveSchemaExpr :: Text  -- ^ type code (schema)
                   -> IO ExprX
 resolveSchemaExpr code = do
@@ -338,7 +338,7 @@ resolveSchemaExpr code = do
       case Dhall.Parser.exprFromText "\n\ESC[1;31mSCHEMA\ESC[0m" code of
         Left  err              -> throwIO err
         Right parsedExpression -> return parsedExpression
-    D.normalize <$> Dhall.Import.load parsedExpression -- IO
+    Dhall.Import.load parsedExpression
 
 {-| Check that the Dhall type expression actually has type 'Type'
 >>> :set -XOverloadedStrings

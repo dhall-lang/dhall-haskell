@@ -4319,21 +4319,23 @@ data TypeError s a = TypeError
     }
 
 instance (Eq a, Pretty s, Pretty a) => Show (TypeError s a) where
-    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
+    show = Pretty.renderString . Dhall.Pretty.layout . prettyTypeError
 
 instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (TypeError s a)
 
 instance (Eq a, Pretty s, Pretty a) => Pretty (TypeError s a) where
-    pretty (TypeError _ expr msg)
-        = Pretty.unAnnotate
-            (   "\n"
-            <>  shortTypeMessage msg <> "\n"
-            <>  source
-            )
-      where
-        source = case expr of
-            Note s _ -> pretty s
-            _        -> mempty
+    pretty = Pretty.unAnnotate . prettyTypeError
+
+prettyTypeError :: (Eq a, Pretty s, Pretty a) => TypeError s a -> Doc Ann
+prettyTypeError (TypeError _ expr msg) =
+    (   "\n"
+    <>  shortTypeMessage msg <> "\n"
+    <>  source
+    )
+  where
+    source = case expr of
+        Note s _ -> pretty s
+        _        -> mempty
 
 {-| Wrap a type error in this exception type to censor source code and
     `Text` literals from the error message
@@ -4496,36 +4498,39 @@ newtype DetailedTypeError s a = DetailedTypeError (TypeError s a)
     deriving (Typeable)
 
 instance (Eq a, Pretty s, Pretty a) => Show (DetailedTypeError s a) where
-    show = Pretty.renderString . Dhall.Pretty.layout . Pretty.pretty
+    show = Pretty.renderString . Dhall.Pretty.layout . prettyDetailedTypeError
 
 instance (Eq a, Pretty s, Pretty a, Typeable s, Typeable a) => Exception (DetailedTypeError s a)
 
 instance (Eq a, Pretty s, Pretty a) => Pretty (DetailedTypeError s a) where
-    pretty (DetailedTypeError (TypeError ctx expr msg))
-        = Pretty.unAnnotate
-            (   "\n"
-            <>  (   if null (Dhall.Context.toList ctx)
-                    then ""
-                    else prettyContext ctx <> "\n\n"
-                )
-            <>  longTypeMessage msg <> "\n"
-            <>  "────────────────────────────────────────────────────────────────────────────────\n"
-            <>  "\n"
-            <>  source
-            )
-      where
-        prettyKV (key, val) =
-            pretty key <> " : " <> Dhall.Util.snipDoc (pretty val)
+    pretty = Pretty.unAnnotate . prettyDetailedTypeError
 
-        prettyContext =
-                Pretty.vsep
-            .   map prettyKV
-            .   reverse
-            .   Dhall.Context.toList
+prettyDetailedTypeError :: (Eq a, Pretty s, Pretty a) => DetailedTypeError s a -> Doc Ann
+prettyDetailedTypeError (DetailedTypeError (TypeError ctx expr msg)) =
+    (   "\n"
+    <>  (   if null (Dhall.Context.toList ctx)
+            then ""
+            else prettyContext ctx <> "\n\n"
+        )
+    <>  longTypeMessage msg <> "\n"
+    <>  "────────────────────────────────────────────────────────────────────────────────\n"
+    <>  "\n"
+    <>  source
+    )
+  where
+    prettyKV (key, val) =
+        Dhall.Util.snipDoc
+            (Dhall.Pretty.Internal.prettyLabel key <> " : " <> Dhall.Pretty.prettyExpr val)
 
-        source = case expr of
-            Note s _ -> pretty s
-            _        -> mempty
+    prettyContext =
+            Pretty.vsep
+        .   map prettyKV
+        .   reverse
+        .   Dhall.Context.toList
+
+    source = case expr of
+        Note s _ -> pretty s
+        _        -> mempty
 
 {-| This function verifies that a custom context is well-formed so that
     type-checking will not loop
