@@ -31,8 +31,8 @@ import Dhall.Src (Src)
 import qualified Control.Exception
 import qualified Data.Text
 import qualified Data.Text.IO
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 
@@ -81,7 +81,7 @@ snipDoc doc = Pretty.align (Pretty.pretty (snip text))
 
     ansiStream = fmap Dhall.Pretty.annToAnsiStyle stream
 
-    text = Pretty.renderStrict ansiStream
+    text = Pretty.Terminal.renderStrict ansiStream
 
 takeEnd :: Int -> [a] -> [a]
 takeEnd n l = go (drop n l) l
