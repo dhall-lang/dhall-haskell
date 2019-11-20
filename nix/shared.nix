@@ -55,14 +55,14 @@ let
 
       dhallLarge =
         pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-logo.png";
-          sha256 = "0j6sfvm4kxqb2m6s1sv9qag7m30cibaxpphprhaibp9s9shpra4p";
+          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/28f4fb830f158bba6bb635bd29f1fd7075501b8f/img/dhall-logo.svg";
+          sha256 = "19hqz6ipyb7fw460gnz9wkjlzllw1hpls9kahis12p9xr7a6rfb1";
         };
 
       dhallSmall =
         pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/8bab26f9515cc1007025e0ab4b4e7dd6e95a7103/img/dhall-icon.png";
-          sha256 = "1lly3yb5szl9n3hszsfzv2mil98cvlidrzyci7vs4wi461s9bhxi";
+          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/28f4fb830f158bba6bb635bd29f1fd7075501b8f/img/dhall-icon.svg";
+          sha256 = "0cxwvvhay54fq908ncyfmvq6jyjrbq565g4vrzk97z7z4qv3h5hh";
         };
 
       discourse = ./img/discourse.svg;
@@ -177,6 +177,11 @@ let
                 doBenchmarkExtension =
                   mass pkgsNew.haskell.lib.doBenchmark allDhallPackages;
 
+                doJailbreakExtension =
+                  mass pkgsNew.haskell.lib.doJailbreak [
+                    "hnix"
+                  ];
+
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
                     "dhall"
@@ -266,6 +271,7 @@ let
                     extension
                     doCheckExtension
                     doBenchmarkExtension
+                    doJailbreakExtension
                     failOnAllWarningsExtension
                     failOnMissingHaddocksExtension
                   ];

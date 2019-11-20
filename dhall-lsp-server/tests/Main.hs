@@ -37,7 +37,7 @@ hoveringSpec dir =
         case (extractContents typeHover, extractContents funcHover) of
           (HoverContents typeContent, HoverContents functionContent) -> do
             getValue typeContent `shouldBe` "Type"
-            getValue functionContent `shouldBe` "{ home : Text, name : Text }"
+            getValue functionContent `shouldBe` "\8704(_isAdmin : Bool) \8594 { home : Text, name : Text }"
           _ -> error "test failed"
         pure ()
 
