@@ -327,7 +327,7 @@ parsers embedded = Parsers {..}
                 (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
                 b <- importExpression_
                 return (sep, b)
-            return (foldl' app (f a) bs)
+            return (foldl app (f a) bs)
           where
             app a (sep, b)
                 | Note (Src left _ bytesL) _ <- a
