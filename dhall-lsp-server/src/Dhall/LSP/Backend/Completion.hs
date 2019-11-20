@@ -158,7 +158,7 @@ completeProjections (CompletionContext context values) expr =
   -- substitute 'dependent lets', necessary for completion of unions
   let values' = toList values
       subs = filter ((/= holeExpr) . snd) $ zip (contextToVariables values') (map snd values')
-      expr' = foldl (\e (x,val) -> subst x val e) expr subs
+      expr' = foldl' (\e (x,val) -> subst x val e) expr subs
 
   in case typeWithA absurd context expr' of
       Left _ -> []

@@ -300,7 +300,7 @@ parsers embedded = Parsers {..}
                     whitespace
 
                     return (\l -> l `op` r)
-                return (foldl (\x f -> f x) a b) )
+                return (foldl' (\x f -> f x) a b))
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
@@ -324,7 +324,7 @@ parsers embedded = Parsers {..}
                 <|> return id
             a <- noted importExpression_
             b <- Text.Megaparsec.many (try (nonemptyWhitespace *> noted importExpression_))
-            return (foldl app (f a) b)
+            return (foldl' app (f a) b)
           where
             app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
                 Note (Src before after (bytesL <> bytesR)) (App nL nR)
@@ -366,7 +366,7 @@ parsers embedded = Parsers {..}
                     <|> fmap projectByExpression recordType
 
             b <- Text.Megaparsec.many (try (whitespace *> _dot *> whitespace *> alternatives))
-            return (foldl (\e k -> k e) a b) )
+            return (foldl' (\e k -> k e) a b) )
 
     primitiveExpression =
             noted
