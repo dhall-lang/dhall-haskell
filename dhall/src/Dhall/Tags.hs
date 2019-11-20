@@ -9,7 +9,7 @@ module Dhall.Tags
     ) where
 
 import Control.Exception (handle, SomeException(..))
-import Data.List (isSuffixOf)
+import Data.List (isSuffixOf, foldl')
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Semigroup(..))
 import Dhall.Map (foldMapWithKey)

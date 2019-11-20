@@ -10,6 +10,7 @@ module Dhall.Parser.Expression where
 
 import Control.Applicative (Alternative(..), optional)
 import Data.ByteArray.Encoding (Base(..))
+import Data.Foldable (foldl')
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))

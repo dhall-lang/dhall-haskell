@@ -49,7 +49,7 @@ import Dhall.Syntax
     , Var(..)
     )
 
-import Data.Foldable (toList)
+import Data.Foldable (toList, foldl')
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
