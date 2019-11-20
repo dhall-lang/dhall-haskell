@@ -1,5 +1,6 @@
 module Dhall.LSP.Backend.Completion where
 
+import Data.List (foldl')
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
