@@ -597,8 +597,15 @@ parsers embedded = Parsers {..}
 
                     let toNumber = Data.List.foldl' (\x y -> x * 16 + y) 0
 
-                    let fourCharacterEscapeSequence =
-                            fmap toNumber (Control.Monad.replicateM 4 hexNumber)
+                    let fourCharacterEscapeSequence = do
+                            ns <- Control.Monad.replicateM 4 hexNumber
+                            
+                            let number = toNumber ns
+
+                            Control.Monad.guard (validCodepoint number)
+                                <|> fail "Invalid Unicode code point"
+
+                            return number
 
                     let bracedEscapeSequence = do
                             _  <- char '{'
@@ -606,12 +613,12 @@ parsers embedded = Parsers {..}
 
                             let number = toNumber ns
 
-                            Control.Monad.guard (number <= 0x10FFFF && validCodepoint (Char.chr number))
+                            Control.Monad.guard (number <= 0x10FFFD && validCodepoint number)
                                 <|> fail "Invalid Unicode code point"
 
                             _  <- char '}'
 
-                            return (toNumber ns)
+                            return number
 
                     n <- bracedEscapeSequence <|> fourCharacterEscapeSequence
 

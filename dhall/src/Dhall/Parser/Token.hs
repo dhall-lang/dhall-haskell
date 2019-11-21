@@ -110,6 +110,7 @@ module Dhall.Parser.Token (
 import           Dhall.Parser.Combinators
 
 import Control.Applicative (Alternative(..), optional)
+import Data.Bits ((.&.))
 import Data.Functor (void)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
@@ -135,12 +136,14 @@ import Prelude hiding (const, pi)
 
 import qualified Text.Parser.Token
 
--- | Returns `True` if the given `Char` is a valid Unicode codepoint
-validCodepoint :: Char -> Bool
+-- | Returns `True` if the given `Int` is a valid Unicode codepoint
+validCodepoint :: Int -> Bool
 validCodepoint c =
-    not (category == Char.Surrogate || category == Char.NotAssigned)
+    not (category == Char.Surrogate 
+      || c .&. 0xFFFE == 0xFFFE 
+      || c .&. 0xFFFF == 0xFFFF)
   where
-    category = Char.generalCategory c
+    category = Char.generalCategory (Char.chr c)
 
 {-| Parse 0 or more whitespace characters (including comments)
 
