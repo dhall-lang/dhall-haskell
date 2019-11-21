@@ -189,7 +189,6 @@ import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty               as NonEmpty
-import qualified Data.Map.Strict                  as Map
 import qualified Data.Text.Encoding
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO
@@ -479,11 +478,12 @@ chainImport (Chained parent) child =
 loadImport :: Chained -> StateT Status IO ImportSemantics
 loadImport import_ = do
     Status {..} <- State.get
-    case Map.lookup import_ _cache of
+
+    case Dhall.Map.lookup import_ _cache of
         Just importSemantics -> return importSemantics
         Nothing -> do
             importSemantics <- loadImportWithSemanticCache import_
-            zoom cache (State.modify (Map.insert import_ importSemantics))
+            zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
             return importSemantics
 
 -- | Load an import from the 'semantic cache'. Defers to
