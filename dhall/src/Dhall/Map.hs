@@ -34,6 +34,7 @@ module Dhall.Map
     , delete
     , filter
     , restrictKeys
+    , withoutKeys
     , mapMaybe
 
       -- * Query
@@ -373,6 +374,23 @@ restrictKeys (Map m ks) s = Map m' ks'
 
     ks' = filterKeys (\k -> Data.Set.member k s) ks
 {-# INLINABLE restrictKeys #-}
+
+{-| Remove all keys in a @"Data.Set".'Set'@ from a 'Map'
+
+>>> withoutKeys (fromList [("A",1),("B",2)]) (Data.Set.fromList ["A"])
+fromList [("B",2)]
+-}
+withoutKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
+withoutKeys (Map m ks) s = Map m' ks'
+  where
+#if MIN_VERSION_containers(0,5,8)
+    m' = Data.Map.withoutKeys m s
+#else
+    m' = Data.Map.filterWithKey (\k _ -> Data.Set.notMember k s) m
+#endif
+
+    ks' = filterKeys (\k -> Data.Set.notMember k s) ks
+{-# INLINABLE withoutKeys #-}
 
 {-| Transform all values in a `Map` using the supplied function, deleting the
     key if the function returns `Nothing`

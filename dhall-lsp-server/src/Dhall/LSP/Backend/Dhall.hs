@@ -29,6 +29,7 @@ import qualified Dhall.TypeCheck as Dhall
 import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Dhall.Map
 import qualified Network.URI as URI
 import qualified Language.Haskell.LSP.Types as LSP.Types
 import qualified Data.Text as Text
@@ -75,11 +76,11 @@ type ImportGraph = [Dhall.Depends]
 
 -- | A cache maps Dhall imports to fully normalised expressions. By reusing
 --   caches we can speeds up diagnostics etc. significantly!
-data Cache = Cache ImportGraph (Map.Map Dhall.Chained Dhall.ImportSemantics)
+data Cache = Cache ImportGraph (Dhall.Map.Map Dhall.Chained Dhall.ImportSemantics)
 
 -- | The initial cache.
 emptyCache :: Cache
-emptyCache = Cache [] Map.empty
+emptyCache = Cache [] Dhall.Map.empty
 
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
@@ -87,7 +88,7 @@ emptyCache = Cache [] Map.empty
 --   Transitively invalidates any imports depending on the changed file.
 invalidate :: FileIdentifier -> Cache -> Cache
 invalidate (FileIdentifier chained) (Cache dependencies cache) =
-  Cache dependencies' $ Map.withoutKeys cache invalidImports
+  Cache dependencies' $ Dhall.Map.withoutKeys cache invalidImports
   where
     imports = map Dhall.parent dependencies ++ map Dhall.child dependencies
 
