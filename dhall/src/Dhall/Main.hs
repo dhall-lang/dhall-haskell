@@ -63,6 +63,7 @@ import qualified Dhall.Freeze
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
+import qualified Dhall.Map
 import qualified Dhall.Tags
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
@@ -307,7 +308,7 @@ parseMode =
           Options.Applicative.flag' (Just ListTransitiveDependencies)
               (   Options.Applicative.long "transitive-dependencies"
               <>  Options.Applicative.help
-                    "List transitive import dependencies"
+                    "List transitive import dependencies in post-order"
               )
         <|> pure Nothing
 
@@ -570,7 +571,8 @@ command (Options {..}) = do
                           .   Dhall.Core.importType
                           .   Dhall.Core.importHashed
                           .   Dhall.Import.chainedImport )
-                 .   Data.Map.keys
+                 .   reverse
+                 .   Dhall.Map.keys
                  $   _cache
 
         Resolve { resolveMode = Nothing, ..} -> do
