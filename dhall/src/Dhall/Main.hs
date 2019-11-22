@@ -50,6 +50,7 @@ import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Lazy.Char8
+import qualified Data.Map
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -76,7 +77,7 @@ import qualified System.Exit                               as Exit
 import qualified System.IO
 import qualified System.FilePath
 import qualified Text.Dot
-import qualified Data.Map
+import qualified Text.Pretty.Simple
 
 -- | Top-level program options
 data Options = Options
@@ -130,6 +131,7 @@ data Mode
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
+    | SyntaxTree { file :: Input }
 
 data ResolveMode
     = Dot
@@ -158,11 +160,12 @@ parseOptions =
         f True  = Censor
         f False = NoCensor
 
-subcommand :: String -> String -> Parser a -> Parser a
-subcommand name description parser =
+subcommand' :: Bool -> String -> String -> Parser a -> Parser a
+subcommand' internal name description parser =
     Options.Applicative.hsubparser
         (   Options.Applicative.command name parserInfo
         <>  Options.Applicative.metavar name
+        <>  if internal then Options.Applicative.internal else mempty
         )
   where
     parserInfo =
@@ -170,6 +173,12 @@ subcommand name description parser =
             (   Options.Applicative.fullDesc
             <>  Options.Applicative.progDesc description
             )
+
+subcommand :: String -> String -> Parser a -> Parser a
+subcommand = subcommand' False
+
+internalSubcommand :: String -> String -> Parser a -> Parser a
+internalSubcommand = subcommand' True
 
 parseMode :: Parser Mode
 parseMode =
@@ -229,6 +238,10 @@ parseMode =
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> parseFile)
+    <|> internalSubcommand
+            "haskell-syntax-tree"
+            "Output the parsed syntax tree (for debugging)"
+            (SyntaxTree <$> parseFile)
     <|> (   Default
         <$> parseFile
         <*> parseOutput
@@ -745,7 +758,14 @@ command (Options {..}) = do
                     System.IO.withFile file System.IO.WriteMode (`Data.Text.IO.hPutStr` tags)
 
                 StandardOutput -> Data.Text.IO.putStrLn tags
-            
+
+        SyntaxTree {..} -> do
+            expression <- getExpression file
+
+            let denoted :: Expr Void Import
+                denoted = Dhall.Core.denote expression
+
+            Text.Pretty.Simple.pPrintNoColor denoted
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()
