@@ -99,6 +99,7 @@ data Ann
   | Literal     -- ^ Literals such as integers and strings
   | Builtin     -- ^ Builtin types and values
   | Operator    -- ^ Operators
+  deriving Show
 
 {-| Convert annotations to their corresponding color for syntax highlighting
     purposes
