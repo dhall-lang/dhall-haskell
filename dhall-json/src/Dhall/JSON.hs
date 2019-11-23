@@ -207,6 +207,8 @@ module Dhall.JSON (
     , SpecialDoubleMode(..)
     , handleSpecialDoubles
     , codeToValue
+    , UnionTagOptions
+    , parseUnionTagOptions
 
     -- * Exceptions
     , CompileError(..)
@@ -1009,12 +1011,42 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.Embed a ->
             Core.Embed a
 
-data TagUnions
+data UnionTagMode
     = TagNested Text
     | TagInline
 
-tagUnionsNesting :: TagUnions -> Expr s a
-tagUnionsNesting = \case
+data UnionTagOptions = UnionTagOptions
+    { tagMode :: UnionTagMode
+    , tagField :: Text
+    }
+
+parseUnionTagOptions :: Parser UnionTagOptions
+parseUnionTagOptions = UnionTagOptions <$> parseTagMode <*> parseTagField
+  where
+    parseTagMode = parseTagInline <|> parseTagNested
+      where
+        parseTagInline =
+            Options.Applicative.flag'
+                TagInline
+                (   Options.Applicative.long "union-nesting-inline"
+                <>  Options.Applicative.help "Preserve union tags inline"
+                )
+        parseTagNested =
+                TagNested
+            <$> Options.Applicative.strOption
+                    (   Options.Applicative.long "union-nesting-nested"
+                    <>  Options.Applicative.help "Preserve union tags nested"
+                    <>  Options.Applicative.metavar "FIELD"
+                    )
+    parseTagField =
+        Options.Applicative.strOption
+            (   Options.Applicative.long "union-tag-field"
+            <>  Options.Applicative.help "The field that contains the name of the union constructor"
+            <>  Options.Applicative.metavar "FIELD"
+            )
+
+unionTagModeNesting :: UnionTagMode -> Expr s a
+unionTagModeNesting = \case
     TagNested t -> Core.App (Core.Field nesting "Nested") (Core.TextLit (Core.Chunks [] t))
     TagInline -> Core.Field nesting "Inline"
   where
@@ -1022,15 +1054,15 @@ tagUnionsNesting = \case
         Core.Union
             (Dhall.Map.unorderedFromList [("Nested", Just Core.Text), ("Inline", Nothing)])
 
-tagUnions :: Text -> TagUnions -> Expr s Void -> Expr s Void
-tagUnions tagField tagUnions_ = loop
+tagUnions :: UnionTagOptions -> Expr s Void -> Expr s Void
+tagUnions UnionTagOptions{..} = loop
   where
     loop expr = case expr of
         -- TODO: In the case of inline nesting should we check the union types for
         -- any non-record alternatives? (See InvalidInlineContents)
         Core.Field Core.Union{} _ -> tagged
         Core.App (Core.Field Core.Union{} _) x ->
-            case (tagUnions_, x) of
+            case (tagMode, x) of
                 (TagNested _, _)              -> tagged
                 (TagInline, Core.RecordLit{}) -> tagged
                 _                             -> expr -- inline nesting works only for alternatives containing records
@@ -1051,14 +1083,12 @@ tagUnions tagField tagUnions_ = loop
         Core.Pi v a b -> Core.Pi v (loop a) (loop b) 
         Core.App f a -> Core.App (loop f) (loop a)
         Core.Note a b -> Core.Note a (loop b)
-        _ -> expr
-
       where
         tagged =
             Core.RecordLit $ Dhall.Map.unorderedFromList 
                 [ ("contents", expr)
                 , ("field", Core.TextLit (Core.Chunks [] tagField))
-                , ("nesting", tagUnionsNesting tagUnions_)
+                , ("nesting", unionTagModeNesting tagMode)
                 ]
 
 -- | Parser for command-line options related to homogeneous map support
@@ -1150,13 +1180,14 @@ handleSpecialDoubles specialDoubleMode =
 >>> Object (fromList [("a",Number 1.0)])
 -}
 codeToValue
-  :: Conversion
+  :: Maybe UnionTagOptions
+  -> Conversion
   -> SpecialDoubleMode
   -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
                      -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO Value
-codeToValue conversion specialDoubleMode mFilePath code = do
+codeToValue mUnionTagOptions conversion specialDoubleMode mFilePath code = do
     parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(stdin)" mFilePath) code)
 
     let rootDirectory = case mFilePath of
@@ -1167,8 +1198,16 @@ codeToValue conversion specialDoubleMode mFilePath code = do
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
+    let normalizedExpression = Core.normalize resolvedExpression
+
+    taggedExpression <- case mUnionTagOptions of
+        Just unionTagOptions ->
+            pure (tagUnions unionTagOptions normalizedExpression)
+        Nothing ->
+            pure normalizedExpression
+
     let convertedExpression =
-            convertToHomogeneousMaps conversion resolvedExpression
+            convertToHomogeneousMaps conversion taggedExpression
 
     specialDoubleExpression <- Core.throws (handleSpecialDoubles specialDoubleMode convertedExpression)
 
