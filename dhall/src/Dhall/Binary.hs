@@ -49,7 +49,7 @@ import Dhall.Syntax
     , Var(..)
     )
 
-import Data.Foldable (toList)
+import Data.Foldable (toList, foldl')
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
@@ -241,7 +241,7 @@ decodeExpressionInternal decodeEmbed = go
                                     then die "Non-standard encoding of a function with no arguments"
                                     else return ()
 
-                                return (foldl App f xs)
+                                return (foldl' App f xs)
 
                             1 -> do
                                 case len of

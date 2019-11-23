@@ -9,7 +9,7 @@ module Dhall.Tags
     ) where
 
 import Control.Exception (handle, SomeException(..))
-import Data.List (isSuffixOf)
+import Data.List (isSuffixOf, foldl')
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (Semigroup(..))
 import Dhall.Map (foldMapWithKey)
@@ -144,7 +144,7 @@ fixPosAndDefinition t = foldMap (\(LC ln c, term) ->
           --   In example above, first line is 15 bytes long and '\n', mls contain:
           --   (1, (16, "let foo = "bar"")
           --   That allow us to get byte offset easier.
-          mls = M.fromList . fst . foldl processLine ([], 0) . zip [1..] $ T.lines t
+          mls = M.fromList . fst . foldl' processLine ([], 0) . zip [1..] $ T.lines t
 
           {-| processLine is a worker for `foldl` that generates the list of lines with
               byte offsets from the start of the first line from a list of lines
