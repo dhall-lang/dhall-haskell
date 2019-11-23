@@ -1092,7 +1092,7 @@ prettyCharacterSet characterSet expression =
         | anyText (== '\n') =
             if not (null a) || anyText (/= '\n')
             then long
-            else Pretty.flatAlt long short
+            else Pretty.group (Pretty.flatAlt long short)
         | otherwise =
             short
       where
