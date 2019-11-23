@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards     #-}
@@ -1007,6 +1008,58 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
 
         Core.Embed a ->
             Core.Embed a
+
+data TagUnions
+    = TagNested Text
+    | TagInline
+
+tagUnionsNesting :: TagUnions -> Expr s a
+tagUnionsNesting = \case
+    TagNested t -> Core.App (Core.Field nesting "Nested") (Core.TextLit (Core.Chunks [] t))
+    TagInline -> Core.Field nesting "Inline"
+  where
+    nesting =
+        Core.Union
+            (Dhall.Map.unorderedFromList [("Nested", Just Core.Text), ("Inline", Nothing)])
+
+tagUnions :: Text -> TagUnions -> Expr s Void -> Expr s Void
+tagUnions tagField tagUnions_ = loop
+  where
+    loop expr = case expr of
+        -- TODO: In the case of inline nesting should we check the union types for
+        -- any non-record alternatives? (See InvalidInlineContents)
+        Core.Field Core.Union{} _ -> tagged
+        Core.App (Core.Field Core.Union{} _) x ->
+            case (tagUnions_, x) of
+                (TagNested _, _)              -> tagged
+                (TagInline, Core.RecordLit{}) -> tagged
+                _                             -> expr -- inline nesting works only for alternatives containing records
+        Core.RecordLit m
+            | [ ("contents", contents)
+              , ("field", _)
+              , ("nesting", _)
+              ] <- Dhall.Map.toList m
+            -> let contents' = case contents of
+                         Core.App u@(Core.Field (Core.Union _) _) x ->
+                             Core.App u (loop x)
+                         x -> x
+               in Core.RecordLit (Dhall.Map.insert "contents" contents' m)
+        
+        Core.Const c -> Core.Const c
+        Core.Var v -> Core.Var v
+        Core.Lam v t b -> Core.Lam v (loop t) (loop b)
+        Core.Pi v a b -> Core.Pi v (loop a) (loop b) 
+        Core.App f a -> Core.App (loop f) (loop a)
+        Core.Note a b -> Core.Note a (loop b)
+        _ -> expr
+
+      where
+        tagged =
+            Core.RecordLit $ Dhall.Map.unorderedFromList 
+                [ ("contents", expr)
+                , ("field", Core.TextLit (Core.Chunks [] tagField))
+                , ("nesting", tagUnionsNesting tagUnions_)
+                ]
 
 -- | Parser for command-line options related to homogeneous map support
 parseConversion :: Parser Conversion
