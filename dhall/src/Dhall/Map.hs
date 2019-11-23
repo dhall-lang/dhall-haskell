@@ -60,6 +60,7 @@ module Dhall.Map
 
       -- * Conversions
     , toList
+    , toAscList
     , toMap
     , keys
     , keysSet
@@ -125,6 +126,9 @@ instance Ord k => Foldable (Map k) where
 
   length m = size m
   {-# INLINABLE length #-}
+
+  null (Map m _) = null m
+  {-# INLINABLE null #-}
 
 instance Ord k => Traversable (Map k) where
   traverse f m = traverseWithKey (\_ v -> f v) m
@@ -653,6 +657,12 @@ toList :: Ord k => Map k v -> [(k, v)]
 toList (Map m Sorted)        = Data.Map.toList m
 toList (Map m (Original ks)) = fmap (\k -> (k, m Data.Map.! k)) ks
 {-# INLINABLE toList #-}
+
+{-| Convert a `Map` to a list of key-value pairs in ascending order of keys
+-}
+toAscList :: Map k v -> [(k, v)]
+toAscList (Map m _) = Data.Map.toAscList m
+{-# INLINABLE toAscList #-}
 
 {-| Convert a @"Dhall.Map".`Map`@ to a @"Data.Map".`Data.Map.Map`@
 
