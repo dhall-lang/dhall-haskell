@@ -187,7 +187,7 @@ toDefault definitions types modelName = go
       -- Simple types should not have a default
       (Dhall.Text) -> Nothing
       -- Set lists to empty
-      (Dhall.App Dhall.List typ) -> Just $ Dhall.ListLit (Just $ adjustImport typ) mempty
+      (Dhall.App Dhall.List typ) -> Just $ Dhall.ListLit (Just $ Dhall.App Dhall.List (adjustImport typ)) mempty
       -- But most of the times we are dealing with a record.
       -- Here we transform the record type in a value, transforming the keys in this way:
       -- * take the BaseData from definition and populate it
@@ -207,7 +207,7 @@ toDefault definitions types modelName = go
             valueForField :: Expr -> Maybe Expr
             valueForField = \case
               (Dhall.App Dhall.Optional typ) -> Just $ Dhall.App Dhall.None (adjustImport typ)
-              (Dhall.App Dhall.List typ) -> Just $ Dhall.ListLit (Just $ adjustImport typ) mempty
+              (Dhall.App Dhall.List typ) -> Just $ Dhall.ListLit (Just $ Dhall.App Dhall.List (adjustImport typ)) mempty
               -- Imports can stay only if they refer to Records (which are "transitively emptiable")
               -- otherwise they have to go
               embed@(Dhall.Embed imp) -> do

@@ -9,6 +9,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 import qualified Dhall.Core                            as Dhall
 import qualified Dhall.Format
 import qualified Dhall.Pretty
+import qualified Dhall.Util
 import qualified Turtle
 
 import           Data.Aeson                            (decodeFileStrict)
@@ -26,8 +27,17 @@ writeDhall :: Turtle.FilePath -> Expr -> IO ()
 writeDhall path expr = do
   echoStr $ "Writing file '" <> Turtle.encodeString path <> "'"
   Turtle.writeTextFile path $ pretty expr <> "\n"
-  Dhall.Format.format
-    (Dhall.Format.Format Dhall.Pretty.ASCII $ Dhall.Format.Modify (Just $ Turtle.encodeString path))
+
+  let characterSet = Dhall.Pretty.ASCII
+
+  let censor = Dhall.Util.NoCensor
+
+  let formatMode =
+          Dhall.Format.Modify (Dhall.Util.InputFile (Turtle.encodeString path))
+
+  let formatOptions = Dhall.Format.Format{..}
+
+  Dhall.Format.format formatOptions
 
 -- | Pretty print things
 pretty :: Pretty.Pretty a => a -> Text
