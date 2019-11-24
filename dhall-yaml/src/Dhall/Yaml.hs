@@ -39,7 +39,7 @@ dhallToYaml Options{..} mFilePath code = do
   
   let explaining = if explain then Dhall.detailed else id
 
-  json <- omission <$> explaining (codeToValue conversion UseYAMLEncoding mFilePath code)
+  json <- omission <$> explaining (codeToValue unionTagOptions conversion UseYAMLEncoding mFilePath code)
 
   return $ jsonToYaml json documents quoted
 

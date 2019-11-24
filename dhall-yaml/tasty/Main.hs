@@ -36,6 +36,9 @@ testTree =
           testDhallToYaml
             (Dhall.JSON.Yaml.defaultOptions { quoted = True })
             "./tasty/data/quoted"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions
+            "./tasty/data/special"
         ]
 
 testDhallToYaml :: Options -> String -> TestTree

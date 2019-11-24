@@ -10,7 +10,6 @@ import Control.Exception (SomeException)
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall.JSON (parsePreservationAndOmission, parseConversion)
 import Dhall.JSON.Yaml (Options(..), parseDocuments, parseQuoted)
 import Options.Applicative (Parser, ParserInfo)
 
@@ -18,6 +17,7 @@ import qualified Control.Exception
 import qualified Data.ByteString
 import qualified Data.Text.IO        as Text.IO
 import qualified Data.Version
+import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as Options
 import qualified System.Exit
@@ -28,6 +28,7 @@ parseOptions =
             Just
         <$> (   Options
             <$> parseExplain
+            <*> optional Dhall.JSON.parseUnionTagOptions
             <*> Dhall.JSON.parsePreservationAndOmission
             <*> parseDocuments
             <*> parseQuoted
