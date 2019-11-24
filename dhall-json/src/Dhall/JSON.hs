@@ -1054,35 +1054,54 @@ unionTagModeNesting = \case
         Core.Union
             (Dhall.Map.unorderedFromList [("Nested", Just Core.Text), ("Inline", Nothing)])
 
-tagUnions :: UnionTagOptions -> Expr s Void -> Expr s Void
+data UnionNestingError
+    = UnionNestingError (Expr Void Void) Text (Expr Void Void)
+    deriving (Show)
+
+instance Exception UnionNestingError
+
+tagUnions :: UnionTagOptions -> Expr Void Void -> Either UnionNestingError (Expr Void Void)
 tagUnions UnionTagOptions{..} = loop
   where
-    loop expr = case expr of
-        Core.Field Core.Union{} _ -> tagged
+    checkUnion m = case tagMode of
+        TagNested{} -> pure ()
+        TagInline -> do
+            let check label = \case
+                    Just Core.Record{} -> pure ()
+                    Just t             -> Left (UnionNestingError (Core.Union m) label t)
+                    Nothing            -> pure ()
 
-        Core.App (Core.Field Core.Union{} _) x ->
-            case (tagMode, x) of
-                (TagNested _, _)              -> tagged
-                (TagInline, Core.RecordLit{}) -> tagged
-                _                             -> expr -- inline nesting works only for alternatives containing records
+            Dhall.Map.unorderedTraverseWithKey_ check m
+
+    loop expr = case expr of
+        Core.Field (Core.Union m) _ -> do
+            checkUnion m
+            pure tagged
+
+        Core.App (Core.Field (Core.Union m) _) _ -> do
+            checkUnion m
+            pure tagged
 
         Core.RecordLit m
             | [ ("contents", contents)
               , ("field", _)
               , ("nesting", _)
-              ] <- Dhall.Map.toList m
-            -> let contents' = case contents of
-                         Core.App u@(Core.Field (Core.Union _) _) x ->
-                             Core.App u (loop x)
-                         x -> x
-               in Core.RecordLit (Dhall.Map.insert "contents" contents' m)
-            | otherwise -> Core.RecordLit (fmap loop m)
+              ] <- Dhall.Map.toList m -> do
+                  contents' <- case contents of
+                      Core.App u@(Core.Field (Core.Union _) _) x ->
+                          Core.App u <$> loop x
+                      x -> pure x
+
+                  pure (Core.RecordLit (Dhall.Map.insert "contents" contents' m))
+
+            | otherwise ->
+                  Core.RecordLit <$> traverse loop m
                 
         Core.Const a ->
-            Core.Const a
+            pure (Core.Const a)
 
         Core.Var v ->
-            Core.Var v
+            pure (Core.Var v)
 
         {- Minor hack: Don't descend into lambda, since the only thing it can
            possibly encode is a Boehm-Berarducci-encoded JSON value.  In such a
@@ -1090,290 +1109,290 @@ tagUnions UnionTagOptions{..} = loop
            interfere with decoding the value.
         -}
         Core.Lam a b c ->
-            Core.Lam a b c
+            pure (Core.Lam a b c)
 
         Core.Pi a b c ->
-            Core.Pi a b' c'
+            Core.Pi a <$> b' <*> c'
           where
             b' = loop b
             c' = loop c
 
         Core.App a b ->
-            Core.App a' b'
+            Core.App <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.Let (Binding src0 a src1 b src2 c) d ->
-            Core.Let (Binding src0 a src1 b' src2 c') d'
+            Core.Let <$> (Binding src0 a src1 <$> b' <*> pure src2 <*> c') <*> d'
           where
-            b' = fmap (fmap loop) b
-            c' =            loop  c
-            d' =            loop  d
+            b' = traverse (traverse loop) b
+            c' = loop c
+            d' = loop d
 
         Core.Annot a b ->
-            Core.Annot a' b'
+            Core.Annot <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.Bool ->
-            Core.Bool
+            pure Core.Bool
 
         Core.BoolLit a ->
-            Core.BoolLit a
+            pure (Core.BoolLit a)
 
         Core.BoolAnd a b ->
-            Core.BoolAnd a' b'
+            Core.BoolAnd <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.BoolOr a b ->
-            Core.BoolOr a' b'
+            Core.BoolOr <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.BoolEQ a b ->
-            Core.BoolEQ a' b'
+            Core.BoolEQ <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.BoolNE a b ->
-            Core.BoolNE a' b'
+            Core.BoolNE <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.BoolIf a b c ->
-            Core.BoolIf a' b' c'
+            Core.BoolIf <$> a' <*> b' <*> c'
           where
             a' = loop a
             b' = loop b
             c' = loop c
 
         Core.Natural ->
-            Core.Natural
+            pure Core.Natural
 
         Core.NaturalLit a ->
-            Core.NaturalLit a
+            pure (Core.NaturalLit a)
 
         Core.NaturalFold ->
-            Core.NaturalFold
+            pure Core.NaturalFold
 
         Core.NaturalBuild ->
-            Core.NaturalBuild
+            pure Core.NaturalBuild
 
         Core.NaturalIsZero ->
-            Core.NaturalIsZero
+            pure Core.NaturalIsZero
 
         Core.NaturalEven ->
-            Core.NaturalEven
+            pure Core.NaturalEven
 
         Core.NaturalOdd ->
-            Core.NaturalOdd
+            pure Core.NaturalOdd
 
         Core.NaturalToInteger ->
-            Core.NaturalToInteger
+            pure Core.NaturalToInteger
 
         Core.NaturalShow ->
-            Core.NaturalShow
+            pure Core.NaturalShow
 
         Core.NaturalSubtract ->
-            Core.NaturalSubtract
+            pure Core.NaturalSubtract
 
         Core.NaturalPlus a b ->
-            Core.NaturalPlus a' b'
+            Core.NaturalPlus <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.NaturalTimes a b ->
-            Core.NaturalTimes a' b'
+            Core.NaturalTimes <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.Integer ->
-            Core.Integer
+            pure Core.Integer
 
         Core.IntegerLit a ->
-            Core.IntegerLit a
+            pure (Core.IntegerLit a)
 
         Core.IntegerClamp ->
-            Core.IntegerClamp
+            pure Core.IntegerClamp
 
         Core.IntegerNegate ->
-            Core.IntegerNegate
+            pure Core.IntegerNegate
 
         Core.IntegerShow ->
-            Core.IntegerShow
+            pure Core.IntegerShow
 
         Core.IntegerToDouble ->
-            Core.IntegerToDouble
+            pure Core.IntegerToDouble
 
         Core.Double ->
-            Core.Double
+            pure Core.Double
 
         Core.DoubleLit a ->
-            Core.DoubleLit a
+            pure (Core.DoubleLit a)
 
         Core.DoubleShow ->
-            Core.DoubleShow
+            pure Core.DoubleShow
 
         Core.Text ->
-            Core.Text
+            pure Core.Text
 
         Core.TextLit (Core.Chunks a b) ->
-            Core.TextLit (Core.Chunks a' b)
+            Core.TextLit <$> (Core.Chunks <$> a' <*> pure b)
           where
-            a' = fmap (fmap loop) a
+            a' = traverse (traverse loop) a
 
         Core.TextAppend a b ->
-            Core.TextAppend a' b'
+            Core.TextAppend <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.TextShow ->
-            Core.TextShow
+            pure Core.TextShow
 
         Core.List ->
-            Core.List
+            pure Core.List
 
         Core.ListLit mt xs ->
-            Core.ListLit mt' xs'
+            Core.ListLit <$> mt' <*> xs'
           where
-            mt' = fmap loop mt
-            xs' = fmap loop xs
+            mt' = traverse loop mt
+            xs' = traverse loop xs
 
         Core.ListAppend a b ->
-            Core.ListAppend a' b'
+            Core.ListAppend <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.ListBuild ->
-            Core.ListBuild
+            pure Core.ListBuild
 
         Core.ListFold ->
-            Core.ListFold
+            pure Core.ListFold
 
         Core.ListLength ->
-            Core.ListLength
+            pure Core.ListLength
 
         Core.ListHead ->
-            Core.ListHead
+            pure Core.ListHead
 
         Core.ListLast ->
-            Core.ListLast
+            pure Core.ListLast
 
         Core.ListIndexed ->
-            Core.ListIndexed
+            pure Core.ListIndexed
 
         Core.ListReverse ->
-            Core.ListReverse
+            pure Core.ListReverse
 
         Core.Optional ->
-            Core.Optional
+            pure Core.Optional
 
         Core.Some a ->
-            Core.Some a'
+            Core.Some <$> a'
           where
             a' = loop a
 
         Core.None ->
-            Core.None
+            pure Core.None
 
         Core.OptionalFold ->
-            Core.OptionalFold
+            pure Core.OptionalFold
 
         Core.OptionalBuild ->
-            Core.OptionalBuild
+            pure Core.OptionalBuild
 
         Core.Record a ->
-            Core.Record a'
+            Core.Record <$> a'
           where
-            a' = fmap loop a
+            a' = traverse loop a
 
         Core.Union a ->
-            Core.Union a'
+            Core.Union <$> a'
           where
-            a' = fmap (fmap loop) a
+            a' = traverse (traverse loop) a
 
         Core.Combine a b ->
-            Core.Combine a' b'
+            Core.Combine <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.CombineTypes a b ->
-            Core.CombineTypes a' b'
+            Core.CombineTypes <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.Prefer a b ->
-            Core.Prefer a' b'
+            Core.Prefer <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.RecordCompletion a b ->
-            Core.RecordCompletion a' b'
+            Core.RecordCompletion <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.Merge a b c ->
-            Core.Merge a' b' c'
+            Core.Merge <$> a' <*> b' <*> c'
           where
-            a' =      loop a
-            b' =      loop b
-            c' = fmap loop c
+            a' =          loop a
+            b' =          loop b
+            c' = traverse loop c
 
         Core.ToMap a b ->
-            Core.ToMap a' b'
+            Core.ToMap <$> a' <*> b'
           where
-            a' =      loop a
-            b' = fmap loop b
+            a' =          loop a
+            b' = traverse loop b
 
         Core.Field a b ->
-            Core.Field a' b
+            Core.Field <$> a' <*> pure b
           where
             a' = loop a
 
         Core.Project a b ->
-            Core.Project a' b
+            Core.Project <$> a' <*> pure b
           where
             a' = loop a
 
         Core.Assert a ->
-            Core.Assert a'
+            Core.Assert <$> a'
           where
             a' = loop a
 
         Core.Equivalent a b ->
-            Core.Equivalent a' b'
+            Core.Equivalent <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.ImportAlt a b ->
-            Core.ImportAlt a' b'
+            Core.ImportAlt <$> a' <*> b'
           where
             a' = loop a
             b' = loop b
 
         Core.Note a b ->
-            Core.Note a b'
+            Core.Note a <$> b'
           where
             b' = loop b
 
         Core.Embed a ->
-            Core.Embed a
+            pure (Core.Embed a)
       where
         tagged =
             Core.RecordLit $ Dhall.Map.unorderedFromList 
@@ -1493,7 +1512,7 @@ codeToValue mUnionTagOptions conversion specialDoubleMode mFilePath code = do
 
     taggedExpression <- case mUnionTagOptions of
         Just unionTagOptions ->
-            pure (tagUnions unionTagOptions normalizedExpression)
+            Core.throws (tagUnions unionTagOptions normalizedExpression)
         Nothing ->
             pure normalizedExpression
 
