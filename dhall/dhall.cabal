@@ -40,23 +40,39 @@ Extra-Source-Files:
     dhall-lang/Prelude/Double/show
     dhall-lang/Prelude/Function/compose
     dhall-lang/Prelude/Function/package.dhall
+    dhall-lang/Prelude/Integer/abs
+    dhall-lang/Prelude/Integer/add
+    dhall-lang/Prelude/Integer/clamp
+    dhall-lang/Prelude/Integer/equal
+    dhall-lang/Prelude/Integer/greaterThan
+    dhall-lang/Prelude/Integer/greaterThanEqual
+    dhall-lang/Prelude/Integer/lessThan
+    dhall-lang/Prelude/Integer/lessThanEqual
+    dhall-lang/Prelude/Integer/multiply
+    dhall-lang/Prelude/Integer/negate
     dhall-lang/Prelude/Integer/package.dhall
     dhall-lang/Prelude/Integer/show
+    dhall-lang/Prelude/Integer/subtract
     dhall-lang/Prelude/Integer/toDouble
+    dhall-lang/Prelude/Integer/toNatural
+    dhall-lang/Prelude/JSON/Nesting
+    dhall-lang/Prelude/JSON/Tagged
+    dhall-lang/Prelude/JSON/Type
     dhall-lang/Prelude/JSON/array
     dhall-lang/Prelude/JSON/bool
+    dhall-lang/Prelude/JSON/core.dhall
     dhall-lang/Prelude/JSON/keyText
     dhall-lang/Prelude/JSON/keyValue
-    dhall-lang/Prelude/JSON/Nesting
     dhall-lang/Prelude/JSON/null
     dhall-lang/Prelude/JSON/number
     dhall-lang/Prelude/JSON/object
     dhall-lang/Prelude/JSON/omitNullFields
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
+    dhall-lang/Prelude/JSON/renderYAML
     dhall-lang/Prelude/JSON/string
-    dhall-lang/Prelude/JSON/Tagged
-    dhall-lang/Prelude/JSON/Type
+    dhall-lang/Prelude/JSON/tagInline
+    dhall-lang/Prelude/JSON/tagNested
     dhall-lang/Prelude/List/all
     dhall-lang/Prelude/List/any
     dhall-lang/Prelude/List/build
@@ -82,16 +98,16 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/take
     dhall-lang/Prelude/List/unzip
-    dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Location/Type
+    dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Map/Entry
+    dhall-lang/Prelude/Map/Type
     dhall-lang/Prelude/Map/empty
-    dhall-lang/Prelude/Map/keys
     dhall-lang/Prelude/Map/keyText
     dhall-lang/Prelude/Map/keyValue
+    dhall-lang/Prelude/Map/keys
     dhall-lang/Prelude/Map/map
     dhall-lang/Prelude/Map/package.dhall
-    dhall-lang/Prelude/Map/Type
     dhall-lang/Prelude/Map/values
     dhall-lang/Prelude/Monoid
     dhall-lang/Prelude/Natural/build
@@ -132,7 +148,6 @@ Extra-Source-Files:
     dhall-lang/Prelude/Optional/package.dhall
     dhall-lang/Prelude/Optional/toList
     dhall-lang/Prelude/Optional/unzip
-    dhall-lang/Prelude/package.dhall
     dhall-lang/Prelude/Text/concat
     dhall-lang/Prelude/Text/concatMap
     dhall-lang/Prelude/Text/concatMapSep
@@ -141,6 +156,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/defaultMap
     dhall-lang/Prelude/Text/package.dhall
     dhall-lang/Prelude/Text/show
+    dhall-lang/Prelude/XML/Type
     dhall-lang/Prelude/XML/attribute
     dhall-lang/Prelude/XML/element
     dhall-lang/Prelude/XML/emptyAttributes
@@ -148,7 +164,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/XML/package.dhall
     dhall-lang/Prelude/XML/render
     dhall-lang/Prelude/XML/text
-    dhall-lang/Prelude/XML/Type
+    dhall-lang/Prelude/package.dhall
     dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
