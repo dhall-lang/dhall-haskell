@@ -1058,14 +1058,14 @@ tagUnions :: UnionTagOptions -> Expr s Void -> Expr s Void
 tagUnions UnionTagOptions{..} = loop
   where
     loop expr = case expr of
-        -- TODO: In the case of inline nesting should we check the union types for
-        -- any non-record alternatives? (See InvalidInlineContents)
         Core.Field Core.Union{} _ -> tagged
+
         Core.App (Core.Field Core.Union{} _) x ->
             case (tagMode, x) of
                 (TagNested _, _)              -> tagged
                 (TagInline, Core.RecordLit{}) -> tagged
                 _                             -> expr -- inline nesting works only for alternatives containing records
+
         Core.RecordLit m
             | [ ("contents", contents)
               , ("field", _)
@@ -1076,13 +1076,304 @@ tagUnions UnionTagOptions{..} = loop
                              Core.App u (loop x)
                          x -> x
                in Core.RecordLit (Dhall.Map.insert "contents" contents' m)
-        
-        Core.Const c -> Core.Const c
-        Core.Var v -> Core.Var v
-        Core.Lam v t b -> Core.Lam v (loop t) (loop b)
-        Core.Pi v a b -> Core.Pi v (loop a) (loop b) 
-        Core.App f a -> Core.App (loop f) (loop a)
-        Core.Note a b -> Core.Note a (loop b)
+            | otherwise -> Core.RecordLit (fmap loop m)
+                
+        Core.Const a ->
+            Core.Const a
+
+        Core.Var v ->
+            Core.Var v
+
+        {- Minor hack: Don't descend into lambda, since the only thing it can
+           possibly encode is a Boehm-Berarducci-encoded JSON value.  In such a
+           case we do *not* want to perform this rewrite since it will
+           interfere with decoding the value.
+        -}
+        Core.Lam a b c ->
+            Core.Lam a b c
+
+        Core.Pi a b c ->
+            Core.Pi a b' c'
+          where
+            b' = loop b
+            c' = loop c
+
+        Core.App a b ->
+            Core.App a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.Let (Binding src0 a src1 b src2 c) d ->
+            Core.Let (Binding src0 a src1 b' src2 c') d'
+          where
+            b' = fmap (fmap loop) b
+            c' =            loop  c
+            d' =            loop  d
+
+        Core.Annot a b ->
+            Core.Annot a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.Bool ->
+            Core.Bool
+
+        Core.BoolLit a ->
+            Core.BoolLit a
+
+        Core.BoolAnd a b ->
+            Core.BoolAnd a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.BoolOr a b ->
+            Core.BoolOr a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.BoolEQ a b ->
+            Core.BoolEQ a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.BoolNE a b ->
+            Core.BoolNE a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.BoolIf a b c ->
+            Core.BoolIf a' b' c'
+          where
+            a' = loop a
+            b' = loop b
+            c' = loop c
+
+        Core.Natural ->
+            Core.Natural
+
+        Core.NaturalLit a ->
+            Core.NaturalLit a
+
+        Core.NaturalFold ->
+            Core.NaturalFold
+
+        Core.NaturalBuild ->
+            Core.NaturalBuild
+
+        Core.NaturalIsZero ->
+            Core.NaturalIsZero
+
+        Core.NaturalEven ->
+            Core.NaturalEven
+
+        Core.NaturalOdd ->
+            Core.NaturalOdd
+
+        Core.NaturalToInteger ->
+            Core.NaturalToInteger
+
+        Core.NaturalShow ->
+            Core.NaturalShow
+
+        Core.NaturalSubtract ->
+            Core.NaturalSubtract
+
+        Core.NaturalPlus a b ->
+            Core.NaturalPlus a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.NaturalTimes a b ->
+            Core.NaturalTimes a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.Integer ->
+            Core.Integer
+
+        Core.IntegerLit a ->
+            Core.IntegerLit a
+
+        Core.IntegerClamp ->
+            Core.IntegerClamp
+
+        Core.IntegerNegate ->
+            Core.IntegerNegate
+
+        Core.IntegerShow ->
+            Core.IntegerShow
+
+        Core.IntegerToDouble ->
+            Core.IntegerToDouble
+
+        Core.Double ->
+            Core.Double
+
+        Core.DoubleLit a ->
+            Core.DoubleLit a
+
+        Core.DoubleShow ->
+            Core.DoubleShow
+
+        Core.Text ->
+            Core.Text
+
+        Core.TextLit (Core.Chunks a b) ->
+            Core.TextLit (Core.Chunks a' b)
+          where
+            a' = fmap (fmap loop) a
+
+        Core.TextAppend a b ->
+            Core.TextAppend a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.TextShow ->
+            Core.TextShow
+
+        Core.List ->
+            Core.List
+
+        Core.ListLit mt xs ->
+            Core.ListLit mt' xs'
+          where
+            mt' = fmap loop mt
+            xs' = fmap loop xs
+
+        Core.ListAppend a b ->
+            Core.ListAppend a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.ListBuild ->
+            Core.ListBuild
+
+        Core.ListFold ->
+            Core.ListFold
+
+        Core.ListLength ->
+            Core.ListLength
+
+        Core.ListHead ->
+            Core.ListHead
+
+        Core.ListLast ->
+            Core.ListLast
+
+        Core.ListIndexed ->
+            Core.ListIndexed
+
+        Core.ListReverse ->
+            Core.ListReverse
+
+        Core.Optional ->
+            Core.Optional
+
+        Core.Some a ->
+            Core.Some a'
+          where
+            a' = loop a
+
+        Core.None ->
+            Core.None
+
+        Core.OptionalFold ->
+            Core.OptionalFold
+
+        Core.OptionalBuild ->
+            Core.OptionalBuild
+
+        Core.Record a ->
+            Core.Record a'
+          where
+            a' = fmap loop a
+
+        Core.Union a ->
+            Core.Union a'
+          where
+            a' = fmap (fmap loop) a
+
+        Core.Combine a b ->
+            Core.Combine a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.CombineTypes a b ->
+            Core.CombineTypes a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.Prefer a b ->
+            Core.Prefer a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.RecordCompletion a b ->
+            Core.RecordCompletion a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.Merge a b c ->
+            Core.Merge a' b' c'
+          where
+            a' =      loop a
+            b' =      loop b
+            c' = fmap loop c
+
+        Core.ToMap a b ->
+            Core.ToMap a' b'
+          where
+            a' =      loop a
+            b' = fmap loop b
+
+        Core.Field a b ->
+            Core.Field a' b
+          where
+            a' = loop a
+
+        Core.Project a b ->
+            Core.Project a' b
+          where
+            a' = loop a
+
+        Core.Assert a ->
+            Core.Assert a'
+          where
+            a' = loop a
+
+        Core.Equivalent a b ->
+            Core.Equivalent a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.ImportAlt a b ->
+            Core.ImportAlt a' b'
+          where
+            a' = loop a
+            b' = loop b
+
+        Core.Note a b ->
+            Core.Note a b'
+          where
+            b' = loop b
+
+        Core.Embed a ->
+            Core.Embed a
       where
         tagged =
             Core.RecordLit $ Dhall.Map.unorderedFromList 
