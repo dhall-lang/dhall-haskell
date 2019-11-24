@@ -684,7 +684,7 @@ infer typer = loop
                             VList a
                         ~>  VList
                                 (VRecord
-                                    (Dhall.Map.fromList
+                                    (Dhall.Map.unorderedFromList
                                         [ ("index", VNatural)
                                         , ("value", a       )
                                         ]
@@ -1084,7 +1084,7 @@ infer typer = loop
             let mapType _T' =
                     VList
                         (VRecord
-                            (Dhall.Map.fromList
+                            (Dhall.Map.unorderedFromList
                                 [("mapKey", VText), ("mapValue", _T')]
                             )
                         )
@@ -1150,9 +1150,9 @@ infer typer = loop
                                 Just _T' -> return (x, _T')
                                 Nothing  -> die (MissingField x _E'')
 
-                    let adapt = VRecord . Dhall.Map.fromList
+                    let adapt = VRecord . Dhall.Map.unorderedFromList
 
-                    fmap adapt (traverse process (Dhall.Set.toList (Dhall.Set.sort xs)))
+                    fmap adapt (traverse process (Dhall.Set.toAscList xs))
 
                 _ -> do
                     let text =

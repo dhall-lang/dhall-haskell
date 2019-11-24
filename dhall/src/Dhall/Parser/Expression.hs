@@ -10,6 +10,7 @@ module Dhall.Parser.Expression where
 
 import Control.Applicative (Alternative(..), optional)
 import Data.ByteArray.Encoding (Base(..))
+import Data.Foldable (foldl')
 import Data.Functor (void)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
@@ -300,7 +301,7 @@ parsers embedded = Parsers {..}
                     whitespace
 
                     return (\l -> l `op` r)
-                return (foldl (\x f -> f x) a b) )
+                return (foldl' (\x f -> f x) a b))
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
@@ -323,13 +324,18 @@ parsers embedded = Parsers {..}
             f <-    (Some <$ _Some <* nonemptyWhitespace)
                 <|> return id
             a <- noted importExpression_
-            b <- Text.Megaparsec.many (try (nonemptyWhitespace *> noted importExpression_))
-            return (foldl app (f a) b)
+            bs <- Text.Megaparsec.many . try $ do
+                (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
+                b <- importExpression_
+                return (sep, b)
+            return (foldl' app (f a) bs)
           where
-            app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
-                Note (Src before after (bytesL <> bytesR)) (App nL nR)
-            app nL nR =
-                App nL nR
+            app a (sep, b)
+                | Note (Src left _ bytesL) _ <- a
+                , Note (Src _ right bytesR) _ <- b
+                = Note (Src left right (bytesL <> sep <> bytesR)) (App a b)
+            app a (_, b) =
+                App a b
 
     importExpression_ = noted (choice [ alternative0, alternative1 ])
           where
@@ -368,7 +374,7 @@ parsers embedded = Parsers {..}
                     <|> fmap projectByExpression recordType
 
             b <- Text.Megaparsec.many (try (whitespace *> _dot *> whitespace *> alternatives))
-            return (foldl (\e k -> k e) a b) )
+            return (foldl' (\e k -> k e) a b) )
 
     primitiveExpression =
             noted

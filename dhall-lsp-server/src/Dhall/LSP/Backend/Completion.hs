@@ -1,5 +1,6 @@
 module Dhall.LSP.Backend.Completion where
 
+import Data.List (foldl')
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
@@ -158,7 +159,7 @@ completeProjections (CompletionContext context values) expr =
   -- substitute 'dependent lets', necessary for completion of unions
   let values' = toList values
       subs = filter ((/= holeExpr) . snd) $ zip (contextToVariables values') (map snd values')
-      expr' = foldl (\e (x,val) -> subst x val e) expr subs
+      expr' = foldl' (\e (x,val) -> subst x val e) expr subs
 
   in case typeWithA absurd context expr' of
       Left _ -> []

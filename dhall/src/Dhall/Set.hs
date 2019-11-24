@@ -10,6 +10,7 @@
 module Dhall.Set (
       Set(..)
     , toList
+    , toAscList
     , toSet
     , toSeq
     , fromList
@@ -57,6 +58,15 @@ instance Foldable Set where
     foldMap f (Set _ x) = foldMap f x
     {-# INLINABLE foldMap #-}
 
+    toList = Dhall.Set.toList
+    {-# INLINABLE toList #-}
+
+    null = Dhall.Set.null
+    {-# INLINABLE null #-}
+
+    length (Set s _) = Data.Set.size s
+    {-# INLINABLE length #-}
+
 -- | Convert to an unordered @"Data.Set".`Data.Set.Set`@
 toSet :: Set a -> Data.Set.Set a
 toSet (Set s _) = s
@@ -67,7 +77,11 @@ toSeq (Set _ xs) = xs
 
 -- | Convert a `Set` to a list, preserving the original order of the elements
 toList :: Set a -> [a]
-toList = Data.Foldable.toList
+toList (Set _ xs) = Data.Foldable.toList xs
+
+-- | Convert a `Set` to a list of ascending elements
+toAscList :: Set a -> [a]
+toAscList (Set s _) = Data.Set.toAscList s
 
 -- | Convert a list to a `Set`, remembering the element order
 fromList :: Ord a => [a] -> Set a
@@ -103,7 +117,7 @@ difference os (Set s _) =
 True
 -}
 sort :: Ord a => Set a -> Set a
-sort (Set s xs) = Set s (Data.Sequence.sort xs)
+sort (Set s _) = Set s (Data.Sequence.fromList (Data.Set.toList s))
 
 {-|
 >>> isSorted (fromList [2, 1])

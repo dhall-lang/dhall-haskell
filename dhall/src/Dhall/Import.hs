@@ -179,19 +179,18 @@ import Dhall.Import.Types
 import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
 import Lens.Family.State.Strict (zoom)
 
-import qualified Codec.CBOR.Encoding              as Encoding
-import qualified Codec.CBOR.Write                 as Write
+import qualified Codec.CBOR.Encoding                         as Encoding
+import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
-import qualified Control.Monad.Trans.Maybe        as Maybe
-import qualified Control.Monad.Trans.State.Strict as State
+import qualified Control.Monad.Trans.Maybe                   as Maybe
+import qualified Control.Monad.Trans.State.Strict            as State
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
-import qualified Data.List.NonEmpty               as NonEmpty
-import qualified Data.Map.Strict                  as Map
+import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Text.Encoding
-import qualified Data.Text                        as Text
+import qualified Data.Text                                   as Text
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
@@ -200,11 +199,12 @@ import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.TypeCheck
+import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
 import qualified System.Environment
 import qualified System.Info
 import qualified System.IO
-import qualified System.Directory                 as Directory
-import qualified System.FilePath                  as FilePath
+import qualified System.Directory                            as Directory
+import qualified System.FilePath                             as FilePath
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -479,11 +479,12 @@ chainImport (Chained parent) child =
 loadImport :: Chained -> StateT Status IO ImportSemantics
 loadImport import_ = do
     Status {..} <- State.get
-    case Map.lookup import_ _cache of
+
+    case Dhall.Map.lookup import_ _cache of
         Just importSemantics -> return importSemantics
         Nothing -> do
             importSemantics <- loadImportWithSemanticCache import_
-            zoom cache (State.modify (Map.insert import_ importSemantics))
+            zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
             return importSemantics
 
 -- | Load an import from the 'semantic cache'. Defers to
@@ -554,7 +555,7 @@ writeToSemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteString 
 writeToSemanticCache hash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall" hash
-        liftIO (Data.ByteString.writeFile cacheFile bytes)
+        liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
     return ()
 
 -- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
@@ -669,7 +670,7 @@ writeToSemisemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteStr
 writeToSemisemanticCache semisemanticHash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
-        liftIO (Data.ByteString.writeFile cacheFile bytes)
+        liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
     return ()
 
 -- Fetch source code directly from disk/network

@@ -99,6 +99,7 @@ data Ann
   | Literal     -- ^ Literals such as integers and strings
   | Builtin     -- ^ Builtin types and values
   | Operator    -- ^ Operators
+  deriving Show
 
 {-| Convert annotations to their corresponding color for syntax highlighting
     purposes
@@ -1091,7 +1092,7 @@ prettyCharacterSet characterSet expression =
         | anyText (== '\n') =
             if not (null a) || anyText (/= '\n')
             then long
-            else Pretty.flatAlt long short
+            else Pretty.group (Pretty.flatAlt long short)
         | otherwise =
             short
       where
