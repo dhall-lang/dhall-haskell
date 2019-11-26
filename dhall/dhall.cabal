@@ -632,7 +632,9 @@ Test-Suite doctest
         directory                     ,
         filepath                < 1.5 ,
         mockery                 < 0.4 ,
-        doctest   >= 0.7.0   && < 0.17
+        special-values                ,
+        doctest   >= 0.7.0   && < 0.17,
+        QuickCheck
     Default-Language: Haskell2010
     -- `doctest` doesn't work with `MIN_VERSION` macros before GHC 8
     --

@@ -201,6 +201,10 @@ makeBinding name = Binding Nothing name Nothing Nothing Nothing
 newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
     deriving (Show, Data, NFData, Generic)
 
+-- Note: the property doctest has to be written all on one line
+-- because of <https://github.com/sol/doctest/issues/174> and
+-- <https://github.com/sol/doctest/issues/131>.
+--
 -- | This instance satisfies all the customary 'Eq' laws except substitutivity.
 --
 -- In particular:
@@ -211,9 +215,7 @@ newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
 --
 -- This instance is also consistent with with the binary encoding of Dhall @Double@s:
 --
--- >>> toBytes n = Dhall.Binary.encodeExpression (DoubleLit n :: Expr Void Import)
---
--- prop> \a b -> (a == b) == (toBytes a == toBytes b)
+-- prop> let toBytes n = Dhall.Binary.encodeExpression (DoubleLit (DhallDouble n) :: Expr Void Import) in \a b -> (a == b) == (toBytes a == toBytes b)
 instance Eq DhallDouble where
     DhallDouble a == DhallDouble b
         | isNaN a && isNaN b                      = True

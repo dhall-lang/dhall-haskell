@@ -491,6 +491,7 @@ prettyEnvironmentVariable t
 'prettyCharacterSet' largely ignores 'Note's. 'Note's do however matter for
 the layout of let-blocks:
 
+>>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
 >>> let inner = Let (Binding Nothing "x" Nothing Nothing Nothing (NaturalLit 1)) (Var (V "x" 0)) :: Expr Src ()
 >>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) inner)
 let y = 2 let x = 1 in x
