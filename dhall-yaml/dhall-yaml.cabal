@@ -1,5 +1,5 @@
 Name: dhall-yaml
-Version: 1.6.0
+Version: 1.0.0
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
 Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
@@ -37,8 +37,8 @@ Library
         base                      >= 4.8.0.0  && < 5   ,
         aeson                     >= 1.0.0.0  && < 1.5 ,
         bytestring                               < 0.11,
-        dhall                     >= 1.27.0   && < 1.28,
-        dhall-json                >= 1.5.0    && < 1.6 ,
+        dhall                     >= 1.28.0   && < 1.29,
+        dhall-json                >= 1.5.0    && < 1.7 ,
         optparse-applicative      >= 0.14.0.0 && < 0.16,
         text                      >= 0.11.1.0 && < 1.3 ,
         vector

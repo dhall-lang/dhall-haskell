@@ -1,3 +1,85 @@
+1.28.0
+
+* [Supports version 12.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v12.0.0)
+* BREAKING CHANGE: [Add `Integer/{clamp,negate}` built-ins](https://github.com/dhall-lang/dhall-haskell/pull/1486)
+    * This is a technically breaking change API since this adds a new
+      constructor to the `Expr` type
+    * This is also a technically breaking change to the language.  See the [changelog for standard version 12.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v12.0.0) for more details
+* BREAKING CHANGE: [Remove support for fusion](https://github.com/dhall-lang/dhall-haskell/pull/1478)
+    * This is also a technically breaking change to the language.  See the [changelog for standard version 12.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v12.0.0) for more details
+* BREAKING CHANGE: [Parse whitespace more precisely](https://github.com/dhall-lang/dhall-haskell/pull/1483)
+    * The Haskell implementation now matches the official grammar much more
+      closely, but as a result will now reject some programs that it used to
+      accept
+    * For example, `1:Natural` used to be valid and now is no longer valid as
+      the standard requires mandatory whitespace after the `:`
+    * Consult the [standard grammar](https://github.com/dhall-lang/dhall-lang/blob/master/standard/dhall.abnf) if you run into a new parsing error as a result of this change
+    * This is also a parsing performance regression (specifically for parsing
+      comments), but should not be noticeable in practice.  See [#1512](https://github.com/dhall-lang/dhall-haskell/pull/1512) for more details
+* BREAKING CHANGE: Rename `Type` to `Decoder` and `InputType` to `Encoder` [#1483](https://github.com/dhall-lang/dhall-haskell/pull/1485) / [#1489](https://github.com/dhall-lang/dhall-haskell/pull/1489)
+* BUG FIX: [Fix `dhall format --check`](https://github.com/dhall-lang/dhall-haskell/pull/1462)
+    * Before this change `dhall format --check` would fail due to attempting to
+      read all of standard input in twice
+* BUG FIX: [Fix `dhall freeze` to always re-freeze an import](https://github.com/dhall-lang/dhall-haskell/pull/1471)
+    * Before this fix, `dhall freeze` would not attempt to refreeze an already
+      frozen import
+* [Permit spaces around completion operator](https://github.com/dhall-lang/dhall-haskell/pull/1532)
+    * See the [changelog for standard version 12.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v12.0.0) for more details
+* [Make `missing` referentially transparent](https://github.com/dhall-lang/dhall-haskell/pull/1509)
+    * `missing` can now be imported transitively via a remote import
+    * Normally resolving `missing` would still still fail, except for
+      `missing as Location`, which is now a valid transitive import
+    * See the [changelog for standard version 12.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v12.0.0) for more details
+* [Write cache files atomically](https://github.com/dhall-lang/dhall-haskell/pull/1544)
+    * This is a resilience improvement so that the cache is not left in a
+      corrupt state in the event of a power outage or exhausting disk/memory
+* [New `Dhall.function` utility](https://github.com/dhall-lang/dhall-haskell/pull/1507)
+    * This is provides the same functionality as the `Interpret` instance for
+      `(->)`, except without the use of typeclasses
+* [New `dhall haskell-syntax-tree` command](https://github.com/dhall-lang/dhall-haskell/pull/1553)
+    * This command displays the Haskell syntax tree of an expression
+      (primarily for debugging purposes)
+    * Note that this is highly-volatile and subject to change, so don't depend
+      on this programmatically.  We may break the output of this command without
+      any notice.
+* [Add `instance Show Ann`](https://github.com/dhall-lang/dhall-haskell/pull/1567)
+* [Move normalization code from `Dhall.Core` to `Dhall.Normalize`](https://github.com/dhall-lang/dhall-haskell/pull/1452)
+    * Note that this is not a breaking change.  The relocated utilities are
+      still re-exported from `Dhall.Core`
+* [Fix `dhall resolve --transitive-dependencies` to list dependencies in "post-order"](https://github.com/dhall-lang/dhall-haskell/pull/1539)
+* Performance improvements
+    * [#1500](https://github.com/dhall-lang/dhall-haskell/pull/1500)
+    * [#1522](https://github.com/dhall-lang/dhall-haskell/pull/1522)
+    * [#1568](https://github.com/dhall-lang/dhall-haskell/pull/1568)
+* Fixes and improvements to code formatting
+    * [#1460](https://github.com/dhall-lang/dhall-haskell/pull/1460)
+    * [#1466](https://github.com/dhall-lang/dhall-haskell/pull/1466)
+    * [#1508](https://github.com/dhall-lang/dhall-haskell/pull/1508)
+    * [#1527](https://github.com/dhall-lang/dhall-haskell/pull/1527)
+    * [#1422](https://github.com/dhall-lang/dhall-haskell/pull/1422)
+    * [#1552](https://github.com/dhall-lang/dhall-haskell/pull/1552)
+    * [#1543](https://github.com/dhall-lang/dhall-haskell/pull/1543)
+    * [#1554](https://github.com/dhall-lang/dhall-haskell/pull/1554)
+    * [#1569](https://github.com/dhall-lang/dhall-haskell/pull/1569)
+* Fixes and improvements to code linting
+    * [#1518](https://github.com/dhall-lang/dhall-haskell/pull/1518)
+    * [#1531](https://github.com/dhall-lang/dhall-haskell/pull/1531)
+* Fixes and improvements to error messages
+    * [#1443](https://github.com/dhall-lang/dhall-haskell/pull/1443)
+    * [#1448](https://github.com/dhall-lang/dhall-haskell/pull/1448)
+    * [#1482](https://github.com/dhall-lang/dhall-haskell/pull/1482)
+    * [#1519](https://github.com/dhall-lang/dhall-haskell/pull/1519)
+    * [#1556](https://github.com/dhall-lang/dhall-haskell/pull/1556)
+    * [#1528](https://github.com/dhall-lang/dhall-haskell/pull/1528)
+* Fixes and improvements to the parser
+    * [#1473](https://github.com/dhall-lang/dhall-haskell/pull/1473)
+    * [#1549](https://github.com/dhall-lang/dhall-haskell/pull/1549)
+    * [#1563](https://github.com/dhall-lang/dhall-haskell/pull/1563)
+* Fixes and improvements to the REPL
+    * [#1573](https://github.com/dhall-lang/dhall-haskell/pull/1573)
+* Fixes and improvements to documentation
+    * [#1530](https://github.com/dhall-lang/dhall-haskell/pull/1530)
+
 1.27.0
 
 * [Supports version 11.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v11.0.0)

@@ -1,4 +1,23 @@
-Next version
+1.6.0
+
+* BREAKING CHANGE: [Move `HsYAML` code to a new `dhall-yaml` package](https://github.com/dhall-lang/dhall-haskell/pull/1514)
+    * This package is now fully BSD-licensed (both for the JSON and YAML
+      utilities)
+    * The GPL-licensed YAML utilities are now provided as part of the
+      `dhall-yaml` package
+    * Note that this package still provides `dhall-to-yaml` and the `dhall-yaml`
+      package provides a separate `dhall-to-yaml-ng` executable
+    * This is a breaking change in the following respects:
+        * The YAML-related modules in this package were renamed
+        * This package no longer accepts a `-fgpl` cabal configure flag
+        * This package no longer provides the `yaml-to-dhall` executable (which
+          now resides within the `dhall-yaml` package)
+* [Don't normalize schema before type-checking](https://github.com/dhall-lang/dhall-haskell/pull/1555)
+    * This improves the error messages for `{json,yaml}-to-dhall`
+* [Fix `dhall-to-yaml` to quote special strings](https://github.com/dhall-lang/dhall-haskell/pull/1474)
+* [Make some of CLI options for `dhall-json` more consistent](https://github.com/dhall-lang/dhall-haskell/pull/1475)
+
+1.5.0
 
 * [BREAKING CHANGE: Rename some options of `dhall-to-{json,yaml}` to more consistent ones](https://github.com/dhall-lang/dhall-haskell/issues/1430):
     * rename `--omitEmpty` to `--omit-empty`
