@@ -12,6 +12,11 @@
         * This package no longer accepts a `-fgpl` cabal configure flag
         * This package no longer provides the `yaml-to-dhall` executable (which
           now resides within the `dhall-yaml` package)
+* [BREAKING CHANGE: Rename some options of `dhall-to-{json,yaml}` to more consistent ones](https://github.com/dhall-lang/dhall-haskell/issues/1430):
+    * rename `--omitEmpty` to `--omit-empty`
+    * rename `--preserveNull` to `--preserve-null`
+    * rename `--noMaps` to `--no-maps`
+    * drop `--omitNull` as redundant because of `--preserve-null` (see below)
 * [Don't normalize schema before type-checking](https://github.com/dhall-lang/dhall-haskell/pull/1555)
     * This improves the error messages for `{json,yaml}-to-dhall`
 * [Fix `dhall-to-yaml` to quote special strings](https://github.com/dhall-lang/dhall-haskell/pull/1474)
@@ -19,11 +24,6 @@
 
 1.5.0
 
-* [BREAKING CHANGE: Rename some options of `dhall-to-{json,yaml}` to more consistent ones](https://github.com/dhall-lang/dhall-haskell/issues/1430):
-    * rename `--omitEmpty` to `--omit-empty`
-    * rename `--preserveNull` to `--preserve-null`
-    * rename `--noMaps` to `--no-maps`
-    * drop `--omitNull` as redundant because of `--preserve-null` (see below)
 * [BREAKING CHANGE: Enable `--pretty` by default for `dhall-to-json`](https://github.com/dhall-lang/dhall-haskell/issues/716)
 * [BREAKING CHANGE: Enable `--omitNull` by default for `dhall-to-{json,yaml}`](https://github.com/dhall-lang/dhall-haskell/pull/1365)
     * To recover the old behavior use the `--preserveNull` flag
