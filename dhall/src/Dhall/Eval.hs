@@ -57,6 +57,7 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
+import DhallList (DhallList)
 
 import Dhall.Syntax
   ( Binding(..)
@@ -76,6 +77,7 @@ import qualified Data.Char
 import qualified Data.Sequence   as Sequence
 import qualified Data.Set
 import qualified Data.Text       as Text
+import qualified DhallList
 import qualified Dhall.Syntax    as Syntax
 import qualified Dhall.Map       as Map
 import qualified Dhall.Set
@@ -198,7 +200,7 @@ data Val a
     | VTextShow !(Val a)
 
     | VList !(Val a)
-    | VListLit !(Maybe (Val a)) !(Seq (Val a))
+    | VListLit !(Maybe (Val a)) !(DhallList (Val a))
     | VListAppend !(Val a) !(Val a)
     | VListBuild   (Val a) !(Val a)
     | VListFold    (Val a) !(Val a) !(Val a) !(Val a) !(Val a)
@@ -594,23 +596,23 @@ eval !env t0 =
         ListLength ->
             VPrim $ \ a ->
             VPrim $ \case
-                VListLit _ as -> VNaturalLit (fromIntegral (Sequence.length as))
+                VListLit _ as -> VNaturalLit (fromIntegral (DhallList.length as))
                 as            -> VListLength a as
         ListHead ->
             VPrim $ \ a ->
             VPrim $ \case
                 VListLit _ as ->
-                    case Sequence.viewl as of
-                        y :< _ -> VSome y
-                        _      -> VNone a
+                    case DhallList.head as of
+                        Just y  -> VSome y
+                        Nothing -> VNone a
                 as ->
                     VListHead a as
         ListLast ->
             VPrim $ \ a ->
             VPrim $ \case
                 VListLit _ as ->
-                    case Sequence.viewr as of
-                        _ :> t -> VSome t
+                    case DhallList.last as of
+                        Just t -> VSome t
                         _      -> VNone a
                 as -> VListLast a as
         ListIndexed ->
@@ -623,7 +625,7 @@ eval !env t0 =
                             else Nothing
 
                         as' =
-                            Sequence.mapWithIndex
+                            DhallList.mapWithIndex
                                 (\i t ->
                                     VRecordLit
                                         (Map.unorderedFromList
@@ -643,7 +645,7 @@ eval !env t0 =
                 VListLit t as | null as ->
                     VListLit t as
                 VListLit _ as ->
-                    VListLit Nothing (Sequence.reverse as)
+                    VListLit Nothing (DhallList.reverse as)
                 t ->
                     VListReverse a t
         Optional ->
@@ -701,7 +703,7 @@ eval !env t0 =
         ToMap x ma ->
             case (eval env x, fmap (eval env) ma) of
                 (VRecordLit m, ma'@(Just _)) | null m ->
-                    VListLit ma' Sequence.empty
+                    VListLit ma' DhallList.empty
                 (VRecordLit m, _) ->
                     let entry (k, v) =
                             VRecordLit
@@ -711,7 +713,7 @@ eval !env t0 =
                                     ]
                                 )
 
-                        s = (Sequence.fromList . map entry . Map.toAscList) m
+                        s = (DhallList.fromList . map entry . Map.toAscList) m
 
                     in  VListLit Nothing s
                 (x', ma') ->

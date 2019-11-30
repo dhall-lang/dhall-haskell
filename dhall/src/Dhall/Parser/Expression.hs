@@ -30,6 +30,7 @@ import qualified Data.List.NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
+import qualified DhallList
 import qualified Dhall.Crypto
 import qualified Text.Megaparsec
 #if !MIN_VERSION_megaparsec(7, 0, 0)
@@ -274,8 +275,8 @@ parsers embedded = Parsers {..}
                     nonemptyWhitespace
                     b <- expression
                     case shallowDenote a of
-                        ListLit Nothing [] ->
-                            return (ListLit (Just b) [])
+                        ListLit Nothing xs | DhallList.null xs ->
+                            return (ListLit (Just b) xs)
                         Merge c d Nothing ->
                             return (Merge c d (Just b))
                         ToMap c Nothing ->
@@ -827,7 +828,7 @@ parsers embedded = Parsers {..}
 
             _closeBracket
 
-            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "literal"
+            return (ListLit Nothing (DhallList.fromList a)) ) <?> "literal"
 
 {-| Parse an environment variable import
 

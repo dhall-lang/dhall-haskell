@@ -31,6 +31,7 @@ import Prelude hiding (succ)
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
+import qualified DhallList
 import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
@@ -674,20 +675,20 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                           App (App cons y) <$> ys >>= loop
                         lazyCons   y ys =       App (App cons y) ys
                     App (App ListLength _) (ListLit _ ys) ->
-                        pure (NaturalLit (fromIntegral (Data.Sequence.length ys)))
+                        pure (NaturalLit (fromIntegral (DhallList.length ys)))
                     App (App ListHead t) (ListLit _ ys) -> loop o
                       where
-                        o = case Data.Sequence.viewl ys of
-                                y :< _ -> Some y
+                        o = case DhallList.head ys of
+                                Just y -> Some y
                                 _      -> App None t
                     App (App ListLast t) (ListLit _ ys) -> loop o
                       where
-                        o = case Data.Sequence.viewr ys of
-                                _ :> y -> Some y
+                        o = case DhallList.last ys of
+                                Just y -> Some y
                                 _      -> App None t
                     App (App ListIndexed _A₀) (ListLit _ as₀) -> loop (ListLit t as₁)
                       where
-                        as₁ = Data.Sequence.mapWithIndex adapt as₀
+                        as₁ = DhallList.mapWithIndex adapt as₀
 
                         _A₂ = Record (Dhall.Map.fromList kts)
                           where
@@ -705,7 +706,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                   , ("value", a_)
                                   ]
                     App (App ListReverse _) (ListLit t xs) ->
-                        loop (ListLit t (Data.Sequence.reverse xs))
+                        loop (ListLit t (DhallList.reverse xs))
 
                     App (App OptionalFold t0) x0 -> do
                         t1 <- loop t0
@@ -830,17 +831,17 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     TextShow -> pure TextShow
     List -> pure List
     ListLit t es
-        | Data.Sequence.null es -> ListLit <$> t' <*> pure Data.Sequence.empty
-        | otherwise             -> ListLit Nothing <$> es'
+        | DhallList.null es -> ListLit <$> t' <*> pure DhallList.empty
+        | otherwise         -> ListLit Nothing <$> es'
       where
         t'  = traverse loop t
         es' = traverse loop es
     ListAppend x y -> decide <$> loop x <*> loop y
       where
-        decide (ListLit _ m)  r            | Data.Sequence.null m = r
-        decide  l            (ListLit _ n) | Data.Sequence.null n = l
-        decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
-        decide  l             r                                   = ListAppend l r
+        decide (ListLit _ m)  r            | DhallList.null m = r
+        decide  l            (ListLit _ n) | DhallList.null n = l
+        decide (ListLit t m) (ListLit _ n)                    = ListLit t (m <> n)
+        decide  l             r                               = ListAppend l r
     ListBuild -> pure ListBuild
     ListFold -> pure ListFold
     ListLength -> pure ListLength
@@ -937,7 +938,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                 ]
                             )
 
-                let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList kvsX))
+                let keyValues = DhallList.fromList (map entry (Dhall.Map.toList kvsX))
 
                 let listType = case t' of
                         Just _ | null keyValues ->
@@ -1153,10 +1154,10 @@ isNormalized e0 = loop (Syntax.denote e0)
       ListLit t es -> all loop t && all loop es
       ListAppend x y -> loop x && loop y && decide x y
         where
-          decide (ListLit _ m)  _            | Data.Sequence.null m = False
-          decide  _            (ListLit _ n) | Data.Sequence.null n = False
-          decide (ListLit _ _) (ListLit _ _)                        = False
-          decide  _             _                                   = True
+          decide (ListLit _ m)  _            | DhallList.null m = False
+          decide  _            (ListLit _ n) | DhallList.null n = False
+          decide (ListLit _ _) (ListLit _ _)                    = False
+          decide  _             _                               = True
       ListBuild -> True
       ListFold -> True
       ListLength -> True

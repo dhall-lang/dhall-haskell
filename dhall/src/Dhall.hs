@@ -172,6 +172,7 @@ import qualified Data.Text.IO
 import qualified Data.Text.Lazy
 import qualified Data.Vector
 import qualified Data.Void
+import qualified DhallList
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -798,12 +799,7 @@ maybe (Decoder extractIn expectedIn) = Decoder extractOut expectedOut
 fromList [1,2,3]
 -}
 sequence :: Decoder a -> Decoder (Seq a)
-sequence (Decoder extractIn expectedIn) = Decoder extractOut expectedOut
-  where
-    extractOut (ListLit _ es) = traverse extractIn es
-    extractOut expr           = typeError expectedOut expr
-
-    expectedOut = App List expectedIn
+sequence = fmap Data.Sequence.fromList . list
 
 {-| Decode a list
 
@@ -811,7 +807,7 @@ sequence (Decoder extractIn expectedIn) = Decoder extractOut expectedOut
 [1,2,3]
 -}
 list :: Decoder a -> Decoder [a]
-list = fmap Data.Foldable.toList . sequence
+list = fmap Data.Foldable.toList . vector
 
 {-| Decode a `Vector`
 
@@ -819,7 +815,13 @@ list = fmap Data.Foldable.toList . sequence
 [1,2,3]
 -}
 vector :: Decoder a -> Decoder (Vector a)
-vector = fmap Data.Vector.fromList . list
+vector (Decoder extractIn expectedIn) = Decoder extractOut expectedOut
+  where
+    extractOut (ListLit _ es) = traverse extractIn (DhallList.toVector es)
+    extractOut expr           = typeError expectedOut expr
+
+    expectedOut = App List expectedIn
+-- vector = fmap Data.Vector.fromList . list
 
 {-| Decode a Dhall function into a Haskell function
 
@@ -950,7 +952,7 @@ setHelper size toSet (Decoder extractIn expectedIn) = Decoder extractOut expecte
           where
             vList = Data.Foldable.toList vSeq
             vSet = toSet vList
-            sameSize = size vSet == Data.Sequence.length vSeq
+            sameSize = size vSet == DhallList.length vSeq
             duplicates = vList Data.List.\\ Data.Foldable.toList vSet
             err | length duplicates == 1 =
                      "One duplicate element in the list: "
@@ -1883,9 +1885,15 @@ instance ToDhall a => ToDhall (Maybe a) where
         declaredOut = App Optional declaredIn
 
 instance ToDhall a => ToDhall (Seq a) where
+    injectWith = fmap (contramap Data.Foldable.toList) injectWith
+
+instance ToDhall a => ToDhall [a] where
+    injectWith = fmap (contramap Data.Vector.fromList) injectWith
+
+instance ToDhall a => ToDhall (Vector a) where
     injectWith options = Encoder embedOut declaredOut
       where
-        embedOut xs = ListLit listType (fmap embedIn xs)
+        embedOut xs = ListLit listType (fmap embedIn (DhallList.fromVector xs))
           where
             listType
                 | null xs   = Just (App List declaredIn)
@@ -1894,12 +1902,6 @@ instance ToDhall a => ToDhall (Seq a) where
         declaredOut = App List declaredIn
 
         Encoder embedIn declaredIn = injectWith options
-
-instance ToDhall a => ToDhall [a] where
-    injectWith = fmap (contramap Data.Sequence.fromList) injectWith
-
-instance ToDhall a => ToDhall (Vector a) where
-    injectWith = fmap (contramap Data.Vector.toList) injectWith
 
 {-| Note that the ouput list will be sorted
 
@@ -1944,7 +1946,7 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
         declaredOut = App List (Record (Dhall.Map.fromList
                           [("mapKey", declaredK), ("mapValue", declaredV)]))
 
-        mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
+        mapEntries = DhallList.fromList . fmap recordPair . Data.Map.toList
         recordPair (k, v) = RecordLit (Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)])
 
@@ -1972,7 +1974,7 @@ instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
         declaredOut = App List (Record (Dhall.Map.fromList
                           [("mapKey", declaredK), ("mapValue", declaredV)]))
 
-        mapEntries = Data.Sequence.fromList . fmap recordPair . HashMap.toList
+        mapEntries = DhallList.fromList . fmap recordPair . HashMap.toList
         recordPair (k, v) = RecordLit (Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)])
 

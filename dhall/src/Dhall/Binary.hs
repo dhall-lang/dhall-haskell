@@ -65,6 +65,7 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Sequence
 import qualified Data.Text            as Text
+import qualified DhallList
 import qualified Dhall.Syntax
 import qualified Dhall.Crypto
 import qualified Dhall.Map
@@ -329,8 +330,8 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         Decoding.decodeNull
 
-                                        xs <- Monad.replicateM (len - 2) go
-                                        return (ListLit Nothing (Data.Sequence.fromList xs))
+                                        xs <- DhallList.replicateM (len - 2) go
+                                        return (ListLit Nothing xs)
 
                             5 -> do
                                 Decoding.decodeNull

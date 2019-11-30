@@ -37,6 +37,7 @@ import Dhall.Core
 import Data.Functor.Identity (Identity(..))
 import Data.Typeable (Typeable, typeRep)
 import Data.Proxy (Proxy(..))
+import DhallList (DhallList)
 import Dhall.Set (Set)
 import Dhall.Parser (Header(..), createHeader)
 import Dhall.Pretty (CharacterSet(..))
@@ -61,6 +62,7 @@ import qualified Data.Set
 import qualified Data.Text as Text
 import qualified Data.Map
 import qualified Data.HashMap.Strict as HashMap
+import qualified DhallList
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -75,6 +77,10 @@ import qualified Test.QuickCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck
 import qualified Text.Megaparsec       as Megaparsec
+
+instance Arbitrary a => Arbitrary (DhallList a) where
+  arbitrary = DhallList.fromList <$> arbitrary
+  shrink = map DhallList.fromList . shrink . DhallList.toList
 
 instance (Arbitrary a, Ord a) => Arbitrary (Set a) where
   arbitrary = Dhall.Set.fromList <$> arbitrary
@@ -321,8 +327,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     shrink expression = filter standardizedExpression (genericShrink expression)
 
 standardizedExpression :: Expr s a -> Bool
-standardizedExpression (ListLit  Nothing  xs) = not (Data.Sequence.null xs)
-standardizedExpression (ListLit (Just _ ) xs) = Data.Sequence.null xs
+standardizedExpression (ListLit  Nothing  xs) = not (DhallList.null xs)
+standardizedExpression (ListLit (Just _ ) xs) = DhallList.null xs
 standardizedExpression (Note _ _            ) = False
 standardizedExpression  _                     = True
 

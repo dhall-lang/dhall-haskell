@@ -37,6 +37,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
+import DhallList (DhallList)
 import Dhall.Context (Context)
 import Dhall.Syntax (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
 import Dhall.Eval
@@ -53,6 +54,7 @@ import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Data.Traversable
+import qualified DhallList
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
@@ -73,9 +75,9 @@ import qualified Lens.Family
 type X = Void
 {-# DEPRECATED X "Use Data.Void.Void instead" #-}
 
-traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
+traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> DhallList a -> f ()
 traverseWithIndex_ k xs =
-    Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
+    Data.Foldable.sequenceA_ (DhallList.mapWithIndex k xs)
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -568,8 +570,8 @@ infer typer = loop
             return (VConst Type ~> VConst Type)
 
         ListLit Nothing ts₀ -> do
-            case Data.Sequence.viewl ts₀ of
-                t₀ :< ts₁ -> do
+            case DhallList.head ts₀ of
+                Just t₀ -> do
                     _T₀' <- loop ctx t₀
 
                     let _T₀'' = quote names _T₀'
@@ -600,7 +602,7 @@ infer typer = loop
 
                                     Left (TypeError context t₁ err)
 
-                    traverseWithIndex_ process ts₁
+                    traverseWithIndex_ process ts₀ -- TODO: traverse only the tail, use native mapM_withIndex
 
                     return (VList _T₀')
 
@@ -608,7 +610,7 @@ infer typer = loop
                     die MissingListType
 
         ListLit (Just _T₀) ts -> do
-            if Data.Sequence.null ts
+            if DhallList.null ts
                 then do
                     _ <- loop ctx _T₀
 

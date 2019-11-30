@@ -25,6 +25,7 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
+import DhallList (DhallList)
 import Dhall.Syntax (Binding(..), Chunks (..), Const(..), DhallDouble(..), Expr(..), Var(..))
 import Dhall.Map (Map)
 import Dhall.Set (Set)
@@ -360,7 +361,7 @@ diffChunks cL cR
 
 diffList
     :: (Eq a, Pretty a)
-    => Seq (Expr Void a) -> Seq (Expr Void a) -> Diff
+    => DhallList (Expr Void a) -> DhallList (Expr Void a) -> Diff
 diffList l r = bracketed (foldMap diffPart parts)
   where
     -- Sections of the list that are only in left, only in right, or in both

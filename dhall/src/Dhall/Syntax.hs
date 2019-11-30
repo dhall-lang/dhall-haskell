@@ -68,10 +68,11 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.String (IsString(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
-import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.Text (Text)
 import Data.Traversable
 import Data.Void (Void)
+import DhallList (DhallList)
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Src (Src(..))
@@ -376,7 +377,7 @@ data Expr s a
     -- Eventually we should have separate constructors for empty and non-empty
     -- list literals. For now it's easier to check the invariant in @infer@.
     -- See https://github.com/dhall-lang/dhall-haskell/issues/1359#issuecomment-537087234.
-    | ListLit (Maybe (Expr s a)) (Seq (Expr s a))
+    | ListLit (Maybe (Expr s a)) (DhallList (Expr s a))
     -- | > ListAppend x y                           ~  x # y
     | ListAppend (Expr s a) (Expr s a)
     -- | > ListBuild                                ~  List/build
