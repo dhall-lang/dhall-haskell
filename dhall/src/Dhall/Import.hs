@@ -192,6 +192,7 @@ import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Text.Encoding
 import qualified Data.Text                                   as Text
 import qualified Data.Text.IO
+import qualified DhallList
 import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Crypto
@@ -1061,7 +1062,7 @@ loadWith expr₀ = case expr₀ of
   TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
   TextShow             -> pure TextShow
   List                 -> pure List
-  ListLit a b          -> ListLit <$> mapM loadWith a <*> mapM loadWith b
+  ListLit a b          -> ListLit <$> mapM loadWith a <*> DhallList.mapM loadWith b
   ListAppend a b       -> ListAppend <$> loadWith a <*> loadWith b
   ListBuild            -> pure ListBuild
   ListFold             -> pure ListFold
