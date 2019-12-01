@@ -75,10 +75,6 @@ import qualified Lens.Family
 type X = Void
 {-# DEPRECATED X "Use Data.Void.Void instead" #-}
 
-traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> DhallList a -> f ()
-traverseWithIndex_ k xs =
-    Data.Foldable.sequenceA_ (DhallList.mapWithIndex k xs)
-
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
 axiom Kind = return Sort
@@ -570,8 +566,8 @@ infer typer = loop
             return (VConst Type ~> VConst Type)
 
         ListLit Nothing ts₀ -> do
-            case DhallList.head ts₀ of
-                Just t₀ -> do
+            case DhallList.uncons ts₀ of
+                Just (t₀, ts₁) -> do
                     _T₀' <- loop ctx t₀
 
                     let _T₀'' = quote names _T₀'
@@ -602,11 +598,11 @@ infer typer = loop
 
                                     Left (TypeError context t₁ err)
 
-                    traverseWithIndex_ process ts₀ -- TODO: traverse only the tail, use native mapM_withIndex
+                    DhallList.mapM_withIndex process ts₁
 
                     return (VList _T₀')
 
-                _ -> do
+                Nothing -> do
                     die MissingListType
 
         ListLit (Just _T₀) ts -> do
