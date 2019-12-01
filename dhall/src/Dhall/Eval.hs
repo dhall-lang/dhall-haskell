@@ -52,9 +52,8 @@ module Dhall.Eval (
   , textShow
   ) where
 
-import Data.Foldable (foldr', toList)
+import Data.Foldable (foldr')
 import Data.Semigroup (Semigroup(..))
-import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
 import DhallList (DhallList)
@@ -74,7 +73,6 @@ import GHC.Natural (Natural)
 import Prelude hiding (succ)
 
 import qualified Data.Char
-import qualified Data.Sequence   as Sequence
 import qualified Data.Set
 import qualified Data.Text       as Text
 import qualified DhallList
@@ -889,7 +887,7 @@ conv !env t0 t0' =
         (VList a, VList a') ->
             conv env a a'
         (VListLit _ xs, VListLit _ xs') ->
-            eqListBy (conv env) (toList xs) (toList xs')
+            DhallList.eqBy (conv env) xs xs'
         (VListAppend t u, VListAppend t' u') ->
             conv env t t' && conv env u u'
         (VListBuild _ t, VListBuild _ t') ->

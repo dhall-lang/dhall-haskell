@@ -63,7 +63,6 @@ import qualified Control.Monad        as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
-import qualified Data.Sequence
 import qualified Data.Text            as Text
 import qualified DhallList
 import qualified Dhall.Syntax
@@ -778,7 +777,7 @@ encodeExpressionInternal encodeEmbed = go
             | null xs ->
                 encodeList2 (Encoding.encodeInt label) _T₁
             | otherwise ->
-                encodeList
+                encodeList -- TODO
                     ( Encoding.encodeInt 4
                     : Encoding.encodeNull
                     : map go (Data.Foldable.toList xs)
