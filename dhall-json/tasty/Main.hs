@@ -31,6 +31,7 @@ testTree :: TestTree
 testTree =
     Test.Tasty.testGroup "dhall-json"
         [ testDhallToJSON "./tasty/data/issue48"
+        , testDhallToJSON "./tasty/data/emptyObjectStrongType"
         , testJSONToDhall "./tasty/data/emptyAlternative"
         , testJSONToDhall "./tasty/data/emptyObject"
         , testJSONToDhall "./tasty/data/emptyList"

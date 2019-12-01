@@ -858,7 +858,7 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
                 case elements of
                     [] ->
                         case a of
-                            Just (Core.Record m) -> do
+                            Just (Core.App Core.List (Core.Record m)) -> do
                                 guard (Foldable.length m == 2)
                                 guard (Dhall.Map.member mapKey   m)
                                 guard (Dhall.Map.member mapValue m)
