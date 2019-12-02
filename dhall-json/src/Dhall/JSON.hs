@@ -201,6 +201,7 @@ module Dhall.JSON (
     , omitEmpty
     , parsePreservationAndOmission
     , Conversion(..)
+    , defaultConversion
     , convertToHomogeneousMaps
     , parseConversion
     , SpecialDoubleMode(..)
@@ -645,6 +646,12 @@ parsePreservationAndOmission = parseOmission <|> parseNullPreservation
 data Conversion
     = NoConversion
     | Conversion { mapKey :: Text, mapValue :: Text }
+
+defaultConversion :: Conversion
+defaultConversion = Conversion
+    { mapKey = "mapKey"
+    , mapValue = "mapValue"
+    }
 
 {-| Convert association lists to homogeneous maps
 
