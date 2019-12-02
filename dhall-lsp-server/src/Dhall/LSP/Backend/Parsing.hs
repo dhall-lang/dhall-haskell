@@ -139,9 +139,10 @@ getImportHash (Src left _ text) =
           return (Src begin end tokens)
 
 setSourcePos :: SourcePos -> Parser ()
-setSourcePos src = Megaparsec.updateParserState
-                     (\(Megaparsec.State s o (Megaparsec.PosState i o' _ t l)) ->
-                       Megaparsec.State s o (Megaparsec.PosState i o' src t l))
+setSourcePos src =
+  Megaparsec.updateParserState $ \state ->
+    let posState = (Megaparsec.statePosState state) { Megaparsec.pstateSourcePos = src }
+    in state { Megaparsec.statePosState = posState }
 
 getImportLink :: Src -> Src
 getImportLink src@(Src left _ text) =

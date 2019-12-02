@@ -439,7 +439,7 @@ Library
         haskeline                   >= 0.7.2.1  && < 0.8 ,
         hashable                    >= 1.2      && < 1.3 ,
         lens-family-core            >= 1.0.0    && < 2.1 ,
-        megaparsec                  >= 6.5.0    && < 7.1 ,
+        megaparsec                  >= 7        && < 8.1 ,
         memory                      >= 0.14     && < 0.16,
         mtl                         >= 2.2.1    && < 2.3 ,
         network-uri                 >= 2.6      && < 2.7 ,
