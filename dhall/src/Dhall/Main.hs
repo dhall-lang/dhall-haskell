@@ -55,6 +55,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall
 import qualified Dhall.Binary
 import qualified Dhall.Core
@@ -72,6 +73,7 @@ import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
+import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.Console.ANSI
 import qualified System.Exit                               as Exit
 import qualified System.IO
@@ -666,22 +668,18 @@ command (Options {..}) = do
         Lint {..} -> do
             (Header header, expression) <- getExpressionAndHeader inplace
 
+            let lintedExpression = Dhall.Lint.lint expression
+
+            let doc =   Pretty.pretty header
+                    <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
+
             case inplace of
                 InputFile file -> do
-                    let lintedExpression = Dhall.Lint.lint expression
+                    let stream = Dhall.Pretty.layout (doc <> "\n")
 
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
-
-                    System.IO.withFile file System.IO.WriteMode (\h -> do
-                        renderDoc h doc )
+                    AtomicWrite.LazyText.atomicWriteFile file (Pretty.Text.renderLazy stream)
 
                 StandardInput -> do
-                    let lintedExpression = Dhall.Lint.lint expression
-
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
-
                     renderDoc System.IO.stdout doc
 
         Encode {..} -> do
