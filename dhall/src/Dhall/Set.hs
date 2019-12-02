@@ -21,6 +21,7 @@ module Dhall.Set (
     , sort
     , isSorted
     , null
+    , size
     ) where
 
 import Prelude hiding (null)
@@ -64,7 +65,7 @@ instance Foldable Set where
     null = Dhall.Set.null
     {-# INLINABLE null #-}
 
-    length (Set s _) = Data.Set.size s
+    length = Dhall.Set.size
     {-# INLINABLE length #-}
 
 -- | Convert to an unordered @"Data.Set".`Data.Set.Set`@
@@ -136,3 +137,10 @@ True
 -}
 null :: Set a -> Bool
 null (Set s _) = Data.Set.null s
+
+{-|
+>>> size (fromList [1])
+1
+-}
+size :: Set a -> Int
+size (Set s _) = Data.Set.size s
