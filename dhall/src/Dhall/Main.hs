@@ -502,6 +502,12 @@ command (Options {..}) = do
 
             renderDoc h doc
 
+    let writeDocToFile :: FilePath -> Doc ann -> IO ()
+        writeDocToFile file doc = do
+            let stream = Dhall.Pretty.layout (doc <> "\n")
+
+            AtomicWrite.LazyText.atomicWriteFile file (Pretty.Text.renderLazy stream)
+
     when (not $ ignoreSemanticCache mode) Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
@@ -537,12 +543,10 @@ command (Options {..}) = do
             case output of
                 StandardOutput -> render System.IO.stdout annotatedExpression
 
-                OutputFile file_ -> do
-                    let doc = Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression
-
-                    let stream = Dhall.Pretty.layout (doc <> "\n")
-
-                    AtomicWrite.LazyText.atomicWriteFile file_ (Pretty.Text.renderLazy stream)
+                OutputFile file_ ->
+                    writeDocToFile
+                        file_
+                        (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
 
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
@@ -679,13 +683,9 @@ command (Options {..}) = do
                     <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
             case inplace of
-                InputFile file -> do
-                    let stream = Dhall.Pretty.layout (doc <> "\n")
+                InputFile file -> writeDocToFile file doc
 
-                    AtomicWrite.LazyText.atomicWriteFile file (Pretty.Text.renderLazy stream)
-
-                StandardInput -> do
-                    renderDoc System.IO.stdout doc
+                StandardInput -> renderDoc System.IO.stdout doc
 
         Encode {..} -> do
             expression <- getExpression file
