@@ -26,12 +26,14 @@ import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
+import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.FilePath
 import qualified System.IO
 
@@ -94,9 +96,10 @@ writeExpr inplace (header, expr) characterSet = do
     let unAnnotated = Pretty.unAnnotateS stream
 
     case inplace of
-        InputFile f ->
-            System.IO.withFile f System.IO.WriteMode (\handle -> do
-                Pretty.renderIO handle unAnnotated)
+        InputFile file ->
+            AtomicWrite.LazyText.atomicWriteFile
+                file
+                (Pretty.Text.renderLazy unAnnotated)
 
         StandardInput -> do
             supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
