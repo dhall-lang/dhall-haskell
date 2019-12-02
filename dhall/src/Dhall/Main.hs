@@ -536,8 +536,13 @@ command (Options {..}) = do
 
             case output of
                 StandardOutput -> render System.IO.stdout annotatedExpression
-                OutputFile file_ ->
-                    System.IO.withFile file_ System.IO.WriteMode $ \h -> render h annotatedExpression
+
+                OutputFile file_ -> do
+                    let doc = Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression
+
+                    let stream = Dhall.Pretty.layout (doc <> "\n")
+
+                    AtomicWrite.LazyText.atomicWriteFile file_ (Pretty.Text.renderLazy stream)
 
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
