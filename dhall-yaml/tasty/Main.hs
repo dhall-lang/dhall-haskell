@@ -10,7 +10,6 @@ import Test.Tasty (TestTree)
 
 import qualified Data.ByteString
 import qualified Data.Text.IO
-import qualified Dhall.JSON
 import qualified Dhall.JSON.Yaml
 import qualified Dhall.Yaml
 import qualified GHC.IO.Encoding
@@ -38,7 +37,6 @@ testTree =
             "./tasty/data/emptyList"
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
-                { conversion = Dhall.JSON.Conversion "mapKey" "mapValue" }
             "./tasty/data/emptyMap"
         , Test.Tasty.ExpectedFailure.ignoreTestBecause "#1516" $
           testDhallToYaml
