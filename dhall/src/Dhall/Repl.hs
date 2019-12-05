@@ -25,6 +25,7 @@ import Data.Text ( Text )
 import Data.Void (Void)
 import Dhall.Context (Context)
 import Dhall.Import (hashExpressionToCode)
+import Dhall.Parser (Parser(..))
 import Dhall.Src (Src)
 import Dhall.Pretty (CharacterSet(..))
 import System.Console.Haskeline (Interrupt(..))
@@ -43,18 +44,21 @@ import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
+import qualified Dhall.Parser.Token                      as Parser.Token
 import qualified Dhall.Pretty
+import qualified Dhall.Pretty.Internal
 import qualified Dhall.Core as Expr ( Expr(..) )
-import qualified Dhall.Import as Dhall
-import qualified Dhall.Map as Map
-import qualified Dhall.Parser as Dhall
-import qualified Dhall.TypeCheck as Dhall
-import qualified Dhall.Version as Meta
+import qualified Dhall.Import                            as Dhall
+import qualified Dhall.Map                               as Map
+import qualified Dhall.Parser                            as Dhall
+import qualified Dhall.TypeCheck                         as Dhall
+import qualified Dhall.Version                           as Meta
 import qualified System.Console.ANSI
-import qualified System.Console.Haskeline.Completion as Haskeline
+import qualified System.Console.Haskeline.Completion     as Haskeline
 import qualified System.Console.Haskeline.MonadException as Haskeline
-import qualified System.Console.Repline as Repline
+import qualified System.Console.Repline                  as Repline
 import qualified System.IO
+import qualified Text.Megaparsec                         as Megaparsec
 
 type Repl = Repline.HaskelineT (State.StateT Env IO)
 
@@ -212,23 +216,19 @@ separateEqual (str : strs)
 
 addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
 addBinding (k : "=" : srcs) = do
-  let
-    varName =
-      Text.pack k
+  varName <- case Megaparsec.parse (unParser Parser.Token.label) "(stdin)" (Text.pack k) of
+      Left   _      -> Fail.fail "Invalid variable name"
+      Right varName -> return varName
 
-  loaded <-
-    parseAndLoad ( unwords srcs )
+  loaded <- parseAndLoad ( unwords srcs )
 
-  t <-
-    typeCheck loaded
+  t <- typeCheck loaded
 
-  expr <-
-    normalize loaded
+  expr <- normalize loaded
 
   modify
     ( \e ->
-        e
-          { envBindings =
+        e { envBindings =
               Dhall.Context.insert
                 varName
                 Binding { bindingType = t, bindingExpr = expr }
@@ -351,7 +351,11 @@ saveBinding [file] = do
       handler handle =
           State.evalStateT
             (forM_ bindings $ \(name, expr) -> do
-              liftIO (System.IO.hPutStr handle $ ":let " <> Text.unpack name <> " = ")
+              let doc = Dhall.Pretty.Internal.prettyLabel name
+
+              let label = Dhall.Pretty.Internal.docToStrictText doc
+
+              liftIO (System.IO.hPutStr handle $ ":let " <> Text.unpack label <> " = ")
               outputWithoutSpacing expr)
             (env { outputHandle = Just handle })
 

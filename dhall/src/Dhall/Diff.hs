@@ -361,14 +361,22 @@ diffChunks cL cR
 diffList
     :: (Eq a, Pretty a)
     => Seq (Expr Void a) -> Seq (Expr Void a) -> Diff
-diffList l r = bracketed (foldMap diffPart parts)
+diffList l r = bracketed (loop parts₀)
   where
     -- Sections of the list that are only in left, only in right, or in both
-    parts =
-        Algo.Diff.getGroupedDiffBy ((same .) . diff) (toList l) (toList r)
+    parts₀ = Algo.Diff.getGroupedDiffBy equal (toList l) (toList r)
+
+    equal a b = same (diff a b)
 
     -- Render each element of a list using an extra rendering function f
     prettyElems f = map (f . token . Internal.prettyExpr)
+
+    loop [] =
+        mempty
+    loop (Algo.Diff.First as : Algo.Diff.Second bs : parts)
+        | length as == length bs = zipWith diff as bs <> loop parts
+    loop (part : parts) =
+        diffPart part <> loop parts
 
     diffPart part =
       case part of

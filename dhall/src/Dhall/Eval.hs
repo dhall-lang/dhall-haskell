@@ -619,14 +619,14 @@ eval !env t0 =
                 VListLit _ as ->
                     let a' =
                             if null as
-                            then Just (VList (VRecord (Map.fromList [("index", VNatural), ("value", a)])))
+                            then Just (VList (VRecord (Map.unorderedFromList [("index", VNatural), ("value", a)])))
                             else Nothing
 
                         as' =
                             Sequence.mapWithIndex
                                 (\i t ->
                                     VRecordLit
-                                        (Map.fromList
+                                        (Map.unorderedFromList
                                             [ ("index", VNaturalLit (fromIntegral i))
                                             , ("value", t)
                                             ]
@@ -701,17 +701,17 @@ eval !env t0 =
         ToMap x ma ->
             case (eval env x, fmap (eval env) ma) of
                 (VRecordLit m, ma'@(Just _)) | null m ->
-                    VListLit ma' (Sequence.empty)
+                    VListLit ma' Sequence.empty
                 (VRecordLit m, _) ->
                     let entry (k, v) =
                             VRecordLit
-                                (Map.fromList
+                                (Map.unorderedFromList
                                     [ ("mapKey", VTextLit $ VChunks [] k)
                                     , ("mapValue", v)
                                     ]
                                 )
 
-                        s = (Sequence.fromList . map entry . Map.toList) m
+                        s = (Sequence.fromList . map entry . Map.toAscList) m
 
                     in  VListLit Nothing s
                 (x', ma') ->
@@ -759,7 +759,7 @@ eqListBy f = go
 eqMapsBy :: Ord k => (v -> v -> Bool) -> Map k v -> Map k v -> Bool
 eqMapsBy f mL mR =
     Map.size mL == Map.size mR
-    && eqListBy eq (Map.toList mL) (Map.toList mR)
+    && eqListBy eq (Map.toAscList mL) (Map.toAscList mR)
   where
     eq (kL, vL) (kR, vR) = kL == kR && f vL vR
 {-# INLINE eqMapsBy #-}

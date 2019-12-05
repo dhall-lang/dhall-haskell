@@ -42,6 +42,7 @@ tests =
         , issue1131a
         , issue1131b
         , issue1341
+        , issue1584
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -179,6 +180,13 @@ issue1341 = Test.Tasty.HUnit.testCase "Issue #1341" (do
     let actual = Dhall.Core.V "x" 0 `Dhall.Core.freeIn` nan
     let msg    = "NaN shouldn't contain any free variables"
     Test.Tasty.HUnit.assertEqual msg False actual)
+
+issue1584 :: TestTree
+issue1584 = Test.Tasty.HUnit.testCase "Issue #1584" (do
+    -- This test ensures that we can parse variables with keyword prefixes
+    -- (e.g. `ifX`)
+    _ <- Util.code "./tests/regression/issue1584.dhall"
+    return () )
 
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do

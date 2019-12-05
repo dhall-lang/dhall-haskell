@@ -21,7 +21,7 @@ module Dhall.JSON.Yaml
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), UnionTagOptions(..), UnionTagMode(..), codeToValue)
+import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), UnionTagOptions(..), UnionTagMode(..))
 import Options.Applicative (Parser)
 
 import qualified Data.Aeson
@@ -29,6 +29,7 @@ import qualified Data.Aeson.Yaml
 import qualified Data.ByteString.Lazy
 import qualified Data.Vector
 import qualified Dhall
+import qualified Dhall.JSON
 import qualified Options.Applicative
 
 data Options = Options
@@ -49,7 +50,7 @@ defaultOptions =
           , omission = id
           , documents = False
           , quoted = False
-          , conversion = NoConversion
+          , conversion = Dhall.JSON.defaultConversion
           , file = Nothing
           , output = Nothing
           }
@@ -80,7 +81,7 @@ dhallToYaml Options{..} mFilePath code = do
   
   let explaining = if explain then Dhall.detailed else id
 
-  json <- omission <$> explaining (codeToValue unionTagOptions conversion UseYAMLEncoding mFilePath code)
+  json <- omission <$> explaining (Dhall.JSON.codeToValue unionTagOptions conversion UseYAMLEncoding mFilePath code)
 
   return $ jsonToYaml json documents quoted
 

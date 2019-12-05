@@ -29,9 +29,6 @@ import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Set
 import qualified Text.Megaparsec
-#if !MIN_VERSION_megaparsec(7, 0, 0)
-import qualified Text.Megaparsec.Char as Text.Megaparsec (satisfy)
-#endif
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
@@ -126,9 +123,13 @@ instance MonadPlus Parser where
     -- {-# INLINE mplus #-}
 
 instance Text.Megaparsec.MonadParsec Void Text Parser where
+#if MIN_VERSION_megaparsec(8, 0, 0)
+    parseError e = Parser (Text.Megaparsec.parseError e)
+#else
     failure u e    = Parser (Text.Megaparsec.failure u e)
 
     fancyFailure e = Parser (Text.Megaparsec.fancyFailure e)
+#endif
 
     label l (Parser p) = Parser (Text.Megaparsec.label l p)
 
@@ -196,11 +197,7 @@ instance Text.Parser.Char.CharParsing Parser where
 
   notChar = Text.Megaparsec.Char.char
 
-#if MIN_VERSION_megaparsec(7, 0, 0)
   anyChar = Text.Megaparsec.anySingle
-#else
-  anyChar = Text.Megaparsec.Char.anyChar
-#endif
 
   string = fmap Data.Text.unpack . Text.Megaparsec.Char.string . fromString
 

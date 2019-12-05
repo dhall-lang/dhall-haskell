@@ -23,6 +23,7 @@ import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Dhall.Pretty
 import qualified Dhall.Util
+import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.Console.ANSI
 import qualified System.IO
 
@@ -68,8 +69,9 @@ format (Format {..}) = do
 
             case inplace of
                 InputFile file -> do
-                    System.IO.withFile file System.IO.WriteMode (\handle -> do
-                        Pretty.Terminal.renderIO handle (Pretty.unAnnotateS docStream))
+                    AtomicWrite.LazyText.atomicWriteFile
+                        file
+                        (Pretty.Text.renderLazy docStream)
 
                 StandardInput -> do
                     supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
