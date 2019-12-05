@@ -207,7 +207,8 @@ module Dhall.JSON (
     , SpecialDoubleMode(..)
     , handleSpecialDoubles
     , codeToValue
-    , UnionTagOptions
+    , UnionTagOptions(..)
+    , UnionTagMode(..)
     , parseUnionTagOptions
 
     -- * Exceptions

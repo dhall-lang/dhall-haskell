@@ -5,7 +5,7 @@
 module Main where
 
 import Data.Monoid ((<>))
-import Dhall.JSON.Yaml (Options(..))
+import Dhall.JSON.Yaml (Options(..), UnionTagOptions(..), UnionTagMode(..))
 import Test.Tasty (TestTree)
 
 import qualified Data.ByteString
@@ -39,7 +39,31 @@ testTree =
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/special"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions { unionTagOptions = Just inlineTagOptions }
+            "./tasty/data/autoNestingInlineA"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions { unionTagOptions = Just inlineTagOptions }
+            "./tasty/data/autoNestingInlineB"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions { unionTagOptions = Just nestedTagOptions }
+            "./tasty/data/autoNestingNestedA"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions { unionTagOptions = Just nestedTagOptions }
+            "./tasty/data/autoNestingNestedB"
         ]
+
+inlineTagOptions :: UnionTagOptions
+inlineTagOptions = UnionTagOptions
+    { tagMode = TagInline
+    , tagField = "tag"
+    }
+
+nestedTagOptions :: UnionTagOptions
+nestedTagOptions = UnionTagOptions
+    { tagMode = TagNested "contents"
+    , tagField = "tag"
+    }
 
 testDhallToYaml :: Options -> String -> TestTree
 testDhallToYaml options prefix =

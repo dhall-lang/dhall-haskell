@@ -9,6 +9,8 @@
 -}
 module Dhall.JSON.Yaml
   ( Options(..)
+  , UnionTagOptions(..)
+  , UnionTagMode(..)
   , parseDocuments
   , parseQuoted
   , defaultOptions
@@ -19,7 +21,7 @@ module Dhall.JSON.Yaml
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), UnionTagOptions, codeToValue)
+import Dhall.JSON (Conversion(..), SpecialDoubleMode(..), UnionTagOptions(..), UnionTagMode(..), codeToValue)
 import Options.Applicative (Parser)
 
 import qualified Data.Aeson
