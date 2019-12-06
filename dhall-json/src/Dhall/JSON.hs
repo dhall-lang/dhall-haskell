@@ -211,6 +211,7 @@ module Dhall.JSON (
     , UnionTagOptions(..)
     , UnionTagMode(..)
     , parseUnionTagOptions
+    , tagUnions
 
     -- * Exceptions
     , CompileError(..)
