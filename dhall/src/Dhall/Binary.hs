@@ -697,7 +697,8 @@ encodeExpressionInternal encodeEmbed = go
             Encoding.encodeString "Sort"
 
         a@App{} ->
-            encodeList
+            encodeListN
+                (2 + length arguments)
                 ( Encoding.encodeInt 0
                 : go function
                 : map go arguments
@@ -777,7 +778,8 @@ encodeExpressionInternal encodeEmbed = go
             | null xs ->
                 encodeList2 (Encoding.encodeInt label) _T₁
             | otherwise ->
-                encodeList
+                encodeListN
+                    (2 + length xs)
                     ( Encoding.encodeInt 4
                     : Encoding.encodeNull
                     : map go (Data.Foldable.toList xs)
@@ -824,7 +826,8 @@ encodeExpressionInternal encodeEmbed = go
                 (Encoding.encodeString x)
 
         Project t (Left xs) ->
-            encodeList
+            encodeListN
+                (2 + Dhall.Set.size xs)
                 ( Encoding.encodeInt 10
                 : go t
                 : map Encoding.encodeString (Dhall.Set.toList xs)
@@ -884,7 +887,8 @@ encodeExpressionInternal encodeEmbed = go
                 (Encoding.encodeString z)
 
         TextLit (Chunks xys z) ->
-            encodeList
+            encodeListN
+                (2 + 2 * length xys)
                 ( Encoding.encodeInt 18
                 : concatMap encodePair xys ++ [ Encoding.encodeString z ]
                 )
@@ -900,7 +904,8 @@ encodeExpressionInternal encodeEmbed = go
             encodeEmbed x
 
         Let a₀ b₀ ->
-            encodeList
+            encodeListN
+                (2 + 3 * length as)
                 ( Encoding.encodeInt 25
                 : concatMap encodeBinding (toList as) ++ [ go b₁ ]
                 )
@@ -966,9 +971,12 @@ encodeList4 :: Encoding -> Encoding -> Encoding -> Encoding -> Encoding
 encodeList4 a b c d = Encoding.encodeListLen 4 <> a <> b <> c <> d
 {-# INLINE encodeList4 #-}
 
+encodeListN :: Int -> [ Encoding ] -> Encoding
+encodeListN len xs = Encoding.encodeListLen (fromIntegral len) <> mconcat xs
+{-# INLINE encodeListN #-}
+
 encodeList :: [ Encoding ] -> Encoding
-encodeList xs =
-    Encoding.encodeListLen (fromIntegral (length xs)) <> mconcat xs
+encodeList xs = encodeListN (length xs) xs
 {-# INLINE encodeList #-}
 
 decodeImport :: Int -> Decoder s Import

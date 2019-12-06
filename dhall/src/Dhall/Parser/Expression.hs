@@ -32,9 +32,6 @@ import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Crypto
 import qualified Text.Megaparsec
-#if !MIN_VERSION_megaparsec(7, 0, 0)
-import qualified Text.Megaparsec.Char    as Text.Megaparsec
-#endif
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
@@ -43,31 +40,19 @@ import Dhall.Parser.Token
 getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
                 m Text.Megaparsec.SourcePos
 getSourcePos =
-#if MIN_VERSION_megaparsec(7, 0, 0)
     Text.Megaparsec.getSourcePos
-#else
-    Text.Megaparsec.getPosition
-#endif
 {-# INLINE getSourcePos #-}
 
 -- | Get the current source offset (in tokens)
 getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
-#if MIN_VERSION_megaparsec(7, 0, 0)
 getOffset = Text.Megaparsec.stateOffset <$> Text.Megaparsec.getParserState
-#else
-getOffset = Text.Megaparsec.stateTokensProcessed <$> Text.Megaparsec.getParserState
-#endif
 {-# INLINE getOffset #-}
 
 -- | Set the current source offset
 setOffset :: Text.Megaparsec.MonadParsec e s m => Int -> m ()
-#if MIN_VERSION_megaparsec(7, 0, 0)
-setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s _ pst) ->
-  Text.Megaparsec.State s o pst
-#else
-setOffset o = Text.Megaparsec.updateParserState $ \(Text.Megaparsec.State s p _ stw) ->
-  Text.Megaparsec.State s p o stw
-#endif
+setOffset o = Text.Megaparsec.updateParserState $ \state ->
+    state
+        { Text.Megaparsec.stateOffset = o }
 {-# INLINE setOffset #-}
 
 {-| Wrap a `Parser` to still match the same text but return only the `Src`
@@ -162,24 +147,19 @@ parsers embedded = Parsers {..}
             return (Lam a b c)
 
         alternative1 = do
-            _if
-            nonemptyWhitespace
+            try (_if *> nonemptyWhitespace)
             a <- expression
             whitespace
-            _then
-            nonemptyWhitespace
+            try (_then *> nonemptyWhitespace)
             b <- expression
             whitespace
-            _else
-            nonemptyWhitespace
+            try (_else *> nonemptyWhitespace)
             c <- expression
             return (BoolIf a b c)
 
         alternative2 = do
             let binding = do
-                    _let
-
-                    src0 <- src nonemptyWhitespace
+                    src0 <- try (_let *> src nonemptyWhitespace)
 
                     c <- label
 
@@ -208,9 +188,7 @@ parsers embedded = Parsers {..}
 
             as <- Data.List.NonEmpty.some1 binding
 
-            _in
-
-            nonemptyWhitespace
+            try (_in *> nonemptyWhitespace)
 
             b <- expression
 
@@ -234,9 +212,7 @@ parsers embedded = Parsers {..}
             return (Dhall.Syntax.wrapInLets as b)
 
         alternative3 = do
-            _forall
-            whitespace
-            _openParens
+            try (_forall *> whitespace *> _openParens)
             whitespace
             a <- label
             whitespace
@@ -252,9 +228,7 @@ parsers embedded = Parsers {..}
             return (Pi a b c)
 
         alternative4 = do
-            _assert
-            whitespace
-            _colon
+            try (_assert *> whitespace *> _colon)
             nonemptyWhitespace
             a <- expression
             return (Assert a)
@@ -321,7 +295,7 @@ parsers embedded = Parsers {..}
         ]
 
     applicationExpression = do
-            f <-    (Some <$ _Some <* nonemptyWhitespace)
+            f <-    (Some <$ try (_Some <* nonemptyWhitespace))
                 <|> return id
             a <- noted importExpression_
             bs <- Text.Megaparsec.many . try $ do
@@ -433,16 +407,14 @@ parsers embedded = Parsers {..}
             alternative06 = listLiteral
 
             alternative07 = do
-                _merge
-                nonemptyWhitespace
+                try (_merge *> nonemptyWhitespace)
                 a <- importExpression_
                 nonemptyWhitespace
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative08 = do
-                _toMap
-                nonemptyWhitespace
+                try (_toMap *> nonemptyWhitespace)
                 a <- importExpression_
                 return (ToMap a Nothing)
 

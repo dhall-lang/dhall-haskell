@@ -32,6 +32,12 @@ testTree =
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/special"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions
+            "./tasty/data/emptyList"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions
+            "./tasty/data/emptyMap"
         , Test.Tasty.ExpectedFailure.ignoreTestBecause "#1516" $
           testDhallToYaml
             (Dhall.JSON.Yaml.defaultOptions { quoted = True })

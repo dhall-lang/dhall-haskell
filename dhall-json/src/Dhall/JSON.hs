@@ -201,6 +201,7 @@ module Dhall.JSON (
     , omitEmpty
     , parsePreservationAndOmission
     , Conversion(..)
+    , defaultConversion
     , convertToHomogeneousMaps
     , parseConversion
     , SpecialDoubleMode(..)
@@ -646,6 +647,12 @@ data Conversion
     = NoConversion
     | Conversion { mapKey :: Text, mapValue :: Text }
 
+defaultConversion :: Conversion
+defaultConversion = Conversion
+    { mapKey = "mapKey"
+    , mapValue = "mapValue"
+    }
+
 {-| Convert association lists to homogeneous maps
 
     This converts an association list of the form:
@@ -858,7 +865,7 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
                 case elements of
                     [] ->
                         case a of
-                            Just (Core.Record m) -> do
+                            Just (Core.App Core.List (Core.Record m)) -> do
                                 guard (Foldable.length m == 2)
                                 guard (Dhall.Map.member mapKey   m)
                                 guard (Dhall.Map.member mapValue m)
