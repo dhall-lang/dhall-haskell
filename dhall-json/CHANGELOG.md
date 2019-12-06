@@ -17,6 +17,10 @@
     * rename `--preserveNull` to `--preserve-null`
     * rename `--noMaps` to `--no-maps`
     * drop `--omitNull` as redundant because of `--preserve-null` (see below)
+* [BUG FIX: Handle empty maps correctly](https://github.com/dhall-lang/dhall-haskell/pull/1561)
+    * `dhall-to-{json,yaml}` now correctly translate empty Dhall maps
+      to empty JSON dictionaries
+* [Add `Dhall.JSON.defaultConversion`](https://github.com/dhall-lang/dhall-haskell/pull/1579)
 * [Don't normalize schema before type-checking](https://github.com/dhall-lang/dhall-haskell/pull/1555)
     * This improves the error messages for `{json,yaml}-to-dhall`
 * [Fix `dhall-to-yaml` to quote special strings](https://github.com/dhall-lang/dhall-haskell/pull/1474)

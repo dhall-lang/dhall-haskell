@@ -51,6 +51,7 @@
     * [#1500](https://github.com/dhall-lang/dhall-haskell/pull/1500)
     * [#1522](https://github.com/dhall-lang/dhall-haskell/pull/1522)
     * [#1568](https://github.com/dhall-lang/dhall-haskell/pull/1568)
+    * [#1580](https://github.com/dhall-lang/dhall-haskell/pull/1578)
 * Fixes and improvements to code formatting
     * [#1460](https://github.com/dhall-lang/dhall-haskell/pull/1460)
     * [#1466](https://github.com/dhall-lang/dhall-haskell/pull/1466)
@@ -75,6 +76,9 @@
     * [#1473](https://github.com/dhall-lang/dhall-haskell/pull/1473)
     * [#1549](https://github.com/dhall-lang/dhall-haskell/pull/1549)
     * [#1563](https://github.com/dhall-lang/dhall-haskell/pull/1563)
+    * [#1584](https://github.com/dhall-lang/dhall-haskell/pull/1584)
+* Fixes and improvements to diffs
+    * [#1585](https://github.com/dhall-lang/dhall-haskell/pull/1585)
 * Fixes and improvements to the REPL
     * [#1573](https://github.com/dhall-lang/dhall-haskell/pull/1573)
 * Fixes and improvements to documentation
