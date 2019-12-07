@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 -- | This module contains the implementation of the @dhall lint@ command
 
@@ -29,7 +30,7 @@ import Dhall.Syntax
     )
 
 import qualified Data.List.NonEmpty as NonEmpty
-import qualified Dhall.Core
+import qualified Dhall.Core         as Core
 import qualified Dhall.Optics
 import qualified Lens.Family
 
@@ -42,12 +43,14 @@ import qualified Lens.Family
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
 -}
-lint :: Expr s Import -> Expr t Import
-lint =
-      Dhall.Optics.rewriteOf
-        subExpressions
-        (\e -> fixAssert e <|> removeUnusedBindings e <|> fixParentPath e)
-    . removeLetInLet
+lint :: Expr s Import -> Expr s Import
+lint = Dhall.Optics.rewriteOf subExpressions rewrite
+  where
+    rewrite e =
+            fixAssert            e
+        <|> removeUnusedBindings e
+        <|> fixParentPath        e
+        <|> removeLetInLet       e
 
 -- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -55,16 +58,16 @@ removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
 removeUnusedBindings (Let (Binding _ _ _ _ _ e) _)
     | isOrContainsAssert e = Nothing
 removeUnusedBindings (Let (Binding _ a _ _ _ _) d)
-    | not (V a 0 `Dhall.Core.freeIn` d) =
-        Just (Dhall.Core.shift (-1) (V a 0) d)
+    | not (V a 0 `Core.freeIn` d) =
+        Just (Core.shift (-1) (V a 0) d)
 removeUnusedBindings _ = Nothing
 
 -- | Fix `Let` bindings  that the user probably meant to be `assert`s
 fixAssert :: Expr s a -> Maybe (Expr s a)
-fixAssert (Let (Binding { value = Equivalent x y, ..}) body) =
-    Just (Let (Binding { value = Assert (Equivalent x y), .. }) body)
-fixAssert (Let binding (Equivalent x y)) =
-    Just (Let binding (Assert (Equivalent x y)))
+fixAssert (Let (Binding { value = v@(Core.shallowDenote -> Equivalent {}), ..}) body) =
+    Just (Let (Binding { value = Assert v, .. }) body)
+fixAssert (Let binding body@(Core.shallowDenote -> Equivalent {})) =
+    Just (Let binding (Assert body))
 fixAssert _ =
     Nothing
 
@@ -110,5 +113,6 @@ isOrContainsAssert e = Lens.Family.anyOf subExpressions isOrContainsAssert e
 -- is that in the second expression, the inner 'Let' is wrapped by a 'Note'.
 --
 -- Denoting removes that distinction.
-removeLetInLet :: Expr s a -> Expr t a
-removeLetInLet = Dhall.Core.denote
+removeLetInLet :: Expr s a -> Maybe (Expr s a)
+removeLetInLet (Let binding (Note _ l@Let{})) = Just (Let binding l)
+removeLetInLet _ = Nothing
