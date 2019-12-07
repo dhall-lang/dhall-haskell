@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 -- | This module contains the implementation of the @dhall freeze@ subcommand
 
@@ -27,7 +28,7 @@ import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
-import qualified Dhall.Core
+import qualified Dhall.Core                                as Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
 import qualified Dhall.Pretty
@@ -60,11 +61,10 @@ freezeImport directory import_ = do
         Left  exception -> Control.Exception.throwIO exception
         Right _         -> return ()
 
-    let normalizedExpression =
-            Dhall.Core.alphaNormalize (Dhall.Core.normalize expression)
+    let normalizedExpression = Core.alphaNormalize (Core.normalize expression)
 
     -- make sure the frozen import is present in the semantic cache
-    Dhall.Import.writeExpressionToSemanticCache (Dhall.Core.denote expression)
+    Dhall.Import.writeExpressionToSemanticCache (Core.denote expression)
 
     let expressionHash = Dhall.Import.hashExpression normalizedExpression
 
@@ -152,10 +152,10 @@ freeze inplace scope intent characterSet censor = do
 
     let cache
             (ImportAlt
-                (Embed
+                (Core.shallowDenote -> Embed
                     (Import { importHashed = ImportHashed { hash = Just _expectedHash } })
                 )
-                import_@(ImportAlt
+                import_@(Core.shallowDenote -> ImportAlt
                     (Embed
                         (Import { importHashed = ImportHashed { hash = Just _actualHash } })
                     )
@@ -190,9 +190,9 @@ freeze inplace scope intent characterSet censor = do
                     traverse freezeFunction expression
                 Cache  ->
                     Dhall.Optics.transformMOf
-                        Dhall.Core.subExpressions
+                        Core.subExpressions
                         cache
-                        (Dhall.Core.denote expression)
+                        expression
 
     frozenExpression <- rewrite parsedExpression
 
