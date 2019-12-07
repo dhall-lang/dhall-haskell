@@ -193,7 +193,7 @@ parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
     -- Verify that parsing should not fail
     --
     -- In 267093f8cddf1c2f909f2d997c31fd0a7cb2440a I broke the parser when left
-    -- factoring the grammer by failing to handle the source tested by this
+    -- factoring the grammar by failing to handle the source tested by this
     -- regression test.  The root of the problem was that the parser was trying
     -- to parse `List ./Node` as `Field List "/Node"` instead of
     -- `App List (Embed (Path (File Homeless "./Node") Code))`.  The latter is

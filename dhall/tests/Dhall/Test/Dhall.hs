@@ -92,7 +92,7 @@ shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
 
   case inputEx of
     Left ex -> assertEqual assertMsg expectedMsg (show ex)
-    Right _ -> fail "The extraction using a wrong type succeded"
+    Right _ -> fail "The extraction using a wrong type succeeded"
 
 -- https://github.com/dhall-lang/dhall-haskell/issues/915
 shouldHandleUnionLiteral :: TestTree

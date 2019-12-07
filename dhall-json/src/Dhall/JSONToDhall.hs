@@ -349,7 +349,7 @@ App List Natural
 
 >>> typeCheckSchemaExpr id =<< resolveSchemaExpr "+1"
 *** Exception:
-Error: Schema expression is succesfully parsed but has Dhall type:
+Error: Schema expression is successfully parsed but has Dhall type:
 Integer
 Expected Dhall type: Type
 Parsed expression: +1
@@ -641,7 +641,7 @@ showCompileError format showValue = let prefix = red "\nError: "
     TypeError e -> show e
 
     BadDhallType t e -> prefix
-      <> "Schema expression is succesfully parsed but has Dhall type:\n"
+      <> "Schema expression is successfully parsed but has Dhall type:\n"
       <> showExpr t <> "\nExpected Dhall type: Type"
       <> "\nParsed expression: "
       <> showExpr e <> "\n"
