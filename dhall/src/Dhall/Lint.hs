@@ -112,7 +112,8 @@ isOrContainsAssert e = Lens.Family.anyOf subExpressions isOrContainsAssert e
 --
 -- is that in the second expression, the inner 'Let' is wrapped by a 'Note'.
 --
--- Denoting removes that distinction.
+-- We remove such a 'Note' in order to consolidate nested let-blocks into a
+-- single one.
 removeLetInLet :: Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let binding (Note _ l@Let{})) = Just (Let binding l)
 removeLetInLet _ = Nothing

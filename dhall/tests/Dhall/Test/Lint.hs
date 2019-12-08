@@ -4,17 +4,19 @@ module Dhall.Test.Lint where
 
 import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Core (Expr, Import)
+import Dhall.Parser (Header(..))
 import Prelude hiding (FilePath)
 import Test.Tasty (TestTree)
 import Turtle (FilePath)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
+import qualified Data.Text.Prettyprint.Doc as Doc
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Doc.Render.Text
 import qualified Dhall.Core       as Core
 import qualified Dhall.Lint       as Lint
 import qualified Dhall.Parser     as Parser
+import qualified Dhall.Pretty     as Pretty
 import qualified Dhall.Test.Util  as Test.Util
 import qualified Test.Tasty       as Tasty
 import qualified Test.Tasty.HUnit as Tasty.HUnit
@@ -31,6 +33,16 @@ getTests = do
 
     return testTree
 
+format :: Header -> Core.Expr Parser.Src Core.Import -> Text
+format (Header header) expr =
+    let doc =  Doc.pretty header
+            <> Pretty.prettyCharacterSet Pretty.Unicode expr
+            <> "\n"
+
+        docStream = Pretty.layout doc
+    in
+        Doc.Render.Text.renderStrict docStream
+
 lintTest :: Text -> TestTree
 lintTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
@@ -39,18 +51,14 @@ lintTest prefix =
 
         inputText <- Text.IO.readFile inputFile
 
-        parsedInput <- Core.throws (Parser.exprFromText mempty inputText)
+        (header, parsedInput) <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
 
-        let actualExpression :: Expr Void Import
-            actualExpression = Core.denote (Lint.lint parsedInput)
+        let actualExpression = Lint.lint parsedInput
 
-        outputText <- Text.IO.readFile outputFile
+        let actualText = format header actualExpression
 
-        parsedOutput <- Core.throws (Parser.exprFromText mempty outputText)
-
-        let expectedExpression :: Expr Void Import
-            expectedExpression = Core.denote parsedOutput
+        expectedText <- Text.IO.readFile outputFile
 
         let message = "The linted expression did not match the expected output"
 
-        Tasty.HUnit.assertEqual message expectedExpression actualExpression
+        Tasty.HUnit.assertEqual message expectedText actualText
