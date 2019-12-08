@@ -12,6 +12,9 @@ module Dhall.Pretty
 
     , Dhall.Pretty.Internal.layout
     , Dhall.Pretty.Internal.layoutOpts
+
+    , escapeEnvironmentVariable
+    , escapeLabel
     ) where
 
 import Dhall.Pretty.Internal

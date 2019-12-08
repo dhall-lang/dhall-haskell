@@ -467,7 +467,7 @@ completionHandler request = do
   let computeCompletions
         -- environment variable
         | "env:" `isPrefixOf` completionPrefix =
-          liftIO $ completeEnvironmentImport
+          liftIO completeEnvironmentImport
 
         -- local import
         | any (`isPrefixOf` completionPrefix) [ "/", "./", "../", "~/" ] = do

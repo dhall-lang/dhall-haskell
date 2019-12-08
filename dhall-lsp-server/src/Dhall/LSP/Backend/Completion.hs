@@ -3,22 +3,32 @@ module Dhall.LSP.Backend.Completion where
 import Data.List (foldl')
 import Data.Text (Text)
 import Data.Void (Void, absurd)
+import Dhall.Context (Context, insert)
+import Dhall.Context (empty, toList)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
+import Dhall.LSP.Backend.Parsing (holeExpr)
+import Dhall.Parser (Src, exprFromText)
+import Dhall.TypeCheck (typeWithA, typeOf)
 import System.Directory (doesDirectoryExist, listDirectory)
-import System.FilePath (takeDirectory, (</>))
 import System.Environment (getEnvironment)
+import System.FilePath (takeDirectory, (</>))
 import System.Timeout (timeout)
 
-import Dhall.Context (empty, toList)
-import qualified Data.Text as Text
-import Dhall.Context (Context, insert)
-import Dhall.Core (Binding(..), Expr(..), Var(..), normalize, shift, subst, pretty, reservedIdentifiers)
-import Dhall.TypeCheck (typeWithA, typeOf)
-import Dhall.Parser (Src, exprFromText)
-import qualified Dhall.Map
-import qualified Data.HashSet as HashSet
+import Dhall.Core
+    ( Binding(..)
+    , Expr(..)
+    , Var(..)
+    , normalize
+    , shift
+    , subst
+    , pretty
+    , reservedIdentifiers
+    )
 
-import Dhall.LSP.Backend.Parsing (holeExpr)
+import qualified Data.HashSet as HashSet
+import qualified Data.Text as Text
+import qualified Dhall.Map
+import qualified Dhall.Pretty
 
 -- | Given the cursor position construct the corresponding 'completion query'
 -- consisting of the leadup, i.e. text leading up to the word prefix that is to
@@ -58,9 +68,13 @@ completeLocalImport relativeTo prefix = do
 completeEnvironmentImport :: IO [Completion]
 completeEnvironmentImport = do
   environment <- getEnvironment
-  let environmentImports = map (Text.pack . fst) environment
-  return $ map (\env -> Completion env Nothing) environmentImports
 
+  let toCompletion (variable, _) = Completion escapedVariable Nothing
+       where
+          escapedVariable =
+              Dhall.Pretty.escapeEnvironmentVariable (Text.pack variable)
+
+  return (map toCompletion environment)
 
 -- | A completion context, consisting of the (approximated) type-checking
 -- context. We need to substitute 'dependent lets' later so we keep their values
@@ -170,13 +184,17 @@ completeProjections (CompletionContext context values) expr =
  where
   -- complete a union constructor by inspecting the union value
   completeUnion _A (Union m) =
-    let constructor (k, Nothing) = Completion k (Just _A)
-        constructor (k, Just v) = Completion k (Just (Pi k v _A))
+    let constructor (k, Nothing) =
+            Completion (Dhall.Pretty.escapeLabel True k) (Just _A)
+        constructor (k, Just v) =
+            Completion (Dhall.Pretty.escapeLabel True k) (Just (Pi k v _A))
      in map constructor (Dhall.Map.toList m)
   completeUnion _ _ = []
 
 
   -- complete a record projection by inspecting the record type
-  completeRecord (Record m) =
-    map (\(name, typ) -> Completion name (Just typ)) (Dhall.Map.toList m)
+  completeRecord (Record m) = map toCompletion (Dhall.Map.toList m)
+    where
+      toCompletion (name, typ) =
+          Completion (Dhall.Pretty.escapeLabel True name) (Just typ)
   completeRecord _ = []
