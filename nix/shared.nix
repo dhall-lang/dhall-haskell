@@ -670,7 +670,7 @@ in
     shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
     shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
     shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
-    shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
+    shell-dhall-lsp-server = (pkgs.haskell.lib.doCheck pkgs.haskell.packages."${compiler}".dhall-lsp-server).env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
     shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
