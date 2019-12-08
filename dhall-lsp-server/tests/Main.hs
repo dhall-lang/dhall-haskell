@@ -108,9 +108,22 @@ codeCompletionSpec fixtureDir =
         docId <- openDoc "ImportedFunctions.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 0, _character = 33})
         liftIO $ do
-          let firstItem = head cs
-          _label firstItem `shouldBe` "makeUser"
+          let [ firstItem, secondItem ] = cs
+          _label firstItem `shouldBe` "`make user`"
+          _label secondItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
+          _detail secondItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
+    it "suggests union alternatives"
+      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ do
+        docId <- openDoc "Union.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 2, _character = 10})
+        liftIO $ do
+          let [ firstItem, secondItem ] = cs
+          _label firstItem `shouldBe` "A"
+          _label secondItem `shouldBe` "`B C`"
+          _detail firstItem `shouldBe` Just "\8704(A : Text) \8594 < A : Text | `B C` >"
+          _detail secondItem `shouldBe` Just "< A : Text | `B C` >"
 
 diagnosticsSpec :: FilePath -> Spec
 diagnosticsSpec fixtureDir = do

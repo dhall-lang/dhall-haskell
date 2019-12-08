@@ -21,9 +21,11 @@ module Dhall.Pretty.Internal (
     , prettyVar
     , pretty_
     , escapeText_
+    , escapeEnvironmentVariable
     , prettyEnvironmentVariable
 
     , prettyConst
+    , escapeLabel
     , prettyLabel
     , prettyAnyLabel
     , prettyLabels
@@ -211,7 +213,7 @@ literal  = Pretty.annotate Literal
 builtin  = Pretty.annotate Builtin
 operator = Pretty.annotate Operator
 
-comma, lbracket, rbracket, langle, rangle, lbrace, rbrace, lparen, rparen, pipe, backtick, dollar, colon, equals, dot :: Doc Ann
+comma, lbracket, rbracket, langle, rangle, lbrace, rbrace, lparen, rparen, pipe, dollar, colon, equals, dot :: Doc Ann
 comma    = syntax Pretty.comma
 lbracket = syntax Pretty.lbracket
 rbracket = syntax Pretty.rbracket
@@ -222,7 +224,6 @@ rbrace   = syntax Pretty.rbrace
 lparen   = syntax Pretty.lparen
 rparen   = syntax Pretty.rparen
 pipe     = syntax Pretty.pipe
-backtick = syntax "`"
 dollar   = syntax "$"
 colon    = syntax ":"
 equals   = syntax "="
@@ -420,15 +421,17 @@ headCharacter c = alpha c || c == '_'
 tailCharacter :: Char -> Bool
 tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
+-- | Escape a label if it is not valid when unquoted
+escapeLabel :: Bool -> Text -> Text
+escapeLabel allowReserved l =
+    case Text.uncons l of
+        Just (h, t)
+            | headCharacter h && Text.all tailCharacter t && (allowReserved || not (Data.HashSet.member l reservedIdentifiers))
+                -> l
+        _       -> "`" <> l <> "`"
+
 prettyLabelShared :: Bool -> Text -> Doc Ann
-prettyLabelShared allowReserved a = label doc
-    where
-        doc =
-            case Text.uncons a of
-                Just (h, t)
-                    | headCharacter h && Text.all tailCharacter t && (allowReserved || not (Data.HashSet.member a reservedIdentifiers))
-                        -> Pretty.pretty a
-                _       -> backtick <> Pretty.pretty a <> backtick
+prettyLabelShared b l = label (Pretty.pretty (escapeLabel b l))
 
 prettyLabel :: Text -> Doc Ann
 prettyLabel = prettyLabelShared False
@@ -465,9 +468,13 @@ prettyVar (V x 0) = label (Pretty.unAnnotate (prettyLabel x))
 prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt n))
 
 prettyEnvironmentVariable :: Text -> Doc ann
-prettyEnvironmentVariable t
-  | validBashEnvVar t = Pretty.pretty t
-  | otherwise         = Pretty.pretty ("\"" <> escapeText_ t <> "\"")
+prettyEnvironmentVariable t = Pretty.pretty (escapeEnvironmentVariable t)
+
+-- | Escape an environment variable if not a valid Bash environment variable
+escapeEnvironmentVariable :: Text -> Text
+escapeEnvironmentVariable t
+  | validBashEnvVar t = t
+  | otherwise         = "\"" <> escapeText_ t <> "\""
   where
     validBashEnvVar v = case Text.uncons v of
         Nothing      -> False
