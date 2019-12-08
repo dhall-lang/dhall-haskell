@@ -1250,7 +1250,7 @@ emptyLine  _               = False
 leadingSpaces :: Chunks s a -> Text
 leadingSpaces chunks = Data.Text.takeWhile isSpace firstText
   where
-    isSpace c = c == '\x20' || c == '\x09'
+    isSpace c = c == ' ' || c == '\t'
 
     firstText =
         case chunks of
