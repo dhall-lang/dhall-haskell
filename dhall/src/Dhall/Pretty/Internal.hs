@@ -1151,53 +1151,46 @@ multilineChunks :: Chunks s a -> Chunks s a
 multilineChunks =
      escapeTrailingSingleQuote
    . escapeControlCharacters
-   . escapeLastLineLeadingWhitespace
+   . escapeSharedWhitespacePrefix
 
--- | Escape leading whitespace on the last line by moving it into a string
--- interpolation
+-- | Escape any leading whitespace shared by all lines
 --
--- This ensures that the parser can find the correct indentation level, no matter
--- what the other lines contain.-
+-- This ensures that significant shared leading whitespace is not stripped
 --
--- >>> escapeLastLineLeadingWhitespace (Chunks [] "\n \tx")
+-- >>> escapeSharedWhitespacePrefix (Chunks [] "\n \tx")
 -- Chunks [("\n",TextLit (Chunks [] " \t"))] "x"
--- >>> escapeLastLineLeadingWhitespace (Chunks [("\n",Var (V "x" 0))] " ")
+-- >>> escapeSharedWhitespacePrefix (Chunks [("\n",Var (V "x" 0))] " ")
 -- Chunks [("\n",Var (V "x" 0))] " "
--- >>> escapeLastLineLeadingWhitespace (Chunks [("\n ",Var (V "x" 0))] "")
+-- >>> escapeSharedWhitespacePrefix (Chunks [("\n ",Var (V "x" 0))] "")
 -- Chunks [("\n",TextLit (Chunks [] " ")),("",Var (V "x" 0))] ""
--- >>> escapeLastLineLeadingWhitespace (Chunks [("\n ",Var (V "x" 0))] "\n")
+-- >>> escapeSharedWhitespacePrefix (Chunks [("\n ",Var (V "x" 0))] "\n")
 -- Chunks [("\n ",Var (V "x" 0))] "\n"
---
--- We assume that there's at least one newline and may therefore ignore leading
--- whitespace on the first line:
---
--- >>> escapeLastLineLeadingWhitespace (Chunks [] " ")
--- Chunks [] " "
-escapeLastLineLeadingWhitespace :: Chunks s a -> Chunks s a
-escapeLastLineLeadingWhitespace (Chunks as0 b0) =
-    case escape1 b0 of
-        Nothing             -> Chunks (escapeChunks as0) b0
-        Just (Chunks cs b1) -> Chunks (as0 ++ cs) b1
+-- >>> escapeSharedWhitespacePrefix (Chunks [] " ")
+-- Chunks [("",TextLit (Chunks [] " "))] ""
+escapeSharedWhitespacePrefix :: Chunks s a -> Chunks s a
+escapeSharedWhitespacePrefix literal_ = unlinesLiteral literals₁
   where
-    -- Nothing: No newline found
-    -- Just chunks: Newline was found!
-    escape1 :: Text -> Maybe (Chunks s a)
-    escape1 t = case Text.breakOnEnd "\n" t of
-        ("", _) -> Nothing
-        (a , b) -> Just $ case Text.span predicate b of
-            ("", _) -> Chunks [] t
-            (c , d) -> Chunks [(a, TextLit (Chunks [] c))] d
+    literals₀ = linesLiteral literal_
 
-    predicate c = c == ' ' || c == '\t'
+    sharedPrefix = longestSharedWhitespacePrefix literals₀
 
-    escapeChunks = snd . foldr f (NotDone, [])
+    stripPrefix = Text.drop (Text.length sharedPrefix)
 
-    f chunk  (Done   , chunks) = (Done, chunk : chunks)
-    f (t, e) (NotDone, chunks) = case escape1 t of
-        Nothing            -> (NotDone, (t, e) : chunks)
-        Just (Chunks as b) -> (Done, as ++ (b, e) : chunks)
+    escapeSharedPrefix (Chunks [] prefix₀)
+        | Text.isPrefixOf sharedPrefix prefix₀ =
+            Chunks [ ("", TextLit (Chunks [] sharedPrefix)) ] prefix₁
+      where
+        prefix₁ = stripPrefix prefix₀
+    escapeSharedPrefix (Chunks ((prefix₀, y) : xys) z)
+        | Text.isPrefixOf sharedPrefix prefix₀ =
+            Chunks (("", TextLit (Chunks [] sharedPrefix)) : (prefix₁, y) : xys) z
+      where
+        prefix₁ = stripPrefix prefix₀
+    escapeSharedPrefix line = line
 
-data Done = NotDone | Done
+    literals₁
+        | not (Text.null sharedPrefix) = fmap escapeSharedPrefix literals₀
+        | otherwise = literals₀
 
 -- | Escape control characters by moving them into string interpolations
 --
@@ -1320,7 +1313,6 @@ layoutOpts :: Pretty.LayoutOptions
 layoutOpts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
-
 
 {- $setup
 >>> import Test.QuickCheck (Fun(..))
