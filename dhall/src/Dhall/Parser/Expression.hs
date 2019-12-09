@@ -277,7 +277,8 @@ parsers embedded = Parsers {..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ ImportAlt    <$ _importAlt    <* nonemptyWhitespace
+        [ Equivalent   <$ _equivalent   <* whitespace
+        , ImportAlt    <$ _importAlt    <* nonemptyWhitespace
         , BoolOr       <$ _or           <* whitespace
         , NaturalPlus  <$ _plus         <* nonemptyWhitespace
         , TextAppend   <$ _textAppend   <* whitespace
@@ -287,9 +288,8 @@ parsers embedded = Parsers {..}
         , Prefer       <$ _prefer       <* whitespace
         , CombineTypes <$ _combineTypes <* whitespace
         , NaturalTimes <$ _times        <* whitespace
-        , BoolEQ       <$ _doubleEqual  <* whitespace
+        , BoolEQ       <$ try (_doubleEqual  <* nonemptyWhitespace)
         , BoolNE       <$ _notEqual     <* whitespace
-        , Equivalent   <$ _equivalent   <* whitespace
         ]
 
     applicationExpression = do

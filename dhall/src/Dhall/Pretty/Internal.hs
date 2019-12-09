@@ -720,7 +720,7 @@ prettyCharacterSet characterSet expression =
         prettyOperatorExpression a0
 
     prettyOperatorExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyOperatorExpression = prettyImportAltExpression
+    prettyOperatorExpression = prettyEquivalentExpression
 
     prettyOperator :: Text -> [Doc Ann] -> Doc Ann
     prettyOperator op docs =
@@ -734,6 +734,18 @@ prettyCharacterSet characterSet expression =
         prefix = if Text.length op == 1 then "  " else "    "
 
         spacer = if Text.length op == 1 then " "  else "  "
+
+    prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyEquivalentExpression a0@(Equivalent _ _) =
+        prettyOperator (equivalent characterSet) (docs a0)
+      where
+        docs (Equivalent a b) = prettyImportAltExpression b : docs a
+        docs (Note       _ b) = docs b
+        docs               b  = [ prettyImportAltExpression b ]
+    prettyEquivalentExpression (Note _ a) =
+        prettyEquivalentExpression a
+    prettyEquivalentExpression a0 =
+        prettyImportAltExpression a0
 
     prettyImportAltExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportAltExpression a0@(ImportAlt _ _) =
@@ -871,24 +883,12 @@ prettyCharacterSet characterSet expression =
     prettyNotEqualExpression a0@(BoolNE _ _) =
         prettyOperator "!=" (docs a0)
       where
-        docs (BoolNE a b) = prettyEquivalentExpression b : docs a
+        docs (BoolNE a b) = prettyApplicationExpression b : docs a
         docs (Note   _ b) = docs b
-        docs           b  = [ prettyEquivalentExpression b ]
+        docs           b  = [ prettyApplicationExpression b ]
     prettyNotEqualExpression (Note _ a) =
         prettyNotEqualExpression a
     prettyNotEqualExpression a0 =
-        prettyEquivalentExpression a0
-
-    prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyEquivalentExpression a0@(Equivalent _ _) =
-        prettyOperator (equivalent characterSet) (docs a0)
-      where
-        docs (Equivalent a b) = prettyApplicationExpression b : docs a
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyApplicationExpression b ]
-    prettyEquivalentExpression (Note _ a) =
-        prettyEquivalentExpression a
-    prettyEquivalentExpression a0 =
         prettyApplicationExpression a0
 
     prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
