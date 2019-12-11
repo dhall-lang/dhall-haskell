@@ -8,12 +8,13 @@ module Dhall.Kubernetes.Convert
 import qualified Data.List              as List
 import qualified Data.Map.Strict        as Data.Map
 import qualified Data.Set               as Set
+import qualified Data.Sort              as Sort
 import qualified Data.Text              as Text
 import qualified Dhall.Core             as Dhall
 import qualified Dhall.Map
 
 import           Data.Bifunctor         (first, second)
-import           Data.Maybe             (fromMaybe)
+import           Data.Maybe             (fromMaybe, mapMaybe)
 import           Data.Set               (Set)
 import           Data.Text              (Text)
 
@@ -63,14 +64,19 @@ pathFromRef (Ref r) = (Text.split (== '/') r) List.!! 2
 
 -- | Build an import from path components (note: they need to be in reverse order)
 --   and a filename
-mkImport :: [Text] -> Text -> Dhall.Import
-mkImport components file = Dhall.Import{..}
+mkImport :: Data.Map.Map Prefix Dhall.Import -> [Text] -> Text -> Dhall.Import
+mkImport prefixMap components file =
+  case Data.Map.toList filteredPrefixMap of
+    []    -> localImport
+    xs    -> (snd . head $ Sort.sortOn (Text.length . fst) xs) <> localImport
   where
+    localImport = Dhall.Import{..}
     importMode = Dhall.Code
     importHashed = Dhall.ImportHashed{..}
     hash = Nothing
     importType = Dhall.Local Dhall.Here Dhall.File{..}
     directory = Dhall.Directory{..}
+    filteredPrefixMap = Data.Map.filterWithKey (\k _ -> Text.isPrefixOf k file) prefixMap
 
 -- | Get the namespaced object name if the Import points to it
 namespacedObjectFromImport :: Dhall.Import -> Maybe Text
@@ -91,8 +97,8 @@ toTextLit str = Dhall.TextLit (Dhall.Chunks [] str)
 --   Note: we cannot do 1-to-1 conversion and we need the whole Map because
 --   many types reference other types so we need to access them to decide things
 --   like "should this key be optional"
-toTypes :: Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
-toTypes definitions = memo
+toTypes :: Data.Map.Map Prefix Dhall.Import -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
+toTypes prefixMap definitions = memo
   where
     memo = Data.Map.mapWithKey (\k -> convertToType (Just k)) definitions
 
@@ -139,7 +145,7 @@ toTypes definitions = memo
     convertToType :: Maybe ModelName -> Definition -> Expr
     convertToType maybeModelName Definition{..} = case (ref, typ, properties) of
       -- If we point to a ref we just reference it via Import
-      (Just r, _, _) -> Dhall.Embed $ mkImport [] $ (pathFromRef r <> ".dhall")
+      (Just r, _, _) -> Dhall.Embed $ mkImport prefixMap [] (pathFromRef r <> ".dhall")
       -- Otherwise - if we have 'properties' - it's an object
       (_, _, Just props) ->
         let (required', optional')
@@ -169,12 +175,13 @@ toTypes definitions = memo
 
 -- | Convert a Dhall Type to its default value
 toDefault
-  :: Data.Map.Map ModelName Definition -- ^ All the Swagger definitions
+  :: Data.Map.Map Prefix Dhall.Import  -- ^ Mapping of prefixes to import roots
+  -> Data.Map.Map ModelName Definition -- ^ All the Swagger definitions
   -> Data.Map.Map ModelName Expr       -- ^ All the Dhall types generated from them
   -> ModelName                         -- ^ The name of the object we're converting
   -> Expr                              -- ^ The Dhall type of the object
   -> Maybe Expr
-toDefault definitions types modelName = go
+toDefault prefixMap definitions types modelName = go
   where
     go = \case
       -- If we have an import, we also import in the default
@@ -228,29 +235,31 @@ toDefault definitions types modelName = go
     --   but if we want to refer them from the defaults we need to adjust the path
     adjustImport :: Expr -> Expr
     adjustImport (Dhall.Embed imp) | Just file <- namespacedObjectFromImport imp
-      = Dhall.Embed $ mkImport ["types", ".."] (file <> ".dhall")
+      = Dhall.Embed $ mkImport prefixMap ["types", ".."] (file <> ".dhall")
     adjustImport other = other
 
 
 -- | Get a Dhall.Map filled with imports, for creating giant Records or Unions of types or defaults
 getImportsMap
-  :: [ModelName]             -- ^ A list of all the object names
-  -> Text                    -- ^ The folder we should get imports from
-  -> [ModelName]             -- ^ List of the object names we want to include in the Map
+  :: Data.Map.Map Prefix Dhall.Import -- ^ Mapping of prefixes to import roots
+  -> DuplicateHandler                 -- ^ Duplicate name handler
+  -> [ModelName]                      -- ^ A list of all the object names
+  -> Text                             -- ^ The folder we should get imports from
+  -> [ModelName]                      -- ^ List of the object names we want to include in the Map
   -> Dhall.Map.Map Text Expr
-getImportsMap objectNames folder toInclude
+getImportsMap prefixMap duplicateNameHandler objectNames folder toInclude
   = Dhall.Map.fromList
   $ Data.Map.elems
   -- This intersection is here to "pick" common elements between "all the objects"
   -- and "objects we want to include", already associating keys to their import
   $ Data.Map.intersectionWithKey
-      (\(ModelName name) key _ -> (key, Dhall.Embed $ mkImport [folder] (name <> ".dhall")))
+      (\(ModelName name) key _ -> (key, Dhall.Embed $ mkImport prefixMap [folder] (name <> ".dhall")))
       namespacedToSimple
       (Data.Map.fromList $ fmap (,()) toInclude)
   where
     -- | A map from namespaced names to simple ones (i.e. without the namespace)
     namespacedToSimple
-      = Data.Map.fromList $ fmap selectObject $ Data.Map.toList $ groupByObjectName objectNames
+      = Data.Map.fromList $ mapMaybe selectObject $ Data.Map.toList $ groupByObjectName objectNames
 
     -- | Given a list of fully namespaced bjects, it will group them by the
     --   object name
@@ -267,8 +276,8 @@ getImportsMap objectNames folder toInclude
     --   (because different API versions, and objects move around packages but k8s
     --   cannot break compatibility so we have all of them), so we have to select one
     --   (and we error out if it's not so after the filtering)
-    selectObject :: (Text, [ModelName]) -> (ModelName, Text)
-    selectObject (kind, namespacedNames) = (namespaced, kind)
+    selectObject :: (Text, [ModelName]) -> Maybe (ModelName, Text)
+    selectObject (kind, namespacedNames) = fmap (,kind) namespaced
       where
         filterFn modelName@(ModelName name) = not $ or
           -- The reason why we filter these two prefixes is that they are "internal"
@@ -281,5 +290,5 @@ getImportsMap objectNames folder toInclude
           ]
 
         namespaced = case filter filterFn namespacedNames of
-          [name] -> name
-          wrong  -> error $ "Got more than one key for "++ show kind ++"! See:\n" <> show wrong
+          [name] -> Just name
+          names  -> duplicateNameHandler (kind, names)

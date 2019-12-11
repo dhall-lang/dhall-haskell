@@ -5,19 +5,33 @@
 
 packages:
 - completed:
-    hackage: dhall-1.24.0@sha256:326896b819e9c099ae5b1de5954e577e44e325c287aad6ac77006611d4c60fac,31232
+    hackage: dhall-1.27.0@sha256:b522d6b534949e65771ed0179afc1488e4de2b185af5ed38e4806a6720db51bf,30519
     pantry-tree:
-      size: 142551
-      sha256: 55b3d15eef3d919d4eed222d33fc6a29e13f5ba659691027290ba9f2ff83ec05
+      size: 232998
+      sha256: 3f79ba6a3eeb0f59c1cf41663d65eebe71f5780f5765169e3d52406789a6f286
   original:
-    hackage: dhall-1.24.0
+    hackage: dhall-1.27.0
 - completed:
-    hackage: dhall-json-1.3.0@sha256:7afae1a51b3081b2788497fada89004c2305616357dab9a2c727a6f7c7753d80,4887
+    hackage: dhall-json-1.5.0@sha256:cf5ba9c349539715ba3a9642fbd56e905b1a7675ac82ea48ee4a67bc34446872,5644
     pantry-tree:
-      size: 878
-      sha256: 2fa3f800d259b496a5abd78694ddbfa42b2efe75e1954aa9b7fcf9f9d12103e8
+      size: 3601
+      sha256: 109a2d85c440e3e0371da886ab1ddf004d51b0c20a1e61a8195e74bc0459802f
   original:
-    hackage: dhall-json-1.3.0
+    hackage: dhall-json-1.5.0
+- completed:
+    hackage: th-lift-0.8.0.1@sha256:cceb81b12c0580e02a7a3898b6d60cca5e1be080741f69ddde4f12210d8ba7ca,1960
+    pantry-tree:
+      size: 461
+      sha256: 7ed900048c8722069edb6063023d89343f056ca305be598f51f166bd389621df
+  original:
+    hackage: th-lift-0.8.0.1
+- completed:
+    hackage: th-lift-instances-0.1.14@sha256:351314ffad77a5ba49439accb50d3baf9de0186ab1d8d207e88ed698f1becc5e,2625
+    pantry-tree:
+      size: 526
+      sha256: ef2728ea6af150cf4514254b3ef74f16d8bf6f3c52f4c26a4f2625fceee6fd76
+  original:
+    hackage: th-lift-instances-0.1.14
 snapshots:
 - completed:
     size: 500539

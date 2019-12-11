@@ -17,6 +17,9 @@ import           GHC.Generics              (Generic)
 
 type Expr = Dhall.Expr Dhall.Src Dhall.Import
 
+type DuplicateHandler = (Text, [ModelName]) -> Maybe ModelName
+
+type Prefix = Text
 
 {-| Type for the Swagger specification.
 
