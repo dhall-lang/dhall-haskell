@@ -17,7 +17,7 @@ module Dhall.LSP.Backend.Diagnostics
 where
 
 import Dhall.Parser (SourcedException(..), Src(..), unwrap)
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError(..))
+import Dhall.TypeCheck (DetailedTypeError(..), ErrorMessages(..), TypeError(..))
 import Dhall.Core (Expr(Note, Embed), subExpressions)
 
 import Dhall.LSP.Util
@@ -28,9 +28,13 @@ import Control.Lens (toListOf)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.List.NonEmpty as NonEmpty
-import qualified Text.Megaparsec as Megaparsec
+
+import qualified Data.Text                             as Text
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
+import qualified Data.List.NonEmpty                    as NonEmpty
+import qualified Dhall.Pretty
+import qualified Dhall.TypeCheck                       as TypeCheck
+import qualified Text.Megaparsec                       as Megaparsec
 
 -- | A (line, col) pair representing a position in a source file; 0-based.
 type Position = (Int, Int)
@@ -61,11 +65,15 @@ diagnose (ErrorImportSourced (SourcedException src e)) = [Diagnosis { .. }]
     range = Just (rangeFromDhall src)
     diagnosis = tshow e
 
-diagnose (ErrorTypecheck e@(TypeError _ expr _)) = [Diagnosis { .. }]
+diagnose (ErrorTypecheck (TypeError _ expr message)) = [Diagnosis { .. }]
   where
     doctor = "Dhall.TypeCheck"
+
     range = fmap rangeFromDhall (note expr)
-    diagnosis = tshow e
+
+    diagnosis = "Error: " <> Pretty.Text.renderStrict (Dhall.Pretty.layout short)
+
+    ErrorMessages{..} = TypeCheck.prettyTypeMessage message
 
 diagnose (ErrorParse e) =
   [ Diagnosis { .. } | (diagnosis, range) <- zip diagnoses (map Just ranges) ]
