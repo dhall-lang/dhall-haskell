@@ -28,7 +28,14 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
-import Dhall.Core (Expr(Annot), Import, pretty)
+import Dhall.Core
+    ( Expr(Annot)
+    , Import(..)
+    , ImportHashed(..)
+    , ImportType(..)
+    , URL(..)
+    , pretty
+    )
 import Dhall.Freeze (Intent(..), Scope(..))
 import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
 import Dhall.Parser (Src)
@@ -422,6 +429,13 @@ parserInfoOptions =
         <>  Options.Applicative.fullDesc
         )
 
+noHeaders :: Import -> Import
+noHeaders
+    (Import { importHashed = ImportHashed { importType = Remote URL{ .. }, ..}, .. }) =
+    Import { importHashed = ImportHashed { importType = Remote URL{ headers = Nothing, .. }, .. }, .. }
+noHeaders i =
+    i
+
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
@@ -561,10 +575,12 @@ command (Options {..}) = do
             let dotNode (i, nodeId) =
                     Text.Dot.userNode
                         nodeId
-                        [ ("label", Data.Text.unpack $ pretty i)
+                        [ ("label", Data.Text.unpack $ pretty (convert i))
                         , ("shape", "box")
                         , ("style", "rounded")
                         ]
+                  where
+                    convert = noHeaders . Dhall.Import.chainedImport
 
             let dotEdge (Depends parent child) =
                     case (Data.Map.lookup parent importIds, Data.Map.lookup child importIds) of
@@ -580,9 +596,7 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListImmediateDependencies, ..} -> do
             expression <- getExpression file
 
-            mapM_ (print
-                        . Pretty.pretty
-                        . Dhall.Core.importHashed) expression
+            mapM_ (print . Pretty.pretty . noHeaders) expression
 
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
@@ -591,10 +605,10 @@ command (Options {..}) = do
                 State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
 
             mapM_ print
-                 .   fmap (   Pretty.pretty
-                          .   Dhall.Core.importType
-                          .   Dhall.Core.importHashed
-                          .   Dhall.Import.chainedImport )
+                 .   fmap ( Pretty.pretty
+                          . noHeaders
+                          . Dhall.Import.chainedImport
+                          )
                  .   reverse
                  .   Dhall.Map.keys
                  $   _cache
