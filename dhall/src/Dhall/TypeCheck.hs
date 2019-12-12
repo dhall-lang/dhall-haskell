@@ -24,6 +24,8 @@ module Dhall.TypeCheck (
     , DetailedTypeError(..)
     , Censored(..)
     , TypeMessage(..)
+    , prettyTypeMessage
+    , ErrorMessages(..)
     ) where
 
 import Control.Exception (Exception)
@@ -1357,6 +1359,9 @@ longTypeMessage msg =
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
+{-| Output of `prettyTypeMessage`, containing short- and long-form error
+    messages
+-}
 data ErrorMessages = ErrorMessages
     { short :: Doc Ann
     -- ^ Default succinct 1-line explanation of what went wrong
@@ -1370,6 +1375,7 @@ _NOT = "\ESC[1mnot\ESC[0m"
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
 
+-- | Convert a `TypeMessage` to short- and long-form `ErrorMessages`
 prettyTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- We do not need to print variable name here. For the discussion see:
