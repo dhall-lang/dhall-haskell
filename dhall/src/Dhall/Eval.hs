@@ -697,6 +697,12 @@ eval !env t0 =
                 (VRecordLit m, VInject _ k mt, _)
                     | Just f <- Map.lookup k m -> maybe f (vApp f) mt
                     | otherwise                -> error errorMsg
+                (VRecordLit m, VSome t, _)
+                    | Just f <- Map.lookup "Some" m -> vApp f t
+                    | otherwise                     -> error errorMsg
+                (VRecordLit m, VNone _, _)
+                    | Just t <- Map.lookup "None" m -> t
+                    | otherwise                     -> error errorMsg
                 (x', y', ma') -> VMerge x' y' ma'
         ToMap x ma ->
             case (eval env x, fmap (eval env) ma) of
