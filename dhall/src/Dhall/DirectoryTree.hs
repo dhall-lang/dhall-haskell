@@ -4,7 +4,7 @@
 -- | Implementation of the @dhall to-directory-tree@ subcommand
 module Dhall.DirectoryTree
     ( -- * Filesystem
-      directoryTree
+      toDirectoryTree
     , FilesystemError(..)
     ) where
 

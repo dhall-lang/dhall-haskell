@@ -799,7 +799,7 @@ command (Options {..}) = do
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
-            DirectoryTree.directoryTree path normalizedExpression
+            DirectoryTree.toDirectoryTree path normalizedExpression
 
         SyntaxTree {..} -> do
             expression <- getExpression file
