@@ -26,7 +26,7 @@ executable dhall-kubernetes-generator
     dhall                >= 1.22.0    && < 1.28 ,
     megaparsec           >= 7.0       && < 7.1  ,
     optparse-applicative >= 0.14.3.0  && < 0.15 ,
-    parser-combinators   >= 1.0.3     && < 1.1  ,
+    parser-combinators   >= 1.0.3     && < 1.3  ,
     prettyprinter        >= 1.2.0.1   && < 1.3  ,
     sort                 >= 1.0       && < 1.1  ,
     text                 >= 0.11.1.0  && < 1.3  ,

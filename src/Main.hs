@@ -126,12 +126,13 @@ main = do
       Nothing -> error "Unable to decode the Swagger file"
       Just s  -> pure s
 
+  let fix m = Data.Map.adjust patchCyclicImports (ModelName m)
   -- Convert to Dhall types in a Map
   let types = Convert.toTypes prefixMap
         -- TODO: find a better way to deal with this cyclic import
-         $ Data.Map.adjust patchCyclicImports
-            (ModelName "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps")
-            definitions
+         $ fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps"
+         $ fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+         $ definitions
 
   -- Output to types
   Turtle.mktree "types"
