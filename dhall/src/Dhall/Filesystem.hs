@@ -8,6 +8,7 @@ module Dhall.Filesystem
     ) where
 
 import Control.Exception (Exception)
+import Data.Monoid ((<>))
 import Data.Void (Void)
 import Dhall.Syntax (Chunks(..), Expr(..))
 import System.FilePath ((</>))
