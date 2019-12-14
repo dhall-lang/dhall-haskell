@@ -517,6 +517,7 @@ Library
         Dhall.Core
         Dhall.Crypto
         Dhall.Diff
+        Dhall.DirectoryTree
         Dhall.Format
         Dhall.Freeze
         Dhall.Import
