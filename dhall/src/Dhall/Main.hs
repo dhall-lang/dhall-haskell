@@ -67,7 +67,7 @@ import qualified Dhall
 import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Diff
-import qualified Dhall.Filesystem                          as Filesystem
+import qualified Dhall.DirectoryTree                       as DirectoryTree
 import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Import
@@ -141,7 +141,7 @@ data Mode
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool }
     | Text { file :: Input }
-    | Filesystem { file :: Input, path :: FilePath }
+    | DirectoryTree { file :: Input, path :: FilePath }
     | SyntaxTree { file :: Input }
 
 data ResolveMode
@@ -250,9 +250,9 @@ parseMode =
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> parseFile)
     <|> subcommand
-            "filesystem"
+            "to-directory-tree"
             "Convert nested records of Text literals into a directory tree"
-            (Filesystem <$> parseFile <*> parseFilesystemOutput)
+            (DirectoryTree <$> parseFile <*> parseDirectoryTreeOutput)
     <|> internalSubcommand
             "haskell-syntax-tree"
             "Output the parsed syntax tree (for debugging)"
@@ -421,7 +421,7 @@ parseMode =
         <>  Options.Applicative.help "Only check if the input is formatted"
         )
 
-    parseFilesystemOutput =
+    parseDirectoryTreeOutput =
         Options.Applicative.strOption
             (   Options.Applicative.long "output"
             <>  Options.Applicative.help "The destination path to create"
@@ -789,7 +789,7 @@ command (Options {..}) = do
 
                 StandardOutput -> Data.Text.IO.putStrLn tags
 
-        Filesystem {..} -> do
+        DirectoryTree {..} -> do
             expression <- getExpression file
 
             resolvedExpression <-
@@ -799,7 +799,7 @@ command (Options {..}) = do
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
-            Filesystem.filesystem path normalizedExpression
+            DirectoryTree.directoryTree path normalizedExpression
 
         SyntaxTree {..} -> do
             expression <- getExpression file

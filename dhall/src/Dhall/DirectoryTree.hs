@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Dhall.Filesystem
+-- | Implementation of the @dhall to-directory-tree@ subcommand
+module Dhall.DirectoryTree
     ( -- * Filesystem
-      filesystem
+      directoryTree
     , FilesystemError(..)
     ) where
 
@@ -22,7 +23,7 @@ import qualified System.Directory                        as Directory
 import qualified Data.Text                               as Text
 import qualified Data.Text.IO                            as Text.IO
 
-{-| Attempt to transform a Dhall record into a filesystem where:
+{-| Attempt to transform a Dhall record into a directory tree where:
 
     * Records are translated into directories
 
@@ -73,13 +74,13 @@ import qualified Data.Text.IO                            as Text.IO
     provided expression.  This will raise a `FilesystemError` exception upon
     encountering an expression that is not a `TextLit` or `RecordLit`.
 -}
-filesystem :: FilePath -> Expr Void Void -> IO ()
-filesystem path expression = case expression of
+directoryTree :: FilePath -> Expr Void Void -> IO ()
+directoryTree path expression = case expression of
     RecordLit keyValues -> do
         let process key value = do
                 Directory.createDirectoryIfMissing False path
 
-                filesystem (path </> Text.unpack key) value
+                directoryTree (path </> Text.unpack key) value
 
         Map.unorderedTraverseWithKey_ process keyValues
 
@@ -92,8 +93,8 @@ filesystem path expression = case expression of
         Exception.throwIO FilesystemError{..}
 
 {- | This error indicates that you supplied an invalid Dhall expression to the
-     `filesystem` function.  The Dhall expression could not be translated to
-     a filesystem path.
+     `directoryTree` function.  The Dhall expression could not be translated to
+     a directory tree.
 -}
 newtype FilesystemError =
     FilesystemError { unexpectedExpression :: Expr Void Void }
@@ -103,15 +104,15 @@ instance Show FilesystemError where
         Pretty.renderString (Dhall.Pretty.layout message)
       where
         message =
-          Util._ERROR <> ": Not a valid filesystem expression\n\
+          Util._ERROR <> ": Not a valid directory tree expression\n\
           \                                                                                \n\
-          \Explanation: Only a subset of Dhall expressions can be converted to a set of    \n\
-          \paths.  Specifically, record literals can be converted to directories and ❰Text❱\n\
+          \Explanation: Only a subset of Dhall expressions can be converted to a directory \n\
+          \tree.  Specifically, record literals can be converted to directories and ❰Text❱ \n\
           \literals can be converted to files.  No other type of value can be translated to\n\
-          \filesystem paths.                                                               \n\
+          \a directory tree.                                                               \n\
           \                                                                                \n\
-          \For example, this is a valid expression that can be translated to filesystem    \n\
-          \paths:                                                                          \n\
+          \For example, this is a valid expression that can be translated to a directory   \n\
+          \tree:                                                                           \n\
           \                                                                                \n\
           \                                                                                \n\
           \    ┌──────────────────────────────────┐                                        \n\
@@ -128,7 +129,7 @@ instance Show FilesystemError where
           \    └───────────────────────┘                                                   \n\
           \                                                                                \n\
           \                                                                                \n\
-          \You tried to translate the following expression to a filesystem path:           \n\
+          \You tried to translate the following expression to a directory tree:            \n\
           \                                                                                \n\
           \" <> Util.insert unexpectedExpression <> "\n\
           \                                                                                \n\
