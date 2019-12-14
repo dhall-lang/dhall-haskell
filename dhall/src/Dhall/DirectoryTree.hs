@@ -27,11 +27,16 @@ import qualified Data.Text.IO                            as Text.IO
 
     * Records are translated into directories
 
-    * `Text` values or fields are translated into files
+    * @Text@ values or fields are translated into files
+
+    * @Optional@ values are omitted if @None@
 
     For example, the following Dhall record:
 
-    > { dir = { `hello.txt` = "Hello\n" }, `goodbye.txt`= "Goodbye\n" }
+    > { dir = { `hello.txt` = "Hello\n" }
+    > , `goodbye.txt`= Some "Goodbye\n"
+    > , `missing.txt` = None Text
+    > }
 
     ... should translate to this directory tree:
 
@@ -74,18 +79,24 @@ import qualified Data.Text.IO                            as Text.IO
     provided expression.  This will raise a `FilesystemError` exception upon
     encountering an expression that is not a `TextLit` or `RecordLit`.
 -}
-directoryTree :: FilePath -> Expr Void Void -> IO ()
-directoryTree path expression = case expression of
+toDirectoryTree :: FilePath -> Expr Void Void -> IO ()
+toDirectoryTree path expression = case expression of
     RecordLit keyValues -> do
         let process key value = do
                 Directory.createDirectoryIfMissing False path
 
-                directoryTree (path </> Text.unpack key) value
+                toDirectoryTree (path </> Text.unpack key) value
 
         Map.unorderedTraverseWithKey_ process keyValues
 
     TextLit (Chunks [] text) -> do
         Text.IO.writeFile path text
+
+    Some value -> do
+        toDirectoryTree path value
+
+    App None _ -> do
+        return ()
 
     _ -> do
         let unexpectedExpression = expression
@@ -107,16 +118,17 @@ instance Show FilesystemError where
           Util._ERROR <> ": Not a valid directory tree expression\n\
           \                                                                                \n\
           \Explanation: Only a subset of Dhall expressions can be converted to a directory \n\
-          \tree.  Specifically, record literals can be converted to directories and ❰Text❱ \n\
-          \literals can be converted to files.  No other type of value can be translated to\n\
-          \a directory tree.                                                               \n\
+          \tree.  Specifically, record literals can be converted to directories, ❰Text❱    \n\
+          \literals can be converted to files, and ❰Optional❱ values are included if ❰Some❱\n\
+          \and omitted if ❰None❱.  No other type of value can be translated to a directory \n\
+          \tree.                                                                           \n\
           \                                                                                \n\
           \For example, this is a valid expression that can be translated to a directory   \n\
           \tree:                                                                           \n\
           \                                                                                \n\
           \                                                                                \n\
           \    ┌──────────────────────────────────┐                                        \n\
-          \    │ { `example.json` = \"[1, true]\" } │                                        \n\
+          \    │ { `example.json` = \"[1, true]\" } │                                      \n\
           \    └──────────────────────────────────┘                                        \n\
           \                                                                                \n\
           \                                                                                \n\
@@ -133,6 +145,7 @@ instance Show FilesystemError where
           \                                                                                \n\
           \" <> Util.insert unexpectedExpression <> "\n\
           \                                                                                \n\
-          \... which is neither a ❰Text❱ literal nor a record literal.                     \n"
+          \... which is neither a ❰Text❱ literal, a record literal, nor an ❰Optional❱      \n\
+          \value.                                                                          \n"
 
 instance Exception FilesystemError
