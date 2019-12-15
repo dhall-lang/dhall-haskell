@@ -33,10 +33,7 @@ let toRule =
           , paths =
             [ k8s.HTTPIngressPath::{
               , path = Some args.path
-              , backend = k8s.IngressBackend::{
-                , serviceName = args.serviceName
-                , servicePort = args.servicePort
-                }
+              , backend = k8s.IngressBackend::args.{ serviceName, servicePort }
               }
             ]
           }
