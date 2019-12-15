@@ -31,13 +31,14 @@ let toRule =
         , host = Some args.host
         , http = Some k8s.HTTPIngressRuleValue::{
           , paths =
-              [ k8s.HTTPIngressPath::{
-                , path = Some args.path
-                , backend = k8s.IngressBackend::args.{ serviceName
-                                                     , servicePort
-                                                     }
+            [ k8s.HTTPIngressPath::{
+              , path = Some args.path
+              , backend = k8s.IngressBackend::{
+                , serviceName = args.serviceName
+                , servicePort = args.servicePort
                 }
-              ]
+              }
+            ]
           }
         }
 
@@ -49,19 +50,19 @@ in  [ k8s.Resource.Ingress
           }
         , spec = Some k8s.IngressSpec::{
           , rules =
-              [ toRule
-                  { host = "localhost"
-                  , path = "/"
-                  , serviceName = serviceName
-                  , servicePort = gatewayPort
-                  }
-              , toRule
-                  { host = "localhost"
-                  , path = "/"
-                  , serviceName = serviceName
-                  , servicePort = apiPort
-                  }
-              ]
+            [ toRule
+                { host = "localhost"
+                , path = "/"
+                , serviceName = serviceName
+                , servicePort = gatewayPort
+                }
+            , toRule
+                { host = "localhost"
+                , path = "/"
+                , serviceName = serviceName
+                , servicePort = apiPort
+                }
+            ]
           }
         }
     , k8s.Resource.Service
@@ -72,17 +73,17 @@ in  [ k8s.Resource.Ingress
           }
         , spec = Some k8s.ServiceSpec::{
           , ports =
-              [ k8s.ServicePort::{
-                , port = 5001
-                , targetPort = Some apiPort
-                , name = Some "api"
-                }
-              , k8s.ServicePort::{
-                , port = 8080
-                , targetPort = Some gatewayPort
-                , name = Some "api"
-                }
-              ]
+            [ k8s.ServicePort::{
+              , port = 5001
+              , targetPort = Some apiPort
+              , name = Some "api"
+              }
+            , k8s.ServicePort::{
+              , port = 8080
+              , targetPort = Some gatewayPort
+              , name = Some "api"
+              }
+            ]
           , selector = toMap matchLabels
           }
         }
@@ -101,43 +102,43 @@ in  [ k8s.Resource.Ingress
                 , fsGroup = Some 1000
                 }
               , containers =
-                  [ k8s.Container::{
-                    , name = name
-                    , image = Some "ipfs/go-ipfs:v0.4.22"
-                    , livenessProbe = k8s.Probe::{
-                      , httpGet = Some k8s.HTTPGetAction::{
-                        , path = Some "/debug/metrics/prometheus"
-                        , port = k8s.IntOrString.String "api"
-                        }
-                      , initialDelaySeconds = Some 15
-                      , periodSeconds = Some 3
+                [ k8s.Container::{
+                  , name = name
+                  , image = Some "ipfs/go-ipfs:v0.4.22"
+                  , livenessProbe = k8s.Probe::{
+                    , httpGet = Some k8s.HTTPGetAction::{
+                      , path = Some "/debug/metrics/prometheus"
+                      , port = k8s.IntOrString.String "api"
                       }
-                    , readinessProbe = k8s.Probe::{
-                      , httpGet = Some k8s.HTTPGetAction::{
-                        , path = Some "/debug/metrics/prometheus"
-                        , port = k8s.IntOrString.String "api"
-                        }
-                      , initialDelaySeconds = Some 15
-                      , periodSeconds = Some 3
-                      }
-                    , ports =
-                        [ k8s.ContainerPort::{
-                          , containerPort = 5001
-                          , name = Some "api"
-                          }
-                        , k8s.ContainerPort::{
-                          , containerPort = 8080
-                          , name = Some "gateway"
-                          }
-                        ]
-                    , volumeMounts =
-                        [ k8s.VolumeMount::{
-                          , name = "ipfs-storage"
-                          , mountPath = "/data/ipfs"
-                          }
-                        ]
+                    , initialDelaySeconds = Some 15
+                    , periodSeconds = Some 3
                     }
-                  ]
+                  , readinessProbe = k8s.Probe::{
+                    , httpGet = Some k8s.HTTPGetAction::{
+                      , path = Some "/debug/metrics/prometheus"
+                      , port = k8s.IntOrString.String "api"
+                      }
+                    , initialDelaySeconds = Some 15
+                    , periodSeconds = Some 3
+                    }
+                  , ports =
+                    [ k8s.ContainerPort::{
+                      , containerPort = 5001
+                      , name = Some "api"
+                      }
+                    , k8s.ContainerPort::{
+                      , containerPort = 8080
+                      , name = Some "gateway"
+                      }
+                    ]
+                  , volumeMounts =
+                    [ k8s.VolumeMount::{
+                      , name = "ipfs-storage"
+                      , mountPath = "/data/ipfs"
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }

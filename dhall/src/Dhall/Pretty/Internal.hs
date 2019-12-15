@@ -1088,6 +1088,11 @@ prettyCharacterSet characterSet expression =
                                     <>  prettyImportExpression val'
                     RecordCompletion _T r ->
                         completion _T r
+                    ListLit _ xs
+                        | not (null xs) ->
+                                Pretty.hardline
+                            <>  "  "
+                            <>  prettyExpression val
                     _ -> 
                             Pretty.hardline
                         <>  "    "
