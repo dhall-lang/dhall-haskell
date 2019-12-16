@@ -6,7 +6,7 @@
       , content =
           [ text
               ''
-              any line going past the 80 characters boundary (e.g. this one is 82)
+              any line going past the 80 characters boundary     (e.g. this one is 82)
               ''
           ]
       }
