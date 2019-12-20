@@ -13,6 +13,7 @@ module Dhall.Diff (
     -- * Diff
       Diff (..)
     , diffNormalized
+    , diffNormalizedWith
     , diff
     ) where
 
@@ -155,11 +156,26 @@ rparen :: Diff
 rparen = token Internal.rparen
 
 -- | Render the difference between the normal form of two expressions
-diffNormalized :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
-diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
+diffNormalized
+    :: (Eq a, Pretty a)
+    => Expr s a
+    -> Expr s a
+    -> Diff
+diffNormalized l r =
+    diffNormalizedWith Nothing l r
+
+diffNormalizedWith
+    :: (Eq a, Pretty a)
+    => Maybe (Dhall.Normalize.ReifiedNormalizer a)
+    -> Expr s a
+    -> Expr s a
+    -> Diff
+diffNormalizedWith normalizer l r =
+    Dhall.Diff.diff (normalize l) (normalize r)
   where
-    l1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize l0)
-    r1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize r0)
+    normalize =
+          Dhall.Normalize.alphaNormalize
+        . Dhall.Normalize.normalizeWith normalizer
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -350,7 +366,7 @@ diffChunks cL cR
 
     diffTextSkeleton = difference textSkeleton textSkeleton
 
-    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR) 
+    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR)
 
     chunkDiff a b =
       case (a, b) of

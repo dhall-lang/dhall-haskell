@@ -13,6 +13,7 @@ module Dhall.JSON.Yaml
   , parseQuoted
   , defaultOptions
   , dhallToYaml
+  , dhallToYamlWith
   , jsonToYaml
   ) where
 
@@ -27,6 +28,7 @@ import qualified Data.Aeson.Yaml
 import qualified Data.ByteString.Lazy
 import qualified Data.Vector
 import qualified Dhall
+import qualified Dhall.Context
 import qualified Dhall.JSON
 import qualified Options.Applicative
 
@@ -64,22 +66,41 @@ parseQuoted =
             (   Options.Applicative.long "quoted"
             <>  Options.Applicative.help "Prevent from generating not quoted scalars"
             )
-                           
+
 {-| Convert a piece of Text carrying a Dhall inscription to an equivalent YAML ByteString
 -}
 dhallToYaml
-  :: Options
-  -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
-                     -- are resolved relative to the current directory.
-  -> Text  -- ^ Input text.
-  -> IO ByteString
-dhallToYaml Options{..} mFilePath code = do
-  
-  let explaining = if explain then Dhall.detailed else id
+    :: Options
+    -> Maybe FilePath
+    -- ^ The source file path. If no path is given, imports
+    -- are resolved relative to the current directory.
+    -> Text
+    -- ^ Input text.
+    -> IO ByteString
+dhallToYaml mpath =
+    dhallToYamlWith Dhall.Context.empty Nothing mpath
 
-  json <- omission <$> explaining (Dhall.JSON.codeToValue conversion UseYAMLEncoding mFilePath code)
+dhallToYamlWith
+    :: _
+    -> Maybe _
+    -> Options
+    -> Maybe FilePath
+    -- ^ The source file path. If no path is given, imports
+    -- are resolved relative to the current directory.
+    -> Text
+    -- ^ Input text.
+    -> IO ByteString
+dhallToYamlWith Options{..} mpath code = do
+    let explaining =
+            if explain
+                then Dhall.detailed
+                else id
 
-  return $ jsonToYaml json documents quoted
+    json <-
+        explaining
+            (Dhall.JSON.codeToValueWith context normalizer conversion UseYAMLEncoding mpath code)
+
+    return $ jsonToYaml (omission json) documents quoted
 
 -- | Transform json representation into yaml
 jsonToYaml

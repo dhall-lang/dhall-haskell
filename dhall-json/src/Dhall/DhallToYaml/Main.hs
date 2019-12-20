@@ -76,27 +76,35 @@ main
     :: Data.Version.Version
     -> (Options -> Maybe FilePath -> Text -> IO ByteString)
     -> IO ()
-main version dhallToYaml = do
+main version = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
     maybeOptions <- Options.execParser parserInfo
+    mainWith Dhall.Context.empty Nothing version maybeOptions
 
-    case maybeOptions of
-        Nothing -> do
-            putStrLn (Data.Version.showVersion version)
+mainWith
+    :: _
+    -> Maybe _
+    -> Data.Version.Version
+    -> (Options -> Maybe FilePath -> Text -> IO ByteString)
+    -> Maybe Options
+    -> IO ()
+mainWith context normalizer version dhallToYaml = \case
+    Nothing ->
+        putStrLn (Data.Version.showVersion version)
 
-        Just options@(Options {..}) -> do
-            handle $ do
-                contents <- case file of
-                    Nothing   -> Text.IO.getContents
-                    Just path -> Text.IO.readFile path
+    Just options@(Options {..}) -> do
+        handle $ do
+            contents <- case file of
+                Nothing   -> Text.IO.getContents
+                Just path -> Text.IO.readFile path
 
-                let write =
-                        case output of
-                            Nothing -> Data.ByteString.putStr
-                            Just file_ -> Data.ByteString.writeFile file_
+            let write =
+                    case output of
+                        Nothing    -> Data.ByteString.putStr
+                        Just file_ -> Data.ByteString.writeFile file_
 
-                write =<< dhallToYaml options file contents
+            write =<< dhallToYaml options file contents
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

@@ -197,16 +197,19 @@
 module Dhall.JSON (
     -- * Dhall to JSON
       dhallToJSON
+    , dhallToJSONWith
     , omitNull
     , omitEmpty
     , parsePreservationAndOmission
     , Conversion(..)
     , defaultConversion
     , convertToHomogeneousMaps
+    , convertToHomogeneousMapsWith
     , parseConversion
     , SpecialDoubleMode(..)
     , handleSpecialDoubles
     , codeToValue
+    , codeToValueWith
 
     -- * Exceptions
     , CompileError(..)
@@ -237,6 +240,7 @@ import qualified Data.Ord
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Data.Vector                           as Vector
+import qualified Dhall.Context
 import qualified Dhall.Core                            as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
@@ -409,10 +413,17 @@ Right "{\"foo\":1,\"bar\":\"ABC\"}"
 -}
 dhallToJSON
     :: Expr s Void
+    -> Either CompileError Void
+dhallToJSON = dhallToJSONWith Nothing
+
+dhallToJSONWith
+    :: Maybe _
+    -> Expr s Void
     -> Either CompileError Value
-dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
+dhallToJSONWith normalizer e0 =
+    loop (Core.alphaNormalize (Core.normalizeWith normalizer e0))
   where
-    loop e = case e of 
+    loop e = case e of
         Core.BoolLit a -> return (toJSON a)
         Core.NaturalLit a -> return (toJSON a)
         Core.IntegerLit a -> return (toJSON a)
@@ -596,7 +607,7 @@ omitNull (Bool bool) =
 omitNull Null =
     Null
 
-{-| Omit record fields that are @null@, arrays and records whose transitive 
+{-| Omit record fields that are @null@, arrays and records whose transitive
     fields are all null
 -}
 omitEmpty :: Value -> Value
@@ -663,9 +674,21 @@ defaultConversion = Conversion
 
     > { k0 = v0, k1 = v1 }
 -}
-convertToHomogeneousMaps :: Conversion -> Expr s Void -> Expr s Void
-convertToHomogeneousMaps NoConversion e0 = e0
-convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
+convertToHomogeneousMaps
+    :: Conversion
+    -> Expr s Void
+    -> Expr s Void
+convertToHomogeneousMaps conversion =
+    convertToHomogeneousMapsWith Nothing conversion
+
+convertToHomogeneousMapsWith
+    :: Maybe _
+    -> Conversion
+    -> Expr s Void
+    -> Expr s Void
+convertToHomogeneousMaps _normalizer NoConversion      e0 = e0
+convertToHomogeneousMaps normalizer  (Conversion {..}) e0 =
+    loop (Core.normalizeWith normalizer e0)
   where
     loop e = case e of
         Core.Const a ->
@@ -1104,29 +1127,55 @@ handleSpecialDoubles specialDoubleMode =
 >>> Object (fromList [("a",Number 1.0)])
 -}
 codeToValue
-  :: Conversion
-  -> SpecialDoubleMode
-  -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
-                     -- are resolved relative to the current directory.
-  -> Text  -- ^ Input text.
-  -> IO Value
-codeToValue conversion specialDoubleMode mFilePath code = do
-    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(stdin)" mFilePath) code)
+    -> Conversion
+    -> SpecialDoubleMode
+    -> Maybe FilePath
+    -- ^ The source file path. If no path is given, imports
+    -- are resolved relative to the current directory.
+    -> Text
+    -- ^ Input text.
+    -> IO Value
+codeToValue conversion doubleMode mpath =
+    codeToValueWith Dhall.Context.empty Nothing conversion doubleMode mpath
+
+codeToValueWith
+    :: Dhall.Context.Context
+    -> Maybe (Dhall.Normalize.ReifiedNormalizer a)
+    -> Conversion
+    -> SpecialDoubleMode
+    -> Maybe FilePath
+    -- ^ The source file path. If no path is given, imports
+    -- are resolved relative to the current directory.
+    -> Text
+    -- ^ Input text.
+    -> IO Value
+codeToValueWith context normalizer conversion doubleMode mpath code = do
+    parsedExpression <-
+        Core.throws (Dhall.Parser.exprFromText (fromMaybe "(stdin)" mpath) code)
 
     let rootDirectory = case mFilePath of
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
+    let transform =
+              Lens.Family.set Dhall.Import.normalizer      normalizer
+            . Lens.Family.set Dhall.Import.startingContext context
 
-    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+    let status = transform (Dhall.Import.emptyStatus rootDirectory)
+               { _semanticCacheMode = UseSemanticCache
+               }
+
+    resolvedExpression <-
+        State.execStateT (Dhall.Import.loadWith parsedExpression) status
+
+    _ <- Core.throws (Dhall.TypeCheck.typeWith context resolvedExpression)
 
     let convertedExpression =
-            convertToHomogeneousMaps conversion resolvedExpression
+            convertToHomogeneousMaps context normalizer conversion resolvedExpression
 
-    specialDoubleExpression <- Core.throws (handleSpecialDoubles specialDoubleMode convertedExpression)
+    specialDoubleExpression <-
+        Core.throws (handleSpecialDoubles doubleMode convertedExpression)
 
     case dhallToJSON specialDoubleExpression of
-      Left  err  -> Control.Exception.throwIO err
-      Right json -> return json
-
+        Left  err  -> Control.Exception.throwIO err
+        Right json -> return json

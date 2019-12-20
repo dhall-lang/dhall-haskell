@@ -17,6 +17,7 @@ module Dhall.Main
 
       -- * Execution
     , command
+    , commandWith
     , main
     ) where
 
@@ -65,6 +66,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall
 import qualified Dhall.Binary
+import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.DirectoryTree                       as DirectoryTree
@@ -80,6 +82,7 @@ import qualified Dhall.Repl
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
+import qualified Lens.Family
 import qualified Options.Applicative
 import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.Console.ANSI
@@ -451,7 +454,14 @@ noHeaders i =
 
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
-command (Options {..}) = do
+command = commandWith Dhall.Context.empty Nothing
+
+commandWith
+    :: Dhall.Context.Context (Expr Src Void)
+    -> Maybe (Dhall.Core.ReifiedNormalizer Void)
+    -> Options
+    -> IO ()
+commandWith context normalizer (Options {..}) = do
     let characterSet = case ascii of
             True  -> ASCII
             False -> Unicode
@@ -462,10 +472,23 @@ command (Options {..}) = do
             InputFile f   -> System.FilePath.takeDirectory f
             StandardInput -> "."
 
-    let toStatus = Dhall.Import.emptyStatus . rootDirectory
+    let transform =
+              Lens.Family.set Dhall.Import.normalizer      normalizer
+            . Lens.Family.set Dhall.Import.startingContext context
+
+    let toStatus = transform . Dhall.Import.emptyStatus . rootDirectory
+
+    let loadRelativeTo semanticCacheMode file expression =
+            State.runStateT (Dhall.Import.loadWith expression) $
+                (toStatus file)
+                    { _semanticCacheMode = semanticCacheMode
+                    }
 
     let getExpression          = Dhall.Util.getExpression          censor
     let getExpressionAndHeader = Dhall.Util.getExpressionAndHeader censor
+
+    let typeOf    = Dhall.TypeCheck.typeWith context
+    let normalize = Dhall.Core.normalizeWith normalizer
 
     let handle io =
             Control.Exception.catches io
@@ -550,12 +573,12 @@ command (Options {..}) = do
 
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+            (resolvedExpression, _status) <-
+                loadRelativeTo semanticCacheMode file expression
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            inferredType <- Dhall.Core.throws (typeOf resolvedExpression)
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression = normalize resolvedExpression
 
             let alphaNormalizedExpression =
                     if alpha
@@ -578,8 +601,8 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            (_resolvedExpression, Dhall.Import.Types.Status { _graph, _stack }) <-
+                loadRelativeTo semanticCacheMode file expression
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map parent _graph ++ map child _graph
@@ -614,8 +637,8 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            (_resolvedExpression, Dhall.Import.Types.Status { _cache }) <-
+                loadRelativeTo semanticCacheMode file expression
 
             mapM_ print
                  .   fmap ( Pretty.pretty
@@ -629,8 +652,8 @@ command (Options {..}) = do
         Resolve { resolveMode = Nothing, ..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+            (resolvedExpression, _status) <-
+                loadRelativeTo semanticCacheMode file expression
 
             render System.IO.stdout resolvedExpression
 
@@ -639,9 +662,9 @@ command (Options {..}) = do
 
             resolvedExpression <- Dhall.Import.assertNoImports expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            _ <- Dhall.Core.throws (typeOf resolvedExpression)
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression = normalize resolvedExpression
 
             let alphaNormalizedExpression =
                     if alpha
@@ -653,10 +676,10 @@ command (Options {..}) = do
         Type {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+            (resolvedExpression, _status) <-
+                loadRelativeTo semanticCacheMode file expression
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            inferredType <- Dhall.Core.throws (typeOf resolvedExpression)
 
             if quiet
                 then return ()
@@ -670,7 +693,7 @@ command (Options {..}) = do
 
             expression2 <- Dhall.inputExpr expr2
 
-            let diff = Dhall.Diff.diffNormalized expression1 expression2
+            let diff = Dhall.Diff.diffNormalizedWith normalizer expression1 expression2
 
             renderDoc System.IO.stdout (Dhall.Diff.doc diff)
 
@@ -691,13 +714,13 @@ command (Options {..}) = do
         Hash {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+            (resolvedExpression, _status) <-
+                loadRelativeTo UseSemanticCache file expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            _ <- Dhall.Core.throws (typeOf resolvedExpression)
 
             let normalizedExpression =
-                    Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+                    Dhall.Core.alphaNormalize (normalize resolvedExpression)
 
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
@@ -761,12 +784,12 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+            (resolvedExpression, _status) <-
+                loadRelativeTo UseSemanticCache file expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
+            _ <- Dhall.Core.throws (typeOf (Annot resolvedExpression Dhall.Core.Text))
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression = normalize resolvedExpression
 
             case normalizedExpression of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do
@@ -792,12 +815,13 @@ command (Options {..}) = do
         DirectoryTree {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+            (resolvedExpression, _status) <-
+                loadRelativeTo UseSemanticCache file expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            _ <- Dhall.Core.throws (typeOf resolvedExpression)
+
+            let normalizedExpression = normalize resolvedExpression
 
             DirectoryTree.toDirectoryTree path normalizedExpression
 
@@ -813,4 +837,4 @@ command (Options {..}) = do
 main :: IO ()
 main = do
     options <- Options.Applicative.execParser parserInfoOptions
-    command options
+    commandWith Dhall.Context.empty Nothing options
