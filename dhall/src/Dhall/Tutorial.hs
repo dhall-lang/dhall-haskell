@@ -1880,7 +1880,7 @@ import Dhall
 -- >     let inputSettings = transform Dhall.defaultInputSettings
 -- >           where
 -- >             transform =
--- >                   Lens.set Dhall.normalizer      (ReifiedNormalizer (pure . normalizer))
+-- >                   Lens.set Dhall.normalizer      (Just (ReifiedNormalizer (pure . normalizer)))
 -- >                 . Lens.set Dhall.startingContext startingContext
 -- > 
 -- >     x <- Dhall.inputWithSettings inputSettings Dhall.auto text
