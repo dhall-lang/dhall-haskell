@@ -283,16 +283,18 @@ braces docs =
         rbrace
         docs
 
-hangingBraces :: [(Doc Ann, Doc Ann)] -> Doc Ann
-hangingBraces [] =
+hangingBraces :: Int -> [(Doc Ann, Doc Ann)] -> Doc Ann
+hangingBraces _ [] =
     lbrace <> rbrace
-hangingBraces docs =
+hangingBraces n docs =
     Pretty.group
         (Pretty.flatAlt
             (  lbrace
             <> Pretty.hardline
-            <> mconcat (zipWith combineLong (repeat separator) docsLong)
-            <> rbrace
+            <> Pretty.indent n
+               ( mconcat (zipWith combineLong (repeat separator) docsLong)
+               <> rbrace
+               )
             )
             (mconcat (zipWith (<>) (beginShort : repeat separator) docsShort) <> space <> rbrace)
         )
@@ -925,7 +927,7 @@ prettyCharacterSet characterSet expression =
                 Pretty.align
                     (   prettySelectorExpression a
                     <>  doubleColon
-                    <>  prettyCompletionLit kvs
+                    <>  prettyCompletionLit 0 kvs
                     )
             _ ->    prettySelectorExpression a
                 <>  doubleColon
@@ -1055,18 +1057,46 @@ prettyCharacterSet characterSet expression =
     prettyKeyValue separator (key, val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
+        completion _T r =
+                " "
+            <>  prettySelectorExpression _T
+            <>  doubleColon
+            <>  case shallowDenote r of
+                    RecordLit kvs ->
+                        prettyCompletionLit 2 kvs
+                    _ ->
+                        prettySelectorExpression r
+
         short = prettyAnyLabel key
             <>  " "
             <>  separator
             <>  " "
             <>  prettyExpression val
 
-        long =  prettyAnyLabel key
+        long =
+                prettyAnyLabel key
             <>  " "
             <>  separator
-            <>  Pretty.hardline
-            <>  "    "
-            <>  prettyExpression val
+            <>  case shallowDenote val of
+                    Some val' ->
+                            " Some"
+                        <>  case shallowDenote val' of
+                                RecordCompletion _T r ->
+                                    completion _T r
+                                _ ->    Pretty.hardline
+                                    <>  "    "
+                                    <>  prettyImportExpression val'
+                    RecordCompletion _T r ->
+                        completion _T r
+                    ListLit _ xs
+                        | not (null xs) ->
+                                Pretty.hardline
+                            <>  "  "
+                            <>  prettyExpression val
+                    _ -> 
+                            Pretty.hardline
+                        <>  "    "
+                        <>  prettyExpression val
 
     prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecord =
@@ -1080,12 +1110,12 @@ prettyCharacterSet characterSet expression =
             braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
     prettyCompletionLit
-        :: Pretty a => Map Text (Expr Src a) -> Doc Ann
-    prettyCompletionLit a
+        :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
+    prettyCompletionLit n a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
-            hangingBraces (map (prettyKeyValue equals) (Dhall.Map.toList a))
+            hangingBraces n (map (prettyKeyValue equals) (Dhall.Map.toList a))
 
     prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
     prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)

@@ -12,9 +12,9 @@ let example
       → λ(MakePerson : { children : List Person, name : Text } → Person)
       → MakePerson
           { children =
-              [ MakePerson { children = [] : List Person, name = "Mary" }
-              , MakePerson { children = [] : List Person, name = "Jane" }
-              ]
+            [ MakePerson { children = [] : List Person, name = "Mary" }
+            , MakePerson { children = [] : List Person, name = "Jane" }
+            ]
           , name = "John"
           }
 
