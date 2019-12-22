@@ -213,8 +213,8 @@ doubleInfinity = (do
 integerLiteral :: Parser Integer
 integerLiteral = (do
     sign <- signPrefix
-    a <- Text.Megaparsec.Char.Lexer.decimal
-    return (sign a) ) <?> "literal"
+    a    <- naturalLiteral
+    return (sign (fromIntegral a)) ) <?> "literal"
 
 {-| Parse a `Natural` literal 
 
@@ -222,7 +222,8 @@ integerLiteral = (do
 -}
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
-    a <- Text.Megaparsec.Char.Lexer.decimal
+    a <-    try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
+        <|> Text.Megaparsec.Char.Lexer.decimal
     return a ) <?> "literal"
 
 {-| Parse an identifier (i.e. a variable or built-in)
@@ -239,8 +240,8 @@ identifier = do
             whitespace
             _at
             whitespace
-            n <- Text.Megaparsec.Char.Lexer.decimal
-            return n
+            n <- naturalLiteral
+            return (fromIntegral n)
 
     n <- indexed <|> pure 0
     return (V x n)

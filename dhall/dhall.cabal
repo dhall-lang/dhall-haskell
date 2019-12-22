@@ -50,7 +50,11 @@ Extra-Source-Files:
     dhall-lang/Prelude/Integer/lessThanEqual
     dhall-lang/Prelude/Integer/multiply
     dhall-lang/Prelude/Integer/negate
+    dhall-lang/Prelude/Integer/negative
+    dhall-lang/Prelude/Integer/nonNegative
+    dhall-lang/Prelude/Integer/nonPositive
     dhall-lang/Prelude/Integer/package.dhall
+    dhall-lang/Prelude/Integer/positive
     dhall-lang/Prelude/Integer/show
     dhall-lang/Prelude/Integer/subtract
     dhall-lang/Prelude/Integer/toDouble
