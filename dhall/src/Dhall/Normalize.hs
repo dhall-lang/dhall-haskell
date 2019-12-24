@@ -920,6 +920,14 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                     Nothing -> Merge x' y' <$> t'
                             _ ->
                                 Merge x' y' <$> t'
+                    Some a ->
+                        case Dhall.Map.lookup "Some" kvsX of
+                            Just vX -> loop (App vX a)
+                            Nothing -> Merge x' y' <$> t'
+                    App None _ ->
+                        case Dhall.Map.lookup "None" kvsX of
+                            Just vX -> return vX
+                            Nothing -> Merge x' y' <$> t'
                     _ -> Merge x' y' <$> t'
             _ -> Merge x' y' <$> t'
       where
@@ -1191,7 +1199,14 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide (RecordLit _) (RecordLit _) = False
           decide l r = not (Eval.judgmentallyEqual l r)
       RecordCompletion _ _ -> False
-      Merge x y t -> loop x && loop y && all loop t
+      Merge x y t -> loop x && loop y && all loop t && case x of
+          RecordLit _ -> case y of
+              Field (Union _) _ -> False
+              App (Field (Union _) _) _ -> False
+              Some _ -> False
+              App None _ -> False
+              _ -> True
+          _ -> True
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
