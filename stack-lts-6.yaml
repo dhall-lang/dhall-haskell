@@ -20,7 +20,7 @@ extra-deps:
 - cabal-doctest-1.0.6
 - case-insensitive-1.2.1.0
 - cborg-0.2.1.0
-- cborg-json-0.2.1.0
+- cborg-json-0.2.2.0
 - contravariant-1.5.2
 - cryptonite-0.24
 - data-fix-0.2.0

@@ -26,6 +26,7 @@ extra-deps:
   - prettyprinter-1.5.1@sha256:fca87c3e2611d3499a0341a59857e9b424a23f31646e4737d535a18582284f96,5375
   - atomic-write-0.2.0.7@sha256:3b626dfbc288cd070f1ac31b1c15ddd49822a923778ffe21f92b2116ffc72dc3,4584
   - megaparsec-8.0.0
+  - cborg-json-0.2.2.0
 nix:
   packages:
     - ncurses

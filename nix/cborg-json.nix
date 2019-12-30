@@ -1,13 +1,18 @@
-{ mkDerivation, aeson, aeson-pretty, base, cborg, scientific
-, stdenv, text, unordered-containers, vector
+{ mkDerivation, aeson, aeson-pretty, base, bytestring, cborg
+, criterion, deepseq, directory, process, scientific, stdenv, text
+, unordered-containers, vector, zlib
 }:
 mkDerivation {
   pname = "cborg-json";
-  version = "0.2.1.0";
-  sha256 = "3fb6b54e6ddd322880689fb461f7911aca45b9758482c9f9949619c7d7b52006";
+  version = "0.2.2.0";
+  sha256 = "ab68a2457cb71a76699d7a8df07a880ea70c51d2c1a891b12669ca9ccfa7517b";
   libraryHaskellDepends = [
     aeson aeson-pretty base cborg scientific text unordered-containers
     vector
+  ];
+  benchmarkHaskellDepends = [
+    aeson base bytestring cborg criterion deepseq directory process
+    zlib
   ];
   homepage = "https://github.com/well-typed/cborg";
   description = "A library for encoding JSON as CBOR";
