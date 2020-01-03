@@ -18,7 +18,6 @@ import           Data.Maybe             (fromMaybe, mapMaybe)
 import           Data.Set               (Set)
 import           Data.Text              (Text)
 
-import           Dhall.Kubernetes.Data  (excludedModels)
 import           Dhall.Kubernetes.Types
 
 
@@ -279,14 +278,13 @@ getImportsMap prefixMap duplicateNameHandler objectNames folder toInclude
     selectObject :: (Text, [ModelName]) -> Maybe (ModelName, Text)
     selectObject (kind, namespacedNames) = fmap (,kind) namespaced
       where
-        filterFn modelName@(ModelName name) = not $ or
+        filterFn (ModelName name) = not $ or
           -- The reason why we filter these two prefixes is that they are "internal"
           -- objects. I.e. they do not appear referenced in other objects, but are
           -- just in the Go source. E.g. see https://godoc.org/k8s.io/kubernetes/pkg/apis/core
           [ Text.isPrefixOf "io.k8s.kubernetes.pkg.api." name
           , Text.isPrefixOf "io.k8s.kubernetes.pkg.apis." name
           -- We keep a list of "old" objects that should not be preferred/picked
-          , Set.member modelName excludedModels
           ]
 
         namespaced = case filter filterFn namespacedNames of

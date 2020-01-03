@@ -3,30 +3,34 @@
 
 module Main (main) where
 
+import Control.Applicative.Combinators (sepBy1, option)
+import Data.Aeson (decodeFileStrict)
+import Data.Bifunctor (bimap)
+import Data.Foldable (for_)
+import Data.Text (Text, pack)
+import Data.Void (Void)
+import Dhall.Kubernetes.Data (patchCyclicImports)
+import Dhall.Kubernetes.Types
+import Numeric.Natural (Natural)
+import Text.Megaparsec (Parsec, some, parse, (<|>), errorBundlePretty)
+import Text.Megaparsec.Char (char, alphaNumChar)
+
+import qualified Data.List                             as List
+import qualified Data.Ord                              as Ord
 import qualified Data.Map.Strict                       as Data.Map
 import qualified Data.Text                             as Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 import qualified Dhall.Core                            as Dhall
 import qualified Dhall.Format
+import qualified Dhall.Kubernetes.Convert              as Convert
+import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Util
-import qualified Turtle
-
-import           Data.Aeson                            (decodeFileStrict)
-import           Data.Bifunctor                        (bimap)
-import           Data.Foldable                         (for_)
-import           Data.Text                             (Text, pack)
 import qualified Options.Applicative
-import           Control.Applicative.Combinators       (sepBy1, option)
-import           Text.Megaparsec                       (some, parse, (<|>), errorBundlePretty)
-import           Text.Megaparsec.Char                  (char, alphaNumChar)
-
-import qualified Dhall.Kubernetes.Convert              as Convert
-import           Dhall.Kubernetes.Data                 (patchCyclicImports)
-import qualified Dhall.Parser
-import           Dhall.Kubernetes.Types
-
+import qualified Text.Megaparsec                       as Megaparsec
+import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Lexer
+import qualified Turtle
 
 -- | Top-level program options
 data Options = Options
@@ -64,8 +68,70 @@ echo = Turtle.printf (Turtle.s Turtle.% "\n")
 echoStr :: Turtle.MonadIO m => String -> m ()
 echoStr = echo . Text.pack
 
-errorOnDuplicateHandler :: DuplicateHandler
-errorOnDuplicateHandler (kind, names) = error $ "Got more than one key for "++ show kind ++"! See:\n" <> show names
+data Stability = Alpha Natural | Beta Natural | Production deriving (Eq, Ord)
+
+data Version = Version
+    { version :: Natural
+    , stability :: Stability
+    } deriving (Eq, Ord)
+
+parseStability :: Parsec Void Text Stability
+parseStability = parseAlpha <|> parseBeta <|> parseProduction
+  where
+    parseAlpha = do
+        _ <- "alpha"
+
+        n <- Megaparsec.Lexer.decimal
+
+        return (Alpha n)
+
+    parseBeta = do
+        _ <- "beta"
+
+        n <- Megaparsec.Lexer.decimal
+
+        return (Beta n)
+
+    parseProduction = do
+        return Production
+
+parseVersion :: Parsec Void Text Version
+parseVersion = Megaparsec.try parseSuffix <|> parsePrefix
+  where
+    parseComponent = do
+        Megaparsec.takeWhile1P (Just "not a period") (/= '.')
+
+    parseSuffix = do
+        _ <- "v"
+
+        version <- Megaparsec.Lexer.decimal
+
+        stability <- parseStability
+
+        _ <- "."
+
+        _ <- parseComponent
+
+        Megaparsec.eof
+
+        return Version{..}
+
+    parsePrefix = do
+        _ <- parseComponent
+
+        _ <- "."
+
+        parseVersion
+
+getVersion :: ModelName -> Version
+getVersion ModelName{..} =
+    case Megaparsec.parse parseVersion "" unModelName of
+        Left  errors  -> error (show errors)
+        Right version -> version
+
+preferStableResource :: DuplicateHandler
+preferStableResource (_, names) =
+    return (List.maximumBy (Ord.comparing getVersion) names)
 
 skipDuplicatesHandler :: DuplicateHandler
 skipDuplicatesHandler = const Nothing
@@ -118,7 +184,12 @@ parserInfoOptions =
 main :: IO ()
 main = do
   Options{..} <- Options.Applicative.execParser parserInfoOptions
-  let duplicateHandler = if skipDuplicates then skipDuplicatesHandler else errorOnDuplicateHandler
+
+  let duplicateHandler =
+        if skipDuplicates
+        then skipDuplicatesHandler
+        else preferStableResource
+
   -- Get the Swagger spec
   Swagger{..} <- do
     swaggerFile <- decodeFileStrict filename
