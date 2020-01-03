@@ -20,19 +20,19 @@
   };
 
   outputs = { self, nixpkgs, nixpkgsStaticLinux }: {
-    hydraJobs = import ./release.nix {
+    hydraJobs.x86_64-linux = import ./release.nix {
       inherit nixpkgs nixpkgsStaticLinux;
       system = "x86_64-linux";
     };
-    packages = with self.hydraJobs; {
+    packages.x86_64-linux = with self.hydraJobs.x86_64-linux; {
       dhall = linux-dhall;
       dhall-bash = linux-dhall-bash;
       dhall-json = linux-dhall-json;
       dhall-lsp-server = linux-dhall-lsp-server;
       dhall-nix = linux-dhall-nix;
     };
-    defaultPackage = self.packages.dhall;
-    checks = { inherit (self.hydraJobs) coverage-dhall; };
+    defaultPackage.x86_64-linux = self.packages.x86_64-linux.dhall;
+    checks.x86_64-linux = { inherit (self.hydraJobs.x86_64-linux) coverage-dhall; };
   };
 
 }
