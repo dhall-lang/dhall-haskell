@@ -399,6 +399,11 @@ let
                           haskellPackagesNew.semigroups
                         ];
 
+                    managed =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.managed
+                        haskellPackagesNew.semigroups;
+
                     megaparsec =
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.megaparsec
@@ -412,6 +417,11 @@ let
                       pkgsNew.haskell.lib.addBuildDepend
                         haskellPackagesOld.optparse-applicative
                         haskellPackagesNew.fail;
+
+                    optional-args =
+                      pkgsNew.haskell.lib.addBuildDepend
+                        haskellPackagesOld.optional-args
+                        haskellPackagesNew.semigroups;
 
                     parser-combinators =
                       pkgsNew.haskell.lib.addBuildDepend
