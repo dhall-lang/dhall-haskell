@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 
@@ -8,20 +9,25 @@ module Dhall.TH
     , makeHaskellType
     ) where
 
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall.Syntax (Expr(..))
 import Language.Haskell.TH.Quote (dataToExpQ) -- 7.10 compatibility.
 
 import Language.Haskell.TH.Syntax
-    ( Bang(..)
-    , Con(..)
+    ( Con(..)
     , Dec(..)
     , Exp(..)
     , Q
+    , Type(..)
+#if MIN_VERSION_template_haskell(2,11,0)
+    , Bang(..)
     , SourceStrictness(..)
     , SourceUnpackedness(..)
-    , Type(..)
+#else
+    , Strict(..)
+#endif
     )
 
 import qualified Data.Text                               as Text
@@ -105,26 +111,28 @@ toSimpleHaskellType dhallType =
 
         _ -> do
             let document =
-                    "Dhall.TH.makeHaskellType: Unsupported simple type\n\
-                    \                                                                                \n\
-                    \Explanation: Not all Dhall alternative types can be converted to Haskell        \n\
-                    \constructor types.  Specifically, only the following simple Dhall types are     \n\
-                    \supported as an alternative type or a field of an alternative type:             \n\
-                    \                                                                                \n\
-                    \• ❰Bool❱                                                                        \n\
-                    \• ❰Double❱                                                                      \n\
-                    \• ❰Integer❱                                                                     \n\
-                    \• ❰Natural❱                                                                     \n\
-                    \• ❰Text❱                                                                        \n\
-                    \• ❰List a❱     (where ❰a❱ is also a simple type)                                \n\
-                    \• ❰Optional a❱ (where ❰a❱ is also a simple type)                                \n\
-                    \                                                                                \n\
-                    \The Haskell datatype generation logic encountered the following complex         \n\
-                    \Dhall type:                                                                     \n\
-                    \                                                                                \n\
-                    \ " <> Dhall.Util.insert dhallType <> "\n\
-                    \                                                                                \n\
-                    \... where a simpler type was expected."
+                    mconcat
+                    [ "Dhall.TH.makeHaskellType: Unsupported simple type\n"
+                    , "                                                                                \n"
+                    , "Explanation: Not all Dhall alternative types can be converted to Haskell        \n"
+                    , "constructor types.  Specifically, only the following simple Dhall types are     \n"
+                    , "supported as an alternative type or a field of an alternative type:             \n"
+                    , "                                                                                \n"
+                    , "• ❰Bool❱                                                                        \n"
+                    , "• ❰Double❱                                                                      \n"
+                    , "• ❰Integer❱                                                                     \n"
+                    , "• ❰Natural❱                                                                     \n"
+                    , "• ❰Text❱                                                                        \n"
+                    , "• ❰List a❱     (where ❰a❱ is also a simple type)                                \n"
+                    , "• ❰Optional a❱ (where ❰a❱ is also a simple type)                                \n"
+                    , "                                                                                \n"
+                    , "The Haskell datatype generation logic encountered the following complex         \n"
+                    , "Dhall type:                                                                     \n"
+                    , "                                                                                \n"
+                    , " " <> Dhall.Util.insert dhallType <> "\n"
+                    , "                                                                                \n"
+                    , "... where a simpler type was expected."
+                    ]
 
             let message = Pretty.renderString (Dhall.Pretty.layout document)
 
@@ -135,7 +143,11 @@ toConstructor :: Pretty a => (Text, Maybe (Expr s a)) -> Q Con
 toConstructor (constructorName, maybeAlternativeType) = do
     let name = Syntax.mkName (Text.unpack constructorName)
 
+#if MIN_VERSION_template_haskell(2,11,0)
     let bang = Bang NoSourceUnpackedness NoSourceStrictness
+#else
+    let bang = NotStrict
+#endif
 
     case maybeAlternativeType of
         Just (Record kts) -> do
@@ -209,46 +221,53 @@ makeHaskellType typeName text = do
 
             constructors <- traverse toConstructor (Dhall.Map.toList kts )
 
-            let declaration = DataD [] name [] Nothing constructors []
+            let declaration = DataD [] name []
+#if MIN_VERSION_template_haskell(2,11,0)
+                    Nothing
+#else
+#endif
+                    constructors []
 
             return [ declaration ]
 
         _ -> do
             let document =
-                    "Dhall.TH.makeHaskellType: Unsupported Dhall type\n\
-                    \                                                                                \n\
-                    \Explanation: Not all Dhall types can be converted to Haskell datatype           \n\
-                    \declarations.  Specifically, only union types can be converted to Haskell types.\n\
-                    \                                                                                \n\
-                    \For example, this is a valid Dhall type:                                        \n\
-                    \                                                                                \n\
-                    \                                                                                \n\
-                    \    ┌─────────────────────────────────────────────────────────┐                 \n\
-                    \    │ Dhall.TH.makeHaskellType \"T\" \"< A : { x : Bool } | B >\" │                 \n\
-                    \    └─────────────────────────────────────────────────────────┘                 \n\
-                    \                                                                                \n\
-                    \                                                                                \n\
-                    \... which corresponds to this Haskell type declaration:                         \n\
-                    \                                                                                \n\
-                    \                                                                                \n\
-                    \    ┌──────────────────────────────────────┐                                    \n\
-                    \    │ data T = A {x :: GHC.Types.Bool} | B │                                    \n\
-                    \    └──────────────────────────────────────┘                                    \n\
-                    \                                                                                \n\
-                    \                                                                                \n\
-                    \... but the following Dhall type is rejected due to being a bare record type:   \n\
-                    \                                                                                \n\
-                    \                                                                                \n\
-                    \    ┌─────────────────────────────────────────────┐                             \n\
-                    \    │ Dhall.TH.makeHaskellType \"T\" \"{ x : Bool }\" │  Not valid due to not being \n\
-                    \    └─────────────────────────────────────────────┘  wrapped in a union         \n\
-                    \                                                                                \n\
-                    \                                                                                \n\
-                    \The Haskell datatype generation logic encountered the following Dhall type:     \n\
-                    \                                                                                \n\
-                    \ " <> Dhall.Util.insert expression <> "\n\
-                    \                                                                                \n\
-                    \... which is not a union type."
+                    mconcat
+                    [ "Dhall.TH.makeHaskellType: Unsupported Dhall type\n"
+                    , "                                                                                \n"
+                    , "Explanation: Not all Dhall types can be converted to Haskell datatype           \n"
+                    , "declarations.  Specifically, only union types can be converted to Haskell types.\n"
+                    , "                                                                                \n"
+                    , "For example, this is a valid Dhall type:                                        \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "    ┌─────────────────────────────────────────────────────────┐                 \n"
+                    , "    │ Dhall.TH.makeHaskellType \"T\" \"< A : { x : Bool } | B >\" │                 \n"
+                    , "    └─────────────────────────────────────────────────────────┘                 \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "... which corresponds to this Haskell type declaration:                         \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "    ┌──────────────────────────────────────┐                                    \n"
+                    , "    │ data T = A {x :: GHC.Types.Bool} | B │                                    \n"
+                    , "    └──────────────────────────────────────┘                                    \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "... but the following Dhall type is rejected due to being a bare record type:   \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "    ┌─────────────────────────────────────────────┐                             \n"
+                    , "    │ Dhall.TH.makeHaskellType \"T\" \"{ x : Bool }\" │  Not valid due to not being \n"
+                    , "    └─────────────────────────────────────────────┘  wrapped in a union         \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
+                    , "                                                                                \n"
+                    , " " <> Dhall.Util.insert expression <> "\n"
+                    , "                                                                                \n"
+                    , "... which is not a union type."
+                    ]
 
             let message = Pretty.renderString (Dhall.Pretty.layout document)
 
