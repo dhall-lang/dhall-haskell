@@ -7,8 +7,8 @@
 }:
 mkDerivation {
   pname = "haskell-lsp";
-  version = "0.15.0.0";
-  sha256 = "8fddcc317494a308a115abc8789581db301f3fd7906e356e3a49da4b1b042c84";
+  version = "0.17.0.0";
+  sha256 = "fdd8c88739a782a8127b880d4326d49ca56e76bd071c4cc0524d49539b2d899d";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
