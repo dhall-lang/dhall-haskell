@@ -14,6 +14,7 @@ import qualified Dhall.Test.Normalization
 import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
+import qualified Dhall.Test.TH
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeInference
 import qualified GHC.IO.Encoding
@@ -57,6 +58,7 @@ getAllTests = do
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
                 , Dhall.Test.Dhall.tests
+                , Dhall.Test.TH.tests
                 ]
 
     return testTree

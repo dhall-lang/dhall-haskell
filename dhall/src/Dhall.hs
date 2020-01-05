@@ -1225,7 +1225,7 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
 -- >     \(Expr : Type)
 -- > ->  let ExprF =
 -- >           < LitF :
--- >               { _1 : Natural }
+-- >               Natural
 -- >           | AddF :
 -- >               { _1 : Expr, _2 : Expr }
 -- >           | MulF :
@@ -1233,7 +1233,7 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
 -- >           >
 -- >
 -- >     in      \(Fix : ExprF -> Expr)
--- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF { _1 = x })
+-- >         ->  let Lit = \(x : Natural) -> Fix (ExprF.LitF x)
 -- >
 -- >             let Add =
 -- >                       \(x : Expr)
@@ -1291,7 +1291,6 @@ data InterpretOptions = InterpretOptions
     --   corresponding Dhall alternative names
     , singletonConstructors :: SingletonConstructors
     -- ^ Specify how to handle constructors with only one field.  The default is
-    --   `Wrapped` for backwards compatibility but will eventually be changed to
     --   `Smart`
     , inputNormalizer     :: Dhall.Core.ReifiedNormalizer Void
     -- ^ This is only used by the `FromDhall` instance for functions in order
@@ -1334,7 +1333,7 @@ defaultInterpretOptions = InterpretOptions
     , constructorModifier =
           id
     , singletonConstructors =
-          Wrapped
+          Smart
     , inputNormalizer =
           Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }

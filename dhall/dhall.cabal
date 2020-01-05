@@ -402,6 +402,7 @@ Extra-Source-Files:
     tests/regression/*.dhall
     tests/tags/*.dhall
     tests/tags/*.tags
+    tests/th/*.dhall
     tests/tutorial/*.dhall
 
 Source-Repository head
@@ -587,6 +588,7 @@ Test-Suite tasty
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
         Dhall.Test.SemanticHash
+        Dhall.Test.TH
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference
         Dhall.Test.Util
