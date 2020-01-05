@@ -15,7 +15,7 @@ import qualified Dhall.TH
 import qualified Test.Tasty       as Tasty
 import qualified Test.Tasty.HUnit as Tasty.HUnit
 
-Dhall.TH.makeHaskellType "T" "./tests/th/example.dhall"
+Dhall.TH.makeHaskellTypeFromUnion "T" "./tests/th/example.dhall"
 
 deriving instance Eq        T
 deriving instance Show      T
@@ -23,10 +23,10 @@ deriving instance Generic   T
 deriving instance FromDhall T
 
 tests :: TestTree
-tests = Tasty.testGroup "Template Haskell" [ makeHaskellType ]
+tests = Tasty.testGroup "Template Haskell" [ makeHaskellTypeFromUnion ]
 
-makeHaskellType :: TestTree
-makeHaskellType = Tasty.HUnit.testCase "makeHaskellType" $ do
+makeHaskellTypeFromUnion :: TestTree
+makeHaskellTypeFromUnion = Tasty.HUnit.testCase "makeHaskellTypeFromUnion" $ do
     let interpretOptions =
             Dhall.defaultInterpretOptions
                 { Dhall.singletonConstructors = Dhall.Smart

@@ -6,7 +6,7 @@
 module Dhall.TH
     ( -- * Template Haskell
       staticDhallExpression
-    , makeHaskellType
+    , makeHaskellTypeFromUnion
     ) where
 
 import Data.Monoid ((<>))
@@ -112,7 +112,7 @@ toSimpleHaskellType dhallType =
         _ -> do
             let document =
                     mconcat
-                    [ "Dhall.TH.makeHaskellType: Unsupported simple type\n"
+                    [ "Unsupported simple type\n"
                     , "                                                                                \n"
                     , "Explanation: Not all Dhall alternative types can be converted to Haskell        \n"
                     , "constructor types.  Specifically, only the following simple Dhall types are     \n"
@@ -168,7 +168,8 @@ toConstructor (constructorName, maybeAlternativeType) = do
         Nothing -> do
             return (NormalC name [])
 
--- | Generate a Haskell datatype declaration from a Dhall type
+-- | Generate a Haskell datatype declaration from a Dhall union type where
+-- each union alternative corresponds to a Haskell constructor
 --
 -- This comes in handy if you need to keep a Dhall type and Haskell type in
 -- sync.  You make the Dhall type the source of truth and use Template Haskell
@@ -176,11 +177,17 @@ toConstructor (constructorName, maybeAlternativeType) = do
 --
 -- For example, this Template Haskell splice:
 --
--- > Dhall.TH.makeHaskellType "T" "< A : { x : Bool } | B >"
+-- > Dhall.TH.makeHaskellTypeFromUnion "T" "< A : { x : Bool } | B >"
 --
 -- ... generates this Haskell code:
 --
 -- > data T = A {x :: GHC.Types.Bool} | B
+--
+-- If you are starting from an existing record type that you want to convert to
+-- a Haskell type, wrap the record type in a union with one alternative, like
+-- this:
+--
+-- > Dhall.TH.makeHaskellTypeFromUnion "T" "< A : ./recordType.dhall >"
 --
 -- To add any desired instances (such as `Dhall.FromDhall`/`Dhall.ToDhall`),
 -- you can use the `StandaloneDeriving` language extension, like this:
@@ -191,7 +198,7 @@ toConstructor (constructorName, maybeAlternativeType) = do
 -- > {-# LANGUAGE StandaloneDeriving #-}
 -- > {-# LANGUAGE TemplateHaskell    #-}
 -- >
--- > Dhall.TH.makeHaskellType "T" "< A : { x : Bool } | B >"
+-- > Dhall.TH.makeHaskellTypeFromUnion  "T" "< A : { x : Bool } | B >"
 -- > 
 -- > deriving instance Generic   T
 -- > deriving instance FromDhall T
@@ -208,9 +215,13 @@ toConstructor (constructorName, maybeAlternativeType) = do
 -- >             }
 -- >
 -- > let decoder = Dhall.autoWith interpretOptions
-
-makeHaskellType :: Text -> Text -> Q [Dec]
-makeHaskellType typeName text = do
+makeHaskellTypeFromUnion
+    :: Text
+    -- ^ Name of the generated Haskell type
+    -> Text
+    -- ^ Dhall code that evaluates to a union type
+    -> Q [Dec]
+makeHaskellTypeFromUnion typeName text = do
     Syntax.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
 
     expression <- Syntax.runIO (Dhall.inputExpr text)
@@ -233,17 +244,17 @@ makeHaskellType typeName text = do
         _ -> do
             let document =
                     mconcat
-                    [ "Dhall.TH.makeHaskellType: Unsupported Dhall type\n"
+                    [ "Dhall.TH.makeHaskellTypeFromUnion: Unsupported Dhall type\n"
                     , "                                                                                \n"
-                    , "Explanation: Not all Dhall types can be converted to Haskell datatype           \n"
-                    , "declarations.  Specifically, only union types can be converted to Haskell types.\n"
+                    , "Explanation: This function only coverts Dhall union types to Haskell datatype   \n"
+                    , "declarations.                                                                   \n"
                     , "                                                                                \n"
-                    , "For example, this is a valid Dhall type:                                        \n"
+                    , "For example, this is a valid Dhall union type that this function would accept:  \n"
                     , "                                                                                \n"
                     , "                                                                                \n"
-                    , "    ┌─────────────────────────────────────────────────────────┐                 \n"
-                    , "    │ Dhall.TH.makeHaskellType \"T\" \"< A : { x : Bool } | B >\" │                 \n"
-                    , "    └─────────────────────────────────────────────────────────┘                 \n"
+                    , "    ┌──────────────────────────────────────────────────────────────────┐        \n"
+                    , "    │ Dhall.TH.makeHaskellTypeFromUnion \"T\" \"< A : { x : Bool } | B >\" │        \n"
+                    , "    └──────────────────────────────────────────────────────────────────┘        \n"
                     , "                                                                                \n"
                     , "                                                                                \n"
                     , "... which corresponds to this Haskell type declaration:                         \n"
@@ -257,9 +268,19 @@ makeHaskellType typeName text = do
                     , "... but the following Dhall type is rejected due to being a bare record type:   \n"
                     , "                                                                                \n"
                     , "                                                                                \n"
-                    , "    ┌─────────────────────────────────────────────┐                             \n"
-                    , "    │ Dhall.TH.makeHaskellType \"T\" \"{ x : Bool }\" │  Not valid due to not being \n"
-                    , "    └─────────────────────────────────────────────┘  wrapped in a union         \n"
+                    , "    ┌──────────────────────────────────────────────────────┐                    \n"
+                    , "    │ Dhall.TH.makeHaskellTypeFromUnion \"T\" \"{ x : Bool }\" │  Not valid         \n"
+                    , "    └──────────────────────────────────────────────────────┘                    \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "If you are starting from a file containing only a record type and you want to   \n"
+                    , "generate a Haskell type from that, then wrap the record type in a union with one\n"
+                    , "alternative, like this:                                                         \n"
+                    , "                                                                                \n"
+                    , "                                                                                \n"
+                    , "    ┌──────────────────────────────────────────────────────────────────┐        \n"
+                    , "    │ Dhall.TH.makeHaskellTypeFromUnion \"T\" \"< A : ./recordType.dhall >\" │      \n"
+                    , "    └──────────────────────────────────────────────────────────────────┘        \n"
                     , "                                                                                \n"
                     , "                                                                                \n"
                     , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
