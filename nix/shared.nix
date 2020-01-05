@@ -56,7 +56,7 @@ let
       rust =
         pkgsNew.fetchurl {
           url    = "http://rust-lang.org/logos/rust-logo-128x128-blk.png";
-          sha256 = "1yvvdqcmgpa75y7px3isi4x6690iksq52ilnbslhn7mcngikw6m0";
+          sha256 = "19ycf7ra6pn6gvavpfg1gbi9j8dsmxfm0gnczabvpspv7yaf8i71";
         };
 
       dhallLarge =
