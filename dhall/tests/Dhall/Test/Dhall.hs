@@ -176,13 +176,13 @@ shouldHandleUnionsCorrectly :: TestTree
 shouldHandleUnionsCorrectly =
   testGroup "Handle union literals"
     [ "λ(x : < N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >) → x"
-        `shouldPassThrough` [ N0 True, N1 5, N2 "ABC" ]
+        `shouldPassThroughWrapped` [ N0 True, N1 5, N2 "ABC" ]
     , "λ(x : < E0 | E1 | E2 >) → x"
-        `shouldPassThrough` [ E0, E1, E2 ]
+        `shouldPassThroughWrapped` [ E0, E1, E2 ]
     , "λ(x : < R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >) → x"
-        `shouldPassThrough` [ R0 {}, R1 { a = () }, R2 { x = 1.0 }, R3 { a = (), b = () }, R4 { x = 1.0, y = 2.0 } ]
+        `shouldPassThroughWrapped` [ R0 {}, R1 { a = () }, R2 { x = 1.0 }, R3 { a = (), b = () }, R4 { x = 1.0, y = 2.0 } ]
     , "λ(x : < P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >) → x"
-        `shouldPassThrough` [ P0 , P1 (), P2 1.0, P3 () (), P4 1.0 2.0 ]
+        `shouldPassThroughWrapped` [ P0 , P1 (), P2 1.0, P3 () (), P4 1.0 2.0 ]
 
     , "λ(x : < N0 : Bool | N1 : Natural | N2 : Text >) → x"
         `shouldPassThroughSmart` [ N0 True, N1 5, N2 "ABC" ]
@@ -192,12 +192,12 @@ shouldHandleUnionsCorrectly =
         `shouldPassThroughSmart` [ P0 , P1 (), P2 1.0, P3 () (), P4 1.0 2.0 ]
 
     , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
-        `shouldMarshalInto` N0 True
+        `shouldMarshalIntoWrapped` N0 True
     , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
-        `shouldMarshalInto` N1 5
+        `shouldMarshalIntoWrapped` N1 5
     , "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
 
-        `shouldMarshalInto` N2 "ABC"
+        `shouldMarshalIntoWrapped` N2 "ABC"
 
     , "(< N0 : Bool | N1 : Natural | N2 : Text >).N0 True"
         `shouldMarshalIntoSmart` N0 True
@@ -206,20 +206,20 @@ shouldHandleUnionsCorrectly =
     , "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
         `shouldMarshalIntoSmart` N2 "ABC"
 
-    , "(< E0 | E1 | E2>).E0" `shouldMarshalInto` E0
-    , "(< E0 | E1 | E2>).E1" `shouldMarshalInto` E1
-    , "(< E0 | E1 | E2>).E2" `shouldMarshalInto` E2
+    , "(< E0 | E1 | E2>).E0" `shouldMarshalIntoWrapped` E0
+    , "(< E0 | E1 | E2>).E1" `shouldMarshalIntoWrapped` E1
+    , "(< E0 | E1 | E2>).E2" `shouldMarshalIntoWrapped` E2
 
     , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
-        `shouldMarshalInto` R0
+        `shouldMarshalIntoWrapped` R0
     , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
-        `shouldMarshalInto` R1 { a = () }
+        `shouldMarshalIntoWrapped` R1 { a = () }
     , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0 }"
-        `shouldMarshalInto` R2 { x = 1.0 }
+        `shouldMarshalIntoWrapped` R2 { x = 1.0 }
     , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
-        `shouldMarshalInto` R3 { a = (), b = () }
+        `shouldMarshalIntoWrapped` R3 { a = (), b = () }
     , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
-        `shouldMarshalInto` R4 { x = 1.0, y = 2.0 }
+        `shouldMarshalIntoWrapped` R4 { x = 1.0, y = 2.0 }
 
     , "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
         `shouldMarshalIntoSmart` R0
@@ -233,15 +233,15 @@ shouldHandleUnionsCorrectly =
         `shouldMarshalIntoSmart` R4 { x = 1.0, y = 2.0 }
 
     , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
-        `shouldMarshalInto` P0
+        `shouldMarshalIntoWrapped` P0
     , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1 { _1 = {=} }"
-        `shouldMarshalInto` P1 ()
+        `shouldMarshalIntoWrapped` P1 ()
     , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 { _1 = 1.0 }"
-        `shouldMarshalInto` P2 1.0
+        `shouldMarshalIntoWrapped` P2 1.0
     , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
-        `shouldMarshalInto` P3 () ()
+        `shouldMarshalIntoWrapped` P3 () ()
     , "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
-        `shouldMarshalInto` P4 1.0 2.0
+        `shouldMarshalIntoWrapped` P4 1.0 2.0
 
     , "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
         `shouldMarshalIntoSmart` P0
@@ -255,13 +255,13 @@ shouldHandleUnionsCorrectly =
         `shouldMarshalIntoSmart` P4 1.0 2.0
 
     , N0 True
-        `shouldEmbedAs`
+        `shouldEmbedAsWrapped`
         "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N0 { _1 = True }"
     , N1 5
-        `shouldEmbedAs`
+        `shouldEmbedAsWrapped`
         "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N1 { _1 = 5 }"
     , N2 "ABC"
-        `shouldEmbedAs`
+        `shouldEmbedAsWrapped`
         "(< N0 : { _1 : Bool } | N1 : { _1 : Natural } | N2 : { _1 : Text } >).N2 { _1 = \"ABC\" }"
 
     , N0 True
@@ -274,15 +274,15 @@ shouldHandleUnionsCorrectly =
         `shouldEmbedAsSmart`
         "(< N0 : Bool | N1 : Natural | N2 : Text >).N2 \"ABC\""
 
-    , E0 `shouldEmbedAs` "< E0 | E1 | E2 >.E0"
-    , E1 `shouldEmbedAs` "< E0 | E1 | E2 >.E1"
-    , E2 `shouldEmbedAs` "< E0 | E1 | E2 >.E2"
+    , E0 `shouldEmbedAsWrapped` "< E0 | E1 | E2 >.E0"
+    , E1 `shouldEmbedAsWrapped` "< E0 | E1 | E2 >.E1"
+    , E2 `shouldEmbedAsWrapped` "< E0 | E1 | E2 >.E2"
 
-    , R0 `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
-    , R1 { a = () } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
-    , R2 { x = 1.0 } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0}"
-    , R3 { a = (), b = () } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
-    , R4 { x = 1.0, y = 2.0 } `shouldEmbedAs` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
+    , R0 `shouldEmbedAsWrapped` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
+    , R1 { a = () } `shouldEmbedAsWrapped` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
+    , R2 { x = 1.0 } `shouldEmbedAsWrapped` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R2 { x = 1.0}"
+    , R3 { a = (), b = () } `shouldEmbedAsWrapped` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
+    , R4 { x = 1.0, y = 2.0 } `shouldEmbedAsWrapped` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
 
     , R0 `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R0"
     , R1 { a = () } `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R1 { a = {=} }"
@@ -290,11 +290,11 @@ shouldHandleUnionsCorrectly =
     , R3 { a = (), b = () } `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R3 { a = {=}, b = {=} }"
     , R4 { x = 1.0, y = 2.0 } `shouldEmbedAsSmart` "< R0 | R1 : { a : {} } | R2 : { x : Double } | R3 : { a : {}, b : {} } | R4 : { x : Double, y : Double } >.R4 { x = 1.0, y = 2.0 }"
 
-    , P0 `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
-    , P1 () `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1 { _1 = {=} }"
-    , P2 1.0 `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 { _1 = 1.0 }"
-    , P3 () () `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
-    , P4 1.0 2.0 `shouldEmbedAs` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
+    , P0 `shouldEmbedAsWrapped` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
+    , P1 () `shouldEmbedAsWrapped` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1 { _1 = {=} }"
+    , P2 1.0 `shouldEmbedAsWrapped` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P2 { _1 = 1.0 }"
+    , P3 () () `shouldEmbedAsWrapped` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P3 { _1 = {=}, _2 = {=} }"
+    , P4 1.0 2.0 `shouldEmbedAsWrapped` "< P0 | P1 : { _1 : {} } | P2 : { _1 : Double } | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P4 { _1 = 1.0, _2 = 2.0 }"
 
     , P0 `shouldEmbedAsSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P0"
     , P1 () `shouldEmbedAsSmart` "< P0 | P1 | P2 : Double | P3 : { _1 : {}, _2 : {} } | P4 : { _1 : Double, _2 : Double } >.P1"
@@ -307,8 +307,12 @@ shouldHandleUnionsCorrectly =
         Dhall.defaultInterpretOptions
             { Dhall.singletonConstructors = Dhall.Smart }
 
-    code `shouldPassThrough` values = testCase "Pass through" $ do
-        f <- Dhall.input Dhall.auto code
+    wrappedOptions =
+        Dhall.defaultInterpretOptions
+            { Dhall.singletonConstructors = Dhall.Wrapped }
+
+    code `shouldPassThroughWrapped` values = testCase "Pass through" $ do
+        f <- Dhall.input (Dhall.autoWith wrappedOptions) code
 
         values @=? map f values
 
@@ -317,8 +321,8 @@ shouldHandleUnionsCorrectly =
 
         values @=? map f values
 
-    code `shouldMarshalInto` expectedValue = testCase "Marshal" $ do
-        actualValue <- Dhall.input Dhall.auto code
+    code `shouldMarshalIntoWrapped` expectedValue = testCase "Marshal" $ do
+        actualValue <- Dhall.input (Dhall.autoWith wrappedOptions) code
 
         expectedValue @=? actualValue
 
@@ -327,12 +331,12 @@ shouldHandleUnionsCorrectly =
 
         expectedValue @=? actualValue
 
-    value `shouldEmbedAs` expectedCode = testCase "ToDhall" $ do
+    value `shouldEmbedAsWrapped` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
-        Dhall.Core.denote resolvedExpression @=? Dhall.embed Dhall.inject value
+        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.injectWith wrappedOptions) value
 
     value `shouldEmbedAsSmart` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)

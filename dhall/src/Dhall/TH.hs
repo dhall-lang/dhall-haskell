@@ -202,19 +202,6 @@ toConstructor (constructorName, maybeAlternativeType) = do
 -- > 
 -- > deriving instance Generic   T
 -- > deriving instance FromDhall T
---
--- Carefully note that the generated Haskell type only corresponds to the Dhall
--- type when using the `Dhall.Smart` setting for the
--- `Dhall.singletonConstructors` field of `InterpretOptions`.  That setting
--- will eventually become the default, but until then you will need to
--- explicitly use the setting like this:
---
--- > let interpretOptions =
--- >         Dhall.defaultInterpretOptions
--- >             { Dhall.singletonConstructors = Dhall.Smart
--- >             }
--- >
--- > let decoder = Dhall.autoWith interpretOptions
 makeHaskellTypeFromUnion
     :: Text
     -- ^ Name of the generated Haskell type

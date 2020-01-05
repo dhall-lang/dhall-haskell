@@ -27,21 +27,14 @@ tests = Tasty.testGroup "Template Haskell" [ makeHaskellTypeFromUnion ]
 
 makeHaskellTypeFromUnion :: TestTree
 makeHaskellTypeFromUnion = Tasty.HUnit.testCase "makeHaskellTypeFromUnion" $ do
-    let interpretOptions =
-            Dhall.defaultInterpretOptions
-                { Dhall.singletonConstructors = Dhall.Smart
-                }
-
-    let decoder = Dhall.autoWith interpretOptions
-
-    t0 <- Dhall.input decoder "let T = ./tests/th/example.dhall in T.A { x = True, y = [ \"ABC\" ] }"
+    t0 <- Dhall.input Dhall.auto "let T = ./tests/th/example.dhall in T.A { x = True, y = [ \"ABC\" ] }"
 
     Tasty.HUnit.assertEqual "" t0 A{ x = True, y = [ "ABC" ] }
 
-    t1 <- Dhall.input decoder "let T = ./tests/th/example.dhall in T.B (Some [ 1 ])"
+    t1 <- Dhall.input Dhall.auto "let T = ./tests/th/example.dhall in T.B (Some [ 1 ])"
 
     Tasty.HUnit.assertEqual "" t1 (B (Just [ 1 ]))
 
-    t2 <- Dhall.input decoder "let T = ./tests/th/example.dhall in T.C"
+    t2 <- Dhall.input Dhall.auto "let T = ./tests/th/example.dhall in T.C"
 
     Tasty.HUnit.assertEqual "" t2 C
