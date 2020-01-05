@@ -23,6 +23,7 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/ln --symbolic ${logo.bash} $out/img/bash-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.clojure} $out/img/clojure-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.ruby} $out/img/ruby-logo.svg
+  ${coreutils}/bin/ln --symbolic ${logo.rust} $out/img/rust-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.discourse} $out/img/discourse-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.dhallLarge} $out/img/dhall-large-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.dhallSmall} $out/img/dhall-small-logo.svg
