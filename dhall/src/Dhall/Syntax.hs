@@ -64,6 +64,7 @@ module Dhall.Syntax (
     , unlinesLiteral
     ) where
 
+import Control.Applicative (liftA2)
 import Control.DeepSeq (NFData)
 import Data.Bifunctor (Bifunctor(..))
 import Data.Bits (xor)
@@ -167,6 +168,29 @@ instance IsString Var where
 instance Pretty Var where
     pretty = Pretty.unAnnotate . prettyVar
 
+data BindingPattern s a
+    = SimpleBindingPattern Text (Maybe s) (Maybe (Maybe s, Expr s a))
+    | RecordBindingPattern RecordPattern -- (Maybe s)
+    deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
+
+instance Bifunctor BindingPattern where
+    first k = \case
+        SimpleBindingPattern a src b -> SimpleBindingPattern a (fmap k src) (fmap adapt b)
+        RecordBindingPattern p       -> RecordBindingPattern p
+      where
+        adapt (src, x) = (fmap k src, first k x)
+
+    second = fmap
+
+data RecordPattern
+    -- |
+    -- > { a, b, c }
+    = CompleteRecordPattern (Set Text)
+    -- |
+    -- > { a, b, ... }
+    | IncompleteRecordPattern (Set Text)
+    deriving (Data, Eq, Generic, NFData, Ord, Show)
+
 {- | Record the binding part of a @let@ expression.
 
 For example,
@@ -182,25 +206,21 @@ will be instantiated as follows:
 -}
 data Binding s a = Binding
     { bindingSrc0 :: Maybe s
-    , variable    :: Text
-    , bindingSrc1 :: Maybe s
-    , annotation  :: Maybe (Maybe s, Expr s a)
+    , pattern     :: BindingPattern s a
     , bindingSrc2 :: Maybe s
     , value       :: Expr s a
     } deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
 
 instance Bifunctor Binding where
-    first k (Binding src0 a src1 b src2 c) =
-        Binding (fmap k src0) a (fmap k src1) (fmap adapt0 b) (fmap k src2) (first k c)
-      where
-        adapt0 (src3, d) = (fmap k src3, first k d)
+    first k (Binding src0 a src2 c) =
+        Binding (fmap k src0) (first k a) (fmap k src2) (first k c)
 
     second = fmap
 
 {-| Construct a 'Binding' with no source information and no type annotation.
 -}
 makeBinding :: Text -> Expr s a -> Binding s a
-makeBinding name = Binding Nothing name Nothing Nothing Nothing
+makeBinding name = Binding Nothing (SimpleBindingPattern name Nothing Nothing) Nothing
 
 -- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
 -- defined via the binary encoding of Dhall @Double@s.
@@ -555,10 +575,13 @@ instance Monad (Expr s) where
     App a b              >>= k = App (a >>= k) (b >>= k)
     Let a b              >>= k = Let (adapt0 a) (b >>= k)
       where
-        adapt0 (Binding src0 c src1 d src2 e) =
-            Binding src0 c src1 (fmap adapt1 d) src2 (e >>= k)
+        adapt0 (Binding src0 c src2 e) =
+            Binding src0 (adapt1 c) src2 (e >>= k)
 
-        adapt1 (src3, f) = (src3, f >>= k)
+        adapt1 (SimpleBindingPattern a src b) = SimpleBindingPattern a src (fmap adapt2 b)
+        adapt1 (RecordBindingPattern p) = RecordBindingPattern p
+
+        adapt2 (src3, f) = (src3, f >>= k)
     Annot a b            >>= k = Annot (a >>= k) (b >>= k)
     Bool                 >>= _ = Bool
     BoolLit a            >>= _ = BoolLit a
@@ -835,14 +858,12 @@ bindingExprs
   :: (Applicative f)
   => (Expr s a -> f (Expr s b))
   -> Binding s a -> f (Binding s b)
-bindingExprs f (Binding s0 n s1 t s2 v) =
-  Binding
-    <$> pure s0
-    <*> pure n
-    <*> pure s1
-    <*> traverse (traverse f) t
-    <*> pure s2
-    <*> f v
+bindingExprs f (Binding s0 x s1 y) =
+    liftA2 (\x' y' -> Binding s0 x' s1 y') (adapt x) (f y)
+  where
+    adapt = \case
+        SimpleBindingPattern v s mT -> SimpleBindingPattern v s <$> traverse (traverse f) mT
+        RecordBindingPattern p      -> pure (RecordBindingPattern p)
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
@@ -1066,10 +1087,13 @@ denote (Pi a b c            ) = Pi a (denote b) (denote c)
 denote (App a b             ) = App (denote a) (denote b)
 denote (Let a b             ) = Let (adapt0 a) (denote b)
   where
-    adapt0 (Binding _ c _ d _ e) =
-        Binding Nothing c Nothing (fmap adapt1 d) Nothing (denote e)
+    adapt0 (Binding _ c _ d) =
+        Binding Nothing (adapt1 c) Nothing (denote d)
 
-    adapt1 (_, f) = (Nothing, denote f)
+    adapt1 (SimpleBindingPattern e _ f) = SimpleBindingPattern e Nothing (fmap adapt2 f)
+    adapt1 (RecordBindingPattern e)     = RecordBindingPattern e
+
+    adapt2 (_, g) = (Nothing, denote g)
 denote (Annot a b           ) = Annot (denote a) (denote b)
 denote  Bool                  = Bool
 denote (BoolLit a           ) = BoolLit a
