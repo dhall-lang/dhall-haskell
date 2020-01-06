@@ -60,10 +60,12 @@ import Data.Void (Void)
 
 import Dhall.Syntax
   ( Binding(..)
+  , BindingPattern(..)
   , Expr(..)
   , Chunks(..)
   , Const(..)
   , DhallDouble(..)
+  , RecordPattern(..)
   , Var(..)
   )
 
@@ -73,6 +75,7 @@ import GHC.Natural (Natural)
 import Prelude hiding (succ)
 
 import qualified Data.Char
+import qualified Data.Foldable
 import qualified Data.Sequence   as Sequence
 import qualified Data.Set
 import qualified Data.Text       as Text
@@ -403,8 +406,13 @@ eval !env t0 =
             VPi (eval env a) (Closure x env b)
         App t u ->
             vApp (eval env t) (eval env u)
-        Let (Binding _ x _ _mA _ a) b ->
-            let !env' = Extend env x (eval env a)
+        Let (Binding _ p _ a) b ->
+            let !env' = case p of
+                    SimpleBindingPattern x _ _mA -> Extend env x (eval env a)
+                    RecordBindingPattern r ->
+                        let !a' = eval env a
+                        in  case r of
+                            CompleteRecordPattern s -> Data.Foldable.foldl' (\env_ x -> Extend env_ x (vField a' x)) env s
             in  eval env' b
         Annot t _ ->
             eval env t
@@ -1188,8 +1196,11 @@ alphaNormalize = goEnv EmptyNames
                 Pi "_" (go a) (goBind x b)
             App t u ->
                 App (go t) (go u)
-            Let (Binding src0 x src1 mA src2 a) b ->
-                Let (Binding src0 "_" src1 (fmap (fmap go) mA) src2 (go a)) (goBind x b)
+            Let (Binding src0 p src2 a) b ->
+                case p of
+                    SimpleBindingPattern x src1 mA ->
+                        Let (Binding src0 (SimpleBindingPattern "_" src1 (fmap (fmap go) mA)) src2 (go a)) (goBind x b)
+                    RecordBindingPattern p -> error "alphaNormalize"
             Annot t u ->
                 Annot (go t) (go u)
             Bool ->

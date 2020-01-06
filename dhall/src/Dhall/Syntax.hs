@@ -22,6 +22,8 @@ module Dhall.Syntax (
       Const(..)
     , Var(..)
     , Binding(..)
+    , BindingPattern(..)
+    , RecordPattern(..)
     , makeBinding
     , Chunks(..)
     , DhallDouble(..)
