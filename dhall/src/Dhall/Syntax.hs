@@ -23,7 +23,6 @@ module Dhall.Syntax (
     , Var(..)
     , Binding(..)
     , BindingPattern(..)
-    , RecordPattern(..)
     , makeBinding
     , Chunks(..)
     , DhallDouble(..)
@@ -172,25 +171,21 @@ instance Pretty Var where
 
 data BindingPattern s a
     = SimpleBindingPattern Text (Maybe s) (Maybe (Maybe s, Expr s a))
-    | RecordBindingPattern RecordPattern -- (Maybe s)
+    | RecordBindingPattern [Text] PatternExhaustiveness -- (Maybe s)
     deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
 
 instance Bifunctor BindingPattern where
     first k = \case
         SimpleBindingPattern a src b -> SimpleBindingPattern a (fmap k src) (fmap adapt b)
-        RecordBindingPattern p       -> RecordBindingPattern p
+        RecordBindingPattern a b     -> RecordBindingPattern a b
       where
         adapt (src, x) = (fmap k src, first k x)
 
     second = fmap
 
-data RecordPattern
-    -- |
-    -- > { a, b, c }
-    = CompleteRecordPattern (Set Text)
-    -- |
-    -- > { a, b, ... }
-    | IncompleteRecordPattern (Set Text)
+data PatternExhaustiveness
+    = Complete
+    | Incomplete
     deriving (Data, Eq, Generic, NFData, Ord, Show)
 
 {- | Record the binding part of a @let@ expression.
@@ -209,7 +204,7 @@ will be instantiated as follows:
 data Binding s a = Binding
     { bindingSrc0 :: Maybe s
     , pattern     :: BindingPattern s a
-    , bindingSrc2 :: Maybe s
+    , bindingSrc1 :: Maybe s
     , value       :: Expr s a
     } deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
 
@@ -581,7 +576,7 @@ instance Monad (Expr s) where
             Binding src0 (adapt1 c) src2 (e >>= k)
 
         adapt1 (SimpleBindingPattern a src b) = SimpleBindingPattern a src (fmap adapt2 b)
-        adapt1 (RecordBindingPattern p) = RecordBindingPattern p
+        adapt1 (RecordBindingPattern a b)     = RecordBindingPattern a b
 
         adapt2 (src3, f) = (src3, f >>= k)
     Annot a b            >>= k = Annot (a >>= k) (b >>= k)
@@ -865,7 +860,7 @@ bindingExprs f (Binding s0 x s1 y) =
   where
     adapt = \case
         SimpleBindingPattern v s mT -> SimpleBindingPattern v s <$> traverse (traverse f) mT
-        RecordBindingPattern p      -> pure (RecordBindingPattern p)
+        RecordBindingPattern vs e   -> pure (RecordBindingPattern vs e)
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
@@ -1093,7 +1088,7 @@ denote (Let a b             ) = Let (adapt0 a) (denote b)
         Binding Nothing (adapt1 c) Nothing (denote d)
 
     adapt1 (SimpleBindingPattern e _ f) = SimpleBindingPattern e Nothing (fmap adapt2 f)
-    adapt1 (RecordBindingPattern e)     = RecordBindingPattern e
+    adapt1 (RecordBindingPattern e f)   = RecordBindingPattern e f
 
     adapt2 (_, g) = (Nothing, denote g)
 denote (Annot a b           ) = Annot (denote a) (denote b)

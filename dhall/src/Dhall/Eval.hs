@@ -65,7 +65,6 @@ import Dhall.Syntax
   , Chunks(..)
   , Const(..)
   , DhallDouble(..)
-  , RecordPattern(..)
   , Var(..)
   )
 
@@ -409,10 +408,9 @@ eval !env t0 =
         Let (Binding _ p _ a) b ->
             let !env' = case p of
                     SimpleBindingPattern x _ _mA -> Extend env x (eval env a)
-                    RecordBindingPattern r ->
+                    RecordBindingPattern xs e ->
                         let !a' = eval env a
-                        in  case r of
-                            CompleteRecordPattern s -> Data.Foldable.foldl' (\env_ x -> Extend env_ x (vField a' x)) env s
+                        in  Data.Foldable.foldl' (\env_ x -> Extend env_ x (vField a' x)) env xs
             in  eval env' b
         Annot t _ ->
             eval env t
@@ -1200,7 +1198,8 @@ alphaNormalize = goEnv EmptyNames
                 case p of
                     SimpleBindingPattern x src1 mA ->
                         Let (Binding src0 (SimpleBindingPattern "_" src1 (fmap (fmap go) mA)) src2 (go a)) (goBind x b)
-                    RecordBindingPattern p -> error "alphaNormalize"
+                    RecordBindingPattern _ _ ->
+                        error "alphaNormalize"
             Annot t u ->
                 Annot (go t) (go u)
             Bool ->
