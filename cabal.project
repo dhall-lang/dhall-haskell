@@ -1,4 +1,4 @@
-packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-lsp-server ./dhall-nix
+packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-lsp-server
 
 -- TODO: Remove this once hnix has a compatible release:
 -- https://github.com/haskell-nix/hnix/issues/524
