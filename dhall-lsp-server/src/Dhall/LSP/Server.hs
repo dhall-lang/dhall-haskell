@@ -77,23 +77,19 @@ syncOptions = J.TextDocumentSyncOptions
 -- Server capabilities. Tells the LSP client that we can execute commands etc.
 lspOptions :: LSP.Core.Options
 lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
-                 , LSP.Core.completionProvider =
-                     Just (J.CompletionOptions {
-                         _resolveProvider = Nothing
-                       , _triggerCharacters = Just [":", ".", "/"] })
-                 , LSP.Core.executeCommandProvider =
-                     -- Note that this registers the dhall.server.lint command
-                     -- with VSCode, which means that our plugin can't expose a
-                     -- command of the same name. In the case of dhall.lint we
-                     -- name the server-side command dhall.server.lint to work
-                     -- around this peculiarity.
-                     Just (J.ExecuteCommandOptions
-                       (J.List ["dhall.server.lint",
-                                "dhall.server.annotateLet",
-                                "dhall.server.freezeImport",
-                                "dhall.server.freezeAllImports"]))
-                 , LSP.Core.documentLinkProvider =
-                    Just (J.DocumentLinkOptions { _resolveProvider = Just False })
+                 , LSP.Core.completionTriggerCharacters = Just [':', '.', '/']
+                 -- Note that this registers the dhall.server.lint command
+                 -- with VSCode, which means that our plugin can't expose a
+                 -- command of the same name. In the case of dhall.lint we
+                 -- name the server-side command dhall.server.lint to work
+                 -- around this peculiarity.
+                 , LSP.Core.executeCommandCommands =
+                     Just
+                       [ "dhall.server.lint",
+                         "dhall.server.annotateLet",
+                         "dhall.server.freezeImport",
+                         "dhall.server.freezeAllImports"
+                       ]
                  }
 
 lspHandlers :: MVar ServerState -> LSP.Core.Handlers
