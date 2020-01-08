@@ -71,8 +71,8 @@ echoStr = echo . Text.pack
 data Stability = Alpha Natural | Beta Natural | Production deriving (Eq, Ord)
 
 data Version = Version
-    { version :: Natural
-    , stability :: Stability
+    { stability :: Stability
+    , version :: Natural
     } deriving (Eq, Ord)
 
 parseStability :: Parsec Void Text Stability
