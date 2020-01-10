@@ -19,20 +19,95 @@
 
   };
 
-  outputs = { self, nixpkgs, nixpkgsStaticLinux }: {
-    hydraJobs.x86_64-linux = import ./release.nix {
-      inherit nixpkgs nixpkgsStaticLinux;
-      system = "x86_64-linux";
-    };
-    packages.x86_64-linux = with self.hydraJobs.x86_64-linux; {
-      dhall = linux-dhall;
-      dhall-bash = linux-dhall-bash;
-      dhall-json = linux-dhall-json;
-      dhall-lsp-server = linux-dhall-lsp-server;
-      dhall-nix = linux-dhall-nix;
-    };
-    defaultPackage.x86_64-linux = self.packages.x86_64-linux.dhall;
-    checks.x86_64-linux = { inherit (self.hydraJobs.x86_64-linux) coverage-dhall; };
-  };
+  outputs = { self, nixpkgs, nixpkgsStaticLinux }:
+    let
+      inherit (builtins) getAttr;
+
+      systems = [ "x86_64-linux" ];
+
+      mkOutput = system:
+        let getDhall = attrs: getAttr "dhall" (getAttr system attrs);
+        in rec {
+
+          hydraJobs =
+            import ./release.nix { inherit system nixpkgs nixpkgsStaticLinux; };
+
+          packages =
+            # the packages are taken from the hydraJobs,
+            # which is the evaluation of release.nix
+            with (hydraJobs); {
+              dhall = linux-dhall;
+              dhall-bash = linux-dhall-bash;
+              dhall-json = linux-dhall-json;
+              dhall-nix = linux-dhall-nix;
+            };
+
+          checks = { inherit (hydraJobs) coverage-dhall; };
+
+          apps = let
+            mkApp = { drv, name ? drv.pname or drv.name, exe ? name }: {
+              inherit name;
+              value = {
+                type = "app";
+                program = "${drv}/bin/${exe}";
+              };
+            };
+          in builtins.listToAttrs [
+            (mkApp { drv = packages.dhall; })
+
+            (mkApp {
+              drv = packages.dhall-bash;
+              name = "dhall-to-bash";
+            })
+
+            (mkApp {
+              drv = packages.dhall-json;
+              name = "dhall-to-json";
+            })
+
+            (mkApp {
+              drv = packages.dhall-json;
+              name = "json-to-dhall";
+            })
+
+            (mkApp {
+              drv = packages.dhall-json;
+              name = "dhall-to-yaml";
+            })
+
+            (mkApp {
+              drv = packages.dhall-json;
+              name = "yaml-to-dhall";
+            })
+
+            (mkApp {
+              drv = packages.dhall-nix;
+              name = "dhall-to-nix";
+            })
+
+          ];
+
+          defaultApp = getDhall self.apps;
+
+          defaultPackage = getDhall self.packages;
+        };
+
+      forAllSystems = f:
+        with builtins;
+        let
+          f' = output: system:
+            let
+              attrs = f system;
+              f' = name: {
+                inherit name;
+                value = output.${name} or { } // {
+                  ${system} = getAttr name attrs;
+                };
+              };
+              attrs' = listToAttrs (map f' (attrNames attrs));
+            in attrs';
+        in foldl' f' { } systems;
+
+    in forAllSystems mkOutput;
 
 }
