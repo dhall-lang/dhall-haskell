@@ -32,6 +32,20 @@ packages:
       sha256: ef2728ea6af150cf4514254b3ef74f16d8bf6f3c52f4c26a4f2625fceee6fd76
   original:
     hackage: th-lift-instances-0.1.14
+- completed:
+    hackage: kubernetes-client-core-0.1.0.1@sha256:8751cc7ba60a9a3adc6b88da67539cd7a5ff42fc3128cb98f3a76033f03ff063,6467
+    pantry-tree:
+      size: 6855
+      sha256: 75a3056503249f8dfcbb0067264c46d1da4126b02cfb406d4dab13f72c71e41d
+  original:
+    hackage: kubernetes-client-core-0.1.0.1@sha256:8751cc7ba60a9a3adc6b88da67539cd7a5ff42fc3128cb98f3a76033f03ff063,6467
+- completed:
+    hackage: katip-0.8.3.0@sha256:8a67c0aec3ba1f0eabcfae443cb909e4cf9405e29bac99ccf1420f1f1bbda9c4,4097
+    pantry-tree:
+      size: 1140
+      sha256: cad8c67256ec85819309d77bdcbc15b67885940ef76f2b850c8be20c2efd0149
+  original:
+    hackage: katip-0.8.3.0@sha256:8a67c0aec3ba1f0eabcfae443cb909e4cf9405e29bac99ccf1420f1f1bbda9c4,4097
 snapshots:
 - completed:
     size: 500539

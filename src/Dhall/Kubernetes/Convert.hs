@@ -1,10 +1,25 @@
+{-# LANGUAGE NamedFieldPuns   #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Dhall.Kubernetes.Convert
   ( toTypes
   , toDefault
   , getImportsMap
   , mkImport
+  , toDefinition
   ) where
 
+import Control.Applicative ((<|>))
+import Data.Aeson
+import Data.Aeson.Types (Parser, parseMaybe)
+import Data.Bifunctor (first, second)
+import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Set (Set)
+import Data.Text (Text)
+import Dhall.Kubernetes.Types
+import GHC.Generics (Generic, Rep)
+
+import qualified Data.Char              as Char
 import qualified Data.List              as List
 import qualified Data.Map.Strict        as Data.Map
 import qualified Data.Set               as Set
@@ -12,14 +27,6 @@ import qualified Data.Sort              as Sort
 import qualified Data.Text              as Text
 import qualified Dhall.Core             as Dhall
 import qualified Dhall.Map
-
-import           Data.Bifunctor         (first, second)
-import           Data.Maybe             (fromMaybe, mapMaybe)
-import           Data.Set               (Set)
-import           Data.Text              (Text)
-
-import           Dhall.Kubernetes.Types
-
 
 -- | Get all the required fields for a model
 --   See https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/#required-fields
@@ -290,3 +297,136 @@ getImportsMap prefixMap duplicateNameHandler objectNames folder toInclude
         namespaced = case filter filterFn namespacedNames of
           [name] -> Just name
           names  -> duplicateNameHandler (kind, names)
+
+stripPrefix :: (Generic a, GFromJSON Zero (Rep a)) => Int -> Value -> Parser a
+stripPrefix n = genericParseJSON options
+  where
+    options = defaultOptions { fieldLabelModifier }
+
+    fieldLabelModifier string = case drop n string of
+        s : tring -> Char.toLower s : tring
+        []        -> []
+
+data V1beta1CustomResourceDefinition =
+    V1beta1CustomResourceDefinition
+        { v1beta1CustomResourceDefinitionSpec :: V1beta1CustomResourceDefinitionSpec
+        }
+    deriving (Generic)
+
+instance FromJSON V1beta1CustomResourceDefinition where
+    parseJSON = stripPrefix 31
+
+data V1beta1CustomResourceDefinitionSpec =
+    V1beta1CustomResourceDefinitionSpec
+        { v1beta1CustomResourceDefinitionSpecGroup :: Text
+        , v1beta1CustomResourceDefinitionSpecNames :: V1beta1CustomResourceDefinitionNames
+        , v1beta1CustomResourceDefinitionSpecValidation :: Maybe V1beta1CustomResourceValidation
+        , v1beta1CustomResourceDefinitionSpecVersion :: Maybe Text
+        , v1beta1CustomResourceDefinitionSpecVersions :: Maybe [V1beta1CustomResourceDefinitionVersion]
+        } deriving (Generic)
+
+instance FromJSON V1beta1CustomResourceDefinitionSpec where
+    parseJSON = stripPrefix 35
+
+data V1beta1CustomResourceDefinitionNames =
+    V1beta1CustomResourceDefinitionNames
+        { v1beta1CustomResourceDefinitionNamesKind :: Text
+        } deriving (Generic)
+
+instance FromJSON V1beta1CustomResourceDefinitionNames where
+    parseJSON = stripPrefix 36
+
+data V1beta1CustomResourceValidation =
+    V1beta1CustomResourceValidation
+        { v1beta1CustomResourceValidationOpenApiv3Schema :: Maybe V1beta1JSONSchemaProps
+        } deriving (Generic)
+
+instance FromJSON V1beta1CustomResourceValidation where
+    parseJSON = stripPrefix 31
+
+data V1beta1CustomResourceDefinitionVersion =
+    V1betaV1beta1CustomResourceDefinitionVersion
+        { v1beta1CustomResourceDefinitionVersionName :: Text
+        } deriving (Generic)
+
+instance FromJSON V1beta1CustomResourceDefinitionVersion where
+    parseJSON = stripPrefix 38
+
+data V1beta1JSONSchemaProps =
+    V1beta1JSONSchemaProps
+        { v1beta1JSONSchemaPropsRef :: Maybe Text
+        , v1beta1JSONSchemaPropsDescription :: Maybe Text
+        , v1beta1JSONSchemaPropsFormat :: Maybe Text
+        , v1beta1JSONSchemaPropsItems :: Maybe Value
+        , v1beta1JSONSchemaPropsProperties :: Maybe (Data.Map.Map String V1beta1JSONSchemaProps)
+        , v1beta1JSONSchemaPropsRequired :: Maybe [Text]
+        , v1beta1JSONSchemaPropsType :: Maybe Text
+        } deriving (Generic)
+
+instance FromJSON V1beta1JSONSchemaProps where
+    parseJSON = stripPrefix 22
+
+mkV1beta1JSONSchemaProps :: V1beta1JSONSchemaProps
+mkV1beta1JSONSchemaProps =
+    V1beta1JSONSchemaProps
+        { v1beta1JSONSchemaPropsRef = Nothing
+        , v1beta1JSONSchemaPropsDescription = Nothing
+        , v1beta1JSONSchemaPropsFormat = Nothing
+        , v1beta1JSONSchemaPropsItems = Nothing
+        , v1beta1JSONSchemaPropsProperties = Nothing
+        , v1beta1JSONSchemaPropsRequired = Nothing
+        , v1beta1JSONSchemaPropsType = Nothing
+        }
+
+toDefinition :: V1beta1CustomResourceDefinition -> Maybe (ModelName, Definition)
+toDefinition crd = 
+    fmap (\d -> (modelName, d)) definition
+  where
+    spec = v1beta1CustomResourceDefinitionSpec crd
+    group = v1beta1CustomResourceDefinitionSpecGroup spec
+    crdKind = (v1beta1CustomResourceDefinitionNamesKind . v1beta1CustomResourceDefinitionSpecNames) spec
+    modelName = ModelName (group <> "." <> crdKind)
+    definition = do
+      let 
+        versionName xs = case xs of 
+          (x:_) -> Just (v1beta1CustomResourceDefinitionVersionName x)
+          _ -> Nothing
+      version <- 
+        v1beta1CustomResourceDefinitionSpecVersion spec 
+        <|> do 
+          versions <- v1beta1CustomResourceDefinitionSpecVersions spec 
+          versionName versions             
+      validation <- v1beta1CustomResourceDefinitionSpecValidation spec
+      schema <- v1beta1CustomResourceValidationOpenApiv3Schema validation
+      let baseData = BaseData {
+        kind = crdKind,
+        apiVersion = version
+      }
+      let completeSchemaProperties = 
+            fmap 
+            (Data.Map.union
+              (
+                Data.Map.fromList [
+                  ("apiVersion", (mkV1beta1JSONSchemaProps {v1beta1JSONSchemaPropsType = Just "string"}))
+                , ("kind", (mkV1beta1JSONSchemaProps {v1beta1JSONSchemaPropsType = Just "string"} ))
+                , ("metadata", mkV1beta1JSONSchemaProps {v1beta1JSONSchemaPropsType = Just "object", v1beta1JSONSchemaPropsRef = Just "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"} )
+                ]
+              ))
+            (v1beta1JSONSchemaPropsProperties schema)
+      let completeSchema = schema { v1beta1JSONSchemaPropsProperties = completeSchemaProperties}
+      pure  $ propsToDefinition (completeSchema) (Just baseData)
+    propsToDefinition :: V1beta1JSONSchemaProps -> Maybe BaseData -> Definition
+    propsToDefinition schema basedata =
+      Definition
+        { typ         = v1beta1JSONSchemaPropsType schema
+        , ref         = Ref <$> v1beta1JSONSchemaPropsRef schema
+        , format      = v1beta1JSONSchemaPropsFormat schema
+        , description = v1beta1JSONSchemaPropsDescription schema
+        , items       = v1beta1JSONSchemaPropsItems schema >>= parseMaybe parseJSON
+        , properties  = fmap toProperties (v1beta1JSONSchemaPropsProperties schema)
+        , required    = fmap (Set.fromList . fmap FieldName) (v1beta1JSONSchemaPropsRequired schema)
+        , baseData    = basedata
+        }
+    toProperties :: Data.Map.Map String V1beta1JSONSchemaProps -> Data.Map.Map ModelName Definition
+    toProperties props = 
+      (Data.Map.fromList . fmap (\(k, p) -> ((ModelName . Text.pack) k, propsToDefinition p Nothing)) . Data.Map.toList) props
