@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -12,12 +13,15 @@ module Dhall.Lint
     , removeUnusedBindings
     , fixAssert
     , fixParentPath
+    , removeLetInLet
+    , replaceOptionalBuildFold
     ) where
 
 import Control.Applicative ((<|>))
 
 import Dhall.Syntax
     ( Binding(..)
+    , Const(..)
     , Directory(..)
     , Expr(..)
     , File(..)
@@ -42,15 +46,17 @@ import qualified Lens.Family
     * fixes @let a = x ≡ y@ to be @let a = assert : x ≡ y@
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
+    * Replaces deprecated @Optional\/fold@ and @Optional\/build@ built-ins
 -}
 lint :: Expr s Import -> Expr s Import
 lint = Dhall.Optics.rewriteOf subExpressions rewrite
   where
     rewrite e =
-            fixAssert            e
-        <|> removeUnusedBindings e
-        <|> fixParentPath        e
-        <|> removeLetInLet       e
+            fixAssert                e
+        <|> removeUnusedBindings     e
+        <|> fixParentPath            e
+        <|> removeLetInLet           e
+        <|> replaceOptionalBuildFold e
 
 -- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -102,7 +108,7 @@ isOrContainsAssert :: Expr s a -> Bool
 isOrContainsAssert (Assert _) = True
 isOrContainsAssert e = Lens.Family.anyOf subExpressions isOrContainsAssert e
 
--- The difference between
+-- | The difference between
 --
 -- > let x = 1 let y = 2 in x + y
 --
@@ -117,3 +123,42 @@ isOrContainsAssert e = Lens.Family.anyOf subExpressions isOrContainsAssert e
 removeLetInLet :: Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let binding (Note _ l@Let{})) = Just (Let binding l)
 removeLetInLet _ = Nothing
+
+-- | This replaces @Optional/fold@ and @Optional/build@, both of which can be
+-- implemented within the language
+replaceOptionalBuildFold :: Expr s a -> Maybe (Expr s a)
+replaceOptionalBuildFold OptionalBuild =
+    Just
+        (Lam "a" (Const Type)
+            (Lam "build"
+                (Pi "optional" (Const Type)
+                    (Pi "some" (Pi "_" "a" "optional")
+                        (Pi "none" "optional" "optional")
+                    )
+                )
+                (App (App (App "build" (App Optional "a")) (Lam "x" "a" (Some "x"))) (App None "a"))
+            )
+        )
+replaceOptionalBuildFold OptionalFold =
+    Just
+        (Lam "a" (Const Type)
+            (Lam "o" (App Optional "a")
+                (Lam "optional" (Const Type)
+                    (Lam "some" (Pi "_" "a" "optional")
+                        (Lam "none" "optional"
+                            (Merge
+                                (RecordLit
+                                    [ ("Some", "some")
+                                    , ("None", "none")
+                                    ]
+                                )
+                                "o"
+                                Nothing
+                            )
+                        )
+                    )
+                )
+            )
+        )
+replaceOptionalBuildFold _ =
+    Nothing
