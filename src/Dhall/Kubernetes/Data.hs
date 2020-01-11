@@ -11,4 +11,15 @@ patchCyclicImports :: Definition -> Definition
 patchCyclicImports Definition{ properties = oldProps, .. } = Definition{..}
   where
     properties = fmap (\propsMap -> Data.Map.withoutKeys propsMap toRemove) oldProps
-    toRemove = Set.fromList $ ModelName <$> [ "allOf", "anyOf", "not", "oneOf" ]
+    toRemove =
+      Set.fromList $
+        (   ModelName
+        <$> [ "allOf"
+            , "anyOf"
+            , "not"
+            , "oneOf"
+            , "additionalItems"
+            , "additionalProperties"
+            , "items"
+            ]
+        )

@@ -126,11 +126,11 @@ parseVersion = Megaparsec.try parseSuffix <|> parsePrefix
 
         parseVersion
 
-getVersion :: ModelName -> Version
+getVersion :: ModelName -> Maybe Version
 getVersion ModelName{..} =
     case Megaparsec.parse parseVersion "" unModelName of
-        Left  errors  -> error (show errors)
-        Right version -> version
+        Left  errors  -> Nothing
+        Right version -> Just version
 
 preferStableResource :: DuplicateHandler
 preferStableResource (_, names) =

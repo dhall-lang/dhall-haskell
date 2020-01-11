@@ -296,6 +296,7 @@ getImportsMap prefixMap duplicateNameHandler objectNames folder toInclude
 
         namespaced = case filter filterFn namespacedNames of
           [name] -> Just name
+          []     -> Nothing
           names  -> duplicateNameHandler (kind, names)
 
 stripPrefix :: (Generic a, GFromJSON Zero (Rep a)) => Int -> Value -> Parser a
