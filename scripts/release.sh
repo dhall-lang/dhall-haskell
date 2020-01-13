@@ -1,10 +1,14 @@
-set -x
+#!/bin/sh
+
+set -eux
 
 JOBSET=master
 
+. .travis-functions.sh
+
 function release {
   NAME="$1"
-  VERSION="$2"
+  VERSION="$(get_cabal_version "${NAME}")"
 
   pushd "${NAME}"
   cabal v1-configure
@@ -20,9 +24,6 @@ function release {
   skopeo copy --dest-creds=gabriel439:$(< dockerPassword.txt) "docker-archive:docker-image-${NAME}.tar.gz" "docker://dhallhaskell/${NAME}:${VERSION}"
 }
 
-release dhall-lsp-server 1.0.3
-release dhall-json 1.6.0
-release dhall-yaml 1.0.0
-release dhall-bash 1.0.25
-release dhall-nix 1.1.10
-release dhall 1.28.0
+for package in dhall-lsp-server dhall-json dhall-yaml dhall-bash dhall-nix dhall; do
+  release "${package}"
+done
