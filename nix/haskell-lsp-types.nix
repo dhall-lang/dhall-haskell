@@ -4,8 +4,8 @@
 }:
 mkDerivation {
   pname = "haskell-lsp-types";
-  version = "0.17.0.0";
-  sha256 = "77444fa262393ac58b72b5cb6a4b1db401cdea015b42cab427bb4681dcd1230e";
+  version = "0.19.0.0";
+  sha256 = "a942ab1e504d8ae61b586c9b048e3b1422ab793bd908062332180af01beb3921";
   libraryHaskellDepends = [
     aeson base bytestring data-default deepseq filepath hashable lens
     network-uri scientific text unordered-containers
