@@ -1,3 +1,44 @@
+1.29.0
+
+* [Supports version 13.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v13.0.0)
+* BREAKING CHANGE: [Generate Haskell datatype declarations from Dhall types](https://github.com/dhall-lang/dhall-haskell/commit/b0280826790930d18a5498fb802120478fa11767#diff-a9729dccf50be61ce3d8c68c16f0fd50)
+    * You can now use the `makeHaskellTypeFromUnion` Template Haskell utility
+      to generate a Haskell datatype declaration from a Dhall union type
+    * This helps ensure that your Haskell types and Dhall types stay in sync,
+      when you want the Dhall type to be the source of truth
+    * This is a breaking change because the default `InterpretOptions` changed
+      the default handling of singleton constructors from `Wrapped` to `Smart`
+    * You can preserve the old behavior using:
+      `autoWith defaultInterpretOptions{ singletonConstructors = Wrapped }`
+* BUG FIX: [Fix `dhall freeze --cache` and `dhall lint` to preserve `let`-related comments](https://github.com/dhall-lang/dhall-haskell/pull/1597)
+    * Now they match the behavior of `dhall format` with regard to preserving
+      these comments
+* BUG FIX: [Fix escaping of significant leading whitespace when formatting code](https://github.com/dhall-lang/dhall-haskell/pull/1598)
+    * The formatter would sometimes unnecessarily escape significant leading
+      whitespace for the final line of multiline string literals, which this
+      change fixes
+* BUG FIX: [Fix `dhall encode --json` for `Double` values](https://github.com/dhall-lang/dhall-haskell/issues/1350)
+* NEW FEATURE: [`dhall to-directory-tree` command](https://github.com/dhall-lang/dhall-haskell/pull/1606)
+    * You can now generate a directory tree from a Dhall expression
+    * Specifically:
+        * records are converted to directories
+        * `Text` fields are converted to files named after the field
+        * `Optional` values are omitted if `None`
+        * Everything else is rejected
+* NEW FEATURE: [Hexadecimal literals](https://github.com/dhall-lang/dhall-haskell/pull/1607)
+    * See the [changelog for standard version 13.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v13.0.0) for more details
+* NEW FEATURE: [`merge` works on `Optional` values](https://github.com/dhall-lang/dhall-haskell/pull/1608)
+    * See the [changelog for standard version 13.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v13.0.0) for more details
+* [Improve formatter](https://github.com/dhall-lang/dhall-haskell/pull/1609)
+    * `dhall format` will now render expressions nested inside record fields or
+      alternatives more compactly, including:
+        * Records
+        * Record completion expressions
+        * Expressions wrapped in `Some`
+        * Lists
+* [Exclude the `using ...` suffix from imports listed by `dhall resolve`](https://github.com/dhall-lang/dhall-haskell/pull/1603)
+    * Specifically when using the `--{immediate,transitive}-dependencies` flags
+
 1.28.0
 
 * [Supports version 12.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v12.0.0)

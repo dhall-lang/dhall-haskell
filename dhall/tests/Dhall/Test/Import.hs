@@ -11,6 +11,7 @@ import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
 import qualified Control.Exception                as Exception
+import qualified Control.Monad                    as Monad
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
@@ -28,7 +29,21 @@ importDirectory = "./dhall-lang/tests/import"
 
 getTests :: IO TestTree
 getTests = do
-    successTests <- Test.Util.discover (Turtle.chars <> "A.dhall") successTest (Turtle.lstree (importDirectory </> "success"))
+    let flakyTests =
+            [ -- This test is flaky, occasionally failing with:
+              --
+              --     Error: Remote host not found
+              --
+              --     URL: https://test.dhall-lang.org/Bool/package.dhall
+              importDirectory </> "success/headerForwardingA.dhall"
+            ]
+
+    successTests <- Test.Util.discover (Turtle.chars <> "A.dhall") successTest (do
+        path <- Turtle.lstree (importDirectory </> "success")
+
+        Monad.guard (path `notElem` flakyTests)
+
+        return path )
 
     failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest (Turtle.lstree (importDirectory </> "failure"))
 

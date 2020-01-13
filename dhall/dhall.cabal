@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.28.0
+Version: 1.29.0
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
@@ -39,6 +39,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Double/package.dhall
     dhall-lang/Prelude/Double/show
     dhall-lang/Prelude/Function/compose
+    dhall-lang/Prelude/Function/identity
     dhall-lang/Prelude/Function/package.dhall
     dhall-lang/Prelude/Integer/abs
     dhall-lang/Prelude/Integer/add
@@ -65,14 +66,18 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/array
     dhall-lang/Prelude/JSON/bool
     dhall-lang/Prelude/JSON/core.dhall
+    dhall-lang/Prelude/JSON/double
+    dhall-lang/Prelude/JSON/integer
     dhall-lang/Prelude/JSON/keyText
     dhall-lang/Prelude/JSON/keyValue
+    dhall-lang/Prelude/JSON/natural
     dhall-lang/Prelude/JSON/null
     dhall-lang/Prelude/JSON/number
     dhall-lang/Prelude/JSON/object
     dhall-lang/Prelude/JSON/omitNullFields
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
+    dhall-lang/Prelude/JSON/renderInteger.dhall
     dhall-lang/Prelude/JSON/renderYAML
     dhall-lang/Prelude/JSON/string
     dhall-lang/Prelude/JSON/tagInline
@@ -169,12 +174,13 @@ Extra-Source-Files:
     dhall-lang/Prelude/XML/render
     dhall-lang/Prelude/XML/text
     dhall-lang/Prelude/package.dhall
+    dhall-lang/tests/alpha-normalization/success/unit/*.dhall
     dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
     dhall-lang/tests/import/cache/dhall/1220efc43103e49b56c5bf089db8e0365bbfc455b8a2f0dc6ee5727a3586f85969fd
-    dhall-lang/tests/import/data/*.txt
     dhall-lang/tests/import/data/*.dhall
+    dhall-lang/tests/import/data/*.txt
     dhall-lang/tests/import/data/fieldOrder/*.dhall
     dhall-lang/tests/import/failure/*.dhall
     dhall-lang/tests/import/success/*.dhall
@@ -186,18 +192,17 @@ Extra-Source-Files:
     dhall-lang/tests/normalization/success/simple/*.dhall
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/normalization/success/unit/*.dhall
-    dhall-lang/tests/alpha-normalization/success/unit/*.dhall
     dhall-lang/tests/parser/failure/*.dhall
     dhall-lang/tests/parser/success/*.dhall
     dhall-lang/tests/parser/success/*.dhallb
+    dhall-lang/tests/parser/success/text/*.dhall
+    dhall-lang/tests/parser/success/text/*.dhallb
     dhall-lang/tests/parser/success/unit/*.dhall
     dhall-lang/tests/parser/success/unit/*.dhallb
     dhall-lang/tests/parser/success/unit/import/*.dhall
     dhall-lang/tests/parser/success/unit/import/*.dhallb
     dhall-lang/tests/parser/success/unit/import/urls/*.dhall
     dhall-lang/tests/parser/success/unit/import/urls/*.dhallb
-    dhall-lang/tests/parser/success/text/*.dhall
-    dhall-lang/tests/parser/success/text/*.dhallb
     dhall-lang/tests/semantic-hash/success/*.dhall
     dhall-lang/tests/semantic-hash/success/*.hash
     dhall-lang/tests/semantic-hash/success/haskell-tutorial/access/*.dhall
@@ -391,13 +396,13 @@ Extra-Source-Files:
     dhall-lang/tests/type-inference/success/prelude/Text/concatMap/*.dhall
     dhall-lang/tests/type-inference/success/prelude/Text/concatMapSep/*.dhall
     dhall-lang/tests/type-inference/success/prelude/Text/concatSep/*.dhall
-    dhall-lang/tests/type-inference/success/simple/access/*.dhall
     dhall-lang/tests/type-inference/success/simple/*.dhall
+    dhall-lang/tests/type-inference/success/simple/access/*.dhall
     dhall-lang/tests/type-inference/success/unit/*.dhall
-    tests/format/*.dhall
-    tests/lint/success/*.dhall
     tests/diff/*.dhall
     tests/diff/*.txt
+    tests/format/*.dhall
+    tests/lint/success/*.dhall
     tests/recursive/*.dhall
     tests/regression/*.dhall
     tests/tags/*.dhall
