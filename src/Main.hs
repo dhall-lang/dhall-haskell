@@ -11,11 +11,14 @@ import Data.Maybe (maybeToList)
 import Data.Text (Text, pack)
 import Data.Void (Void)
 import Data.Yaml
+import Dhall.Core (Expr(..))
 import Dhall.Kubernetes.Data (patchCyclicImports)
-import Dhall.Kubernetes.Types
 import Numeric.Natural (Natural)
 import Text.Megaparsec (Parsec, some, parse, (<|>), errorBundlePretty)
 import Text.Megaparsec.Char (char, alphaNumChar)
+
+import Dhall.Kubernetes.Types
+    (DuplicateHandler, ModelName(..), Prefix, Swagger(..))
 
 import qualified Data.List                             as List
 import qualified Data.Map.Strict                       as Data.Map
@@ -26,12 +29,15 @@ import qualified Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 import qualified Dhall.Core                            as Dhall
 import qualified Dhall.Format
 import qualified Dhall.Kubernetes.Convert              as Convert
+import qualified Dhall.Kubernetes.Types                as Types
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Util
+import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Text.Megaparsec                       as Megaparsec
 import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Lexer
+import qualified System.IO
 import qualified Turtle
 
 -- | Top-level program options
@@ -43,7 +49,7 @@ data Options = Options
     }
 
 -- | Write and format a Dhall expression to a file
-writeDhall :: Turtle.FilePath -> Expr -> IO ()
+writeDhall :: Turtle.FilePath -> Types.Expr -> IO ()
 writeDhall path expr = do
   echoStr $ "Writing file '" <> Turtle.encodeString path <> "'"
   Turtle.writeTextFile path $ pretty expr <> "\n"
@@ -129,7 +135,7 @@ parseVersion = Megaparsec.try parseSuffix <|> parsePrefix
 getVersion :: ModelName -> Maybe Version
 getVersion ModelName{..} =
     case Megaparsec.parse parseVersion "" unModelName of
-        Left  errors  -> Nothing
+        Left  _       -> Nothing
         Right version -> Just version
 
 preferStableResource :: DuplicateHandler
@@ -139,7 +145,7 @@ preferStableResource (_, names) =
 skipDuplicatesHandler :: DuplicateHandler
 skipDuplicatesHandler = const Nothing
 
-parseImport :: String -> Expr -> Dhall.Parser.Parser Dhall.Import
+parseImport :: String -> Types.Expr -> Dhall.Parser.Parser Dhall.Import
 parseImport _ (Dhall.Note _ (Dhall.Embed l)) = pure l
 parseImport prefix e = fail $ "Expected a Dhall import for " <> prefix <> " not:\n" <> show e
 
@@ -190,6 +196,8 @@ parserInfoOptions =
 
 main :: IO ()
 main = do
+  GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
+
   Options{..} <- Options.Applicative.execParser parserInfoOptions
 
   let duplicateHandler =
@@ -242,6 +250,17 @@ main = do
 
   let schemas = Data.Map.intersectionWithKey toSchema types defaults
 
+  let package =
+        Combine
+          (Embed (Convert.mkImport prefixMap [ ] "schemas.dhall"))
+          (RecordLit
+              [ ( "IntOrString"
+                , Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) "IntOrString"
+                )
+              , ( "Resource", Embed (Convert.mkImport prefixMap [ ] "typesUnion.dhall"))
+              ]
+          )
+
   -- Output schemas that combine both the types and defaults
   Turtle.mktree "schemas"
   for_ (Data.Map.toList schemas) $ \(ModelName name, expr) -> do
@@ -259,8 +278,10 @@ main = do
       typesUnionPath = "./typesUnion.dhall"
       defaultsRecordPath = "./defaults.dhall"
       schemasRecordPath = "./schemas.dhall"
+      packageRecordPath = "./package.dhall"
 
   writeDhall typesUnionPath (Dhall.Union $ fmap Just typesMap)
   writeDhall typesRecordPath (Dhall.RecordLit typesMap)
   writeDhall defaultsRecordPath (Dhall.RecordLit defaultsMap)
   writeDhall schemasRecordPath (Dhall.RecordLit schemasMap)
+  writeDhall packageRecordPath package
