@@ -225,7 +225,9 @@ import           Data.Either (rights)
 import           Data.Foldable (toList)
 import qualified Data.HashMap.Strict as HM
 import           Data.List ((\\))
+import qualified Data.List as List
 import           Data.Monoid ((<>))
+import qualified Data.Ord as Ord
 import           Data.Scientific (floatingOrInteger, toRealFloat)
 import qualified Data.Sequence as Seq
 import qualified Data.String
@@ -545,7 +547,14 @@ dhallFromJSON (Conversion {..}) expressionType =
                               , ("mapValue", outer val                  )
                               ]
 
-                      elements = Seq.fromList (fmap inner (HM.toList o))
+                      elements =
+                          Seq.fromList
+                              (fmap inner
+                                  (List.sortBy
+                                      (Ord.comparing fst)
+                                      (HM.toList o)
+                                  )
+                              )
 
                       elementType
                           | null elements =
@@ -615,7 +624,14 @@ dhallFromJSON (Conversion {..}) expressionType =
                               , ("mapValue", outer val                  )
                               ]
 
-                      elements = Seq.fromList (fmap inner (HM.toList o))
+                      elements =
+                          Seq.fromList
+                              (fmap inner
+                                  (List.sortBy
+                                      (Ord.comparing fst)
+                                      (HM.toList o)
+                                  )
+                              )
 
                       elementType
                           | null elements =

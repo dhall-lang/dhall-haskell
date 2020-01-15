@@ -10,10 +10,10 @@
       }
     )
 → json.object
-    [ { mapKey = "double", mapValue = json.double 1.0 }
-    , { mapKey = "string", mapValue = json.string "ABC" }
-    , { mapKey = "null", mapValue = json.null }
-    , { mapKey = "array", mapValue = json.array ([] : List JSON) }
-    , { mapKey = "integer", mapValue = json.double 1.0 }
+    [ { mapKey = "array", mapValue = json.array ([] : List JSON) }
     , { mapKey = "bool", mapValue = json.bool False }
+    , { mapKey = "double", mapValue = json.double 1.0 }
+    , { mapKey = "integer", mapValue = json.double 1.0 }
+    , { mapKey = "null", mapValue = json.null }
+    , { mapKey = "string", mapValue = json.string "ABC" }
     ]
