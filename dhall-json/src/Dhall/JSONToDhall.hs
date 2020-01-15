@@ -225,7 +225,9 @@ import           Data.Either (rights)
 import           Data.Foldable (toList)
 import qualified Data.HashMap.Strict as HM
 import           Data.List ((\\))
+import qualified Data.List as List
 import           Data.Monoid ((<>))
+import qualified Data.Ord as Ord
 import           Data.Scientific (floatingOrInteger, toRealFloat)
 import qualified Data.Sequence as Seq
 import qualified Data.String
@@ -521,7 +523,7 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop (App D.Optional expr) value
         = D.Some <$> loop expr value
 
-    -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type
+    -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type (< v13.0.0)
     loop
       (D.Pi _ (D.Const D.Type)
           (D.Pi _
@@ -545,7 +547,14 @@ dhallFromJSON (Conversion {..}) expressionType =
                               , ("mapValue", outer val                  )
                               ]
 
-                      elements = Seq.fromList (fmap inner (HM.toList o))
+                      elements =
+                          Seq.fromList
+                              (fmap inner
+                                  (List.sortBy
+                                      (Ord.comparing fst)
+                                      (HM.toList o)
+                                  )
+                              )
 
                       elementType
                           | null elements =
@@ -581,6 +590,86 @@ dhallFromJSON (Conversion {..}) expressionType =
                             , ("bool"  , D.Pi "_" D.Bool "JSON")
                             , ("null"  , "JSON")
                             , ("number", D.Pi "_" D.Double "JSON")
+                            , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON")])) "JSON")
+                            , ("string", D.Pi "_" D.Text "JSON")
+                            ]
+                        )
+                        (outer value)
+                    )
+
+          return result
+
+    -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type (v13.0.0 <=)
+    loop
+      (D.Pi _ (D.Const D.Type)
+          (D.Pi _
+              (D.Record
+                  [ ("array" , D.Pi _ (D.App D.List (V 0)) (V 1))
+                  , ("bool"  , D.Pi _ D.Bool (V 1))
+                  , ("double", D.Pi _ D.Double (V 1))
+                  , ("integer", D.Pi _ D.Integer (V 1))
+                  , ("null"  , V 0)
+                  , ("object", D.Pi _ (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
+                  , ("string", D.Pi _ D.Text (V 1))
+                  ]
+              )
+              (V 1)
+          )
+      )
+      value = do
+          let outer (A.Object o) =
+                  let inner (key, val) =
+                          D.RecordLit
+                              [ ("mapKey"  , D.TextLit (D.Chunks [] key))
+                              , ("mapValue", outer val                  )
+                              ]
+
+                      elements =
+                          Seq.fromList
+                              (fmap inner
+                                  (List.sortBy
+                                      (Ord.comparing fst)
+                                      (HM.toList o)
+                                  )
+                              )
+
+                      elementType
+                          | null elements =
+                              Just (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON") ]))
+                          | otherwise =
+                              Nothing
+
+                      keyValues = D.ListLit elementType elements
+
+                  in  (D.App (D.Field "json" "object") keyValues)
+              outer (A.Array a) =
+                  let elements = Seq.fromList (fmap outer (Vector.toList a))
+
+                      elementType
+                          | null elements = Just (D.App D.List "JSON")
+                          | otherwise     = Nothing
+
+                  in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
+              outer (A.String s) =
+                  D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
+              outer (A.Number n) =
+                  case floatingOrInteger n of
+                      Left floating -> D.App (D.Field "json" "double") (D.DoubleLit (DhallDouble floating))
+                      Right integer -> D.App (D.Field "json" "integer") (D.IntegerLit integer)
+              outer (A.Bool b) =
+                  D.App (D.Field "json" "bool") (D.BoolLit b)
+              outer A.Null =
+                  D.Field "json" "null"
+
+          let result =
+                D.Lam "JSON" (D.Const D.Type)
+                    (D.Lam "json"
+                        (D.Record
+                            [ ("array" , D.Pi "_" (D.App D.List "JSON") "JSON")
+                            , ("bool"  , D.Pi "_" D.Bool "JSON")
+                            , ("double", D.Pi "_" D.Double "JSON")
+                            , ("integer", D.Pi "_" D.Integer "JSON")
+                            , ("null"  , "JSON")
                             , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON")])) "JSON")
                             , ("string", D.Pi "_" D.Text "JSON")
                             ]
