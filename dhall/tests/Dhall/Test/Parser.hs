@@ -128,10 +128,6 @@ shouldParse path = do
             -- This is a bug created by a parsing performance
             -- improvement
             [ parseDirectory </> "success/unit/MergeParenAnnotation"
-
-            -- https://github.com/dhall-lang/dhall-haskell/issues/1454
-            , parseDirectory </> "success/missingFoo"
-            , parseDirectory </> "success/missingSlash"
             ]
 
     let pathString = Text.unpack path

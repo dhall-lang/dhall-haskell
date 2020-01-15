@@ -1,3 +1,7 @@
+1.6.1
+
+* [Fix typos in error messages](https://github.com/dhall-lang/dhall-haskell/pull/1595)
+
 1.6.0
 
 * BREAKING CHANGE: [Move `HsYAML` code to a new `dhall-yaml` package](https://github.com/dhall-lang/dhall-haskell/pull/1514)

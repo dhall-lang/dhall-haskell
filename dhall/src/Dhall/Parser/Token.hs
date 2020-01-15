@@ -340,9 +340,12 @@ simpleLabel allowReserved = try (do
     Control.Monad.guard (allowReserved || not (Data.HashSet.member t reservedIdentifiers))
     return t )
   where
-    headCharacter c = alpha c || c == '_'
 
-    tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
+headCharacter :: Char -> Bool
+headCharacter c = alpha c || c == '_'
+
+tailCharacter :: Char -> Bool
+tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
 backtickLabel :: Parser Text
 backtickLabel = do
@@ -1120,7 +1123,9 @@ _equivalent = (void (char '≡' <?> "\"≡\"") <|> void (text "===")) <?> "opera
 
 -- | Parse the @missing@ keyword
 _missing :: Parser ()
-_missing = keyword "missing"
+_missing =
+        keyword "missing"
+    *>  Text.Megaparsec.notFollowedBy (Text.Parser.Char.satisfy tailCharacter)
 
 -- | Parse the @?@ symbol
 _importAlt :: Parser ()

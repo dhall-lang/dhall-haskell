@@ -540,6 +540,47 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     outer _ = Left (Unsupported e)
 
                 outer value
+        Core.Lam _ (Core.Const Core.Type)
+            (Core.Lam _
+                (Core.Record
+                    [ ("array" , Core.Pi _ (Core.App Core.List (V 0)) (V 1))
+                    , ("bool"  , Core.Pi _ Core.Bool (V 1))
+                    , ("double", Core.Pi _ Core.Double (V 1))
+                    , ("integer", Core.Pi _ Core.Integer (V 1))
+                    , ("null"  , V 0)
+                    , ("object", Core.Pi _ (Core.App Core.List (Core.Record [ ("mapKey", Core.Text), ("mapValue", V 0)])) (V 1))
+                    , ("string", Core.Pi _ Core.Text (V 1))
+                    ]
+                )
+                value
+            ) -> do
+                let outer (Core.Field (V 0) "null") = do
+                        return Aeson.Null
+                    outer (Core.App (Core.Field (V 0) "bool") (Core.BoolLit b)) = do
+                        return (Aeson.Bool b)
+                    outer (Core.App (Core.Field (V 0) "array") (Core.ListLit _ xs)) = do
+                        ys <- traverse outer (Foldable.toList xs)
+
+                        return (Aeson.Array (Vector.fromList ys))
+                    outer (Core.App (Core.Field (V 0) "object") (Core.ListLit _ xs)) = do
+                        let inner (Core.RecordLit [("mapKey", Core.TextLit (Core.Chunks [] mapKey)), ("mapValue", mapExpression)]) = do
+                                mapValue <- outer mapExpression
+
+                                return (mapKey, mapValue)
+                            inner _ = Left (Unsupported e)
+
+                        ys <- traverse inner (Foldable.toList xs)
+
+                        return (Aeson.Object (HashMap.fromList ys))
+                    outer (Core.App (Core.Field (V 0) "double") (Core.DoubleLit (DhallDouble n))) = do
+                        return (Aeson.toJSON n)
+                    outer (Core.App (Core.Field (V 0) "integer") (Core.IntegerLit n)) = do
+                        return (Aeson.toJSON n)
+                    outer (Core.App (Core.Field (V 0) "string") (Core.TextLit (Core.Chunks [] text))) = do
+                        return (toJSON text)
+                    outer _ = Left (Unsupported e)
+
+                outer value
         _ -> Left (Unsupported e)
 
 getContents :: Expr s Void -> Maybe (Text, Maybe (Expr s Void))

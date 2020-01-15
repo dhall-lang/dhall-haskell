@@ -111,7 +111,7 @@ readUri uri = do
   getVirtualFileFunc <- uses lspFuncs LSP.getVirtualFileFunc
   mVirtualFile <- liftIO $ getVirtualFileFunc (J.toNormalizedUri uri)
   case mVirtualFile of
-    Just (LSP.VirtualFile _ rope _) -> return (Rope.toText rope)
+    Just (LSP.VirtualFile _ _ rope) -> return (Rope.toText rope)
     Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
 
 loadFile :: J.Uri -> HandlerM (Expr Src Void)
