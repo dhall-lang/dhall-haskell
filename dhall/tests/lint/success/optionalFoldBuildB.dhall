@@ -14,4 +14,5 @@
           → optional
         )
     → build (Optional a) (λ(x : a) → Some x) (None a)
+, example2 = merge { Some = Natural/even, None = False } (Some 1)
 }

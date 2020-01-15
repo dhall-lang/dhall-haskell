@@ -15,6 +15,7 @@ module Dhall.Lint
     , fixParentPath
     , removeLetInLet
     , replaceOptionalBuildFold
+    , replaceSaturatedOptionalFold
     ) where
 
 import Control.Applicative ((<|>))
@@ -49,14 +50,17 @@ import qualified Lens.Family
     * Replaces deprecated @Optional\/fold@ and @Optional\/build@ built-ins
 -}
 lint :: Expr s Import -> Expr s Import
-lint = Dhall.Optics.rewriteOf subExpressions rewrite
+lint =  Dhall.Optics.rewriteOf subExpressions lowerPriorityRewrite
+    .   Dhall.Optics.rewriteOf subExpressions higherPriorityRewrite
   where
-    rewrite e =
+    lowerPriorityRewrite e =
             fixAssert                e
         <|> removeUnusedBindings     e
         <|> fixParentPath            e
         <|> removeLetInLet           e
         <|> replaceOptionalBuildFold e
+
+    higherPriorityRewrite = replaceSaturatedOptionalFold
 
 -- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -161,4 +165,27 @@ replaceOptionalBuildFold OptionalFold =
             )
         )
 replaceOptionalBuildFold _ =
+    Nothing
+
+-- | This replaces a saturated @Optional/fold@ with the equivalent @merge@
+-- expression
+replaceSaturatedOptionalFold :: Expr s a -> Maybe (Expr s a)
+replaceSaturatedOptionalFold
+    (App
+        (Core.shallowDenote -> App
+            (Core.shallowDenote -> App
+                (Core.shallowDenote -> App
+                    (Core.shallowDenote -> App
+                        (Core.shallowDenote -> OptionalFold)
+                        _
+                    )
+                    o
+                )
+                _
+            )
+            some
+        )
+        none
+    ) = Just (Merge (RecordLit [ ("Some", some), ("None", none) ]) o Nothing)
+replaceSaturatedOptionalFold _ =
     Nothing
