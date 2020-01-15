@@ -653,7 +653,9 @@ dhallFromJSON (Conversion {..}) expressionType =
               outer (A.String s) =
                   D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
               outer (A.Number n) =
-                  D.App (D.Field "json" "double") (D.DoubleLit (DhallDouble (toRealFloat n)))
+                  case floatingOrInteger n of
+                      Left floating -> D.App (D.Field "json" "double") (D.DoubleLit (DhallDouble floating))
+                      Right integer -> D.App (D.Field "json" "integer") (D.IntegerLit integer)
               outer (A.Bool b) =
                   D.App (D.Field "json" "bool") (D.BoolLit b)
               outer A.Null =
