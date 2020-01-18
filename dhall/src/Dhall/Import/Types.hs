@@ -36,6 +36,7 @@ import System.FilePath (isRelative, splitDirectories)
 
 import qualified Dhall.Context
 import qualified Dhall.Map     as Map
+import qualified Dhall.Substitution
 import qualified Data.Text
 
 -- | A fully 'chained' import, i.e. if it contains a relative path that path is
@@ -90,6 +91,8 @@ data Status = Status
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
 
+    , _substitutions :: Dhall.Substitution.Substitutions Src Void
+
     , _normalizer :: Maybe (ReifiedNormalizer Void)
 
     , _startingContext :: Context (Expr Src Void)
@@ -109,6 +112,8 @@ emptyStatusWith _remote rootDirectory = Status {..}
     _cache = Map.empty
 
     _manager = Nothing
+
+    _substitutions = Dhall.Substitution.empty
 
     _normalizer = Nothing
 
@@ -149,6 +154,11 @@ cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 remote
     :: Functor f => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
 remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
+
+-- | Lens from a `Status` to its `_substitutions` field
+substitutions :: Functor f => LensLike' f Status (Dhall.Substitution.Substitutions Src Void)
+substitutions k s =
+    fmap (\x -> s { _substitutions = x }) (k (_substitutions s))
 
 -- | Lens from a `Status` to its `_normalizer` field
 normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer Void))

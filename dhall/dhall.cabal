@@ -542,6 +542,7 @@ Library
         Dhall.Repl
         Dhall.Set
         Dhall.Src
+        Dhall.Substitution
         Dhall.Tags
         Dhall.Tutorial
         Dhall.TypeCheck
