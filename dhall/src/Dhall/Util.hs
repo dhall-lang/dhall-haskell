@@ -163,7 +163,7 @@ instance Show NotModified where
          _ERROR <> ": Expression is not fully " <> modified_ <> "\n\
         \\n\
         \You ran ❰dhall " <> command_ <> " --check❱ command, but the input appears to\n\
-        \have not been " <> modified_ <> " before, or was chaned since the last time the\n\
+        \have not been " <> modified_ <> " before, or was changed since the last time the\n\
         \input was " <> modified_ <> ".\n"
       where
         modified_ = Data.Text.unpack modified
