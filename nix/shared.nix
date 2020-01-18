@@ -35,6 +35,12 @@ let
 
   overlayShared = pkgsNew: pkgsOld: {
     logo = {
+      argocd =
+        pkgsNew.fetchurl {
+          url    = "https://raw.githubusercontent.com/argoproj/argo-cd/master/docs/assets/argo.png";
+          sha256 = "0gvfd7y7ihqyz93by730w0f6kdfs8dlvxv45ydccih94rxj3j7ac";
+        };
+
       bash =
         pkgsNew.fetchurl {
           url    = "https://raw.githubusercontent.com/odb/official-bash-logo/master/assets/Logos/Icons/PNG/128x128.png";
@@ -81,6 +87,18 @@ let
           sha256 = "0g26j7vx34m46mwp93qgg3q5x8pfdq2j1ch0vxz5gj0nk3b8fxda";
         };
 
+      json =
+        pkgsNew.fetchurl {
+          url    = "https://upload.wikimedia.org/wikipedia/commons/c/c9/JSON_vector_logo.svg";
+          sha256 = "1hqd1qh35v9magjp3rbsw8wszk2wn3hkz981ir49z5cyf11jnx95";
+        };
+
+      kops =
+        pkgsNew.fetchurl {
+          url    = "https://raw.githubusercontent.com/kubernetes/kops/master/docs/img/logo-notext.svg";
+          sha256 = "0gdi0pcrmvmb23dy8zp7z1z980cmj5aqpp9yxrsyp4dsj7flay8r";
+        };
+
       kubernetes =
         pkgsNew.fetchurl {
           url    = "https://raw.githubusercontent.com/kubernetes/kubernetes/7839fe38620508eb0651930cb0e1acb8ea367842/logo/logo.svg";
@@ -93,10 +111,10 @@ let
           sha256 = "1hrz7wr7i0b2bips60ygacbkmdzv466lsbxi22hycg42kv4m0173";
         };
 
-      json =
+      prometheus =
         pkgsNew.fetchurl {
-          url    = "https://upload.wikimedia.org/wikipedia/commons/c/c9/JSON_vector_logo.svg";
-          sha256 = "1hqd1qh35v9magjp3rbsw8wszk2wn3hkz981ir49z5cyf11jnx95";
+          url    = "https://upload.wikimedia.org/wikipedia/commons/3/38/Prometheus_software_logo.svg";
+          sha256 = "19ff8l1kp3i3gxxbd5na9wbzxkpflcxw0lz2ysb1d6s4ybvr0fnb";
         };
 
       stackOverflow =
@@ -104,7 +122,6 @@ let
           url    = "https://cdn.sstatic.net/Sites/stackoverflow/company/img/logos/so/so-icon.svg";
           sha256 = "0i84h23ax197f3hwh0hqm6yjvvnpcjyhd6nkyy33z6x10dh8v4z3";
         };
-
 
       twitter = pkgsNew.callPackage ./twitterLogo.nix { };
 
