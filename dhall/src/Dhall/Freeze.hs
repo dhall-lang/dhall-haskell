@@ -230,9 +230,7 @@ freeze inputMode input scope intent characterSet censor = do
 
             let stream = Dhall.Pretty.layout doc
 
-            let unAnnotated = Pretty.unAnnotateS stream
-
-            let modifiedText = Pretty.renderStrict unAnnotated
+            let modifiedText = Pretty.Text.renderStrict stream
 
             if originalText == modifiedText
                 then return ()
