@@ -24,7 +24,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (ViewL(..), ViewR(..))
 import Data.Traversable
-import Dhall.Syntax (Expr(..), Var(..), Binding(Binding), Chunks(..), DhallDouble(..), Const(..))
+import Dhall.Syntax (Expr(..), Var(..), Binding(Binding), BindingPattern(..), Chunks(..), DhallDouble(..), Const(..))
 import Instances.TH.Lift ()
 import Prelude hiding (succ)
 
@@ -128,14 +128,22 @@ shift d v (App f a) = App f' a'
   where
     f' = shift d v f
     a' = shift d v a
-shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
-    Let (Binding src0 f src1 mt' src2 r') e'
+shift d (V x n) (Let (Binding src0 p src2 r) e) =
+    Let (Binding src0 p' src2 r') e'
   where
-    e' = shift d (V x n') e
-      where
-        n' = if x == f then n + 1 else n
+    (p', e') = case p of
+        SimpleBindingPattern f src mt ->
+            ( let mt' = fmap (fmap (shift d (V x n))) mt
+              in  SimpleBindingPattern f src mt'
+            , let n' = if x == f then n + 1 else n
+              in  shift d (V x n') e
+            )
+        RecordBindingPattern fs _ ->
+            ( p
+            , let n' = if x `elem` fs then n + 1 else n
+              in  shift d (V x n') e
+            )
 
-    mt' = fmap (fmap (shift d (V x n))) mt
     r'  =             shift d (V x n)  r
 shift d v (Annot a b) = Annot a' b'
   where
@@ -730,11 +738,21 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-    Let (Binding _ f _ _ _ r) b -> loop b''
-      where
-        r'  = shift   1  (V f 0) r
-        b'  = subst (V f 0) r' b
-        b'' = shift (-1) (V f 0) b'
+    Let (Binding _ p _ r) b -> do
+        case p of
+            SimpleBindingPattern f _ _ -> loop b''
+              where
+                r'  = shift   1  (V f 0) r
+                b'  = subst (V f 0) r' b
+                b'' = shift (-1) (V f 0) b'
+            RecordBindingPattern fs _  -> do
+                r' <- loop r'
+                let b'' =
+                        foldl'
+                            (\b_ f_ ->
+                                let r'' = shift 1 (V f_ 0) r'
+                                let
+                loop b''
     Annot x _ -> loop x
     Bool -> pure Bool
     BoolLit b -> pure (BoolLit b)
