@@ -17,7 +17,7 @@ module Dhall.Util
     , getExpressionAndHeader
     , getExpressionAndHeaderFromStdinText
     , Header(..)
-    , NotModified(..)
+    , CheckFailed(..)
     ) where
 
 import Control.Exception (Exception(..))
@@ -155,12 +155,12 @@ data Output = StandardOutput | OutputFile FilePath
 data OutputMode = Write | Check
 
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
-data NotModified = NotModified { command :: Text, modified :: Text }
+data CheckFailed = CheckFailed { command :: Text, modified :: Text }
     deriving (Exception)
 
-instance Show NotModified where
-    show NotModified{..} =
-         _ERROR <> ": Expression is not fully " <> modified_ <> "\n\
+instance Show CheckFailed where
+    show CheckFailed{..} =
+         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed\n\
         \\n\
         \You ran ❰dhall " <> command_ <> " --check❱ command, but the input appears to\n\
         \have not been " <> modified_ <> " before, or was changed since the last time the\n\

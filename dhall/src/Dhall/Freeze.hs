@@ -23,9 +23,9 @@ import Dhall.Pretty (CharacterSet)
 import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util
     ( Censor
+    , CheckFailed(..)
     , Header(..)
     , Input(..)
-    , NotModified(..)
     , OutputMode(..)
     )
 import System.Console.ANSI (hSupportsANSI)
@@ -241,4 +241,4 @@ freeze inputMode input scope intent characterSet censor = do
 
                     let modified = "frozen"
 
-                    Exception.throwIO NotModified{..}
+                    Exception.throwIO CheckFailed{..}

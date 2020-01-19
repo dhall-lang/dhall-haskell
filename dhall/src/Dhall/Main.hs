@@ -50,9 +50,9 @@ import Dhall.Core
     )
 import Dhall.Util
     ( Censor(..)
+    , CheckFailed(..)
     , Header (..)
     , Input(..)
-    , NotModified(..)
     , OutputMode(..)
     , Output(..)
     )
@@ -753,7 +753,7 @@ command (Options {..}) = do
                         else do
                             let modified = "linted"
 
-                            Control.Exception.throwIO NotModified{ command = "lint", ..}
+                            Control.Exception.throwIO CheckFailed{ command = "lint", ..}
 
         Encode {..} -> do
             expression <- getExpression file

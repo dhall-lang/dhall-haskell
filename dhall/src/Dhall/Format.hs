@@ -15,9 +15,9 @@ import Dhall.Pretty (CharacterSet(..), annToAnsiStyle)
 
 import Dhall.Util
     ( Censor
+    , CheckFailed(..)
     , Header(..)
     , Input(..)
-    , NotModified(..)
     , OutputMode(..)
     )
 
@@ -93,4 +93,4 @@ format (Format {..}) = do
 
                     let modified = "formatted"
 
-                    Control.Exception.throwIO NotModified{..}
+                    Control.Exception.throwIO CheckFailed{..}
