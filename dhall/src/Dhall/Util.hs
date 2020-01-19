@@ -11,7 +11,7 @@ module Dhall.Util
     , _ERROR
     , Censor(..)
     , Input(..)
-    , InputMode(..)
+    , OutputMode(..)
     , Output(..)
     , getExpression
     , getExpressionAndHeader
@@ -148,11 +148,11 @@ data InputOrTextFromStdin = Input_ Input | StdinText Text
 -- | Path to output
 data Output = StandardOutput | OutputFile FilePath
 
-{-| Some command-line subcommands can either `Modify` their input or `Check`
+{-| Some command-line subcommands can either `Write` their input or `Check`
     that the input has already been modified.  This type is shared between them
     to record that choice.
 -}
-data InputMode = Modify | Check
+data OutputMode = Write | Check
 
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
 data NotModified = NotModified { command :: Text, modified :: Text }

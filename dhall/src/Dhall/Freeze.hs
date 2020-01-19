@@ -25,8 +25,8 @@ import Dhall.Util
     ( Censor
     , Header(..)
     , Input(..)
-    , InputMode(..)
     , NotModified(..)
+    , OutputMode(..)
     )
 import System.Console.ANSI (hSupportsANSI)
 
@@ -138,7 +138,7 @@ data Intent
 
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
-    :: InputMode
+    :: OutputMode
     -> Input
     -> Scope
     -> Intent
@@ -202,7 +202,7 @@ freeze inputMode input scope intent characterSet censor = do
                         expression
 
     case inputMode of
-        Modify -> do
+        Write -> do
             (Header header, parsedExpression) <- do
                 Util.getExpressionAndHeader censor input
 

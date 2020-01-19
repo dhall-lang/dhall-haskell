@@ -17,8 +17,8 @@ import Dhall.Util
     ( Censor
     , Header(..)
     , Input(..)
-    , InputMode(..)
     , NotModified(..)
+    , OutputMode(..)
     )
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -37,7 +37,7 @@ data Format = Format
     { characterSet :: CharacterSet
     , censor       :: Censor
     , input        :: Input
-    , inputMode    :: InputMode
+    , outputMode   :: OutputMode
     }
 
 -- | Implementation of the @dhall format@ subcommand
@@ -54,8 +54,8 @@ format (Format {..}) = do
 
             return (layoutHeaderAndExpr headerAndExpr)
 
-    case inputMode of
-        Modify -> do
+    case outputMode of
+        Write -> do
             docStream <- layoutInput
 
             case input of

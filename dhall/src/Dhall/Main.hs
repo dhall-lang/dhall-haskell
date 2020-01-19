@@ -52,8 +52,8 @@ import Dhall.Util
     ( Censor(..)
     , Header (..)
     , Input(..)
-    , InputMode(..)
     , NotModified(..)
+    , OutputMode(..)
     , Output(..)
     )
 
@@ -137,11 +137,11 @@ data Mode
           }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
-    | Format { input :: Input, inputMode :: InputMode }
-    | Freeze { input :: Input, all_ :: Bool, cache :: Bool, inputMode :: InputMode }
+    | Format { input :: Input, outputMode :: OutputMode }
+    | Freeze { input :: Input, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
     | Hash { file :: Input }
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { input :: Input, inputMode :: InputMode }
+    | Lint { input :: Input, outputMode :: OutputMode }
     | Tags
           { input :: Input
           , output :: Output
@@ -428,7 +428,7 @@ parseMode =
     parseCheck = fmap adapt switch
       where
         adapt True  = Check
-        adapt False = Modify
+        adapt False = Write
 
         switch =
             Options.Applicative.switch
@@ -696,7 +696,7 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze inputMode input scope intent characterSet censor
+            Dhall.Freeze.freeze outputMode input scope intent characterSet censor
 
         Hash {..} -> do
             expression <- getExpression file
@@ -712,8 +712,8 @@ command (Options {..}) = do
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
         Lint {..} -> do
-            case inputMode of
-                Modify -> do
+            case outputMode of
+                Write -> do
                     (Header header, expression) <- do
                         getExpressionAndHeader input
 
