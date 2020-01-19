@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -156,7 +155,8 @@ data InputMode = Modify | Check
 
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
 data NotModified = NotModified { command :: Text, modified :: Text }
-    deriving (Exception)
+
+instance Exception NotModified
 
 instance Show NotModified where
     show NotModified{..} =
