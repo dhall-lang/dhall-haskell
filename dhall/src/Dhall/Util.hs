@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -156,7 +155,8 @@ data OutputMode = Write | Check
 
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
 data CheckFailed = CheckFailed { command :: Text, modified :: Text }
-    deriving (Exception)
+
+instance Exception CheckFailed
 
 instance Show CheckFailed where
     show CheckFailed{..} =
