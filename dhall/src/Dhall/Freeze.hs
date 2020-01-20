@@ -145,7 +145,7 @@ freeze
     -> CharacterSet
     -> Censor
     -> IO ()
-freeze inputMode input scope intent characterSet censor = do
+freeze outputMode input scope intent characterSet censor = do
     let directory = case input of
             StandardInput  -> "."
             InputFile file -> System.FilePath.takeDirectory file
@@ -201,7 +201,7 @@ freeze inputMode input scope intent characterSet censor = do
                         cache
                         expression
 
-    case inputMode of
+    case outputMode of
         Write -> do
             (Header header, parsedExpression) <- do
                 Util.getExpressionAndHeader censor input
