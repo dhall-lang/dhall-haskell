@@ -15,25 +15,34 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
+import Data.Bifunctor (first)
 import Data.Monoid ((<>))
 import Data.Text
 import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet)
 import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
-import Dhall.Util (Censor, Input(..))
+import Dhall.Util
+    ( Censor
+    , CheckFailed(..)
+    , Header(..)
+    , Input(..)
+    , OutputMode(..)
+    )
 import System.Console.ANSI (hSupportsANSI)
 
-import qualified Control.Exception
+import qualified Control.Exception                         as Exception
 import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Data.Text.IO                              as Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Core                                as Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
+import qualified Dhall.Parser                              as Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
-import qualified Dhall.Util
+import qualified Dhall.Util                                as Util
 import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.FilePath
 import qualified System.IO
@@ -58,7 +67,7 @@ freezeImport directory import_ = do
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
     case Dhall.TypeCheck.typeOf expression of
-        Left  exception -> Control.Exception.throwIO exception
+        Left  exception -> Exception.throwIO exception
         Right _         -> return ()
 
     let normalizedExpression = Core.alphaNormalize (Core.normalize expression)
@@ -86,7 +95,7 @@ freezeRemoteImport directory import_ = do
         _         -> return import_
 
 writeExpr :: Input -> (Text, Expr Src Import) -> CharacterSet -> IO ()
-writeExpr inplace (header, expr) characterSet = do
+writeExpr input (header, expr) characterSet = do
     let doc =  Pretty.pretty header
             <> Dhall.Pretty.prettyCharacterSet characterSet expr
             <> "\n"
@@ -95,7 +104,7 @@ writeExpr inplace (header, expr) characterSet = do
 
     let unAnnotated = Pretty.unAnnotateS stream
 
-    case inplace of
+    case input of
         InputFile file ->
             AtomicWrite.LazyText.atomicWriteFile
                 file
@@ -129,19 +138,17 @@ data Intent
 
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
-    :: Input
+    :: OutputMode
+    -> Input
     -> Scope
     -> Intent
     -> CharacterSet
     -> Censor
     -> IO ()
-freeze inplace scope intent characterSet censor = do
-    let directory = case inplace of
+freeze outputMode input scope intent characterSet censor = do
+    let directory = case input of
             StandardInput  -> "."
             InputFile file -> System.FilePath.takeDirectory file
-
-    (Dhall.Util.Header header, parsedExpression) <-
-        Dhall.Util.getExpressionAndHeader censor inplace
 
     let freezeScope =
             case scope of
@@ -194,6 +201,42 @@ freeze inplace scope intent characterSet censor = do
                         cache
                         expression
 
-    frozenExpression <- rewrite parsedExpression
+    case outputMode of
+        Write -> do
+            (Header header, parsedExpression) <- do
+                Util.getExpressionAndHeader censor input
 
-    writeExpr inplace (header, frozenExpression) characterSet
+            frozenExpression <- rewrite parsedExpression
+
+            writeExpr input (header, frozenExpression) characterSet
+
+        Check -> do
+            originalText <- case input of
+                InputFile file -> Text.IO.readFile file
+                StandardInput  -> Text.IO.getContents
+
+            let name = case input of
+                    InputFile file -> file
+                    StandardInput  -> "(stdin)"
+
+            (Header header, parsedExpression) <- do
+                Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
+
+            frozenExpression <- rewrite parsedExpression
+
+            let doc =  Pretty.pretty header
+                    <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
+                    <> "\n"
+
+            let stream = Dhall.Pretty.layout doc
+
+            let modifiedText = Pretty.Text.renderStrict stream
+
+            if originalText == modifiedText
+                then return ()
+                else do
+                    let command = "freeze"
+
+                    let modified = "frozen"
+
+                    Exception.throwIO CheckFailed{..}

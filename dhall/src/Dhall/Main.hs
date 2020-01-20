@@ -16,18 +16,30 @@ module Dhall.Main
     , parserInfoOptions
 
       -- * Execution
-    , command
+    , Dhall.Main.command
     , main
     ) where
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception (Handler(..), SomeException)
 import Control.Monad (when)
+import Data.Bifunctor (first)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
+import Dhall.Freeze (Intent(..), Scope(..))
+import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
+import Dhall.Parser (Src)
+import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle)
+import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
+import Dhall.Version (dhallVersionString)
+import Options.Applicative (Parser, ParserInfo)
+import System.Exit (ExitCode, exitFailure)
+import System.IO (Handle)
+import Text.Dot ((.->.))
+
 import Dhall.Core
     ( Expr(Annot)
     , Import(..)
@@ -36,17 +48,14 @@ import Dhall.Core
     , URL(..)
     , pretty
     )
-import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
-import Dhall.Parser (Src)
-import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle)
-import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
-import Dhall.Util (Censor(..), Header (..), Input(..), Output(..))
-import Dhall.Version (dhallVersionString)
-import Options.Applicative (Parser, ParserInfo)
-import System.Exit (ExitCode, exitFailure)
-import System.IO (Handle)
-import Text.Dot ((.->.))
+import Dhall.Util
+    ( Censor(..)
+    , CheckFailed(..)
+    , Header (..)
+    , Input(..)
+    , OutputMode(..)
+    , Output(..)
+    )
 
 import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
@@ -73,6 +82,7 @@ import qualified Dhall.Freeze
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
+import qualified Dhall.Parser                              as Parser
 import qualified Dhall.Map
 import qualified Dhall.Tags
 import qualified Dhall.Pretty
@@ -127,11 +137,11 @@ data Mode
           }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
-    | Format { formatMode :: Dhall.Format.FormatMode }
-    | Freeze { inplace :: Input, all_ :: Bool, cache :: Bool }
+    | Format { input :: Input, outputMode :: OutputMode }
+    | Freeze { input :: Input, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
     | Hash { file :: Input }
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { inplace :: Input }
+    | Lint { input :: Input, outputMode :: OutputMode }
     | Tags
           { input :: Input
           , output :: Output
@@ -224,7 +234,7 @@ parseMode =
     <|> subcommand
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseInplace)
+            (Lint <$> parseInplace <*> parseCheck)
     <|> subcommand
             "tags"
             "Generate etags file"
@@ -232,11 +242,11 @@ parseMode =
     <|> subcommand
             "format"
             "Standard code formatter for the Dhall language"
-            (Format <$> parseFormatMode)
+            (Format <$> parseInplace <*> parseCheck)
     <|> subcommand
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag)
+            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck)
     <|> subcommand
             "encode"
             "Encode a Dhall expression to binary"
@@ -415,11 +425,16 @@ parseMode =
         <>  Options.Applicative.help "Add fallback unprotected imports when using integrity checks purely for caching purposes"
         )
 
-    parseCheck =
-        Options.Applicative.switch
-        (   Options.Applicative.long "check"
-        <>  Options.Applicative.help "Only check if the input is formatted"
-        )
+    parseCheck = fmap adapt switch
+      where
+        adapt True  = Check
+        adapt False = Write
+
+        switch =
+            Options.Applicative.switch
+            (   Options.Applicative.long "check"
+            <>  Options.Applicative.help "Only check if the input is formatted"
+            )
 
     parseDirectoryTreeOutput =
         Options.Applicative.strOption
@@ -427,11 +442,6 @@ parseMode =
             <>  Options.Applicative.help "The destination path to create"
             <>  Options.Applicative.metavar "PATH"
             )
-
-    parseFormatMode = adapt <$> parseCheck <*> parseInplace
-      where
-        adapt True  path    = Dhall.Format.Check {..}
-        adapt False inplace = Dhall.Format.Modify {..}
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
@@ -686,7 +696,7 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze inplace scope intent characterSet censor
+            Dhall.Freeze.freeze outputMode input scope intent characterSet censor
 
         Hash {..} -> do
             expression <- getExpression file
@@ -702,17 +712,48 @@ command (Options {..}) = do
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
         Lint {..} -> do
-            (Header header, expression) <- getExpressionAndHeader inplace
+            case outputMode of
+                Write -> do
+                    (Header header, expression) <- do
+                        getExpressionAndHeader input
 
-            let lintedExpression = Dhall.Lint.lint expression
+                    let lintedExpression = Dhall.Lint.lint expression
 
-            let doc =   Pretty.pretty header
-                    <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
+                    let doc =   Pretty.pretty header
+                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
-            case inplace of
-                InputFile file -> writeDocToFile file doc
+                    case input of
+                        InputFile file -> writeDocToFile file doc
 
-                StandardInput -> renderDoc System.IO.stdout doc
+                        StandardInput -> renderDoc System.IO.stdout doc
+
+                Check -> do
+                    originalText <- case input of
+                        InputFile file -> Data.Text.IO.readFile file
+                        StandardInput  -> Data.Text.IO.getContents
+
+                    let name = case input of
+                            InputFile file -> file
+                            StandardInput  -> "(stdin)"
+
+                    (Header header, expression) <- do
+                        Dhall.Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
+
+                    let lintedExpression = Dhall.Lint.lint expression
+
+                    let doc =   Pretty.pretty header
+                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
+
+                    let stream = Dhall.Pretty.layout doc
+
+                    let modifiedText = Pretty.Text.renderStrict stream <> "\n"
+
+                    if originalText == modifiedText
+                        then return ()
+                        else do
+                            let modified = "linted"
+
+                            Control.Exception.throwIO CheckFailed{ command = "lint", ..}
 
         Encode {..} -> do
             expression <- getExpression file
@@ -813,4 +854,5 @@ command (Options {..}) = do
 main :: IO ()
 main = do
     options <- Options.Applicative.execParser parserInfoOptions
-    command options
+
+    Dhall.Main.command options

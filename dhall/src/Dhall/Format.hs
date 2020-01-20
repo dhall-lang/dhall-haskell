@@ -7,14 +7,19 @@
 module Dhall.Format
     ( -- * Format
       Format(..)
-    , FormatMode(..)
     , format
     ) where
 
-import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle)
-import Dhall.Util (Censor, Input(..), Header(..))
+
+import Dhall.Util
+    ( Censor
+    , CheckFailed(..)
+    , Header(..)
+    , Input(..)
+    , OutputMode(..)
+    )
 
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
@@ -27,30 +32,16 @@ import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyTe
 import qualified System.Console.ANSI
 import qualified System.IO
 
-data NotFormatted = NotFormatted
-    deriving (Exception)
-
-instance Show NotFormatted where
-    show _ = ""
-
 -- | Arguments to the `format` subcommand
 data Format = Format
     { characterSet :: CharacterSet
     , censor       :: Censor
-    , formatMode   :: FormatMode
+    , input        :: Input
+    , outputMode   :: OutputMode
     }
 
-{-| The `format` subcommand can either `Modify` its input or simply `Check`
-    that the input is already formatted
--}
-data FormatMode
-    = Modify { inplace :: Input }
-    | Check  { path :: Input }
-
 -- | Implementation of the @dhall format@ subcommand
-format
-    :: Format
-    -> IO ()
+format :: Format -> IO ()
 format (Format {..}) = do
     let layoutHeaderAndExpr (Header header, expr) =
             Dhall.Pretty.layout
@@ -58,16 +49,16 @@ format (Format {..}) = do
                 <>  Dhall.Pretty.prettyCharacterSet characterSet expr 
                 <>  "\n")
 
-    let layoutInput input = do
+    let layoutInput = do
             headerAndExpr <- Dhall.Util.getExpressionAndHeader censor input
 
             return (layoutHeaderAndExpr headerAndExpr)
 
-    case formatMode of
-        Modify {..} -> do
-            docStream <- layoutInput inplace
+    case outputMode of
+        Write -> do
+            docStream <- layoutInput
 
-            case inplace of
+            case input of
                 InputFile file -> do
                     AtomicWrite.LazyText.atomicWriteFile
                         file
@@ -82,13 +73,13 @@ format (Format {..}) = do
                             then (fmap annToAnsiStyle docStream)
                             else (Pretty.unAnnotateS docStream))
 
-        Check {..} -> do
-            originalText <- case path of
+        Check -> do
+            originalText <- case input of
                 InputFile file -> Data.Text.IO.readFile file
                 StandardInput  -> Data.Text.IO.getContents
 
-            docStream <- case path of
-                InputFile _    -> layoutInput path
+            docStream <- case input of
+                InputFile _    -> layoutInput
                 StandardInput  -> do
                     headerAndExpr <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
                     return (layoutHeaderAndExpr headerAndExpr)
@@ -97,4 +88,9 @@ format (Format {..}) = do
 
             if originalText == formattedText
                 then return ()
-                else Control.Exception.throwIO NotFormatted
+                else do
+                    let command = "format"
+
+                    let modified = "formatted"
+
+                    Control.Exception.throwIO CheckFailed{..}

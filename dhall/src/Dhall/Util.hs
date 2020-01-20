@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 -- | Shared utility functions
 
@@ -9,11 +10,13 @@ module Dhall.Util
     , _ERROR
     , Censor(..)
     , Input(..)
+    , OutputMode(..)
     , Output(..)
     , getExpression
     , getExpressionAndHeader
     , getExpressionAndHeaderFromStdinText
     , Header(..)
+    , CheckFailed(..)
     ) where
 
 import Control.Exception (Exception(..))
@@ -98,7 +101,11 @@ insert expression =
 _ERROR :: IsString string => string
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
-get :: (String -> Text -> Either ParseError a) -> Censor -> InputOrTextFromStdin -> IO a
+get
+    :: (String -> Text -> Either ParseError a)
+    -> Censor
+    -> InputOrTextFromStdin
+    -> IO a
 get parser censor input = do
     inText <- do
         case input of
@@ -140,15 +147,40 @@ data InputOrTextFromStdin = Input_ Input | StdinText Text
 -- | Path to output
 data Output = StandardOutput | OutputFile FilePath
 
+{-| Some command-line subcommands can either `Write` their input or `Check`
+    that the input has already been modified.  This type is shared between them
+    to record that choice.
+-}
+data OutputMode = Write | Check
+
+-- | Exception thrown when the @--check@ flag to a command-line subcommand fails
+data CheckFailed = CheckFailed { command :: Text, modified :: Text }
+
+instance Exception CheckFailed
+
+instance Show CheckFailed where
+    show CheckFailed{..} =
+         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed\n\
+        \\n\
+        \You ran ❰dhall " <> command_ <> " --check❱, but the input appears to have not\n\
+        \been " <> modified_ <> " before, or was changed since the last time the input\n\
+        \was " <> modified_ <> ".\n"
+      where
+        modified_ = Data.Text.unpack modified
+
+        command_ = Data.Text.unpack command
+
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)
 getExpression censor = get Dhall.Parser.exprFromText censor . Input_
 
 -- | Convenient utility for retrieving an expression along with its header
 getExpressionAndHeader :: Censor -> Input -> IO (Header, Expr Src Import)
-getExpressionAndHeader censor = get Dhall.Parser.exprAndHeaderFromText censor . Input_
+getExpressionAndHeader censor =
+    get Dhall.Parser.exprAndHeaderFromText censor . Input_
 
 -- | Convenient utility for retrieving an expression along with its header from
 -- | text already read from STDIN (so it's not re-read)
 getExpressionAndHeaderFromStdinText :: Censor -> Text -> IO (Header, Expr Src Import)
-getExpressionAndHeaderFromStdinText censor = get Dhall.Parser.exprAndHeaderFromText censor . StdinText
+getExpressionAndHeaderFromStdinText censor =
+    get Dhall.Parser.exprAndHeaderFromText censor . StdinText
