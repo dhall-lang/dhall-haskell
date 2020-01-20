@@ -34,7 +34,7 @@ runCommand "try-dhall" {} ''
   ${coreutils}/bin/ln --symbolic ${logo.nix} $out/img/nix-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.prometheus} $out/img/prometheus-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.ruby} $out/img/ruby-logo.svg
-  ${coreutils}/bin/ln --symbolic ${logo.rust} $out/img/rust-logo.svg
+  ${coreutils}/bin/ln --symbolic ${logo.rust} $out/img/rust-logo.png
   ${coreutils}/bin/ln --symbolic ${logo.stackOverflow} $out/img/stack-overflow-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.xml} $out/img/xml-logo.svg
   ${coreutils}/bin/ln --symbolic ${logo.yaml} $out/img/yaml-logo.png
