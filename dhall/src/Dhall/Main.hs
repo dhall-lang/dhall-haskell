@@ -744,9 +744,9 @@ command (Options {..}) = do
                     let doc =   Pretty.pretty header
                             <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
 
-                    let stream = Pretty.unAnnotateS (Dhall.Pretty.layout doc)
+                    let stream = Dhall.Pretty.layout doc
 
-                    let modifiedText = Pretty.renderStrict stream <> "\n"
+                    let modifiedText = Pretty.Text.renderStrict stream <> "\n"
 
                     if originalText == modifiedText
                         then return ()
