@@ -162,9 +162,9 @@ instance Show CheckFailed where
     show CheckFailed{..} =
          _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed\n\
         \\n\
-        \You ran ❰dhall " <> command_ <> " --check❱ command, but the input appears to\n\
-        \have not been " <> modified_ <> " before, or was changed since the last time the\n\
-        \input was " <> modified_ <> ".\n"
+        \You ran ❰dhall " <> command_ <> " --check❱, but the input appears to have not\n\
+        \been " <> modified_ <> " before, or was changed since the last time the input\n\
+        \was " <> modified_ <> ".\n"
       where
         modified_ = Data.Text.unpack modified
 
