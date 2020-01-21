@@ -55,8 +55,15 @@ script:
   - tar -jcvf $(mk_release_name dhall-lsp-server) bin/dhall-lsp-server
   - tar -jcvf $(mk_release_name dhall-nix) bin/dhall-to-nix
   - tar -jcvf $(mk_release_name dhall-yaml) bin/dhall-to-yaml-ng bin/yaml-to-dhall
+  - tar -jcvf $(mk_lzip_release_name dhall) bin/dhall
+  - tar -jcvf $(mk_lzip_release_name dhall-json) bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall
+  - tar -jcvf $(mk_lzip_release_name dhall-bash) bin/dhall-to-bash
+  - tar -jcvf $(mk_lzip_release_name dhall-lsp-server) bin/dhall-lsp-server
+  - tar -jcvf $(mk_lzip_release_name dhall-nix) bin/dhall-to-nix
+  - tar -jcvf $(mk_lzip_release_name dhall-yaml) bin/dhall-to-yaml-ng bin/yaml-to-dhall
   - mkdir -p uploads
   - mv *.tar.bz2 uploads/
+  - mv *.tar.lz uploads/
 
 
 deploy:
