@@ -1,6 +1,7 @@
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveLift         #-}
 
 -- | This module only exports ways of constructing a Set,
 -- retrieving List, Set, and Seq representations of the same data,
@@ -42,7 +43,7 @@ import qualified Data.Foldable
     formatting Dhall code
 -}
 data Set a = Set (Data.Set.Set a) (Seq a)
-    deriving (Generic, Show, Data, NFData)
+    deriving (Generic, Show, Data, Lift, NFData)
 -- Invariant: In @Set set seq@, @toAscList set == sort (toList seq)@.
 
 instance Eq a => Eq (Set a) where
@@ -52,8 +53,6 @@ instance Eq a => Eq (Set a) where
 instance Ord a => Ord (Set a) where
     compare (Set _ x) (Set _ y) = compare x y
     {-# INLINABLE compare #-}
-
-instance (Data a, Lift a, Ord a) => Lift (Set a)
 
 instance Foldable Set where
     foldMap f (Set _ x) = foldMap f x
