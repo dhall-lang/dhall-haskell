@@ -455,7 +455,7 @@ Library
         network-uri                 >= 2.6      && < 2.7 ,
         optparse-applicative        >= 0.14.0.0 && < 0.16,
         parsers                     >= 0.12.4   && < 0.13,
-        prettyprinter               >= 1.5.1    && < 1.6 ,
+        prettyprinter               >= 1.5.1    && < 1.7 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         pretty-simple                              < 4   ,
         profunctors                 >= 3.1.2    && < 5.6 ,
