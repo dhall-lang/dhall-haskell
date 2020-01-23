@@ -228,23 +228,6 @@ $ stack exec --profile --rts-options -p -- dhall-to-json <<< 'True && False'
 
 This generates a `dhall-to-json.prof` file in your current directory.
 
-## Build the website
-
-Building the website from source is currently only supported for Nix on Linux.
-
-You can build the static assets by running:
-
-```bash
-$ nix-build --attr website
-```
-
-... then open `./result/index.html` in your browser.
-
-You can also download an archive containing the pre-built website from CI using
-this link:
-
-* [website.tar.bz2](http://hydra.dhall-lang.org/job/dhall-haskell/master/tarball-website/latest/download-by-type/file/binary-dist)
-
 ## Contributing
 
 Read the following guide if you would like to contribute:
