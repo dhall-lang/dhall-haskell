@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedStrings  #-}
@@ -94,9 +93,10 @@ import qualified Control.Monad
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc    as Pretty
+import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Crypto
-import qualified Network.URI                  as URI
+import qualified Language.Haskell.TH.Syntax as Syntax
+import qualified Network.URI                as URI
 
 {-| Constants for a pure type system
 
@@ -118,7 +118,10 @@ import qualified Network.URI                  as URI
     Dhall is not a dependently typed language
 -}
 data Const = Type | Kind | Sort
-    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, Lift, NFData)
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData)
+
+instance Lift Const where
+    lift = Syntax.liftData
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -156,7 +159,10 @@ instance Pretty Const where
     appear as a numeric suffix.
 -}
 data Var = V Text !Int
-    deriving (Data, Generic, Eq, Ord, Show, Lift, NFData)
+    deriving (Data, Generic, Eq, Ord, Show, NFData)
+
+instance Lift Var where
+    lift = Syntax.liftData
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -184,7 +190,7 @@ data Binding s a = Binding
     , annotation  :: Maybe (Maybe s, Expr s a)
     , bindingSrc2 :: Maybe s
     , value       :: Expr s a
-    } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
+    } deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
 
 instance Bifunctor Binding where
     first k (Binding src0 a src1 b src2 c) =
@@ -202,7 +208,7 @@ makeBinding name = Binding Nothing name Nothing Nothing Nothing
 -- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
 -- defined via the binary encoding of Dhall @Double@s.
 newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
-    deriving (Show, Data, Lift, NFData, Generic)
+    deriving (Show, Data, NFData, Generic)
 
 -- | This instance satisfies all the customary 'Eq' laws except substitutivity.
 --
@@ -233,7 +239,10 @@ instance Ord DhallDouble where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, Lift, NFData)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
+
+instance (Lift s, Lift a, Data s, Data a) => Lift (Chunks s a) where
+    lift = Syntax.liftData
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -439,7 +448,7 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Foldable, Generic, Traversable, Show, Data, Lift, NFData)
+    deriving (Foldable, Generic, Traversable, Show, Data, NFData)
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
 
@@ -455,6 +464,9 @@ deriving instance (Eq s, Eq a) => Eq (Expr s a)
 
 -- | Note that this 'Ord' instance inherits `DhallDouble`'s defects.
 deriving instance (Ord s, Ord a) => Ord (Expr s a)
+
+instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a) where
+    lift = Syntax.liftData
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap

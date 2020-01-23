@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
@@ -81,6 +80,7 @@ import qualified Data.List
 import qualified Data.Map
 import qualified Data.Set
 import qualified GHC.Exts
+import qualified Language.Haskell.TH.Syntax as Syntax
 import qualified Prelude
 
 {-| A `Map` that remembers the original ordering of keys
@@ -91,12 +91,18 @@ import qualified Prelude
     and also to improve performance
 -}
 data Map k v = Map (Data.Map.Map k v) (Keys k)
-    deriving (Data, Generic, NFData, Lift)
+    deriving (Data, Generic, NFData)
+
+instance (Data k, Data v, Lift k, Lift v, Ord k) => Lift (Map k v) where
+    lift = Syntax.liftData
 
 data Keys a
     = Sorted
     | Original [a]
-    deriving (Data, Generic, NFData, Lift)
+    deriving (Data, Generic, NFData)
+
+instance (Data a, Lift a) => Lift (Keys a) where
+    lift = Syntax.liftData
 
 instance (Ord k, Eq v) => Eq (Map k v) where
   m1 == m2 =
