@@ -81,12 +81,14 @@ main = do
     issue108Text  <- TIO.readFile "benchmark/examples/issue108.dhall"
     issue108Bytes <- Data.ByteString.Lazy.readFile "benchmark/examples/issue108.dhall.bin"
     kubernetesExample <- Data.ByteString.Lazy.readFile "benchmark/examples/kubernetes.dhall.bin"
+    cpkgExample <- Data.ByteString.Lazy.readFile "benchmark/examples/cpkg.dhall"
     defaultMain
         [ bgroup "Issue #108"
             [ benchExprFromText  "Text"   issue108Text
             , benchExprFromBytes "Binary" issue108Bytes
             ]
         , benchExprFromBytes "Kubernetes/Binary" kubernetesExample
+        , benchExprFromText "CPkg/Text" cpkgExample
         , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
         , benchExprFromText "Large number of function arguments" (T.replicate 10000 "x ")
         , benchExprFromText "Long double-quoted strings" ("\"" <> T.replicate 1000000 "x" <> "\"")
