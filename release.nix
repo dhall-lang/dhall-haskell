@@ -60,8 +60,6 @@ in
           shared.tarball-dhall-nix
           shared.tarball-dhall-yaml
 
-          shared_ghcjs.tarball-website
-
           # This is the only `dhall` build that runs the test suite
           coverage.dhall
           coverage.dhall-json
@@ -75,8 +73,6 @@ in
       };
 
     "coverage-dhall" = coverage.dhall;
-
-    inherit (shared_ghcjs) tarball-website;
 
     inherit (shared)
       tarball-dhall

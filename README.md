@@ -230,20 +230,43 @@ This generates a `dhall-to-json.prof` file in your current directory.
 
 ## Build the website
 
-Building the website from source is currently only supported for Nix on Linux.
+If you don't need to change the GHCJS code, then switch to the `dhall-lang`
+repository and follow these instructions instead:
 
-You can build the static assets by running:
+* [`dhall-lang` - Build the website](https://github.com/dhall-lang/dhall-lang/blob/master/nixops/README.md#updating-dhall-langorg)
 
-```bash
-$ nix-build --attr website
+If you do need to test changes to the GHCJS code (i.e. the
+[`./dhall-try`](./dhall-try) subdirectory) then stay within this repository, but
+edit the `dhall/dhall-lang` submodule to make the following change:
+
+```diff
+diff --git a/release.nix b/release.nix
+--- a/dhall/dhall-lang/release.nix
++++ b/dhall/dhall-lang/release.nix
+       let
+         json = builtins.fromJSON (builtins.readFile ./nixops/dhall-haskell.json);
+ 
+-        dhall-haskell =
+-          pkgs.fetchFromGitHub {
+-            owner = "dhall-lang";
+-
+-            repo = "dhall-haskell";
+-
+-            inherit (json) rev sha256 fetchSubmodules;
+-          };
++        dhall-haskell = ../..;
+ 
+       in
+         import "${dhall-haskell}/default.nix";
 ```
 
-... then open `./result/index.html` in your browser.
+... and then build the website by running:
 
-You can also download an archive containing the pre-built website from CI using
-this link:
+```bash
+$ nix build --file dhall/dhall-lang/release.nix website
+```
 
-* [website.tar.bz2](http://hydra.dhall-lang.org/job/dhall-haskell/master/tarball-website/latest/download-by-type/file/binary-dist)
+... which will incorporate any GHCJS-related changes you make
 
 ## Contributing
 
