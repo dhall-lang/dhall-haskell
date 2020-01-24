@@ -251,9 +251,15 @@ noDuplicates = go Dhall.Set.empty
         else go (Dhall.Set.append x found) xs
 
 toMap :: [(Text, a)] -> Parser (Map Text a)
-toMap kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
+toMap = toMapWith err
   where
-    m = Dhall.Map.fromListWithKey err (map (\(k, v) -> (k, pure v)) kvs)
-
     err k _v1 _v2 = Text.Parser.Combinators.unexpected
                         ("duplicate field: " ++ Data.Text.unpack k)
+
+toMapWith
+    :: (Text -> Parser a -> Parser a -> Parser a)
+    -> [(Text, a)]
+    -> Parser (Map Text a)
+toMapWith combine kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
+  where
+    m = Dhall.Map.fromListWithKey combine (map (\(k, v) -> (k, pure v)) kvs)

@@ -8,7 +8,7 @@
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
-import Control.Applicative (Alternative(..), optional)
+import Control.Applicative (liftA2, Alternative(..), optional)
 import Data.ByteArray.Encoding (Base(..))
 import Data.Foldable (foldl')
 import Data.Functor (void)
@@ -759,7 +759,9 @@ parsers embedded = Parsers {..}
 
                         return (c, d) )
 
-                    m <- toMap ((a, b) : e)
+                    let combine _ = liftA2 (flip Combine)
+
+                    m <- toMapWith combine ((a, b) : e)
 
                     return (RecordLit m)
 
