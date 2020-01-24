@@ -1,5 +1,7 @@
 {-# LANGUAGE CPP             #-}
+{-# LANGUAGE DeriveAnyClass  #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveGeneric   #-}
 
 -- | This module contains Dhall's parsing logic
 
@@ -21,12 +23,14 @@ module Dhall.Parser (
     , Parser(..)
     ) where
 
+import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Syntax
 import Dhall.Src (Src(..))
+import GHC.Generics (Generic)
 import Prelude hiding (const, pi)
 import Text.Megaparsec (ParseErrorBundle(..), PosState(..))
 
@@ -52,7 +56,7 @@ exprA = completeExpression
 data ParseError = ParseError {
       unwrap :: Text.Megaparsec.ParseErrorBundle Text Void
     , input  :: Text
-    }
+    } deriving (Generic, NFData)
 
 {-| Replace the source code with spaces when rendering error messages
 
