@@ -216,7 +216,7 @@ data Val a
     | VRecord !(Map Text (Val a))
     | VRecordLit !(Map Text (Val a))
     | VUnion !(Map Text (Maybe (Val a)))
-    | VCombine !(Val a) !(Val a)
+    | VCombine !(Maybe Text) !(Val a) !(Val a)
     | VCombineTypes !(Val a) !(Val a)
     | VPrefer !(Val a) !(Val a)
     | VMerge !(Val a) !(Val a) !(Maybe (Val a))
@@ -288,17 +288,17 @@ vPrefer env t u =
             VPrefer t' u'
 {-# INLINE vPrefer #-}
 
-vCombine :: Val a -> Val a -> Val a
-vCombine t u =
+vCombine :: Maybe Text -> Val a -> Val a -> Val a
+vCombine mk t u =
     case (t, u) of
         (VRecordLit m, u') | null m ->
             u'
         (t', VRecordLit m) | null m ->
             t'
         (VRecordLit m, VRecordLit m') ->
-            VRecordLit (Map.unionWith vCombine m m')
+            VRecordLit (Map.unionWith (vCombine Nothing) m m')
         (t', u') ->
-            VCombine t' u'
+            VCombine mk t' u'
 
 vCombineTypes :: Val a -> Val a -> Val a
 vCombineTypes t u =
@@ -356,11 +356,11 @@ vField t0 k = go t0
         VPrefer l (VRecordLit m) -> case Map.lookup k m of
             Just v -> v
             Nothing -> go l
-        VCombine (VRecordLit m) r -> case Map.lookup k m of
-            Just v -> VField (VCombine (singletonVRecordLit v) r) k
+        VCombine mk (VRecordLit m) r -> case Map.lookup k m of
+            Just v -> VField (VCombine mk (singletonVRecordLit v) r) k
             Nothing -> go r
-        VCombine l (VRecordLit m) -> case Map.lookup k m of
-            Just v -> VField (VCombine l (singletonVRecordLit v)) k
+        VCombine mk l (VRecordLit m) -> case Map.lookup k m of
+            Just v -> VField (VCombine mk l (singletonVRecordLit v)) k
             Nothing -> go l
         t -> VField t k
 
@@ -684,8 +684,8 @@ eval !env t0 =
             VRecordLit (Map.sort (fmap (eval env) kts))
         Union kts ->
             VUnion (Map.sort (fmap (fmap (eval env)) kts))
-        Combine _ t u ->
-            vCombine (eval env t) (eval env u)
+        Combine mk t u ->
+            vCombine mk (eval env t) (eval env u)
         CombineTypes t u ->
             vCombineTypes (eval env t) (eval env u)
         Prefer t u ->
@@ -924,7 +924,7 @@ conv !env t0 t0' =
             eqMapsBy (conv env) m m'
         (VUnion m, VUnion m') ->
             eqMapsBy (eqMaybeBy (conv env)) m m'
-        (VCombine t u, VCombine t' u') ->
+        (VCombine _ t u, VCombine _ t' u') ->
             conv env t t' && conv env u u'
         (VCombineTypes t u, VCombineTypes t' u') ->
             conv env t t' && conv env u u'
@@ -1112,8 +1112,8 @@ quote !env !t0 =
             RecordLit (fmap (quote env) m)
         VUnion m ->
             Union (fmap (fmap (quote env)) m)
-        VCombine t u ->
-            Combine Nothing (quote env t) (quote env u)
+        VCombine mk t u ->
+            Combine mk (quote env t) (quote env u)
         VCombineTypes t u ->
             CombineTypes (quote env t) (quote env u)
         VPrefer t u ->
