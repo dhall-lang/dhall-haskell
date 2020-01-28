@@ -838,7 +838,7 @@ infer typer = loop
 
                         combine x _ _ = do
                             case mt of
-                                Nothing -> die (FieldCollision (reverse (x : xs)))
+                                Nothing -> die (FieldCollision (NonEmpty.reverse (x :| xs)))
                                 Just t  -> die (DuplicateFieldCannotBeMerged (t :| reverse (x : xs)))
 
                     let xEs =
@@ -886,7 +886,7 @@ infer typer = loop
                             combineTypes (x : xs) xLs₁' xRs₁'
 
                         combine x _ _ =
-                            die (FieldTypeCollision (reverse (x : xs)))
+                            die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
 
                     let mL = Dhall.Map.toMap xLs₀'
                     let mR = Dhall.Map.toMap xRs₀'
@@ -1322,8 +1322,8 @@ data TypeMessage s a
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | DuplicateFieldCannotBeMerged (NonEmpty Text)
-    | FieldCollision [Text]
-    | FieldTypeCollision [Text]
+    | FieldCollision (NonEmpty Text)
+    | FieldTypeCollision (NonEmpty Text)
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnionOrOptional (Expr s a) (Expr s a)
     | MustMapARecord (Expr s a) (Expr s a)
