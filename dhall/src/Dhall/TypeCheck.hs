@@ -3011,7 +3011,7 @@ prettyTypeMessage (DuplicateFieldCannotBeMerged ks) = ErrorMessages {..}
         \    └──────────────────────────────────┘                                        \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... wheresa the following expression is valid:                                  \n\
+        \... whereas the following expression is valid:                                  \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────┐                                        \n\
