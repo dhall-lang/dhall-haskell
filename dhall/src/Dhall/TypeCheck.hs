@@ -2861,7 +2861,7 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────┐                                                \n\
-        \    │ { x = 0, x = { y = 0 } } │  Invalid: The second ❰x❱ field is not a record \n\
+        \    │ { x = 0, x = { y = 0 } } │  Invalid: The first ❰x❱ field is not a record  \n\
         \    └──────────────────────────┘                                                \n\
         \                                                                                \n\
         \                                                                                \n\
