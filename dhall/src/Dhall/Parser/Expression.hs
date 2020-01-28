@@ -759,6 +759,10 @@ parsers embedded = Parsers {..}
 
                         return (c, d) )
 
+                    {- The `flip` is necessary because `toMap` is internally
+                       based on `Data.Map.fromListWithKey` which combines keys
+                       in reverse order
+                    -}
                     let combine k = liftA2 (flip (Combine (Just k)))
 
                     m <- toMapWith combine ((a, b) : e)
