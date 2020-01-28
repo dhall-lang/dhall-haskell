@@ -415,7 +415,12 @@ data Expr s a
     | RecordLit (Map Text (Expr s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
     | Union     (Map Text (Maybe (Expr s a)))
-    -- | > Combine m x y                              ~  x ∧ y
+    -- | > Combine Nothing x y                      ~  x ∧ y
+    --
+    -- The first field is a `Just` when the `Combine` operator is introduced
+    -- as a result of desugaring duplicate record fields:
+    --
+    --   > RecordLit [ (k, Combine (Just k) x y) ]  ~ { k = x, k = y }
     | Combine (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
     | CombineTypes (Expr s a) (Expr s a)
