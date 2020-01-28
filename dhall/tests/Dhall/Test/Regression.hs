@@ -43,6 +43,7 @@ tests =
         , issue1131b
         , issue1341
         , issue1584
+        , issue1646
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -186,6 +187,13 @@ issue1584 = Test.Tasty.HUnit.testCase "Issue #1584" (do
     -- This test ensures that we can parse variables with keyword prefixes
     -- (e.g. `ifX`)
     _ <- Util.code "./tests/regression/issue1584.dhall"
+    return () )
+
+issue1646 :: TestTree
+issue1646 = Test.Tasty.HUnit.testCase "Issue #1646" (do
+    -- This test ensures that the parser doesn't eagerly consume trailing
+    -- whitespace after a `Double`
+    _ <- Util.code "./tests/regression/issue1646.dhall"
     return () )
 
 parsing0 :: TestTree
