@@ -805,7 +805,7 @@ infer typer = loop
                     Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete x₀ xTs)
 
                     return (VConst c₀)
-        Combine mt l r -> do
+        Combine mk l r -> do
             _L' <- loop ctx l
 
             xLs' <- case _L' of
@@ -815,7 +815,7 @@ infer typer = loop
                 _ -> do
                     let _L'' = quote names _L'
 
-                    case mt of
+                    case mk of
                         Nothing -> die (MustCombineARecord '∧' l _L'')
                         Just t  -> die (InvalidDuplicateField t l _L'')
 
@@ -828,7 +828,7 @@ infer typer = loop
                 _ -> do
                     let _R'' = quote names _R'
 
-                    case mt of
+                    case mk of
                         Nothing -> die (MustCombineARecord '∧' r _R'')
                         Just t  -> die (InvalidDuplicateField t r _R'')
 
@@ -837,7 +837,7 @@ infer typer = loop
                             combineTypes (x : xs) xLs₁' xRs₁'
 
                         combine x _ _ = do
-                            case mt of
+                            case mk of
                                 Nothing -> die (FieldCollision (NonEmpty.reverse (x :| xs)))
                                 Just t  -> die (DuplicateFieldCannotBeMerged (t :| reverse (x : xs)))
 

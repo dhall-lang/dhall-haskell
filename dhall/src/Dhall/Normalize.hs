@@ -864,7 +864,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
         kts' = traverse (traverse loop) kts
-    Combine mt x y -> decide <$> loop x <*> loop y
+    Combine mk x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
             r
@@ -873,7 +873,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.unionWith decide m n)
         decide l r =
-            Combine mt l r
+            Combine mk l r
     CombineTypes x y -> decide <$> loop x <*> loop y
       where
         decide (Record m) r | Data.Foldable.null m =
