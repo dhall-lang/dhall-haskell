@@ -277,19 +277,19 @@ parsers embedded = Parsers {..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ ImportAlt    <$ _importAlt    <* nonemptyWhitespace
-        , BoolOr       <$ _or           <* whitespace
-        , NaturalPlus  <$ _plus         <* nonemptyWhitespace
-        , TextAppend   <$ _textAppend   <* whitespace
-        , ListAppend   <$ _listAppend   <* whitespace
-        , BoolAnd      <$ _and          <* whitespace
-        , Combine      <$ _combine      <* whitespace
-        , Prefer       <$ _prefer       <* whitespace
-        , CombineTypes <$ _combineTypes <* whitespace
-        , NaturalTimes <$ _times        <* whitespace
-        , BoolEQ       <$ _doubleEqual  <* whitespace
-        , BoolNE       <$ _notEqual     <* whitespace
-        , Equivalent   <$ _equivalent   <* whitespace
+        [ ImportAlt       <$ _importAlt    <* nonemptyWhitespace
+        , BoolOr          <$ _or           <* whitespace
+        , NaturalPlus     <$ _plus         <* nonemptyWhitespace
+        , TextAppend      <$ _textAppend   <* whitespace
+        , ListAppend      <$ _listAppend   <* whitespace
+        , BoolAnd         <$ _and          <* whitespace
+        , Combine Nothing <$ _combine      <* whitespace
+        , Prefer          <$ _prefer       <* whitespace
+        , CombineTypes    <$ _combineTypes <* whitespace
+        , NaturalTimes    <$ _times        <* whitespace
+        , BoolEQ          <$ _doubleEqual  <* whitespace
+        , BoolNE          <$ _notEqual     <* whitespace
+        , Equivalent      <$ _equivalent   <* whitespace
         ]
 
     applicationExpression = do
@@ -759,7 +759,7 @@ parsers embedded = Parsers {..}
 
                         return (c, d) )
 
-                    let combine _ = liftA2 (flip Combine)
+                    let combine k = liftA2 (flip (Combine (Just k)))
 
                     m <- toMapWith combine ((a, b) : e)
 

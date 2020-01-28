@@ -232,10 +232,10 @@ shift d v (RecordLit a) = RecordLit a'
 shift d v (Union a) = Union a'
   where
     a' = fmap (fmap (shift d v)) a
-shift d v (Combine a b) = Combine a' b'
+shift d v (Combine a b c) = Combine a b' c'
   where
-    a' = shift d v a
     b' = shift d v b
+    c' = shift d v c
 shift d v (CombineTypes a b) = CombineTypes a' b'
   where
     a' = shift d v a
@@ -407,10 +407,10 @@ subst x e (RecordLit kvs) = RecordLit kvs'
 subst x e (Union kts) = Union kts'
   where
     kts' = fmap (fmap (subst x e)) kts
-subst x e (Combine a b) = Combine a' b'
+subst x e (Combine a b c) = Combine a b' c'
   where
-    a' = subst x e a
     b' = subst x e b
+    c' = subst x e c
 subst x e (CombineTypes a b) = CombineTypes a' b'
   where
     a' = subst x e a
@@ -864,7 +864,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
         kts' = traverse (traverse loop) kts
-    Combine x y -> decide <$> loop x <*> loop y
+    Combine mt x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
             r
@@ -873,7 +873,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.unionWith decide m n)
         decide l r =
-            Combine l r
+            Combine mt l r
     CombineTypes x y -> decide <$> loop x <*> loop y
       where
         decide (Record m) r | Data.Foldable.null m =
@@ -972,11 +972,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             Prefer l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure v
                 Nothing -> loop (Field l x)
-            Combine (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine (singletonRecordLit v) r_) x)
+            Combine m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine m (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
-            Combine l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine l (singletonRecordLit v)) x)
+            Combine m l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine m l (singletonRecordLit v)) x)
                 Nothing -> loop (Field l x)
             _ -> pure (Field r' x)
     Project x (Left fields)-> do
@@ -1180,7 +1180,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       Record kts -> Dhall.Map.isSorted kts && all loop kts
       RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
-      Combine x y -> loop x && loop y && decide x y
+      Combine _ x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
@@ -1215,8 +1215,8 @@ isNormalized e0 = loop (Syntax.denote e0)
           Project _ _ -> False
           Prefer (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
           Prefer _ (RecordLit _) -> False
-          Combine (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Combine _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
+          Combine _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
+          Combine _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
           _ -> loop r
       Project r p -> loop r &&
           case p of

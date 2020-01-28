@@ -684,7 +684,7 @@ eval !env t0 =
             VRecordLit (Map.sort (fmap (eval env) kts))
         Union kts ->
             VUnion (Map.sort (fmap (fmap (eval env)) kts))
-        Combine t u ->
+        Combine _ t u ->
             vCombine (eval env t) (eval env u)
         CombineTypes t u ->
             vCombineTypes (eval env t) (eval env u)
@@ -1113,7 +1113,7 @@ quote !env !t0 =
         VUnion m ->
             Union (fmap (fmap (quote env)) m)
         VCombine t u ->
-            Combine (quote env t) (quote env u)
+            Combine Nothing (quote env t) (quote env u)
         VCombineTypes t u ->
             CombineTypes (quote env t) (quote env u)
         VPrefer t u ->
@@ -1292,8 +1292,8 @@ alphaNormalize = goEnv EmptyNames
                 RecordLit (fmap go kts)
             Union kts ->
                 Union (fmap (fmap go) kts)
-            Combine t u ->
-                Combine (go t) (go u)
+            Combine m t u ->
+                Combine m (go t) (go u)
             CombineTypes t u ->
                 CombineTypes (go t) (go u)
             Prefer t u ->
