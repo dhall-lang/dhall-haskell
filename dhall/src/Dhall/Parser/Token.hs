@@ -134,8 +134,6 @@ import qualified Text.Parser.Combinators
 import Numeric.Natural (Natural)
 import Prelude hiding (const, pi)
 
-import qualified Text.Parser.Token
-
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
 validCodepoint c =
@@ -191,7 +189,7 @@ signPrefix = (do
 doubleLiteral :: Parser Double
 doubleLiteral = (do
     sign <- signPrefix <|> pure id
-    a <- Text.Parser.Token.double
+    a <- Text.Megaparsec.Char.Lexer.float
     return (sign a) ) <?> "literal"
 
 {-| Parse a signed @Infinity@
