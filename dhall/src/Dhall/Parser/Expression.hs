@@ -759,7 +759,7 @@ parsers embedded = Parsers {..}
 
                         return (c, d) )
 
-                    {- The `flip` is necessary because `toMap` is internally
+                    {- The `flip` is necessary because `toMapWith` is internally
                        based on `Data.Map.fromListWithKey` which combines keys
                        in reverse order
                     -}
