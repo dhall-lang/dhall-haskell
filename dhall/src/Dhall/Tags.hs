@@ -37,9 +37,9 @@ import qualified System.Directory as SD
 -}
 
 data LineColumn = LC 
-    { lcLine :: Int
+    { _lcLine :: Int
       -- ^ line number, starting from 1, where to find the tag
-    , lcColumn :: Int
+    , _lcColumn :: Int
       -- ^ column of line where tag is
     } deriving (Eq, Ord, Show)
 
