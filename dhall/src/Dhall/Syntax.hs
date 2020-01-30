@@ -415,8 +415,13 @@ data Expr s a
     | RecordLit (Map Text (Expr s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
     | Union     (Map Text (Maybe (Expr s a)))
-    -- | > Combine x y                              ~  x ∧ y
-    | Combine (Expr s a) (Expr s a)
+    -- | > Combine Nothing x y                      ~  x ∧ y
+    --
+    -- The first field is a `Just` when the `Combine` operator is introduced
+    -- as a result of desugaring duplicate record fields:
+    --
+    --   > RecordLit [ (k, Combine (Just k) x y) ]  ~ { k = x, k = y }
+    | Combine (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
     | CombineTypes (Expr s a) (Expr s a)
     -- | > Prefer x y                               ~  x ⫽ y
@@ -525,7 +530,7 @@ instance Functor (Expr s) where
   fmap f (Record r) = Record (fmap (fmap f) r)
   fmap f (RecordLit r) = RecordLit (fmap (fmap f) r)
   fmap f (Union u) = Union (fmap (fmap (fmap f)) u)
-  fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
+  fmap f (Combine m e1 e2) = Combine m (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
   fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
   fmap f (RecordCompletion e1 e2) = RecordCompletion (fmap f e1) (fmap f e2)
@@ -610,7 +615,7 @@ instance Monad (Expr s) where
     Record    a          >>= k = Record (fmap (>>= k) a)
     RecordLit a          >>= k = RecordLit (fmap (>>= k) a)
     Union     a          >>= k = Union (fmap (fmap (>>= k)) a)
-    Combine a b          >>= k = Combine (a >>= k) (b >>= k)
+    Combine a b c        >>= k = Combine a (b >>= k) (c >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
     Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
     RecordCompletion a b >>= k = RecordCompletion (a >>= k) (b >>= k)
@@ -682,7 +687,7 @@ instance Bifunctor Expr where
     first k (Record a            ) = Record (fmap (first k) a)
     first k (RecordLit a         ) = RecordLit (fmap (first k) a)
     first k (Union a             ) = Union (fmap (fmap (first k)) a)
-    first k (Combine a b         ) = Combine (first k a) (first k b)
+    first k (Combine a b c       ) = Combine a (first k b) (first k c)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
     first k (Prefer a b          ) = Prefer (first k a) (first k b)
     first k (RecordCompletion a b) = RecordCompletion (first k a) (first k b)
@@ -815,7 +820,7 @@ subExpressions _ OptionalBuild = pure OptionalBuild
 subExpressions f (Record a) = Record <$> traverse f a
 subExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 subExpressions f (Union a) = Union <$> traverse (traverse f) a
-subExpressions f (Combine a b) = Combine <$> f a <*> f b
+subExpressions f (Combine a b c) = Combine a <$> f b <*> f c
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
 subExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
@@ -1121,7 +1126,7 @@ denote  OptionalBuild         = OptionalBuild
 denote (Record a            ) = Record (fmap denote a)
 denote (RecordLit a         ) = RecordLit (fmap denote a)
 denote (Union a             ) = Union (fmap (fmap denote) a)
-denote (Combine a b         ) = Combine (denote a) (denote b)
+denote (Combine _ b c       ) = Combine Nothing (denote b) (denote c)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
 denote (Prefer a b          ) = Prefer (denote a) (denote b)
 denote (RecordCompletion a b) = RecordCompletion (denote a) (denote b)

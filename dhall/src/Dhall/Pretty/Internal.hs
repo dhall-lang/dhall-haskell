@@ -810,12 +810,12 @@ prettyCharacterSet characterSet expression =
        prettyCombineExpression a0
 
     prettyCombineExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyCombineExpression a0@(Combine _ _) =
+    prettyCombineExpression a0@(Combine _ _ _) =
         prettyOperator (combine characterSet) (docs a0)
       where
-        docs (Combine a b) = prettyPreferExpression b : docs a
-        docs (Note    _ b) = docs b
-        docs            b  = [ prettyPreferExpression b ]
+        docs (Combine _ a b) = prettyPreferExpression b : docs a
+        docs (Note      _ b) = docs b
+        docs              b  = [ prettyPreferExpression b ]
     prettyCombineExpression (Note _ a) =
         prettyCombineExpression a
     prettyCombineExpression a0 =

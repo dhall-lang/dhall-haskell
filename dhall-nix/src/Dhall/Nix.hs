@@ -462,7 +462,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
                 return (NamedVar [StaticKey k] v Nix.nullPos)
         return (Fix (NSet a''))
     loop (Union _) = return (Fix (NSet []))
-    loop (Combine a b) = do
+    loop (Combine _ a b) = do
         a' <- loop a
         b' <- loop b
         let e0 = Fix (NBinary NApp (Fix (NBinary NApp "map" "toKeyVals")) "ks")
