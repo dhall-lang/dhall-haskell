@@ -9,7 +9,7 @@ module Dhall.Kubernetes.Convert
   , toDefinition
   ) where
 
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), empty)
 import Data.Aeson
 import Data.Aeson.Types (Parser, parseMaybe)
 import Data.Bifunctor (first, second)
@@ -19,14 +19,15 @@ import Data.Text (Text)
 import Dhall.Kubernetes.Types
 import GHC.Generics (Generic, Rep)
 
-import qualified Data.Char              as Char
-import qualified Data.List              as List
-import qualified Data.Map.Strict        as Data.Map
-import qualified Data.Set               as Set
-import qualified Data.Sort              as Sort
-import qualified Data.Text              as Text
-import qualified Dhall.Core             as Dhall
+import qualified Data.Char       as Char
+import qualified Data.List       as List
+import qualified Data.Map.Strict as Data.Map
+import qualified Data.Set        as Set
+import qualified Data.Sort       as Sort
+import qualified Data.Text       as Text
+import qualified Dhall.Core      as Dhall
 import qualified Dhall.Map
+import qualified Dhall.Optics
 
 -- | Get all the required fields for a model
 --   See https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/#required-fields
@@ -113,33 +114,8 @@ toTypes prefixMap definitions = memo
     intOrString = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
       [ ("Int", Dhall.Natural), ("String", Dhall.Text) ]
 
-    shouldBeRequired :: Maybe ModelName -> (Maybe FieldName, Expr) -> Bool
-    shouldBeRequired maybeParent (maybeField, expr) = or
-      -- | A field should not be optional if:
-      -- * the field name is in the 'required' list
-      [ case maybeField of
-          Just field -> Set.member field requiredNames
-          _ -> False
-      -- * the field value is somewhat a container, and "transitively emptiable"
-      --   (i.e. it could be an empty container, allowing dhall-to-yaml to throw
-      --   away the empty shell if so)
-      , case expr of
-          -- So if it's a record we recursively check that all its fields can be emptiable
-          (Dhall.Record kvs) -> not $ List.foldr (\a b -> or [a, b]) False
-            $ shouldBeRequired maybeParent
-            <$> (first (Just . FieldName))
-            <$> Dhall.Map.toList kvs
-          -- A list can indeed be empty
-          (Dhall.App Dhall.List _) -> True
-          -- An import requires us to recur on the toplevel Map of objects,
-          -- to check if the object we're dealing with is itself an emptiable container
-          (Dhall.Embed imp) ->
-            let maybeModelName = fmap ModelName (namespacedObjectFromImport imp)
-            in case maybeModelName >>= (\n -> Data.Map.lookup n memo) of
-                 Just e -> shouldBeRequired maybeModelName (Nothing, e)
-                 _      -> False
-          _ -> False
-      ]
+    shouldBeRequired :: Maybe ModelName -> FieldName -> Bool
+    shouldBeRequired maybeParent field = Set.member field requiredNames
       where
         requiredNames = requiredFields maybeParent $ do
           name <- maybeParent
@@ -156,9 +132,9 @@ toTypes prefixMap definitions = memo
       (_, _, Just props) ->
         let (required', optional')
               = Data.Map.partitionWithKey
-                (\k v -> shouldBeRequired maybeModelName (Just $ FieldName $ unModelName k, v))
+                (\k _ -> shouldBeRequired maybeModelName (FieldName (unModelName k)))
               -- TODO: labelize
-              $ Data.Map.mapWithKey (\_k -> convertToType Nothing) props
+              $ Data.Map.map (convertToType Nothing) props
 
             allFields
               = Data.Map.toList required'
@@ -183,55 +159,59 @@ toTypes prefixMap definitions = memo
 toDefault
   :: Data.Map.Map Prefix Dhall.Import  -- ^ Mapping of prefixes to import roots
   -> Data.Map.Map ModelName Definition -- ^ All the Swagger definitions
-  -> Data.Map.Map ModelName Expr       -- ^ All the Dhall types generated from them
   -> ModelName                         -- ^ The name of the object we're converting
   -> Expr                              -- ^ The Dhall type of the object
   -> Maybe Expr
-toDefault prefixMap definitions types modelName = go
+toDefault prefixMap definitions modelName = go
   where
     go = \case
       -- If we have an import, we also import in the default
       e@(Dhall.Embed _) -> Just e
-      -- If it's a sum type, we have to exclude it as we cannot mix types and values
-      -- in records (we need this to have the big "defaults" record)
-      (Dhall.Union _) -> Nothing
-      -- Dynamic records (i.e. List { mapKey : Text, mapValue : Text }) also don't have default
-      (Dhall.App Dhall.List _) -> Nothing
+      -- For a sum type, there is no obvious default value
+      Dhall.Union _ -> Nothing
+      -- Dynamic records (i.e. List { mapKey : Text, mapValue : Text }) also
+      -- don't have default
+      Dhall.App Dhall.List _ -> Nothing
       -- Simple types should not have a default
-      (Dhall.Text) -> Nothing
+      Dhall.Text -> Nothing
       -- Set lists to empty
-      (Dhall.App Dhall.List typ) -> Just $ Dhall.ListLit (Just $ Dhall.App Dhall.List (adjustImport typ)) mempty
+      Dhall.App Dhall.List typ -> Just $ Dhall.ListLit (Just $ Dhall.App Dhall.List (adjustImport typ)) mempty
       -- But most of the times we are dealing with a record.
-      -- Here we transform the record type in a value, transforming the keys in this way:
+      -- Here we transform the record type in a value, transforming the keys in
+      -- this way:
+      --
       -- * take the BaseData from definition and populate it
       -- * skip other required fields, except if they are records
       -- * set the optional fields to None and the lists to empty
-      (Dhall.Record kvs) ->
+      Dhall.Record kvs ->
         let getBaseData :: Maybe Definition -> Dhall.Map.Map Text Expr
-            getBaseData (Just Definition { baseData = Just BaseData{..} })
-              = Dhall.Map.fromList [ ("apiVersion", toTextLit apiVersion)
-                                   , ("kind", toTextLit kind)]
+            getBaseData (Just Definition { baseData = Just BaseData{..} }) =
+                Dhall.Map.fromList
+                    [ ("apiVersion", toTextLit apiVersion)
+                    , ("kind"      , toTextLit kind      )
+                    ]
             getBaseData _ = mempty
 
             baseData = getBaseData $ Data.Map.lookup modelName definitions
 
-            -- | Given a Dhall type from a record field, figure out if and what default
-            --   value it should have
+            -- | Given a Dhall type from a record field, figure out if and what
+            --   default value it should have
             valueForField :: Expr -> Maybe Expr
             valueForField = \case
-              (Dhall.App Dhall.Optional typ) -> Just $ Dhall.App Dhall.None (adjustImport typ)
-              (Dhall.App Dhall.List typ) -> Just $ Dhall.ListLit (Just $ Dhall.App Dhall.List (adjustImport typ)) mempty
-              -- Imports can stay only if they refer to Records (which are "transitively emptiable")
-              -- otherwise they have to go
-              embed@(Dhall.Embed imp) -> do
-                name <- namespacedObjectFromImport imp
-                expr <- Data.Map.lookup (ModelName name) types
-                case expr of
-                  (Dhall.Record _) -> Just embed
-                  _                -> Nothing
-              _ -> Nothing
+                Dhall.App Dhall.Optional _T -> do
+                    let expression = Dhall.App Dhall.None _T
 
-        in Just $ Dhall.RecordLit $ Dhall.Map.union baseData $ Dhall.Map.mapMaybe valueForField kvs
+                    let adjustedExpression =
+                            Dhall.Optics.transformOf
+                              Dhall.subExpressions
+                              adjustImport
+                              expression 
+
+                    return adjustedExpression
+                _ -> do
+                    empty
+
+        in  Just $ Dhall.RecordLit $ Dhall.Map.union baseData $ Dhall.Map.mapMaybe valueForField kvs
 
       -- We error out here because wildcards are bad, and we should know if
       -- we get something unexpected

@@ -234,7 +234,7 @@ main = do
     writeDhall path expr
 
   -- Convert from Dhall types to defaults
-  let defaults = Data.Map.mapMaybeWithKey (Convert.toDefault prefixMap defs types) types
+  let defaults = Data.Map.mapMaybeWithKey (Convert.toDefault prefixMap defs) types
 
   -- Output to defaults
   Turtle.mktree "defaults"
