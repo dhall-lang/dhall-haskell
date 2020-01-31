@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -269,11 +268,4 @@ inputToFiles followSyms suffixes (InputFile path) = go path
                                    concat <$> mapM (go . (</>) p) contents
                      else return [p | matchingSuffix || p == path]
                where matchingSuffix = maybe True (any (`isSuffixOf` p)) suffixes
-                     isSymLink = 
-#if MIN_VERSION_directory(1,3,0)
-                                 SD.pathIsSymbolicLink p
-#elif MIN_VERSION_directory(1,2,6)
-                                 SD.isSymbolicLink pa
-#else
-                                 return False
-#endif
+                     isSymLink = SD.pathIsSymbolicLink p

@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 
@@ -21,13 +20,9 @@ import Language.Haskell.TH.Syntax
     , Exp(..)
     , Q
     , Type(..)
-#if MIN_VERSION_template_haskell(2,11,0)
     , Bang(..)
     , SourceStrictness(..)
     , SourceUnpackedness(..)
-#else
-    , Strict(..)
-#endif
     )
 
 import qualified Data.Text                               as Text
@@ -143,11 +138,7 @@ toConstructor :: Pretty a => (Text, Maybe (Expr s a)) -> Q Con
 toConstructor (constructorName, maybeAlternativeType) = do
     let name = Syntax.mkName (Text.unpack constructorName)
 
-#if MIN_VERSION_template_haskell(2,11,0)
     let bang = Bang NoSourceUnpackedness NoSourceStrictness
-#else
-    let bang = NotStrict
-#endif
 
     case maybeAlternativeType of
         Just (Record kts) -> do
@@ -220,10 +211,7 @@ makeHaskellTypeFromUnion typeName text = do
             constructors <- traverse toConstructor (Dhall.Map.toList kts )
 
             let declaration = DataD [] name []
-#if MIN_VERSION_template_haskell(2,11,0)
                     Nothing
-#else
-#endif
                     constructors []
 
             return [ declaration ]

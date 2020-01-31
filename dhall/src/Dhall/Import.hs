@@ -150,10 +150,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
-#if MIN_VERSION_base(4,8,0)
-#else
-import Data.Traversable (traverse)
-#endif
 import Data.Typeable (Typeable)
 import System.FilePath ((</>))
 import Dhall.Binary (StandardVersion(..))
