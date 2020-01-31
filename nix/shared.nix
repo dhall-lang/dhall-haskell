@@ -226,10 +226,7 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    # Newer version of these packages have bounds incompatible
-                    # with GHC 8.0.2
-                    lens-family-core =
-                      haskellPackagesOld.lens-family-core_1_2_1;
+                    # Placeholder for GHC-8.0.2-specific tweaks
                   };
 
               in
