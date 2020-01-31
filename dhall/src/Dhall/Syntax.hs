@@ -93,9 +93,10 @@ import qualified Control.Monad
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc    as Pretty
+import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Crypto
-import qualified Network.URI                  as URI
+import qualified Language.Haskell.TH.Syntax as Syntax
+import qualified Network.URI                as URI
 
 {-| Constants for a pure type system
 
@@ -119,7 +120,8 @@ import qualified Network.URI                  as URI
 data Const = Type | Kind | Sort
     deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData)
 
-instance Lift Const
+instance Lift Const where
+    lift = Syntax.liftData
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -159,7 +161,8 @@ instance Pretty Const where
 data Var = V Text !Int
     deriving (Data, Generic, Eq, Ord, Show, NFData)
 
-instance Lift Var
+instance Lift Var where
+    lift = Syntax.liftData
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -238,7 +241,8 @@ instance Ord DhallDouble where
 data Chunks s a = Chunks [(Text, Expr s a)] Text
     deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
 
-instance (Lift s, Lift a, Data s, Data a) => Lift (Chunks s a)
+instance (Lift s, Lift a, Data s, Data a) => Lift (Chunks s a) where
+    lift = Syntax.liftData
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -466,7 +470,8 @@ deriving instance (Eq s, Eq a) => Eq (Expr s a)
 -- | Note that this 'Ord' instance inherits `DhallDouble`'s defects.
 deriving instance (Ord s, Ord a) => Ord (Expr s a)
 
-instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a)
+instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a) where
+    lift = Syntax.liftData
 
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
