@@ -34,110 +34,6 @@ let
       builtins.listToAttrs (map toNameValue names);
 
   overlayShared = pkgsNew: pkgsOld: {
-    logo = {
-      argocd =
-        pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/argoproj/argo-cd/master/docs/assets/argo.png";
-          sha256 = "0gvfd7y7ihqyz93by730w0f6kdfs8dlvxv45ydccih94rxj3j7ac";
-        };
-
-      bash =
-        pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/odb/official-bash-logo/master/assets/Logos/Icons/PNG/128x128.png";
-          sha256 = "0fybbp6hbqrfw80fbk55bnykzda0m7x4vk38i80bjlmfbrkfvild";
-        };
-
-      clojure =
-        pkgsNew.fetchurl {
-          url    = "https://upload.wikimedia.org/wikipedia/commons/5/5d/Clojure_logo.svg";
-          sha256 = "0mrjzv690g9mxljzxsvay8asyr8vlxhhs9smmax7mp3psd49b43g";
-        };
-
-      ruby =
-        pkgsNew.fetchurl {
-          url    = "https://upload.wikimedia.org/wikipedia/commons/7/73/Ruby_logo.svg";
-          sha256 = "1yvvdqcmgpa75y7px3isi4x6690iksq52ilnbslhn7mcngikw6m9";
-        };
-
-      rust =
-        pkgsNew.fetchurl {
-          url    = "http://rust-lang.org/logos/rust-logo-128x128-blk.png";
-          sha256 = "19ycf7ra6pn6gvavpfg1gbi9j8dsmxfm0gnczabvpspv7yaf8i71";
-        };
-
-      dhallLarge =
-        pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/28f4fb830f158bba6bb635bd29f1fd7075501b8f/img/dhall-logo.svg";
-          sha256 = "19hqz6ipyb7fw460gnz9wkjlzllw1hpls9kahis12p9xr7a6rfb1";
-        };
-
-      dhallSmall =
-        pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/dhall-lang/dhall-lang/28f4fb830f158bba6bb635bd29f1fd7075501b8f/img/dhall-icon.svg";
-          sha256 = "0cxwvvhay54fq908ncyfmvq6jyjrbq565g4vrzk97z7z4qv3h5hh";
-        };
-
-      discourse = ./img/discourse.svg;
-
-      github = pkgsNew.callPackage ./githubLogo.nix { };
-
-      haskell =
-        pkgsNew.fetchurl {
-          url    = "https://wiki.haskell.org/wikiupload/4/4a/HaskellLogoStyPreview-1.png";
-          sha256 = "0g26j7vx34m46mwp93qgg3q5x8pfdq2j1ch0vxz5gj0nk3b8fxda";
-        };
-
-      json =
-        pkgsNew.fetchurl {
-          url    = "https://upload.wikimedia.org/wikipedia/commons/c/c9/JSON_vector_logo.svg";
-          sha256 = "1hqd1qh35v9magjp3rbsw8wszk2wn3hkz981ir49z5cyf11jnx95";
-        };
-
-      kops =
-        pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/kubernetes/kops/master/docs/img/logo-notext.svg";
-          sha256 = "0gdi0pcrmvmb23dy8zp7z1z980cmj5aqpp9yxrsyp4dsj7flay8r";
-        };
-
-      kubernetes =
-        pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/kubernetes/kubernetes/7839fe38620508eb0651930cb0e1acb8ea367842/logo/logo.svg";
-          sha256 = "0kp6idffg9k52ycgv5zkg9n08pfldzsy0fzhwsrb2f7cvrl6fpw4";
-        };
-
-      nix =
-        pkgsNew.fetchurl {
-          url    = "https://nixos.org/logo/nix-wiki.png";
-          sha256 = "1hrz7wr7i0b2bips60ygacbkmdzv466lsbxi22hycg42kv4m0173";
-        };
-
-      prometheus =
-        pkgsNew.fetchurl {
-          url    = "https://upload.wikimedia.org/wikipedia/commons/3/38/Prometheus_software_logo.svg";
-          sha256 = "19ff8l1kp3i3gxxbd5na9wbzxkpflcxw0lz2ysb1d6s4ybvr0fnb";
-        };
-
-      stackOverflow =
-        pkgsNew.fetchurl {
-          url    = "https://cdn.sstatic.net/Sites/stackoverflow/company/img/logos/so/so-icon.svg";
-          sha256 = "0i84h23ax197f3hwh0hqm6yjvvnpcjyhd6nkyy33z6x10dh8v4z3";
-        };
-
-      twitter = pkgsNew.callPackage ./twitterLogo.nix { };
-
-      xml =
-        pkgsNew.fetchurl {
-          url    = "https://www.svgrepo.com/download/106090/xml.svg";
-          sha256 = "0ncjr3sxn40ml5gxwv1iq5vd0zx0qgyy9rzqxi6j80b8wcy45czy";
-        };
-
-      yaml =
-        pkgsNew.fetchurl {
-          url    = "https://raw.githubusercontent.com/yaml/yaml-spec/a6f764e13de58d5f753877f588a01b35dc9a5168/logo.png";
-          sha256 = "12grgaxpqi755p2rnvw3x02zc69brpnzx208id1f0z42w387j4hi";
-        };
-    };
-
     sdist = pkgsNew.callPackage ./sdist.nix { };
 
     haskell = pkgsOld.haskell // {
@@ -164,9 +60,8 @@ let
                     pkgsNew.haskell.lib.dontCheck drv;
 
                 failOnAllWarnings = drv:
-                  # Older versions of GHC incorrectly detect non-exhaustive
-                  # pattern matches
-                  if compiler == "ghc7103" || compiler == "ghcjs"
+                  # GHCJS incorrectly detects non-exhaustive pattern matches
+                  if compiler == "ghcjs"
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
@@ -193,8 +88,8 @@ let
                           "dhall-nix"
                           "dhall-yaml"
                         ]
-                        # Test suite doesn't work on GHCJS or GHC 7.10.3
-                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
+                        # Test suite doesn't work on GHCJS
+                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs")) "dhall"
                     );
 
                 doBenchmarkExtension =
@@ -302,30 +197,6 @@ let
         );
       };
     };
-
-    npm = pkgsNew.callPackage ./npm { };
-
-    jQuery =
-      pkgsNew.fetchurl {
-        url    = "https://code.jquery.com/jquery-3.3.1.min.js";
-        sha256 = "1vq2bp290rhby5l09dv5khqwv3ysnzbddggbgk6m4hl9y9pl42hn";
-      };
-
-    twitterBootstrap = pkgsNew.callPackage ./twitterBootstrap.nix { };
-
-    website = pkgsNew.callPackage ./website.nix {};
-
-    tarball-website = pkgsStaticLinux.releaseTools.binaryTarball rec {
-      src = pkgsNew.website;
-
-      installPhase = ''
-        releaseName=website
-        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/website/"    -D $src/index.html
-        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/website/img" -D $src/img/*
-        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/website/css" -D $src/css/*
-        ${pkgsNew.coreutils}/bin/install --target-directory "$TMPDIR/inst/website/js"  -D $src/js/*
-      '';
-    };
   };
 
   overlayCabal2nix = pkgsNew: pkgsOld: {
@@ -347,7 +218,7 @@ let
     );
   };
 
-  overlayGHC7103 = pkgsNew: pkgsOld: {
+  overlayGHC802 = pkgsNew: pkgsOld: {
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
         "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
@@ -355,131 +226,10 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    # Newer version of these packages have bounds incompatible
-                    # with GHC 7.10.3
                     lens-family-core =
                       haskellPackagesOld.lens-family-core_1_2_1;
 
-                    memory =
-                      haskellPackagesOld.memory_0_14_16;
-
-                    basement =
-                      haskellPackagesOld.basement_0_0_6;
-
-                    foundation =
-                      haskellPackagesOld.foundation_0_0_19;
-
-                    # Most of these fixes are due to certain dependencies being
-                    # hidden behind a conditional compiler version directive, so
-                    # they aren't included by default in the default Hackage
-                    # package set (which was generated for `ghc-8.4.3`)
-                    base-compat-batteries =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.base-compat-batteries
-                        [ haskellPackagesNew.bifunctors
-                          haskellPackagesNew.fail
-                        ];
-
-                    blaze-builder =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.blaze-builder
-                        haskellPackagesNew.semigroups;
-
-                    cborg =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.cborg
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.semigroups
-                        ];
-
-                    conduit =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.conduit
-                        haskellPackagesNew.semigroups;
-
-                    contravariant =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.contravariant
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.semigroups
-                        ];
-
-                    dhall =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.dhall
-                        [ haskellPackagesNew.doctest
-                          haskellPackagesNew.mockery
-                        ];
-
-                    generic-deriving =
-                      pkgsNew.haskell.lib.dontCheck
-                        haskellPackagesOld.generic-deriving;
-
-                    haskell-src =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.haskell-src
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.semigroups
-                        ];
-
-                    managed =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.managed
-                        haskellPackagesNew.semigroups;
-
-                    megaparsec =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.megaparsec
-                        haskellPackagesNew.fail;
-
-                    neat-interpolation =
-                      pkgsNew.haskell.lib.doJailbreak
-                        haskellPackagesOld.neat-interpolation;
-
-                    optparse-applicative =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.optparse-applicative
-                        haskellPackagesNew.fail;
-
-                    optional-args =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.optional-args
-                        haskellPackagesNew.semigroups;
-
-                    parser-combinators =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.parser-combinators
-                        haskellPackagesNew.semigroups;
-
-                    prettyprinter =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.prettyprinter
-                        haskellPackagesNew.semigroups;
-
-                    transformers-compat =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.transformers-compat
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.generic-deriving
-                        ];
-
-                    vector =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.vector
-                        haskellPackagesNew.semigroups;
-
-                    # For some reason, `Cabal-1.22.5` does not respect the
-                    # `buildable: False` directive for the executable section
-                    # even when configured with `-f -cli`.  Fixing this requires
-                    # patching out the executable section of `wcwidth` in order
-                    # to avoid pulling in some extra dependencies which cause a
-                    # a dependency cycle.
-                    wcwidth =
-                      pkgsNew.haskell.lib.appendPatch
-                        haskellPackagesOld.wcwidth ./wcwidth.patch;
-
-                    yaml =
-                      pkgsNew.haskell.lib.doJailbreak haskellPackagesOld.yaml;
+                    lens-family = haskellPackagesOld.lens-family_1_2_1;
                   };
 
               in
@@ -500,6 +250,9 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    lens-family-core =
+                        haskellPackagesOld.lens-family-core_1_2_3;
+
                     # GHC 8.6.1 accidentally shipped with an unpublished
                     # unix-2.8 package.  Normally we'd deal with that by
                     # using `pkgsNew.haskell.lib.jailbreak` but it doesn't
@@ -529,9 +282,9 @@ let
 
     overlays =
           [ overlayShared overlayCabal2nix ]
-      ++  (      if compiler == "ghc7103" then [ overlayGHC7103 ]
-            else if compiler == "ghc861"  then [ overlayGHC861  ]
-            else                               [                ]
+      ++  (      if compiler == "ghc802" then [ overlayGHC802 ]
+            else if compiler == "ghc861" then [ overlayGHC861 ]
+            else                              [               ]
           );
   };
 

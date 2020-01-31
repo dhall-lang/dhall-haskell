@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -64,10 +63,6 @@ module Dhall.Pretty.Internal (
     , rparen
     ) where
 
-#if MIN_VERSION_base(4,8,0)
-#else
-import Control.Applicative (Applicative(..), (<$>))
-#endif
 import Data.Foldable
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -810,12 +805,12 @@ prettyCharacterSet characterSet expression =
        prettyCombineExpression a0
 
     prettyCombineExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyCombineExpression a0@(Combine _ _) =
+    prettyCombineExpression a0@(Combine _ _ _) =
         prettyOperator (combine characterSet) (docs a0)
       where
-        docs (Combine a b) = prettyPreferExpression b : docs a
-        docs (Note    _ b) = docs b
-        docs            b  = [ prettyPreferExpression b ]
+        docs (Combine _ a b) = prettyPreferExpression b : docs a
+        docs (Note      _ b) = docs b
+        docs              b  = [ prettyPreferExpression b ]
     prettyCombineExpression (Note _ a) =
         prettyCombineExpression a
     prettyCombineExpression a0 =

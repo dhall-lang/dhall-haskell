@@ -984,11 +984,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = fmap (fmap loop) a
 
-        Core.Combine a b ->
-            Core.Combine a' b'
+        Core.Combine a b c ->
+            Core.Combine a b' c'
           where
-            a' = loop a
             b' = loop b
+            c' = loop c
 
         Core.CombineTypes a b ->
             Core.CombineTypes a' b'

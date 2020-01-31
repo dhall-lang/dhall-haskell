@@ -305,7 +305,7 @@ decodeExpressionInternal decodeEmbed = go
                                     5  -> return NaturalTimes
                                     6  -> return TextAppend
                                     7  -> return ListAppend
-                                    8  -> return Combine
+                                    8  -> return (Combine Nothing)
                                     9  -> return Prefer
                                     10 -> return CombineTypes
                                     11 -> return ImportAlt
@@ -756,7 +756,7 @@ encodeExpressionInternal encodeEmbed = go
         ListAppend l r ->
             encodeOperator 7 l r
 
-        Combine l r ->
+        Combine _ l r ->
             encodeOperator 8 l r
 
         Prefer l r ->

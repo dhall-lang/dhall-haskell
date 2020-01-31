@@ -324,6 +324,7 @@ standardizedExpression :: Expr s a -> Bool
 standardizedExpression (ListLit  Nothing  xs) = not (Data.Sequence.null xs)
 standardizedExpression (ListLit (Just _ ) xs) = Data.Sequence.null xs
 standardizedExpression (Note _ _            ) = False
+standardizedExpression (Combine (Just _) _ _) = False
 standardizedExpression  _                     = True
 
 instance Arbitrary File where

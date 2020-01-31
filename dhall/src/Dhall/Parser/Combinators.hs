@@ -257,3 +257,11 @@ toMap kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
 
     err k _v1 _v2 = Text.Parser.Combinators.unexpected
                         ("duplicate field: " ++ Data.Text.unpack k)
+
+toMapWith
+    :: (Text -> Parser a -> Parser a -> Parser a)
+    -> [(Text, a)]
+    -> Parser (Map Text a)
+toMapWith combine kvs = sequence m
+  where
+    m = Dhall.Map.fromListWithKey combine (map (\(k, v) -> (k, pure v)) kvs)

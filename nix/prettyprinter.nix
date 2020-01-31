@@ -1,21 +1,21 @@
 { mkDerivation, ansi-wl-pprint, base, base-compat, bytestring
-, containers, criterion, deepseq, doctest, mtl, pgp-wordlist
-, QuickCheck, random, stdenv, tasty, tasty-hunit, tasty-quickcheck
-, text, transformers
+, containers, deepseq, doctest, gauge, mtl, pgp-wordlist
+, QuickCheck, quickcheck-instances, random, stdenv, tasty
+, tasty-hunit, tasty-quickcheck, text, transformers
 }:
 mkDerivation {
   pname = "prettyprinter";
-  version = "1.5.1";
-  sha256 = "fb66b498cdd46aa7f36abdaf0b49e88444a3e6ed9d04bec8924ed6355f393794";
+  version = "1.6.0";
+  sha256 = "fdaa85aeaff852c3d96f1ac2a323bc1dd96e0061185d11cdc4d1cdb269f5f2f5";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [ base text ];
   testHaskellDepends = [
-    base bytestring doctest pgp-wordlist QuickCheck tasty tasty-hunit
-    tasty-quickcheck text
+    base bytestring doctest pgp-wordlist QuickCheck
+    quickcheck-instances tasty tasty-hunit tasty-quickcheck text
   ];
   benchmarkHaskellDepends = [
-    ansi-wl-pprint base base-compat containers criterion deepseq mtl
+    ansi-wl-pprint base base-compat containers deepseq gauge mtl
     QuickCheck random text transformers
   ];
   homepage = "http://github.com/quchen/prettyprinter";

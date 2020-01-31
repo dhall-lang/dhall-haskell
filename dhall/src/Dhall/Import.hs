@@ -150,10 +150,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
-#if MIN_VERSION_base(4,8,0)
-#else
-import Data.Traversable (traverse)
-#endif
 import Data.Typeable (Typeable)
 import System.FilePath ((</>))
 import Dhall.Binary (StandardVersion(..))
@@ -1078,7 +1074,7 @@ loadWith expr₀ = case expr₀ of
   Record a             -> Record <$> mapM loadWith a
   RecordLit a          -> RecordLit <$> mapM loadWith a
   Union a              -> Union <$> mapM (mapM loadWith) a
-  Combine a b          -> Combine <$> loadWith a <*> loadWith b
+  Combine m a b        -> Combine m <$> loadWith a <*> loadWith b
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
   Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
   RecordCompletion a b -> RecordCompletion <$> loadWith a <*> loadWith b

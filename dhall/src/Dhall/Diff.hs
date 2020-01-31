@@ -882,7 +882,7 @@ diffCombineExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffCombineExpression l@(Combine {}) r@(Combine {}) =
     enclosed' "  " (operator "∧" <> " ") (docs l r)
   where
-    docs (Combine aL bL) (Combine aR bR) =
+    docs (Combine _ aL bL) (Combine _ aR bR) =
         Data.List.NonEmpty.cons (diffPreferExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffPreferExpression aL aR)
