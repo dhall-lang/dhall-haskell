@@ -229,7 +229,7 @@ let
                     lens-family-core =
                       haskellPackagesOld.lens-family-core_1_2_1;
 
-                    lens-family = haskellPackagesOld.lens-family;
+                    lens-family = haskellPackagesOld.lens-family_1_2_1;
                   };
 
               in
