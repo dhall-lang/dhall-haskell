@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -37,9 +36,9 @@ import qualified System.Directory as SD
 -}
 
 data LineColumn = LC 
-    { lcLine :: Int
+    { _lcLine :: Int
       -- ^ line number, starting from 1, where to find the tag
-    , lcColumn :: Int
+    , _lcColumn :: Int
       -- ^ column of line where tag is
     } deriving (Eq, Ord, Show)
 
@@ -269,11 +268,4 @@ inputToFiles followSyms suffixes (InputFile path) = go path
                                    concat <$> mapM (go . (</>) p) contents
                      else return [p | matchingSuffix || p == path]
                where matchingSuffix = maybe True (any (`isSuffixOf` p)) suffixes
-                     isSymLink = 
-#if MIN_VERSION_directory(1,3,0)
-                                 SD.pathIsSymbolicLink p
-#elif MIN_VERSION_directory(1,2,6)
-                                 SD.isSymbolicLink pa
-#else
-                                 return False
-#endif
+                     isSymLink = SD.pathIsSymbolicLink p
