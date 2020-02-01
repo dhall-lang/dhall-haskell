@@ -728,7 +728,8 @@ parsers embedded = Parsers {..}
                     return (Record m)
 
             let keysValue = do
-                    keys <- Combinators.NonEmpty.sepBy1 anyLabel _dot
+                    keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+
                     whitespace
 
                     _equal
