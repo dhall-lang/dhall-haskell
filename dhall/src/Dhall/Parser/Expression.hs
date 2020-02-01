@@ -19,11 +19,12 @@ import Prelude hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
+import qualified Control.Monad.Combinators.NonEmpty as Combinators.NonEmpty
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
-import qualified Data.Char               as Char
+import qualified Data.Char                          as Char
 import qualified Data.List
-import qualified Data.List.NonEmpty
+import qualified Data.List.NonEmpty                 as NonEmpty
 import qualified Data.Sequence
 import qualified Data.Text
 import qualified Data.Text.Encoding
@@ -183,7 +184,7 @@ parsers embedded = Parsers {..}
 
                     return (Binding (Just src0) c (Just src1) d (Just src3) f)
 
-            as <- Data.List.NonEmpty.some1 binding
+            as <- NonEmpty.some1 binding
 
             try (_in *> nonemptyWhitespace)
 
@@ -694,12 +695,8 @@ parsers embedded = Parsers {..}
             alternative2 = return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral = do
-            a <- anyLabel
-
-            whitespace
-
             let nonEmptyRecordType = do
-                    _colon
+                    a <- try (anyLabel <* whitespace <* _colon)
 
                     nonemptyWhitespace
 
@@ -730,31 +727,34 @@ parsers embedded = Parsers {..}
 
                     return (Record m)
 
-            let nonEmptyRecordLiteral = do
+            let keysValue = do
+                    keys <- Combinators.NonEmpty.sepBy1 anyLabel _dot
+                    whitespace
+
                     _equal
 
                     whitespace
 
-                    b <- expression
+                    value <- expression
 
                     whitespace
+
+                    let cons key (key', values) =
+                            (key, RecordLit [ (key', values) ])
+
+                    let nil = (NonEmpty.last keys, value)
+
+                    return (foldr cons nil (NonEmpty.init keys))
+
+            let nonEmptyRecordLiteral = do
+                    (a, b) <- keysValue
 
                     e <- Text.Megaparsec.many (do
                         _comma
 
                         whitespace
 
-                        c <- anyLabel
-
-                        whitespace
-
-                        _equal
-
-                        whitespace
-
-                        d <- expression
-
-                        whitespace
+                        (c, d) <- keysValue
 
                         return (c, d) )
 
