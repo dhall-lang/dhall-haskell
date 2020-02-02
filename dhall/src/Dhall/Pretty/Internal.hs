@@ -64,6 +64,7 @@ module Dhall.Pretty.Internal (
     ) where
 
 import Data.Foldable
+import Data.List.NonEmpty (NonEmpty)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
@@ -78,6 +79,7 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
+import qualified Data.List.NonEmpty                      as NonEmpty
 import qualified Data.Set
 import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
@@ -436,8 +438,9 @@ prettyLabel = prettyLabelShared False
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
 
-prettyAnyLabels :: [Text] -> Doc Ann
-prettyAnyLabels = mconcat . Pretty.punctuate dot . map prettyAnyLabel
+prettyAnyLabels :: NonEmpty Text -> Doc Ann
+prettyAnyLabels =
+    mconcat . Pretty.punctuate dot . fmap prettyAnyLabel . toList
 
 prettyLabels :: Set Text -> Doc Ann
 prettyLabels a
@@ -1292,18 +1295,21 @@ pretty_ = prettyToStrictText
 {- This utility function converts
    `{ x = { y = { z = 1 } } }` to `{ x.y.z. = 1 }`
 -}
-consolidateRecordLiteral :: Map Text (Expr s a) -> Map [Text] (Expr s a)
+consolidateRecordLiteral
+    :: Map Text (Expr s a) -> Map (NonEmpty Text) (Expr s a)
 consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
   where
-    adapt :: (Text, Expr s a) -> ([Text], Expr s a)
+    adapt :: (Text, Expr s a) -> (NonEmpty Text, Expr s a)
     adapt (key, expression) =
         case shallowDenote expression of
             RecordLit m ->
                 case fmap adapt (Map.toList m) of
-                    [ (keys, expression') ] -> (key : keys, expression')
-                    _                       -> ([key], RecordLit m)
+                    [ (keys, expression') ] ->
+                        (NonEmpty.cons key keys, expression')
+                    _ ->
+                        (pure key, RecordLit m)
             _ ->
-                ([key], expression)
+                (pure key, expression)
 
 -- | Escape a `Text` literal using Dhall's escaping rules for single-quoted
 --   @Text@
