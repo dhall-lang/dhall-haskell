@@ -15,6 +15,9 @@
 , some =
     Some
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+, someList =
+    Some
+      [ aaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccc, dddddddddddddd ]
 , merge =
     merge
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
