@@ -1081,7 +1081,20 @@ prettyCharacterSet characterSet expression =
             <>  separator
             <>  case shallowDenote val of
                     Some val' ->
-                            " Some"
+                            " " <> builtin "Some"
+                        <>  case shallowDenote val' of
+                                RecordCompletion _T r ->
+                                    completion _T r
+                                ListLit _ xs
+                                    | not (null xs) ->
+                                            Pretty.hardline
+                                        <>  "  "
+                                        <>  prettyExpression val'
+                                _ ->    Pretty.hardline
+                                    <>  "    "
+                                    <>  prettyImportExpression val'
+                    ToMap val' Nothing ->
+                            " " <> keyword "toMap"
                         <>  case shallowDenote val' of
                                 RecordCompletion _T r ->
                                     completion _T r
