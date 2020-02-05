@@ -111,7 +111,7 @@ import           Dhall.Parser.Combinators
 
 import Control.Applicative (Alternative(..), optional)
 import Data.Bits ((.&.))
-import Data.Functor (void)
+import Data.Functor (void, ($>))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Dhall.Syntax
@@ -121,6 +121,7 @@ import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
 import qualified Data.Char                  as Char
+import qualified Data.Foldable
 import qualified Data.HashSet
 import qualified Data.List.NonEmpty
 import qualified Data.Text
@@ -221,8 +222,29 @@ integerLiteral = (do
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
     a <-    try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
-        <|> Text.Megaparsec.Char.Lexer.decimal
+        <|> decimal
+        <|> (char '0' $> 0)
     return a ) <?> "literal"
+  where
+    decimal = do
+        n <- headDigit
+        ns <- many tailDigit
+        return (mkNum (n:ns))
+      where
+        headDigit = decimalDigit nonZeroDigit <?> "non-zero digit"
+          where
+            nonZeroDigit c = '1' <= c && c <= '9'
+
+        tailDigit = decimalDigit digit <?> "digit"
+
+        decimalDigit predicate = do
+            c <- Text.Parser.Char.satisfy predicate
+            return (fromIntegral (Char.ord c - Char.ord '0'))
+
+        mkNum = Data.Foldable.foldl' step 0
+          where
+            step acc x = acc * 10 + x
+
 
 {-| Parse an identifier (i.e. a variable or built-in)
 
