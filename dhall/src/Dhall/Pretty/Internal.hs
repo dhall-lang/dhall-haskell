@@ -64,6 +64,7 @@ module Dhall.Pretty.Internal (
     ) where
 
 import Data.Foldable
+import Data.List.NonEmpty (NonEmpty)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
@@ -78,12 +79,13 @@ import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
+import qualified Data.List.NonEmpty                      as NonEmpty
 import qualified Data.Set
 import qualified Data.Text                               as Text
 import qualified Data.Text.Prettyprint.Doc               as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Dhall.Map
+import qualified Dhall.Map                               as Map
 import qualified Dhall.Set
 
 {-| Annotation type used to tag elements in a pretty-printed document for
@@ -435,6 +437,10 @@ prettyLabel = prettyLabelShared False
 
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
+
+prettyAnyLabels :: NonEmpty Text -> Doc Ann
+prettyAnyLabels =
+    mconcat . Pretty.punctuate dot . fmap prettyAnyLabel . toList
 
 prettyLabels :: Set Text -> Doc Ann
 prettyLabels a
@@ -1048,8 +1054,9 @@ prettyCharacterSet characterSet expression =
 
         short = lparen <> prettyExpression a <> rparen
 
-    prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr Src a) -> (Doc Ann, Doc Ann)
-    prettyKeyValue separator (key, val) =
+    prettyKeyValue
+        :: Pretty a => (k -> Doc Ann) -> Doc Ann -> (k, Expr Src a) -> (Doc Ann, Doc Ann)
+    prettyKeyValue prettyKey separator (key, val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
         completion _T r =
@@ -1062,14 +1069,14 @@ prettyCharacterSet characterSet expression =
                     _ ->
                         prettySelectorExpression r
 
-        short = prettyAnyLabel key
+        short = prettyKey key
             <>  " "
             <>  separator
             <>  " "
             <>  prettyExpression val
 
         long =
-                prettyAnyLabel key
+                prettyKey key
             <>  " "
             <>  separator
             <>  case shallowDenote val of
@@ -1108,14 +1115,18 @@ prettyCharacterSet characterSet expression =
 
     prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecord =
-        braces . map (prettyKeyValue colon) . Dhall.Map.toList
+        braces . map (prettyKeyValue prettyAnyLabel colon) . Map.toList
 
     prettyRecordLit :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecordLit a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
-            braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
+            braces (map prettyRecordEntry (Map.toList consolidated))
+      where
+        consolidated = consolidateRecordLiteral a
+
+        prettyRecordEntry = prettyKeyValue prettyAnyLabels equals
 
     prettyCompletionLit
         :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
@@ -1123,14 +1134,18 @@ prettyCharacterSet characterSet expression =
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
-            hangingBraces n (map (prettyKeyValue equals) (Dhall.Map.toList a))
+            hangingBraces n (map prettyRecordEntry (Map.toList consolidated))
+      where
+        consolidated = consolidateRecordLiteral a
 
-    prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
+        prettyRecordEntry = prettyKeyValue prettyAnyLabels equals
+
+    prettyAlternative (key, Just val) = prettyKeyValue prettyAnyLabel colon (key, val)
     prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
 
     prettyUnion :: Pretty a => Map Text (Maybe (Expr Src a)) -> Doc Ann
     prettyUnion =
-        angles . map prettyAlternative . Dhall.Map.toList
+        angles . map prettyAlternative . Map.toList
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
     prettyChunks chunks@(Chunks a b)
@@ -1289,6 +1304,25 @@ escapeTrailingSingleQuote chunks@(Chunks as b) =
 -- | Pretty-print a value
 pretty_ :: Pretty a => a -> Text
 pretty_ = prettyToStrictText
+
+{- This utility function converts
+   `{ x = { y = { z = 1 } } }` to `{ x.y.z. = 1 }`
+-}
+consolidateRecordLiteral
+    :: Map Text (Expr s a) -> Map (NonEmpty Text) (Expr s a)
+consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
+  where
+    adapt :: (Text, Expr s a) -> (NonEmpty Text, Expr s a)
+    adapt (key, expression) =
+        case shallowDenote expression of
+            RecordLit m ->
+                case fmap adapt (Map.toList m) of
+                    [ (keys, expression') ] ->
+                        (NonEmpty.cons key keys, expression')
+                    _ ->
+                        (pure key, RecordLit m)
+            _ ->
+                (pure key, expression)
 
 -- | Escape a `Text` literal using Dhall's escaping rules for single-quoted
 --   @Text@
