@@ -367,7 +367,7 @@ startingContext = evaluateSettings . l
 
 -- | Access the custom substitutions.
 --
--- @since 9999
+-- @since 1.30
 substitutions
   :: (Functor f, HasEvaluateSettings s)
   => LensLike' f s (Dhall.Substitution.Substitutions Src Void)
