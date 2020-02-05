@@ -1960,12 +1960,22 @@ import Dhall
 -- >
 -- > myexample :: IO Result
 -- > myexample = let
--- >    evaluateSettings = Lens.over Dhall.substitutions (Data.Map.insert "Result" resultType) Dhall.defaultEvaluateSettings
+-- >    evaluateSettings = Lens.over Dhall.substitutions (Dhall.Map.insert "Result" resultType) Dhall.defaultEvaluateSettings
 -- >    in Dhall.inputFileWithSettings evaluateSettings resultDecoder "example.dhall"
 --
--- Substitutions are a simple Map mapping variables to expressions.
--- Note that this approach works well with the inputFile/inputFileWithSettings functions while the let-wrapping will not.
--- In contrast to the custom built-ins described above substitutions are made BEFORE the type-checking.
+-- Substitutions are a simple 'Dhall.Map.Map' mapping variables to expressions. The application of these substitutions reflect the order of the insertions in the substitution map:
+--
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- >
+-- > substitute (Dhall.Core.Var "Foo") (Dhall.Map.fromList [("Foo", Dhall.Core.Var "Bar"), ("Bar", Dhall.Core.Var "Baz")])
+--
+-- results in @Dhall.Core.Var \"Baz\"@ since we first substitute \"Foo\" with \"Bar\" and then the resulting \"Bar\" with the final \"Baz\".
+--
+-- Notable differences to the other extensions of the builtin language:
+--
+--  * This approach works well with the inputFile/inputFileWithSettings functions while the let-wrapping will not.
+--
+--  * In contrast to the custom built-ins described above substitutions are made BEFORE the type-checking.
 
 -- $prelude
 --
