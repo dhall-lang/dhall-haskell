@@ -1,14 +1,15 @@
 module Dhall.Substitution where
 
-import Dhall.Core (subst)
-import Dhall.Syntax (Expr, Var)
+import Data.Text (Text)
+import Dhall.Normalize (subst)
+import Dhall.Syntax (Expr, Var(..))
 
 import qualified Dhall.Map
 
 {- | Substitutions map variables to arbitrary Dhall expressions.
      Note that we use "Dhall.Map.Map" as an underlying structure. Hence we respect insertion order.
 -}
-type Substitutions s a = Dhall.Map.Map Var (Expr s a)
+type Substitutions s a = Dhall.Map.Map Text (Expr s a)
 
 {- | An empty substitution map.
 -}
@@ -26,4 +27,4 @@ empty = Dhall.Map.empty
 --
 --   results in @Dhall.Core.Var \"Baz\"@ since we first substitute \"Foo\" with \"Bar\" and then the resulting \"Bar\" with the final \"Baz\".
 substitute :: Expr s a -> Substitutions s a -> Expr s a
-substitute expr = foldl (\memo (k, v) -> subst k v memo) expr . Dhall.Map.toList
+substitute expr = foldl (\memo (k, v) -> subst (V k 0) v memo) expr . Dhall.Map.toList
