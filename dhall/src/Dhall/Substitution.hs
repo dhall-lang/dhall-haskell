@@ -1,3 +1,7 @@
+{- | This module provides types and functions used in the substitution step
+     which is done before type checking and normalization.
+-}
+
 module Dhall.Substitution where
 
 import Data.Text (Text)
