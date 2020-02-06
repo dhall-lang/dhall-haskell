@@ -33,6 +33,7 @@ module Dhall
     , rootDirectory
     , sourceName
     , startingContext
+    , substitutions
     , normalizer
     , defaultInputSettings
     , InputSettings
@@ -178,6 +179,7 @@ import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified Lens.Family
@@ -335,7 +337,8 @@ sourceName k s =
 
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
-  { _startingContext :: Dhall.Context.Context (Expr Src Void)
+  { _substitutions   :: Dhall.Substitution.Substitutions Src Void
+  , _startingContext :: Dhall.Context.Context (Expr Src Void)
   , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer Void)
   }
 
@@ -345,7 +348,8 @@ data EvaluateSettings = EvaluateSettings
 -- @since 1.16
 defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
-  { _startingContext = Dhall.Context.empty
+  { _substitutions   = Dhall.Substitution.empty
+  , _startingContext = Dhall.Context.empty
   , _normalizer      = Nothing
   }
 
@@ -360,6 +364,18 @@ startingContext = evaluateSettings . l
     l :: (Functor f)
       => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src Void))
     l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
+
+-- | Access the custom substitutions.
+--
+-- @since 1.30
+substitutions
+  :: (Functor f, HasEvaluateSettings s)
+  => LensLike' f s (Dhall.Substitution.Substitutions Src Void)
+substitutions = evaluateSettings . l
+  where
+    l :: (Functor f)
+      => LensLike' f EvaluateSettings (Dhall.Substitution.Substitutions Src Void)
+    l k s = fmap (\x -> s { _substitutions = x }) (k (_substitutions s))
 
 -- | Access the custom normalizer.
 --
@@ -435,23 +451,25 @@ inputWithSettings settings (Decoder {..}) txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               Lens.Family.set Dhall.Import.normalizer      _normalizer
+               Lens.Family.set Dhall.Import.substitutions   _substitutions
+            .  Lens.Family.set Dhall.Import.normalizer      _normalizer
             .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
+    let substituted = Dhall.Substitution.substitute expr' $ view substitutions settings
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
-    let annot = case expr' of
+    let annot = case substituted of
             Note (Src begin end bytes) _ ->
-                Note (Src begin end bytes') (Annot expr' expected)
+                Note (Src begin end bytes') (Annot substituted expected)
               where
                 bytes' = bytes <> " : " <> suffix
             _ ->
-                Annot expr' expected
+                Annot substituted expected
     _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) expr'
+    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) substituted
 
     case extract normExpr  of
         Success x  -> return x

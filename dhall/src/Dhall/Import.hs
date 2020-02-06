@@ -122,6 +122,7 @@ module Dhall.Import (
     , graph
     , remote
     , toHeaders
+    , substitutions
     , normalizer
     , startingContext
     , chainImport
@@ -194,6 +195,7 @@ import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck
 import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
 import qualified System.Environment
@@ -603,9 +605,11 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             return importSemantics
 
         Nothing -> do
-            betaNormal <- case Dhall.TypeCheck.typeWith _startingContext resolvedExpr of
-                Left  err -> throwMissingImport (Imported _stack err)
-                Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
+            betaNormal <- do
+                let substitutedExpr = Dhall.Substitution.substitute resolvedExpr _substitutions
+                case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+                    Left  err -> throwMissingImport (Imported _stack err)
+                    Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
 
             let bytes = encodeExpression NoVersion betaNormal
             lift $ writeToSemisemanticCache semisemanticHash bytes

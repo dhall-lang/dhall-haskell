@@ -74,6 +74,9 @@ module Dhall.Tutorial (
     -- ** Extending the language
     -- $extending
 
+    -- ** Substitutions
+    -- $substitutions
+
     -- * Prelude
     -- $prelude
 
@@ -1915,6 +1918,64 @@ import Dhall
 -- * Keep built-ins easy to implement across language bindings
 -- * Prefer general purpose built-ins or built-ins appropriate for the task of program configuration
 -- * Design built-ins to catch errors as early as possible (i.e. when type-checking the configuration)
+
+-- $substitutions
+--
+-- Substitutions are another way to extend the language.
+-- Suppose we have the following Haskell datatype:
+--
+-- > data Result = Failure Integer | Success String
+-- >     deriving (Eq, Generic, Show)
+-- >
+-- > instance FromDhall Result
+--
+-- We can use it in Dhall like that:
+--
+-- > -- example.dhall
+-- >
+-- > let Result = < Failure : Integer | Success Text >
+-- > in Result.Failure 1
+--
+-- Right now it is quite easy to keep these two definitions (the one in Haskell source and the one in the Dhall file) synchronized:
+-- If we implement a new feature in the Haskell source we update the corresponding type in the Dhall file.
+-- But what happens if our application is growing and our Result type contains e.g. 10 unions with possible types embedded in it?
+-- Maintaining the code will get tedious. Luckily we can extract the correct Dhall type from the Haskell definition:
+--
+-- > resultDecoder :: Dhall.Decoder Result
+-- > resultDecoder = Dhall.auto
+-- >
+-- > resultType :: Expr Src Void
+-- > resultType = Dhall.expected resultDecoder
+-- >
+-- > resultTypeString :: String
+-- > resultTypeString = show $ pretty resultType
+--
+-- Now we just have to inject that type into the Dhall code and we are done. One common way to do that is to wrap the import of example.dhall in a let expression:
+--
+-- > Dhall.input (Dhall.auto :: Dhall.Decoder Result) ("let Result = " ++ Data.Text.pack resultTypeString ++ " in ./example.dhall")
+--
+-- Now we can omit the definition of Result in our example.dhall file. While this will work perfectly Dhall provides a cleaner solution for our \"injection problem\":
+--
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- >
+-- > myexample :: IO Result
+-- > myexample = let
+-- >    evaluateSettings = Lens.over Dhall.substitutions (Dhall.Map.insert "Result" resultType) Dhall.defaultEvaluateSettings
+-- >    in Dhall.inputFileWithSettings evaluateSettings resultDecoder "example.dhall"
+--
+-- Substitutions are a simple 'Dhall.Map.Map' mapping variables to expressions. The application of these substitutions reflect the order of the insertions in the substitution map:
+--
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- >
+-- > substitute (Dhall.Core.Var "Foo") (Dhall.Map.fromList [("Foo", Dhall.Core.Var "Bar"), ("Bar", Dhall.Core.BoolLit True)])
+--
+-- results in @Dhall.Core.Var \"Baz\"@ since we first substitute \"Foo\" with \"Bar\" and then the resulting \"Bar\" with the final @True@.
+--
+-- Notable differences to the other extensions of the builtin language:
+--
+--  * This approach works well with the inputFile/inputFileWithSettings functions while the let-wrapping will not.
+--
+--  * In contrast to the custom built-ins described above substitutions are made BEFORE the type-checking.
 
 -- $prelude
 --
