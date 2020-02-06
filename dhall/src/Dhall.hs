@@ -459,18 +459,17 @@ inputWithSettings settings (Decoder {..}) txt = do
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
+    let substituted = Dhall.Substitution.substitute expr' $ view substitutions settings
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
-    let annot = case expr' of
+    let annot = case substituted of
             Note (Src begin end bytes) _ ->
-                Note (Src begin end bytes') (Annot expr' expected)
+                Note (Src begin end bytes') (Annot substituted expected)
               where
                 bytes' = bytes <> " : " <> suffix
             _ ->
-                Annot expr' expected
-    let substituted = Dhall.Substitution.substitute annot $ view substitutions settings
-    let substituted' = Dhall.Substitution.substitute expr' $ view substitutions settings
-    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) substituted)
-    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) substituted'
+                Annot substituted expected
+    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
+    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) substituted
 
     case extract normExpr  of
         Success x  -> return x
