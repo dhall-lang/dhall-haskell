@@ -44,6 +44,9 @@ tests =
             , Test.Tasty.HUnit.testCase "substitution2.dhall" $ do
                 res <- Substitution.substituteResult "tests/tutorial/substitution2.dhall"
                 res @?= Substitution.Failure 1
+            , Test.Tasty.HUnit.testCase "substitution3.dhall" $ do
+                res <- Substitution.substituteFoo "tests/tutorial/substitution3.dhall"
+                res @?= True
             ]
         ]
 

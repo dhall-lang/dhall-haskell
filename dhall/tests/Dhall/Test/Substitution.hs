@@ -4,7 +4,7 @@
 module Dhall.Test.Substitution where
 
 import Data.Void (Void)
-import Dhall.Core (Expr)
+import Dhall.Core (Expr(BoolLit, Var))
 import Dhall.Src (Src)
 
 import qualified Dhall
@@ -26,3 +26,8 @@ resultDecoder = Dhall.auto
 
 resultType :: Expr Src Void
 resultType = Dhall.expected resultDecoder
+
+substituteFoo :: FilePath -> IO Bool
+substituteFoo fp = let
+    evaluateSettings = Lens.set Dhall.substitutions (Dhall.Map.fromList [("Foo", Var "Bar"), ("Bar", BoolLit True)]) Dhall.defaultEvaluateSettings
+    in Dhall.inputFileWithSettings evaluateSettings Dhall.auto fp
