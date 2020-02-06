@@ -444,32 +444,16 @@ inputWithSettings
     -> IO a
     -- ^ The decoded value in Haskell
 inputWithSettings settings (Decoder {..}) txt = do
-    expr  <- Dhall.Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
-
-    let InputSettings {..} = settings
-
-    let EvaluateSettings {..} = _evaluateSettings
-
-    let transform =
-               Lens.Family.set Dhall.Import.substitutions   _substitutions
-            .  Lens.Family.set Dhall.Import.normalizer      _normalizer
-            .  Lens.Family.set Dhall.Import.startingContext _startingContext
-
-    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
-
-    expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
-
-    let substituted = Dhall.Substitution.substitute expr' $ view substitutions settings
     let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
-    let annot = case substituted of
+    let annotate substituted = case substituted of
             Note (Src begin end bytes) _ ->
                 Note (Src begin end bytes') (Annot substituted expected)
               where
                 bytes' = bytes <> " : " <> suffix
             _ ->
                 Annot substituted expected
-    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    let normExpr = Dhall.Core.normalizeWith (view normalizer settings) substituted
+
+    normExpr <- inputHelper annotate settings txt
 
     case extract normExpr  of
         Success x  -> return x
@@ -539,7 +523,20 @@ inputExprWithSettings
     -- ^ The Dhall program
     -> IO (Expr Src Void)
     -- ^ The fully normalized AST
-inputExprWithSettings settings txt = do
+inputExprWithSettings = inputHelper id
+
+{-| Helper function for the input* function family
+
+@since 1.30
+-}
+inputHelper
+    :: (Expr Src Void -> Expr Src Void)
+    -> InputSettings
+    -> Text
+    -- ^ The Dhall program
+    -> IO (Expr Src Void)
+    -- ^ The fully normalized AST
+inputHelper annotate settings txt = do
     expr  <- Dhall.Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
 
     let InputSettings {..} = settings
@@ -547,15 +544,18 @@ inputExprWithSettings settings txt = do
     let EvaluateSettings {..} = _evaluateSettings
 
     let transform =
-               Lens.Family.set Dhall.Import.normalizer      _normalizer
+               Lens.Family.set Dhall.Import.substitutions   _substitutions
+            .  Lens.Family.set Dhall.Import.normalizer      _normalizer
             .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatus _rootDirectory)
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 
-    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) expr')
-    pure (Dhall.Core.normalizeWith (view normalizer settings) expr')
+    let substituted = Dhall.Substitution.substitute expr' $ view substitutions settings
+    let annot = annotate substituted
+    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
+    pure (Dhall.Core.normalizeWith (view normalizer settings) substituted)
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for
