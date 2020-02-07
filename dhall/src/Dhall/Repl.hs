@@ -124,7 +124,7 @@ parseAndLoad
   :: MonadIO m => String -> m ( Dhall.Expr Dhall.Src Void) 
 parseAndLoad src = do
   parsed <-
-    case Dhall.exprFromText "(stdin)" ( Text.pack src ) of
+    case Dhall.exprFromText "(stdin)" (Text.pack src <> "\n") of
       Left e ->
         liftIO ( throwIO e )
 
