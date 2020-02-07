@@ -407,8 +407,7 @@ parsers embedded = Parsers {..}
             alternative07 = do
                 try (_merge *> nonemptyWhitespace)
                 a <- importExpression_
-                nonemptyWhitespace
-                b <- importExpression_ <?> "second argument to ❰merge❱"
+                b <- (nonemptyWhitespace *> importExpression_) <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative08 = do
