@@ -299,7 +299,7 @@ parsers embedded = Parsers {..}
 
                     return (f, True)
 
-            -- Or something else like `x ===`
+            -- Or something else like `Natural/even`
             let alternative1 = return (id, False)
 
             (f, isSome) <- alternative0 <|> alternative1
