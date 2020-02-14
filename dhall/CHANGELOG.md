@@ -1,3 +1,44 @@
+1.30.0
+
+* [Supports version 14.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0)
+* BREAKING CHANGE TO THE API: [Add `--check` flag to `dhall {lint,freeze}`](https://github.com/dhall-lang/dhall-haskell/pull/1636)
+    * You can now use the `--check` flag to verify that a file has already been
+      linted or frozen
+    * This is a breaking change to the types used by the `Dhall.Format` module
+* BREAKING CHANGE TO THE LANGUAGE: [Disallow `Natural` literals with leading zeros](https://github.com/dhall-lang/dhall-haskell/pull/1658)
+    * Now a literal like `042` is no longer valid
+    * See the [changelog for standard version 14.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0) for more details
+* BUG FIX: [Fix parsing of `Double` literal trailing whitespace](https://github.com/dhall-lang/dhall-haskell/pull/1647)
+    * Certain expressions using `Double` literals would fail to parse, which this
+      change fixes
+* BUG FIX: [Use `DeriveLift` instead of GHC Generics to derive `Lift` ](Use `DeriveLift` instead of GHC Generics to derive `Lift` )
+    * This fixes a build failure on GHC 8.6 and GHC 8.8 when building with `-O2`
+* [Drop support for GHC 7.10.3](https://github.com/dhall-lang/dhall-haskell/pull/1649)
+    * GHC 8.0.2 is now the earliest supported version
+* [Add support for dotted field syntax](https://github.com/dhall-lang/dhall-haskell/pull/1651)
+    * `{ x.y.z = 1 }` now legal syntax for nested fields
+    * See the [changelog for standard version 14.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0) for more details
+* [Add support for duplicate record fields](https://github.com/dhall-lang/dhall-haskell/pull/1643)
+    * This combines with the previous feature to let you write
+      `{ x.y = 1, x.z = True }`, which is equivalent to
+      `{ x = { y = 1, z = True } }`
+    * See the [changelog for standard version 14.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0) for more details
+* [Add `dhall lint` support for deprecating `Optional/{fold,build}`](https://github.com/dhall-lang/dhall-haskell/pull/1628)
+    * The `Optional/{fold,build}` built-ins are deprecated and can be implemented
+      in terms of other language features
+    * `Optional/fold` can be implemented in terms of `merge` (which now works on
+      `Optional` values)
+    * `Optional/build` could always be implemented using `Some`/`None`
+    * `dhall lint` now transforms the deprecated built-ins to use their
+      equivalent built-in-free versions
+* [Support Template Haskell for multiple datatypes](https://github.com/dhall-lang/dhall-haskell/pull/1664)
+    * This extends the Template Haskell support added in the previous release to
+      work for datatypes that refer to one another
+* [Add support for custom substitutions](https://github.com/dhall-lang/dhall-haskell/pull/1650)
+    * You can now add custom substitutions, which are like `let` bindings that
+      propagate to transitive imports
+* [Small formatting fixes](https://github.com/dhall-lang/dhall-haskell/pull/1652)
+
 1.29.0
 
 * [Supports version 13.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v13.0.0)
