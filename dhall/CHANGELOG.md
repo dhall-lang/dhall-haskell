@@ -11,8 +11,8 @@
 * BUG FIX: [Fix parsing of `Double` literal trailing whitespace](https://github.com/dhall-lang/dhall-haskell/pull/1647)
     * Certain expressions using `Double` literals would fail to parse, which this
       change fixes
-* BUG FIX: [Use `DeriveLift` instead of GHC Generics to derive `Lift` ](Use `DeriveLift` instead of GHC Generics to derive `Lift` )
-    * This fixes a build failure on GHC 8.6 and GHC 8.8 when building with `-O2`
+* BUG FIX: [Use `DeriveLift` instead of GHC Generics to derive `Lift` ](https://github.com/dhall-lang/dhall-haskell/pull/1640)
+    * This fixes a build failure on GHC 8.10
 * [Drop support for GHC 7.10.3](https://github.com/dhall-lang/dhall-haskell/pull/1649)
     * GHC 8.0.2 is now the earliest supported version
 * [Add support for dotted field syntax](https://github.com/dhall-lang/dhall-haskell/pull/1651)
