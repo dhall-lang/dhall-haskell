@@ -1,8 +1,8 @@
 Name: dhall-yaml
-Version: 1.0.1
+Version: 1.0.2
 Cabal-Version: >=1.8.0.2
 Build-Type: Simple
-Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
+Tested-With: GHC == 8.0.2, GHC == 8.4.3, GHC == 8.6.1
 License: GPL-3
 License-File: LICENSE
 Copyright: 2019 Gabriel Gonzalez
@@ -37,7 +37,7 @@ Library
         base                      >= 4.8.0.0  && < 5   ,
         aeson                     >= 1.0.0.0  && < 1.5 ,
         bytestring                               < 0.11,
-        dhall                     >= 1.28.0   && < 1.30,
+        dhall                     >= 1.28.0   && < 1.31,
         dhall-json                >= 1.6.0    && < 1.7 ,
         optparse-applicative      >= 0.14.0.0 && < 0.16,
         text                      >= 0.11.1.0 && < 1.3 ,
