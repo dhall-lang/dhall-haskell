@@ -49,6 +49,8 @@ in
           # `hnix` depends on `unix-2.7.*` and doesn't work with GHC 8.6
           # shared_8_6_1.dhall-nix
 
+          shared_ghcjs.dhall-try
+
           # However, we still use GHC 8.4.3 to build the distributed tarballs
           # due to a bug in GHC 8.6.1.  See:
           #
