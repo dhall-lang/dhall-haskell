@@ -1,3 +1,10 @@
+1.6.2
+
+* [Fix `dhall-json` for new `Prelude.JSON.Type`](https://github.com/dhall-lang/dhall-haskell/pull/1631)
+    * Version 13.0.0 of the Prelude caused the `JSON` type to change, which
+      broke `dhall-json`'s support for that type
+    * This release fixes that (and still supports the old `JSON` type)
+
 1.6.1
 
 * [Fix typos in error messages](https://github.com/dhall-lang/dhall-haskell/pull/1595)
