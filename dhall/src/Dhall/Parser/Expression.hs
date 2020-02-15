@@ -293,9 +293,21 @@ parsers embedded = Parsers {..}
         ]
 
     applicationExpression = do
-            f <-    (Some <$ try (_Some <* nonemptyWhitespace))
-                <|> return id
-            a <- noted importExpression_
+            -- Here f can be `Some`
+            let alternative0 = do
+                    f <- (Some <$ try (_Some <* nonemptyWhitespace))
+
+                    return (f, True)
+
+            -- Or something else like `Natural/even`
+            let alternative1 = return (id, False)
+
+            (f, isSome) <- alternative0 <|> alternative1
+
+            let adapt parser = if isSome then parser <?> "argument to ❰Some❱" else parser
+
+            a <- adapt $ noted importExpression_
+
             bs <- Text.Megaparsec.many . try $ do
                 (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
                 b <- importExpression_
