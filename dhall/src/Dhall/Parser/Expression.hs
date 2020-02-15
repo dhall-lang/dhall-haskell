@@ -294,6 +294,7 @@ parsers embedded = Parsers {..}
 
     applicationExpression = do
             f <-    (Some <$ try (_Some <* nonemptyWhitespace))
+                <|> ((\a -> ToMap a Nothing) <$ try (_toMap *> nonemptyWhitespace))
                 <|> return id
             a <- noted importExpression_
             bs <- Text.Megaparsec.many . try $ do
@@ -359,7 +360,6 @@ parsers embedded = Parsers {..}
                     , alternative05
                     , alternative06
                     , alternative07
-                    , alternative08
                     , alternative37
                     , alternative09
                     , builtin
@@ -410,11 +410,6 @@ parsers embedded = Parsers {..}
                 nonemptyWhitespace
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
-
-            alternative08 = do
-                try (_toMap *> nonemptyWhitespace)
-                a <- importExpression_
-                return (ToMap a Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
