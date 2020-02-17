@@ -293,14 +293,33 @@ parsers embedded = Parsers {..}
         ]
 
     applicationExpression = do
-            f <-    (Some <$ try (_Some <* nonemptyWhitespace))
-                <|> ((\a -> ToMap a Nothing) <$ try (_toMap *> nonemptyWhitespace))
-                <|> return id
-            a <- noted importExpression_
+            let alternative0 = do
+                    _ <- try (_Some <* nonemptyWhitespace)
+
+                    return (Some, Just "argument to ❰Some❱")
+
+            let alternative1 = do
+                    _ <- try (_toMap *> nonemptyWhitespace)
+
+                    return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
+
+            let alternative2 = do
+                    return (id, Nothing)
+
+            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2
+
+            let adapt parser =
+                    case maybeMessage of
+                        Nothing      -> parser
+                        Just message -> parser <?> message
+
+            a <- adapt (noted importExpression_)
+
             bs <- Text.Megaparsec.many . try $ do
                 (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
                 b <- importExpression_
                 return (sep, b)
+
             return (foldl' app (f a) bs)
           where
             app a (sep, b)
