@@ -293,13 +293,33 @@ parsers embedded = Parsers {..}
         ]
 
     applicationExpression = do
-            f <-    (Some <$ try (_Some <* nonemptyWhitespace))
-                <|> return id
-            a <- noted importExpression_
+            let alternative0 = do
+                    _ <- try (_Some <* nonemptyWhitespace)
+
+                    return (Some, Just "argument to ❰Some❱")
+
+            let alternative1 = do
+                    _ <- try (_toMap *> nonemptyWhitespace)
+
+                    return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
+
+            let alternative2 = do
+                    return (id, Nothing)
+
+            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2
+
+            let adapt parser =
+                    case maybeMessage of
+                        Nothing      -> parser
+                        Just message -> parser <?> message
+
+            a <- adapt (noted importExpression_)
+
             bs <- Text.Megaparsec.many . try $ do
                 (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
                 b <- importExpression_
                 return (sep, b)
+
             return (foldl' app (f a) bs)
           where
             app a (sep, b)
@@ -359,7 +379,6 @@ parsers embedded = Parsers {..}
                     , alternative05
                     , alternative06
                     , alternative07
-                    , alternative08
                     , alternative37
                     , alternative09
                     , builtin
@@ -410,11 +429,6 @@ parsers embedded = Parsers {..}
                 nonemptyWhitespace
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
-
-            alternative08 = do
-                try (_toMap *> nonemptyWhitespace)
-                a <- importExpression_
-                return (ToMap a Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
