@@ -130,10 +130,15 @@ configuration options to access dhall packages from your declarative configurati
 
 ```nix
   nix = {
-    binaryCaches = [ "https://cache.nixos.org" "https://cache.dhall-lang.org" ];
+    binaryCaches = [
+      "https://cache.nixos.org"
+      "https://cache.dhall-lang.org"
+      "https://dhall.cachix.org"
+    ];
 
     binaryCachePublicKeys = [
       "cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM="
+      "dhall.cachix.org-1:8laGciue2JBwD49ICFtg+cIF8ddDaW7OFBjDb/dHEAo="
     ];
   };
 ```
@@ -145,15 +150,15 @@ regardless of whether you use NixOS, set the following options in your
 Using Nix 2.0 or later:
 
 ```
-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM=
-substituters = https://cache.nixos.org https://cache.dhall-lang.org
+trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM= dhall.cachix.org-1:8laGciue2JBwD49ICFtg+cIF8ddDaW7OFBjDb/dHEAo=
+substituters = https://cache.nixos.org https://cache.dhall-lang.org https://dhall.cachix.org
 ```
 
 Using earlier Nix versions (i.e. Nix `1.*`):
 
 ```
-binary-cache-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM=
-binary-caches = https://cache.nixos.org https://cache.dhall-lang.org
+binary-cache-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM= dhall.cachix.org-1:8laGciue2JBwD49ICFtg+cIF8ddDaW7OFBjDb/dHEAo=
+binary-caches = https://cache.nixos.org https://cache.dhall-lang.org https://dhall.cachix.org
 ```
 
 You can build all of the packages by running:
