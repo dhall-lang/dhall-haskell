@@ -293,25 +293,33 @@ parsers embedded = Parsers {..}
         ]
 
     applicationExpression = do
-            -- Here f can be `Some`
             let alternative0 = do
-                    f <- (Some <$ try (_Some <* nonemptyWhitespace))
+                    _ <- try (_Some <* nonemptyWhitespace)
 
-                    return (f, True)
+                    return (Some, Just "argument to ❰Some❱")
 
-            -- Or something else like `Natural/even`
-            let alternative1 = return (id, False)
+            let alternative1 = do
+                    _ <- try (_toMap *> nonemptyWhitespace)
 
-            (f, isSome) <- alternative0 <|> alternative1
+                    return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
 
-            let adapt parser = if isSome then parser <?> "argument to ❰Some❱" else parser
+            let alternative2 = do
+                    return (id, Nothing)
 
-            a <- adapt $ noted importExpression_
+            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2
+
+            let adapt parser =
+                    case maybeMessage of
+                        Nothing      -> parser
+                        Just message -> parser <?> message
+
+            a <- adapt (noted importExpression_)
 
             bs <- Text.Megaparsec.many . try $ do
                 (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
                 b <- importExpression_
                 return (sep, b)
+
             return (foldl' app (f a) bs)
           where
             app a (sep, b)
@@ -371,7 +379,6 @@ parsers embedded = Parsers {..}
                     , alternative05
                     , alternative06
                     , alternative07
-                    , alternative08
                     , alternative37
                     , alternative09
                     , builtin
@@ -422,11 +429,6 @@ parsers embedded = Parsers {..}
                 nonemptyWhitespace
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
-
-            alternative08 = do
-                try (_toMap *> nonemptyWhitespace)
-                a <- importExpression_
-                return (ToMap a Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
