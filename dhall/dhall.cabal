@@ -1,6 +1,6 @@
 Name: dhall
 Version: 1.30.0
-Cabal-Version: >=1.10
+Cabal-Version: 1.18
 Build-Type: Simple
 Tested-With: GHC == 8.0.2, GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
@@ -22,6 +22,8 @@ Description:
     .
     Read "Dhall.Tutorial" to learn how to use this library
 Category: Compiler
+Extra-Doc-Files:
+    man/dhall.1
 Extra-Source-Files:
     benchmark/deep-nested-large-record/*.dhall
     benchmark/examples/*.dhall
