@@ -89,6 +89,18 @@ dhall - a programmable configuration language
 **-\-censor**
 :   Hide source code from error messages
 
+# EDITOR INTEGRATION
+
+Editor integration for Vim, Emacs, Atom, and VS Code is available at:
+
+https://github.com/vmchale/dhall-vim
+
+https://github.com/psibi/dhall-mode
+
+https://github.com/jmitchell/atom-language-dhall
+
+https://github.com/dhall-lang/vscode-language-dhall
+
 # BUGS
 
 Please report any bugs you may come across to
