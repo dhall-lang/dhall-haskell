@@ -20,7 +20,7 @@ dhall - a programmable configuration language
 
   dhall repl
 
-  dhall diff <(cat file1.dhall) <(cat file2.dhall)
+  dhall diff './file1.dhall' './file2.dhall'
 
   dhall type -\- quiet -\-file check-ci.dhall
 
