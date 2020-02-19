@@ -22,6 +22,8 @@ dhall - a programmable configuration language
 
   dhall diff <(cat file1.dhall) <(cat file2.dhall)
 
+  dhall type -\- quiet -\-file check-ci.dhall
+
 # SUBCOMMANDS
 
 **version** - Display version information
