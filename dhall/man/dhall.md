@@ -93,15 +93,9 @@ dhall - a programmable configuration language
 
 # EDITOR INTEGRATION
 
-Editor integration for Vim, Emacs, Atom, and VS Code is available at:
+Up-to-date information on editor integration is available at:
 
-https://github.com/vmchale/dhall-vim
-
-https://github.com/psibi/dhall-mode
-
-https://github.com/jmitchell/atom-language-dhall
-
-https://github.com/dhall-lang/vscode-language-dhall
+https://docs.dhall-lang.org/howtos/Text-Editor-Configuration.html
 
 # BUGS
 
