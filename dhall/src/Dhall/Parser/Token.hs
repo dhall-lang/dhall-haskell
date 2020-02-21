@@ -123,13 +123,16 @@ import qualified Control.Monad
 import qualified Data.Char                  as Char
 import qualified Data.Foldable
 import qualified Data.HashSet
+import qualified Data.List                  as List
 import qualified Data.List.NonEmpty
+import qualified Data.Scientific            as Scientific
 import qualified Data.Text
 import qualified Dhall.Set
 import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
+import qualified Text.Parser.Token
 import qualified Text.Parser.Combinators
 
 import Numeric.Natural (Natural)
@@ -190,8 +193,43 @@ signPrefix = (do
 doubleLiteral :: Parser Double
 doubleLiteral = (do
     sign <- signPrefix <|> pure id
-    a <- Text.Megaparsec.Char.Lexer.float
-    return (sign a) ) <?> "literal"
+
+    x <- Text.Parser.Token.decimal
+
+    let alternative0 = do
+            y <- fraction
+
+            e <- exponent' <|> pure 1
+
+            return ((fromInteger x + y) * e)
+
+    let alternative1 = do
+            expo <- exponent'
+
+            return (fromInteger x * expo)
+
+    n <- alternative0 <|> alternative1
+
+    return (sign (Scientific.toRealFloat n)) ) <?> "literal"
+  where
+    fraction = do
+        _ <- Text.Parser.Char.char '.'
+
+        digits <- some Text.Parser.Char.digit
+
+        let snoc y d =
+              y + Scientific.scientific (fromIntegral (Char.digitToInt d)) (Scientific.base10Exponent y - 1)
+
+        return (List.foldl' snoc 0 digits)
+
+    exponent' = do
+        _ <- Text.Parser.Char.oneOf "eE"
+
+        sign <- signPrefix <|> pure id
+
+        x <- Text.Parser.Token.decimal
+
+        return (Scientific.scientific 1 (fromInteger (sign x)))
 
 {-| Parse a signed @Infinity@
 
