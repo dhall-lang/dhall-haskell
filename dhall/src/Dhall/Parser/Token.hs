@@ -192,6 +192,21 @@ signPrefix = (do
 -}
 doubleLiteral :: Parser Double
 doubleLiteral = (do
+    -- We don't use `Text.Parser.Token.double` since that consumes trailing
+    -- whitespace and there is no whitespace-free alternative.  See:
+    --
+    -- * https://github.com/dhall-lang/dhall-haskell/pull/1646
+    -- * https://github.com/dhall-lang/dhall-haskell/pull/1647
+    --
+    -- We also don't use `Text.Megaparsec.Char.Lexer.float` because that
+    -- transitively depends on `Data.Char.toTitle` which is broken on older
+    -- versions of GHCJS that we still support.  See:
+    --
+    -- * https://github.com/dhall-lang/dhall-haskell/pull/1681
+    -- * https://github.com/ghcjs/ghcjs-base/issues/62
+    --
+    -- Also, hand-writing the parser code for `Double` literals helps to better
+    -- ensure that we follow the standard exactly as written.
     sign <- signPrefix <|> pure id
 
     x <- Text.Parser.Token.decimal
