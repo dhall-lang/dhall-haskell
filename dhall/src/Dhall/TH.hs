@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards     #-}
@@ -17,6 +18,8 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall.Syntax (Expr(..))
+import Dhall (FromDhall, ToDhall)
+import GHC.Generics (Generic)
 import Language.Haskell.TH.Quote (dataToExpQ) -- 7.10 compatibility.
 
 import Language.Haskell.TH.Syntax
@@ -28,6 +31,12 @@ import Language.Haskell.TH.Syntax
     , Bang(..)
     , SourceStrictness(..)
     , SourceUnpackedness(..)
+#if MIN_VERSION_template_haskell(2,12,0)
+    , DerivClause(..)
+    , DerivStrategy(..)
+#else
+    , Pred
+#endif
     )
 
 import qualified Data.List                               as List
@@ -140,8 +149,8 @@ toNestedHaskellType haskellTypes = loop
                     , "• ❰Integer❱                                                                     \n"
                     , "• ❰Natural❱                                                                     \n"
                     , "• ❰Text❱                                                                        \n"
-                    , "• ❰List a❱     (where ❰a❱ is also a simple type)                                \n"
-                    , "• ❰Optional a❱ (where ❰a❱ is also a simple type)                                \n"
+                    , "• ❰List a❱     (where ❰a❱ is also a valid nested type)                          \n"
+                    , "• ❰Optional a❱ (where ❰a❱ is also a valid nested type)                          \n"
                     , "• Another matching datatype declaration                                         \n"
                     , "                                                                                \n"
                     , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
@@ -158,6 +167,17 @@ toNestedHaskellType haskellTypes = loop
             predicate haskellType =
                 Core.judgmentallyEqual (code haskellType) dhallType
 
+#if MIN_VERSION_template_haskell(2,12,0)
+derivingClauses :: [DerivClause]
+derivingClauses =
+    [ DerivClause (Just StockStrategy) [ ConT ''Generic ]
+    , DerivClause (Just AnyclassStrategy) [ ConT ''FromDhall, ConT ''ToDhall ]
+    ]
+#else
+derivingClauses :: [Pred]
+derivingClauses = [ ConT ''Generic, ConT ''FromDhall, ConT ''ToDhall ]
+#endif
+
 -- | Convert a Dhall type to the corresponding Haskell datatype declaration
 toDeclaration
     :: (Eq a, Pretty a)
@@ -171,7 +191,7 @@ toDeclaration haskellTypes MultipleConstructors{..} = do
 
             constructors <- traverse (toConstructor haskellTypes) (Dhall.Map.toList kts )
 
-            return (DataD [] name [] Nothing constructors [])
+            return (DataD [] name [] Nothing constructors derivingClauses)
 
         _ -> do
             let document =
@@ -220,7 +240,7 @@ toDeclaration haskellTypes SingleConstructor{..} = do
 
     constructor <- toConstructor haskellTypes (constructorName, Just code)
 
-    return (DataD [] name [] Nothing [constructor] [])
+    return (DataD [] name [] Nothing [constructor] derivingClauses)
 
 -- | Convert a Dhall type to the corresponding Haskell constructor
 toConstructor
@@ -318,6 +338,12 @@ data HaskellType code
 --
 -- ... this Template Haskell splice:
 --
+-- > {-# LANGUAGE DeriveAnyClass     #-}
+-- > {-# LANGUAGE DeriveGeneric      #-}
+-- > {-# LANGUAGE DerivingStrategies #-}
+-- > {-# LANGUAGE OverloadedStrings  #-}
+-- > {-# LANGUAGE TemplateHaskell    #-}
+-- >
 -- > Dhall.TH.makeHaskellTypes
 -- >     [ MultipleConstructors "Department" "./tests/th/Department.dhall"
 -- >     , SingleConstructor "Employee" "MakeEmployee" "./tests/th/Employee.dhall"
@@ -326,21 +352,34 @@ data HaskellType code
 -- ... generates this Haskell code:
 --
 -- > data Department = Engineering | Marketing | Sales
+-- >   deriving stock (GHC.Generics.Generic)
+-- >   deriving anyclass (Dhall.FromDhall, Dhall.ToDhall)
 -- >
 -- > data Employee
 -- >   = MakeEmployee {department :: Department,
 -- >                   name :: Data.Text.Internal.Text}
+-- >   deriving stock (GHC.Generics.Generic)
+-- >   deriving anyclass (Dhall.FromDhall, Dhall.ToDhall)
 --
 -- Carefully note that the conversion makes a best-effort attempt to
 -- auto-detect when a Dhall type (like @./Employee.dhall@) refers to another
 -- Dhall type (like @./Department.dhall@) and replaces that reference with the
 -- corresponding Haskell type.
 --
--- To add any desired instances (such as `Dhall.FromDhall`/`Dhall.ToDhall`),
--- you can use the `StandaloneDeriving` language extension, like this:
+-- This Template Haskell splice requires you to enable the following extensions:
+--
+-- * @DeriveGeneric@
+-- * @DerivingAnyClass@
+-- * @DerivingStrategies@
+--
+-- By default, the generated types only derive `GHC.Generics.Generic`,
+-- `Dhall.FromDhall`, and `Dhall.ToDhall`.  To add any desired instances (such
+-- as `Eq`\/`Ord`\/`Show`), you can use the `StandaloneDeriving` language
+-- extension, like this:
 --
 -- > {-# LANGUAGE DeriveAnyClass     #-}
 -- > {-# LANGUAGE DeriveGeneric      #-}
+-- > {-# LANGUAGE DerivingStrategies #-}
 -- > {-# LANGUAGE OverloadedStrings  #-}
 -- > {-# LANGUAGE StandaloneDeriving #-}
 -- > {-# LANGUAGE TemplateHaskell    #-}
@@ -350,11 +389,13 @@ data HaskellType code
 -- >     , SingleConstructor "Employee" "MakeEmployee" "./tests/th/Employee.dhall"
 -- >     ]
 -- >
--- > deriving instance Generic   Department
--- > deriving instance FromDhall Department
+-- > deriving instance Eq   Department
+-- > deriving instance Ord  Department
+-- > deriving instance Show Department
 -- >
--- > deriving instance Generic   Employee
--- > deriving instance FromDhall Employee
+-- > deriving instance Eq   Employee
+-- > deriving instance Ord  Employee
+-- > deriving instance Show Employee
 makeHaskellTypes :: [HaskellType Text] -> Q [Dec]
 makeHaskellTypes haskellTypes = do
     Syntax.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)

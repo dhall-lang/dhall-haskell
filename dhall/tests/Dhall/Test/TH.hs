@@ -1,14 +1,13 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
 
 module Dhall.Test.TH where
 
-import Dhall (FromDhall(..))
 import Dhall.TH (HaskellType(..))
-import GHC.Generics
 import Test.Tasty (TestTree)
 
 import qualified Dhall
@@ -18,25 +17,19 @@ import qualified Test.Tasty.HUnit as Tasty.HUnit
 
 Dhall.TH.makeHaskellTypeFromUnion "T" "./tests/th/example.dhall"
 
-deriving instance Eq        T
-deriving instance Show      T
-deriving instance Generic   T
-deriving instance FromDhall T
+deriving instance Eq   T
+deriving instance Show T
 
 Dhall.TH.makeHaskellTypes
     [ MultipleConstructors "Department" "./tests/th/Department.dhall"
     , SingleConstructor "Employee" "MakeEmployee" "./tests/th/Employee.dhall"
     ]
 
-deriving instance Eq        Department
-deriving instance Show      Department
-deriving instance Generic   Department
-deriving instance FromDhall Department
+deriving instance Eq   Department
+deriving instance Show Department
 
-deriving instance Eq        Employee
-deriving instance Show      Employee
-deriving instance Generic   Employee
-deriving instance FromDhall Employee
+deriving instance Eq   Employee
+deriving instance Show Employee
 
 tests :: TestTree
 tests = Tasty.testGroup "Template Haskell" [ makeHaskellTypeFromUnion ]
