@@ -1,9 +1,13 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
+
+#if MIN_VERSION_template_haskell(2,12,0)
+{-# LANGUAGE DerivingStrategies #-}
+#endif
 
 module Dhall.Test.TH where
 
