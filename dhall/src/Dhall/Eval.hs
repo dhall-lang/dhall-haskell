@@ -57,6 +57,10 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
+import Dhall.Map (Map)
+import Dhall.Set (Set)
+import GHC.Natural (Natural)
+import Prelude hiding (succ)
 
 import Dhall.Syntax
   ( Binding(..)
@@ -66,11 +70,6 @@ import Dhall.Syntax
   , DhallDouble(..)
   , Var(..)
   )
-
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import GHC.Natural (Natural)
-import Prelude hiding (succ)
 
 import qualified Data.Char
 import qualified Data.Sequence   as Sequence
@@ -736,6 +735,8 @@ eval !env t0 =
             VAssert (eval env t)
         Equivalent t u ->
             VEquivalent (eval env t) (eval env u)
+        e@With{} ->
+            eval env (Syntax.desugarWith e)
         Note _ e ->
             eval env e
         ImportAlt t _ ->
@@ -1312,6 +1313,8 @@ alphaNormalize = goEnv EmptyNames
                 Assert (go t)
             Equivalent t u ->
                 Equivalent (go t) (go u)
+            With t us ->
+                With (go t) (fmap (fmap go) us)
             Note s e ->
                 Note s (go e)
             ImportAlt t u ->

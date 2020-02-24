@@ -271,6 +271,10 @@ shift d v (Project a b) = Project a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
+shift d v (With a b) = With a' b'
+  where
+    a' =             shift d v   a
+    b' = fmap (fmap (shift d v)) b
 shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
@@ -446,6 +450,10 @@ subst x e (Equivalent a b) = Equivalent a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst x e (With a b) = With a' b'
+  where
+    a' =             subst x e   a
+    b' = fmap (fmap (subst x e)) b
 subst x e (Note a b) = Note a b'
   where
     b' = subst x e b
@@ -1012,6 +1020,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         r' <- loop r
 
         pure (Equivalent l' r')
+    With l r -> do
+        l' <- loop l
+        r' <- traverse (traverse loop) r
+
+        return (With l' r')
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1230,6 +1243,7 @@ isNormalized e0 = loop (Syntax.denote e0)
                   _ -> loop e'
       Assert t -> loop t
       Equivalent l r -> loop l && loop r
+      With l r -> loop l && all (all loop) r
       Note _ e' -> loop e'
       ImportAlt _ _ -> False
       Embed _ -> True

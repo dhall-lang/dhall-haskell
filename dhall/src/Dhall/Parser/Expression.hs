@@ -313,11 +313,11 @@ parsers embedded = Parsers {..}
                         Nothing      -> parser
                         Just message -> parser <?> message
 
-            a <- adapt (noted importExpression_)
+            a <- adapt (noted withExpression)
 
             bs <- Text.Megaparsec.many . try $ do
                 (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
-                b <- importExpression_
+                b <- withExpression
                 return (sep, b)
 
             return (foldl' app (f a) bs)
@@ -328,6 +328,45 @@ parsers embedded = Parsers {..}
                 = Note (Src left right (bytesL <> sep <> bytesR)) (App a b)
             app a (_, b) =
                 App a b
+
+    withExpression = noted (do
+        a <- importExpression_
+
+        mb <- optional (do
+            try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
+
+            _openBrace
+
+            whitespace
+
+            _ <- optional (_comma *> whitespace)
+
+            let update = do
+                    keys <- Text.Megaparsec.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+
+                    whitespace
+
+                    _equal
+
+                    whitespace
+
+                    value <- expression
+
+                    whitespace
+
+                    return (keys, value)
+
+            updates <- Combinators.NonEmpty.sepBy1 update (_comma *> whitespace)
+
+            whitespace
+
+            _closeBrace
+
+            return updates )
+
+        case mb of
+            Nothing -> return a
+            Just b  -> return (With a b) )
 
     importExpression_ = noted (choice [ alternative0, alternative1 ])
           where
@@ -425,9 +464,9 @@ parsers embedded = Parsers {..}
 
             alternative07 = do
                 try (_merge *> nonemptyWhitespace)
-                a <- importExpression_
+                a <- withExpression
                 nonemptyWhitespace
-                b <- importExpression_ <?> "second argument to ❰merge❱"
+                b <- withExpression <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative09 = do
@@ -762,16 +801,7 @@ parsers embedded = Parsers {..}
                     return (foldr cons nil (NonEmpty.init keys))
 
             let nonEmptyRecordLiteral = do
-                    (a, b) <- keysValue
-
-                    e <- Text.Megaparsec.many (do
-                        _comma
-
-                        whitespace
-
-                        (c, d) <- keysValue
-
-                        return (c, d) )
+                    as <- Text.Megaparsec.sepBy1 keysValue (_comma *> whitespace)
 
                     {- The `flip` is necessary because `toMapWith` is internally
                        based on `Data.Map.fromListWithKey` which combines keys
@@ -779,7 +809,7 @@ parsers embedded = Parsers {..}
                     -}
                     let combine k = liftA2 (flip (Combine (Just k)))
 
-                    m <- toMapWith combine ((a, b) : e)
+                    m <- toMapWith combine as
 
                     return (RecordLit m)
 

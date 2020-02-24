@@ -36,7 +36,7 @@ import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
-import qualified Dhall.Normalize
+import qualified Dhall.Normalize            as Normalize
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty.Internal      as Internal
@@ -158,8 +158,8 @@ rparen = token Internal.rparen
 diffNormalized :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
-    l1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize l0)
-    r1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize r0)
+    l1 = Normalize.alphaNormalize (Normalize.normalize l0)
+    r1 = Normalize.alphaNormalize (Normalize.normalize r0)
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -619,6 +619,12 @@ skeleton (Project {}) =
     <>  ignore
     <>  " "
     <>  rbrace
+skeleton (With {}) =
+         ignore
+    <>   " "
+    <>   keyword "with"
+    <>   " "
+    <>   ignore
 skeleton x = token (Pretty.pretty x)
 
 mismatch :: Pretty a => Expr s a -> Expr s a -> Diff
@@ -729,8 +735,8 @@ diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
   where
     doc =   keyword "merge"
         <>  " "
-        <>  format " " (diffImportExpression aL aR)
-        <>  format " " (diffImportExpression bL bR)
+        <>  format " " (diffWithExpression aL aR)
+        <>  format " " (diffWithExpression bL bR)
         <>  diffMaybe (colon <> " ") diffApplicationExpression cL cR
 diffAnnotatedExpression l@(Merge {}) r =
     mismatch l r
@@ -740,7 +746,7 @@ diffAnnotatedExpression (ToMap aL bL) (ToMap aR bR) = align doc
   where
     doc =   keyword "toMap"
         <>  " "
-        <>  format " " (diffImportExpression aL aR)
+        <>  format " " (diffWithExpression aL aR)
         <>  diffMaybe (colon <> " ") diffApplicationExpression bL bR
 diffAnnotatedExpression l@(ToMap {}) r =
     mismatch l r
@@ -989,26 +995,39 @@ diffApplicationExpression l@(App {}) r@(App {}) =
     enclosed' mempty mempty (Data.List.NonEmpty.reverse (docs l r))
   where
     docs (App aL bL) (App aR bR) =
-        Data.List.NonEmpty.cons (diffImportExpression bL bR) (docs aL aR)
+        Data.List.NonEmpty.cons (diffWithExpression bL bR) (docs aL aR)
     docs (Some aL) (Some aR) =
-        diffImportExpression aL aR :| [ builtin "Some" ]
+        diffWithExpression aL aR :| [ builtin "Some" ]
     docs aL aR@(Some {}) =
         pure (mismatch aL aR)
     docs aL@(Some {}) aR =
         pure (mismatch aL aR)
     docs aL aR =
-        pure (diffImportExpression aL aR)
+        pure (diffWithExpression aL aR)
 diffApplicationExpression l@(App {}) r =
     mismatch l r
 diffApplicationExpression l r@(App {}) =
     mismatch l r
 diffApplicationExpression (Some l) (Some r) =
-    enclosed' mempty mempty (builtin "Some" :| [ diffImportExpression l r ])
+    enclosed' mempty mempty (builtin "Some" :| [ diffWithExpression l r ])
 diffApplicationExpression l@(Some {}) r =
     mismatch l r
 diffApplicationExpression l r@(Some {}) =
     mismatch l r
 diffApplicationExpression l r =
+    diffWithExpression l r
+
+diffWithExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
+diffWithExpression (With aL bL) (With aR bR) =
+    diffImportExpression aL aR <> " " <> keyword "with" <> " " <>
+        diffPrimitiveExpression (toRecord bL) (toRecord bR)
+  where
+    toRecord updates = Normalize.normalize (With (RecordLit mempty) updates)
+diffWithExpression l r@With{} =
+    mismatch l r
+diffWithExpression l@With{} r =
+    mismatch l r
+diffWithExpression l r =
     diffImportExpression l r
 
 diffImportExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff

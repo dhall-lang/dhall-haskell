@@ -105,6 +105,7 @@ module Dhall.Parser.Token (
     _forall,
     _arrow,
     _doubleColon,
+    _with,
     ) where
 
 import           Dhall.Parser.Combinators
@@ -828,6 +829,10 @@ _toMap = keyword "toMap"
 -}
 _assert :: Parser ()
 _assert = keyword "assert"
+
+-- | Parse the @with@ keyword
+_with :: Parser ()
+_with = keyword "with"
 
 {-| Parse the @Some@ built-in
 

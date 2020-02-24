@@ -65,6 +65,7 @@ import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Syntax                            as Syntax
 import qualified Dhall.Util
 import qualified Lens.Family
 
@@ -1260,6 +1261,9 @@ infer typer = loop
                 else die (EquivalenceTypeMismatch x _A₀'' y _A₁'')
 
             return (VConst Type)
+
+        e@With{} -> do
+            loop ctx (Syntax.desugarWith e)
 
         Note s e ->
             case loop ctx e of
