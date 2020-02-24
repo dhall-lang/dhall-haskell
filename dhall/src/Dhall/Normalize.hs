@@ -1021,10 +1021,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
 
         pure (Equivalent l' r')
     With l r -> do
-        l' <- loop l
-        r' <- traverse (traverse loop) r
-
-        return (With l' r')
+        loop (Syntax.desugarWith (With l r))
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1243,7 +1240,7 @@ isNormalized e0 = loop (Syntax.denote e0)
                   _ -> loop e'
       Assert t -> loop t
       Equivalent l r -> loop l && loop r
-      With l r -> loop l && all (all loop) r
+      With _ _ -> False
       Note _ e' -> loop e'
       ImportAlt _ _ -> False
       Embed _ -> True
