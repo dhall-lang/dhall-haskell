@@ -39,6 +39,7 @@ import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Normalize            as Normalize
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Dhall.Syntax               as Syntax
 import qualified Dhall.Pretty.Internal      as Internal
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
@@ -1018,11 +1019,8 @@ diffApplicationExpression l r =
     diffWithExpression l r
 
 diffWithExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
-diffWithExpression (With aL bL) (With aR bR) =
-    diffImportExpression aL aR <> " " <> keyword "with" <> " " <>
-        diffPrimitiveExpression (toRecord bL) (toRecord bR)
-  where
-    toRecord updates = Normalize.normalize (With (RecordLit mempty) updates)
+diffWithExpression l@With{} r@With{} =
+    diffWithExpression (Syntax.desugarWith l) (Syntax.desugarWith r)
 diffWithExpression l r@With{} =
     mismatch l r
 diffWithExpression l@With{} r =

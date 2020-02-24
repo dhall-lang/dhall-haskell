@@ -1323,7 +1323,7 @@ toDoubleQuoted literal =
 
     indent = Data.Text.length longestSharedPrefix
 
--- | Desugar all `with` expressions
+-- | Desugar all @with@ expressions
 desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
