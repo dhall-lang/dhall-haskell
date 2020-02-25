@@ -1061,24 +1061,15 @@ prettyCharacterSet characterSet expression =
                 )
 
     prettyWithExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyWithExpression (With a b) = Pretty.flatAlt long short
+    prettyWithExpression (With a b) =
+            prettyImportExpression a
+        <>  " "
+        <>  keyword "with"
+        <>  " "
+        <>  prettyUpdates b
       where
-        short =
-              prettyImportExpression a
-          <>  " "
-          <>  keyword "with"
-          <>  " "
-          <>  prettyUpdates b
-
-        long =
-              prettyImportExpression a
-          <>  " "
-          <>  keyword "with"
-          <>  Pretty.hardline
-          <>  Pretty.indent 2 (prettyUpdates b)
-
         prettyUpdates updates =
-            braces (map prettyRecordEntry (Foldable.toList updates))
+            hangingBraces 0 (map prettyRecordEntry (Foldable.toList updates))
 
         prettyRecordEntry = prettyKeyValue prettyAnyLabels equals
     prettyWithExpression a
