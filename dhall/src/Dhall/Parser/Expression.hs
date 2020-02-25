@@ -332,7 +332,7 @@ parsers embedded = Parsers {..}
     withExpression = noted (do
         a <- importExpression_
 
-        mb <- optional (do
+        bs <- many (do
             try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
 
             _openBrace
@@ -364,9 +364,7 @@ parsers embedded = Parsers {..}
 
             return updates )
 
-        case mb of
-            Nothing -> return a
-            Just b  -> return (With a b) )
+        return (foldl With a bs) )
 
     importExpression_ = noted (choice [ alternative0, alternative1 ])
           where
