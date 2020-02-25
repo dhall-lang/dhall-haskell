@@ -77,6 +77,7 @@ import Prelude hiding (succ)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
 
 import qualified Data.Char
+import qualified Data.Foldable                           as Foldable
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.List.NonEmpty                      as NonEmpty
@@ -438,7 +439,7 @@ prettyLabel = prettyLabelShared False
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
 
-prettyAnyLabels :: NonEmpty Text -> Doc Ann
+prettyAnyLabels :: Foldable list => list Text -> Doc Ann
 prettyAnyLabels =
     mconcat . Pretty.punctuate dot . fmap prettyAnyLabel . toList
 
@@ -700,18 +701,18 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "merge"
                 <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
+                <>  Pretty.indent 2 (prettyWithExpression a)
                 <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression b)
+                <>  Pretty.indent 2 (prettyWithExpression b)
                 <>  Pretty.hardline
                 <>  colon <> space
                 <>  prettyApplicationExpression c
                 )
 
         short = keyword "merge" <> space
-            <>  prettyImportExpression a
+            <>  prettyWithExpression a
             <>  " "
-            <>  prettyImportExpression b
+            <>  prettyWithExpression b
             <>  space <> colon <> space
             <>  prettyApplicationExpression c
     prettyAnnotatedExpression (ToMap a (Just b)) =
@@ -721,14 +722,14 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "toMap"
                 <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
+                <>  Pretty.indent 2 (prettyWithExpression a)
                 <>  Pretty.hardline
                 <>  colon <> space
                 <>  prettyApplicationExpression b
                 )
 
         short = keyword "toMap" <> space
-            <>  prettyImportExpression a
+            <>  prettyWithExpression a
             <>  space <> colon <> space
             <>  prettyApplicationExpression b
     prettyAnnotatedExpression a0@(Annot _ _) =
@@ -1046,18 +1047,38 @@ prettyCharacterSet characterSet expression =
             e | Note _ b <- e ->
                   go args b
               | null args ->
-                  prettyImportExpression e -- just a performance optimization
+                  prettyWithExpression e -- just a performance optimization
               | Just doc <- preserveSource e ->
                   app doc args
               | otherwise ->
-                  app (prettyImportExpression e) args
+                  app (prettyWithExpression e) args
 
         app f args =
             enclose'
                 "" "" " " ""
                 ( duplicate f
-                : map (fmap (Pretty.indent 2) . duplicate . prettyImportExpression) args
+                : map (fmap (Pretty.indent 2) . duplicate . prettyWithExpression) args
                 )
+
+    prettyWithExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyWithExpression (With a b) =
+            prettyImportExpression a
+        <>  " "
+        <>  keyword "with"
+        <>  " "
+        <>  prettyUpdates b
+      where
+        prettyUpdates updates =
+            hangingBraces 0 (map prettyRecordEntry (Foldable.toList updates))
+
+        prettyRecordEntry = prettyKeyValue prettyAnyLabels equals
+    prettyWithExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyWithExpression b
+        | otherwise =
+            prettyImportExpression a
 
     prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportExpression (Embed a) =

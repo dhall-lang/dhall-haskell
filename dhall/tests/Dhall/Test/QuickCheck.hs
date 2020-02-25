@@ -313,6 +313,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "Project")
             % (1 :: W "Assert")
             % (1 :: W "Equivalent")
+            % (1 :: W "With")
             % (0 :: W "Note")
             % (7 :: W "ImportAlt")
             % (7 :: W "Embed")
@@ -325,6 +326,7 @@ standardizedExpression (ListLit  Nothing  xs) = not (Data.Sequence.null xs)
 standardizedExpression (ListLit (Just _ ) xs) = Data.Sequence.null xs
 standardizedExpression (Note _ _            ) = False
 standardizedExpression (Combine (Just _) _ _) = False
+standardizedExpression (With _ _            ) = False
 standardizedExpression  _                     = True
 
 instance Arbitrary File where
