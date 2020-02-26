@@ -342,7 +342,7 @@ parsers embedded = Parsers {..}
             _ <- optional (_comma *> whitespace)
 
             let update = do
-                    keys <- Text.Megaparsec.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+                    keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
 
                     whitespace
 

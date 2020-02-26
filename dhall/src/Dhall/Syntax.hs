@@ -95,7 +95,8 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Control.Monad
 import qualified Data.HashSet
-import qualified Data.List.NonEmpty
+import qualified Data.List                  as List
+import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Crypto
@@ -453,7 +454,7 @@ data Expr s a
     -- | > Equivalent x y                           ~  x ≡ y
     | Equivalent (Expr s a) (Expr s a)
     -- | > With x y                                 ~  x with y
-    | With (Expr s a) (NonEmpty ([Text], Expr s a))
+    | With (Expr s a) (NonEmpty (NonEmpty Text, Expr s a))
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -756,7 +757,7 @@ multiLet :: Binding s a -> Expr s a -> MultiLet s a
 multiLet b0 = \case
     Let b1 e1 ->
         let MultiLet bs e = multiLet b1 e1
-        in  MultiLet (Data.List.NonEmpty.cons b0 bs) e
+        in  MultiLet (NonEmpty.cons b0 bs) e
     e -> MultiLet (b0 :| []) e
 
 {-| Wrap let-'Binding's around an 'Expr'.
@@ -1246,21 +1247,21 @@ linesLiteral (Chunks [] suffix) =
     fmap (Chunks []) (splitOn "\n" suffix)
 linesLiteral (Chunks ((prefix, interpolation) : pairs₀) suffix₀) =
     foldr
-        Data.List.NonEmpty.cons
+        NonEmpty.cons
         (Chunks ((lastLine, interpolation) : pairs₁) suffix₁ :| chunks)
         (fmap (Chunks []) initLines)
   where
     splitLines = splitOn "\n" prefix
 
-    initLines = Data.List.NonEmpty.init splitLines
-    lastLine  = Data.List.NonEmpty.last splitLines
+    initLines = NonEmpty.init splitLines
+    lastLine  = NonEmpty.last splitLines
 
     Chunks pairs₁ suffix₁ :| chunks = linesLiteral (Chunks pairs₀ suffix₀)
 
 -- | Flatten several `Chunks` back into a single `Chunks` by inserting newlines
 unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
 unlinesLiteral chunks =
-    Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
+    Data.Foldable.fold (NonEmpty.intersperse "\n" chunks)
 
 -- | Returns `True` if the `Chunks` represents a blank line
 emptyLine :: Chunks s a -> Bool
@@ -1297,9 +1298,9 @@ longestSharedWhitespacePrefix literals =
     -- for the last line
     filteredLines = newInit <> pure oldLast
       where
-        oldInit = Data.List.NonEmpty.init literals
+        oldInit = NonEmpty.init literals
 
-        oldLast = Data.List.NonEmpty.last literals
+        oldLast = NonEmpty.last literals
 
         newInit = filter (not . emptyLine) oldInit
 
@@ -1327,11 +1328,15 @@ toDoubleQuoted literal =
 desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
-    _record `with` ([], value) =
-        value
-    record `with` (key : keys, value) =
-        Prefer record
-            (RecordLit [ (key, Field record key `with` (keys, value)) ])
+    record `with` (key :| [], value) =
+        Prefer record (RecordLit [ (key, value) ])
+    record `with` (key0 :| key1 : keys, value) =
+        Let (Binding Nothing "_" Nothing Nothing Nothing record)
+            (Prefer "_"
+                (RecordLit
+                    [ (key0, Field "_" key0 `with` (key1 :| keys, value)) ]
+                )
+            )
 
-    rewrite (With record updates) = Just (foldl with record updates)
+    rewrite (With record updates) = Just (List.foldl with record updates)
     rewrite  _                    = Nothing
