@@ -3,4 +3,5 @@
 , int_value = 1
 , bool_value = True
 , yes = "y"
+, hello_world = "hello world"
 }

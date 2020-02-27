@@ -26,7 +26,8 @@ main = do
 testTree :: TestTree
 testTree =
     Test.Tasty.testGroup "dhall-yaml"
-        [ testDhallToYaml
+        [ Test.Tasty.ExpectedFailure.ignoreTestBecause "#1516" $
+          testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/normal"
         , testDhallToYaml
@@ -38,8 +39,7 @@ testTree =
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/emptyMap"
-        , Test.Tasty.ExpectedFailure.ignoreTestBecause "#1516" $
-          testDhallToYaml
+        , testDhallToYaml
             (Dhall.JSON.Yaml.defaultOptions { quoted = True })
             "./tasty/data/quoted"
         ]
