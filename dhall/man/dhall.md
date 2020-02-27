@@ -20,9 +20,9 @@ dhall - a programmable configuration language
 
   dhall repl
 
-  dhall diff './file1.dhall' './file2.dhall'
+  dhall diff \'./file1.dhall' \'./file2.dhall'
 
-  dhall type -\- quiet -\-file check-ci.dhall
+  dhall type -\-quiet -\-file check-ci.dhall
 
 # SUBCOMMANDS
 
