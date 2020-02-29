@@ -14,7 +14,6 @@ import qualified Dhall.JSON.Yaml
 import qualified Dhall.Yaml
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
-import qualified Test.Tasty.ExpectedFailure
 import qualified Test.Tasty.HUnit
 
 main :: IO ()
@@ -38,8 +37,7 @@ testTree =
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/emptyMap"
-        , Test.Tasty.ExpectedFailure.ignoreTestBecause "#1516" $
-          testDhallToYaml
+        , testDhallToYaml
             (Dhall.JSON.Yaml.defaultOptions { quoted = True })
             "./tasty/data/quoted"
         ]
