@@ -14,7 +14,6 @@ import qualified Dhall.JSON.Yaml
 import qualified Dhall.Yaml
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
-import qualified Test.Tasty.ExpectedFailure
 import qualified Test.Tasty.HUnit
 
 main :: IO ()
