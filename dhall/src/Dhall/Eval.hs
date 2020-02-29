@@ -1313,8 +1313,8 @@ alphaNormalize = goEnv EmptyNames
                 Assert (go t)
             Equivalent t u ->
                 Equivalent (go t) (go u)
-            With t us ->
-                With (go t) (fmap (fmap go) us)
+            With e k v ->
+                With (go e) k (go v)
             Note s e ->
                 Note s (go e)
             ImportAlt t u ->

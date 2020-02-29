@@ -95,7 +95,6 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Control.Monad
 import qualified Data.HashSet
-import qualified Data.List                  as List
 import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
@@ -454,7 +453,7 @@ data Expr s a
     -- | > Equivalent x y                           ~  x ≡ y
     | Equivalent (Expr s a) (Expr s a)
     -- | > With x y                                 ~  x with y
-    | With (Expr s a) (NonEmpty (NonEmpty Text, Expr s a))
+    | With (Expr s a) (NonEmpty Text) (Expr s a)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -553,7 +552,7 @@ instance Functor (Expr s) where
   fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
   fmap f (Assert t) = Assert (fmap f t)
   fmap f (Equivalent e1 e2) = Equivalent (fmap f e1) (fmap f e2)
-  fmap f (With e1 us) = With (fmap f e1) (fmap (fmap (fmap f)) us)
+  fmap f (With e k v) = With (fmap f e) k (fmap f v)
   fmap f (Note s e1) = Note s (fmap f e1)
   fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
   fmap f (Embed a) = Embed (f a)
@@ -639,7 +638,7 @@ instance Monad (Expr s) where
     Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
     Assert a             >>= k = Assert (a >>= k)
     Equivalent a b       >>= k = Equivalent (a >>= k) (b >>= k)
-    With a b             >>= k = With (a >>= k) (fmap (fmap (>>= k)) b)
+    With a b c           >>= k = With (a >>= k) b (c >>= k)
     Note a b             >>= k = Note a (b >>= k)
     ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
     Embed a              >>= k = k a
@@ -712,7 +711,7 @@ instance Bifunctor Expr where
     first k (Assert a            ) = Assert (first k a)
     first k (Equivalent a b      ) = Equivalent (first k a) (first k b)
     first k (Project a b         ) = Project (first k a) (fmap (first k) b)
-    first k (With a b            ) = With (first k a) (fmap (fmap (first k)) b)
+    first k (With a b c          ) = With (first k a) b (first k c)
     first k (Note a b            ) = Note (k a) (first k b)
     first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
     first _ (Embed a             ) = Embed a
@@ -846,7 +845,7 @@ subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> traverse f b
 subExpressions f (Assert a) = Assert <$> f a
 subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
-subExpressions f (With a b) = With <$> f a <*> traverse (traverse f) b
+subExpressions f (With a b c) = With <$> f a <*> pure b <*> f c
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
@@ -1153,7 +1152,7 @@ denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) (fmap denote b)
 denote (Assert a            ) = Assert (denote a)
 denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
-denote (With a b            ) = With (denote a) (fmap (fmap denote) b)
+denote (With a b c          ) = With (denote a) b (denote c)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
@@ -1191,6 +1190,7 @@ reservedIdentifiers =
         , "toMap"
         , "assert"
         , "forall"
+        , "with"
 
           -- Builtins according to the `builtin` rule in the grammar
         , "Natural/fold"
@@ -1328,15 +1328,15 @@ toDoubleQuoted literal =
 desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
-    record `with` (key :| [], value) =
-        Prefer record (RecordLit [ (key, value) ])
-    record `with` (key0 :| key1 : keys, value) =
-        Let (Binding Nothing "_" Nothing Nothing Nothing record)
-            (Prefer "_"
-                (RecordLit
-                    [ (key0, Field "_" key0 `with` (key1 :| keys, value)) ]
+    rewrite (With record (key :| []) value) =
+        Just (Prefer record (RecordLit [ (key, value) ]))
+    rewrite (With record (key0 :| key1 : keys) value) =
+        Just
+            (Let (Binding Nothing "_" Nothing Nothing Nothing record)
+                (Prefer "_"
+                    (RecordLit
+                        [ (key0, With (Field "_" key0) (key1 :| keys) value) ]
+                    )
                 )
             )
-
-    rewrite (With record updates) = Just (List.foldl with record updates)
-    rewrite  _                    = Nothing
+    rewrite _ = Nothing

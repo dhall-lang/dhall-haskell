@@ -257,7 +257,7 @@ parsers embedded = Parsers {..}
             alternative4A <|> alternative4B <|> pure a
 
     operatorExpression =
-        foldr makeOperatorExpression applicationExpression operatorParsers
+        foldr makeOperatorExpression withExpression operatorParsers
 
     makeOperatorExpression operatorParser subExpression =
             noted (do
@@ -292,6 +292,26 @@ parsers embedded = Parsers {..}
         , Equivalent      <$ _equivalent   <* whitespace
         ]
 
+    withExpression = noted (do
+        a <- applicationExpression
+
+        bs <- many (do
+            try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
+
+            keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+
+            whitespace
+
+            _equal
+
+            whitespace
+
+            value <- applicationExpression
+
+            return (\e -> With e keys value) )
+
+        return (foldl (\e f -> f e) a bs) )
+
     applicationExpression = do
             let alternative0 = do
                     _ <- try (_Some <* nonemptyWhitespace)
@@ -313,11 +333,11 @@ parsers embedded = Parsers {..}
                         Nothing      -> parser
                         Just message -> parser <?> message
 
-            a <- adapt (noted withExpression)
+            a <- adapt (noted importExpression_)
 
             bs <- Text.Megaparsec.many . try $ do
                 (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
-                b <- withExpression
+                b <- importExpression_
                 return (sep, b)
 
             return (foldl' app (f a) bs)
@@ -328,43 +348,6 @@ parsers embedded = Parsers {..}
                 = Note (Src left right (bytesL <> sep <> bytesR)) (App a b)
             app a (_, b) =
                 App a b
-
-    withExpression = noted (do
-        a <- importExpression_
-
-        bs <- many (do
-            try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
-
-            _openBrace
-
-            whitespace
-
-            _ <- optional (_comma *> whitespace)
-
-            let update = do
-                    keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
-
-                    whitespace
-
-                    _equal
-
-                    whitespace
-
-                    value <- expression
-
-                    whitespace
-
-                    return (keys, value)
-
-            updates <- Combinators.NonEmpty.sepBy1 update (_comma *> whitespace)
-
-            whitespace
-
-            _closeBrace
-
-            return updates )
-
-        return (foldl With a bs) )
 
     importExpression_ = noted (choice [ alternative0, alternative1 ])
           where
@@ -462,9 +445,9 @@ parsers embedded = Parsers {..}
 
             alternative07 = do
                 try (_merge *> nonemptyWhitespace)
-                a <- withExpression
+                a <- importExpression_
                 nonemptyWhitespace
-                b <- withExpression <?> "second argument to ❰merge❱"
+                b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative09 = do
