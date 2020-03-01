@@ -31,16 +31,15 @@ import Dhall.Set (Set)
 import Dhall.Pretty.Internal (Ann)
 import Numeric.Natural (Natural)
 
-import qualified Data.Algorithm.Diff        as Algo.Diff
+import qualified Data.Algorithm.Diff       as Algo.Diff
 import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc  as Pretty
-import qualified Dhall.Normalize            as Normalize
+import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Dhall.Map
+import qualified Dhall.Normalize           as Normalize
+import qualified Dhall.Pretty.Internal     as Internal
 import qualified Dhall.Set
-import qualified Dhall.Syntax               as Syntax
-import qualified Dhall.Pretty.Internal      as Internal
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
     any difference was detected
@@ -1020,7 +1019,7 @@ diffApplicationExpression l r =
 
 diffWithExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffWithExpression l@With{} r@With{} =
-    diffWithExpression (Syntax.desugarWith l) (Syntax.desugarWith r)
+    diffWithExpression (Normalize.desugarWith l) (Normalize.desugarWith r)
 diffWithExpression l r@With{} =
     mismatch l r
 diffWithExpression l@With{} r =

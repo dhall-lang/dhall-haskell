@@ -65,10 +65,11 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Sequence
 import qualified Data.Text            as Text
-import qualified Dhall.Syntax         as Syntax
 import qualified Dhall.Crypto
 import qualified Dhall.Map
+import qualified Dhall.Normalize      as Normalize
 import qualified Dhall.Set
+import qualified Dhall.Syntax         as Syntax
 import qualified Text.Printf          as Printf
 
 {-| Supported version strings
@@ -940,7 +941,7 @@ encodeExpressionInternal encodeEmbed = go
                 (go _T)
 
         a@With{} ->
-            go (Syntax.desugarWith a)
+            go (Normalize.desugarWith a)
 
         Note _ b ->
             go b
