@@ -198,12 +198,11 @@ parseOptions =
         f True  = Censor
         f False = NoCensor
 
-subcommand' :: Bool -> Group -> String -> String -> Parser a -> Parser a
-subcommand' internal group name description parser =
+subcommand :: Group -> String -> String -> Parser a -> Parser a
+subcommand group name description parser =
     Options.Applicative.hsubparser
         (   Options.Applicative.command name parserInfo
         <>  Options.Applicative.metavar name
-        <>  if internal then Options.Applicative.internal else mempty
         <>  Options.Applicative.commandGroup (groupDescription group)
         )
   where
@@ -212,12 +211,6 @@ subcommand' internal group name description parser =
             (   Options.Applicative.fullDesc
             <>  Options.Applicative.progDesc description
             )
-
-subcommand :: Group -> String -> String -> Parser a -> Parser a
-subcommand = subcommand' False
-
-internalSubcommand :: Group -> String -> String -> Parser a -> Parser a
-internalSubcommand = subcommand' True
 
 parseMode :: Parser Mode
 parseMode =
@@ -296,7 +289,7 @@ parseMode =
             "version"
             "Display version"
             (pure Version)
-    <|> internalSubcommand
+    <|> subcommand
             Debugging
             "haskell-syntax-tree"
             "Output the parsed syntax tree (for debugging)"
