@@ -222,10 +222,30 @@ internalSubcommand = subcommand' True
 parseMode :: Parser Mode
 parseMode =
         subcommand
-            Miscellaneous
-            "version"
-            "Display version"
-            (pure Version)
+            Manipulate
+            "format"
+            "Standard code formatter for the Dhall language"
+            (Format <$> parseInplace <*> parseCheck)
+    <|> subcommand
+            Manipulate
+            "freeze"
+            "Add integrity checks to remote import statements of an expression"
+            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck)
+    <|> subcommand
+            Manipulate
+            "lint"
+            "Improve Dhall code by using newer language features and removing dead code"
+            (Lint <$> parseInplace <*> parseCheck)
+    <|> subcommand
+            Generate
+            "text"
+            "Render a Dhall expression that evaluates to a Text literal"
+            (Text <$> parseFile)
+    <|> subcommand
+            Generate
+            "to-directory-tree"
+            "Convert nested records of Text literals into a directory tree"
+            (DirectoryTree <$> parseFile <*> parseDirectoryTreeOutput)
     <|> subcommand
             Interpret
             "resolve"
@@ -242,6 +262,16 @@ parseMode =
             "Normalize an expression"
             (Normalize <$> parseFile <*> parseAlpha)
     <|> subcommand
+            Convert
+            "encode"
+            "Encode a Dhall expression to binary"
+            (Encode <$> parseFile <*> parseJSONFlag)
+    <|> subcommand
+            Convert
+            "decode"
+            "Decode a Dhall expression from binary"
+            (Decode <$> parseFile <*> parseJSONFlag)
+    <|> subcommand
             Miscellaneous
             "repl"
             "Interpret expressions in a REPL"
@@ -257,45 +287,15 @@ parseMode =
             "Compute semantic hashes for Dhall expressions"
             (Hash <$> parseFile)
     <|> subcommand
-            Manipulate
-            "lint"
-            "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseInplace <*> parseCheck)
-    <|> subcommand
             Miscellaneous
             "tags"
             "Generate etags file"
             (Tags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
     <|> subcommand
-            Manipulate
-            "format"
-            "Standard code formatter for the Dhall language"
-            (Format <$> parseInplace <*> parseCheck)
-    <|> subcommand
-            Manipulate
-            "freeze"
-            "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck)
-    <|> subcommand
-            Convert
-            "encode"
-            "Encode a Dhall expression to binary"
-            (Encode <$> parseFile <*> parseJSONFlag)
-    <|> subcommand
-            Convert
-            "decode"
-            "Decode a Dhall expression from binary"
-            (Decode <$> parseFile <*> parseJSONFlag)
-    <|> subcommand
-            Generate
-            "text"
-            "Render a Dhall expression that evaluates to a Text literal"
-            (Text <$> parseFile)
-    <|> subcommand
-            Generate
-            "to-directory-tree"
-            "Convert nested records of Text literals into a directory tree"
-            (DirectoryTree <$> parseFile <*> parseDirectoryTreeOutput)
+            Miscellaneous
+            "version"
+            "Display version"
+            (pure Version)
     <|> internalSubcommand
             Debugging
             "haskell-syntax-tree"
