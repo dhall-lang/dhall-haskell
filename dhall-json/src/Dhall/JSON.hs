@@ -1042,6 +1042,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' = loop a
             b' = loop b
 
+        Core.With a b c ->
+            Core.With a' b c'
+          where
+            a' = loop a
+            c' = loop c
+
         Core.ImportAlt a b ->
             Core.ImportAlt a' b'
           where

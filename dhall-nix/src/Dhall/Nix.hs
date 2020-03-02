@@ -558,6 +558,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NSet []))
     loop (Equivalent _ _) = do
         return (Fix (NSet []))
+    loop a@With{} = do
+        loop (Dhall.Core.desugarWith a)
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x
