@@ -161,21 +161,21 @@ data ResolveMode
 
 -- | Groups of subcommands
 data Group
-  = Manipulate
-  | Generate
-  | Interpret
-  | Convert
-  | Miscellaneous
-  | Debugging
+    = Manipulate
+    | Generate
+    | Interpret
+    | Convert
+    | Miscellaneous
+    | Debugging
 
 groupDescription :: Group -> String
 groupDescription group = case group of
-  Manipulate -> "Manipulate Dhall code"
-  Generate -> "Generate other formats from Dhall"
-  Interpret -> "Interpret Dhall"
-  Convert -> "Convert Dhall to and from its binary representation"
-  Miscellaneous -> "Miscellaneous"
-  Debugging -> "Debugging this interpreter"
+    Manipulate -> "Manipulate Dhall code"
+    Generate -> "Generate other formats from Dhall"
+    Interpret -> "Interpret Dhall"
+    Convert -> "Convert Dhall to and from its binary representation"
+    Miscellaneous -> "Miscellaneous"
+    Debugging -> "Debugging this interpreter"
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
