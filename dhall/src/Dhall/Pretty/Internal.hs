@@ -178,24 +178,25 @@ renderSrc strip (Just (Src {..}))
         Nothing        -> ""
         Just (c, _, _) -> c
 
+    sharedSpacePrefix []       = ""
+    sharedSpacePrefix (l : ls) = foldl' commonPrefix (spacePrefix l) ls
+
     blank = Text.all horizontalSpace
 
     newLines =
         case oldLines of
             [] ->
                []
-            l0 : [] ->
-                Pretty.pretty l0 : []
-            l0 : l1 : ls ->
+            l0 : ls ->
                 let sharedPrefix =
-                        foldl' commonPrefix (spacePrefix l1) (map spacePrefix (filter (not . blank) ls))
+                        sharedSpacePrefix (filter (not . blank) ls)
 
                     perLine l =
                         case Text.stripPrefix sharedPrefix l of
                             Nothing -> Pretty.pretty l
                             Just l' -> Pretty.pretty l'
 
-                in  Pretty.pretty l0 : map perLine (l1 : ls)
+                in  Pretty.pretty l0 : map perLine ls
 
     f x y = x <> Pretty.hardline <> y
 renderSrc _ _ =

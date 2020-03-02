@@ -4,8 +4,8 @@
 }:
 mkDerivation {
   pname = "aeson-yaml";
-  version = "1.0.5.0";
-  sha256 = "e3c49b52b7000dcfe0a227af2e3a70aa7fd97f5c577156ad659470b17127a533";
+  version = "1.0.6.0";
+  sha256 = "feac4e3706601ec65e4bc8a71c0e95c36383426f7b286b09d3f673429f24359b";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
