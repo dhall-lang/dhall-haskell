@@ -1276,17 +1276,9 @@ desugarWith = Optics.rewriteOf Syntax.subExpressions rewrite
         Just (Prefer record (RecordLit [ (key, value) ]))
     rewrite (With record (key0 :| key1 : keys) value) =
         Just
-            (Let (Binding Nothing "_" Nothing Nothing Nothing record)
-                (Prefer "_"
-                    (RecordLit
-                        [ ( key0
-                          , With
-                              (Field "_" key0)
-                              (key1 :| keys)
-                              (shift 1 "_" value)
-                          )
-                        ]
-                    )
+            (Prefer record
+                (RecordLit
+                    [ (key0, With (Field record key0) (key1 :| keys) value) ]
                 )
             )
     rewrite _ = Nothing
