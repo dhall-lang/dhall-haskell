@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -62,6 +63,9 @@ module Dhall.Syntax (
     , longestSharedWhitespacePrefix
     , linesLiteral
     , unlinesLiteral
+
+    -- * Desugaring
+    , desugarWith
     ) where
 
 import Control.DeepSeq (NFData)
@@ -95,6 +99,7 @@ import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Crypto
+import qualified Dhall.Optics               as Optics
 import qualified Language.Haskell.TH.Syntax as Syntax
 import qualified Network.URI                as URI
 
@@ -1318,3 +1323,18 @@ toDoubleQuoted literal =
     longestSharedPrefix = longestSharedWhitespacePrefix literals
 
     indent = Data.Text.length longestSharedPrefix
+
+-- | Desugar all @with@ expressions
+desugarWith :: Expr s a -> Expr s a
+desugarWith = Optics.rewriteOf subExpressions rewrite
+  where
+    rewrite (With record (key :| []) value) =
+        Just (Prefer record (RecordLit [ (key, value) ]))
+    rewrite (With record (key0 :| key1 : keys) value) =
+        Just
+            (Prefer record
+                (RecordLit
+                    [ (key0, With (Field record key0) (key1 :| keys) value) ]
+                )
+            )
+    rewrite _ = Nothing

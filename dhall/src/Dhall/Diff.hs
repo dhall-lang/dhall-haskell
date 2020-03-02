@@ -40,6 +40,7 @@ import qualified Dhall.Map
 import qualified Dhall.Normalize           as Normalize
 import qualified Dhall.Pretty.Internal     as Internal
 import qualified Dhall.Set
+import qualified Dhall.Syntax              as Syntax
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
     any difference was detected
@@ -1019,7 +1020,7 @@ diffApplicationExpression l r =
 
 diffWithExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffWithExpression l@With{} r@With{} =
-    diffWithExpression (Normalize.desugarWith l) (Normalize.desugarWith r)
+    diffWithExpression (Syntax.desugarWith l) (Syntax.desugarWith r)
 diffWithExpression l r@With{} =
     mismatch l r
 diffWithExpression l@With{} r =

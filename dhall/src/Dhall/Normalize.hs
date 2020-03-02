@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns       #-}
-{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 
@@ -17,13 +16,11 @@ module Dhall.Normalize (
     , isNormalized
     , isNormalizedWith
     , freeIn
-    , desugarWith
     ) where
 
 import Control.Applicative (empty)
 import Data.Foldable
 import Data.Functor.Identity (Identity(..))
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (ViewL(..), ViewR(..))
 import Data.Traversable
@@ -36,7 +33,6 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
-import qualified Dhall.Optics  as Optics
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
 
@@ -1025,7 +1021,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
 
         pure (Equivalent l' r')
     With e' k v -> do
-        loop (desugarWith (With e' k v))
+        loop (Syntax.desugarWith (With e' k v))
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1267,18 +1263,3 @@ variable@(V var i) `freeIn` expression =
     denote' = Syntax.denote
 
     strippedExpression = denote' expression
-
--- | Desugar all @with@ expressions
-desugarWith :: Expr s a -> Expr s a
-desugarWith = Optics.rewriteOf Syntax.subExpressions rewrite
-  where
-    rewrite (With record (key :| []) value) =
-        Just (Prefer record (RecordLit [ (key, value) ]))
-    rewrite (With record (key0 :| key1 : keys) value) =
-        Just
-            (Prefer record
-                (RecordLit
-                    [ (key0, With (Field record key0) (key1 :| keys) value) ]
-                )
-            )
-    rewrite _ = Nothing

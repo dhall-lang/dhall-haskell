@@ -58,7 +58,6 @@ import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Map (Map)
-import {-# SOURCE #-} Dhall.Normalize (desugarWith)
 import Dhall.Set (Set)
 import GHC.Natural (Natural)
 import Prelude hiding (succ)
@@ -737,7 +736,7 @@ eval !env t0 =
         Equivalent t u ->
             VEquivalent (eval env t) (eval env u)
         e@With{} ->
-            eval env (desugarWith e)
+            eval env (Syntax.desugarWith e)
         Note _ e ->
             eval env e
         ImportAlt t _ ->

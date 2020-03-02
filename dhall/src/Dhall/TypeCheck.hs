@@ -62,10 +62,10 @@ import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Eval                              as Eval
 import qualified Dhall.Map
-import qualified Dhall.Normalize                         as Normalize
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Set
+import qualified Dhall.Syntax                            as Syntax
 import qualified Dhall.Util
 import qualified Lens.Family
 
@@ -1263,7 +1263,7 @@ infer typer = loop
             return (VConst Type)
 
         e@With{} -> do
-            loop ctx (Normalize.desugarWith e)
+            loop ctx (Syntax.desugarWith e)
 
         Note s e ->
             case loop ctx e of

@@ -67,7 +67,6 @@ import qualified Data.Sequence
 import qualified Data.Text            as Text
 import qualified Dhall.Crypto
 import qualified Dhall.Map
-import qualified Dhall.Normalize      as Normalize
 import qualified Dhall.Set
 import qualified Dhall.Syntax         as Syntax
 import qualified Text.Printf          as Printf
@@ -941,7 +940,7 @@ encodeExpressionInternal encodeEmbed = go
                 (go _T)
 
         a@With{} ->
-            go (Normalize.desugarWith a)
+            go (Syntax.desugarWith a)
 
         Note _ b ->
             go b
