@@ -75,6 +75,7 @@ module Dhall
     , list
     , vector
     , function
+    , functionWith
     , setFromDistinctList
     , setIgnoringDuplicates
     , hashSetFromDistinctList
@@ -843,18 +844,32 @@ vector = fmap Data.Vector.fromList . list
 
 {-| Decode a Dhall function into a Haskell function
 
->>> f <- input (function defaultInputNormalizer inject bool) "Natural/even" :: IO (Natural -> Bool)
+>>> f <- input (function inject bool) "Natural/even" :: IO (Natural -> Bool)
 >>> f 0
 True
 >>> f 1
 False
 -}
 function
+    :: Encoder a
+    -> Decoder b
+    -> Decoder (a -> b)
+function = functionWith defaultInputNormalizer
+
+{-| Decode a Dhall function into a Haskell function using the specified normalizer
+
+>>> f <- input (functionWith defaultInputNormalizer inject bool) "Natural/even" :: IO (Natural -> Bool)
+>>> f 0
+True
+>>> f 1
+False
+-}
+functionWith
     :: InputNormalizer
     -> Encoder a
     -> Decoder b
     -> Decoder (a -> b)
-function inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
+functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
     Decoder extractOut expectedOut
   where
     normalizer_ = Just (getInputNormalizer inputNormalizer)
@@ -1172,7 +1187,7 @@ instance (Eq k, Hashable k, FromDhall k, FromDhall v) => FromDhall (HashMap k v)
 
 instance (ToDhall a, FromDhall b) => FromDhall (a -> b) where
     autoWith inputNormalizer =
-        function inputNormalizer (injectWith inputNormalizer) (autoWith inputNormalizer)
+        functionWith inputNormalizer (injectWith inputNormalizer) (autoWith inputNormalizer)
 
 instance (FromDhall a, FromDhall b) => FromDhall (a, b)
 
