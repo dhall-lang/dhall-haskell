@@ -1199,7 +1199,7 @@ auto :: FromDhall a => Decoder a
 auto = autoWith defaultInputNormalizer
 
 {-| This type is exactly the same as `Data.Fix.Fix` except with a different
-    `FromDhall` instance.  This intermediate type simplies the implementation
+    `FromDhall` instance.  This intermediate type simplifies the implementation
     of the inner loop for the `FromDhall` instance for `Fix`
 -}
 newtype Result f = Result { _unResult :: f (Result f) }
@@ -1956,7 +1956,7 @@ instance ToDhall a => ToDhall [a] where
 instance ToDhall a => ToDhall (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
 
-{-| Note that the ouput list will be sorted
+{-| Note that the output list will be sorted
 
 >>> let x = Data.Set.fromList ["mom", "hi" :: Text]
 >>> prettyExpr $ embed inject x
@@ -1966,7 +1966,7 @@ instance ToDhall a => ToDhall (Vector a) where
 instance ToDhall a => ToDhall (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toAscList) injectWith
 
-{-| Note that the ouput list may not be sorted
+{-| Note that the output list may not be sorted
 
 >>> let x = Data.HashSet.fromList ["hi", "mom" :: Text]
 >>> prettyExpr $ embed inject x
