@@ -1268,7 +1268,7 @@ prettyCharacterSet characterSet expression =
                                 RecordCompletion _T r ->
                                     completion _T r
 
-                                RecordLit r ->
+                                RecordLit _ ->
                                         Pretty.hardline
                                     <>  "  "
                                     <>  prettyImportExpression val'
@@ -1295,7 +1295,7 @@ prettyCharacterSet characterSet expression =
                     RecordCompletion _T r ->
                         completion _T r
 
-                    RecordLit r ->
+                    RecordLit _ ->
                             Pretty.hardline
                         <>  "  "
                         <>  prettyExpression val
