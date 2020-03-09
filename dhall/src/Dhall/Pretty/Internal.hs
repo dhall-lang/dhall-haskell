@@ -1045,7 +1045,7 @@ prettyCharacterSet characterSet expression =
 
         long =  Pretty.hardline
             <>  "  "
-            <>  keyword "with" <> " " <> update
+            <>  Pretty.align (keyword "with" <> " " <> update)
 
         (update, _ ) = prettyKeyValue prettyAnyLabels equals (b, c)
     prettyWithExpression a
@@ -1233,7 +1233,11 @@ prettyCharacterSet characterSet expression =
         short = lparen <> prettyExpression a <> rparen
 
     prettyKeyValue
-        :: Pretty a => (k -> Doc Ann) -> Doc Ann -> (k, Expr Src a) -> (Doc Ann, Doc Ann)
+        :: Pretty a
+        => (k -> Doc Ann)
+        -> Doc Ann
+        -> (k, Expr Src a)
+        -> (Doc Ann, Doc Ann)
     prettyKeyValue prettyKey separator (key, val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
@@ -1263,14 +1267,22 @@ prettyCharacterSet characterSet expression =
                         <>  case shallowDenote val' of
                                 RecordCompletion _T r ->
                                     completion _T r
+
+                                RecordLit r ->
+                                        Pretty.hardline
+                                    <>  "  "
+                                    <>  prettyImportExpression val'
+
                                 ListLit _ xs
                                     | not (null xs) ->
                                             Pretty.hardline
                                         <>  "  "
                                         <>  prettyExpression val'
+
                                 _ ->    Pretty.hardline
                                     <>  "    "
                                     <>  prettyImportExpression val'
+
                     ToMap val' Nothing ->
                             " " <> keyword "toMap"
                         <>  case shallowDenote val' of
@@ -1279,13 +1291,21 @@ prettyCharacterSet characterSet expression =
                                 _ ->    Pretty.hardline
                                     <>  "    "
                                     <>  prettyImportExpression val'
+
                     RecordCompletion _T r ->
                         completion _T r
+
+                    RecordLit r ->
+                            Pretty.hardline
+                        <>  "  "
+                        <>  prettyExpression val
+
                     ListLit _ xs
                         | not (null xs) ->
                                 Pretty.hardline
                             <>  "  "
                             <>  prettyExpression val
+
                     _ -> 
                             Pretty.hardline
                         <>  "    "
