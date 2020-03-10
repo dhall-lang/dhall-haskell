@@ -59,6 +59,7 @@ module Dhall
     , fromMonadic
     , auto
     , genericAuto
+    , genericAutoWith
     , InterpretOptions(..)
     , SingletonConstructors(..)
     , defaultInterpretOptions
@@ -74,6 +75,7 @@ module Dhall
     , list
     , vector
     , function
+    , functionWith
     , setFromDistinctList
     , setIgnoringDuplicates
     , hashSetFromDistinctList
@@ -96,6 +98,7 @@ module Dhall
     , Inject
     , inject
     , genericToDhall
+    , genericToDhallWith
     , RecordEncoder(..)
     , encodeFieldWith
     , encodeField
@@ -841,21 +844,35 @@ vector = fmap Data.Vector.fromList . list
 
 {-| Decode a Dhall function into a Haskell function
 
->>> f <- input (function defaultInterpretOptions inject bool) "Natural/even" :: IO (Natural -> Bool)
+>>> f <- input (function inject bool) "Natural/even" :: IO (Natural -> Bool)
 >>> f 0
 True
 >>> f 1
 False
 -}
 function
-    :: InterpretOptions
+    :: Encoder a
+    -> Decoder b
+    -> Decoder (a -> b)
+function = functionWith defaultInputNormalizer
+
+{-| Decode a Dhall function into a Haskell function using the specified normalizer
+
+>>> f <- input (functionWith defaultInputNormalizer inject bool) "Natural/even" :: IO (Natural -> Bool)
+>>> f 0
+True
+>>> f 1
+False
+-}
+functionWith
+    :: InputNormalizer
     -> Encoder a
     -> Decoder b
     -> Decoder (a -> b)
-function options (Encoder {..}) (Decoder extractIn expectedIn) =
+functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
     Decoder extractOut expectedOut
   where
-    normalizer_ = Just (inputNormalizer options)
+    normalizer_ = Just (getInputNormalizer inputNormalizer)
 
     extractOut e = pure (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
         Success o  -> o
@@ -1097,10 +1114,10 @@ fromList [("a",False),("b",True)]
     types.
 -}
 class FromDhall a where
-    autoWith:: InterpretOptions -> Decoder a
+    autoWith :: InputNormalizer -> Decoder a
     default autoWith
-        :: (Generic a, GenericFromDhall (Rep a)) => InterpretOptions -> Decoder a
-    autoWith options = fmap GHC.Generics.to (evalState (genericAutoWith options) 1)
+        :: (Generic a, GenericFromDhall (Rep a)) => InputNormalizer -> Decoder a
+    autoWith _ = genericAuto
 
 {-| A compatibility alias for `FromDhall`
 
@@ -1160,29 +1177,29 @@ instance (FromDhall a, Ord a, Show a) => FromDhall (Data.Set.Set a) where
     the list. To ignore duplicates, use `hashSetIgnoringDuplicates`.
 -}
 instance (FromDhall a, Hashable a, Ord a, Show a) => FromDhall (Data.HashSet.HashSet a) where
-    autoWith opts = hashSetFromDistinctList (autoWith opts)
+    autoWith inputNormalizer = hashSetFromDistinctList (autoWith inputNormalizer)
 
 instance (Ord k, FromDhall k, FromDhall v) => FromDhall (Map k v) where
-    autoWith opts = Dhall.map (autoWith opts) (autoWith opts)
+    autoWith inputNormalizer = Dhall.map (autoWith inputNormalizer) (autoWith inputNormalizer)
 
 instance (Eq k, Hashable k, FromDhall k, FromDhall v) => FromDhall (HashMap k v) where
-    autoWith opts = Dhall.hashMap (autoWith opts) (autoWith opts)
+    autoWith inputNormalizer = Dhall.hashMap (autoWith inputNormalizer) (autoWith inputNormalizer)
 
 instance (ToDhall a, FromDhall b) => FromDhall (a -> b) where
-    autoWith opts =
-        function opts (injectWith opts) (autoWith opts)
+    autoWith inputNormalizer =
+        functionWith inputNormalizer (injectWith inputNormalizer) (autoWith inputNormalizer)
 
 instance (FromDhall a, FromDhall b) => FromDhall (a, b)
 
-{-| Use the default options for interpreting a configuration file
+{-| Use the default input normalizer for interpreting a configuration file
 
-> auto = autoWith defaultInterpretOptions
+> auto = autoWith defaultInputNormalizer
 -}
 auto :: FromDhall a => Decoder a
-auto = autoWith defaultInterpretOptions
+auto = autoWith defaultInputNormalizer
 
 {-| This type is exactly the same as `Data.Fix.Fix` except with a different
-    `FromDhall` instance.  This intermediate type simplies the implementation
+    `FromDhall` instance.  This intermediate type simplifies the implementation
     of the inner loop for the `FromDhall` instance for `Fix`
 -}
 newtype Result f = Result { _unResult :: f (Result f) }
@@ -1191,12 +1208,12 @@ resultToFix :: Functor f => Result f -> Fix f
 resultToFix (Result x) = Fix (fmap resultToFix x)
 
 instance FromDhall (f (Result f)) => FromDhall (Result f) where
-    autoWith options = Decoder { expected = expected_, extract = extract_ }
+    autoWith inputNormalizer = Decoder { expected = expected_, extract = extract_ }
       where
         expected_ = "result"
 
         extract_ (App _ expression) = do
-            fmap Result (extract (autoWith options) expression)
+            fmap Result (extract (autoWith inputNormalizer) expression)
         extract_ expression = do
             typeError expression expected_
 
@@ -1275,18 +1292,18 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
 -- >
 -- >     print (convert x :: Expr)
 instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
-    autoWith options = Decoder { expected = expected_, extract = extract_ }
+    autoWith inputNormalizer = Decoder { expected = expected_, extract = extract_ }
       where
         expected_ =
             Pi "result" (Const Dhall.Core.Type)
-                (Pi "Make" (Pi "_" (expected (autoWith options :: Decoder (f (Result f)))) "result")
+                (Pi "Make" (Pi "_" (expected (autoWith inputNormalizer :: Decoder (f (Result f)))) "result")
                     "result"
                 )
 
         extract_ expression0 = go0 (Dhall.Core.alphaNormalize expression0)
           where
             go0 (Lam _ _ (Lam _ _  expression1)) =
-                fmap resultToFix (extract (autoWith options) expression1)
+                fmap resultToFix (extract (autoWith inputNormalizer) expression1)
             go0 _ = typeError expected_ expression0
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
@@ -1295,7 +1312,13 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
     the type derives `Generic`
 -}
 genericAuto :: (Generic a, GenericFromDhall (Rep a)) => Decoder a
-genericAuto = fmap to (evalState (genericAutoWith defaultInterpretOptions) 1)
+genericAuto = genericAutoWith defaultInterpretOptions
+
+{-| `genericAutoWith` is a configurable version of `genericAuto`.
+-}
+genericAutoWith :: (Generic a, GenericFromDhall (Rep a)) => InterpretOptions -> Decoder a
+genericAutoWith options = fmap to (evalState (genericAutoWithNormalizer defaultInputNormalizer options) 1)
+
 
 {-| Use these options to tweak how Dhall derives a generic implementation of
     `FromDhall`
@@ -1310,11 +1333,17 @@ data InterpretOptions = InterpretOptions
     , singletonConstructors :: SingletonConstructors
     -- ^ Specify how to handle constructors with only one field.  The default is
     --   `Smart`
-    , inputNormalizer     :: Dhall.Core.ReifiedNormalizer Void
-    -- ^ This is only used by the `FromDhall` instance for functions in order
-    --   to normalize the function input before marshaling the input into a
-    --   Dhall expression
     }
+
+-- | This is only used by the `FromDhall` instance for functions in order
+--   to normalize the function input before marshaling the input into a
+--   Dhall expression
+newtype InputNormalizer = InputNormalizer
+  { getInputNormalizer :: Dhall.Core.ReifiedNormalizer Void }
+
+defaultInputNormalizer :: InputNormalizer
+defaultInputNormalizer = InputNormalizer
+ { getInputNormalizer = Dhall.Core.ReifiedNormalizer (const (pure Nothing)) }
 
 {-| This type specifies how to model a Haskell constructor with 1 field in
     Dhall
@@ -1339,9 +1368,10 @@ data SingletonConstructors
     | Smart
     -- ^ Only fields in a record if they are named
 
-{-| Default interpret options, which you can tweak or override, like this:
+{-| Default interpret options for generics-based instances,
+    which you can tweak or override, like this:
 
-> autoWith
+> genericAutoWith
 >     (defaultInterpretOptions { fieldModifier = Data.Text.Lazy.dropWhile (== '_') })
 -}
 defaultInterpretOptions :: InterpretOptions
@@ -1352,23 +1382,21 @@ defaultInterpretOptions = InterpretOptions
           id
     , singletonConstructors =
           Smart
-    , inputNormalizer =
-          Dhall.Core.ReifiedNormalizer (const (pure Nothing))
     }
 
 {-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
 class GenericFromDhall f where
-    genericAutoWith :: InterpretOptions -> State Int (Decoder (f a))
+    genericAutoWithNormalizer :: InputNormalizer -> InterpretOptions -> State Int (Decoder (f a))
 
 instance GenericFromDhall f => GenericFromDhall (M1 D d f) where
-    genericAutoWith options = do
-        res <- genericAutoWith options
+    genericAutoWithNormalizer inputNormalizer options = do
+        res <- genericAutoWithNormalizer inputNormalizer options
         pure (fmap M1 res)
 
 instance GenericFromDhall V1 where
-    genericAutoWith _ = pure Decoder {..}
+    genericAutoWithNormalizer _ _ = pure Decoder {..}
       where
         extract expr = typeError expected expr
 
@@ -1429,7 +1457,7 @@ extractUnionConstructor _ =
   empty
 
 instance (Constructor c1, Constructor c2, GenericFromDhall f1, GenericFromDhall f2) => GenericFromDhall (M1 C c1 f1 :+: M1 C c2 f2) where
-    genericAutoWith options@(InterpretOptions {..}) = pure (Decoder {..})
+    genericAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Decoder {..})
       where
         nL :: M1 i c1 f1 a
         nL = undefined
@@ -1457,11 +1485,11 @@ instance (Constructor c1, Constructor c2, GenericFromDhall f1, GenericFromDhall 
                     ]
                 )
 
-        Decoder extractL expectedL = evalState (genericAutoWith options) 1
-        Decoder extractR expectedR = evalState (genericAutoWith options) 1
+        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
+        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
 
 instance (Constructor c, GenericFromDhall (f :+: g), GenericFromDhall h) => GenericFromDhall ((f :+: g) :+: M1 C c h) where
-    genericAutoWith options@(InterpretOptions {..}) = pure (Decoder {..})
+    genericAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Decoder {..})
       where
         n :: M1 i c h a
         n = undefined
@@ -1478,13 +1506,13 @@ instance (Constructor c, GenericFromDhall (f :+: g), GenericFromDhall h) => Gene
         expected =
             Union (Dhall.Map.insert name (notEmptyRecord expectedR) ktsL)
 
-        Decoder extractL expectedL = evalState (genericAutoWith options) 1
-        Decoder extractR expectedR = evalState (genericAutoWith options) 1
+        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
+        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
 
-        ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
+        ktsL = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedL
 
 instance (Constructor c, GenericFromDhall f, GenericFromDhall (g :+: h)) => GenericFromDhall (M1 C c f :+: (g :+: h)) where
-    genericAutoWith options@(InterpretOptions {..}) = pure (Decoder {..})
+    genericAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Decoder {..})
       where
         n :: M1 i c f a
         n = undefined
@@ -1501,31 +1529,31 @@ instance (Constructor c, GenericFromDhall f, GenericFromDhall (g :+: h)) => Gene
         expected =
             Union (Dhall.Map.insert name (notEmptyRecord expectedL) ktsR)
 
-        Decoder extractL expectedL = evalState (genericAutoWith options) 1
-        Decoder extractR expectedR = evalState (genericAutoWith options) 1
+        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
+        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
 
-        ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
+        ktsR = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedR
 
 instance (GenericFromDhall (f :+: g), GenericFromDhall (h :+: i)) => GenericFromDhall ((f :+: g) :+: (h :+: i)) where
-    genericAutoWith options = pure (Decoder {..})
+    genericAutoWithNormalizer inputNormalizer options = pure (Decoder {..})
       where
         extract e = fmap L1 (extractL e) `ealt` fmap R1 (extractR e)
 
         expected = Union (Dhall.Map.union ktsL ktsR)
 
-        Decoder extractL expectedL = evalState (genericAutoWith options) 1
-        Decoder extractR expectedR = evalState (genericAutoWith options) 1
+        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
+        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
 
-        ktsL = unsafeExpectUnion "genericAutoWith (:+:)" expectedL
-        ktsR = unsafeExpectUnion "genericAutoWith (:+:)" expectedR
+        ktsL = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedL
+        ktsR = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedR
 
 instance GenericFromDhall f => GenericFromDhall (M1 C c f) where
-    genericAutoWith options = do
-        res <- genericAutoWith options
+    genericAutoWithNormalizer inputNormalizer options = do
+        res <- genericAutoWithNormalizer inputNormalizer options
         pure (fmap M1 res)
 
 instance GenericFromDhall U1 where
-    genericAutoWith _ = pure (Decoder {..})
+    genericAutoWithNormalizer _ _ = pure (Decoder {..})
       where
         extract _ = pure U1
 
@@ -1539,12 +1567,12 @@ getSelName n = case selName n of
     nn -> pure (Data.Text.pack nn)
 
 instance (GenericFromDhall (f :*: g), GenericFromDhall (h :*: i)) => GenericFromDhall ((f :*: g) :*: (h :*: i)) where
-    genericAutoWith options = do
-        Decoder extractL expectedL <- genericAutoWith options
-        Decoder extractR expectedR <- genericAutoWith options
+    genericAutoWithNormalizer inputNormalizer options = do
+        Decoder extractL expectedL <- genericAutoWithNormalizer inputNormalizer options
+        Decoder extractR expectedR <- genericAutoWithNormalizer inputNormalizer options
 
-        let ktsL = unsafeExpectRecord "genericAutoWith (:*:)" expectedL
-        let ktsR = unsafeExpectRecord "genericAutoWith (:*:)" expectedR
+        let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedL
+        let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedR
 
         let expected = Record (Dhall.Map.union ktsL ktsR)
 
@@ -1554,17 +1582,17 @@ instance (GenericFromDhall (f :*: g), GenericFromDhall (h :*: i)) => GenericFrom
         return (Decoder {..})
 
 instance (GenericFromDhall (f :*: g), Selector s, FromDhall a) => GenericFromDhall ((f :*: g) :*: M1 S s (K1 i a)) where
-    genericAutoWith options@InterpretOptions{..} = do
+    genericAutoWithNormalizer inputNormalizer options@InterpretOptions{..} = do
         let nR :: M1 S s (K1 i a) r
             nR = undefined
 
         nameR <- fmap fieldModifier (getSelName nR)
 
-        Decoder extractL expectedL <- genericAutoWith options
+        Decoder extractL expectedL <- genericAutoWithNormalizer inputNormalizer options
 
-        let Decoder extractR expectedR = autoWith options
+        let Decoder extractR expectedR = autoWith inputNormalizer
 
-        let ktsL = unsafeExpectRecord "genericAutoWith (:*:)" expectedL
+        let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedL
 
         let expected = Record (Dhall.Map.insert nameR expectedR ktsL)
 
@@ -1584,17 +1612,17 @@ instance (GenericFromDhall (f :*: g), Selector s, FromDhall a) => GenericFromDha
         return (Decoder {..})
 
 instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDhall (M1 S s (K1 i a) :*: (f :*: g)) where
-    genericAutoWith options@InterpretOptions{..} = do
+    genericAutoWithNormalizer inputNormalizer options@InterpretOptions{..} = do
         let nL :: M1 S s (K1 i a) r
             nL = undefined
 
         nameL <- fmap fieldModifier (getSelName nL)
 
-        let Decoder extractL expectedL = autoWith options
+        let Decoder extractL expectedL = autoWith inputNormalizer
 
-        Decoder extractR expectedR <- genericAutoWith options
+        Decoder extractR expectedR <- genericAutoWithNormalizer inputNormalizer options
 
-        let ktsR = unsafeExpectRecord "genericAutoWith (:*:)" expectedR
+        let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedR
 
         let expected = Record (Dhall.Map.insert nameL expectedL ktsR)
 
@@ -1614,7 +1642,7 @@ instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDha
         return (Decoder {..})
 
 instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDhall (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
-    genericAutoWith options@InterpretOptions{..} = do
+    genericAutoWithNormalizer inputNormalizer InterpretOptions{..} = do
         let nL :: M1 S s1 (K1 i1 a1) r
             nL = undefined
 
@@ -1624,8 +1652,8 @@ instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDh
         nameL <- fmap fieldModifier (getSelName nL)
         nameR <- fmap fieldModifier (getSelName nR)
 
-        let Decoder extractL expectedL = autoWith options
-        let Decoder extractR expectedR = autoWith options
+        let Decoder extractL expectedL = autoWith inputNormalizer
+        let Decoder extractR expectedR = autoWith inputNormalizer
 
         let expected =
                 Record
@@ -1651,13 +1679,13 @@ instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDh
         return (Decoder {..})
 
 instance (Selector s, FromDhall a) => GenericFromDhall (M1 S s (K1 i a)) where
-    genericAutoWith options@InterpretOptions{..} = do
+    genericAutoWithNormalizer inputNormalizer InterpretOptions{..} = do
         let n :: M1 S s (K1 i a) r
             n = undefined
 
         name <- fmap fieldModifier (getSelName n)
 
-        let Decoder { extract = extract', expected = expected'} = autoWith options
+        let Decoder { extract = extract', expected = expected'} = autoWith inputNormalizer
 
         let expected =
                 case singletonConstructors of
@@ -1722,11 +1750,10 @@ instance Contravariant Encoder where
     * Marshaling the resulting Dhall expression back into a Haskell value
 -}
 class ToDhall a where
-    injectWith :: InterpretOptions -> Encoder a
+    injectWith :: InputNormalizer -> Encoder a
     default injectWith
-        :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> Encoder a
-    injectWith options
-        = contramap GHC.Generics.from (evalState (genericToDhallWith options) 1)
+        :: (Generic a, GenericToDhall (Rep a)) => InputNormalizer -> Encoder a
+    injectWith _ = genericToDhall
 
 {-| A compatibility alias for `ToDhall`
 
@@ -1734,12 +1761,12 @@ This will eventually be removed.
 -}
 type Inject = ToDhall
 
-{-| Use the default options for injecting a value
+{-| Use the default input normalizer for injecting a value
 
-> inject = injectWith defaultInterpretOptions
+> inject = injectWith defaultInputNormalizer
 -}
 inject :: ToDhall a => Encoder a
-inject = injectWith defaultInterpretOptions
+inject = injectWith defaultInputNormalizer
 
 {-| Use the default options for injecting a value, whose structure is
 determined generically.
@@ -1750,7 +1777,18 @@ want to define orphan instances for.
 genericToDhall
   :: (Generic a, GenericToDhall (Rep a)) => Encoder a
 genericToDhall
-    = contramap GHC.Generics.from (evalState (genericToDhallWith defaultInterpretOptions) 1)
+    = genericToDhallWith defaultInterpretOptions
+
+{-| Use custom options for injecting a value, whose structure is
+determined generically.
+
+This can be used when you want to use 'ToDhall' on types that you don't
+want to define orphan instances for.
+-}
+genericToDhallWith
+  :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> Encoder a
+genericToDhallWith options
+    = contramap GHC.Generics.from (evalState (genericToDhallWithNormalizer defaultInputNormalizer options) 1)
 
 instance ToDhall Void where
     injectWith _ = Encoder {..}
@@ -1782,8 +1820,8 @@ instance ToDhall Text where
         declared = Text
 
 instance {-# OVERLAPS #-} ToDhall String where
-    injectWith options =
-        contramap Data.Text.pack (injectWith options :: Encoder Text)
+    injectWith inputNormalizer =
+        contramap Data.Text.pack (injectWith inputNormalizer :: Encoder Text)
 
 instance ToDhall Natural where
     injectWith _ = Encoder {..}
@@ -1879,8 +1917,8 @@ instance ToDhall Double where
         declared = Double
 
 instance ToDhall Scientific where
-    injectWith options =
-        contramap Data.Scientific.toRealFloat (injectWith options :: Encoder Double)
+    injectWith inputNormalizer =
+        contramap Data.Scientific.toRealFloat (injectWith inputNormalizer :: Encoder Double)
 
 instance ToDhall () where
     injectWith _ = Encoder {..}
@@ -1890,17 +1928,17 @@ instance ToDhall () where
         declared = Record mempty
 
 instance ToDhall a => ToDhall (Maybe a) where
-    injectWith options = Encoder embedOut declaredOut
+    injectWith inputNormalizer = Encoder embedOut declaredOut
       where
         embedOut (Just x ) = Some (embedIn x)
         embedOut  Nothing  = App None declaredIn
 
-        Encoder embedIn declaredIn = injectWith options
+        Encoder embedIn declaredIn = injectWith inputNormalizer
 
         declaredOut = App Optional declaredIn
 
 instance ToDhall a => ToDhall (Seq a) where
-    injectWith options = Encoder embedOut declaredOut
+    injectWith inputNormalizer = Encoder embedOut declaredOut
       where
         embedOut xs = ListLit listType (fmap embedIn xs)
           where
@@ -1910,7 +1948,7 @@ instance ToDhall a => ToDhall (Seq a) where
 
         declaredOut = App List declaredIn
 
-        Encoder embedIn declaredIn = injectWith options
+        Encoder embedIn declaredIn = injectWith inputNormalizer
 
 instance ToDhall a => ToDhall [a] where
     injectWith = fmap (contramap Data.Sequence.fromList) injectWith
@@ -1918,7 +1956,7 @@ instance ToDhall a => ToDhall [a] where
 instance ToDhall a => ToDhall (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
 
-{-| Note that the ouput list will be sorted
+{-| Note that the output list will be sorted
 
 >>> let x = Data.Set.fromList ["mom", "hi" :: Text]
 >>> prettyExpr $ embed inject x
@@ -1928,7 +1966,7 @@ instance ToDhall a => ToDhall (Vector a) where
 instance ToDhall a => ToDhall (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toAscList) injectWith
 
-{-| Note that the ouput list may not be sorted
+{-| Note that the output list may not be sorted
 
 >>> let x = Data.HashSet.fromList ["hi", "mom" :: Text]
 >>> prettyExpr $ embed inject x
@@ -1950,7 +1988,7 @@ instance (ToDhall a, ToDhall b) => ToDhall (a, b)
 
 -}
 instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
-    injectWith options = Encoder embedOut declaredOut
+    injectWith inputNormalizer = Encoder embedOut declaredOut
       where
         embedOut m = ListLit listType (mapEntries m)
           where
@@ -1965,8 +2003,8 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
         recordPair (k, v) = RecordLit (Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)])
 
-        Encoder embedK declaredK = injectWith options
-        Encoder embedV declaredV = injectWith options
+        Encoder embedK declaredK = injectWith inputNormalizer
+        Encoder embedV declaredV = injectWith inputNormalizer
 
 {-| Embed a `Data.HashMap` as a @Prelude.Map.Type@
 
@@ -1978,7 +2016,7 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
 
 -}
 instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
-    injectWith options = Encoder embedOut declaredOut
+    injectWith inputNormalizer = Encoder embedOut declaredOut
       where
         embedOut m = ListLit listType (mapEntries m)
           where
@@ -1993,29 +2031,29 @@ instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
         recordPair (k, v) = RecordLit (Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)])
 
-        Encoder embedK declaredK = injectWith options
-        Encoder embedV declaredV = injectWith options
+        Encoder embedK declaredK = injectWith inputNormalizer
+        Encoder embedV declaredV = injectWith inputNormalizer
 
 {-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
 class GenericToDhall f where
-    genericToDhallWith :: InterpretOptions -> State Int (Encoder (f a))
+    genericToDhallWithNormalizer :: InputNormalizer -> InterpretOptions -> State Int (Encoder (f a))
 
 instance GenericToDhall f => GenericToDhall (M1 D d f) where
-    genericToDhallWith options = do
-        res <- genericToDhallWith options
+    genericToDhallWithNormalizer inputNormalizer options = do
+        res <- genericToDhallWithNormalizer inputNormalizer options
         pure (contramap unM1 res)
 
 instance GenericToDhall f => GenericToDhall (M1 C c f) where
-    genericToDhallWith options = do
-        res <- genericToDhallWith options
+    genericToDhallWithNormalizer inputNormalizer options = do
+        res <- genericToDhallWithNormalizer inputNormalizer options
         pure (contramap unM1 res)
 
 instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
-    genericToDhallWith options@InterpretOptions{..} = do
+    genericToDhallWithNormalizer inputNormalizer InterpretOptions{..} = do
         let Encoder { embed = embed', declared = declared' } =
-                injectWith options
+                injectWith inputNormalizer
 
         let n :: M1 S s (K1 i a) r
             n = undefined
@@ -2045,7 +2083,7 @@ instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
         return (Encoder {..})
 
 instance (Constructor c1, Constructor c2, GenericToDhall f1, GenericToDhall f2) => GenericToDhall (M1 C c1 f1 :+: M1 C c2 f2) where
-    genericToDhallWith options@(InterpretOptions {..}) = pure (Encoder {..})
+    genericToDhallWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Encoder {..})
       where
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
@@ -2078,11 +2116,11 @@ instance (Constructor c1, Constructor c2, GenericToDhall f1, GenericToDhall f2) 
         keyL = constructorModifier (Data.Text.pack (conName nL))
         keyR = constructorModifier (Data.Text.pack (conName nR))
 
-        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
-        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
 
 instance (Constructor c, GenericToDhall (f :+: g), GenericToDhall h) => GenericToDhall ((f :+: g) :+: M1 C c h) where
-    genericToDhallWith options@(InterpretOptions {..}) = pure (Encoder {..})
+    genericToDhallWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Encoder {..})
       where
         embed (L1 l) =
             case maybeValL of
@@ -2090,7 +2128,7 @@ instance (Constructor c, GenericToDhall (f :+: g), GenericToDhall h) => GenericT
                 Just valL -> App (Field declared keyL) valL
           where
             (keyL, maybeValL) =
-              unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedL l)
+              unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedL l)
         embed (R1 (M1 r)) =
             case notEmptyRecordLit (embedR r) of
                 Nothing   -> Field declared keyR
@@ -2103,13 +2141,13 @@ instance (Constructor c, GenericToDhall (f :+: g), GenericToDhall h) => GenericT
 
         declared = Union (Dhall.Map.insert keyR (notEmptyRecord declaredR) ktsL)
 
-        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
-        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
 
-        ktsL = unsafeExpectUnion "genericToDhallWith (:+:)" declaredL
+        ktsL = unsafeExpectUnion "genericToDhallWithNormalizer (:+:)" declaredL
 
 instance (Constructor c, GenericToDhall f, GenericToDhall (g :+: h)) => GenericToDhall (M1 C c f :+: (g :+: h)) where
-    genericToDhallWith options@(InterpretOptions {..}) = pure (Encoder {..})
+    genericToDhallWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Encoder {..})
       where
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
@@ -2121,7 +2159,7 @@ instance (Constructor c, GenericToDhall f, GenericToDhall (g :+: h)) => GenericT
                 Just valR -> App (Field declared keyR) valR
           where
             (keyR, maybeValR) =
-                unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedR r)
+                unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedR r)
 
         nL :: M1 i c f a
         nL = undefined
@@ -2130,13 +2168,13 @@ instance (Constructor c, GenericToDhall f, GenericToDhall (g :+: h)) => GenericT
 
         declared = Union (Dhall.Map.insert keyL (notEmptyRecord declaredL) ktsR)
 
-        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
-        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
 
-        ktsR = unsafeExpectUnion "genericToDhallWith (:+:)" declaredR
+        ktsR = unsafeExpectUnion "genericToDhallWithNormalizer (:+:)" declaredR
 
 instance (GenericToDhall (f :+: g), GenericToDhall (h :+: i)) => GenericToDhall ((f :+: g) :+: (h :+: i)) where
-    genericToDhallWith options = pure (Encoder {..})
+    genericToDhallWithNormalizer inputNormalizer options = pure (Encoder {..})
       where
         embed (L1 l) =
             case maybeValL of
@@ -2144,92 +2182,92 @@ instance (GenericToDhall (f :+: g), GenericToDhall (h :+: i)) => GenericToDhall 
                 Just valL -> App (Field declared keyL) valL
           where
             (keyL, maybeValL) =
-                unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedL l)
+                unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedL l)
         embed (R1 r) =
             case maybeValR of
                 Nothing   -> Field declared keyR
                 Just valR -> App (Field declared keyR) valR
           where
             (keyR, maybeValR) =
-                unsafeExpectUnionLit "genericToDhallWith (:+:)" (embedR r)
+                unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedR r)
 
         declared = Union (Dhall.Map.union ktsL ktsR)
 
-        Encoder embedL declaredL = evalState (genericToDhallWith options) 1
-        Encoder embedR declaredR = evalState (genericToDhallWith options) 1
+        Encoder embedL declaredL = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
+        Encoder embedR declaredR = evalState (genericToDhallWithNormalizer inputNormalizer options) 1
 
-        ktsL = unsafeExpectUnion "genericToDhallWith (:+:)" declaredL
-        ktsR = unsafeExpectUnion "genericToDhallWith (:+:)" declaredR
+        ktsL = unsafeExpectUnion "genericToDhallWithNormalizer (:+:)" declaredL
+        ktsR = unsafeExpectUnion "genericToDhallWithNormalizer (:+:)" declaredR
 
 instance (GenericToDhall (f :*: g), GenericToDhall (h :*: i)) => GenericToDhall ((f :*: g) :*: (h :*: i)) where
-    genericToDhallWith options = do
-        Encoder embedL declaredL <- genericToDhallWith options
-        Encoder embedR declaredR <- genericToDhallWith options
+    genericToDhallWithNormalizer inputNormalizer options = do
+        Encoder embedL declaredL <- genericToDhallWithNormalizer inputNormalizer options
+        Encoder embedR declaredR <- genericToDhallWithNormalizer inputNormalizer options
 
         let embed (l :*: r) =
                 RecordLit (Dhall.Map.union mapL mapR)
               where
                 mapL =
-                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedL l)
+                    unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedL l)
 
                 mapR =
-                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedR r)
+                    unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedR r)
 
         let declared = Record (Dhall.Map.union mapL mapR)
               where
-                mapL = unsafeExpectRecord "genericToDhallWith (:*:)" declaredL
-                mapR = unsafeExpectRecord "genericToDhallWith (:*:)" declaredR
+                mapL = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredL
+                mapR = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredR
 
         pure (Encoder {..})
 
 instance (GenericToDhall (f :*: g), Selector s, ToDhall a) => GenericToDhall ((f :*: g) :*: M1 S s (K1 i a)) where
-    genericToDhallWith options@InterpretOptions{..} = do
+    genericToDhallWithNormalizer inputNormalizer options@InterpretOptions{..} = do
         let nR :: M1 S s (K1 i a) r
             nR = undefined
 
         nameR <- fmap fieldModifier (getSelName nR)
 
-        Encoder embedL declaredL <- genericToDhallWith options
+        Encoder embedL declaredL <- genericToDhallWithNormalizer inputNormalizer options
 
-        let Encoder embedR declaredR = injectWith options
+        let Encoder embedR declaredR = injectWith inputNormalizer
 
         let embed (l :*: M1 (K1 r)) =
                 RecordLit (Dhall.Map.insert nameR (embedR r) mapL)
               where
                 mapL =
-                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedL l)
+                    unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedL l)
 
         let declared = Record (Dhall.Map.insert nameR declaredR mapL)
               where
-                mapL = unsafeExpectRecord "genericToDhallWith (:*:)" declaredL
+                mapL = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredL
 
         return (Encoder {..})
 
 instance (Selector s, ToDhall a, GenericToDhall (f :*: g)) => GenericToDhall (M1 S s (K1 i a) :*: (f :*: g)) where
-    genericToDhallWith options@InterpretOptions{..} = do
+    genericToDhallWithNormalizer inputNormalizer options@InterpretOptions{..} = do
         let nL :: M1 S s (K1 i a) r
             nL = undefined
 
         nameL <- fmap fieldModifier (getSelName nL)
 
-        let Encoder embedL declaredL = injectWith options
+        let Encoder embedL declaredL = injectWith inputNormalizer
 
-        Encoder embedR declaredR <- genericToDhallWith options
+        Encoder embedR declaredR <- genericToDhallWithNormalizer inputNormalizer options
 
         let embed (M1 (K1 l) :*: r) =
                 RecordLit (Dhall.Map.insert nameL (embedL l) mapR)
               where
                 mapR =
-                    unsafeExpectRecordLit "genericToDhallWith (:*:)" (embedR r)
+                    unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedR r)
 
         let declared = Record (Dhall.Map.insert nameL declaredL mapR)
               where
-                mapR = unsafeExpectRecord "genericToDhallWith (:*:)" declaredR
+                mapR = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredR
 
         return (Encoder {..})
 
 instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
-    genericToDhallWith options@InterpretOptions{..} = do
+    genericToDhallWithNormalizer inputNormalizer InterpretOptions{..} = do
         let nL :: M1 S s1 (K1 i1 a1) r
             nL = undefined
 
@@ -2239,8 +2277,8 @@ instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M
         nameL <- fmap fieldModifier (getSelName nL)
         nameR <- fmap fieldModifier (getSelName nR)
 
-        let Encoder embedL declaredL = injectWith options
-        let Encoder embedR declaredR = injectWith options
+        let Encoder embedL declaredL = injectWith inputNormalizer
+        let Encoder embedR declaredR = injectWith inputNormalizer
 
         let embed (M1 (K1 l) :*: M1 (K1 r)) =
                 RecordLit
@@ -2257,7 +2295,7 @@ instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M
         return (Encoder {..})
 
 instance GenericToDhall U1 where
-    genericToDhallWith _ = pure (Encoder {..})
+    genericToDhallWithNormalizer _ _ = pure (Encoder {..})
       where
         embed _ = RecordLit mempty
 

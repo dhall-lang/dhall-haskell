@@ -24,7 +24,7 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import Dhall (ToDhall, FromDhall)
 import Dhall.Core (Expr(..))
-import GHC.Generics (Generic)
+import GHC.Generics (Generic, Rep)
 import Numeric.Natural (Natural)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -311,23 +311,33 @@ shouldHandleUnionsCorrectly =
         Dhall.defaultInterpretOptions
             { Dhall.singletonConstructors = Dhall.Wrapped }
 
+    functionWithOptions
+      :: ( Generic a
+         , Dhall.GenericToDhall (Rep a)
+         , Generic b
+         , Dhall.GenericFromDhall (Rep b)
+         )
+      => Dhall.InterpretOptions -> Dhall.Decoder (a -> b)
+    functionWithOptions options =
+      Dhall.function (Dhall.genericToDhallWith options) (Dhall.genericAutoWith options)
+
     code `shouldPassThroughWrapped` values = testCase "Pass through" $ do
-        f <- Dhall.input (Dhall.autoWith wrappedOptions) code
+        f <- Dhall.input (functionWithOptions wrappedOptions) code
 
         values @=? map f values
 
     code `shouldPassThroughSmart` values = testCase "Pass through" $ do
-        f <- Dhall.input (Dhall.autoWith smartOptions) code
+        f <- Dhall.input (functionWithOptions smartOptions) code
 
         values @=? map f values
 
     code `shouldMarshalIntoWrapped` expectedValue = testCase "Marshal" $ do
-        actualValue <- Dhall.input (Dhall.autoWith wrappedOptions) code
+        actualValue <- Dhall.input (Dhall.genericAutoWith wrappedOptions) code
 
         expectedValue @=? actualValue
 
     code `shouldMarshalIntoSmart` expectedValue = testCase "Marshal" $ do
-        actualValue <- Dhall.input (Dhall.autoWith smartOptions) code
+        actualValue <- Dhall.input (Dhall.genericAutoWith smartOptions) code
 
         expectedValue @=? actualValue
 
@@ -336,14 +346,14 @@ shouldHandleUnionsCorrectly =
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
-        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.injectWith wrappedOptions) value
+        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.genericToDhallWith wrappedOptions) value
 
     value `shouldEmbedAsSmart` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
-        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.injectWith smartOptions) value
+        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.genericToDhallWith smartOptions) value
 
 shouldConvertDhallToHaskellCorrectly :: TestTree
 shouldConvertDhallToHaskellCorrectly =
