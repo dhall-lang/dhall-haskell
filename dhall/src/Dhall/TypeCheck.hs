@@ -900,13 +900,21 @@ infer typer = loop
 
             xLs' <- case _L' of
                 VRecord xLs' -> return xLs'
-                _            -> die (MustCombineARecord '⫽' l r)
+
+                _            -> do
+                    let _L'' = quote names _L'
+
+                    die (MustCombineARecord '⫽' l _L'')
 
             _R' <- loop ctx r
 
             xRs' <- case _R' of
                 VRecord xRs' -> return xRs'
-                _            -> die (MustCombineARecord '⫽' l r)
+
+                _            -> do
+                    let _R'' = quote names _R'
+
+                    die (MustCombineARecord '⫽' r _R'')
 
             return (VRecord (Dhall.Map.union xRs' xLs'))
 
