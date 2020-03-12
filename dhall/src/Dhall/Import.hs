@@ -1080,7 +1080,7 @@ loadWith expr₀ = case expr₀ of
   Union a              -> Union <$> mapM (mapM loadWith) a
   Combine m a b        -> Combine m <$> loadWith a <*> loadWith b
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
-  Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
+  Prefer a b c         -> Prefer <$> pure a <*> loadWith b <*> loadWith c
   RecordCompletion a b -> RecordCompletion <$> loadWith a <*> loadWith b
   Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
   ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b

@@ -917,10 +917,10 @@ prettyCharacterSet characterSet expression =
             prettyPreferExpression a
 
     prettyPreferExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyPreferExpression a0@(Prefer _ _) =
+    prettyPreferExpression a0@(Prefer {}) =
         prettyOperator (prefer characterSet) (docs a0)
       where
-        docs (Prefer a b) = prettyCombineTypesExpression b : docs a
+        docs (Prefer _ a b) = prettyCombineTypesExpression b : docs a
         docs a
             | Just doc <- preserveSource a =
                 [ doc ]

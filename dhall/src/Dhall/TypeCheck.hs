@@ -807,6 +807,12 @@ infer typer = loop
         Combine mk l r -> do
             _L' <- loop ctx l
 
+            let l'' = quote names (eval values l)
+
+            _R' <- loop ctx r
+
+            let r'' = quote names (eval values l)
+
             xLs' <- case _L' of
                 VRecord xLs' -> do
                     return xLs'
@@ -815,10 +821,8 @@ infer typer = loop
                     let _L'' = quote names _L'
 
                     case mk of
-                        Nothing -> die (MustCombineARecord '∧' l _L'')
+                        Nothing -> die (MustCombineARecord '∧' l'' r'' _L'')
                         Just t  -> die (InvalidDuplicateField t l _L'')
-
-            _R' <- loop ctx r
 
             xRs' <- case _R' of
                 VRecord xRs' -> do
@@ -828,7 +832,7 @@ infer typer = loop
                     let _R'' = quote names _R'
 
                     case mk of
-                        Nothing -> die (MustCombineARecord '∧' r _R'')
+                        Nothing -> die (MustCombineARecord '∧' r'' l'' _R'')
                         Just t  -> die (InvalidDuplicateField t r _R'')
 
             let combineTypes xs xLs₀' xRs₀' = do
@@ -896,8 +900,14 @@ infer typer = loop
 
             return (VConst c)
 
-        Prefer l r -> do
+        Prefer b l r -> do
             _L' <- loop ctx l
+
+            let l'' = quote names (eval values l)
+
+            _R' <- loop ctx r
+
+            let r'' = quote names (eval values r)
 
             xLs' <- case _L' of
                 VRecord xLs' -> return xLs'
@@ -905,9 +915,9 @@ infer typer = loop
                 _            -> do
                     let _L'' = quote names _L'
 
-                    die (MustCombineARecord '⫽' l _L'')
-
-            _R' <- loop ctx r
+                    if b
+                        then die (MustUpdateARecord l'' _L'')
+                        else die (MustCombineARecord '⫽' l'' r'' _L'')
 
             xRs' <- case _R' of
                 VRecord xRs' -> return xRs'
@@ -915,7 +925,9 @@ infer typer = loop
                 _            -> do
                     let _R'' = quote names _R'
 
-                    die (MustCombineARecord '⫽' r _R'')
+                    if b
+                        then die (MustUpdateARecord r'' _R'')
+                        else die (MustCombineARecord '⫽' r'' l'' _R'')
 
             return (VRecord (Dhall.Map.union xRs' xLs'))
 
@@ -929,7 +941,7 @@ infer typer = loop
                   | not (Dhall.Map.member "Type" xLs')
                      -> die (InvalidRecordCompletion "Type" l)
                   | otherwise
-                     -> loop ctx (Annot (Prefer (Field l "default") r) (Field l "Type"))
+                     -> loop ctx (Annot (Prefer False (Field l "default") r) (Field l "Type"))
                 _ -> die (CompletionSchemaMustBeARecord l (quote names _L'))
 
         Merge t u mT₁ -> do
@@ -1325,7 +1337,8 @@ data TypeMessage s a
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
-    | MustCombineARecord Char (Expr s a) (Expr s a)
+    | MustUpdateARecord (Expr s a) (Expr s a)
+    | MustCombineARecord Char (Expr s a) (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
     | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
@@ -2773,12 +2786,58 @@ prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = pretty fieldName
 
-prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
+prettyTypeMessage (MustUpdateARecord expression typeExpression) =
+    ErrorMessages {..}
   where
-    short = "You can only combine records"
+    short = "You can only update records"
 
     long =
-        "Explanation: You can combine records using the ❰" <> op <> "❱ operator, like this:\n\
+        "Explanation: You can update records using the ❰with❱ keyword, like this:        \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────┐                                          \n\
+        \    │ { x = { y = 1 } } with x.y = 2 │                                          \n\
+        \    └────────────────────────────────┘                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────────────────────────────────┐              \n\
+        \    │ λ(r : { foo : { bar : Bool } }) → r with foo.bar = False } │              \n\
+        \    └────────────────────────────────────────────────────────────┘              \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot update values that are not records.                          \n\
+        \                                                                                \n\
+        \For example, the following expression is " <> _NOT <> " valid:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────┐                                                         \n\
+        \    │ 1 with x = True │                                                         \n\
+        \    └─────────────────┘                                                         \n\
+        \      ⇧                                                                         \n\
+        \      Invalid: Not a record                                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You tried to update this expression:                                            \n\
+        \                                                                                \n\
+        \" <> insert expression <> "\n\
+        \                                                                                \n\
+        \... which is not a record, but is actually a:                                   \n\
+        \                                                                                \n\
+        \" <> insert typeExpression <> "\n"
+
+prettyTypeMessage (MustCombineARecord c primaryExpression secondaryExpression typeExpression) =
+    ErrorMessages {..}
+  where
+    action = case c of
+        '∧' -> "combine"
+        _   -> "override"
+
+    short = "You can only " <> action <> " records"
+
+    long =
+        "Explanation: You can " <> action <> " records using the ❰" <> op <> "❱ operator, like this:\n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
@@ -2791,7 +2850,7 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         \    └─────────────────────────────────────────────┘                             \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but you cannot combine values that are not records.                         \n\
+        \... but you cannot " <> action <> " values that are not records.                \n\
         \                                                                                \n\
         \For example, the following expressions are " <> _NOT <> " valid:                \n\
         \                                                                                \n\
@@ -2817,17 +2876,21 @@ prettyTypeMessage (MustCombineARecord c expr0 expr1) = ErrorMessages {..}
         \                                 Invalid: This is a union type and not a record \n\
         \                                                                                \n\
         \                                                                                \n\
-        \You tried to combine the following value:                                       \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \" <> txt0 <> "\n\
+        \You tried to use this expression:                                               \n\
+        \                                                                                \n\
+        \" <> insert secondaryExpression <> "\n\
+        \                                                                                \n\
+        \... to update this expression:                                                  \n\
+        \                                                                                \n\
+        \" <> insert primaryExpression <> "\n\
         \                                                                                \n\
         \... which is not a record, but is actually a:                                   \n\
         \                                                                                \n\
-        \" <> txt1 <> "\n"
+        \" <> insert typeExpression <> "\n"
       where
-        op   = pretty c
-        txt0 = insert expr0
-        txt1 = insert expr1
+        op = pretty c
 
 prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
     ErrorMessages {..}
@@ -4608,8 +4671,10 @@ messageExpressions f m = case m of
         ListAppendMismatch <$> f a <*> f b
     InvalidDuplicateField a b c ->
         InvalidDuplicateField a <$> f b <*> f c
-    MustCombineARecord a b c ->
-        MustCombineARecord <$> pure a <*> f b <*> f c
+    MustUpdateARecord a b ->
+        MustUpdateARecord <$> f a <*> f b
+    MustCombineARecord a b c d ->
+        MustCombineARecord <$> pure a <*> f b <*> f c <*> f d
     InvalidRecordCompletion a l -> 
         InvalidRecordCompletion a <$> f l
     CompletionSchemaMustBeARecord l r -> 

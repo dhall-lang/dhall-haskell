@@ -284,7 +284,7 @@ parsers embedded = Parsers {..}
         , ListAppend      <$ _listAppend   <* whitespace
         , BoolAnd         <$ _and          <* whitespace
         , Combine Nothing <$ _combine      <* whitespace
-        , Prefer          <$ _prefer       <* whitespace
+        , Prefer False    <$ _prefer       <* whitespace
         , CombineTypes    <$ _combineTypes <* whitespace
         , NaturalTimes    <$ _times        <* whitespace
         , BoolEQ          <$ _doubleEqual  <* whitespace

@@ -306,7 +306,7 @@ decodeExpressionInternal decodeEmbed = go
                                     6  -> return TextAppend
                                     7  -> return ListAppend
                                     8  -> return (Combine Nothing)
-                                    9  -> return Prefer
+                                    9  -> return (Prefer False)
                                     10 -> return CombineTypes
                                     11 -> return ImportAlt
                                     12 -> return Equivalent
@@ -759,7 +759,7 @@ encodeExpressionInternal encodeEmbed = go
         Combine _ l r ->
             encodeOperator 8 l r
 
-        Prefer l r ->
+        Prefer _ l r ->
             encodeOperator 9 l r
 
         CombineTypes l r ->

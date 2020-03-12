@@ -904,7 +904,7 @@ diffPreferExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffPreferExpression l@(Prefer {}) r@(Prefer {}) =
     enclosed' "  " (operator "⫽" <> " ") (docs l r)
   where
-    docs (Prefer aL bL) (Prefer aR bR) =
+    docs (Prefer _ aL bL) (Prefer _ aR bR) =
         Data.List.NonEmpty.cons (diffCombineTypesExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffCombineTypesExpression aL aR)

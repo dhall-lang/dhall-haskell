@@ -433,8 +433,11 @@ data Expr s a
     | Combine (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
     | CombineTypes (Expr s a) (Expr s a)
-    -- | > Prefer x y                               ~  x ⫽ y
-    | Prefer (Expr s a) (Expr s a)
+    -- | > Prefer False x y                         ~  x ⫽ y
+    --
+    -- The first field is a `True` when the `Prefer` operator is introduced as a
+    -- result of desugaring a @with@ expression
+    | Prefer Bool (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -544,7 +547,7 @@ instance Functor (Expr s) where
   fmap f (Union u) = Union (fmap (fmap (fmap f)) u)
   fmap f (Combine m e1 e2) = Combine m (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
-  fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
+  fmap f (Prefer ks e1 e2) = Prefer ks (fmap f e1) (fmap f e2)
   fmap f (RecordCompletion e1 e2) = RecordCompletion (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
@@ -630,7 +633,7 @@ instance Monad (Expr s) where
     Union     a          >>= k = Union (fmap (fmap (>>= k)) a)
     Combine a b c        >>= k = Combine a (b >>= k) (c >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
-    Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
+    Prefer a b c         >>= k = Prefer a (b >>= k) (c >>= k)
     RecordCompletion a b >>= k = RecordCompletion (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
@@ -703,7 +706,7 @@ instance Bifunctor Expr where
     first k (Union a             ) = Union (fmap (fmap (first k)) a)
     first k (Combine a b c       ) = Combine a (first k b) (first k c)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
-    first k (Prefer a b          ) = Prefer (first k a) (first k b)
+    first k (Prefer a b c        ) = Prefer a (first k b) (first k c)
     first k (RecordCompletion a b) = RecordCompletion (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
@@ -837,7 +840,7 @@ subExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 subExpressions f (Union a) = Union <$> traverse (traverse f) a
 subExpressions f (Combine a b c) = Combine a <$> f b <*> f c
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
-subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
+subExpressions f (Prefer a b c) = Prefer <$> pure a <*> f b <*> f c
 subExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
@@ -1144,7 +1147,7 @@ denote (RecordLit a         ) = RecordLit (fmap denote a)
 denote (Union a             ) = Union (fmap (fmap denote) a)
 denote (Combine _ b c       ) = Combine Nothing (denote b) (denote c)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
-denote (Prefer a b          ) = Prefer (denote a) (denote b)
+denote (Prefer a b c        ) = Prefer a (denote b) (denote c)
 denote (RecordCompletion a b) = RecordCompletion (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
@@ -1329,10 +1332,10 @@ desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
     rewrite (With record (key :| []) value) =
-        Just (Prefer record (RecordLit [ (key, value) ]))
+        Just (Prefer True record (RecordLit [ (key, value) ]))
     rewrite (With record (key0 :| key1 : keys) value) =
         Just
-            (Prefer record
+            (Prefer True record
                 (RecordLit
                     [ (key0, With (Field record key0) (key1 :| keys) value) ]
                 )
