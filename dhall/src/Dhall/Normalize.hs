@@ -901,7 +901,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             Record (Dhall.Map.unionWith decide m n)
         decide l r =
             CombineTypes l r
-    Prefer b x y -> decide <$> loop x <*> loop y
+    Prefer _ x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
             r
@@ -912,7 +912,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l r | Eval.judgmentallyEqual l r =
             l
         decide l r =
-            Prefer b l r
+            Prefer PreferFromSource l r
     RecordCompletion x y -> do
         loop (Annot (Prefer PreferFromCompletion (Field x "default") y) (Field x "Type"))
     Merge x y t      -> do
@@ -983,8 +983,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     Just v  -> pure v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
             Project r_ _ -> loop (Field r_ x)
-            Prefer b (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Prefer b (singletonRecordLit v) r_) x)
+            Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
             Prefer _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure v
@@ -1004,11 +1004,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
             Project y _ ->
                 loop (Project y (Left fields))
-            Prefer b l (RecordLit rKvs) -> do
+            Prefer _ l (RecordLit rKvs) -> do
                 let rKs = Dhall.Map.keysSet rKvs
                 let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
                 let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
-                loop (Prefer b l' r')
+                loop (Prefer PreferFromSource l' r')
             _ | null fields -> pure (RecordLit mempty)
               | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
     Project r (Right e1) -> do
