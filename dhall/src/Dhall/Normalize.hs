@@ -24,9 +24,18 @@ import Data.Functor.Identity (Identity(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (ViewL(..), ViewR(..))
 import Data.Traversable
-import Dhall.Syntax (Expr(..), Var(..), Binding(Binding), Chunks(..), DhallDouble(..), Const(..))
 import Instances.TH.Lift ()
 import Prelude hiding (succ)
+
+import Dhall.Syntax
+    ( Expr(..)
+    , Var(..)
+    , Binding(Binding)
+    , Chunks(..)
+    , DhallDouble(..)
+    , Const(..)
+    , PreferAnnotation(..)
+    )
 
 import qualified Data.Sequence
 import qualified Data.Set
@@ -905,7 +914,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l r =
             Prefer b l r
     RecordCompletion x y -> do
-        loop (Annot (Prefer False (Field x "default") y) (Field x "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field x "default") y) (Field x "Type"))
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y

@@ -41,12 +41,19 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Dhall.Context (Context)
-import Dhall.Syntax (Binding(..), Const(..), Chunks(..), Expr(..), Var(..))
-import Dhall.Eval
-    (Environment(..), Names(..), Val(..), (~>))
+import Dhall.Eval (Environment(..), Names(..), Val(..), (~>))
 import Dhall.Pretty (Ann)
 import Dhall.Src (Src)
 import Lens.Family (over)
+
+import Dhall.Syntax
+    ( Binding(..)
+    , Const(..)
+    , Chunks(..)
+    , Expr(..)
+    , PreferAnnotation(..)
+    , Var(..)
+    )
 
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty                      as NonEmpty
@@ -900,7 +907,7 @@ infer typer = loop
 
             return (VConst c)
 
-        Prefer b l r -> do
+        Prefer a l r -> do
             _L' <- loop ctx l
 
             let l'' = quote names (eval values l)
@@ -915,9 +922,11 @@ infer typer = loop
                 _            -> do
                     let _L'' = quote names _L'
 
-                    if b
-                        then die (MustUpdateARecord l'' _L'')
-                        else die (MustCombineARecord '⫽' l'' r'' _L'')
+                    case a of
+                        PreferFromWith ->
+                            die (MustUpdateARecord l'' _L'')
+                        _ ->
+                            die (MustCombineARecord '⫽' l'' r'' _L'')
 
             xRs' <- case _R' of
                 VRecord xRs' -> return xRs'
@@ -925,9 +934,11 @@ infer typer = loop
                 _            -> do
                     let _R'' = quote names _R'
 
-                    if b
-                        then die (MustUpdateARecord r'' _R'')
-                        else die (MustCombineARecord '⫽' r'' l'' _R'')
+                    case a of
+                        PreferFromWith ->
+                            die (MustUpdateARecord r'' _R'')
+                        _ ->
+                            die (MustCombineARecord '⫽' r'' l'' _R'')
 
             return (VRecord (Dhall.Map.union xRs' xLs'))
 
@@ -941,7 +952,7 @@ infer typer = loop
                   | not (Dhall.Map.member "Type" xLs')
                      -> die (InvalidRecordCompletion "Type" l)
                   | otherwise
-                     -> loop ctx (Annot (Prefer False (Field l "default") r) (Field l "Type"))
+                     -> loop ctx (Annot (Prefer PreferFromCompletion (Field l "default") r) (Field l "Type"))
                 _ -> die (CompletionSchemaMustBeARecord l (quote names _L'))
 
         Merge t u mT₁ -> do

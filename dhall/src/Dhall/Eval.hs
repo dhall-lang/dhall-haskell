@@ -68,6 +68,7 @@ import Dhall.Syntax
   , Chunks(..)
   , Const(..)
   , DhallDouble(..)
+  , PreferAnnotation(..)
   , Var(..)
   )
 
@@ -217,7 +218,7 @@ data Val a
     | VUnion !(Map Text (Maybe (Val a)))
     | VCombine !(Maybe Text) !(Val a) !(Val a)
     | VCombineTypes !(Val a) !(Val a)
-    | VPrefer Bool !(Val a) !(Val a)
+    | VPrefer PreferAnnotation !(Val a) !(Val a)
     | VMerge !(Val a) !(Val a) !(Maybe (Val a))
     | VToMap !(Val a) !(Maybe (Val a))
     | VField !(Val a) !Text
@@ -272,8 +273,8 @@ vApp !t !u =
         t'        -> VApp t' u
 {-# INLINE vApp #-}
 
-vPrefer :: Eq a => Environment a -> Bool -> Val a -> Val a -> Val a
-vPrefer env b t u =
+vPrefer :: Eq a => Environment a -> PreferAnnotation -> Val a -> Val a -> Val a
+vPrefer env a t u =
     case (t, u) of
         (VRecordLit m, u') | null m ->
             u'
@@ -284,7 +285,7 @@ vPrefer env b t u =
         (t', u') | conv env t' u' ->
             t'
         (t', u') ->
-            VPrefer b t' u'
+            VPrefer a t' u'
 {-# INLINE vPrefer #-}
 
 vCombine :: Maybe Text -> Val a -> Val a -> Val a
@@ -690,7 +691,7 @@ eval !env t0 =
         Prefer b t u ->
             vPrefer env b (eval env t) (eval env u)
         RecordCompletion t u ->
-            eval env (Annot (Prefer False (Field t "default") u) (Field t "Type"))
+            eval env (Annot (Prefer PreferFromCompletion (Field t "default") u) (Field t "Type"))
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)

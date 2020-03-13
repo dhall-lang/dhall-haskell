@@ -26,6 +26,7 @@ module Dhall.Syntax (
     , makeBinding
     , Chunks(..)
     , DhallDouble(..)
+    , PreferAnnotation(..)
     , Expr(..)
 
     -- ** 'Let'-blocks
@@ -265,6 +266,9 @@ instance Monoid (Chunks s a) where
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
 
+data PreferAnnotation = PreferFromSource | PreferFromWith | PreferFromCompletion
+    deriving (Data, Eq, Generic, NFData, Ord, Show)
+
 {-| Syntax tree for expressions
 
     The @s@ type parameter is used to track the presence or absence of `Src`
@@ -437,7 +441,7 @@ data Expr s a
     --
     -- The first field is a `True` when the `Prefer` operator is introduced as a
     -- result of desugaring a @with@ expression
-    | Prefer Bool (Expr s a) (Expr s a)
+    | Prefer PreferAnnotation (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -1332,10 +1336,10 @@ desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
     rewrite (With record (key :| []) value) =
-        Just (Prefer True record (RecordLit [ (key, value) ]))
+        Just (Prefer PreferFromWith record (RecordLit [ (key, value) ]))
     rewrite (With record (key0 :| key1 : keys) value) =
         Just
-            (Prefer True record
+            (Prefer PreferFromWith record
                 (RecordLit
                     [ (key0, With (Field record key0) (key1 :| keys) value) ]
                 )

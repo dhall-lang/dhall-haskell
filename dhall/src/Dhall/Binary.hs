@@ -44,6 +44,7 @@ import Dhall.Syntax
     , ImportMode(..)
     , ImportType(..)
     , MultiLet(..)
+    , PreferAnnotation(..)
     , Scheme(..)
     , URL(..)
     , Var(..)
@@ -306,7 +307,7 @@ decodeExpressionInternal decodeEmbed = go
                                     6  -> return TextAppend
                                     7  -> return ListAppend
                                     8  -> return (Combine Nothing)
-                                    9  -> return (Prefer False)
+                                    9  -> return (Prefer PreferFromSource)
                                     10 -> return CombineTypes
                                     11 -> return ImportAlt
                                     12 -> return Equivalent
