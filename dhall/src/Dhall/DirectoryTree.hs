@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -8,6 +9,7 @@ module Dhall.DirectoryTree
     , FilesystemError(..)
     ) where
 
+import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Data.Void (Void)
@@ -15,6 +17,7 @@ import Dhall.Syntax (Chunks(..), Expr(..))
 import System.FilePath ((</>))
 
 import qualified Control.Exception                       as Exception
+import qualified Data.Foldable                           as Foldable
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Util                              as Util
 import qualified Dhall.Map                               as Map
@@ -77,17 +80,20 @@ import qualified Data.Text.IO                            as Text.IO
 
     This utility does not take care of type-checking and normalizing the
     provided expression.  This will raise a `FilesystemError` exception upon
-    encountering an expression that is not a `TextLit` or `RecordLit`.
+    encountering an expression that cannot be converted as-is.
 -}
 toDirectoryTree :: FilePath -> Expr Void Void -> IO ()
 toDirectoryTree path expression = case expression of
     RecordLit keyValues -> do
-        let process key value = do
-                Directory.createDirectoryIfMissing False path
-
-                toDirectoryTree (path </> Text.unpack key) value
-
         Map.unorderedTraverseWithKey_ process keyValues
+
+    ListLit (Just (Record [ ("mapKey", Text), ("mapValue", _) ])) [] -> do
+        return ()
+
+    ListLit _ records
+        | not (null records)
+        , Just keyValues <- extract (Foldable.toList records) -> do
+            Foldable.traverse_ (uncurry process) keyValues
 
     TextLit (Chunks [] text) -> do
         Text.IO.writeFile path text
@@ -102,6 +108,20 @@ toDirectoryTree path expression = case expression of
         let unexpectedExpression = expression
 
         Exception.throwIO FilesystemError{..}
+  where
+    extract [] = do
+        return []
+
+    extract (RecordLit [("mapKey", TextLit (Chunks [] key)), ("mapValue", value)]:records) = do
+        fmap ((key, value) :) (extract records)
+
+    extract _ = do
+        empty
+
+    process key value = do
+        Directory.createDirectoryIfMissing False path
+
+        toDirectoryTree (path </> Text.unpack key) value
 
 {- | This error indicates that you supplied an invalid Dhall expression to the
      `directoryTree` function.  The Dhall expression could not be translated to
