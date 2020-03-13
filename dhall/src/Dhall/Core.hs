@@ -24,6 +24,7 @@ module Dhall.Core (
     , Binding(..)
     , makeBinding
     , Chunks(..)
+    , PreferAnnotation(..)
     , Expr(..)
 
     -- * Normalization
