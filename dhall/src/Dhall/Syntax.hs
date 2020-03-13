@@ -266,8 +266,19 @@ instance Monoid (Chunks s a) where
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
 
-data PreferAnnotation = PreferFromSource | PreferFromWith | PreferFromCompletion
-    deriving (Data, Eq, Generic, NFData, Ord, Show)
+data PreferAnnotation s a
+    = PreferFromSource
+    | PreferFromWith (Expr s a)
+      -- ^ Stores the original @with@ expression
+    | PreferFromCompletion
+    deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
+
+instance Bifunctor PreferAnnotation where
+    first _  PreferFromSource      = PreferFromSource
+    first f (PreferFromWith e    ) = PreferFromWith (first f e)
+    first _  PreferFromCompletion  = PreferFromCompletion
+
+    second = fmap
 
 {-| Syntax tree for expressions
 
@@ -441,7 +452,7 @@ data Expr s a
     --
     -- The first field is a `True` when the `Prefer` operator is introduced as a
     -- result of desugaring a @with@ expression
-    | Prefer PreferAnnotation (Expr s a) (Expr s a)
+    | Prefer (PreferAnnotation s a) (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -551,7 +562,7 @@ instance Functor (Expr s) where
   fmap f (Union u) = Union (fmap (fmap (fmap f)) u)
   fmap f (Combine m e1 e2) = Combine m (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
-  fmap f (Prefer ks e1 e2) = Prefer ks (fmap f e1) (fmap f e2)
+  fmap f (Prefer a e1 e2) = Prefer (fmap f a) (fmap f e1) (fmap f e2)
   fmap f (RecordCompletion e1 e2) = RecordCompletion (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
@@ -637,7 +648,12 @@ instance Monad (Expr s) where
     Union     a          >>= k = Union (fmap (fmap (>>= k)) a)
     Combine a b c        >>= k = Combine a (b >>= k) (c >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
-    Prefer a b c         >>= k = Prefer a (b >>= k) (c >>= k)
+    Prefer a b c         >>= k = Prefer a' (b >>= k) (c >>= k)
+      where
+        a' = case a of
+            PreferFromSource     -> PreferFromSource
+            PreferFromWith e     -> PreferFromWith (e >>= k)
+            PreferFromCompletion -> PreferFromCompletion
     RecordCompletion a b >>= k = RecordCompletion (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
@@ -710,7 +726,7 @@ instance Bifunctor Expr where
     first k (Union a             ) = Union (fmap (fmap (first k)) a)
     first k (Combine a b c       ) = Combine a (first k b) (first k c)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
-    first k (Prefer a b c        ) = Prefer a (first k b) (first k c)
+    first k (Prefer a b c        ) = Prefer (first k a) (first k b) (first k c)
     first k (RecordCompletion a b) = RecordCompletion (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
@@ -1151,7 +1167,12 @@ denote (RecordLit a         ) = RecordLit (fmap denote a)
 denote (Union a             ) = Union (fmap (fmap denote) a)
 denote (Combine _ b c       ) = Combine Nothing (denote b) (denote c)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
-denote (Prefer a b c        ) = Prefer a (denote b) (denote c)
+denote (Prefer a b c        ) = Prefer a' (denote b) (denote c)
+  where
+    a' = case a of
+        PreferFromSource     -> PreferFromSource
+        PreferFromWith e     -> PreferFromWith (denote e)
+        PreferFromCompletion -> PreferFromCompletion
 denote (RecordCompletion a b) = RecordCompletion (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
@@ -1335,11 +1356,11 @@ toDoubleQuoted literal =
 desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
-    rewrite (With record (key :| []) value) =
-        Just (Prefer PreferFromWith record (RecordLit [ (key, value) ]))
-    rewrite (With record (key0 :| key1 : keys) value) =
+    rewrite e@(With record (key :| []) value) =
+        Just (Prefer (PreferFromWith e) record (RecordLit [ (key, value) ]))
+    rewrite e@(With record (key0 :| key1 : keys) value) =
         Just
-            (Prefer PreferFromWith record
+            (Prefer (PreferFromWith e) record
                 (RecordLit
                     [ (key0, With (Field record key0) (key1 :| keys) value) ]
                 )

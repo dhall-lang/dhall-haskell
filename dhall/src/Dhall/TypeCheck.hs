@@ -923,8 +923,8 @@ infer typer = loop
                     let _L'' = quote names _L'
 
                     case a of
-                        PreferFromWith ->
-                            die (MustUpdateARecord l'' _L'')
+                        PreferFromWith withExpression ->
+                            die (MustUpdateARecord withExpression l'' _L'')
                         _ ->
                             die (MustCombineARecord '⫽' l'' r'' _L'')
 
@@ -934,11 +934,7 @@ infer typer = loop
                 _            -> do
                     let _R'' = quote names _R'
 
-                    case a of
-                        PreferFromWith ->
-                            die (MustUpdateARecord r'' _R'')
-                        _ ->
-                            die (MustCombineARecord '⫽' r'' l'' _R'')
+                    die (MustCombineARecord '⫽' r'' l'' _R'')
 
             return (VRecord (Dhall.Map.union xRs' xLs'))
 
@@ -1348,7 +1344,7 @@ data TypeMessage s a
     | InvalidAlternativeType Text (Expr s a)
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
-    | MustUpdateARecord (Expr s a) (Expr s a)
+    | MustUpdateARecord (Expr s a) (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
@@ -2797,7 +2793,7 @@ prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = pretty fieldName
 
-prettyTypeMessage (MustUpdateARecord expression typeExpression) =
+prettyTypeMessage (MustUpdateARecord withExpression expression typeExpression) =
     ErrorMessages {..}
   where
     short = "You can only update records"
@@ -2830,13 +2826,21 @@ prettyTypeMessage (MustUpdateARecord expression typeExpression) =
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to update this expression:                                            \n\
+        \The following expression is not permitted:                                      \n\
+        \                                                                                \n\
+        \" <> insert withExpression' <> "\n\
+        \                                                                                \n\
+        \... because the left argument to ❰with❱:                                        \n\
         \                                                                                \n\
         \" <> insert expression <> "\n\
         \                                                                                \n\
-        \... which is not a record, but is actually a:                                   \n\
+        \... is not a record, but is actually a:                                         \n\
         \                                                                                \n\
         \" <> insert typeExpression <> "\n"
+      where
+        withExpression' = case withExpression of
+            With record keys value -> With (Dhall.Core.normalize record) keys value
+            _                      -> withExpression
 
 prettyTypeMessage (MustCombineARecord c primaryExpression secondaryExpression typeExpression) =
     ErrorMessages {..}
@@ -4682,8 +4686,8 @@ messageExpressions f m = case m of
         ListAppendMismatch <$> f a <*> f b
     InvalidDuplicateField a b c ->
         InvalidDuplicateField a <$> f b <*> f c
-    MustUpdateARecord a b ->
-        MustUpdateARecord <$> f a <*> f b
+    MustUpdateARecord a b c ->
+        MustUpdateARecord <$> f a <*> f b <*> f c
     MustCombineARecord a b c d ->
         MustCombineARecord <$> pure a <*> f b <*> f c <*> f d
     InvalidRecordCompletion a l -> 

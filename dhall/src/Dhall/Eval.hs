@@ -218,7 +218,7 @@ data Val a
     | VUnion !(Map Text (Maybe (Val a)))
     | VCombine !(Maybe Text) !(Val a) !(Val a)
     | VCombineTypes !(Val a) !(Val a)
-    | VPrefer PreferAnnotation !(Val a) !(Val a)
+    | VPrefer !(Val a) !(Val a)
     | VMerge !(Val a) !(Val a) !(Maybe (Val a))
     | VToMap !(Val a) !(Maybe (Val a))
     | VField !(Val a) !Text
@@ -273,8 +273,8 @@ vApp !t !u =
         t'        -> VApp t' u
 {-# INLINE vApp #-}
 
-vPrefer :: Eq a => Environment a -> PreferAnnotation -> Val a -> Val a -> Val a
-vPrefer env a t u =
+vPrefer :: Eq a => Environment a -> Val a -> Val a -> Val a
+vPrefer env t u =
     case (t, u) of
         (VRecordLit m, u') | null m ->
             u'
@@ -285,7 +285,7 @@ vPrefer env a t u =
         (t', u') | conv env t' u' ->
             t'
         (t', u') ->
-            VPrefer a t' u'
+            VPrefer t' u'
 {-# INLINE vPrefer #-}
 
 vCombine :: Maybe Text -> Val a -> Val a -> Val a
@@ -350,10 +350,10 @@ vField t0 k = go t0
             | Just v <- Map.lookup k m -> v
             | otherwise -> error errorMsg
         VProject t _ -> go t
-        VPrefer b (VRecordLit m) r -> case Map.lookup k m of
-            Just v -> VField (VPrefer b (singletonVRecordLit v) r) k
+        VPrefer (VRecordLit m) r -> case Map.lookup k m of
+            Just v -> VField (VPrefer (singletonVRecordLit v) r) k
             Nothing -> go r
-        VPrefer _ l (VRecordLit m) -> case Map.lookup k m of
+        VPrefer l (VRecordLit m) -> case Map.lookup k m of
             Just v -> v
             Nothing -> go l
         VCombine mk (VRecordLit m) r -> case Map.lookup k m of
@@ -377,7 +377,7 @@ vProjectByFields env t ks =
                 in  VRecordLit kvs'
             VProject t' _ ->
                 vProjectByFields env t' ks
-            VPrefer b l (VRecordLit kvs) ->
+            VPrefer l (VRecordLit kvs) ->
                 let ksSet = Dhall.Set.toSet ks
 
                     kvs' = Map.restrictKeys kvs ksSet
@@ -386,7 +386,7 @@ vProjectByFields env t ks =
                         Dhall.Set.fromSet
                             (Data.Set.difference ksSet (Map.keysSet kvs'))
 
-                in  vPrefer env b (vProjectByFields env l ks') (VRecordLit kvs')
+                in  vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
             t' ->
                 VProject t' (Left ks)
 
@@ -688,8 +688,8 @@ eval !env t0 =
             vCombine mk (eval env t) (eval env u)
         CombineTypes t u ->
             vCombineTypes (eval env t) (eval env u)
-        Prefer b t u ->
-            vPrefer env b (eval env t) (eval env u)
+        Prefer _ t u ->
+            vPrefer env (eval env t) (eval env u)
         RecordCompletion t u ->
             eval env (Annot (Prefer PreferFromCompletion (Field t "default") u) (Field t "Type"))
         Merge x y ma ->
@@ -930,7 +930,7 @@ conv !env t0 t0' =
             conv env t t' && conv env u u'
         (VCombineTypes t u, VCombineTypes t' u') ->
             conv env t t' && conv env u u'
-        (VPrefer _ t u, VPrefer _ t' u') ->
+        (VPrefer t u, VPrefer t' u') ->
             conv env t t' && conv env u u'
         (VMerge t u _, VMerge t' u' _) ->
             conv env t t' && conv env u u'
@@ -1118,8 +1118,8 @@ quote !env !t0 =
             Combine mk (quote env t) (quote env u)
         VCombineTypes t u ->
             CombineTypes (quote env t) (quote env u)
-        VPrefer b t u ->
-            Prefer b (quote env t) (quote env u)
+        VPrefer t u ->
+            Prefer PreferFromSource (quote env t) (quote env u)
         VMerge t u ma ->
             Merge (quote env t) (quote env u) (fmap (quote env) ma)
         VToMap t ma ->
