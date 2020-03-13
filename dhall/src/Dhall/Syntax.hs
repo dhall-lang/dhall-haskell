@@ -266,6 +266,8 @@ instance Monoid (Chunks s a) where
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
 
+-- | Used to record the origin of a @//@ operator (i.e. from source code or a
+-- product of desugaring)
 data PreferAnnotation s a
     = PreferFromSource
     | PreferFromWith (Expr s a)
