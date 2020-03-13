@@ -105,9 +105,7 @@ toDirectoryTree path expression = case expression of
         return ()
 
     _ -> do
-        let unexpectedExpression = expression
-
-        Exception.throwIO FilesystemError{..}
+        die
   where
     extract [] = do
         return []
@@ -119,9 +117,17 @@ toDirectoryTree path expression = case expression of
         empty
 
     process key value = do
+        if Text.isInfixOf "/" key
+            then die
+            else return ()
+
         Directory.createDirectoryIfMissing False path
 
         toDirectoryTree (path </> Text.unpack key) value
+
+    die = Exception.throwIO FilesystemError{..}
+      where
+        unexpectedExpression = expression
 
 {- | This error indicates that you supplied an invalid Dhall expression to the
      `directoryTree` function.  The Dhall expression could not be translated to
@@ -161,11 +167,26 @@ instance Show FilesystemError where
           \    └───────────────────────┘                                                   \n\
           \                                                                                \n\
           \                                                                                \n\
+          \Note that key names cannot contain forward slashes:                             \n\
+          \                                                                                \n\
+          \                                                                                \n\
+          \    ┌───────────────────────────────────┐                                       \n\
+          \    │ { `directory/example.txt` = \"ABC\" │ Invalid: Key contains a forward slash \n\
+          \    └───────────────────────────────────┘                                       \n\
+          \                                                                                \n\
+          \                                                                                \n\
+          \Instead, you need to refactor the expression to use nested records instead:     \n\
+          \                                                                                \n\
+          \                                                                                \n\
+          \    ┌───────────────────────────────────────────┐                               \n\
+          \    │ { directory = { `example.txt` = \"ABC\" } } │                               \n\
+          \    └───────────────────────────────────────────┘                               \n\
+          \                                                                                \n\
+          \                                                                                \n\
           \You tried to translate the following expression to a directory tree:            \n\
           \                                                                                \n\
           \" <> Util.insert unexpectedExpression <> "\n\
           \                                                                                \n\
-          \... which is neither a ❰Text❱ literal, a record literal, nor an ❰Optional❱      \n\
-          \value.                                                                          \n"
+          \... which is not an expression that can be translated to a directory tree.      \n"
 
 instance Exception FilesystemError
