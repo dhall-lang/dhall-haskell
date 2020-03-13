@@ -828,7 +828,7 @@ infer typer = loop
                     let _L'' = quote names _L'
 
                     case mk of
-                        Nothing -> die (MustCombineARecord '∧' l'' r'' _L'')
+                        Nothing -> die (MustCombineARecord '∧' l'' _L'')
                         Just t  -> die (InvalidDuplicateField t l _L'')
 
             xRs' <- case _R' of
@@ -839,7 +839,7 @@ infer typer = loop
                     let _R'' = quote names _R'
 
                     case mk of
-                        Nothing -> die (MustCombineARecord '∧' r'' l'' _R'')
+                        Nothing -> die (MustCombineARecord '∧' r'' _R'')
                         Just t  -> die (InvalidDuplicateField t r _R'')
 
             let combineTypes xs xLs₀' xRs₀' = do
@@ -910,11 +910,7 @@ infer typer = loop
         Prefer a l r -> do
             _L' <- loop ctx l
 
-            let l'' = quote names (eval values l)
-
             _R' <- loop ctx r
-
-            let r'' = quote names (eval values r)
 
             xLs' <- case _L' of
                 VRecord xLs' -> return xLs'
@@ -922,11 +918,13 @@ infer typer = loop
                 _            -> do
                     let _L'' = quote names _L'
 
+                    let l'' = quote names (eval values l)
+
                     case a of
                         PreferFromWith withExpression ->
                             die (MustUpdateARecord withExpression l'' _L'')
                         _ ->
-                            die (MustCombineARecord '⫽' l'' r'' _L'')
+                            die (MustCombineARecord '⫽' l'' _L'')
 
             xRs' <- case _R' of
                 VRecord xRs' -> return xRs'
@@ -934,7 +932,9 @@ infer typer = loop
                 _            -> do
                     let _R'' = quote names _R'
 
-                    die (MustCombineARecord '⫽' r'' l'' _R'')
+                    let r'' = quote names (eval values r)
+
+                    die (MustCombineARecord '⫽' r'' _R'')
 
             return (VRecord (Dhall.Map.union xRs' xLs'))
 
@@ -1345,7 +1345,7 @@ data TypeMessage s a
     | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustUpdateARecord (Expr s a) (Expr s a) (Expr s a)
-    | MustCombineARecord Char (Expr s a) (Expr s a) (Expr s a)
+    | MustCombineARecord Char (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
     | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
@@ -2842,7 +2842,7 @@ prettyTypeMessage (MustUpdateARecord withExpression expression typeExpression) =
             With record keys value -> With (Dhall.Core.normalize record) keys value
             _                      -> withExpression
 
-prettyTypeMessage (MustCombineARecord c primaryExpression secondaryExpression typeExpression) =
+prettyTypeMessage (MustCombineARecord c expression typeExpression) =
     ErrorMessages {..}
   where
     action = case c of
@@ -2893,13 +2893,9 @@ prettyTypeMessage (MustCombineARecord c primaryExpression secondaryExpression ty
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You tried to use this expression:                                               \n\
+        \You supplied this expression as one of the arguments:                           \n\
         \                                                                                \n\
-        \" <> insert secondaryExpression <> "\n\
-        \                                                                                \n\
-        \... to update this expression:                                                  \n\
-        \                                                                                \n\
-        \" <> insert primaryExpression <> "\n\
+        \" <> insert expression <> "\n\
         \                                                                                \n\
         \... which is not a record, but is actually a:                                   \n\
         \                                                                                \n\
@@ -4688,8 +4684,8 @@ messageExpressions f m = case m of
         InvalidDuplicateField a <$> f b <*> f c
     MustUpdateARecord a b c ->
         MustUpdateARecord <$> f a <*> f b <*> f c
-    MustCombineARecord a b c d ->
-        MustCombineARecord <$> pure a <*> f b <*> f c <*> f d
+    MustCombineARecord a b c ->
+        MustCombineARecord <$> pure a <*> f b <*> f c
     InvalidRecordCompletion a l -> 
         InvalidRecordCompletion a <$> f l
     CompletionSchemaMustBeARecord l r -> 
