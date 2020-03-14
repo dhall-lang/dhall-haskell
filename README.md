@@ -161,6 +161,13 @@ binary-cache-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFG
 binary-caches = https://cache.nixos.org https://cache.dhall-lang.org https://dhall.cachix.org
 ```
 
+Since many tests require HTTP access, you should also add this setting to
+your `/etc/nix/nix.conf`:
+
+```
+sandbox = false
+```
+
 You can build all of the packages by running:
 
 ```console
