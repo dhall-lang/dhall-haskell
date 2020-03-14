@@ -23,6 +23,12 @@ main = do
         writeFile "both" "./bool1 && ./bool2"
         writeFile "file2" "./file1"
         writeFile "file1" "./file2"
+        writeFile "simon.dhall" $ unlines
+          [ "let Name = Text"
+          , "let Font = < Arial | `Comic Sans` | Helvetica | `Times New Roman` >"
+          , "let Person = { name : Name, favoriteFont : Font }"
+          , "in  { name = \"Simon\", favoriteFont = Font.`Comic Sans` } : Person"
+          ]
 
         Test.DocTest.doctest
             [ "-DWITH_HTTP"
@@ -38,6 +44,7 @@ main = do
 
             -- , prefix </> "src"
             , "-i" <> (prefix </> "src")
+            , prefix </> "src/Dhall/Deriving.hs"
             , prefix </> "src/Dhall/Tags.hs"
             , prefix </> "src/Dhall/Tutorial.hs"
             ]
