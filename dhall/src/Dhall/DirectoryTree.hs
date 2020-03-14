@@ -18,17 +18,20 @@ import System.FilePath ((</>))
 
 import qualified Control.Exception                       as Exception
 import qualified Data.Foldable                           as Foldable
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Dhall.Util                              as Util
-import qualified Dhall.Map                               as Map
-import qualified Dhall.Pretty
-import qualified System.Directory                        as Directory
 import qualified Data.Text                               as Text
 import qualified Data.Text.IO                            as Text.IO
+import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Dhall.Map                               as Map
+import qualified Dhall.Pretty
+import qualified Dhall.Util                              as Util
+import qualified System.Directory                        as Directory
+import qualified System.FilePath                         as FilePath
 
 {-| Attempt to transform a Dhall record into a directory tree where:
 
     * Records are translated into directories
+
+    * @Map@s are also translated into directories
 
     * @Text@ values or fields are translated into files
 
@@ -117,7 +120,7 @@ toDirectoryTree path expression = case expression of
         empty
 
     process key value = do
-        if Text.isInfixOf "/" key
+        if Text.isInfixOf (Text.pack [ FilePath.pathSeparator ]) key
             then die
             else return ()
 
@@ -144,10 +147,10 @@ instance Show FilesystemError where
           Util._ERROR <> ": Not a valid directory tree expression\n\
           \                                                                                \n\
           \Explanation: Only a subset of Dhall expressions can be converted to a directory \n\
-          \tree.  Specifically, record literals can be converted to directories, ❰Text❱    \n\
-          \literals can be converted to files, and ❰Optional❱ values are included if ❰Some❱\n\
-          \and omitted if ❰None❱.  No other type of value can be translated to a directory \n\
-          \tree.                                                                           \n\
+          \tree.  Specifically, record literals or maps can be converted to directories,   \n\
+          \❰Text❱ literals can be converted to files, and ❰Optional❱ values are included if\n\
+          \❰Some❱ and omitted if ❰None❱.  No other type of value can be translated to a    \n\
+          \directory tree.                                                                 \n\
           \                                                                                \n\
           \For example, this is a valid expression that can be translated to a directory   \n\
           \tree:                                                                           \n\
@@ -167,7 +170,7 @@ instance Show FilesystemError where
           \    └───────────────────────┘                                                   \n\
           \                                                                                \n\
           \                                                                                \n\
-          \Note that key names cannot contain forward slashes:                             \n\
+          \Note that key names cannot contain path separators:                             \n\
           \                                                                                \n\
           \                                                                                \n\
           \    ┌───────────────────────────────────┐                                       \n\
