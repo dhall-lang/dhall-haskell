@@ -96,7 +96,15 @@ import Data.Fix (Fix(..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
-import Dhall.Core (Chunks(..), Const(..), DhallDouble(..), Expr(..), MultiLet(..), Var(..))
+import Dhall.Core
+    ( Chunks(..)
+    , Const(..)
+    , DhallDouble(..)
+    , Expr(..)
+    , MultiLet(..)
+    , PreferAnnotation(..)
+    , Var(..)
+    )
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
@@ -524,7 +532,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         c' <- loop c
         return (Fix (NBinary NUpdate b' c'))
     loop (RecordCompletion a b) = do
-        loop (Annot (Prefer False (Field a "default") b) (Field a "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field a "default") b) (Field a "Type"))
     loop (Field (Union kts) k) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we
