@@ -1109,9 +1109,14 @@ pair l r = Decoder extractOut expectedOut
 >>> input auto "toMap { a = False, b = True }" :: IO (Map Text Bool)
 fromList [("a",False),("b",True)]
 
-    This class auto-generates a default implementation for records that
+    This class auto-generates a default implementation for types that
     implement `Generic`.  This does not auto-generate an instance for recursive
     types.
+
+    The default instance can be tweaked using 'genericAutoWith' and custom
+    'InterpretOptions', or using
+    [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
+    and 'Dhall.Deriving.Codec' from 'Dhall.Deriving'.
 -}
 class FromDhall a where
     autoWith :: InputNormalizer -> Decoder a
@@ -1748,6 +1753,15 @@ instance Contravariant Encoder where
       (i.e. @App f x@)
     * Normalizing the syntax tree (i.e. @normalize (App f x)@)
     * Marshaling the resulting Dhall expression back into a Haskell value
+
+    This class auto-generates a default implementation for types that
+    implement `Generic`.  This does not auto-generate an instance for recursive
+    types.
+
+    The default instance can be tweaked using 'genericToDhallWith' and custom
+    'InterpretOptions', or using
+    [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
+    and 'Dhall.Deriving.Codec' from 'Dhall.Deriving'.
 -}
 class ToDhall a where
     injectWith :: InputNormalizer -> Encoder a
