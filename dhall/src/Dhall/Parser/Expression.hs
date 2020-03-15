@@ -257,7 +257,7 @@ parsers embedded = Parsers {..}
             alternative4A <|> alternative4B <|> pure a
 
     operatorExpression =
-        foldr makeOperatorExpression applicationExpression operatorParsers
+        foldr makeOperatorExpression withExpression operatorParsers
 
     makeOperatorExpression operatorParser subExpression =
             noted (do
@@ -277,20 +277,40 @@ parsers embedded = Parsers {..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ ImportAlt       <$ _importAlt    <* nonemptyWhitespace
-        , BoolOr          <$ _or           <* whitespace
-        , NaturalPlus     <$ _plus         <* nonemptyWhitespace
-        , TextAppend      <$ _textAppend   <* whitespace
-        , ListAppend      <$ _listAppend   <* whitespace
-        , BoolAnd         <$ _and          <* whitespace
-        , Combine Nothing <$ _combine      <* whitespace
-        , Prefer          <$ _prefer       <* whitespace
-        , CombineTypes    <$ _combineTypes <* whitespace
-        , NaturalTimes    <$ _times        <* whitespace
-        , BoolEQ          <$ _doubleEqual  <* whitespace
-        , BoolNE          <$ _notEqual     <* whitespace
-        , Equivalent      <$ _equivalent   <* whitespace
+        [ ImportAlt               <$ _importAlt    <* nonemptyWhitespace
+        , BoolOr                  <$ _or           <* whitespace
+        , NaturalPlus             <$ _plus         <* nonemptyWhitespace
+        , TextAppend              <$ _textAppend   <* whitespace
+        , ListAppend              <$ _listAppend   <* whitespace
+        , BoolAnd                 <$ _and          <* whitespace
+        , Combine Nothing         <$ _combine      <* whitespace
+        , Prefer PreferFromSource <$ _prefer       <* whitespace
+        , CombineTypes            <$ _combineTypes <* whitespace
+        , NaturalTimes            <$ _times        <* whitespace
+        , BoolEQ                  <$ _doubleEqual  <* whitespace
+        , BoolNE                  <$ _notEqual     <* whitespace
+        , Equivalent              <$ _equivalent   <* whitespace
         ]
+
+    withExpression = noted (do
+        a <- applicationExpression
+
+        bs <- many (do
+            try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
+
+            keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+
+            whitespace
+
+            _equal
+
+            whitespace
+
+            value <- applicationExpression
+
+            return (\e -> With e keys value) )
+
+        return (foldl (\e f -> f e) a bs) )
 
     applicationExpression = do
             let alternative0 = do
@@ -762,16 +782,7 @@ parsers embedded = Parsers {..}
                     return (foldr cons nil (NonEmpty.init keys))
 
             let nonEmptyRecordLiteral = do
-                    (a, b) <- keysValue
-
-                    e <- Text.Megaparsec.many (do
-                        _comma
-
-                        whitespace
-
-                        (c, d) <- keysValue
-
-                        return (c, d) )
+                    as <- Text.Megaparsec.sepBy1 keysValue (_comma *> whitespace)
 
                     {- The `flip` is necessary because `toMapWith` is internally
                        based on `Data.Map.fromListWithKey` which combines keys
@@ -779,7 +790,7 @@ parsers embedded = Parsers {..}
                     -}
                     let combine k = liftA2 (flip (Combine (Just k)))
 
-                    m <- toMapWith combine ((a, b) : e)
+                    m <- toMapWith combine as
 
                     return (RecordLit m)
 

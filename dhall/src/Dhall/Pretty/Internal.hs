@@ -439,7 +439,7 @@ prettyLabel = prettyLabelShared False
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
 
-prettyAnyLabels :: NonEmpty Text -> Doc Ann
+prettyAnyLabels :: Foldable list => list Text -> Doc Ann
 prettyAnyLabels =
     mconcat . Pretty.punctuate dot . fmap prettyAnyLabel . toList
 
@@ -917,10 +917,10 @@ prettyCharacterSet characterSet expression =
             prettyPreferExpression a
 
     prettyPreferExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyPreferExpression a0@(Prefer _ _) =
+    prettyPreferExpression a0@(Prefer {}) =
         prettyOperator (prefer characterSet) (docs a0)
       where
-        docs (Prefer a b) = prettyCombineTypesExpression b : docs a
+        docs (Prefer _ a b) = prettyCombineTypesExpression b : docs a
         docs a
             | Just doc <- preserveSource a =
                 [ doc ]
@@ -1033,6 +1033,26 @@ prettyCharacterSet characterSet expression =
             doc
         | Note _ b <- a =
             prettyEquivalentExpression b
+        | otherwise =
+            prettyWithExpression a
+
+    prettyWithExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyWithExpression (With a b c) =
+            prettyWithExpression a
+        <>  Pretty.flatAlt long short
+      where
+        short = " " <> keyword "with" <> " " <> update
+
+        long =  Pretty.hardline
+            <>  "  "
+            <>  Pretty.align (keyword "with" <> " " <> update)
+
+        (update, _ ) = prettyKeyValue prettyAnyLabels equals (b, c)
+    prettyWithExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyWithExpression b
         | otherwise =
             prettyApplicationExpression a
 
@@ -1213,7 +1233,11 @@ prettyCharacterSet characterSet expression =
         short = lparen <> prettyExpression a <> rparen
 
     prettyKeyValue
-        :: Pretty a => (k -> Doc Ann) -> Doc Ann -> (k, Expr Src a) -> (Doc Ann, Doc Ann)
+        :: Pretty a
+        => (k -> Doc Ann)
+        -> Doc Ann
+        -> (k, Expr Src a)
+        -> (Doc Ann, Doc Ann)
     prettyKeyValue prettyKey separator (key, val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
@@ -1243,14 +1267,22 @@ prettyCharacterSet characterSet expression =
                         <>  case shallowDenote val' of
                                 RecordCompletion _T r ->
                                     completion _T r
+
+                                RecordLit _ ->
+                                        Pretty.hardline
+                                    <>  "  "
+                                    <>  prettyImportExpression val'
+
                                 ListLit _ xs
                                     | not (null xs) ->
                                             Pretty.hardline
                                         <>  "  "
                                         <>  prettyExpression val'
+
                                 _ ->    Pretty.hardline
                                     <>  "    "
                                     <>  prettyImportExpression val'
+
                     ToMap val' Nothing ->
                             " " <> keyword "toMap"
                         <>  case shallowDenote val' of
@@ -1259,13 +1291,21 @@ prettyCharacterSet characterSet expression =
                                 _ ->    Pretty.hardline
                                     <>  "    "
                                     <>  prettyImportExpression val'
+
                     RecordCompletion _T r ->
                         completion _T r
+
+                    RecordLit _ ->
+                            Pretty.hardline
+                        <>  "  "
+                        <>  prettyExpression val
+
                     ListLit _ xs
                         | not (null xs) ->
                                 Pretty.hardline
                             <>  "  "
                             <>  prettyExpression val
+
                     _ -> 
                             Pretty.hardline
                         <>  "    "

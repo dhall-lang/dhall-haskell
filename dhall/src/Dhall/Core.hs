@@ -24,6 +24,7 @@ module Dhall.Core (
     , Binding(..)
     , makeBinding
     , Chunks(..)
+    , PreferAnnotation(..)
     , Expr(..)
 
     -- * Normalization
@@ -66,6 +67,7 @@ module Dhall.Core (
     , Eval.textShow
     , censorExpression
     , censorText
+    , Syntax.desugarWith
     ) where
 
 import Control.Exception (Exception)
@@ -82,8 +84,9 @@ import Lens.Family (over)
 import Prelude hiding (succ)
 
 import qualified Control.Exception
-import qualified Dhall.Eval    as Eval
 import qualified Data.Text
+import qualified Dhall.Eval        as Eval
+import qualified Dhall.Syntax      as Syntax
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text

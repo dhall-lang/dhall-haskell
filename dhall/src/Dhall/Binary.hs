@@ -44,6 +44,7 @@ import Dhall.Syntax
     , ImportMode(..)
     , ImportType(..)
     , MultiLet(..)
+    , PreferAnnotation(..)
     , Scheme(..)
     , URL(..)
     , Var(..)
@@ -65,10 +66,10 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Sequence
 import qualified Data.Text            as Text
-import qualified Dhall.Syntax
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Dhall.Syntax         as Syntax
 import qualified Text.Printf          as Printf
 
 {-| Supported version strings
@@ -306,7 +307,7 @@ decodeExpressionInternal decodeEmbed = go
                                     6  -> return TextAppend
                                     7  -> return ListAppend
                                     8  -> return (Combine Nothing)
-                                    9  -> return Prefer
+                                    9  -> return (Prefer PreferFromSource)
                                     10 -> return CombineTypes
                                     11 -> return ImportAlt
                                     12 -> return Equivalent
@@ -759,7 +760,7 @@ encodeExpressionInternal encodeEmbed = go
         Combine _ l r ->
             encodeOperator 8 l r
 
-        Prefer l r ->
+        Prefer _ l r ->
             encodeOperator 9 l r
 
         CombineTypes l r ->
@@ -910,7 +911,7 @@ encodeExpressionInternal encodeEmbed = go
                 : concatMap encodeBinding (toList as) ++ [ go b₁ ]
                 )
           where
-            MultiLet as b₁ = Dhall.Syntax.multiLet a₀ b₀
+            MultiLet as b₁ = Syntax.multiLet a₀ b₀
 
             encodeBinding (Binding _ x _ mA₀ _ a) =
                 [ Encoding.encodeString x
@@ -938,6 +939,9 @@ encodeExpressionInternal encodeEmbed = go
                 (Encoding.encodeInt 27)
                 (go t)
                 (go _T)
+
+        a@With{} ->
+            go (Syntax.desugarWith a)
 
         Note _ b ->
             go b
@@ -1104,7 +1108,7 @@ encodeImport import_ =
                 Nothing ->
                     Encoding.encodeNull
                 Just h ->
-                    encodeExpressionInternal encodeImport (Dhall.Syntax.denote h)
+                    encodeExpressionInternal encodeImport (Syntax.denote h)
 
             scheme₁ = case scheme₀ of
                 HTTP  -> 0
