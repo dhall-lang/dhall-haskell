@@ -454,6 +454,7 @@ Library
         memory                      >= 0.14     && < 0.16,
         mtl                         >= 2.2.1    && < 2.3 ,
         network-uri                 >= 2.6      && < 2.7 ,
+        nonempty-containers         >= 0.3.3.0  && < 0.4 ,
         optparse-applicative        >= 0.14.0.0 && < 0.16,
         parsers                     >= 0.12.4   && < 0.13,
         parser-combinators                               ,

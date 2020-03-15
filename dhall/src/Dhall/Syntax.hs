@@ -79,6 +79,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.String (IsString(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
+import Data.Sequence.NonEmpty (NESeq)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Traversable
@@ -408,7 +409,8 @@ data Expr s a
     -- Eventually we should have separate constructors for empty and non-empty
     -- list literals. For now it's easier to check the invariant in @infer@.
     -- See https://github.com/dhall-lang/dhall-haskell/issues/1359#issuecomment-537087234.
-    | ListLit (Maybe (Expr s a)) (Seq (Expr s a))
+    | EmptyListLit (Expr s a)
+    | NonEmptyListLit (NESeq (Expr s a))
     -- | > ListAppend x y                           ~  x # y
     | ListAppend (Expr s a) (Expr s a)
     -- | > ListBuild                                ~  List/build
@@ -545,7 +547,8 @@ instance Functor (Expr s) where
   fmap f (TextAppend e1 e2) = TextAppend (fmap f e1) (fmap f e2)
   fmap _ TextShow = TextShow
   fmap _ List = List
-  fmap f (ListLit maybeE seqE) = ListLit (fmap (fmap f) maybeE) (fmap (fmap f) seqE)
+  fmap f EmptyListLit e = EmptyListLit (fmap f e)
+  fmap f (NonEmptyListLit seqE) = NonEmptyListLit (fmap (fmap f) seqE)
   fmap f (ListAppend e1 e2) = ListAppend (fmap f e1) (fmap f e2)
   fmap _ ListBuild = ListBuild
   fmap _ ListFold = ListFold
