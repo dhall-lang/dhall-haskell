@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Main where
 
 import Data.Monoid ((<>))
@@ -44,7 +46,11 @@ main = do
 
             -- , prefix </> "src"
             , "-i" <> (prefix </> "src")
+#ifdef MIN_VERSION_GLASGOW_HASKELL
+#if MIN_VERSION_GLASGOW_HASKELL(8,6,1,0)
             , prefix </> "src/Dhall/Deriving.hs"
+#endif
+#endif
             , prefix </> "src/Dhall/Tags.hs"
             , prefix </> "src/Dhall/Tutorial.hs"
             ]
