@@ -24,9 +24,18 @@ import Data.Functor.Identity (Identity(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (ViewL(..), ViewR(..))
 import Data.Traversable
-import Dhall.Syntax (Expr(..), Var(..), Binding(Binding), Chunks(..), DhallDouble(..), Const(..))
 import Instances.TH.Lift ()
 import Prelude hiding (succ)
+
+import Dhall.Syntax
+    ( Expr(..)
+    , Var(..)
+    , Binding(Binding)
+    , Chunks(..)
+    , DhallDouble(..)
+    , Const(..)
+    , PreferAnnotation(..)
+    )
 
 import qualified Data.Sequence
 import qualified Data.Set
@@ -240,10 +249,10 @@ shift d v (CombineTypes a b) = CombineTypes a' b'
   where
     a' = shift d v a
     b' = shift d v b
-shift d v (Prefer a b) = Prefer a' b'
+shift d v (Prefer a b c) = Prefer a b' c'
   where
-    a' = shift d v a
     b' = shift d v b
+    c' = shift d v c
 shift d v (RecordCompletion a b) = RecordCompletion a' b'
   where
     a' = shift d v a
@@ -271,6 +280,10 @@ shift d v (Project a b) = Project a' b'
   where
     a' =       shift d v  a
     b' = fmap (shift d v) b
+shift d v (With a b c) = With a' b c'
+  where
+    a' = shift d v a
+    c' = shift d v c
 shift d v (Note a b) = Note a b'
   where
     b' = shift d v b
@@ -415,10 +428,10 @@ subst x e (CombineTypes a b) = CombineTypes a' b'
   where
     a' = subst x e a
     b' = subst x e b
-subst x e (Prefer a b) = Prefer a' b'
+subst x e (Prefer a b c) = Prefer a b' c'
   where
-    a' = subst x e a
     b' = subst x e b
+    c' = subst x e c
 subst x e (RecordCompletion a b) = RecordCompletion a' b'
   where
     a' = subst x e a
@@ -446,6 +459,10 @@ subst x e (Equivalent a b) = Equivalent a' b'
   where
     a' = subst x e a
     b' = subst x e b
+subst x e (With a b c) = With a' b c'
+  where
+    a' = subst x e a
+    c' = subst x e c
 subst x e (Note a b) = Note a b'
   where
     b' = subst x e b
@@ -884,7 +901,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             Record (Dhall.Map.unionWith decide m n)
         decide l r =
             CombineTypes l r
-    Prefer x y -> decide <$> loop x <*> loop y
+    Prefer _ x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
             r
@@ -895,9 +912,9 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l r | Eval.judgmentallyEqual l r =
             l
         decide l r =
-            Prefer l r
+            Prefer PreferFromSource l r
     RecordCompletion x y -> do
-        loop (Annot (Prefer (Field x "default") y) (Field x "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field x "default") y) (Field x "Type"))
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y
@@ -966,10 +983,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     Just v  -> pure v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
             Project r_ _ -> loop (Field r_ x)
-            Prefer (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Prefer (singletonRecordLit v) r_) x)
+            Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
-            Prefer l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+            Prefer _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure v
                 Nothing -> loop (Field l x)
             Combine m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
@@ -987,11 +1004,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
             Project y _ ->
                 loop (Project y (Left fields))
-            Prefer l (RecordLit rKvs) -> do
+            Prefer _ l (RecordLit rKvs) -> do
                 let rKs = Dhall.Map.keysSet rKvs
                 let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
                 let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
-                loop (Prefer l' r')
+                loop (Prefer PreferFromSource l' r')
             _ | null fields -> pure (RecordLit mempty)
               | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
     Project r (Right e1) -> do
@@ -1012,6 +1029,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         r' <- loop r
 
         pure (Equivalent l' r')
+    With e' k v -> do
+        loop (Syntax.desugarWith (With e' k v))
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1192,7 +1211,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide _ (Record n) | Data.Foldable.null n = False
           decide (Record _) (Record _) = False
           decide  _ _ = True
-      Prefer x y -> loop x && loop y && decide x y
+      Prefer _ x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
@@ -1213,8 +1232,8 @@ isNormalized e0 = loop (Syntax.denote e0)
       Field r k -> case r of
           RecordLit _ -> False
           Project _ _ -> False
-          Prefer (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Prefer _ (RecordLit _) -> False
+          Prefer _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
+          Prefer _ _ (RecordLit _) -> False
           Combine _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
           Combine _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
           _ -> loop r
@@ -1223,13 +1242,14 @@ isNormalized e0 = loop (Syntax.denote e0)
               Left s -> case r of
                   RecordLit _ -> False
                   Project _ _ -> False
-                  Prefer _ (RecordLit _) -> False
+                  Prefer _ _ (RecordLit _) -> False
                   _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
       Assert t -> loop t
       Equivalent l r -> loop l && loop r
+      With{} -> False
       Note _ e' -> loop e'
       ImportAlt _ _ -> False
       Embed _ -> True

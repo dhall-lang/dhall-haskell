@@ -96,7 +96,15 @@ import Data.Fix (Fix(..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
-import Dhall.Core (Chunks(..), Const(..), DhallDouble(..), Expr(..), MultiLet(..), Var(..))
+import Dhall.Core
+    ( Chunks(..)
+    , Const(..)
+    , DhallDouble(..)
+    , Expr(..)
+    , MultiLet(..)
+    , PreferAnnotation(..)
+    , Var(..)
+    )
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
@@ -522,12 +530,12 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet NNonRecursive setBindings)))))
         let toMap = Fix (NAbs "kvs" (Fix (NBinary NApp map_ ks)))
         return (Fix (NBinary NApp toMap a'))
-    loop (Prefer a b) = do
-        a' <- loop a
+    loop (Prefer _ b c) = do
         b' <- loop b
-        return (Fix (NBinary NUpdate a' b'))
+        c' <- loop c
+        return (Fix (NBinary NUpdate b' c'))
     loop (RecordCompletion a b) = do
-        loop (Annot (Prefer (Field a "default") b) (Field a "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field a "default") b) (Field a "Type"))
     loop (Field (Union kts) k) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we
@@ -561,6 +569,8 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return untranslatable
     loop (Equivalent _ _) = do
         return untranslatable
+    loop a@With{} = do
+        loop (Dhall.Core.desugarWith a)
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x

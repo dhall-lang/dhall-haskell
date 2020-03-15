@@ -57,6 +57,10 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
+import Dhall.Map (Map)
+import Dhall.Set (Set)
+import GHC.Natural (Natural)
+import Prelude hiding (succ)
 
 import Dhall.Syntax
   ( Binding(..)
@@ -64,13 +68,9 @@ import Dhall.Syntax
   , Chunks(..)
   , Const(..)
   , DhallDouble(..)
+  , PreferAnnotation(..)
   , Var(..)
   )
-
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import GHC.Natural (Natural)
-import Prelude hiding (succ)
 
 import qualified Data.Char
 import qualified Data.Sequence   as Sequence
@@ -688,10 +688,10 @@ eval !env t0 =
             vCombine mk (eval env t) (eval env u)
         CombineTypes t u ->
             vCombineTypes (eval env t) (eval env u)
-        Prefer t u ->
+        Prefer _ t u ->
             vPrefer env (eval env t) (eval env u)
         RecordCompletion t u ->
-            eval env (Annot (Prefer (Field t "default") u) (Field t "Type"))
+            eval env (Annot (Prefer PreferFromCompletion (Field t "default") u) (Field t "Type"))
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
@@ -736,6 +736,8 @@ eval !env t0 =
             VAssert (eval env t)
         Equivalent t u ->
             VEquivalent (eval env t) (eval env u)
+        e@With{} ->
+            eval env (Syntax.desugarWith e)
         Note _ e ->
             eval env e
         ImportAlt t _ ->
@@ -1117,7 +1119,7 @@ quote !env !t0 =
         VCombineTypes t u ->
             CombineTypes (quote env t) (quote env u)
         VPrefer t u ->
-            Prefer (quote env t) (quote env u)
+            Prefer PreferFromSource (quote env t) (quote env u)
         VMerge t u ma ->
             Merge (quote env t) (quote env u) (fmap (quote env) ma)
         VToMap t ma ->
@@ -1296,8 +1298,8 @@ alphaNormalize = goEnv EmptyNames
                 Combine m (go t) (go u)
             CombineTypes t u ->
                 CombineTypes (go t) (go u)
-            Prefer t u ->
-                Prefer (go t) (go u)
+            Prefer b t u ->
+                Prefer b (go t) (go u)
             RecordCompletion t u ->
                 RecordCompletion (go t) (go u)
             Merge x y ma ->
@@ -1312,6 +1314,8 @@ alphaNormalize = goEnv EmptyNames
                 Assert (go t)
             Equivalent t u ->
                 Equivalent (go t) (go u)
+            With e k v ->
+                With (go e) k (go v)
             Note s e ->
                 Note s (go e)
             ImportAlt t u ->

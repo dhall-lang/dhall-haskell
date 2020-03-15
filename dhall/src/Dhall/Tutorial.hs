@@ -544,7 +544,15 @@ import Dhall
 -- >     }
 -- > }
 --
--- You can access a field of a record using the following syntax:
+-- You can specify nested fields using dot-separated keys, like this:
+--
+-- > { foo = 1, bar.baz = 2.0, bar.qux = True }
+--
+-- ... which is equivalent to:
+--
+-- > { foo = 1, bar = { baz = 2.0, qux = True } }
+--
+-- You can also access a field of a record using the following syntax:
 --
 -- > record.fieldName
 --
@@ -827,6 +835,24 @@ import Dhall
 --
 -- Note that the order of record fields does not matter.  The compiler
 -- automatically sorts the fields.
+--
+-- If you need to set or add a deeply nested field you can use the @with@
+-- keyword, like this:
+--
+-- > $ dhall <<< '{ x.y = 1 } with x.z = True'
+-- > { x = { y = 1, z = True } }
+--
+-- > $ dhall <<< '{ x.y = 1 } with x.y = 2'
+-- > { x.y = 2 }
+--
+-- The @with@ keyword is syntactic sugar for the @//@ operator which follows
+-- these rules:
+--
+-- > -- Nested case
+-- > record with k.ks… = value  ⇒  record // { k = record.k with ks… = value }
+-- >
+-- > -- Base case
+-- > record with k = value      ⇒  record // { k = value }
 --
 -- The @(/\\)@ operator (or @(∧)@ U+2227) also lets you combine records, but
 -- behaves differently if the records share fields in common.  The operator

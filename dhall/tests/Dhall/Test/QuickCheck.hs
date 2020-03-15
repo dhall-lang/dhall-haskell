@@ -29,6 +29,7 @@ import Dhall.Core
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
+    , PreferAnnotation(..)
     , Scheme(..)
     , URL(..)
     , Var(..)
@@ -219,6 +220,14 @@ instance Arbitrary Directory where
 
     shrink = genericShrink
 
+instance (Arbitrary s, Arbitrary a) => Arbitrary (PreferAnnotation s a) where
+    arbitrary =
+        Test.QuickCheck.oneof
+            [ pure PreferFromSource
+            , PreferFromWith <$> arbitrary
+            , pure PreferFromCompletion
+            ]
+
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =
         Test.QuickCheck.suchThat
@@ -313,6 +322,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "Project")
             % (1 :: W "Assert")
             % (1 :: W "Equivalent")
+            % (1 :: W "With")
             % (0 :: W "Note")
             % (7 :: W "ImportAlt")
             % (7 :: W "Embed")
@@ -321,11 +331,22 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     shrink expression = filter standardizedExpression (genericShrink expression)
 
 standardizedExpression :: Expr s a -> Bool
-standardizedExpression (ListLit  Nothing  xs) = not (Data.Sequence.null xs)
-standardizedExpression (ListLit (Just _ ) xs) = Data.Sequence.null xs
-standardizedExpression (Note _ _            ) = False
-standardizedExpression (Combine (Just _) _ _) = False
-standardizedExpression  _                     = True
+standardizedExpression (ListLit  Nothing  xs) =
+    not (Data.Sequence.null xs)
+standardizedExpression (ListLit (Just _ ) xs) =
+    Data.Sequence.null xs
+standardizedExpression (Note _ _) =
+    False
+standardizedExpression (Combine (Just _) _ _) =
+    False
+standardizedExpression With{} =
+    False
+standardizedExpression (Prefer PreferFromCompletion _ _) =
+    False
+standardizedExpression (Prefer (PreferFromWith _) _ _) =
+    False
+standardizedExpression _ =
+    True
 
 instance Arbitrary File where
     arbitrary = lift2 File
