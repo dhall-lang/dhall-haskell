@@ -1,25 +1,17 @@
-{ mkDerivation, aeson, base, base-compat, bifunctors, binary
-, containers, data-default-class, deepseq, hashable, keys, lens
-, mtl, QuickCheck, quickcheck-instances, semigroupoids, stdenv
-, tasty, tasty-quickcheck, transformers, transformers-compat
-, unordered-containers, vector, vector-instances
+{ mkDerivation, aeson, assoc, base, base-compat, binary, deepseq
+, hashable, QuickCheck, semigroupoids, stdenv, unordered-containers
 }:
 mkDerivation {
   pname = "these";
-  version = "0.7.6";
-  sha256 = "9464b83d98e626360a8ad9836ba77e5201cd1e9c89b95b1b11a28ef3c23ac746";
+  version = "1.0.1";
+  sha256 = "79cc1ee35d268c5871f585681c649daded2ffe5fc657c3db87a9b2f38a8917cc";
+  revision = "1";
+  editedCabalFile = "0923r86fnmgpx0msm68aszirh2n19nn5bccgjxfh2146jw4z7w3z";
   libraryHaskellDepends = [
-    aeson base base-compat bifunctors binary containers
-    data-default-class deepseq hashable keys lens mtl QuickCheck
-    semigroupoids transformers transformers-compat unordered-containers
-    vector vector-instances
-  ];
-  testHaskellDepends = [
-    aeson base base-compat bifunctors binary containers hashable lens
-    QuickCheck quickcheck-instances tasty tasty-quickcheck transformers
-    unordered-containers vector
+    aeson assoc base base-compat binary deepseq hashable QuickCheck
+    semigroupoids unordered-containers
   ];
   homepage = "https://github.com/isomorphism/these";
-  description = "An either-or-both data type & a generalized 'zip with padding' typeclass";
+  description = "An either-or-both data type";
   license = stdenv.lib.licenses.bsd3;
 }

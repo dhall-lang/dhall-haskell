@@ -34,7 +34,6 @@ let
                   "megaparsec"
                   "lens-family-th"
                   "network-uri"
-                  "invariant"
                   "interpolate"
                   "http-types"
                   "parsers"
