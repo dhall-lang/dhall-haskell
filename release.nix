@@ -9,7 +9,7 @@ let
   callShared = args:
     import ./nix/shared.nix ({ inherit nixpkgs nixpkgsStaticLinux; } // args);
 
-  shared_8_0_2 = callShared { compiler = "ghc802"; };
+  shared_8_2_2 = callShared { compiler = "ghc822"; };
 
   shared_8_6_1 = callShared { compiler = "ghc861"; };
 
@@ -28,15 +28,15 @@ in
         constituents = [
           # Verify that the packages build against the oldest supported version
           # of the compiler
-          shared_8_0_2.dhall
-          shared_8_0_2.dhall-bash
-          shared_8_0_2.dhall-json
-          # `dhall-nix` → `hnix-store-core` → `4.10 <= base` → `8.2.1 <= ghc`
-          # shared_8_0_2.dhall-nix
+          shared_8_2_2.dhall
+          shared_8_2_2.dhall-bash
+          shared_8_2_2.dhall-json
+          # `dhall-nix` → `hnix` → `4.11 <= base` → `8.4.1 <= ghc`
+          # shared_8_2_2.dhall-nix
           # `HsYAML-aeson` requires Cabal >= 2.2, which implies GHC 8.4 or newer
-          # shared_8_0_2.dhall-yaml
+          # shared_8_2_2.dhall-yaml
           # `base-noprelude` depends on a specific version of `base`
-          # shared_8_0_2.dhall-lsp-server
+          # shared_8_2_2.dhall-lsp-server
 
           # Verify that the packages build against the latest supported version
           # of the compiler
