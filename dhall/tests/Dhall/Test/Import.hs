@@ -72,6 +72,10 @@ successTest path = do
 
         let unsetCache = Turtle.unset "XDG_CACHE_HOME"
 
+        let setTestVar = Turtle.export "DHALL_TEST_VAR" "6 * 7"
+
+        let unsetTestVar = Turtle.unset "DHALL_TEST_VAR"
+
         let load =
                 State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
 
@@ -81,10 +85,9 @@ successTest path = do
                 _ <- load
                 unsetCache
             else do
+                setTestVar
                 _ <- load
-                return ()
-
-        return () )
+                unsetTestVar )
 
 failureTest :: Text -> TestTree
 failureTest path = do
