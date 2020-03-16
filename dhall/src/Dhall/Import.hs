@@ -976,7 +976,7 @@ emptyStatus = emptyStatusWith fetchRemote
 -}
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr₀ = case expr₀ of
-  Embed import₀ -> do
+  Embed import₀@Import {..} -> do
     Status {..} <- State.get
 
     let parent = NonEmpty.head _stack
@@ -988,7 +988,8 @@ loadWith expr₀ = case expr₀ of
         local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
         local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
 
-    let referentiallySane = not (local child) || local parent
+    let referentiallySane =
+            importMode == Location || not (local child) || local parent
 
     if referentiallySane
         then return ()
