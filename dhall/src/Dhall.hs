@@ -1761,7 +1761,7 @@ instance Contravariant Encoder where
     The default instance can be tweaked using 'genericToDhallWith' and custom
     'InterpretOptions', or using
     [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
-    and 'Dhall.Deriving.Codec' from 'Dhall.Deriving'.
+    and 'Dhall.Deriving.Codec' from "Dhall.Deriving".
 -}
 class ToDhall a where
     injectWith :: InputNormalizer -> Encoder a
