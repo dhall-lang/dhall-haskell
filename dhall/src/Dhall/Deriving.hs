@@ -15,6 +15,11 @@
     Inspired by Matt Parson's blog post
     [Mirror Mirror: Reflection and Encoding Via](https://www.parsonsmatt.org/2020/02/04/mirror_mirror.html),
     but applied to Dhall instead of JSON.
+
+    This module is intended to be used with
+    [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
+    so it's only available for GHC >= v8.6.1.
+
 -}
 
 module Dhall.Deriving
