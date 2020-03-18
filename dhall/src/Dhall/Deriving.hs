@@ -20,6 +20,8 @@
     [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
     so it's only available for GHC >= v8.6.1.
 
+    Check "Dhall.Deriving#derivingVia" if you want to see this module in action.
+
 -}
 
 module Dhall.Deriving
@@ -72,6 +74,7 @@ module Dhall.Deriving
   , addFieldModifier
   , addConstructorModifier
   , setSingletonConstructors
+
   ) where
 
 import Data.Proxy (Proxy (..))
@@ -244,6 +247,7 @@ setSingletonConstructors v options = options
 Let's take the following Haskell data types:
 
 >>> :set -XDerivingStrategies
+
 >>> :{
 newtype Name = Name { getName :: Text }
   deriving stock (Show)
@@ -265,7 +269,7 @@ data Person = Person
 And assume we want to read the following Dhall file as a @Person@:
 
 @
--- simon.dhall
+-- ./simon.dhall
 let Name = Text
 let Font = \< Arial | `Comic Sans` | Helvetica | `Times New Roman` \>
 let Person = { name : Name, favoriteFont : Font }
@@ -317,6 +321,7 @@ plus 'Generic' instances for each of those, but that's okay.
 
 >>> :set -XStandaloneDeriving
 >>> :set -XDeriveGeneric
+
 >>> :{
 deriving stock instance Generic Name
 deriving stock instance Generic Font
@@ -424,37 +429,50 @@ Now, for the moment of truth:
 
 >>> input auto "./simon.dhall":: IO Person
 Person {personName = Name {getName = "Simon"}, personFavoriteFont = ComicSans}
+
+That took a bit more work than we wanted, though, and a lot of it was just
+boilerplate for defining the instances through `genericAutoWith`, tweaking
+a single parameter at a time. Even worse, if we also wanted to provide
+'ToDhall' instances we would need to keep the options in sync between both
+instances, since otherwise the values wouldn't be able to round-trip from
+Dhall to Dhall through Haskell.
+
 -}
 
 {- $derivingVia
-That took a bit more work than we wanted, though, and a lot of it was just
-boilerplate for defining the instances through `genericAutoWith`, tweaking
-a single parameter at a time.
-With [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia),
-together with this module, we can reduce our boilerplate to:
+   #derivingVia#
 
+Starting with this dhall file:
+
+@
+-- ./simon.dhall
+let Name = Text
+let Font = \< Arial | `Comic Sans` | Helvetica | `Times New Roman` \>
+let Person = { name : Name, favoriteFont : Font }
+in  { name = \"Simon\", favoriteFont = Font.`Comic Sans` } : Person
+@
+
+We can define the equivalent Haskell types as follows. Note that we
+derive the 'FromDhall' and 'ToDhall' instances @via 'Codec' tag TheType@,
+using a different @tag@ depending on the transformations we need to apply to
+the Haskell type to get the Dhall equivalent:
+
+>>> :set -XDataKinds
+>>> :set -XDeriveGeneric
 >>> :set -XDerivingVia
 >>> :set -XTypeOperators
->>> :set -XDataKinds
->>> :{
-deriving via Codec (Field (CamelCase <<< DropPrefix "person")) Person instance FromDhall Person
-deriving via Codec (Constructor TitleCase) Font instance FromDhall Font
-deriving via Codec (SetSingletonConstructors Bare) Name instance FromDhall Name
-:}
-
-or, deriving directly where the types are defined:
 
 >>> :{
 newtype Name = Name { getName :: Text }
   deriving stock (Generic, Show)
-  deriving (FromDhall)
+  deriving (FromDhall, ToDhall)
     via Codec (SetSingletonConstructors Bare) Name
 :}
 
 >>> :{
 data Font = Arial | ComicSans | Helvetica | TimesNewRoman
   deriving stock (Generic, Show)
-  deriving (FromDhall)
+  deriving (FromDhall, ToDhall)
     via Codec (Constructor TitleCase) Font
 :}
 
@@ -464,16 +482,26 @@ data Person = Person
   , personFavoriteFont :: Font
   }
   deriving stock (Generic, Show)
-  deriving (FromDhall)
+  deriving (FromDhall, ToDhall)
     via Codec (Field (CamelCase <<< DropPrefix "person")) Person
 :}
 
-Let's try it:
+we can then read the file using 'auto':
 
->>> input auto "./simon.dhall":: IO Person
+>>> simon <- input auto "./simon.dhall":: IO Person
+>>> print simon
 Person {personName = Name {getName = "Simon"}, personFavoriteFont = ComicSans}
 
-It works! But how does it work?
+And using 'inject' we can get @simon@ back as a Dhall value:
+
+>>> import qualified Data.Text.IO as Text
+>>> import Dhall.Core (pretty)
+>>> Text.putStrLn . pretty . embed inject $ simon
+{ name = "Simon"
+, favoriteFont =
+    < Arial | `Comic Sans` | Helvetica | `Times New Roman` >.`Comic Sans`
+}
+
 -}
 
 {- $behindTheScenes
