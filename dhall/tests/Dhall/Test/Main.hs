@@ -71,6 +71,8 @@ main = do
 
     System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
 
+    System.Environment.setEnv "DHALL_TEST_VAR" "6 * 7"
+
     allTests <- getAllTests
 
     Test.Tasty.defaultMain allTests

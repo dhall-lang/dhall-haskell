@@ -2,6 +2,7 @@
 
 module Dhall.Test.Import where
 
+import Control.Exception (SomeException)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Dhall.Import (MissingImports(..))
@@ -61,7 +62,11 @@ successTest path = do
 
     let directoryString = FilePath.takeDirectory pathString
 
-    Tasty.HUnit.testCase pathString (do
+    let expectedFailures =
+            [ importDirectory </> "success/unit/asLocation/HashA.dhall"
+            ]
+
+    Test.Util.testCase path expectedFailures (do
 
         text <- Text.IO.readFile pathString
 
@@ -75,14 +80,20 @@ successTest path = do
         let load =
                 State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
 
-        if Turtle.filename (Turtle.fromText path) == "hashFromCacheA.dhall"
-            then do
-                setCache
-                _ <- load
-                unsetCache
-            else do
-                _ <- load
-                return ()
+        let runTest = do
+                if Turtle.filename (Turtle.fromText path) == "hashFromCacheA.dhall"
+                    then do
+                        setCache
+                        _ <- load
+                        unsetCache
+                    else do
+                        _ <- load
+                        return ()
+
+        let handler :: SomeException -> IO ()
+            handler exception = Tasty.HUnit.assertFailure (show exception)
+
+        Exception.handle handler runTest
 
         return () )
 

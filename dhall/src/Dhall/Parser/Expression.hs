@@ -11,6 +11,7 @@ import Control.Applicative (liftA2, Alternative(..), optional)
 import Data.ByteArray.Encoding (Base(..))
 import Data.Foldable (foldl')
 import Data.Functor (void)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Dhall.Syntax
@@ -764,22 +765,28 @@ parsers embedded = Parsers {..}
             let keysValue = do
                     keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
 
-                    whitespace
+                    let normalRecordEntry = do
+                            try (whitespace *> _equal)
 
-                    _equal
+                            whitespace
 
-                    whitespace
+                            value <- expression
 
-                    value <- expression
+                            whitespace
 
-                    whitespace
+                            let cons key (key', values) =
+                                    (key, RecordLit [ (key', values) ])
 
-                    let cons key (key', values) =
-                            (key, RecordLit [ (key', values) ])
+                            let nil = (NonEmpty.last keys, value)
 
-                    let nil = (NonEmpty.last keys, value)
+                            return (foldr cons nil (NonEmpty.init keys))
 
-                    return (foldr cons nil (NonEmpty.init keys))
+                    let punnedEntry =
+                            case keys of
+                                x :| [] -> return (x, Var (V x 0))
+                                _       -> empty
+
+                    normalRecordEntry <|> punnedEntry
 
             let nonEmptyRecordLiteral = do
                     as <- Text.Megaparsec.sepBy1 keysValue (_comma *> whitespace)
