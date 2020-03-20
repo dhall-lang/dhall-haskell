@@ -7,20 +7,20 @@
 , stdenv, tagged, template-haskell, test-framework
 , test-framework-hunit, test-framework-quickcheck2
 , test-framework-th, text, th-abstraction, transformers
-, transformers-compat, unordered-containers, vector, void
+, transformers-compat, type-equality, unordered-containers, vector
 }:
 mkDerivation {
   pname = "lens";
-  version = "4.17";
-  sha256 = "473664de541023bef44aa29105abbb1e35542e9254cdc846963183e0dd3f08cc";
+  version = "4.18.1";
+  sha256 = "3107a3d5165a9762269d7c9e39205d2c4c2aaebc1900ff44a0066c31a492bdd2";
   setupHaskellDepends = [ base Cabal cabal-doctest filepath ];
   libraryHaskellDepends = [
     array base base-orphans bifunctors bytestring call-stack comonad
     containers contravariant distributive exceptions filepath free
     ghc-prim hashable kan-extensions mtl parallel profunctors
-    reflection semigroupoids semigroups tagged template-haskell text
-    th-abstraction transformers transformers-compat
-    unordered-containers vector void
+    reflection semigroupoids tagged template-haskell text
+    th-abstraction transformers transformers-compat type-equality
+    unordered-containers vector
   ];
   testHaskellDepends = [
     base bytestring containers deepseq directory doctest filepath

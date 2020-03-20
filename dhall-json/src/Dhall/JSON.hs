@@ -996,11 +996,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' = loop a
             b' = loop b
 
-        Core.Prefer a b ->
-            Core.Prefer a' b'
+        Core.Prefer a b c ->
+            Core.Prefer a b' c'
           where
-            a' = loop a
             b' = loop b
+            c' = loop c
 
         Core.RecordCompletion a b ->
             Core.RecordCompletion a' b'
@@ -1041,6 +1041,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = loop a
             b' = loop b
+
+        Core.With a b c ->
+            Core.With a' b c'
+          where
+            a' = loop a
+            c' = loop c
 
         Core.ImportAlt a b ->
             Core.ImportAlt a' b'

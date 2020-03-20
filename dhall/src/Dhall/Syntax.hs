@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -25,6 +26,7 @@ module Dhall.Syntax (
     , makeBinding
     , Chunks(..)
     , DhallDouble(..)
+    , PreferAnnotation(..)
     , Expr(..)
 
     -- ** 'Let'-blocks
@@ -62,6 +64,9 @@ module Dhall.Syntax (
     , longestSharedWhitespacePrefix
     , linesLiteral
     , unlinesLiteral
+
+    -- * Desugaring
+    , desugarWith
     ) where
 
 import Control.DeepSeq (NFData)
@@ -91,10 +96,11 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Control.Monad
 import qualified Data.HashSet
-import qualified Data.List.NonEmpty
+import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc  as Pretty
 import qualified Dhall.Crypto
+import qualified Dhall.Optics               as Optics
 import qualified Language.Haskell.TH.Syntax as Syntax
 import qualified Network.URI                as URI
 
@@ -259,6 +265,22 @@ instance Monoid (Chunks s a) where
 
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
+
+-- | Used to record the origin of a @//@ operator (i.e. from source code or a
+-- product of desugaring)
+data PreferAnnotation s a
+    = PreferFromSource
+    | PreferFromWith (Expr s a)
+      -- ^ Stores the original @with@ expression
+    | PreferFromCompletion
+    deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
+
+instance Bifunctor PreferAnnotation where
+    first _  PreferFromSource      = PreferFromSource
+    first f (PreferFromWith e    ) = PreferFromWith (first f e)
+    first _  PreferFromCompletion  = PreferFromCompletion
+
+    second = fmap
 
 {-| Syntax tree for expressions
 
@@ -428,8 +450,11 @@ data Expr s a
     | Combine (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
     | CombineTypes (Expr s a) (Expr s a)
-    -- | > Prefer x y                               ~  x ⫽ y
-    | Prefer (Expr s a) (Expr s a)
+    -- | > Prefer False x y                         ~  x ⫽ y
+    --
+    -- The first field is a `True` when the `Prefer` operator is introduced as a
+    -- result of desugaring a @with@ expression
+    | Prefer (PreferAnnotation s a) (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -447,6 +472,8 @@ data Expr s a
     | Assert (Expr s a)
     -- | > Equivalent x y                           ~  x ≡ y
     | Equivalent (Expr s a) (Expr s a)
+    -- | > With x y                                 ~  x with y
+    | With (Expr s a) (NonEmpty Text) (Expr s a)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
@@ -537,7 +564,7 @@ instance Functor (Expr s) where
   fmap f (Union u) = Union (fmap (fmap (fmap f)) u)
   fmap f (Combine m e1 e2) = Combine m (fmap f e1) (fmap f e2)
   fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
-  fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
+  fmap f (Prefer a e1 e2) = Prefer (fmap f a) (fmap f e1) (fmap f e2)
   fmap f (RecordCompletion e1 e2) = RecordCompletion (fmap f e1) (fmap f e2)
   fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
   fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
@@ -545,6 +572,7 @@ instance Functor (Expr s) where
   fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
   fmap f (Assert t) = Assert (fmap f t)
   fmap f (Equivalent e1 e2) = Equivalent (fmap f e1) (fmap f e2)
+  fmap f (With e k v) = With (fmap f e) k (fmap f v)
   fmap f (Note s e1) = Note s (fmap f e1)
   fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
   fmap f (Embed a) = Embed (f a)
@@ -622,7 +650,12 @@ instance Monad (Expr s) where
     Union     a          >>= k = Union (fmap (fmap (>>= k)) a)
     Combine a b c        >>= k = Combine a (b >>= k) (c >>= k)
     CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
-    Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
+    Prefer a b c         >>= k = Prefer a' (b >>= k) (c >>= k)
+      where
+        a' = case a of
+            PreferFromSource     -> PreferFromSource
+            PreferFromWith e     -> PreferFromWith (e >>= k)
+            PreferFromCompletion -> PreferFromCompletion
     RecordCompletion a b >>= k = RecordCompletion (a >>= k) (b >>= k)
     Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
     ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
@@ -630,6 +663,7 @@ instance Monad (Expr s) where
     Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
     Assert a             >>= k = Assert (a >>= k)
     Equivalent a b       >>= k = Equivalent (a >>= k) (b >>= k)
+    With a b c           >>= k = With (a >>= k) b (c >>= k)
     Note a b             >>= k = Note a (b >>= k)
     ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
     Embed a              >>= k = k a
@@ -694,7 +728,7 @@ instance Bifunctor Expr where
     first k (Union a             ) = Union (fmap (fmap (first k)) a)
     first k (Combine a b c       ) = Combine a (first k b) (first k c)
     first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
-    first k (Prefer a b          ) = Prefer (first k a) (first k b)
+    first k (Prefer a b c        ) = Prefer (first k a) (first k b) (first k c)
     first k (RecordCompletion a b) = RecordCompletion (first k a) (first k b)
     first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
     first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
@@ -702,6 +736,7 @@ instance Bifunctor Expr where
     first k (Assert a            ) = Assert (first k a)
     first k (Equivalent a b      ) = Equivalent (first k a) (first k b)
     first k (Project a b         ) = Project (first k a) (fmap (first k) b)
+    first k (With a b c          ) = With (first k a) b (first k c)
     first k (Note a b            ) = Note (k a) (first k b)
     first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
     first _ (Embed a             ) = Embed a
@@ -746,7 +781,7 @@ multiLet :: Binding s a -> Expr s a -> MultiLet s a
 multiLet b0 = \case
     Let b1 e1 ->
         let MultiLet bs e = multiLet b1 e1
-        in  MultiLet (Data.List.NonEmpty.cons b0 bs) e
+        in  MultiLet (NonEmpty.cons b0 bs) e
     e -> MultiLet (b0 :| []) e
 
 {-| Wrap let-'Binding's around an 'Expr'.
@@ -827,7 +862,7 @@ subExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 subExpressions f (Union a) = Union <$> traverse (traverse f) a
 subExpressions f (Combine a b c) = Combine a <$> f b <*> f c
 subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
-subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
+subExpressions f (Prefer a b c) = Prefer <$> pure a <*> f b <*> f c
 subExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
@@ -835,6 +870,7 @@ subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f (Project a b) = Project <$> f a <*> traverse f b
 subExpressions f (Assert a) = Assert <$> f a
 subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
+subExpressions f (With a b c) = With <$> f a <*> pure b <*> f c
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 subExpressions _ (Embed a) = pure (Embed a)
@@ -1133,7 +1169,12 @@ denote (RecordLit a         ) = RecordLit (fmap denote a)
 denote (Union a             ) = Union (fmap (fmap denote) a)
 denote (Combine _ b c       ) = Combine Nothing (denote b) (denote c)
 denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
-denote (Prefer a b          ) = Prefer (denote a) (denote b)
+denote (Prefer a b c        ) = Prefer a' (denote b) (denote c)
+  where
+    a' = case a of
+        PreferFromSource     -> PreferFromSource
+        PreferFromWith e     -> PreferFromWith (denote e)
+        PreferFromCompletion -> PreferFromCompletion
 denote (RecordCompletion a b) = RecordCompletion (denote a) (denote b)
 denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
 denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
@@ -1141,6 +1182,7 @@ denote (Field a b           ) = Field (denote a) b
 denote (Project a b         ) = Project (denote a) (fmap denote b)
 denote (Assert a            ) = Assert (denote a)
 denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
+denote (With a b c          ) = With (denote a) b (denote c)
 denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
 denote (Embed a             ) = Embed a
 
@@ -1178,6 +1220,7 @@ reservedIdentifiers =
         , "toMap"
         , "assert"
         , "forall"
+        , "with"
 
           -- Builtins according to the `builtin` rule in the grammar
         , "Natural/fold"
@@ -1234,21 +1277,21 @@ linesLiteral (Chunks [] suffix) =
     fmap (Chunks []) (splitOn "\n" suffix)
 linesLiteral (Chunks ((prefix, interpolation) : pairs₀) suffix₀) =
     foldr
-        Data.List.NonEmpty.cons
+        NonEmpty.cons
         (Chunks ((lastLine, interpolation) : pairs₁) suffix₁ :| chunks)
         (fmap (Chunks []) initLines)
   where
     splitLines = splitOn "\n" prefix
 
-    initLines = Data.List.NonEmpty.init splitLines
-    lastLine  = Data.List.NonEmpty.last splitLines
+    initLines = NonEmpty.init splitLines
+    lastLine  = NonEmpty.last splitLines
 
     Chunks pairs₁ suffix₁ :| chunks = linesLiteral (Chunks pairs₀ suffix₀)
 
 -- | Flatten several `Chunks` back into a single `Chunks` by inserting newlines
 unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
 unlinesLiteral chunks =
-    Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
+    Data.Foldable.fold (NonEmpty.intersperse "\n" chunks)
 
 -- | Returns `True` if the `Chunks` represents a blank line
 emptyLine :: Chunks s a -> Bool
@@ -1285,9 +1328,9 @@ longestSharedWhitespacePrefix literals =
     -- for the last line
     filteredLines = newInit <> pure oldLast
       where
-        oldInit = Data.List.NonEmpty.init literals
+        oldInit = NonEmpty.init literals
 
-        oldLast = Data.List.NonEmpty.last literals
+        oldLast = NonEmpty.last literals
 
         newInit = filter (not . emptyLine) oldInit
 
@@ -1310,3 +1353,18 @@ toDoubleQuoted literal =
     longestSharedPrefix = longestSharedWhitespacePrefix literals
 
     indent = Data.Text.length longestSharedPrefix
+
+-- | Desugar all @with@ expressions
+desugarWith :: Expr s a -> Expr s a
+desugarWith = Optics.rewriteOf subExpressions rewrite
+  where
+    rewrite e@(With record (key :| []) value) =
+        Just (Prefer (PreferFromWith e) record (RecordLit [ (key, value) ]))
+    rewrite e@(With record (key0 :| key1 : keys) value) =
+        Just
+            (Prefer (PreferFromWith e) record
+                (RecordLit
+                    [ (key0, With (Field record key0) (key1 :| keys) value) ]
+                )
+            )
+    rewrite _ = Nothing

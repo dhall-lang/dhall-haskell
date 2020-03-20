@@ -164,6 +164,7 @@ import Dhall.Syntax
     , ImportType(..)
     , ImportMode(..)
     , Import(..)
+    , PreferAnnotation(..)
     , URL(..)
     , bindingExprs
     , chunkExprs
@@ -1080,7 +1081,12 @@ loadWith expr₀ = case expr₀ of
   Union a              -> Union <$> mapM (mapM loadWith) a
   Combine m a b        -> Combine m <$> loadWith a <*> loadWith b
   CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
-  Prefer a b           -> Prefer <$> loadWith a <*> loadWith b
+  Prefer a b c         -> Prefer <$> a' <*> loadWith b <*> loadWith c
+    where
+      a' = case a of
+          PreferFromSource     -> pure PreferFromSource
+          PreferFromWith e     -> PreferFromWith <$> loadWith e
+          PreferFromCompletion -> pure PreferFromCompletion
   RecordCompletion a b -> RecordCompletion <$> loadWith a <*> loadWith b
   Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
   ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
@@ -1088,6 +1094,7 @@ loadWith expr₀ = case expr₀ of
   Project a b          -> Project <$> loadWith a <*> mapM loadWith b
   Assert a             -> Assert <$> loadWith a
   Equivalent a b       -> Equivalent <$> loadWith a <*> loadWith b
+  With a b c           -> With <$> loadWith a <*> pure b <*> loadWith c
   Note a b             -> do
       let handler e = throwM (SourcedException a (e :: MissingImports))
 

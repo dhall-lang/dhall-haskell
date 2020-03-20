@@ -95,11 +95,6 @@ let
                 doBenchmarkExtension =
                   mass pkgsNew.haskell.lib.doBenchmark allDhallPackages;
 
-                doJailbreakExtension =
-                  mass pkgsNew.haskell.lib.doJailbreak [
-                    "hnix"
-                  ];
-
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
                     "dhall"
@@ -189,7 +184,6 @@ let
                     extension
                     doCheckExtension
                     doBenchmarkExtension
-                    doJailbreakExtension
                     failOnAllWarningsExtension
                     failOnMissingHaddocksExtension
                   ];
@@ -218,7 +212,7 @@ let
     );
   };
 
-  overlayGHC802 = pkgsNew: pkgsOld: {
+  overlayGHC822 = pkgsNew: pkgsOld: {
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
         "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
@@ -226,6 +220,10 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    # Compilation of Dhall.Test.QuickCheck tends to OOM
+                    dhall =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.dhall;
+
                     lens-family-core =
                       haskellPackagesOld.lens-family-core_1_2_1;
 
@@ -282,7 +280,7 @@ let
 
     overlays =
           [ overlayShared overlayCabal2nix ]
-      ++  (      if compiler == "ghc802" then [ overlayGHC802 ]
+      ++  (      if compiler == "ghc822" then [ overlayGHC822 ]
             else if compiler == "ghc861" then [ overlayGHC861 ]
             else                              [               ]
           );

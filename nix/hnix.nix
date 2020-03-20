@@ -8,16 +8,16 @@
 , interpolate, lens-family, lens-family-core, lens-family-th
 , logict, megaparsec, monad-control, monadlist, mtl
 , optparse-applicative, parser-combinators, pretty-show
-, prettyprinter, process, ref-tf, regex-tdfa, regex-tdfa-text
-, repline, scientific, semigroups, serialise, split, stdenv, syb
-, tasty, tasty-hedgehog, tasty-hunit, tasty-quickcheck, tasty-th
-, template-haskell, text, these, time, transformers
+, prettyprinter, process, ref-tf, regex-tdfa, repline, scientific
+, semialign, semialign-indexed, semigroups, serialise, split
+, stdenv, syb, tasty, tasty-hedgehog, tasty-hunit, tasty-quickcheck
+, tasty-th, template-haskell, text, these, time, transformers
 , transformers-base, unix, unordered-containers, vector, xml
 }:
 mkDerivation {
   pname = "hnix";
-  version = "0.6.1";
-  sha256 = "914b98e6d3e0c7f17308b3a459cae8eb717ade65c75983edac08fd5173e3e960";
+  version = "0.7.1";
+  sha256 = "34b53ee0e7d910df65ac66e56eb4e965b91a4832d54b1c8b60629c6ee7f53a0a";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
@@ -29,9 +29,9 @@ mkDerivation {
     interpolate lens-family lens-family-core lens-family-th logict
     megaparsec monad-control monadlist mtl optparse-applicative
     parser-combinators pretty-show prettyprinter process ref-tf
-    regex-tdfa regex-tdfa-text scientific semigroups serialise split
-    syb template-haskell text these time transformers transformers-base
-    unix unordered-containers vector xml
+    regex-tdfa scientific semialign semialign-indexed semigroups
+    serialise split syb template-haskell text these time transformers
+    transformers-base unix unordered-containers vector xml
   ];
   executableHaskellDepends = [
     aeson base base16-bytestring bytestring comonad containers

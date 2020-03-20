@@ -1,4 +1,4 @@
-resolver: lts-13.30
+resolver: lts-14.27
 packages:
   - dhall
   - dhall-bash
@@ -7,32 +7,23 @@ packages:
   - dhall-lsp-server
   - dhall-yaml
 extra-deps:
-  - th-lift-instances-0.1.13@sha256:2852e468511805cb25d9e3923c9e91647d008ab4a764ec0921e5e40ff8a8e874,2625
-  - th-lift-0.8.0.1@sha256:cceb81b12c0580e02a7a3898b6d60cca5e1be080741f69ddde4f12210d8ba7ca,1960
-  - haskell-lsp-0.19.0.0
-  - haskell-lsp-types-0.19.0.0
-  - rope-utf16-splay-0.3.1.0@sha256:15a53c57f8413d193054bb5f045929edae3b2669def4c6af63197b30dc1d5003
-  - hnix-0.6.1@sha256:13da97c09489ccf0b908fbe7817401137559eebc377c00cd7b8a66b77e8c251b,24519
+  - hnix-0.7.1@sha256:7b09f3aa4a54b26772dcce8a974389f39b6009375c888d221b85f4af24a247d1,39720
+  - HsYAML-0.2.1.0@sha256:e4677daeba57f7a1e9a709a1f3022fe937336c91513e893166bd1f023f530d68,5311
+  - HsYAML-aeson-0.2.0.0@sha256:04796abfc01cffded83f37a10e6edba4f0c0a15d45bef44fc5bb4313d9c87757,1791
+  - aeson-yaml-1.0.6.0@sha256:bdf6d67265d9a3e251122fa53d2f0f19e0b9865d928e5d6efb77d4754ca3f6cb,1975
   - hashing-0.1.0.1@sha256:98861f16791946cdf28e3c7a6ee9ac8b72d546d6e33c569c7087ef18253294e7,2816
+  - haskell-lsp-0.20.0.1@sha256:fd4f773c9a32c6e76d57381956b3c2e1302230ae2ad784722ce85ff6e7d64ceb,5315
   - hnix-store-core-0.1.0.0@sha256:719a261870367b3ce2e2e8d11502e7170faa664109a14486b95b555bc3672807,2541
   - monadlist-0.0.2@sha256:978305e3f03dd5f65c673b551124dac0c39a247c2c14d84739ca9a3405fbb63a,904
-  - ref-tf-0.4.0.1@sha256:369e5c6237e4b6fe330fde021b94a9f98971690cbec5b910faa9af3cbcb15610,1133
-  - generic-random-1.3.0.0
-  - HsYAML-0.2.0.0@sha256:4e554ee481650156a26a71b40f233979cd943f22ee887b70dae3b8b24de2932f,5273
-  - HsYAML-aeson-0.2.0.0@sha256:04796abfc01cffded83f37a10e6edba4f0c0a15d45bef44fc5bb4313d9c87757,1791
-  - ordered-containers-0.2.2@sha256:ebf2be3f592d9cf148ea6b8375f8af97148d44f82d8d04476899285e965afdbf,810
-  - lsp-test-0.10.0.0
-  - aeson-yaml-1.0.5.0@sha256:5786f021c1e088d6a5aa259120ec5b1f22bb1757f4427c1a87e0513d00f17f31,1975
-  - prettyprinter-1.6.0
-  - atomic-write-0.2.0.7@sha256:3b626dfbc288cd070f1ac31b1c15ddd49822a923778ffe21f92b2116ffc72dc3,4584
-  - megaparsec-8.0.0
-  - cborg-json-0.2.2.0
-  - parser-combinators-1.2.1
+  - prettyprinter-1.6.1@sha256:11876ec94a79048e1d2942a99bfaa6f2be5222eafeedac6a9545673a79465009,5459
+  - ref-tf-0.4.0.2@sha256:69de3550250e0cd69f45d080359cb314a9487c915024349c75b78732bbee9332,1134
+  - semialign-indexed-1.1@sha256:bc375898351fea11ab3f4279844fcfc00aa42c90182eedfc28c4754098da3e0e,2026
+  - haskell-lsp-types-0.20.0.0@sha256:24dcd72f3d39260b9ebb447e89175e09f2244a17d24eca8bf6dbea3f9cf20977,2941
+  - semialign-1.1@sha256:5ff1788b6bcec97084ca60f736c126334e4ba4a450517e7ca4f69dd1156d38a0,2471
+  - generic-random-1.3.0.0@sha256:e5dc3bc7854cfefddc41b562ae78771aaf2e06ea20d7a5c1ecbdb01ba12dd7b7,1346
+  - lsp-test-0.10.1.0
+  - parser-combinators-1.2.1@sha256:16c3490e007ec10b1255a2b36fb483d000156d555269107131241d9e0fa96412,1788
 nix:
   packages:
     - ncurses
     - zlib
-
-# hnix-0.6.1 doesn't allow prettyprinter >= 1.3 and megaparsec >= 8
-# https://github.com/haskell-nix/hnix/issues/524
-allow-newer: true

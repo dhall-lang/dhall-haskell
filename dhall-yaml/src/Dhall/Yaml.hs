@@ -17,6 +17,7 @@ import Data.ByteString.Lazy (toStrict)
 
 import qualified Data.Aeson
 import qualified Data.ByteString
+import qualified Data.Char as Char
 import qualified Data.Text as Text
 import qualified Data.Vector
 import qualified Data.YAML as Y
@@ -60,8 +61,17 @@ jsonToYaml json documents quoted =
     style (Y.SStr s)
         | "\n" `Text.isInfixOf` s =
             Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-        | quoted =
+        | quoted || Text.all isNumberOrDateRelated s || isBoolString =
             Right (YE.untagged, YE.SingleQuoted, s)
+      where
+        isBoolString
+          | Text.length s > 5 = False
+          | otherwise =
+            case Text.toLower s of
+              "true" -> True
+              "false" -> True
+              _ -> False
+        isNumberOrDateRelated c = Char.isDigit c || c == '.' || c == 'e' || c == '-'
     style s =
         YS.schemaEncoderScalar Y.coreSchemaEncoder s
 
