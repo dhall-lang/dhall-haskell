@@ -20,7 +20,7 @@
     [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
     so it's only available for GHC >= v8.6.1.
 
-    Check "Dhall.Deriving#derivingVia" if you want to see this module in action.
+    Check the section /Letting DerivingVia do the work/ if you want to see this module in action. (Click "Dhall.Deriving#derivingVia" to jump there)
 
 -}
 
