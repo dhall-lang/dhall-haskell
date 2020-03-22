@@ -465,6 +465,7 @@ Library
         scientific                  >= 0.3.0.0  && < 0.4 ,
         template-haskell            >= 2.11.1.0 && < 2.16,
         text                        >= 0.11.1.0 && < 1.3 ,
+        text-manipulate             >= 0.2.0.1  && < 0.3 ,
         th-lift-instances           >= 0.1.13   && < 0.2 ,
         transformers                >= 0.2.0.0  && < 0.6 ,
         transformers-compat         >= 0.6.2    && < 0.7 ,
@@ -552,6 +553,9 @@ Library
     if !flag(cross)
         Exposed-Modules:
             Dhall.TH
+    if impl(ghc >= 8.6.1)
+        Exposed-Modules:
+          Dhall.Deriving
     Other-Modules:
         Dhall.Eval
         Dhall.Import.Types
