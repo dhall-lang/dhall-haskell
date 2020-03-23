@@ -990,7 +990,7 @@ loadWith expr₀ = case expr₀ of
 
     let referentiallySane = not (local child) || local parent
 
-    if referentiallySane
+    if importMode import₀ == Location || referentiallySane
         then return ()
         else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
 

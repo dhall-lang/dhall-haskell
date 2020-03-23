@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Dhall.Test.TypeInference where
@@ -44,7 +45,15 @@ getTests = do
 
 successTest :: Text -> TestTree
 successTest prefix = do
-    let expectedFailures = []
+    let expectedFailures =
+                []
+
+#ifdef WITH_HTTP
+#else
+            ++  [ typeInferenceDirectory </> "success/CacheImports"
+                , typeInferenceDirectory </> "success/CacheImportsCanonicalize"
+                ]
+#endif
 
     Test.Util.testCase prefix expectedFailures $ do
         let prefixFP = Text.unpack prefix

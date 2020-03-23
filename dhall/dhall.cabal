@@ -182,7 +182,6 @@ Extra-Source-Files:
     dhall-lang/tests/import/cache/dhall/1220efc43103e49b56c5bf089db8e0365bbfc455b8a2f0dc6ee5727a3586f85969fd
     dhall-lang/tests/import/data/*.dhall
     dhall-lang/tests/import/data/*.txt
-    dhall-lang/tests/import/data/fieldOrder/*.dhall
     dhall-lang/tests/import/failure/*.dhall
     dhall-lang/tests/import/success/*.dhall
     dhall-lang/tests/normalization/success/*.dhall
