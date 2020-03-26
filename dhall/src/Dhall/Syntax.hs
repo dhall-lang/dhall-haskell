@@ -370,9 +370,9 @@ data Expr s a
     | Integer
     -- | > IntegerLit n                             ~  ±n
     | IntegerLit Integer
-    -- | IntegerClamp                               ~  Integer/clamp
+    -- | > IntegerClamp                               ~  Integer/clamp
     | IntegerClamp
-    -- | IntegerNegate                              ~  Integer/negate
+    -- | > IntegerNegate                              ~  Integer/negate
     | IntegerNegate
     -- | > IntegerShow                              ~  Integer/show
     | IntegerShow
@@ -466,7 +466,7 @@ data Expr s a
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Project e (Left xs)                      ~  e.{ xs }
-    -- | > Project e (Right t)                      ~  e.(t)
+    --   > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
     -- | > Assert e                                 ~  assert : e
     | Assert (Expr s a)
