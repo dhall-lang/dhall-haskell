@@ -127,7 +127,7 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
 import Data.Coerce (coerce)
-import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
+import Data.Either.Validation (Validation(..), eitherToValidation, validationToEither)
 import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
@@ -1542,7 +1542,7 @@ instance (Constructor c, GenericFromDhall f, GenericFromDhall (g :+: h)) => Gene
 instance (GenericFromDhall (f :+: g), GenericFromDhall (h :+: i)) => GenericFromDhall ((f :+: g) :+: (h :+: i)) where
     genericAutoWithNormalizer inputNormalizer options = pure (Decoder {..})
       where
-        extract e = fmap L1 (extractL e) `ealt` fmap R1 (extractR e)
+        extract e = fmap L1 (extractL e) <> fmap R1 (extractR e)
 
         expected = Union (Dhall.Map.union ktsL ktsR)
 
