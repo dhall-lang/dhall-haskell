@@ -61,6 +61,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Integer/subtract
     dhall-lang/Prelude/Integer/toDouble
     dhall-lang/Prelude/Integer/toNatural
+    dhall-lang/Prelude/JSON/Format
     dhall-lang/Prelude/JSON/Nesting
     dhall-lang/Prelude/JSON/Tagged
     dhall-lang/Prelude/JSON/Type
@@ -78,6 +79,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/omitNullFields
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
+    dhall-lang/Prelude/JSON/renderAs
     dhall-lang/Prelude/JSON/renderInteger.dhall
     dhall-lang/Prelude/JSON/renderYAML
     dhall-lang/Prelude/JSON/string
