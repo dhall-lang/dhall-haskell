@@ -1,3 +1,65 @@
+1.31.0
+
+* [Supports version 15.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v15.0.0)
+    * [Implement `with` keyword](https://github.com/dhall-lang/dhall-haskell/pull/1685)
+        * You can now write `someRecord with a.b.c = x` to update a nested
+          fields
+    * [Add support for record puns](https://github.com/dhall-lang/dhall-haskell/pull/1710)
+        * You can now write `{ x, y }` as a shorthand for `{ x = x, y = y }`
+* BREAKING CHANGE TO THE API: [Auto-derive `Generic`/`FromDhall`/`ToDhall` with Template Haskell](https://github.com/dhall-lang/dhall-haskell/pull/1682)
+    * Now the `Dhall.TH.makeHaskell*` utilities will include these derived
+      instances in the generated declarations
+    * This is a breaking change since users were likely already generating these
+      instances separately, which will now conflict with the included instances
+* BREAKING CHANGE TO THE API: [`From/ToDhall` no longer takes `InterpretOptions` argument](https://github.com/dhall-lang/dhall-haskell/pull/1696)
+    * The types of the `autoWith` and `injectWith` methods have changed to
+      take an `InputNormalizer` instead of an `InterpretOptions`
+        * Note that `InputNormalizer` is a subset of `InterpretOptions`
+    * This is a breaking change to how derived `FromDhall` / `ToDhall` instances
+      are customized to more closely match how other Haskell packages customize
+      derived instances (e.g. `aeson` with `FromJSON` / `ToJSON`)
+        * Previously you would customize the behavior globally by passing in
+          a top-level `InterpretOptions` record to `autoWith`
+        * Now you can customize the behavior locally on a per-instance basis
+    * This change enables the following change ...
+* [Add `Dhall.Deriving` module for `deriving-via` helpers](https://github.com/dhall-lang/dhall-haskell/pull/1700)
+    * Now you can take advantage of the `-XDerivingVia` language extension to
+      customize derived `FromDhall`/`ToDhall` instances, like this:
+        * `deriving (FromDhall, ToDhall) via Codec (SetSingletonConstructors Bare) Name`
+* BREAKING CHANGE TO THE LANGUAGE: [Match standard with respect to `using toMap`](https://github.com/dhall-lang/dhall-haskell/pull/1673)
+    * `https://example.com using toMap customHeaders` is now a parse error
+      and needs to be explicitly parenthesized as
+      `https://example.com using (toMap customHeaders)`
+    * The language standard had always required the parentheses, but the Haskell
+      implementation was not correctly matching the standard
+* [Fix formatting of indented comments containing empty lines](https://github.com/dhall-lang/dhall-haskell/pull/1688)
+    * `dhall format` was previously not idempotent when formatting indented
+      comments with empty lines
+    * Specifically, the formatter kept indenting things further with each
+      format, which this change fixes
+* [Fix pretty-printer to preserve original numeric literals](https://github.com/dhall-lang/dhall-haskell/pull/1674)
+    * Now `dhall format` will preserve numeric literals exactly how you wrote
+      them
+    * For example, `0xFF` will no longer be reformatted as `255`
+* [Add `dhall to-directory-tree` support for `Map`s](https://github.com/dhall-lang/dhall-haskell/pull/1705)
+    * `Map`s are now converted to directories (just like records)
+* [Add manpage](https://github.com/dhall-lang/dhall-haskell/pull/1677)
+    * ... mainly for the benefit of people packaging Dhall for various
+      distributions
+* [Group commands in CLI](https://github.com/dhall-lang/dhall-haskell/pull/1692)
+    * The command-line `--help` output now groups commands into useful
+      sections
+* [Fix numeric parsing for GHCJS](https://github.com/dhall-lang/dhall-haskell/pull/1681)
+    * The GHCJS backend for Dhall was failing to parse numbers, which this
+      change fixes
+* Fixes and improvements to error messages:
+    * [#1656](https://github.com/dhall-lang/dhall-haskell/pull/1656)
+    * [#1698](https://github.com/dhall-lang/dhall-haskell/pull/1698)
+    * [#1702](https://github.com/dhall-lang/dhall-haskell/pull/1702)
+* Fixes and improvements to the haddocks:
+    * [#1708](https://github.com/dhall-lang/dhall-haskell/pull/1708)
+    * [#1712](https://github.com/dhall-lang/dhall-haskell/pull/1712)
+
 1.30.0
 
 * [Supports version 14.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0)
