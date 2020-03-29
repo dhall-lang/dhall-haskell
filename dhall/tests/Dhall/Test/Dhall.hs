@@ -18,10 +18,12 @@ module Dhall.Test.Dhall where
 
 import Control.Exception (SomeException, try)
 import Data.Fix (Fix(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence (Seq)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Vector (Vector)
+import Data.Void (Void)
 import Dhall (ToDhall, FromDhall)
 import Dhall.Core (Expr(..))
 import GHC.Generics (Generic, Rep)
@@ -51,8 +53,9 @@ tests =
      , shouldHaveWorkingGenericAuto
      , shouldHandleUnionsCorrectly
      , shouldTreatAConstructorStoringUnitAsEmptyAlternative
-     , shouldConvertDhallToHaskellCorrectly 
+     , shouldConvertDhallToHaskellCorrectly
      , shouldConvertHaskellToDhallCorrectly
+     , shouldShowCorrectErrorForInvalidDecoderInUnion
      ]
 
 data MyType = MyType { foo :: String , bar :: Natural }
@@ -415,3 +418,45 @@ shouldConvertHaskellToDhallCorrectly =
                     Dhall.Core.pretty (Dhall.embed Dhall.inject haskellValue)
 
             expectedDhallCode @=? actualDhallCode
+
+-- https://github.com/dhall-lang/dhall-haskell/issues/1711
+data Issue1711
+  = A Bad
+  | B
+  | C
+  | D
+  deriving (Generic, Show, FromDhall)
+
+newtype Bad = Bad Text
+  deriving (Show)
+
+issue1711Msg :: Text
+issue1711Msg = "Issue 1711"
+
+instance FromDhall Bad where
+  autoWith _ =
+    Dhall.Decoder
+      (const (Dhall.extractError issue1711Msg))
+      (Dhall.expected Dhall.strictText)
+
+type DhallExtractErrors = Dhall.ExtractErrors Dhall.Parser.Src Void
+
+-- https://github.com/dhall-lang/dhall-haskell/issues/1711
+shouldShowCorrectErrorForInvalidDecoderInUnion :: TestTree
+shouldShowCorrectErrorForInvalidDecoderInUnion =
+  testCase "Correct error is thrown for invalid decoder in union" $ do
+    let value = "< B | D | C | A : Text >.A \"\""
+
+    inputEx :: Either DhallExtractErrors Issue1711 <- try (Dhall.input Dhall.auto value)
+
+    let expectedMsg = issue1711Msg
+
+    let assertMsg = "The exception message did not match the expected output"
+
+    case inputEx of
+      Left (Dhall.ExtractErrors errs) -> case errs of
+        (err :| []) -> case err of
+          Dhall.TypeMismatch {} -> fail "The extraction using an invalid decoder failed with a type mismatch"
+          Dhall.ExtractError extractError -> assertEqual assertMsg expectedMsg extractError
+        _ -> fail "The extraction using an invalid decoder failed with multiple errors"
+      Right _ -> fail "The extraction using an invalid decoder succeeded"

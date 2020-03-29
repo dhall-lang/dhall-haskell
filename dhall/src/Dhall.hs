@@ -51,6 +51,7 @@ module Dhall
     , Interpret
     , InvalidDecoder(..)
     , ExtractErrors(..)
+    , ExtractError(..)
     , Extractor
     , MonadicExtractor
     , typeError
