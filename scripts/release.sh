@@ -24,10 +24,15 @@ function release {
 
   curl --location --output "${NAME}-${VERSION}-x86_64-linux.tar.bz2" "https://hydra.dhall-lang.org/job/dhall-haskell/${JOBSET}/tarball-${NAME}/latest/download/1/${NAME}.tar.bz2"
 
-  curl --location --remote-name "https://hydra.dhall-lang.org/job/dhall-haskell/${JOBSET}/image-${NAME}/latest/download/1/docker-image-${NAME}.tar.gz"
+  DOCKER_ARCHIVE="docker-image-${NAME}.tar.gz"
 
-  skopeo copy --dest-creds=gabriel439:$(< dockerPassword.txt) "docker-archive:docker-image-${NAME}.tar.gz" "docker://dhallhaskell/${NAME}"
-  skopeo copy --dest-creds=gabriel439:$(< dockerPassword.txt) "docker-archive:docker-image-${NAME}.tar.gz" "docker://dhallhaskell/${NAME}:${VERSION}"
+  curl --location --remote-name "https://hydra.dhall-lang.org/job/dhall-haskell/${JOBSET}/image-${NAME}/latest/download/1/${DOCKER_ARCHIVE}"
+
+  skopeo copy --dest-creds="gabriel439:$(< dockerPassword.txt)" "docker-archive:${DOCKER_ARCHIVE}" "docker://dhallhaskell/${NAME}"
+
+  skopeo copy --dest-creds="gabriel439:$(< dockerPassword.txt)" "docker-archive:${DOCKER_ARCHIVE}" "docker://dhallhaskell/${NAME}:${VERSION}"
+
+  rm "${DOCKER_ARCHIVE}"
 }
 
 for package in dhall-lsp-server dhall-json dhall-yaml dhall-bash dhall-nix dhall; do
