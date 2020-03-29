@@ -135,9 +135,8 @@ import Data.Hashable (Hashable)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.HashMap.Strict (HashMap)
 import Data.Map (Map)
-import Data.Monoid ((<>))
 import Data.Scientific (Scientific)
-import Data.Semigroup (Semigroup)
+import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
@@ -166,7 +165,6 @@ import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.List
 import qualified Data.List.NonEmpty
-import qualified Data.Semigroup
 import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
