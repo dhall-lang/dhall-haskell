@@ -1,3 +1,7 @@
+1.6.3
+
+* [yaml: Single-quote date/bool string fields](https://github.com/dhall-lang/dhall-haskell/commits/master/dhall-json)
+
 1.6.2
 
 * [Fix `dhall-json` for new `Prelude.JSON.Type`](https://github.com/dhall-lang/dhall-haskell/pull/1631)
