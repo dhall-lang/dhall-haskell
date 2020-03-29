@@ -128,7 +128,7 @@ import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
 import Control.Monad (guard)
 import Data.Coerce (coerce)
-import Data.Either.Validation (Validation(..), ealt, eitherToValidation, validationToEither)
+import Data.Either.Validation (Validation(..), eitherToValidation, validationToEither)
 import Data.Fix (Fix(..))
 import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
 import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
@@ -1462,96 +1462,27 @@ extractUnionConstructor (Field (Union kts) fld) =
 extractUnionConstructor _ =
   empty
 
-instance (Constructor c1, Constructor c2, GenericFromDhall f1, GenericFromDhall f2) => GenericFromDhall (M1 C c1 f1 :+: M1 C c2 f2) where
-    genericAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Decoder {..})
-      where
-        nL :: M1 i c1 f1 a
-        nL = undefined
+class GenericFromDhallUnion f where
+    genericUnionAutoWithNormalizer :: InputNormalizer -> InterpretOptions -> UnionDecoder (f a)
 
-        nR :: M1 i c2 f2 a
-        nR = undefined
+instance (GenericFromDhallUnion f1, GenericFromDhallUnion f2) => GenericFromDhallUnion (f1 :+: f2) where
+  genericUnionAutoWithNormalizer inputNormalizer options =
+    (<>)
+      (L1 <$> genericUnionAutoWithNormalizer inputNormalizer options)
+      (R1 <$> genericUnionAutoWithNormalizer inputNormalizer options)
 
-        nameL = constructorModifier (Data.Text.pack (conName nL))
-        nameR = constructorModifier (Data.Text.pack (conName nR))
+instance (Constructor c1, GenericFromDhall f1) => GenericFromDhallUnion (M1 C c1 f1) where
+  genericUnionAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) =
+    constructor name (evalState (genericAutoWithNormalizer inputNormalizer options) 1)
+    where
+      n :: M1 C c1 f1 a
+      n = undefined
 
-        extract e0 = do
-          case extractUnionConstructor e0 of
-            Just (name, e1, _) ->
-              if
-                | name == nameL -> fmap (L1 . M1) (extractL e1)
-                | name == nameR -> fmap (R1 . M1) (extractR e1)
-                | otherwise     -> typeError expected e0
-            _ -> typeError expected e0
+      name = constructorModifier (Data.Text.pack (conName n))
 
-        expected =
-            Union
-                (Dhall.Map.fromList
-                    [ (nameL, notEmptyRecord expectedL)
-                    , (nameR, notEmptyRecord expectedR)
-                    ]
-                )
-
-        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-
-instance (Constructor c, GenericFromDhall (f :+: g), GenericFromDhall h) => GenericFromDhall ((f :+: g) :+: M1 C c h) where
-    genericAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Decoder {..})
-      where
-        n :: M1 i c h a
-        n = undefined
-
-        name = constructorModifier (Data.Text.pack (conName n))
-
-        extract u = case extractUnionConstructor u of
-          Just (name', e, _) ->
-            if
-              | name == name' -> fmap (R1 . M1) (extractR e)
-              | otherwise     -> fmap  L1       (extractL u)
-          Nothing -> typeError expected u
-
-        expected =
-            Union (Dhall.Map.insert name (notEmptyRecord expectedR) ktsL)
-
-        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-
-        ktsL = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedL
-
-instance (Constructor c, GenericFromDhall f, GenericFromDhall (g :+: h)) => GenericFromDhall (M1 C c f :+: (g :+: h)) where
-    genericAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) = pure (Decoder {..})
-      where
-        n :: M1 i c f a
-        n = undefined
-
-        name = constructorModifier (Data.Text.pack (conName n))
-
-        extract u = case extractUnionConstructor u of
-          Just (name', e, _) ->
-            if
-              | name == name' -> fmap (L1 . M1) (extractL e)
-              | otherwise     -> fmap  R1       (extractR u)
-          _ -> typeError expected u
-
-        expected =
-            Union (Dhall.Map.insert name (notEmptyRecord expectedL) ktsR)
-
-        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-
-        ktsR = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedR
-
-instance (GenericFromDhall (f :+: g), GenericFromDhall (h :+: i)) => GenericFromDhall ((f :+: g) :+: (h :+: i)) where
-    genericAutoWithNormalizer inputNormalizer options = pure (Decoder {..})
-      where
-        extract e = fmap L1 (extractL e) `ealt` fmap R1 (extractR e)
-
-        expected = Union (Dhall.Map.union ktsL ktsR)
-
-        Decoder extractL expectedL = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-        Decoder extractR expectedR = evalState (genericAutoWithNormalizer inputNormalizer options) 1
-
-        ktsL = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedL
-        ktsR = unsafeExpectUnion "genericAutoWithNormalizer (:+:)" expectedR
+instance GenericFromDhallUnion (f :+: g) => GenericFromDhall (f :+: g) where
+  genericAutoWithNormalizer inputNormalizer options =
+    pure (union (genericUnionAutoWithNormalizer inputNormalizer options))
 
 instance GenericFromDhall f => GenericFromDhall (M1 C c f) where
     genericAutoWithNormalizer inputNormalizer options = do
