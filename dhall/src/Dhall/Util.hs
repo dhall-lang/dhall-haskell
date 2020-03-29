@@ -69,7 +69,7 @@ snip text
 
     preview =
             Data.Text.unlines header
-        <>  separator <> "\n"
+        <>  Data.Text.take 80 separator <> "\n"
         <>  Data.Text.unlines footer
 
 {-| Like `snip`, but for `Doc`s
