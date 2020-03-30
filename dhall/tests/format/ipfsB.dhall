@@ -50,13 +50,13 @@ in  [ k8s.Resource.Ingress
             [ toRule
                 { host = "localhost"
                 , path = "/"
-                , serviceName = serviceName
+                , serviceName
                 , servicePort = gatewayPort
                 }
             , toRule
                 { host = "localhost"
                 , path = "/"
-                , serviceName = serviceName
+                , serviceName
                 , servicePort = apiPort
                 }
             ]
