@@ -178,29 +178,40 @@ Extra-Source-Files:
     dhall-lang/Prelude/XML/text
     dhall-lang/Prelude/package.dhall
     dhall-lang/tests/alpha-normalization/success/unit/*.dhall
+    dhall-lang/tests/alpha-normalization/success/regression/*.dhall
     dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
+    dhall-lang/tests/binary-decode/success/unit/imports/*.dhall
+    dhall-lang/tests/binary-decode/success/unit/imports/*.dhallb
     dhall-lang/tests/import/cache/dhall/1220efc43103e49b56c5bf089db8e0365bbfc455b8a2f0dc6ee5727a3586f85969fd
     dhall-lang/tests/import/data/*.dhall
     dhall-lang/tests/import/data/*.txt
     dhall-lang/tests/import/failure/*.dhall
+    dhall-lang/tests/import/failure/unit/*.dhall
     dhall-lang/tests/import/success/*.dhall
+    dhall-lang/tests/import/success/unit/*.dhall
+    dhall-lang/tests/import/success/unit/asLocation/*.dhall
     dhall-lang/tests/normalization/success/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/access/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/combineTypes/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/prefer/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/projection/*.dhall
+    dhall-lang/tests/normalization/success/regression/*.dhall
     dhall-lang/tests/normalization/success/simple/*.dhall
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/normalization/success/unit/*.dhall
     dhall-lang/tests/parser/failure/*.dhall
+    dhall-lang/tests/parser/failure/spacing/*.dhall
+    dhall-lang/tests/parser/failure/unit/*.dhall
     dhall-lang/tests/parser/success/*.dhall
     dhall-lang/tests/parser/success/*.dhallb
     dhall-lang/tests/parser/success/text/*.dhall
     dhall-lang/tests/parser/success/text/*.dhallb
     dhall-lang/tests/parser/success/unit/*.dhall
     dhall-lang/tests/parser/success/unit/*.dhallb
+    dhall-lang/tests/parser/success/unit/operators/*.dhall
+    dhall-lang/tests/parser/success/unit/operators/*.dhallb
     dhall-lang/tests/parser/success/unit/import/*.dhall
     dhall-lang/tests/parser/success/unit/import/*.dhallb
     dhall-lang/tests/parser/success/unit/import/urls/*.dhall
@@ -398,6 +409,7 @@ Extra-Source-Files:
     dhall-lang/tests/type-inference/success/prelude/Text/concatMap/*.dhall
     dhall-lang/tests/type-inference/success/prelude/Text/concatMapSep/*.dhall
     dhall-lang/tests/type-inference/success/prelude/Text/concatSep/*.dhall
+    dhall-lang/tests/type-inference/success/regression/*.dhall
     dhall-lang/tests/type-inference/success/simple/*.dhall
     dhall-lang/tests/type-inference/success/simple/access/*.dhall
     dhall-lang/tests/type-inference/success/unit/*.dhall
