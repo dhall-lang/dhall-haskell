@@ -61,6 +61,8 @@ module Dhall
     , genericAuto
     , genericAutoWith
     , InterpretOptions(..)
+    , InputNormalizer(..)
+    , defaultInputNormalizer
     , SingletonConstructors(..)
     , defaultInterpretOptions
     , bool
