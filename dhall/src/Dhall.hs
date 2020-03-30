@@ -61,6 +61,8 @@ module Dhall
     , genericAuto
     , genericAutoWith
     , InterpretOptions(..)
+    , InputNormalizer(..)
+    , defaultInputNormalizer
     , SingletonConstructors(..)
     , defaultInterpretOptions
     , bool
@@ -1346,6 +1348,7 @@ data InterpretOptions = InterpretOptions
 newtype InputNormalizer = InputNormalizer
   { getInputNormalizer :: Dhall.Core.ReifiedNormalizer Void }
 
+-- | Default normalization-related settings (no custom normalization)
 defaultInputNormalizer :: InputNormalizer
 defaultInputNormalizer = InputNormalizer
  { getInputNormalizer = Dhall.Core.ReifiedNormalizer (const (pure Nothing)) }
