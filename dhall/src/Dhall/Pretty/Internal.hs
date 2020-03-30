@@ -64,7 +64,7 @@ module Dhall.Pretty.Internal (
     ) where
 
 import Data.Foldable
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
@@ -1324,7 +1324,14 @@ prettyCharacterSet characterSet expression =
       where
         consolidated = consolidateRecordLiteral a
 
-        prettyRecordEntry = prettyKeyValue prettyAnyLabels equals
+        prettyRecordEntry (keys, value) =
+            case keys of
+                key :| []
+                    | Var (V key' 0) <- Dhall.Syntax.shallowDenote value
+                    , key == key' ->
+                        duplicate (prettyAnyLabel key)
+                _ ->
+                    prettyKeyValue prettyAnyLabels equals (keys, value)
 
     prettyCompletionLit
         :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
