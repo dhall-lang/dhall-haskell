@@ -44,6 +44,7 @@ tests =
         , issue1341
         , issue1584
         , issue1646
+        , issue1732
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -194,6 +195,13 @@ issue1646 = Test.Tasty.HUnit.testCase "Issue #1646" (do
     -- This test ensures that the parser doesn't eagerly consume trailing
     -- whitespace after a `Double`
     _ <- Util.code "./tests/regression/issue1646.dhall"
+    return () )
+
+issue1732 :: TestTree
+issue1732 = Test.Tasty.HUnit.testCase "Issue #1732" (do
+    -- This test ensures that the parser allows whitespace after a record pun
+    -- entry
+    _ <- Util.code "./tests/regression/issue1732.dhall"
     return () )
 
 parsing0 :: TestTree

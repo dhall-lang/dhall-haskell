@@ -772,8 +772,6 @@ parsers embedded = Parsers {..}
 
                             value <- expression
 
-                            whitespace
-
                             let cons key (key', values) =
                                     (key, RecordLit [ (key', values) ])
 
@@ -786,7 +784,7 @@ parsers embedded = Parsers {..}
                                 x :| [] -> return (x, Var (V x 0))
                                 _       -> empty
 
-                    normalRecordEntry <|> punnedEntry
+                    (normalRecordEntry <|> punnedEntry) <* whitespace
 
             let nonEmptyRecordLiteral = do
                     as <- Text.Megaparsec.sepBy1 keysValue (_comma *> whitespace)
