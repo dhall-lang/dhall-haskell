@@ -1,5 +1,6 @@
 -- | This module contains the implementation of the @dhall repl@ subcommand
 
+{-# language CPP               #-}
 {-# language FlexibleContexts  #-}
 {-# language NamedFieldPuns    #-}
 {-# language OverloadedStrings #-}
@@ -55,10 +56,15 @@ import qualified Dhall.TypeCheck                         as Dhall
 import qualified Dhall.Version                           as Meta
 import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.Completion     as Haskeline
-import qualified System.Console.Haskeline.MonadException as Haskeline
 import qualified System.Console.Repline                  as Repline
 import qualified System.IO
 import qualified Text.Megaparsec                         as Megaparsec
+
+#if MIN_VERSION_haskeline(0,8,0)
+import qualified Control.Monad.Catch
+#else
+import qualified System.Console.Haskeline.MonadException
+#endif
 
 type Repl = Repline.HaskelineT (State.StateT Env IO)
 
@@ -293,9 +299,7 @@ nextSaveFile = do
 
   pure $ saveFilePrefix <> "-" <> show nextIndex
 
-loadBinding
-  :: ( MonadFail m, MonadIO m, MonadState Env m, Haskeline.MonadException m )
-  => [String] -> m ()
+loadBinding :: [String] -> Repl ()
 loadBinding [] = do
   mFile <- currentSaveFile
 
@@ -402,7 +406,7 @@ cmdQuit _ = do
   liftIO (throwIO Interrupt)
 
 help
-  :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
+  :: ( MonadFail m, MonadIO m, MonadState Env m )
   => HelpOptions m -> [String] -> m ()
 help hs _ = do
   liftIO (putStrLn "Type any expression to normalize it or use one of the following commands:")
@@ -425,9 +429,7 @@ data HelpOption m = HelpOption
 
 type HelpOptions m = [HelpOption m]
 
-helpOptions
-  :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
-  => HelpOptions m
+helpOptions :: HelpOptions Repl
 helpOptions =
   [ HelpOption
       "help"
@@ -481,9 +483,7 @@ helpOptions =
       cmdQuit
   ]
 
-options
-  :: ( Haskeline.MonadException m, MonadFail m, MonadIO m, MonadState Env m )
-  => Repline.Options m
+options :: Repline.Options Repl
 options = (\h -> (helpOptionName h, helpOptionFunction h)) <$> helpOptions
 
 completer
@@ -579,9 +579,13 @@ greeter =
   in liftIO (putStrLn message)
 
 
-dontCrash :: ( MonadIO m, Haskeline.MonadException m ) => m () -> m ()
+dontCrash :: Repl () -> Repl ()
 dontCrash m =
-  Haskeline.catch
+#if MIN_VERSION_haskeline(0,8,0)
+  Control.Monad.Catch.catch
+#else
+  System.Console.Haskeline.MonadException.catch
+#endif
     m
     ( \ e@SomeException{} -> liftIO ( putStrLn ( displayException e ) ) )
 

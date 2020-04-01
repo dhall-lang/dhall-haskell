@@ -267,6 +267,7 @@ diagnosticsHandler uri = do
             _source = Just "Dhall.Lint"
             _code = Nothing
             _message = suggestion
+            _tags = Nothing
             _relatedInformation = Nothing
         in J.Diagnostic {..}
 
@@ -278,6 +279,7 @@ diagnosticsHandler uri = do
             _severity = Just J.DsError
             _source = Just doctor
             _code = Nothing
+            _tags = Nothing
             _message = diagnosis
             _relatedInformation = Nothing
         in J.Diagnostic {..}
@@ -527,6 +529,7 @@ completionHandler request = do
        where
         _label = completeText
         _kind = Nothing
+        _tags = J.List []
         _detail = fmap pretty completeType
         _documentation = Nothing
         _deprecated = Nothing

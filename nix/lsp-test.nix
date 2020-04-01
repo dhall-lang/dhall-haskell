@@ -1,18 +1,18 @@
 { mkDerivation, aeson, aeson-pretty, ansi-terminal, async, base
 , bytestring, conduit, conduit-parse, containers, data-default
 , Diff, directory, filepath, haskell-lsp, hspec, lens, mtl
-, parser-combinators, process, rope-utf16-splay, stdenv, text
-, transformers, unix, unordered-containers
+, parser-combinators, process, stdenv, text, transformers, unix
+, unordered-containers
 }:
 mkDerivation {
   pname = "lsp-test";
-  version = "0.8.0.0";
-  sha256 = "0501730ff0537cb85c83cc0da8eb52c864a5dcaefd5b31bef5fdb58ab6790af1";
+  version = "0.10.2.0";
+  sha256 = "17ffc4ab81d8d012deacfd2d52132eb749efdf6b66e96e51513e4d90d86b18ce";
   libraryHaskellDepends = [
     aeson aeson-pretty ansi-terminal async base bytestring conduit
     conduit-parse containers data-default Diff directory filepath
-    haskell-lsp lens mtl parser-combinators process rope-utf16-splay
-    text transformers unix unordered-containers
+    haskell-lsp lens mtl parser-combinators process text transformers
+    unix unordered-containers
   ];
   testHaskellDepends = [
     aeson base data-default haskell-lsp hspec lens text
