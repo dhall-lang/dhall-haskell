@@ -1316,11 +1316,16 @@ prettyCharacterSet characterSet expression =
         braces . map (prettyKeyValue prettyAnyLabel colon) . Map.toList
 
     prettyRecordLit :: Pretty a => Map Text (Expr Src a) -> Doc Ann
-    prettyRecordLit a
+    prettyRecordLit = prettyRecordLike braces
+
+    prettyCompletionLit :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
+    prettyCompletionLit = prettyRecordLike . hangingBraces
+
+    prettyRecordLike braceStyle a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
-            braces (map prettyRecordEntry (Map.toList consolidated))
+            braceStyle (map prettyRecordEntry (Map.toList consolidated))
       where
         consolidated = consolidateRecordLiteral a
 
@@ -1332,18 +1337,6 @@ prettyCharacterSet characterSet expression =
                         duplicate (prettyAnyLabel key)
                 _ ->
                     prettyKeyValue prettyAnyLabels equals (keys, value)
-
-    prettyCompletionLit
-        :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
-    prettyCompletionLit n a
-        | Data.Foldable.null a =
-            lbrace <> equals <> rbrace
-        | otherwise =
-            hangingBraces n (map prettyRecordEntry (Map.toList consolidated))
-      where
-        consolidated = consolidateRecordLiteral a
-
-        prettyRecordEntry = prettyKeyValue prettyAnyLabels equals
 
     prettyAlternative (key, Just val) = prettyKeyValue prettyAnyLabel colon (key, val)
     prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
