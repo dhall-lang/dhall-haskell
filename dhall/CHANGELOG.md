@@ -1,3 +1,23 @@
+1.31.1
+
+* BUG FIX: [Allow whitespace after record pun entry](https://github.com/dhall-lang/dhall-haskell/pull/1733)
+    * The record pun feature introduced in the previous release did not
+      correctly parse record puns with trailing whitespace, which this change
+      fixes.
+* [Expose `{default,}InputNormalizer`](https://github.com/dhall-lang/dhall-haskell/pull/1727)
+    * The previous version introduced a breaking change to the `autoWith` type
+      that required access to the implementation of `InputNormalizer`, which was
+      not exported.  This change fixes that.
+* Build against latest dependencies
+    * [`QuickCheck-2.14`](https://github.com/dhall-lang/dhall-haskell/pull/1721)
+    * [`haskell-lsp-0.21`](https://github.com/dhall-lang/dhall-haskell/pull/1730)
+    * [`repline-0.3` / `haskeline-0.8`](https://github.com/dhall-lang/dhall-haskell/pull/1717)
+    * [`template-haskell-2.16`](https://github.com/dhall-lang/dhall-haskell/pull/1719)
+* [Prefer to format using record puns when possible](https://github.com/dhall-lang/dhall-haskell/pull/1729)
+    * `dhall format` will now reformat code to use record puns when applicable
+* Fixes and improvements to error messages:
+    * [#1721](https://github.com/dhall-lang/dhall-haskell/pull/1724)
+
 1.31.0
 
 * [Supports version 15.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v15.0.0)
