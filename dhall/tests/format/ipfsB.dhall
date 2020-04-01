@@ -86,12 +86,12 @@ in  [ k8s.Resource.Ingress
         }
     , k8s.Resource.StatefulSet
         k8s.StatefulSet::{
-        , metadata = k8s.ObjectMeta::{ name = name, labels = toMap labels }
+        , metadata = k8s.ObjectMeta::{ name, labels = toMap labels }
         , spec = Some k8s.StatefulSetSpec::{
-          , serviceName = serviceName
+          , serviceName
           , selector = k8s.LabelSelector::{ matchLabels = toMap matchLabels }
           , template = k8s.PodTemplateSpec::{
-            , metadata = k8s.ObjectMeta::{ name = name, labels = toMap labels }
+            , metadata = k8s.ObjectMeta::{ name, labels = toMap labels }
             , spec = Some k8s.PodSpec::{
               , securityContext = Some k8s.PodSecurityContext::{
                 , runAsUser = Some 1000
@@ -100,7 +100,7 @@ in  [ k8s.Resource.Ingress
                 }
               , containers =
                 [ k8s.Container::{
-                  , name = name
+                  , name
                   , image = Some "ipfs/go-ipfs:v0.4.22"
                   , livenessProbe = k8s.Probe::{
                     , httpGet = Some k8s.HTTPGetAction::{
