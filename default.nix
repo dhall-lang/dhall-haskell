@@ -3,9 +3,6 @@ let
 
   shared_ghcjs = import ./nix/shared.nix { compiler = "ghcjs"; };
 
-  shared_ghcjs_linux =
-    import ./nix/shared.nix { compiler = "ghcjs"; system = "x86_64-linux"; };
-
 in
   { inherit (shared.possibly-static)
       dhall
