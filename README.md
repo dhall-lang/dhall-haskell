@@ -76,7 +76,7 @@ download image archives for each package using the following URLs:
 
 You can then load and run one of these archives like so:
 
-```
+```bash
 $ NAME="dhall"
 
 $ curl --location --remote-name "https://hydra.dhall-lang.org/job/dhall-haskell/master/image-${NAME}/latest/download/1/docker-image-${NAME}.tar.gz"
@@ -85,7 +85,7 @@ $ docker load < "docker-image-${NAME}.tar.gz"
 ...
 Loaded image: dhall:vx95jiijmp2i07f5ynl8h6sllf34jggz
 
-$ docker run -i dhall:vx95jiijmp2i07f5ynl8h6sllf34jggz dhall <<< '2 + 2'
+$ docker run --interactive --rm dhall:vx95jiijmp2i07f5ynl8h6sllf34jggz dhall <<< '2 + 2'
 4
 ```
 
@@ -120,10 +120,10 @@ $ cabal new-build dhall
 
 ### [nix](https://nixos.org/nix/)
 
-You will probably want to use the shared cache hosted at `cache.dhall-lang.org`
-when doing Nix development.  This is not required, but this will save you a lot
-of time so that you don't have to build as many dependencies from scratch the
-first time.
+You will probably want to use the shared caches hosted at `cache.dhall-lang.org`
+and `dhall.cachix.org` when doing Nix development.  This is not required, but
+this will save you a lot of time so that you don't have to build as many
+dependencies from scratch the first time.
 
 If your operating system is NixOS then you can add the cache using these NixOS
 configuration options to access dhall packages from your declarative configuration file:
@@ -143,9 +143,8 @@ configuration options to access dhall packages from your declarative configurati
   };
 ```
 
-If you want to install these packages imperatively using `nix-env`,
-regardless of whether you use NixOS, set the following options in your
-`/etc/nix/nix.conf` file.
+If you are not using NixOS, then instead modify your `/etc/nix/nix.conf` file
+by adding the following options.
 
 Using Nix 2.0 or later:
 
@@ -186,8 +185,10 @@ $ nix-env --install --file default.nix
 ... or you can run the same command within each package's respective directory
 to install just that one package.
 
-If you prefer installing the binaries locally in a nix shell environment instead, just run `nix-shell` in the top-level directory.
-This option provides additional flexibility with respect to overriding some of the default parameters e.g. the compiler version, which makes it particularly useful for developers.
+If you prefer installing the binaries locally in a nix shell environment
+instead, just run `nix-shell` in the top-level directory.  This option provides
+additional flexibility with respect to overriding some of the default parameters
+(e.g. the compiler version), which makes it particularly useful for developers.
 
 You can develop any package by navigating to that package's directory and
 running:
