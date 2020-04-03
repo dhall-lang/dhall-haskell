@@ -183,7 +183,7 @@ let
                 pkgsNew.lib.fold
                   pkgsNew.lib.composeExtensions
                   (old.overrides or (_: _: {}))
-                  [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
+                  [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./packages; })
                     extension
                     doCheckExtension
                     doBenchmarkExtension
