@@ -46,6 +46,7 @@ expr = exprA (Text.Megaparsec.try import_)
 -- over any parseable type, allowing the language to be extended as needed.
 exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
+{-# DEPRECATED exprA "Support for parsing custom imports will be dropped in a future release" #-}
 
 -- | A parsing error
 data ParseError = ParseError {
