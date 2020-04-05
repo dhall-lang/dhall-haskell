@@ -679,13 +679,18 @@ unsafeSubExpressions f (Assert a) = Assert <$> f a
 unsafeSubExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
 unsafeSubExpressions f (With a b c) = With <$> f a <*> pure b <*> f c
 unsafeSubExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
-unsafeSubExpressions _ (Let {}) = die
-unsafeSubExpressions _ (Note {}) = die
-unsafeSubExpressions _ (Embed {}) = die
+unsafeSubExpressions _ (Let {}) = unhandledConstructor "Let"
+unsafeSubExpressions _ (Note {}) = unhandledConstructor "Note"
+unsafeSubExpressions _ (Embed {}) = unhandledConstructor "Embed"
 {-# INLINABLE unsafeSubExpressions #-}
 
-die :: a
-die = internalError "Dhall.Syntax.unsafeSubExpressions: Non-exhaustive pattern match"
+unhandledConstructor :: Text -> a
+unhandledConstructor constructor =
+    internalError
+        (   "Dhall.Syntax.unsafeSubExpressions: Unhandled "
+        <>  constructor
+        <>  " construtor"
+        )
 
 {-| Traverse over the immediate 'Expr' children in a 'Binding'.
 -}
