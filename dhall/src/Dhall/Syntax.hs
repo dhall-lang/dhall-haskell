@@ -600,7 +600,7 @@ subExpressions f expression = unsafeSubExpressions f expression
     one of the type variables of the `Expr` type
 
     This utility only works because the implementation is partial, not
-    handling the `Let`, `Note`, or `Embed` cases, which needs to be handled by
+    handling the `Let`, `Note`, or `Embed` cases, which need to be handled by
     the caller.
 -}
 unsafeSubExpressions
