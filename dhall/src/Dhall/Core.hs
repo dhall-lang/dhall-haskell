@@ -72,7 +72,6 @@ module Dhall.Core (
 
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Semigroup (Semigroup(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall.Normalize
@@ -92,29 +91,6 @@ import qualified Dhall.Syntax      as Syntax
 pretty :: Pretty a => a -> Text
 pretty = pretty_
 {-# INLINE pretty #-}
-
-_ERROR :: String
-_ERROR = "\ESC[1;31mError\ESC[0m"
-
-{-| Utility function used to throw internal errors that should never happen
-    (in theory) but that are not enforced by the type system
--}
-internalError :: Data.Text.Text -> forall b . b
-internalError text = error (unlines
-    [ _ERROR <> ": Compiler bug                                                        "
-    , "                                                                                "
-    , "Explanation: This error message means that there is a bug in the Dhall compiler."
-    , "You didn't do anything wrong, but if you would like to see this problem fixed   "
-    , "then you should report the bug at:                                              "
-    , "                                                                                "
-    , "https://github.com/dhall-lang/dhall-haskell/issues                              "
-    , "                                                                                "
-    , "Please include the following text in your bug report:                           "
-    , "                                                                                "
-    , "```                                                                             "
-    , Data.Text.unpack text <> "                                                       "
-    , "```                                                                             "
-    ] )
 
 {-| Escape a `Text` literal using Dhall's escaping rules
 

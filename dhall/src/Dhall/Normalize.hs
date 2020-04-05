@@ -44,6 +44,7 @@ import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
+import qualified Lens.Family   as Lens
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
@@ -117,7 +118,6 @@ judgmentallyEqual = Eval.judgmentallyEqual
     name in order to avoid shifting the bound variables by mistake.
 -}
 shift :: Int -> Var -> Expr s a -> Expr s a
-shift _ _ (Const a) = Const a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
     n'' = if x == x' && n <= n' then n' + d else n'
@@ -133,10 +133,6 @@ shift d (V x n) (Pi x' _A _B) = Pi x' _A' _B'
     _B' = shift d (V x n') _B
       where
         n' = if x == x' then n + 1 else n
-shift d v (App f a) = App f' a'
-  where
-    f' = shift d v f
-    a' = shift d v a
 shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
     Let (Binding src0 f src1 mt' src2 r') e'
   where
@@ -146,154 +142,7 @@ shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
 
     mt' = fmap (fmap (shift d (V x n))) mt
     r'  =             shift d (V x n)  r
-shift d v (Annot a b) = Annot a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ Bool = Bool
-shift _ _ (BoolLit a) = BoolLit a
-shift d v (BoolAnd a b) = BoolAnd a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolOr a b) = BoolOr a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolEQ a b) = BoolEQ a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolNE a b) = BoolNE a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolIf a b c) = BoolIf a' b' c'
-  where
-    a' = shift d v a
-    b' = shift d v b
-    c' = shift d v c
-shift _ _ Natural = Natural
-shift _ _ (NaturalLit a) = NaturalLit a
-shift _ _ NaturalFold = NaturalFold
-shift _ _ NaturalBuild = NaturalBuild
-shift _ _ NaturalIsZero = NaturalIsZero
-shift _ _ NaturalEven = NaturalEven
-shift _ _ NaturalOdd = NaturalOdd
-shift _ _ NaturalToInteger = NaturalToInteger
-shift _ _ NaturalShow = NaturalShow
-shift _ _ NaturalSubtract = NaturalSubtract
-shift d v (NaturalPlus a b) = NaturalPlus a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (NaturalTimes a b) = NaturalTimes a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ Integer = Integer
-shift _ _ (IntegerLit a) = IntegerLit a
-shift _ _ IntegerClamp = IntegerClamp
-shift _ _ IntegerNegate = IntegerNegate
-shift _ _ IntegerShow = IntegerShow
-shift _ _ IntegerToDouble = IntegerToDouble
-shift _ _ Double = Double
-shift _ _ (DoubleLit a) = DoubleLit a
-shift _ _ DoubleShow = DoubleShow
-shift _ _ Text = Text
-shift d v (TextLit (Chunks a b)) = TextLit (Chunks a' b)
-  where
-    a' = fmap (fmap (shift d v)) a
-shift d v (TextAppend a b) = TextAppend a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ TextShow = TextShow
-shift _ _ List = List
-shift d v (ListLit a b) = ListLit a' b'
-  where
-    a' = fmap (shift d v) a
-    b' = fmap (shift d v) b
-shift _ _ ListBuild = ListBuild
-shift d v (ListAppend a b) = ListAppend a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ ListFold = ListFold
-shift _ _ ListLength = ListLength
-shift _ _ ListHead = ListHead
-shift _ _ ListLast = ListLast
-shift _ _ ListIndexed = ListIndexed
-shift _ _ ListReverse = ListReverse
-shift _ _ Optional = Optional
-shift d v (Some a) = Some a'
-  where
-    a' = shift d v a
-shift _ _ None = None
-shift _ _ OptionalFold = OptionalFold
-shift _ _ OptionalBuild = OptionalBuild
-shift d v (Record a) = Record a'
-  where
-    a' = fmap (shift d v) a
-shift d v (RecordLit a) = RecordLit a'
-  where
-    a' = fmap (shift d v) a
-shift d v (Union a) = Union a'
-  where
-    a' = fmap (fmap (shift d v)) a
-shift d v (Combine a b c) = Combine a b' c'
-  where
-    b' = shift d v b
-    c' = shift d v c
-shift d v (CombineTypes a b) = CombineTypes a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (Prefer a b c) = Prefer a b' c'
-  where
-    b' = shift d v b
-    c' = shift d v c
-shift d v (RecordCompletion a b) = RecordCompletion a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (Merge a b c) = Merge a' b' c'
-  where
-    a' =       shift d v  a
-    b' =       shift d v  b
-    c' = fmap (shift d v) c
-shift d v (ToMap a b) = ToMap a' b'
-  where
-    a' =       shift d v  a
-    b' = fmap (shift d v) b
-shift d v (Field a b) = Field a' b
-  where
-    a' = shift d v a
-shift d v (Assert a) = Assert a'
-  where
-    a' = shift d v a
-shift d v (Equivalent a b) = Equivalent a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (Project a b) = Project a' b'
-  where
-    a' =       shift d v  a
-    b' = fmap (shift d v) b
-shift d v (With a b c) = With a' b c'
-  where
-    a' = shift d v a
-    c' = shift d v c
-shift d v (Note a b) = Note a b'
-  where
-    b' = shift d v b
-shift d v (ImportAlt a b) = ImportAlt a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
--- The Dhall compiler enforces that all embedded values are closed expressions
--- and `shift` does nothing to a closed expression
-shift _ _ (Embed p) = Embed p
+shift d v expression = Lens.over Syntax.subExpressions (shift d v) expression
 
 {-| Substitute all occurrences of a variable with an expression
 
@@ -311,10 +160,6 @@ subst (V x n) e (Pi y _A _B) = Pi y _A' _B'
     _A' = subst (V x n )                  e  _A
     _B' = subst (V x n') (shift 1 (V y 0) e) _B
     n'  = if x == y then n + 1 else n
-subst v e (App f a) = App f' a'
-  where
-    f' = subst v e f
-    a' = subst v e a
 subst v e (Var v') = if v == v' then e else Var v'
 subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
     Let (Binding src0 f src1 mt' src2 r') b'
@@ -325,154 +170,7 @@ subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
 
     mt' = fmap (fmap (subst (V x n) e)) mt
     r'  =             subst (V x n) e  r
-subst x e (Annot a b) = Annot a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ Bool = Bool
-subst _ _ (BoolLit a) = BoolLit a
-subst x e (BoolAnd a b) = BoolAnd a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolOr a b) = BoolOr a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolEQ a b) = BoolEQ a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolNE a b) = BoolNE a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolIf a b c) = BoolIf a' b' c'
-  where
-    a' = subst x e a
-    b' = subst x e b
-    c' = subst x e c
-subst _ _ Natural = Natural
-subst _ _ (NaturalLit a) = NaturalLit a
-subst _ _ NaturalFold = NaturalFold
-subst _ _ NaturalBuild = NaturalBuild
-subst _ _ NaturalIsZero = NaturalIsZero
-subst _ _ NaturalEven = NaturalEven
-subst _ _ NaturalOdd = NaturalOdd
-subst _ _ NaturalToInteger = NaturalToInteger
-subst _ _ NaturalShow = NaturalShow
-subst _ _ NaturalSubtract = NaturalSubtract
-subst x e (NaturalPlus a b) = NaturalPlus a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (NaturalTimes a b) = NaturalTimes a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ Integer = Integer
-subst _ _ (IntegerLit a) = IntegerLit a
-subst _ _ IntegerClamp = IntegerClamp
-subst _ _ IntegerNegate = IntegerNegate
-subst _ _ IntegerShow = IntegerShow
-subst _ _ IntegerToDouble = IntegerToDouble
-subst _ _ Double = Double
-subst _ _ (DoubleLit a) = DoubleLit a
-subst _ _ DoubleShow = DoubleShow
-subst _ _ Text = Text
-subst x e (TextLit (Chunks a b)) = TextLit (Chunks a' b)
-  where
-    a' = fmap (fmap (subst x e)) a
-subst x e (TextAppend a b) = TextAppend a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ TextShow = TextShow
-subst _ _ List = List
-subst x e (ListLit a b) = ListLit a' b'
-  where
-    a' = fmap (subst x e) a
-    b' = fmap (subst x e) b
-subst x e (ListAppend a b) = ListAppend a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ ListBuild = ListBuild
-subst _ _ ListFold = ListFold
-subst _ _ ListLength = ListLength
-subst _ _ ListHead = ListHead
-subst _ _ ListLast = ListLast
-subst _ _ ListIndexed = ListIndexed
-subst _ _ ListReverse = ListReverse
-subst _ _ Optional = Optional
-subst x e (Some a) = Some a'
-  where
-    a' = subst x e a
-subst _ _ None = None
-subst _ _ OptionalFold = OptionalFold
-subst _ _ OptionalBuild = OptionalBuild
-subst x e (Record kts) = Record kts'
-  where
-    kts' = fmap (subst x e) kts
-subst x e (RecordLit kvs) = RecordLit kvs'
-  where
-    kvs' = fmap (subst x e) kvs
-subst x e (Union kts) = Union kts'
-  where
-    kts' = fmap (fmap (subst x e)) kts
-subst x e (Combine a b c) = Combine a b' c'
-  where
-    b' = subst x e b
-    c' = subst x e c
-subst x e (CombineTypes a b) = CombineTypes a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (Prefer a b c) = Prefer a b' c'
-  where
-    b' = subst x e b
-    c' = subst x e c
-subst x e (RecordCompletion a b) = RecordCompletion a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (Merge a b c) = Merge a' b' c'
-  where
-    a' =       subst x e  a
-    b' =       subst x e  b
-    c' = fmap (subst x e) c
-subst x e (ToMap a b) = ToMap a' b'
-  where
-    a' =       subst x e  a
-    b' = fmap (subst x e) b
-subst x e (Field a b) = Field a' b
-  where
-    a' = subst x e a
-subst x e (Project a b) = Project a' b'
-  where
-    a' =       subst x e  a
-    b' = fmap (subst x e) b
-subst x e (Assert a) = Assert a'
-  where
-    a' = subst x e a
-subst x e (Equivalent a b) = Equivalent a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (With a b c) = With a' b c'
-  where
-    a' = subst x e a
-    c' = subst x e c
-subst x e (Note a b) = Note a b'
-  where
-    b' = subst x e b
-subst x e (ImportAlt a b) = ImportAlt a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
--- The Dhall compiler enforces that all embedded values are closed expressions
--- and `subst` does nothing to a closed expression
-subst _ _ (Embed p) = Embed p
+subst x e expression = Lens.over Syntax.subExpressions (subst x e) expression
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
