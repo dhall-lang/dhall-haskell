@@ -584,20 +584,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     loop b₂
                 _ -> do
                   case App f' a' of
-                    App NaturalFold (NaturalLit n) -> do
-                        let natural = Var (V "natural" 0)
-                        let go 0  x = x
-                            go n' x = go (n'-1) (App (Var (V "succ" 0)) x)
-                        let n' = go n (Var (V "zero" 0))
-                        pure
-                            (Lam "natural"
-                                (Const Type)
-                                (Lam "succ"
-                                    (Pi "_" natural natural)
-                                    (Lam "zero"
-                                        natural
-                                        n')))
-
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
