@@ -16,12 +16,14 @@ module Dhall.Lint
     , removeLetInLet
     , replaceOptionalBuildFold
     , replaceSaturatedOptionalFold
+    , useToMap
     ) where
 
 import Control.Applicative ((<|>))
 
 import Dhall.Syntax
     ( Binding(..)
+    , Chunks(..)
     , Const(..)
     , Directory(..)
     , Expr(..)
@@ -34,8 +36,10 @@ import Dhall.Syntax
     , subExpressions
     )
 
+import qualified Data.Foldable      as Foldable
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Dhall.Core         as Core
+import qualified Dhall.Map          as Map
 import qualified Dhall.Optics
 import qualified Lens.Family
 
@@ -48,6 +52,7 @@ import qualified Lens.Family
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
     * Replaces deprecated @Optional\/fold@ and @Optional\/build@ built-ins
+    * Replaces key-value @Map@s with a @toMap@ expression
 -}
 lint :: Expr s Import -> Expr s Import
 lint =  Dhall.Optics.rewriteOf subExpressions lowerPriorityRewrite
@@ -59,6 +64,7 @@ lint =  Dhall.Optics.rewriteOf subExpressions lowerPriorityRewrite
         <|> fixParentPath            e
         <|> removeLetInLet           e
         <|> replaceOptionalBuildFold e
+        <|> useToMap                 e
 
     higherPriorityRewrite = replaceSaturatedOptionalFold
 
@@ -188,4 +194,47 @@ replaceSaturatedOptionalFold
         none
     ) = Just (Merge (RecordLit [ ("Some", some), ("None", none) ]) o Nothing)
 replaceSaturatedOptionalFold _ =
+    Nothing
+
+-- | This replaces a record of key-value pairs with the equivalent use of
+--   @toMap@
+useToMap :: Expr s a -> Maybe (Expr s a)
+useToMap
+    (ListLit
+        t@(Just
+            (Core.shallowDenote -> App
+                (Core.shallowDenote -> List)
+                (Core.shallowDenote -> Record
+                    (Map.sort ->
+                        [ ("mapKey", Core.shallowDenote -> Text)
+                        , ("mapValue", _)
+                        ]
+                    )
+                )
+            )
+        )
+        []
+    ) =
+        Just (ToMap (RecordLit []) t)
+useToMap (ListLit _ keyValues)
+    | not (null keyValues)
+    , Just keyValues' <- traverse convert keyValues =
+        Just
+            (ToMap
+                (RecordLit (Map.fromList (Foldable.toList keyValues')))
+                Nothing
+            )
+  where
+    convert keyValue =
+        case Core.shallowDenote keyValue of
+            RecordLit
+                (Map.sort ->
+                    [ ("mapKey"  , (Core.shallowDenote -> TextLit (Chunks [] key)))
+                    , ("mapValue", value)
+                    ]
+                ) ->
+                    Just (key, value)
+            _ ->
+                Nothing
+useToMap _ =
     Nothing
