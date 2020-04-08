@@ -649,20 +649,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
-                    App (App ListFold t) (ListLit _ xs) -> do
-                        t' <- loop t
-                        let list = Var (V "list" 0)
-                        let lam term =
-                                Lam "list" (Const Type)
-                                    (Lam "cons" (Pi "_" t' (Pi "_" list list))
-                                        (Lam "nil" list term))
-                        term <- foldrM
-                            (\x acc -> do
-                                x' <- loop x
-                                pure (App (App (Var (V "cons" 0)) x') acc))
-                            (Var (V "nil" 0))
-                            xs
-                        pure (lam term)
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
