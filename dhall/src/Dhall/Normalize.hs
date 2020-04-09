@@ -745,7 +745,6 @@ isNormalized e0 = loop (Syntax.denote e0)
       App f a -> loop f && loop a && case App f a of
           App (Lam _ _ _) _ -> False
           App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
-          App NaturalFold (NaturalLit _) -> False
           App NaturalBuild _ -> False
           App NaturalIsZero (NaturalLit _) -> False
           App NaturalEven (NaturalLit _) -> False
@@ -763,7 +762,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           App DoubleShow (DoubleLit _) -> False
           App (App OptionalBuild _) _ -> False
           App (App ListBuild _) _ -> False
-          App (App ListFold _) (ListLit _ _) -> False
+          App (App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _) _ -> False
           App (App ListLength _) (ListLit _ _) -> False
           App (App ListHead _) (ListLit _ _) -> False
           App (App ListLast _) (ListLit _ _) -> False
