@@ -164,10 +164,8 @@ import Dhall.Syntax
     , ImportType(..)
     , ImportMode(..)
     , Import(..)
-    , PreferAnnotation(..)
     , URL(..)
     , bindingExprs
-    , chunkExprs
     )
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
@@ -197,6 +195,7 @@ import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Substitution
+import qualified Dhall.Syntax                                as Syntax
 import qualified Dhall.TypeCheck
 import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
 import qualified System.Environment
@@ -1022,83 +1021,12 @@ loadWith expr₀ = case expr₀ of
             where
               text₂ = text₀ <> " ? " <> text₁
 
-  Const a              -> pure (Const a)
-  Var a                -> pure (Var a)
-  Lam a b c            -> Lam <$> pure a <*> loadWith b <*> loadWith c
-  Pi a b c             -> Pi <$> pure a <*> loadWith b <*> loadWith c
-  App a b              -> App <$> loadWith a <*> loadWith b
-  Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
-  Annot a b            -> Annot <$> loadWith a <*> loadWith b
-  Bool                 -> pure Bool
-  BoolLit a            -> pure (BoolLit a)
-  BoolAnd a b          -> BoolAnd <$> loadWith a <*> loadWith b
-  BoolOr a b           -> BoolOr <$> loadWith a <*> loadWith b
-  BoolEQ a b           -> BoolEQ <$> loadWith a <*> loadWith b
-  BoolNE a b           -> BoolNE <$> loadWith a <*> loadWith b
-  BoolIf a b c         -> BoolIf <$> loadWith a <*> loadWith b <*> loadWith c
-  Natural              -> pure Natural
-  NaturalLit a         -> pure (NaturalLit a)
-  NaturalFold          -> pure NaturalFold
-  NaturalBuild         -> pure NaturalBuild
-  NaturalIsZero        -> pure NaturalIsZero
-  NaturalEven          -> pure NaturalEven
-  NaturalOdd           -> pure NaturalOdd
-  NaturalToInteger     -> pure NaturalToInteger
-  NaturalShow          -> pure NaturalShow
-  NaturalSubtract      -> pure NaturalSubtract
-  NaturalPlus a b      -> NaturalPlus <$> loadWith a <*> loadWith b
-  NaturalTimes a b     -> NaturalTimes <$> loadWith a <*> loadWith b
-  Integer              -> pure Integer
-  IntegerLit a         -> pure (IntegerLit a)
-  IntegerClamp         -> pure IntegerClamp
-  IntegerNegate        -> pure IntegerNegate
-  IntegerShow          -> pure IntegerShow
-  IntegerToDouble      -> pure IntegerToDouble
-  Double               -> pure Double
-  DoubleLit a          -> pure (DoubleLit a)
-  DoubleShow           -> pure DoubleShow
-  Text                 -> pure Text
-  TextLit chunks       -> TextLit <$> chunkExprs loadWith chunks
-  TextAppend a b       -> TextAppend <$> loadWith a <*> loadWith b
-  TextShow             -> pure TextShow
-  List                 -> pure List
-  ListLit a b          -> ListLit <$> mapM loadWith a <*> mapM loadWith b
-  ListAppend a b       -> ListAppend <$> loadWith a <*> loadWith b
-  ListBuild            -> pure ListBuild
-  ListFold             -> pure ListFold
-  ListLength           -> pure ListLength
-  ListHead             -> pure ListHead
-  ListLast             -> pure ListLast
-  ListIndexed          -> pure ListIndexed
-  ListReverse          -> pure ListReverse
-  Optional             -> pure Optional
-  None                 -> pure None
-  Some a               -> Some <$> loadWith a
-  OptionalFold         -> pure OptionalFold
-  OptionalBuild        -> pure OptionalBuild
-  Record a             -> Record <$> mapM loadWith a
-  RecordLit a          -> RecordLit <$> mapM loadWith a
-  Union a              -> Union <$> mapM (mapM loadWith) a
-  Combine m a b        -> Combine m <$> loadWith a <*> loadWith b
-  CombineTypes a b     -> CombineTypes <$> loadWith a <*> loadWith b
-  Prefer a b c         -> Prefer <$> a' <*> loadWith b <*> loadWith c
-    where
-      a' = case a of
-          PreferFromSource     -> pure PreferFromSource
-          PreferFromWith e     -> PreferFromWith <$> loadWith e
-          PreferFromCompletion -> pure PreferFromCompletion
-  RecordCompletion a b -> RecordCompletion <$> loadWith a <*> loadWith b
-  Merge a b c          -> Merge <$> loadWith a <*> loadWith b <*> mapM loadWith c
-  ToMap a b            -> ToMap <$> loadWith a <*> mapM loadWith b
-  Field a b            -> Field <$> loadWith a <*> pure b
-  Project a b          -> Project <$> loadWith a <*> mapM loadWith b
-  Assert a             -> Assert <$> loadWith a
-  Equivalent a b       -> Equivalent <$> loadWith a <*> loadWith b
-  With a b c           -> With <$> loadWith a <*> pure b <*> loadWith c
   Note a b             -> do
       let handler e = throwM (SourcedException a (e :: MissingImports))
 
       (Note <$> pure a <*> loadWith b) `catch` handler
+  Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
+  expression           -> Syntax.unsafeSubExpressions loadWith expression
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)
