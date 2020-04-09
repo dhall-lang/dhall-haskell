@@ -138,7 +138,7 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative (Alternative(..))
+import Control.Applicative (Alternative(..), liftA2)
 import Control.Exception (Exception, SomeException, IOException, toException)
 import Control.Monad (when)
 import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
@@ -729,13 +729,13 @@ toHeaders _ = []
 
 toHeader :: Expr s a -> Maybe HTTPHeader
 toHeader (RecordLit m) = do
-    TextLit (Chunks [] keyText  ) <-
-        Dhall.Map.lookup "header" m <|> Dhall.Map.lookup "mapKey" m
-    TextLit (Chunks [] valueText) <-
-        Dhall.Map.lookup "value" m <|> Dhall.Map.lookup "mapValue" m
+    (TextLit (Chunks [] keyText), TextLit (Chunks [] valueText)) <- lookupHeader <|> lookupMapKey
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
+      where
+        lookupHeader = liftA2 (,) (Dhall.Map.lookup "header" m) (Dhall.Map.lookup "value" m)
+        lookupMapKey = liftA2 (,) (Dhall.Map.lookup "mapKey" m) (Dhall.Map.lookup "mapValue" m)
 toHeader _ = do
     empty
 
