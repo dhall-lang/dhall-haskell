@@ -52,7 +52,6 @@ import qualified Lens.Family
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
     * Replaces deprecated @Optional\/fold@ and @Optional\/build@ built-ins
-    * Replaces key-value @Map@s with a @toMap@ expression
 -}
 lint :: Expr s Import -> Expr s Import
 lint =  Dhall.Optics.rewriteOf subExpressions lowerPriorityRewrite
@@ -64,7 +63,6 @@ lint =  Dhall.Optics.rewriteOf subExpressions lowerPriorityRewrite
         <|> fixParentPath            e
         <|> removeLetInLet           e
         <|> replaceOptionalBuildFold e
-        <|> useToMap                 e
 
     higherPriorityRewrite = replaceSaturatedOptionalFold
 
@@ -198,6 +196,11 @@ replaceSaturatedOptionalFold _ =
 
 -- | This replaces a record of key-value pairs with the equivalent use of
 --   @toMap@
+--
+-- This is currently not used by @dhall lint@ because this would sort @Map@
+-- keys, which is not necessarily a behavior-preserving change, but is still
+-- made available as a convenient rewrite rule.  For example,
+-- @{json,yaml}-to-dhall@ use this rewrite to simplify their output.
 useToMap :: Expr s a -> Maybe (Expr s a)
 useToMap
     (ListLit
