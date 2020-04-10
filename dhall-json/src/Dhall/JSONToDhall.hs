@@ -100,7 +100,7 @@
     Conversion of the homogeneous JSON maps to the corresponding Dhall association lists by default:
 
 > $ json-to-dhall 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
-> [ { mapKey = "foo", mapValue = "bar" } ]
+> toMap { foo = "bar" }
 
     The map keys can even be union types instead of `Text`:
 
@@ -171,9 +171,11 @@ general schema possible:
 > → λ(null : JSON)
 > → array
 >   [ object
->     [ { mapKey = "foo", mapValue = null }
->     , { mapKey = "bar", mapValue = array [ number 1.0, bool True ] }
->     ]
+>     ( toMap
+>         { bar = array [ number 1.0, bool True ]
+>         , foo = null
+>         }
+>     )
 >   ]
 
 You can also mix and match JSON fields whose schemas are known or unknown:
@@ -242,7 +244,9 @@ import           Dhall.JSON.Util (pattern V)
 import qualified Dhall.Core as D
 import           Dhall.Core (Expr(App), Chunks(..), DhallDouble(..))
 import qualified Dhall.Import
+import qualified Dhall.Lint as Lint
 import qualified Dhall.Map as Map
+import qualified Dhall.Optics as Optics
 import qualified Dhall.Parser
 import           Dhall.Parser (Src)
 import qualified Dhall.TypeCheck as D
@@ -389,7 +393,7 @@ Right (RecordLit (fromList [("foo",IntegerLit 1)]))
 dhallFromJSON
   :: Conversion -> ExprX -> A.Value -> Either CompileError ExprX
 dhallFromJSON (Conversion {..}) expressionType =
-    loop (D.alphaNormalize (D.normalize expressionType))
+    fmap (Optics.rewriteOf D.subExpressions Lint.useToMap) . loop (D.alphaNormalize (D.normalize expressionType))
   where
     -- any ~> Union
     loop t@(D.Union tm) v = do

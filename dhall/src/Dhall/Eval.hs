@@ -452,19 +452,23 @@ eval !env t0 =
         NaturalLit n ->
             VNaturalLit n
         NaturalFold ->
-            VPrim $ \case
-                VNaturalLit n ->
-                    VHLam (Typed "natural" (VConst Type)) $ \natural ->
-                    VHLam (Typed "succ" (natural ~> natural)) $ \succ ->
-                    VHLam (Typed "zero" natural) $ \zero ->
-                    let go !acc 0 = acc
-                        go  acc m = go (vApp succ acc) (m - 1)
-                    in  go zero (fromIntegral n :: Integer)
-                n ->
-                    VPrim $ \natural ->
-                    VPrim $ \succ ->
-                    VPrim $ \zero ->
-                    VNaturalFold n natural succ zero
+            VPrim $ \n ->
+            VPrim $ \natural ->
+            VPrim $ \succ ->
+            VPrim $ \zero ->
+            let inert = VNaturalFold n natural succ zero
+            in  case zero of
+                VPrimVar -> inert
+                _ -> case succ of
+                    VPrimVar -> inert
+                    _ -> case natural of
+                        VPrimVar -> inert
+                        _ -> case n of
+                            VNaturalLit n' ->
+                                let go !acc 0 = acc
+                                    go  acc m = go (vApp succ acc) (m - 1)
+                                in  go zero (fromIntegral n' :: Integer)
+                            _ -> inert
         NaturalBuild ->
             VPrim $ \case
                 VPrimVar ->
@@ -580,17 +584,23 @@ eval !env t0 =
 
         ListFold ->
             VPrim $ \a ->
-            VPrim $ \case
-                VListLit _ as ->
-                    VHLam (Typed "list" (VConst Type)) $ \list ->
-                    VHLam (Typed "cons" (a ~> list ~> list) ) $ \cons ->
-                    VHLam (Typed "nil"  list) $ \nil ->
-                    foldr' (\x b -> cons `vApp` x `vApp` b) nil as
-                as ->
-                    VPrim $ \t ->
-                    VPrim $ \c ->
-                    VPrim $ \n ->
-                    VListFold a as t c n
+            VPrim $ \as ->
+            VPrim $ \list ->
+            VPrim $ \cons ->
+            VPrim $ \nil ->
+            let inert = VListFold a as list cons nil
+            in  case nil of
+                VPrimVar -> inert
+                _ -> case cons of
+                    VPrimVar -> inert
+                    _ -> case list of
+                        VPrimVar -> inert
+                        _ -> case a of
+                            VPrimVar -> inert
+                            _ -> case as of
+                                VListLit _ as' ->
+                                    foldr' (\x b -> cons `vApp` x `vApp` b) nil as'
+                                _ -> inert
         ListLength ->
             VPrim $ \ a ->
             VPrim $ \case
