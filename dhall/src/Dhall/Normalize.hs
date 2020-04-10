@@ -282,20 +282,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     loop b₂
                 _ -> do
                   case App f' a' of
-                    App NaturalFold (NaturalLit n) -> do
-                        let natural = Var (V "natural" 0)
-                        let go 0  x = x
-                            go n' x = go (n'-1) (App (Var (V "succ" 0)) x)
-                        let n' = go n (Var (V "zero" 0))
-                        pure
-                            (Lam "natural"
-                                (Const Type)
-                                (Lam "succ"
-                                    (Pi "_" natural natural)
-                                    (Lam "zero"
-                                        natural
-                                        n')))
-
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -361,20 +347,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
-                    App (App ListFold t) (ListLit _ xs) -> do
-                        t' <- loop t
-                        let list = Var (V "list" 0)
-                        let lam term =
-                                Lam "list" (Const Type)
-                                    (Lam "cons" (Pi "_" t' (Pi "_" list list))
-                                        (Lam "nil" list term))
-                        term <- foldrM
-                            (\x acc -> do
-                                x' <- loop x
-                                pure (App (App (Var (V "cons" 0)) x') acc))
-                            (Var (V "nil" 0))
-                            xs
-                        pure (lam term)
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -773,7 +745,6 @@ isNormalized e0 = loop (Syntax.denote e0)
       App f a -> loop f && loop a && case App f a of
           App (Lam _ _ _) _ -> False
           App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
-          App NaturalFold (NaturalLit _) -> False
           App NaturalBuild _ -> False
           App NaturalIsZero (NaturalLit _) -> False
           App NaturalEven (NaturalLit _) -> False
@@ -791,7 +762,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           App DoubleShow (DoubleLit _) -> False
           App (App OptionalBuild _) _ -> False
           App (App ListBuild _) _ -> False
-          App (App ListFold _) (ListLit _ _) -> False
+          App (App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _) _ -> False
           App (App ListLength _) (ListLit _ _) -> False
           App (App ListHead _) (ListLit _ _) -> False
           App (App ListLast _) (ListLit _ _) -> False

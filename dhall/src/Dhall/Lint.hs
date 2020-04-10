@@ -16,12 +16,14 @@ module Dhall.Lint
     , removeLetInLet
     , replaceOptionalBuildFold
     , replaceSaturatedOptionalFold
+    , useToMap
     ) where
 
 import Control.Applicative ((<|>))
 
 import Dhall.Syntax
     ( Binding(..)
+    , Chunks(..)
     , Const(..)
     , Directory(..)
     , Expr(..)
@@ -34,8 +36,10 @@ import Dhall.Syntax
     , subExpressions
     )
 
+import qualified Data.Foldable      as Foldable
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Dhall.Core         as Core
+import qualified Dhall.Map          as Map
 import qualified Dhall.Optics
 import qualified Lens.Family
 
@@ -188,4 +192,52 @@ replaceSaturatedOptionalFold
         none
     ) = Just (Merge (RecordLit [ ("Some", some), ("None", none) ]) o Nothing)
 replaceSaturatedOptionalFold _ =
+    Nothing
+
+-- | This replaces a record of key-value pairs with the equivalent use of
+--   @toMap@
+--
+-- This is currently not used by @dhall lint@ because this would sort @Map@
+-- keys, which is not necessarily a behavior-preserving change, but is still
+-- made available as a convenient rewrite rule.  For example,
+-- @{json,yaml}-to-dhall@ use this rewrite to simplify their output.
+useToMap :: Expr s a -> Maybe (Expr s a)
+useToMap
+    (ListLit
+        t@(Just
+            (Core.shallowDenote -> App
+                (Core.shallowDenote -> List)
+                (Core.shallowDenote -> Record
+                    (Map.sort ->
+                        [ ("mapKey", Core.shallowDenote -> Text)
+                        , ("mapValue", _)
+                        ]
+                    )
+                )
+            )
+        )
+        []
+    ) =
+        Just (ToMap (RecordLit []) t)
+useToMap (ListLit _ keyValues)
+    | not (null keyValues)
+    , Just keyValues' <- traverse convert keyValues =
+        Just
+            (ToMap
+                (RecordLit (Map.fromList (Foldable.toList keyValues')))
+                Nothing
+            )
+  where
+    convert keyValue =
+        case Core.shallowDenote keyValue of
+            RecordLit
+                (Map.sort ->
+                    [ ("mapKey"  , (Core.shallowDenote -> TextLit (Chunks [] key)))
+                    , ("mapValue", value)
+                    ]
+                ) ->
+                    Just (key, value)
+            _ ->
+                Nothing
+useToMap _ =
     Nothing

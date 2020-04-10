@@ -170,10 +170,14 @@ unitTest prefix = do
         Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
 
 betaNormalizationTest :: Text -> TestTree
-betaNormalizationTest prefix =
-    Tasty.HUnit.testCase (Text.unpack prefix) $ do
-        let actualCode   = Test.Util.toDhallPath (prefix <> "A.dhall")
-        let expectedCode = Test.Util.toDhallPath (prefix <> "B.dhall")
+betaNormalizationTest prefix = do
+    let prefixString = Text.unpack prefix
+
+    Tasty.HUnit.testCase prefixString $ do
+        let actualCode = Test.Util.toDhallPath (prefix <> "A.dhall")
+
+        let expectedPath = prefixString <> "B.dhall"
+        expectedCode <- Text.IO.readFile expectedPath
 
         actualExpr <- throws (Parser.exprFromText mempty actualCode)
 
