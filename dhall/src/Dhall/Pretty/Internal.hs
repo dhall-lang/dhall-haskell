@@ -1047,7 +1047,8 @@ prettyCharacterSet characterSet expression =
             <>  "  "
             <>  Pretty.align (keyword "with" <> " " <> update)
 
-        (update, _ ) = prettyKeyValue prettyAnyLabels equals (b, c)
+        (update, _ ) =
+            prettyKeyValue prettyAnyLabels prettyApplicationExpression equals (b, c)
     prettyWithExpression a
         | Just doc <- preserveSource a =
             doc
@@ -1235,10 +1236,11 @@ prettyCharacterSet characterSet expression =
     prettyKeyValue
         :: Pretty a
         => (k -> Doc Ann)
+        -> (Expr Src a -> Doc Ann)
         -> Doc Ann
         -> (k, Expr Src a)
         -> (Doc Ann, Doc Ann)
-    prettyKeyValue prettyKey separator (key, val) =
+    prettyKeyValue prettyKey prettyValue separator (key, val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
         completion _T r =
@@ -1255,7 +1257,7 @@ prettyCharacterSet characterSet expression =
             <>  " "
             <>  separator
             <>  " "
-            <>  prettyExpression val
+            <>  prettyValue val
 
         long =
                 prettyKey key
@@ -1277,7 +1279,7 @@ prettyCharacterSet characterSet expression =
                                     | not (null xs) ->
                                             Pretty.hardline
                                         <>  "  "
-                                        <>  prettyExpression val'
+                                        <>  prettyImportExpression val'
 
                                 _ ->    Pretty.hardline
                                     <>  "    "
@@ -1298,22 +1300,24 @@ prettyCharacterSet characterSet expression =
                     RecordLit _ ->
                             Pretty.hardline
                         <>  "  "
-                        <>  prettyExpression val
+                        <>  prettyValue val
 
                     ListLit _ xs
                         | not (null xs) ->
                                 Pretty.hardline
                             <>  "  "
-                            <>  prettyExpression val
+                            <>  prettyValue val
 
                     _ -> 
                             Pretty.hardline
                         <>  "    "
-                        <>  prettyExpression val
+                        <>  prettyValue val
 
     prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecord =
-        braces . map (prettyKeyValue prettyAnyLabel colon) . Map.toList
+          braces
+        . map (prettyKeyValue prettyAnyLabel prettyExpression colon)
+        . Map.toList
 
     prettyRecordLit :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecordLit = prettyRecordLike braces
@@ -1336,10 +1340,12 @@ prettyCharacterSet characterSet expression =
                     , key == key' ->
                         duplicate (prettyAnyLabel key)
                 _ ->
-                    prettyKeyValue prettyAnyLabels equals (keys, value)
+                    prettyKeyValue prettyAnyLabels prettyExpression equals (keys, value)
 
-    prettyAlternative (key, Just val) = prettyKeyValue prettyAnyLabel colon (key, val)
-    prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
+    prettyAlternative (key, Just val) =
+        prettyKeyValue prettyAnyLabel prettyExpression colon (key, val)
+    prettyAlternative (key, Nothing) =
+        duplicate (prettyAnyLabel key)
 
     prettyUnion :: Pretty a => Map Text (Maybe (Expr Src a)) -> Doc Ann
     prettyUnion =
