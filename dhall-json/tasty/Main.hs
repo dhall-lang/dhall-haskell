@@ -120,7 +120,7 @@ testCustomConversionJSONToDhall conv prefix =
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-    let expectedExpression = Core.normalize resolvedExpression
+    let expectedExpression = Core.denote resolvedExpression
 
     let message =
             "Conversion to Dhall did not generate the expected output"
