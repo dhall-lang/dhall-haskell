@@ -217,7 +217,7 @@ freeze outputMode input scope intent characterSet censor = do
 
             let name = case input of
                     InputFile file -> file
-                    StandardInput  -> "(stdin)"
+                    StandardInput  -> "(input)"
 
             (Header header, parsedExpression) <- do
                 Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))

@@ -874,7 +874,7 @@ import Dhall
 -- > 
 -- > { foo = 1, bar = "ABC" } ∧ { foo = True }
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- __Exercise__: Combine any record with the empty record.  What do you expect
 -- to happen?
@@ -941,7 +941,7 @@ import Dhall
 -- > <Ctrl-D>
 -- > Error: Invalid input
 -- > 
--- > (stdin):1:11:
+-- > (input):1:11:
 -- >   |
 -- > 1 | let twice (x : Text) = x ++ x in twice "ha"
 -- >   |           ^
@@ -1381,7 +1381,7 @@ import Dhall
 -- > 
 -- > 1│ ./test.dhall
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- You can compare expressions that contain variables, too, which is equivalent
 -- to symbolic reasoning:
@@ -1410,7 +1410,7 @@ import Dhall
 -- > 
 -- > 1│                   assert : Natural/even (n + n) === True
 -- > 
--- > (stdin):1:19
+-- > (input):1:19
 --
 -- Here the interpreter is not smart enough to simplify @Natural/even (n + n)@
 -- to @True@ so the assertion fails.
@@ -1849,7 +1849,7 @@ import Dhall
 -- > 
 -- > +2 + +2
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- In fact, there are no built-in functions for @Integer@s (or @Double@s) other
 -- than @Integer/show@ and @Double/show@.  As far as the language is concerned
@@ -1932,7 +1932,7 @@ import Dhall
 -- > 
 -- > Natural/equal 
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- You will need to either:
 -- 

@@ -1147,7 +1147,7 @@ handleSpecialDoubles specialDoubleMode =
 
 >>> :set -XOverloadedStrings
 >>> import Core
->>> Dhall.JSON.codeToValue "(stdin)" "{ a = 1 }"
+>>> Dhall.JSON.codeToValue defaultConversion ForbidWithinJSON Nothing "{ a = 1 }"
 >>> Object (fromList [("a",Number 1.0)])
 -}
 codeToValue
@@ -1158,7 +1158,7 @@ codeToValue
   -> Text  -- ^ Input text.
   -> IO Value
 codeToValue conversion specialDoubleMode mFilePath code = do
-    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(stdin)" mFilePath) code)
+    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(input)" mFilePath) code)
 
     let rootDirectory = case mFilePath of
             Nothing -> "."
