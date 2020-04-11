@@ -116,8 +116,8 @@ get parser censor input = do
     let name =
             case input of
                 Input_ (InputFile file) -> file
-                Input_ StandardInput    -> "(stdin)"
-                StdinText _             -> "(stdin)"
+                Input_ StandardInput    -> "(input)"
+                StdinText _             -> "(input)"
 
     let result = parser name inText
 

@@ -761,7 +761,7 @@ command (Options {..}) = do
 
                     let name = case input of
                             InputFile file -> file
-                            StandardInput  -> "(stdin)"
+                            StandardInput  -> "(input)"
 
                     (Header header, expression) <- do
                         Dhall.Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))

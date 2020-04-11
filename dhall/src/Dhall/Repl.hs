@@ -130,7 +130,7 @@ parseAndLoad
   :: MonadIO m => String -> m ( Dhall.Expr Dhall.Src Void) 
 parseAndLoad src = do
   parsed <-
-    case Dhall.exprFromText "(stdin)" (Text.pack src <> "\n") of
+    case Dhall.exprFromText "(input)" (Text.pack src <> "\n") of
       Left e ->
         liftIO ( throwIO e )
 
@@ -222,7 +222,7 @@ separateEqual (str : strs)
 
 addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
 addBinding (k : "=" : srcs) = do
-  varName <- case Megaparsec.parse (unParser Parser.Token.label) "(stdin)" (Text.pack k) of
+  varName <- case Megaparsec.parse (unParser Parser.Token.label) "(input)" (Text.pack k) of
       Left   _      -> Fail.fail "Invalid variable name"
       Right varName -> return varName
 
