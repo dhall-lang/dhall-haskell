@@ -982,14 +982,16 @@ infer typer = loop
             let ysT = Dhall.Map.keysSet yTs'
             let ysU = Dhall.Map.keysSet yUs'
 
+            let hasWildcard = "_" `Data.Set.member` ysT
+
             let diffT = Data.Set.difference ysT ysU
             let diffU = Data.Set.difference ysU ysT
 
-            if Data.Set.null diffT
+            if Data.Set.null $ Data.Set.filter (/= "_") diffT
                 then return ()
                 else die (UnusedHandler diffT)
 
-            if Data.Set.null diffU
+            if Data.Set.null diffU || hasWildcard
                 then return ()
                 else let (exemplar,rest) = Data.Set.deleteFindMin diffU
                      in die (MissingHandler exemplar rest)
@@ -1071,7 +1073,9 @@ infer typer = loop
 
             case (mT₀', mT₁') of
                 (Nothing, Nothing) ->
-                    die MissingMergeType
+                    case Dhall.Map.lookup "_" yTs' of
+                        Just a  -> return a
+                        _       -> die MissingMergeType
                 (Nothing, Just _T₁') ->
                     return _T₁'
                 (Just _T₀', Nothing) ->

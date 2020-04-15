@@ -705,8 +705,9 @@ eval !env t0 =
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
-                    | Just f <- Map.lookup k m -> maybe f (vApp f) mt
-                    | otherwise                -> error errorMsg
+                    | Just f <- Map.lookup k m   -> maybe f (vApp f) mt
+                    | Just f <- Map.lookup "_" m -> maybe f (vApp f) mt
+                    | otherwise                  -> error errorMsg
                 (VRecordLit m, VSome t, _)
                     | Just f <- Map.lookup "Some" m -> vApp f t
                     | otherwise                     -> error errorMsg
