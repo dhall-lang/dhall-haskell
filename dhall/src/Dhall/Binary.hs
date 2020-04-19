@@ -55,11 +55,11 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
+import Numeric.Half (fromHalf, toHalf)
 
 import qualified Codec.CBOR.Decoding  as Decoding
 import qualified Codec.CBOR.Encoding  as Encoding
 import qualified Codec.CBOR.Read      as Read
-import qualified Codec.CBOR.Write     as Write
 import qualified Codec.Serialise      as Serialise
 import qualified Control.Monad        as Monad
 import qualified Data.ByteArray
@@ -870,33 +870,20 @@ encodeExpressionInternal encodeEmbed = go
                 (Encoding.encodeInteger (fromIntegral n))
 
         DoubleLit (DhallDouble n64)
-            | useHalf   -> halfEncoding
-            | useFloat  -> floatEncoding
-            | otherwise -> doubleEncoding
+            | useHalf   -> Encoding.encodeFloat16 n32
+            | useFloat  -> Encoding.encodeFloat n32
+            | otherwise -> Encoding.encodeDouble n64
           where
             n32 = double2Float n64
 
-            doubleEncoding = Encoding.encodeDouble n64
-
-            floatEncoding = Encoding.encodeFloat n32
-
-            halfEncoding = Encoding.encodeFloat16 n32
-
-            -- Check if two encodings result in the same double value after deserialization
-            equivalent :: Encoding -> Encoding -> Bool
-            equivalent a b = isEquivalent
-              where
-                ba = Write.toLazyByteString a
-                bb = Write.toLazyByteString b
-                isEquivalent = case Read.deserialiseFromBytes Decoding.decodeDouble ba of
-                  Left _        -> False
-                  Right (_, va) -> case Read.deserialiseFromBytes Decoding.decodeDouble bb of
-                    Left _        -> False
-                    Right (_, vb) -> va == vb
+            n16 = toHalf n32
 
             useFloat = n64 == float2Double n32
 
-            useHalf = n64 == 0.0 || n64 == infinity || n64 == -infinity || equivalent halfEncoding doubleEncoding
+            -- Check if the original Double can be recovered from a half
+            halfEnough = n64 == (float2Double $ fromHalf n16)
+
+            useHalf = n64 == 0.0 || n64 == infinity || n64 == -infinity || halfEnough
 
             infinity = 1/0 :: Double
 

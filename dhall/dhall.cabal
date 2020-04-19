@@ -460,6 +460,7 @@ Library
         either                      >= 5        && < 5.1,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
+        half                        >= 0.2.2.3  && < 0.4 ,
         haskeline                   >= 0.7.2.1  && < 0.9 ,
         hashable                    >= 1.2      && < 1.4 ,
         lens-family-core            >= 1.0.0    && < 2.2 ,
