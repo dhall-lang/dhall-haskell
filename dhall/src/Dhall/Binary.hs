@@ -880,12 +880,7 @@ encodeExpressionInternal encodeEmbed = go
 
             useFloat = n64 == float2Double n32
 
-            -- Check if the original Double can be recovered from a half
-            halfEnough = n64 == (float2Double $ fromHalf n16)
-
-            useHalf = n64 == 0.0 || n64 == infinity || n64 == -infinity || halfEnough
-
-            infinity = 1/0 :: Double
+            useHalf = n64 == (float2Double $ fromHalf n16)
 
         -- Fast path for the common case of an uninterpolated string
         TextLit (Chunks [] z) ->
