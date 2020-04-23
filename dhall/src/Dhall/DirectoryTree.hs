@@ -104,6 +104,9 @@ toDirectoryTree path expression = case expression of
     Some value -> do
         toDirectoryTree path value
 
+    App (Field (Union _) _) value -> do
+        toDirectoryTree path value
+
     App None _ -> do
         return ()
 
@@ -149,7 +152,9 @@ instance Show FilesystemError where
           \Explanation: Only a subset of Dhall expressions can be converted to a directory \n\
           \tree.  Specifically, record literals or maps can be converted to directories,   \n\
           \❰Text❱ literals can be converted to files, and ❰Optional❱ values are included if\n\
-          \❰Some❱ and omitted if ❰None❱.  No other type of value can be translated to a    \n\
+          \❰Some❱ and omitted if ❰None❱.  Values of union types can also be converted if   \n\
+          \they are an alternative which has a non-nullary constructor whose argument is of\n\
+          \an otherwise convertible type.  No other type of value can be translated to a   \n\
           \directory tree.                                                                 \n\
           \                                                                                \n\
           \For example, this is a valid expression that can be translated to a directory   \n\
