@@ -307,20 +307,33 @@ hangingBraces n docs =
 
     combineLong x y = x <> y <> Pretty.hardline
 
+unsnoc :: [a] -> Maybe ([a], a)
+unsnoc       []   = Nothing
+unsnoc (x0 : xs0) = Just (go id x0 xs0)
+  where
+    go diffXs x      []  = (diffXs [], x)
+    go diffXs x (y : ys) = go (diffXs . (x:)) y ys
+
 -- | Pretty-print anonymous functions and function types
-arrows :: CharacterSet -> [(Doc Ann, Doc Ann)] -> Doc Ann
-arrows ASCII =
-    enclose'
-        ""
-        "    "
-        (" " <> rarrow ASCII <> " ")
-        (rarrow ASCII <> "  ")
-arrows Unicode =
-    enclose'
-        ""
-        "  "
-        (" " <> rarrow Unicode <> " ")
-        (rarrow Unicode <> " ")
+arrows :: CharacterSet -> [ Doc Ann ] -> Doc Ann
+arrows characterSet docs = Pretty.group (Pretty.flatAlt long short)
+  where
+    long = Pretty.align (mconcat (Data.List.intersperse Pretty.hardline docs'))
+      where
+        docs' = case unsnoc docs of
+            Nothing -> docs
+
+            Just (init_, last_) -> init' ++ [ last' ]
+              where
+                 appendArrow doc = doc <> space <> rarrow characterSet
+
+                 init' = map appendArrow init_
+
+                 last' = space <> space <> last_
+
+    short = mconcat (Data.List.intersperse separator docs)
+      where
+        separator = space <> rarrow characterSet <> space
 
 combine :: CharacterSet -> Text
 combine ASCII   = "/\\"
@@ -521,7 +534,7 @@ prettyCharacterSet characterSet expression =
     Pretty.group (prettyExpression expression)
   where
     prettyExpression a0@(Lam _ _ _) =
-        arrows characterSet (fmap duplicate (docs a0))
+        arrows characterSet (docs a0)
       where
         docs (Lam a b c) = Pretty.group (Pretty.flatAlt long short) : docs c
           where
@@ -647,7 +660,7 @@ prettyCharacterSet characterSet expression =
             , keyword "in" <> "  "  <> prettyExpression b
             )
     prettyExpression a0@(Pi _ _ _) =
-        arrows characterSet (fmap duplicate (docs a0))
+        arrows characterSet (docs a0)
       where
         docs (Pi "_" b c) = prettyOperatorExpression b : docs c
         docs (Pi a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c

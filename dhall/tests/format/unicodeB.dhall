@@ -1,5 +1,5 @@
-  λ(isActive : Bool)
-→   { barLeftEnd = Some "┨"
+λ(isActive : Bool) →
+    { barLeftEnd = Some "┨"
     , barRightEnd = Some "┠"
     , separator = Some "┃"
     , alignment =
