@@ -286,6 +286,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                       t' <- loop t
                       if boundedType t' then strict else lazy
                       where
+                        -- Use an `Integer` for the loop, due to the following
+                        -- issue:
+                        --
+                        -- https://github.com/ghcjs/ghcjs/issues/782
                         strict =       strictLoop (fromIntegral n0 :: Integer)
                         lazy   = loop (  lazyLoop (fromIntegral n0 :: Integer))
 
@@ -306,8 +310,14 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
                     App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
-                        | y >= x    -> pure (NaturalLit (subtract x y))
-                        | otherwise -> pure (NaturalLit 0)
+                        -- Use an `Integer` for the subtraction, due to the
+                        -- following issue:
+                        --
+                        -- https://github.com/ghcjs/ghcjs/issues/782
+                        | y >= x ->
+                            pure (NaturalLit (fromIntegral (subtract (fromIntegral x :: Integer) (fromIntegral y :: Integer))))
+                        | otherwise ->
+                            pure (NaturalLit 0)
                     App (App NaturalSubtract (NaturalLit 0)) y -> pure y
                     App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
                     App (App NaturalSubtract x) y | Eval.judgmentallyEqual x y -> pure (NaturalLit 0)
