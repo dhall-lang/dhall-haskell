@@ -465,6 +465,10 @@ eval !env t0 =
                         VPrimVar -> inert
                         _ -> case n of
                             VNaturalLit n' ->
+                                -- Use an `Integer` for the loop, due to the
+                                -- following issue:
+                                --
+                                -- https://github.com/ghcjs/ghcjs/issues/782
                                 let go !acc 0 = acc
                                     go  acc m = go (vApp succ acc) (m - 1)
                                 in  go zero (fromIntegral n' :: Integer)
@@ -499,7 +503,12 @@ eval !env t0 =
             x@(VNaturalLit m) ->
                 VPrim $ \case
                     VNaturalLit n
-                        | n >= m    -> VNaturalLit (subtract m n)
+                        | n >= m ->
+                            -- Use an `Integer` for the subtraction, due to the
+                            -- following issue:
+                            --
+                            -- https://github.com/ghcjs/ghcjs/issues/782
+                            VNaturalLit (fromIntegral (subtract (fromIntegral m :: Integer) (fromIntegral n :: Integer)))
                         | otherwise -> VNaturalLit 0
                     y -> VNaturalSubtract x y
             x ->
