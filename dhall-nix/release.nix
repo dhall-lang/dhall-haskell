@@ -122,7 +122,7 @@ in
           λ(r : { foo : Bool, bar : Text, baz : Natural }) → r.{ foo, bar }
         '';
         testShadow = dhallToNix ''
-          λ(x : Natural) → λ(y : Natural) → λ(x : Natural) → x@1
+          λ(x : Natural) → λ(x1 : Natural) → λ(x : Natural) → x@1
         '';
       in
         assert (testConst == {});

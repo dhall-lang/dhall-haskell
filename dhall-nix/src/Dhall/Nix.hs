@@ -108,7 +108,7 @@ import Dhall.Core
     , PreferAnnotation(..)
     , Var(..)
     )
-import Lens.Family (over, toListOf)
+import Lens.Family (toListOf)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
@@ -127,6 +127,7 @@ import Nix.Expr
 import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Map
+import qualified Dhall.Optics
 import qualified NeatInterpolation
 import qualified Nix
 
@@ -219,7 +220,8 @@ Right x: y: x + y
     the expression to `dhallToNix`
 -}
 dhallToNix :: Expr s Void -> Either CompileError (Fix NExprF)
-dhallToNix e = loop (renameShadowed (Dhall.Core.normalize e))
+dhallToNix e =
+    loop (rewriteShadowed (Dhall.Core.normalize e))
   where
     untranslatable = Fix (NSet NNonRecursive [])
 
@@ -254,33 +256,40 @@ dhallToNix e = loop (renameShadowed (Dhall.Core.normalize e))
 
     -- Higher-level utility that builds on top of `maximumDepth` to rename a
     -- variable if there are shadowed references to that variable
-    rename :: (Text, Expr s Void) -> (Text, Expr s Void)
+    rename :: (Text, Expr s Void) -> Maybe (Text, Expr s Void)
     rename (x, expression) =
         case maximumDepth (V x 0) expression of
             Nothing ->
-                (x, expression)
+                Nothing
             Just 0 ->
-                (x, expression)
+                Nothing
             Just n ->
-                ( x'
-                , Dhall.Core.subst (V x 0) (Var (V x' 0)) (Dhall.Core.shift 1 (V x' 0) expression)
-                )
+                Just
+                  ( x'
+                  , Dhall.Core.subst (V x 0) (Var (V x' 0)) (Dhall.Core.shift 1 (V x' 0) expression)
+                  )
               where
                 x' = x <> Data.Text.pack (show n)
 
+    renameShadowed :: Expr s Void -> Maybe (Expr s Void)
+    renameShadowed (Lam x a b) = do
+        (x', b') <- rename (x, b)
+
+        return (Lam x' a b')
+    renameShadowed (Pi x a b) = do
+        (x', b') <- rename (x, b)
+
+        return (Pi x' a b')
+    renameShadowed (Let Binding{ variable = x, .. } a) = do
+        (x' , a') <- rename (x, a)
+
+        return (Let Binding{ variable = x', .. } a')
+    renameShadowed _ = do
+        Nothing
+
     -- Even higher-level utility that renames all shadowed references
-    renameShadowed :: Expr s Void -> Expr s Void
-    renameShadowed (Lam x a b) =
-        let (x', b') = rename (x, b)
-        in  Lam x' a b'
-    renameShadowed (Pi x a b) =
-        let (x', b') = rename (x, b)
-        in  Pi x' a b'
-    renameShadowed (Let Binding{ variable = x, .. } a) =
-        let (x' , a') = rename (x, a)
-        in  Let Binding{ variable = x', .. } a'
-    renameShadowed expression =
-        over Dhall.Core.subExpressions renameShadowed expression
+    rewriteShadowed =
+        Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
 
     loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Fix (NSym a))
