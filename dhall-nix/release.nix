@@ -122,7 +122,7 @@ in
           λ(r : { foo : Bool, bar : Text, baz : Natural }) → r.{ foo, bar }
         '';
         testShadow = dhallToNix ''
-          λ(x : Natural) → λ(x1 : Natural) → λ(x : Natural) → x@1
+          λ(x : Natural) → λ(x1 : Natural) → λ(x : Natural) → [ x, x1, x@1 ]
         '';
       in
         assert (testConst == {});
@@ -202,7 +202,7 @@ in
           foo = true;
           bar = "ABC";
         });
-        assert (testShadow 0 1 2 == 0);
+        assert (testShadow 0 1 2 == [ 2 1 0 ]);
         stdenv.mkDerivation {
           name = "tests-pass";
 
