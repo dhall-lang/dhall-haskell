@@ -565,10 +565,10 @@ prettyCharacterSet characterSet expression =
         Pretty.group (Pretty.flatAlt long short)
       where
         prefixesLong =
-                "      "
+                ""
             :   cycle
-                    [ Pretty.hardline <> keyword "then" <> "  "
-                    , Pretty.hardline <> keyword "else" <> "  "
+                    [ keyword "then" <> "  "
+                    , keyword "else" <> "  "
                     ]
 
         prefixesShort =
