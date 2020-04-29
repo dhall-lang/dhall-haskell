@@ -81,7 +81,10 @@ successTest path = do
                 State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
 
         let runTest = do
-                if Turtle.filename (Turtle.fromText path) == "hashFromCacheA.dhall"
+                if Turtle.filename (Turtle.fromText path) `elem`
+                     [ "hashFromCacheA.dhall"
+                     , "unit/asLocation/HashA.dhall"
+                     ]
                     then do
                         setCache
                         _ <- load
