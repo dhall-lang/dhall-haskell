@@ -20,14 +20,14 @@ let apiPort = k8s.IntOrString.Int 5001
 let gatewayPort = k8s.IntOrString.Int 8080
 
 let toRule =
-        λ ( args
-          : { host : Text
-            , path : Text
-            , serviceName : Text
-            , servicePort : k8s.IntOrString
-            }
-          )
-      → k8s.IngressRule::{
+      λ ( args
+        : { host : Text
+          , path : Text
+          , serviceName : Text
+          , servicePort : k8s.IntOrString
+          }
+        ) →
+        k8s.IngressRule::{
         , host = Some args.host
         , http = Some k8s.HTTPIngressRuleValue::{
           , paths =
