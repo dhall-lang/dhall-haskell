@@ -36,6 +36,10 @@ let
   overlayShared = pkgsNew: pkgsOld: {
     sdist = pkgsNew.callPackage ./sdist.nix { };
 
+    dhallToNix = pkgsOld.dhallToNix.override {
+      inherit (pkgsNew.haskell.packages."${compiler}") dhall-nix;
+    };
+
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
         "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {

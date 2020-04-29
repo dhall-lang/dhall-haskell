@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE OverloadedLists    #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -93,11 +94,13 @@ module Dhall.Nix (
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
+import Data.Text (Text)
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Dhall.Core
-    ( Chunks(..)
+    ( Binding(..)
+    , Chunks(..)
     , Const(..)
     , DhallDouble(..)
     , Expr(..)
@@ -105,6 +108,7 @@ import Dhall.Core
     , PreferAnnotation(..)
     , Var(..)
     )
+import Lens.Family (toListOf)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
@@ -123,6 +127,7 @@ import Nix.Expr
 import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Map
+import qualified Dhall.Optics
 import qualified NeatInterpolation
 import qualified Nix
 
@@ -215,9 +220,76 @@ Right x: y: x + y
     the expression to `dhallToNix`
 -}
 dhallToNix :: Expr s Void -> Either CompileError (Fix NExprF)
-dhallToNix e = loop (Dhall.Core.normalize e)
+dhallToNix e =
+    loop (rewriteShadowed (Dhall.Core.normalize e))
   where
     untranslatable = Fix (NSet NNonRecursive [])
+
+    -- This is an intermediate utility used to remove all occurrences of
+    -- shadowing (since Nix does not support references to shadowed variables)
+    --
+    -- This finds how many bound variables of the same name that we need to
+    -- descend past to reach the "deepest" reference to the current bound
+    -- variable.  In other words, the result is the "depth" of the deepest
+    -- reference.
+    --
+    -- If `Nothing` then the current bound variable doesn't need to be renamed.
+    -- If any other number, then rename the variable to include the maximum
+    -- depth.
+    maximumDepth :: Var -> Expr s Void -> Maybe Int
+    maximumDepth v@(V x n) (Lam x' a b)
+        | x == x' =
+            max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
+    maximumDepth v@(V x n) (Pi x' a b)
+        | x == x' =
+            max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
+    maximumDepth (V x n) (Let (Binding { variable = x' }) a)
+        | x == x' = fmap (+ 1) (maximumDepth (V x (n + 1)) a)
+    maximumDepth v (Var v')
+        | v == v' = Just 0
+    maximumDepth v expression =
+        foldr max Nothing
+            (map
+                (maximumDepth v)
+                (toListOf Dhall.Core.subExpressions expression)
+            )
+
+    -- Higher-level utility that builds on top of `maximumDepth` to rename a
+    -- variable if there are shadowed references to that variable
+    rename :: (Text, Expr s Void) -> Maybe (Text, Expr s Void)
+    rename (x, expression) =
+        case maximumDepth (V x 0) expression of
+            Nothing ->
+                Nothing
+            Just 0 ->
+                Nothing
+            Just n ->
+                Just
+                  ( x'
+                  , Dhall.Core.subst (V x 0) (Var (V x' 0)) (Dhall.Core.shift 1 (V x' 0) expression)
+                  )
+              where
+                x' = x <> Data.Text.pack (show n)
+
+    renameShadowed :: Expr s Void -> Maybe (Expr s Void)
+    renameShadowed (Lam x a b) = do
+        (x', b') <- rename (x, b)
+
+        return (Lam x' a b')
+    renameShadowed (Pi x a b) = do
+        (x', b') <- rename (x, b)
+
+        return (Pi x' a b')
+    renameShadowed (Let Binding{ variable = x, .. } a) = do
+        (x' , a') <- rename (x, a)
+
+        return (Let Binding{ variable = x', .. } a')
+    renameShadowed _ = do
+        Nothing
+
+    -- Even higher-level utility that renames all shadowed references
+    rewriteShadowed =
+        Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
 
     loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Fix (NSym a))
