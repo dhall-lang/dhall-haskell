@@ -1,99 +1,10 @@
 let
-  pinned = import ./pinnedNixpkgs.nix; in
-  inherit (pinned) nixpkgs;
+  shared = import ../nix/shared.nix { };
 
-  mass = function: names: haskellPackagesNew: haskellPackagesOld:
-    let
-      toNameValue = name: {
-        inherit name;
-
-        value = function haskellPackagesOld."${name}";
-      };
-
-    in
-      builtins.listToAttrs (map toNameValue names);
-
-  config = {
-    packageOverrides = pkgs: {
-      haskellPackages = pkgs.haskellPackages.override (old: {
-          overrides =
-            let
-              dontCheck =
-                mass pkgs.haskell.lib.dontCheck [
-                  "adjunctions"
-                  "base-orphans"
-                  "base64-bytestring"
-                  "cereal"
-                  "blaze-builder"
-                  "neat-interpolation"
-                  "pureMD5"
-                  "pem"
-                  "lens"
-                  "th-orphans"
-                  "mockery"
-                  "megaparsec"
-                  "lens-family-th"
-                  "network-uri"
-                  "interpolate"
-                  "http-types"
-                  "parsers"
-                  "dhall"
-                  "aeson"
-                  "half"
-                  "generic-deriving"
-                  "distributive"
-                  "deriving-compat"
-                  "monad-control"
-                  "logging-facade"
-                  "bifunctors"
-                  "exceptions"
-                  "cborg-json"
-                  "cryptohash-sha512"
-                  "Diff"
-                  "hashable"
-                  "hnix"
-                  "hnix-store-core"
-                  "optparse-generic"
-                  "serialise"
-                  "SHA"
-                  "these"
-                  "unordered-containers"
-                  "vector"
-                ];
-
-              extension = haskellPackagesNew: haskellPackagesOld: {
-                dhall-nix =
-                  pkgs.haskell.lib.failOnAllWarnings
-                    (pkgs.haskell.lib.justStaticExecutables
-                      haskellPackagesOld.dhall-nix
-                    );
-              };
-
-            in
-              pkgs.lib.fold
-                pkgs.lib.composeExtensions
-                (old.overrides or (_: _: {}))
-                [ (pkgs.haskell.lib.packagesFromDirectory { directory = ./nix; })
-                  dontCheck
-                  extension
-                ];
-        }
-      );
-    };
-  };
-
-  pkgs =
-    import nixpkgs { inherit config; };
-
-  inherit (pkgs) dhallToNix;
+  inherit (shared.pkgs) dhallToNix stdenv;
 
 in
-  { dhall-nix = pkgs.haskellPackages.dhall-nix;
-
-    shell = pkgs.haskellPackages.dhall-nix.env;
-
-    # Test that various Dhall to Nix conversions work
-    tests =
+  { tests =
       let
         testConst = dhallToNix "Type";
         testLam = dhallToNix "λ(x : Bool) → x";
@@ -210,6 +121,9 @@ in
         testProject = dhallToNix ''
           λ(r : { foo : Bool, bar : Text, baz : Natural }) → r.{ foo, bar }
         '';
+        testShadow = dhallToNix ''
+          λ(x : Natural) → λ(x1 : Natural) → λ(x : Natural) → [ x, x1, x@1 ]
+        '';
       in
         assert (testConst == {});
         assert (testLam true == true);
@@ -288,7 +202,8 @@ in
           foo = true;
           bar = "ABC";
         });
-        pkgs.stdenv.mkDerivation {
+        assert (testShadow 0 1 2 == [ 2 1 0 ]);
+        stdenv.mkDerivation {
           name = "tests-pass";
 
           buildCommand = "touch $out";
