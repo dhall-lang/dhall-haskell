@@ -565,10 +565,10 @@ prettyCharacterSet characterSet expression =
         Pretty.group (Pretty.flatAlt long short)
       where
         prefixesLong =
-                "      "
+                ""
             :   cycle
-                    [ Pretty.hardline <> keyword "then" <> "  "
-                    , Pretty.hardline <> keyword "else" <> "  "
+                    [ keyword "then" <> "  "
+                    , keyword "else" <> "  "
                     ]
 
         prefixesShort =
@@ -578,25 +578,29 @@ prettyCharacterSet characterSet expression =
                     , space <> keyword "else" <> space
                     ]
 
-        longLines = zipWith (<>) prefixesLong (docsLong a0)
+        longLines = zipWith (<>) prefixesLong (docsLong True a0)
 
         long =
             Pretty.align (mconcat (Data.List.intersperse Pretty.hardline longLines))
 
         short = mconcat (zipWith (<>) prefixesShort (docsShort a0))
 
-        docsLong (BoolIf a b c) =
-            docLong ++ docsLong c
+        docsLong initial (BoolIf a b c) =
+            docLong ++ docsLong False c
           where
+            padding
+                | initial   = "   "
+                | otherwise = mempty
+
             docLong =
-                [   keyword "if" <> " " <> prettyExpression a
+                [   keyword "if" <> padding <> " " <> prettyExpression a
                 ,   prettyExpression b
                 ]
-        docsLong c
+        docsLong initial c
             | Just doc <- preserveSource c =
                 [ doc ]
             | Note _ d <- c =
-                docsLong d
+                docsLong initial d
             | otherwise =
                 [ prettyExpression c ]
 
