@@ -31,7 +31,7 @@ module Dhall.TypeCheck (
 import Control.Exception (Exception)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
-import Data.Monoid (Endo(..), First(..))
+import Data.Monoid (Endo(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup (Max(..), Semigroup(..))
 import Data.Sequence (Seq, ViewL(..))
@@ -55,7 +55,7 @@ import Dhall.Syntax
     , Var(..)
     )
 
-import qualified Data.Foldable
+import qualified Data.Foldable                           as Foldable
 import qualified Data.List.NonEmpty                      as NonEmpty
 import qualified Data.Map
 import qualified Data.Sequence
@@ -86,8 +86,15 @@ type X = Void
 {-# DEPRECATED X "Use Data.Void.Void instead" #-}
 
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
-traverseWithIndex_ k xs =
-    Data.Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
+traverseWithIndex_ k xs = Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
+
+data Level = Level Const
+
+instance Semigroup Level where
+    Level cL <> Level cR = Level (max cL cR)
+
+instance Monoid Level where
+    mempty = Level Type
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -781,36 +788,18 @@ infer typer = loop
             return (VRecord xTs)
 
         Union xTs -> do
-            let nonEmpty x mT = First (fmap (\_T -> (x, _T)) mT)
+            let process _ Nothing = do
+                    return mempty
 
-            case getFirst (Dhall.Map.foldMapWithKey nonEmpty xTs) of
-                Nothing -> do
-                    return (VConst Type)
+                process x₁ (Just _T₁) = do
+                    tT₁' <- loop ctx _T₁
 
-                Just (x₀, _T₀) -> do
-                    tT₀' <- loop ctx _T₀
+                    case tT₁' of
+                        VConst c -> return (Level c)
+                        _        -> die (InvalidAlternativeType x₁ _T₁)
 
-                    c₀ <- case tT₀' of
-                        VConst c₀ -> return c₀
-                        _         -> die (InvalidAlternativeType x₀ _T₀)
-
-                    let process _ Nothing = do
-                            return ()
-
-                        process x₁ (Just _T₁) = do
-                            tT₁' <- loop ctx _T₁
-
-                            c₁ <- case tT₁' of
-                                VConst c₁ -> return c₁
-                                _         -> die (InvalidAlternativeType x₁ _T₁)
-
-                            if c₀ == c₁
-                                then return ()
-                                else die (AlternativeAnnotationMismatch x₁ _T₁ c₁ x₀ _T₀ c₀)
-
-                    Dhall.Map.unorderedTraverseWithKey_ process (Dhall.Map.delete x₀ xTs)
-
-                    return (VConst c₀)
+            Level c <- fmap Foldable.fold (Dhall.Map.unorderedTraverseWithKey process xTs)
+            return (VConst c)
         Combine mk l r -> do
             _L' <- loop ctx l
 
@@ -901,7 +890,7 @@ infer typer = loop
                     let mL = Dhall.Map.toMap xLs₀'
                     let mR = Dhall.Map.toMap xRs₀'
 
-                    Data.Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+                    Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
 
             combineTypes [] xLs' xRs'
 
@@ -1048,7 +1037,7 @@ infer typer = loop
                     (Data.Map.intersectionWithKey match (Dhall.Map.toMap yTs') (Dhall.Map.toMap yUs'))
 
             let checkMatched :: Data.Map.Map Text (Val a) -> Either (TypeError s a) (Maybe (Val a))
-                checkMatched = fmap (fmap snd) . Data.Foldable.foldlM go Nothing . Data.Map.toList
+                checkMatched = fmap (fmap snd) . Foldable.foldlM go Nothing . Data.Map.toList
                   where
                     go Nothing (y₁, _T₁') =
                         return (Just (y₁, _T₁'))
@@ -1102,7 +1091,7 @@ infer typer = loop
                 VConst Type -> return ()
                 _           -> die (InvalidToMapRecordKind _E'' tE'')
 
-            Data.Foldable.traverse_ (loop ctx) mT₁
+            Foldable.traverse_ (loop ctx) mT₁
 
             let compareFieldTypes _T₀' Nothing =
                     Just (Right _T₀')
@@ -1342,7 +1331,6 @@ data TypeMessage s a
     | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidFieldType Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
-    | AlternativeAnnotationMismatch Text (Expr s a) Const Text (Expr s a) Const
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustUpdateARecord (Expr s a) (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
@@ -2636,70 +2624,6 @@ prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
       where
         txt0 = insert k
         txt1 = insert expr0
-
-prettyTypeMessage (AlternativeAnnotationMismatch k0 expr0 c0 k1 expr1 c1) = ErrorMessages {..}
-  where
-    short = "Alternative annotation mismatch"
-
-    long =
-        "Explanation: Every union type annotates each alternative with a ❰Type❱ or a     \n\
-        \❰Kind❱, like this:                                                              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────┐                                       \n\
-        \    │ < Left : Natural | Right : Bool > │  Every alternative is annotated with a\n\
-        \    └───────────────────────────────────┘  ❰Type❱                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────┐                                      \n\
-        \    │ < Foo : Type → Type | Bar : Type > │  Every alternative is annotated with \n\
-        \    └────────────────────────────────────┘  a ❰Kind❱                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────┐                                                          \n\
-        \    │ < Baz : Kind > │  Every alternative is annotated with a ❰Sort❱            \n\
-        \    └────────────────┘                                                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, you cannot have a union type that mixes ❰Type❱s, ❰Kind❱s, or ❰Sort❱s   \n\
-        \for the annotations:                                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \              This is a ❰Type❱ annotation                                       \n\
-        \              ⇩                                                                 \n\
-        \    ┌───────────────────────────────┐                                           \n\
-        \    │ { foo : Natural, bar : Type } │  Invalid union type                       \n\
-        \    └───────────────────────────────┘                                           \n\
-        \                             ⇧                                                  \n\
-        \                             ... but this is a ❰Kind❱ annotation                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \You provided a union type with an alternative named:                            \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which is a " <> level c0 <> " whereas another alternative named:            \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... annotated with the following expression:                                    \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... is a " <> level c1 <> ", which does not match                               \n"
-      where
-        txt0 = insert k0
-        txt1 = insert expr0
-        txt2 = insert k1
-        txt3 = insert expr1
-
-        level Type = "❰Type❱"
-        level Kind = "❰Kind❱"
-        level Sort = "❰Sort❱"
 
 prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
   where
@@ -4676,8 +4600,6 @@ messageExpressions f m = case m of
         InvalidFieldType <$> pure a <*> f b
     InvalidAlternativeType a b ->
         InvalidAlternativeType <$> pure a <*> f b
-    AlternativeAnnotationMismatch a b c d e g ->
-        AlternativeAnnotationMismatch <$> pure a <*> f b <*> pure c <*> pure d <*> f e <*> pure g
     ListAppendMismatch a b ->
         ListAppendMismatch <$> f a <*> f b
     InvalidDuplicateField a b c ->
@@ -4832,6 +4754,4 @@ checkContext context =
 toPath :: (Functor list, Foldable list) => list Text -> Text
 toPath ks =
     Text.intercalate "."
-        (Data.Foldable.toList
-            (fmap (Dhall.Pretty.Internal.escapeLabel True) ks)
-        )
+        (Foldable.toList (fmap (Dhall.Pretty.Internal.escapeLabel True) ks))
