@@ -158,15 +158,36 @@ freeze outputMode input scope intent characterSet censor = do
     let freezeFunction = freezeScope directory
 
     let cache
+            -- This case is necessary because `transformOf` is a bottom-up
+            -- rewrite rule.   Without this rule, if you were to transform a
+            -- file that already has a cached expression, like this:
+            --
+            --     someImport sha256:… ? someImport
+            --
+            -- ... then you would get:
+            --
+            --       (someImport sha256:… ? someImport)
+            --     ? (someImport sha256:… ? someImport)
+            --
+            -- ... and this rule fixes that by collapsing that back to:
+            --
+            --       (someImport sha256:… ? someImport)
             (ImportAlt
-                (Core.shallowDenote -> Embed
-                    (Import { importHashed = ImportHashed { hash = Just _expectedHash } })
+                (Core.shallowDenote -> ImportAlt
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Just _expectedHash } }
+                    )
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Nothing } }
+                    )
                 )
                 import_@(Core.shallowDenote -> ImportAlt
-                    (Embed
-                        (Import { importHashed = ImportHashed { hash = Just _actualHash } })
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Just _actualHash } }
                     )
-                    _
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Nothing } }
+                    )
                 )
             ) = do
                 {- Here we could actually compare the `_expectedHash` and
@@ -183,11 +204,26 @@ freeze outputMode input scope intent characterSet censor = do
                 frozenImport <- freezeFunction import_
 
                 {- The two imports can be the same if the import is local and
-                   `freezeFunction` only freezes remote imports
+                   `freezeFunction` only freezes remote imports by default
                 -}
                 if frozenImport /= import_
                     then return (ImportAlt (Embed frozenImport) (Embed import_))
                     else return (Embed import_)
+        cache
+            (Embed import_@(Import { importHashed = ImportHashed { hash = Just _ } })) = do
+                -- Regenerate the integrity check, just in case it's wrong
+                frozenImport <- freezeFunction import_
+
+                -- `dhall freeze` also works the other way around, adding an
+                -- unprotected fallback import to imports that are already
+                -- protected
+                let thawedImport = import_
+                        { importHashed = (importHashed import_)
+                            { hash = Nothing
+                            }
+                        }
+
+                return (ImportAlt (Embed frozenImport) (Embed thawedImport))
         cache expression = do
             return expression
 
