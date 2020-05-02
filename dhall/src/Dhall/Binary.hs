@@ -55,6 +55,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
+import Numeric.Half (fromHalf, toHalf)
 
 import qualified Codec.CBOR.Decoding  as Decoding
 import qualified Codec.CBOR.Encoding  as Encoding
@@ -875,11 +876,11 @@ encodeExpressionInternal encodeEmbed = go
           where
             n32 = double2Float n64
 
+            n16 = toHalf n32
+
             useFloat = n64 == float2Double n32
 
-            useHalf = n64 == 0.0 || n64 == infinity || n64 == -infinity
-
-            infinity = 1/0 :: Double
+            useHalf = n64 == (float2Double $ fromHalf n16)
 
         -- Fast path for the common case of an uninterpolated string
         TextLit (Chunks [] z) ->
