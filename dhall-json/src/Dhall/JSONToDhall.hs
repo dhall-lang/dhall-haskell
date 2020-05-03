@@ -212,6 +212,13 @@ module Dhall.JSONToDhall (
     , typeCheckSchemaExpr
     , dhallFromJSON
 
+    -- * Schema inference
+    , Schema(..)
+    , RecordSchema(..)
+    , UnionSchema(..)
+    , inferSchema
+    , schemaToDhallType
+
     -- * Exceptions
     , CompileError(..)
     , showCompileError
@@ -220,15 +227,19 @@ module Dhall.JSONToDhall (
 import           Control.Applicative ((<|>))
 import           Control.Exception (Exception, throwIO)
 import           Control.Monad.Catch (throwM, MonadCatch)
+import           Data.Aeson (Value)
 import qualified Data.Aeson as A
 import           Data.Aeson.Encode.Pretty (encodePretty)
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import           Data.Either (rights)
 import           Data.Foldable (toList)
+import qualified Data.Foldable as Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.List ((\\))
 import qualified Data.List as List
-import           Data.Monoid ((<>))
+import qualified Data.Map
+import qualified Data.Map.Merge.Lazy as Data.Map.Merge
+import           Data.Monoid (Any(..), (<>))
 import qualified Data.Ord as Ord
 import           Data.Scientific (floatingOrInteger, toRealFloat)
 import qualified Data.Sequence as Seq
@@ -369,12 +380,256 @@ typeCheckSchemaExpr compileException expr =
       D.Const D.Type -> return expr
       _              -> throwM . compileException $ BadDhallType t expr
 
-keyValMay :: A.Value -> Maybe (Text, A.Value)
+keyValMay :: Value -> Maybe (Text, Value)
 keyValMay (A.Object o) = do
      A.String k <- HM.lookup "key" o
      v <- HM.lookup "value" o
      return (k, v)
 keyValMay _ = Nothing
+
+{-| Given a JSON `Value`, make a best-effort guess of what the matching Dhall
+    type should be
+
+    This is used by @{json,yaml}-to-dhall@ if the user does not supply a schema
+    on the command line
+-}
+inferSchema :: Value -> Schema
+inferSchema (A.Object m) =
+    let convertMap = Data.Map.fromList . HM.toList
+
+    in (Record . RecordSchema . convertMap) (fmap inferSchema m)
+inferSchema (A.Array xs) =
+    List (Foldable.fold (fmap inferSchema xs))
+inferSchema (A.String _) =
+    Text
+inferSchema (A.Number n) =
+    case floatingOrInteger n of
+        Left (_ :: Double) -> Double
+        Right (integer :: Integer)
+            | 0 <= integer -> Natural
+            | otherwise    -> Integer
+inferSchema (A.Bool _) = do
+    Bool
+inferSchema A.Null = do
+    Optional mempty
+
+-- | A record type that `inferSchema` can infer
+newtype RecordSchema =
+    RecordSchema { getRecordSchema :: Data.Map.Map Text Schema }
+
+instance Semigroup RecordSchema where
+    RecordSchema l <> RecordSchema r = RecordSchema m
+      where
+        -- The reason this is not @Just (Optional s)@ is to avoid creating a
+        -- double `Optional` wrapper when unifying a @null@ field with an
+        -- absent field.
+        onMissing _ s = Just (s <> Optional mempty)
+
+        m = Data.Map.Merge.merge
+                (Data.Map.Merge.mapMaybeMissing onMissing)
+                (Data.Map.Merge.mapMaybeMissing onMissing)
+                (Data.Map.Merge.zipWithMatched (\_ -> (<>)))
+                l
+                r
+
+recordSchemaToDhallType :: RecordSchema -> Expr s a
+recordSchemaToDhallType (RecordSchema m) =
+    D.Record (Map.fromList (Data.Map.toList (fmap schemaToDhallType m)))
+
+{-| `inferSchema` will never infer a union type with more than one numeric
+    alternative
+
+    Instead, the most general alternative type will be preferred, which this
+    type tracks
+-}
+data UnionNumber
+    = UnionAbsent
+    -- ^ The union type does not have a numeric alternative
+    | UnionNatural
+    -- ^ The union type has a @Natural@ alternative
+    | UnionInteger
+    -- ^ The union type has an @Integer@ alternative
+    | UnionDouble
+    -- ^ The union type has a @Double@ alternative
+    deriving (Bounded, Eq, Ord)
+
+-- | Unify two numeric alternative types by preferring the most general type
+instance Semigroup UnionNumber where
+    (<>) = max
+
+instance Monoid UnionNumber where
+    mempty = minBound
+
+unionNumberToAlternatives :: UnionNumber -> [ (Text, Maybe (Expr s a)) ]
+unionNumberToAlternatives UnionAbsent  = []
+unionNumberToAlternatives UnionNatural = [ ("Natural", Just D.Natural) ]
+unionNumberToAlternatives UnionInteger = [ ("Integer", Just D.Integer) ]
+unionNumberToAlternatives UnionDouble  = [ ("Double" , Just D.Double ) ]
+
+{-| A union type that `inferSchema` can infer
+
+    This type will have at most three alternatives:
+
+    * A @Bool@ alternative
+    * Either a @Natural@, @Integer@, or @Double@ alternative
+    * A @Text@ alternative
+
+    These alternatives will always use the same names and types when we convert
+    back to a Dhall type, so we only need to keep track of whether or not each
+    alternative is present.
+-}
+data UnionSchema = UnionSchema
+    { bool :: Any
+    -- ^ `True` if the union has a @Bool@ alternative
+    , number :: UnionNumber
+    -- ^ Up to one numeric alternative
+    , text :: Any
+    -- ^ `True` if the union has a @Text@ alternative
+    } deriving (Eq)
+
+unionSchemaToDhallType :: UnionSchema -> Expr s a
+unionSchemaToDhallType UnionSchema{..} = D.Union (Map.fromList alternatives)
+  where
+    alternatives =
+            (if getAny bool then [ ("Bool", Just D.Bool) ] else [])
+        <>  unionNumberToAlternatives number
+        <>  (if getAny text then [ ("Text", Just D.Text) ] else [])
+
+-- | Unify two union types by combining their alternatives
+instance Semigroup UnionSchema where
+    UnionSchema boolL numberL textL <> UnionSchema boolR numberR textR =
+        UnionSchema{..}
+      where
+        bool = boolL <> boolR
+
+        number = numberL <> numberR
+
+        text = textL <> textR
+
+instance Monoid UnionSchema where
+    mempty = UnionSchema{..}
+      where
+        bool = mempty
+
+        number = mempty
+
+        text = mempty
+
+{-| A `Schema` is a subset of the `Expr` type representing all possible
+    Dhall types that `inferSchema` could potentially return
+-}
+data Schema
+    = Bool
+    | Natural
+    | Integer
+    | Double
+    | Text
+    | List Schema
+    | Optional Schema
+    | Record RecordSchema
+    | Union UnionSchema
+    | ArbitraryJSON
+
+-- | (`<>`) unifies two schemas
+instance Semigroup Schema where
+    -- `ArbitraryJSON` subsumes every other type
+    ArbitraryJSON <> _ = ArbitraryJSON
+    _ <> ArbitraryJSON = ArbitraryJSON
+
+    -- Simple types unify with themselves
+    Bool    <> Bool    = Bool
+    Text    <> Text    = Text
+    Natural <> Natural = Natural
+    Integer <> Integer = Integer
+    Double  <> Double  = Double
+
+    -- Complex types unify with themselves
+    Record   l <> Record   r = Record   (l <> r)
+    List     l <> List     r = List     (l <> r)
+    Union    l <> Union    r = Union    (l <> r)
+    Optional l <> Optional r = Optional (l <> r)
+
+    -- Numeric types unify on the most general numeric type
+    Natural <> Integer = Integer
+    Integer <> Natural = Integer
+    Natural <> Double  = Double
+    Integer <> Double  = Double
+    Double  <> Natural = Double
+    Double  <> Integer = Double
+
+    -- Unifying two different simple types produces a union
+    Bool    <> Natural = Union mempty{ bool = Any True, number = UnionNatural }
+    Bool    <> Integer = Union mempty{ bool = Any True, number = UnionInteger }
+    Bool    <> Double  = Union mempty{ bool = Any True, number = UnionDouble }
+    Bool    <> Text    = Union mempty{ bool = Any True, text = Any True }
+    Natural <> Bool    = Union mempty{ bool = Any True, number = UnionNatural }
+    Natural <> Text    = Union mempty{ number = UnionNatural, text = Any True }
+    Integer <> Bool    = Union mempty{ bool = Any True, number = UnionInteger }
+    Integer <> Text    = Union mempty{ number = UnionInteger, text = Any True }
+    Double  <> Bool    = Union mempty{ bool = Any True, number = UnionDouble }
+    Double  <> Text    = Union mempty{ number = UnionDouble, text = Any True }
+    Text    <> Bool    = Union mempty{ bool = Any True, text = Any True }
+    Text    <> Natural = Union mempty{ number = UnionNatural, text = Any True }
+    Text    <> Integer = Union mempty{ number = UnionInteger, text = Any True }
+    Text    <> Double  = Union mempty{ number = UnionDouble, text = Any True }
+
+    -- The empty union type is the identity of unification
+    Union l <> r | l == mempty = r
+    l <> Union r | r == mempty = l
+
+    -- Unifying a simple type with a union adds the simple type as yet another
+    -- alternative
+    Bool    <> Union r = Union (mempty{ bool   = Any True } <> r)
+    Natural <> Union r = Union (mempty{ number = UnionNatural } <> r)
+    Integer <> Union r = Union (mempty{ number = UnionInteger } <> r)
+    Double  <> Union r = Union (mempty{ number = UnionDouble} <> r)
+    Text    <> Union r = Union (mempty{ text   = Any True } <> r)
+    Union l <> Bool    = Union (l <> mempty{ bool   = Any True })
+    Union l <> Natural = Union (l <> mempty{ number = UnionNatural })
+    Union l <> Integer = Union (l <> mempty{ number = UnionInteger })
+    Union l <> Double  = Union (l <> mempty{ number = UnionDouble })
+    Union l <> Text    = Union (l <> mempty{ text   = Any True })
+
+    -- All of the remaining cases are for unifying simple types with
+    -- complex types.  The only such case that can be sensibly unified is for
+    -- `Optional`
+
+    -- `Optional` subsumes every type other than `ArbitraryJSON`
+    Optional l <> r = Optional (l <> r)
+    l <> Optional r = Optional (l <> r)
+
+    -- For all other cases, a simple type cannot be unified with a complex
+    -- type, so fall back to `ArbitraryJSON`
+    _ <> _ = ArbitraryJSON
+
+instance Monoid Schema where
+    mempty = Union mempty
+
+-- | Convert a `Schema` to the corresponding Dhall type
+schemaToDhallType :: Schema -> Expr s a
+schemaToDhallType Bool = D.Bool
+schemaToDhallType Natural = D.Natural
+schemaToDhallType Integer = D.Integer
+schemaToDhallType Double = D.Double
+schemaToDhallType Text = D.Text
+schemaToDhallType (List a) = D.App D.List (schemaToDhallType a)
+schemaToDhallType (Optional a) = D.App D.Optional (schemaToDhallType a)
+schemaToDhallType (Record r) = recordSchemaToDhallType r
+schemaToDhallType (Union u) = unionSchemaToDhallType u
+schemaToDhallType ArbitraryJSON =
+    D.Pi "_" (D.Const D.Type)
+        (D.Pi "_"
+            (D.Record
+                [ ("array" , D.Pi "_" (D.App D.List (V 0)) (V 1))
+                , ("bool"  , D.Pi "_" D.Bool (V 1))
+                , ("null"  , V 0)
+                , ("number", D.Pi "_" D.Double (V 1))
+                , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
+                , ("string", D.Pi "_" D.Text (V 1))
+                ]
+            )
+            (V 1)
+        )
 
 {-| The main conversion function. Traversing\/zipping Dhall /type/ and Aeson value trees together to produce a Dhall /term/ tree, given 'Conversion' options:
 
@@ -391,7 +646,7 @@ Right (RecordLit (fromList [("foo",IntegerLit 1)]))
 
 -}
 dhallFromJSON
-  :: Conversion -> ExprX -> A.Value -> Either CompileError ExprX
+  :: Conversion -> ExprX -> Value -> Either CompileError ExprX
 dhallFromJSON (Conversion {..}) expressionType =
     fmap (Optics.rewriteOf D.subExpressions Lint.useToMap) . loop (D.alphaNormalize (D.normalize expressionType))
   where
@@ -439,7 +694,7 @@ dhallFromJSON (Conversion {..}) expressionType =
     -- key-value list ~> Record
     loop t@(D.Record _) v@(A.Array a)
         | not noKeyValArr
-        , os :: [A.Value] <- toList a
+        , os :: [Value] <- toList a
         , Just kvs <- traverse keyValMay os
         = loop t (A.Object $ HM.fromList kvs)
         | noKeyValArr
@@ -701,7 +956,7 @@ green  s = "\ESC[0;32m" <> s <> "\ESC[0m" -- plain
 showExpr :: ExprX   -> String
 showExpr dhall = Text.unpack (D.pretty dhall)
 
-showJSON :: A.Value -> String
+showJSON :: Value -> String
 showJSON value = BSL8.unpack (encodePretty value)
 
 data CompileError
@@ -713,22 +968,22 @@ data CompileError
   -- generic mismatch (fallback)
   | Mismatch
       ExprX   -- Dhall expression
-      A.Value -- Aeson value
+      Value -- Aeson value
   -- record specific
-  | MissingKey     Text  ExprX A.Value
-  | UnhandledKeys [Text] ExprX A.Value
-  | NoKeyValArray        ExprX A.Value
-  | NoKeyValMap          ExprX A.Value
+  | MissingKey     Text  ExprX Value
+  | UnhandledKeys [Text] ExprX Value
+  | NoKeyValArray        ExprX Value
+  | NoKeyValMap          ExprX Value
   -- union specific
   | ContainsUnion        ExprX
-  | UndecidableUnion     ExprX A.Value [ExprX]
+  | UndecidableUnion     ExprX Value [ExprX]
 
 instance Show CompileError where
     show = showCompileError "JSON" showJSON
 
 instance Exception CompileError
 
-showCompileError :: String -> (A.Value -> String) -> CompileError -> String
+showCompileError :: String -> (Value -> String) -> CompileError -> String
 showCompileError format showValue = let prefix = red "\nError: "
           in \case
     TypeError e -> show e

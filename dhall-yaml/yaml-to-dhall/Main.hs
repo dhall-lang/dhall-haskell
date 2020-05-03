@@ -38,7 +38,7 @@ import qualified Paths_dhall_yaml                          as Meta
 
 data CommandOptions
     = CommandOptions
-        { schema     :: Text
+        { schema     :: Maybe Text
         , conversion :: Conversion
         , file       :: Maybe FilePath
         , output     :: Maybe FilePath
@@ -60,7 +60,7 @@ parserInfo = Options.info
 parseOptions :: Parser CommandOptions
 parseOptions =
         (   CommandOptions
-        <$> parseSchema
+        <$> optional parseSchema
         <*> parseConversion
         <*> optional parseFile
         <*> optional parseOutput

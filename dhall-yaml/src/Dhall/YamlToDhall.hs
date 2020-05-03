@@ -20,7 +20,9 @@ import Dhall.JSONToDhall
   , Conversion(..)
   , defaultConversion
   , dhallFromJSON
+  , inferSchema
   , resolveSchemaExpr
+  , schemaToDhallType
   , showCompileError
   , typeCheckSchemaExpr
   )
@@ -28,15 +30,14 @@ import Dhall.Src (Src)
 
 -- | Options to parametrize conversion
 data Options = Options
-    { schema     :: Text
+    { schema     :: Maybe Text
     , conversion :: Conversion
     } deriving Show
 
-defaultOptions :: Text -> Options
+defaultOptions :: Maybe Text -> Options
 defaultOptions schema = Options {..}
   where conversion = defaultConversion
 
-                        
 data YAMLCompileError = YAMLCompileError CompileError
 
 instance Show YAMLCompileError where
@@ -51,7 +52,12 @@ dhallFromYaml Options{..} yaml = do
 
   value <- either (throwIO . userError) pure (yamlToJson yaml)
 
-  expr <- typeCheckSchemaExpr YAMLCompileError =<< resolveSchemaExpr schema
+  finalSchema <- do
+      case schema of
+          Just text -> resolveSchemaExpr text
+          Nothing   -> return (schemaToDhallType (inferSchema value))
+
+  expr <- typeCheckSchemaExpr YAMLCompileError finalSchema
 
   let dhall = dhallFromJSON conversion expr value
 
