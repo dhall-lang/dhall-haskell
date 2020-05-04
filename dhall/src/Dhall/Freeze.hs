@@ -214,7 +214,7 @@ freeze outputMode input scope intent characterSet censor = do
                 -- Regenerate the integrity check, just in case it's wrong
                 frozenImport <- freezeFunction import_
 
-                -- `dhall freeze` also works the other way around, adding an
+                -- `dhall freeze --cache` also works the other way around, adding an
                 -- unprotected fallback import to imports that are already
                 -- protected
                 let thawedImport = import_
