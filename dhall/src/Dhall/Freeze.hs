@@ -7,6 +7,7 @@
 module Dhall.Freeze
     ( -- * Freeze
       freeze
+    , freezeExpression
     , freezeImport
     , freezeRemoteImport
 
@@ -150,56 +151,7 @@ freeze outputMode input scope intent characterSet censor = do
             StandardInput  -> "."
             InputFile file -> System.FilePath.takeDirectory file
 
-    let freezeScope =
-            case scope of
-                AllImports        -> freezeImport
-                OnlyRemoteImports -> freezeRemoteImport
-
-    let freezeFunction = freezeScope directory
-
-    let cache
-            (ImportAlt
-                (Core.shallowDenote -> Embed
-                    (Import { importHashed = ImportHashed { hash = Just _expectedHash } })
-                )
-                import_@(Core.shallowDenote -> ImportAlt
-                    (Embed
-                        (Import { importHashed = ImportHashed { hash = Just _actualHash } })
-                    )
-                    _
-                )
-            ) = do
-                {- Here we could actually compare the `_expectedHash` and
-                   `_actualHash` to see if they differ, but we choose not to do
-                   so and instead automatically accept the `_actualHash`.  This
-                   is done for the same reason that the `freeze*` functions
-                   ignore hash mismatches: the user intention when using `dhall
-                   freeze` is to update the hash, which they expect to possibly
-                   change.
-                -}
-                return import_
-        cache
-            (Embed import_@(Import { importHashed = ImportHashed { hash = Nothing } })) = do
-                frozenImport <- freezeFunction import_
-
-                {- The two imports can be the same if the import is local and
-                   `freezeFunction` only freezes remote imports
-                -}
-                if frozenImport /= import_
-                    then return (ImportAlt (Embed frozenImport) (Embed import_))
-                    else return (Embed import_)
-        cache expression = do
-            return expression
-
-    let rewrite expression =
-            case intent of
-                Secure ->
-                    traverse freezeFunction expression
-                Cache  ->
-                    Dhall.Optics.transformMOf
-                        Core.subExpressions
-                        cache
-                        expression
+    let rewrite = freezeExpression directory scope intent
 
     case outputMode of
         Write -> do
@@ -240,3 +192,99 @@ freeze outputMode input scope intent characterSet censor = do
                     let modified = "frozen"
 
                     Exception.throwIO CheckFailed{..}
+
+{-| Slightly more pure version of the `freeze` function
+
+    This still requires `IO` to freeze the import, but now the input and output
+    expression are passed in explicitly
+-}
+freezeExpression
+    :: FilePath
+    -- ^ Starting directory
+    -> Scope
+    -> Intent
+    -> Expr s Import
+    -> IO (Expr s Import)
+freezeExpression directory scope intent expression = do
+    let freezeScope =
+            case scope of
+                AllImports        -> freezeImport
+                OnlyRemoteImports -> freezeRemoteImport
+
+    let freezeFunction = freezeScope directory
+
+    let cache
+            -- This case is necessary because `transformOf` is a bottom-up
+            -- rewrite rule.   Without this rule, if you were to transform a
+            -- file that already has a cached expression, like this:
+            --
+            --     someImport sha256:… ? someImport
+            --
+            -- ... then you would get:
+            --
+            --       (someImport sha256:… ? someImport)
+            --     ? (someImport sha256:… ? someImport)
+            --
+            -- ... and this rule fixes that by collapsing that back to:
+            --
+            --       (someImport sha256:… ? someImport)
+            (ImportAlt
+                (Core.shallowDenote -> ImportAlt
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Just _expectedHash } }
+                    )
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Nothing } }
+                    )
+                )
+                import_@(Core.shallowDenote -> ImportAlt
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Just _actualHash } }
+                    )
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Nothing } }
+                    )
+                )
+            ) = do
+                {- Here we could actually compare the `_expectedHash` and
+                   `_actualHash` to see if they differ, but we choose not to do
+                   so and instead automatically accept the `_actualHash`.  This
+                   is done for the same reason that the `freeze*` functions
+                   ignore hash mismatches: the user intention when using `dhall
+                   freeze` is to update the hash, which they expect to possibly
+                   change.
+                -}
+                return import_
+        cache
+            (Embed import_@(Import { importHashed = ImportHashed { hash = Nothing } })) = do
+                frozenImport <- freezeFunction import_
+
+                {- The two imports can be the same if the import is local and
+                   `freezeFunction` only freezes remote imports by default
+                -}
+                if frozenImport /= import_
+                    then return (ImportAlt (Embed frozenImport) (Embed import_))
+                    else return (Embed import_)
+        cache
+            (Embed import_@(Import { importHashed = ImportHashed { hash = Just _ } })) = do
+                -- Regenerate the integrity check, just in case it's wrong
+                frozenImport <- freezeFunction import_
+
+                -- `dhall freeze --cache` also works the other way around, adding an
+                -- unprotected fallback import to imports that are already
+                -- protected
+                let thawedImport = import_
+                        { importHashed = (importHashed import_)
+                            { hash = Nothing
+                            }
+                        }
+
+                return (ImportAlt (Embed frozenImport) (Embed thawedImport))
+        cache expression_ = do
+            return expression_
+
+    case intent of
+        Secure ->
+            traverse freezeFunction expression
+        Cache  ->
+            Dhall.Optics.transformMOf Core.subExpressions cache expression
