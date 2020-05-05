@@ -96,6 +96,8 @@ instance Semigroup Level where
 instance Monoid Level where
     mempty = Level Type
 
+    mappend = (<>)
+
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
 axiom Kind = return Sort
