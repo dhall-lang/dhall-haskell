@@ -409,9 +409,9 @@ inferSchema (A.Number n) =
         Right (integer :: Integer)
             | 0 <= integer -> Natural
             | otherwise    -> Integer
-inferSchema (A.Bool _) = do
+inferSchema (A.Bool _) =
     Bool
-inferSchema A.Null = do
+inferSchema A.Null =
     Optional mempty
 
 -- | A record type that `inferSchema` can infer
