@@ -300,6 +300,10 @@ parsers embedded = Parsers {..}
     -- The firstApplicationExpression argument is necessary in order to
     -- left-factor the parsers for function types and @with@ expressions to
     -- minimize backtracking
+    --
+    -- For a longer explanation, see:
+    --
+    -- https://github.com/dhall-lang/dhall-haskell/pull/1770#discussion_r419022486
     operatorExpression firstApplicationExpression =
         foldr cons nil operatorParsers
       where
