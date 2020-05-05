@@ -7,6 +7,7 @@
 module Dhall.Freeze
     ( -- * Freeze
       freeze
+    , freezeExpression
     , freezeImport
     , freezeRemoteImport
 
@@ -150,6 +151,61 @@ freeze outputMode input scope intent characterSet censor = do
             StandardInput  -> "."
             InputFile file -> System.FilePath.takeDirectory file
 
+    let rewrite = freezeExpression directory scope intent
+
+    case outputMode of
+        Write -> do
+            (Header header, parsedExpression) <- do
+                Util.getExpressionAndHeader censor input
+
+            frozenExpression <- rewrite parsedExpression
+
+            writeExpr input (header, frozenExpression) characterSet
+
+        Check -> do
+            originalText <- case input of
+                InputFile file -> Text.IO.readFile file
+                StandardInput  -> Text.IO.getContents
+
+            let name = case input of
+                    InputFile file -> file
+                    StandardInput  -> "(input)"
+
+            (Header header, parsedExpression) <- do
+                Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
+
+            frozenExpression <- rewrite parsedExpression
+
+            let doc =  Pretty.pretty header
+                    <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
+                    <> "\n"
+
+            let stream = Dhall.Pretty.layout doc
+
+            let modifiedText = Pretty.Text.renderStrict stream
+
+            if originalText == modifiedText
+                then return ()
+                else do
+                    let command = "freeze"
+
+                    let modified = "frozen"
+
+                    Exception.throwIO CheckFailed{..}
+
+{-| Slightly more pure version of the `freeze` function
+
+    This still requires `IO` to freeze the import, but now the input and output
+    expression are passed in explicitly
+-}
+freezeExpression
+    :: FilePath
+    -- ^ Starting directory
+    -> Scope
+    -> Intent
+    -> Expr s Import
+    -> IO (Expr s Import)
+freezeExpression directory scope intent expression = do
     let freezeScope =
             case scope of
                 AllImports        -> freezeImport
@@ -224,55 +280,11 @@ freeze outputMode input scope intent characterSet censor = do
                         }
 
                 return (ImportAlt (Embed frozenImport) (Embed thawedImport))
-        cache expression = do
-            return expression
+        cache expression_ = do
+            return expression_
 
-    let rewrite expression =
-            case intent of
-                Secure ->
-                    traverse freezeFunction expression
-                Cache  ->
-                    Dhall.Optics.transformMOf
-                        Core.subExpressions
-                        cache
-                        expression
-
-    case outputMode of
-        Write -> do
-            (Header header, parsedExpression) <- do
-                Util.getExpressionAndHeader censor input
-
-            frozenExpression <- rewrite parsedExpression
-
-            writeExpr input (header, frozenExpression) characterSet
-
-        Check -> do
-            originalText <- case input of
-                InputFile file -> Text.IO.readFile file
-                StandardInput  -> Text.IO.getContents
-
-            let name = case input of
-                    InputFile file -> file
-                    StandardInput  -> "(input)"
-
-            (Header header, parsedExpression) <- do
-                Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
-
-            frozenExpression <- rewrite parsedExpression
-
-            let doc =  Pretty.pretty header
-                    <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
-                    <> "\n"
-
-            let stream = Dhall.Pretty.layout doc
-
-            let modifiedText = Pretty.Text.renderStrict stream
-
-            if originalText == modifiedText
-                then return ()
-                else do
-                    let command = "freeze"
-
-                    let modified = "frozen"
-
-                    Exception.throwIO CheckFailed{..}
+    case intent of
+        Secure ->
+            traverse freezeFunction expression
+        Cache  ->
+            Dhall.Optics.transformMOf Core.subExpressions cache expression
