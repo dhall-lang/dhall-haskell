@@ -964,7 +964,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 -- ----------
 
 red, purple, green
-    :: (Monoid a, Data.String.IsString a) => a -> a
+    :: (Semigroup a, Data.String.IsString a) => a -> a
 red    s = "\ESC[1;31m" <> s <> "\ESC[0m" -- bold
 purple s = "\ESC[1;35m" <> s <> "\ESC[0m" -- bold
 green  s = "\ESC[0;32m" <> s <> "\ESC[0m" -- plain
