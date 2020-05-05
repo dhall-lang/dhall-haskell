@@ -88,16 +88,6 @@ type X = Void
 traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
 traverseWithIndex_ k xs = Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
-data Level = Level Const
-
-instance Semigroup Level where
-    Level cL <> Level cR = Level (max cL cR)
-
-instance Monoid Level where
-    mempty = Level Type
-
-    mappend = (<>)
-
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
 axiom Kind = return Sort
@@ -797,10 +787,10 @@ infer typer = loop
                     tT₁' <- loop ctx _T₁
 
                     case tT₁' of
-                        VConst c -> return (Level c)
+                        VConst c -> return (Max c)
                         _        -> die (InvalidAlternativeType x₁ _T₁)
 
-            Level c <- fmap Foldable.fold (Dhall.Map.unorderedTraverseWithKey process xTs)
+            Max c <- fmap Foldable.fold (Dhall.Map.unorderedTraverseWithKey process xTs)
             return (VConst c)
         Combine mk l r -> do
             _L' <- loop ctx l
