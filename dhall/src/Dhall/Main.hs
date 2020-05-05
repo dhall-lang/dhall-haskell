@@ -218,17 +218,17 @@ parseMode =
             Manipulate
             "format"
             "Standard code formatter for the Dhall language"
-            (Format <$> parseInplace <*> parseCheck)
+            (Format <$> parseInplace <*> parseCheck "formatted")
     <|> subcommand
             Manipulate
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck)
+            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen")
     <|> subcommand
             Manipulate
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseInplace <*> parseCheck)
+            (Lint <$> parseInplace <*> parseCheck "linted")
     <|> subcommand
             Generate
             "text"
@@ -452,7 +452,7 @@ parseMode =
         <>  Options.Applicative.help "Add fallback unprotected imports when using integrity checks purely for caching purposes"
         )
 
-    parseCheck = fmap adapt switch
+    parseCheck processed = fmap adapt switch
       where
         adapt True  = Check
         adapt False = Write
@@ -460,7 +460,7 @@ parseMode =
         switch =
             Options.Applicative.switch
             (   Options.Applicative.long "check"
-            <>  Options.Applicative.help "Only check if the input is formatted"
+            <>  Options.Applicative.help ("Only check if the input is " <> processed)
             )
 
     parseDirectoryTreeOutput =
