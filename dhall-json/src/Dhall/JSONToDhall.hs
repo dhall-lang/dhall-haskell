@@ -242,6 +242,7 @@ import qualified Data.Map.Merge.Lazy as Data.Map.Merge
 import           Data.Monoid (Any(..), (<>))
 import qualified Data.Ord as Ord
 import           Data.Scientific (floatingOrInteger, toRealFloat)
+import           Data.Semigroup (Semigroup(..))
 import qualified Data.Sequence as Seq
 import qualified Data.String
 import qualified Data.Text as Text
