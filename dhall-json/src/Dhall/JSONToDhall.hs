@@ -605,7 +605,17 @@ instance Semigroup Schema where
 
     -- For all other cases, a simple type cannot be unified with a complex
     -- type, so fall back to `ArbitraryJSON`
-    _ <> _ = ArbitraryJSON
+    --
+    -- This is equivalent to:
+    --
+    --     _ <> _ = ArbitraryJSON
+    --
+    -- ... but more explicit, in order to minimize the chance of ignoring an
+    -- important case by accident.
+    List _   <> _        = ArbitraryJSON
+    _        <> List _   = ArbitraryJSON
+    Record _ <> _        = ArbitraryJSON
+    _        <> Record _ = ArbitraryJSON
 
 instance Monoid Schema where
     mempty = Union mempty
