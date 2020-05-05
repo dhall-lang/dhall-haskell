@@ -623,8 +623,9 @@ schemaToDhallType ArbitraryJSON =
             (D.Record
                 [ ("array" , D.Pi "_" (D.App D.List (V 0)) (V 1))
                 , ("bool"  , D.Pi "_" D.Bool (V 1))
+                , ("double", D.Pi "_" D.Double (V 1))
+                , ("integer", D.Pi "_" D.Integer (V 1))
                 , ("null"  , V 0)
-                , ("number", D.Pi "_" D.Double (V 1))
                 , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
                 , ("string", D.Pi "_" D.Text (V 1))
                 ]

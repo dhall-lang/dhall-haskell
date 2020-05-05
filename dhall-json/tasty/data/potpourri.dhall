@@ -3,13 +3,14 @@
       λ ( json
         : { array : List JSON → JSON
           , bool : Bool → JSON
+          , double : Double → JSON
+          , integer : Integer → JSON
           , null : JSON
-          , number : Double → JSON
           , object : List { mapKey : Text, mapValue : JSON } → JSON
           , string : Text → JSON
           }
         ) →
-        json.number 1.0
+        json.integer +1
   , bool = True
   , double = 0.0
   , extraField = None Bool
@@ -28,8 +29,9 @@
       λ ( json
         : { array : List JSON → JSON
           , bool : Bool → JSON
+          , double : Double → JSON
+          , integer : Integer → JSON
           , null : JSON
-          , number : Double → JSON
           , object : List { mapKey : Text, mapValue : JSON } → JSON
           , string : Text → JSON
           }

@@ -1,8 +1,8 @@
 { pull_request_rules =
   [ { actions =
-      { backport = None (Optional { branches : List Text })
-      , delete_head_branch = None (Optional {})
-      , label = None (Optional { remove : List Text })
+      { backport = None { branches : List Text }
+      , delete_head_branch = None {}
+      , label = None { remove : List Text }
       , merge = Some { method = "squash", strict = "smart" }
       }
     , conditions =
@@ -13,63 +13,63 @@
     , name = "Automatically merge pull requests"
     }
   , { actions =
-      { backport = None (Optional { branches : List Text })
-      , delete_head_branch = Some (Some {=})
-      , label = None (Optional { remove : List Text })
+      { backport = None { branches : List Text }
+      , delete_head_branch = Some {=}
+      , label = None { remove : List Text }
       , merge = None { method : Text, strict : Text }
       }
     , conditions = [ "merged" ]
     , name = "Delete head branch after merge"
     }
   , { actions =
-      { backport = Some (Some { branches = [ "1.0.x" ] })
-      , delete_head_branch = None (Optional {})
-      , label = Some (Some { remove = [ "backport-1.0" ] })
+      { backport = Some { branches = [ "1.0.x" ] }
+      , delete_head_branch = None {}
+      , label = Some { remove = [ "backport-1.0" ] }
       , merge = None { method : Text, strict : Text }
       }
     , conditions = [ "merged", "label=backport-1.0" ]
     , name = "backport patches to 1.0.x branch"
     }
   , { actions =
-      { backport = Some (Some { branches = [ "1.1.x" ] })
-      , delete_head_branch = None (Optional {})
-      , label = Some (Some { remove = [ "backport-1.1" ] })
+      { backport = Some { branches = [ "1.1.x" ] }
+      , delete_head_branch = None {}
+      , label = Some { remove = [ "backport-1.1" ] }
       , merge = None { method : Text, strict : Text }
       }
     , conditions = [ "merged", "label=backport-1.1" ]
     , name = "backport patches to 1.1.x branch"
     }
   , { actions =
-      { backport = Some (Some { branches = [ "1.2.x" ] })
-      , delete_head_branch = None (Optional {})
-      , label = Some (Some { remove = [ "backport-1.2" ] })
+      { backport = Some { branches = [ "1.2.x" ] }
+      , delete_head_branch = None {}
+      , label = Some { remove = [ "backport-1.2" ] }
       , merge = None { method : Text, strict : Text }
       }
     , conditions = [ "merged", "label=backport-1.2" ]
     , name = "backport patches to 1.2.x branch"
     }
   , { actions =
-      { backport = Some (Some { branches = [ "1.3.x" ] })
-      , delete_head_branch = None (Optional {})
-      , label = Some (Some { remove = [ "backport-1.3" ] })
+      { backport = Some { branches = [ "1.3.x" ] }
+      , delete_head_branch = None {}
+      , label = Some { remove = [ "backport-1.3" ] }
       , merge = None { method : Text, strict : Text }
       }
     , conditions = [ "merged", "label=backport-1.3" ]
     , name = "backport patches to 1.3.x branch"
     }
   , { actions =
-      { backport = Some (Some { branches = [ "1.4.x" ] })
-      , delete_head_branch = None (Optional {})
-      , label = Some (Some { remove = [ "backport-1.4" ] })
+      { backport = Some { branches = [ "1.4.x" ] }
+      , delete_head_branch = None {}
+      , label = Some { remove = [ "backport-1.4" ] }
       , merge = None { method : Text, strict : Text }
       }
     , conditions = [ "merged", "label=backport-1.4" ]
     , name = "backport patches to 1.4.x branch"
     }
   , { actions =
-      { backport = Some (Some { branches = [ "1.5.x" ] })
-      , delete_head_branch = None (Optional {})
-      , label = Some (Some { remove = [ "backport-1.5" ] })
+      { backport = Some { branches = [ "1.5.x" ] }
+      , delete_head_branch = None {}
+      , label = Some { remove = [ "backport-1.5" ] }
       , merge = None { method : Text, strict : Text }
       }
     , conditions = [ "merged", "label=backport" ]
