@@ -400,7 +400,7 @@ inferSchema (A.Object m) =
 
     in (Record . RecordSchema . convertMap) (fmap inferSchema m)
 inferSchema (A.Array xs) =
-    List (Foldable.fold (fmap inferSchema xs))
+    List (Foldable.foldMap inferSchema xs)
 inferSchema (A.String _) =
     Text
 inferSchema (A.Number n) =
