@@ -478,6 +478,10 @@ unionNumberToAlternatives UnionDouble  = [ ("Double" , Just D.Double ) ]
     These alternatives will always use the same names and types when we convert
     back to a Dhall type, so we only need to keep track of whether or not each
     alternative is present.
+
+    We only store simple types inside of a union since we treat any attempt to
+    unify a simple type with a complex type as a strong indication that the
+    user intended for the schema to be `ArbitraryJSON`.
 -}
 data UnionSchema = UnionSchema
     { bool :: Any
