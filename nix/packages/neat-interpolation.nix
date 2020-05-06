@@ -1,14 +1,16 @@
-{ mkDerivation, base, base-prelude, HTF, megaparsec, stdenv
+{ mkDerivation, base, megaparsec, QuickCheck, quickcheck-instances
+, rerebase, stdenv, tasty, tasty-hunit, tasty-quickcheck
 , template-haskell, text
 }:
 mkDerivation {
   pname = "neat-interpolation";
-  version = "0.3.2.4";
-  sha256 = "de7370d938ffd8c7b52d732f4f088387ed8216cf9767d818e99b7ec827931752";
-  libraryHaskellDepends = [
-    base base-prelude megaparsec template-haskell text
+  version = "0.5.1";
+  sha256 = "5ffe87dcb058f1facf04e504aed70fcf872c3c1fd8c807d554bd0ee4c869de41";
+  libraryHaskellDepends = [ base megaparsec template-haskell text ];
+  testHaskellDepends = [
+    QuickCheck quickcheck-instances rerebase tasty tasty-hunit
+    tasty-quickcheck
   ];
-  testHaskellDepends = [ base-prelude HTF ];
   homepage = "https://github.com/nikita-volkov/neat-interpolation";
   description = "A quasiquoter for neat and simple multiline text interpolation";
   license = stdenv.lib.licenses.mit;
