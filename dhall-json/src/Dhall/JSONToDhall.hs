@@ -344,7 +344,7 @@ import           Data.List ((\\))
 import qualified Data.List as List
 import qualified Data.Map
 import qualified Data.Map.Merge.Lazy as Data.Map.Merge
-import           Data.Monoid (Any(..), (<>))
+import           Data.Monoid (Any(..))
 import qualified Data.Ord as Ord
 import           Data.Scientific (floatingOrInteger, toRealFloat)
 import           Data.Semigroup (Semigroup(..))
@@ -566,6 +566,8 @@ instance Semigroup UnionNumber where
 instance Monoid UnionNumber where
     mempty = minBound
 
+    mappend = (<>)
+
 unionNumberToAlternatives :: UnionNumber -> [ (Text, Maybe (Expr s a)) ]
 unionNumberToAlternatives UnionAbsent  = []
 unionNumberToAlternatives UnionNatural = [ ("Natural", Just D.Natural) ]
@@ -583,6 +585,10 @@ unionNumberToAlternatives UnionDouble  = [ ("Double" , Just D.Double ) ]
     These alternatives will always use the same names and types when we convert
     back to a Dhall type, so we only need to keep track of whether or not each
     alternative is present.
+
+    We only store simple types inside of a union since we treat any attempt to
+    unify a simple type with a complex type as a strong indication that the
+    user intended for the schema to be `ArbitraryJSON`.
 -}
 data UnionSchema = UnionSchema
     { bool :: Any
@@ -620,6 +626,8 @@ instance Monoid UnionSchema where
         number = mempty
 
         text = mempty
+
+    mappend = (<>)
 
 {-| A `Schema` is a subset of the `Expr` type representing all possible
     Dhall types that `inferSchema` could potentially return
@@ -706,10 +714,22 @@ instance Semigroup Schema where
 
     -- For all other cases, a simple type cannot be unified with a complex
     -- type, so fall back to `ArbitraryJSON`
-    _ <> _ = ArbitraryJSON
+    --
+    -- This is equivalent to:
+    --
+    --     _ <> _ = ArbitraryJSON
+    --
+    -- ... but more explicit, in order to minimize the chance of ignoring an
+    -- important case by accident.
+    List _   <> _        = ArbitraryJSON
+    _        <> List _   = ArbitraryJSON
+    Record _ <> _        = ArbitraryJSON
+    _        <> Record _ = ArbitraryJSON
 
 instance Monoid Schema where
     mempty = Union mempty
+
+    mappend = (<>)
 
 -- | Convert a `Schema` to the corresponding Dhall type
 schemaToDhallType :: Schema -> Expr s a
@@ -1055,7 +1075,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 -- ----------
 
 red, purple, green
-    :: (Monoid a, Data.String.IsString a) => a -> a
+    :: (Semigroup a, Data.String.IsString a) => a -> a
 red    s = "\ESC[1;31m" <> s <> "\ESC[0m" -- bold
 purple s = "\ESC[1;35m" <> s <> "\ESC[0m" -- bold
 green  s = "\ESC[0;32m" <> s <> "\ESC[0m" -- plain
