@@ -6,8 +6,8 @@
 }:
 mkDerivation {
   pname = "lsp-test";
-  version = "0.10.2.0";
-  sha256 = "17ffc4ab81d8d012deacfd2d52132eb749efdf6b66e96e51513e4d90d86b18ce";
+  version = "0.10.3.0";
+  sha256 = "689e3c80f09dff5128711b7019692e1487082d2ff22e2b2075a0cd31537246be";
   libraryHaskellDepends = [
     aeson aeson-pretty ansi-terminal async base bytestring conduit
     conduit-parse containers data-default Diff directory filepath
