@@ -47,7 +47,7 @@ parserInfo = Options.info
 -- | All the command arguments and options
 data Options
     = Options
-        { schema     :: Text
+        { schema     :: Maybe Text
         , conversion :: Conversion
         , file       :: Maybe FilePath
         , output     :: Maybe FilePath
@@ -61,7 +61,7 @@ data Options
 parseOptions :: Parser Options
 parseOptions =
         (   Options
-        <$> parseSchema
+        <$> optional parseSchema
         <*> parseConversion
         <*> optional parseFile
         <*> optional parseOutput
@@ -73,7 +73,7 @@ parseOptions =
     parseSchema =
         Options.strArgument
             (  Options.metavar "SCHEMA"
-            <> Options.help "Dhall type expression (schema)"
+            <> Options.help "Dhall type (schema).  You can omit the schema to let the executable infer the schema from the JSON value."
             )
 
     parseVersion =
@@ -138,7 +138,14 @@ main = do
                   Left err -> throwIO (userError err)
                   Right v -> pure v
 
-                expr <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
+                finalSchema <- do
+                    case schema of
+                        Just text -> do
+                            resolveSchemaExpr text
+                        Nothing -> do
+                            return (schemaToDhallType (inferSchema value))
+
+                expr <- typeCheckSchemaExpr id finalSchema
 
                 result <- case dhallFromJSON conversion expr value of
                   Left err     -> throwIO err

@@ -10,8 +10,10 @@ import Test.Tasty (TestTree)
 
 import qualified Data.ByteString
 import qualified Data.Text.IO
+import qualified Dhall.Core
 import qualified Dhall.JSON.Yaml
 import qualified Dhall.Yaml
+import qualified Dhall.YamlToDhall as YamlToDhall
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
@@ -40,6 +42,8 @@ testTree =
         , testDhallToYaml
             (Dhall.JSON.Yaml.defaultOptions { quoted = True })
             "./tasty/data/quoted"
+        , testYamlToDhall
+            "./tasty/data/mergify"
         ]
 
 testDhallToYaml :: Options -> String -> TestTree
@@ -60,5 +64,24 @@ testDhallToYaml options prefix =
         expectedValue <- Data.ByteString.readFile outputFile
 
         let message = "Conversion to YAML did not generate the expected output"
+
+        Test.Tasty.HUnit.assertEqual message expectedValue actualValue
+
+testYamlToDhall :: String -> TestTree
+testYamlToDhall prefix =
+    Test.Tasty.HUnit.testCase prefix $ do
+        let inputFile = prefix <> ".yaml"
+        let outputFile = prefix <> ".dhall"
+
+        bytes <- Data.ByteString.readFile inputFile
+
+        expression <- YamlToDhall.dhallFromYaml (YamlToDhall.defaultOptions Nothing) bytes
+
+        let actualValue = Dhall.Core.pretty expression <> "\n"
+
+        expectedValue <- Data.Text.IO.readFile outputFile
+
+        let message =
+                "Conversion from YAML did not generate the expected output"
 
         Test.Tasty.HUnit.assertEqual message expectedValue actualValue

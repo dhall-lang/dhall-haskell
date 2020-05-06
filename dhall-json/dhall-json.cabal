@@ -14,13 +14,14 @@ Description:
     Use this package if you want to convert between Dhall expressions and JSON
     or YAML. You can use this package as a library or an executable:
     .
-    * See the "Dhall.JSON" module if you want to use this package as a library
+    * See the "Dhall.JSON" or "Dhall.JSONToDhall" modules if you want to use
+      this package as a library
     .
-    * Use the @dhall-to-json@ or @dhall-to-yaml@ programs from this package if
-      you want an executable
+    * Use the @dhall-to-json@, @dhall-to-yaml@, or @json-to-dhall@ programs from
+      this package if you want an executable
     .
-    The "Dhall.JSON" module also contains instructions for how to use this
-    package
+    The "Dhall.JSON" and "Dhall.JSONToDhall" modules also contains instructions
+    for how to use this package
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
