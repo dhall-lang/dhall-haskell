@@ -8,150 +8,225 @@
 {-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-{-| Convert JSON data to Dhall given a Dhall /type/ expression necessary to make the translation unambiguous.
+{-| Convert JSON data to Dhall in one of two ways:
 
-    Reasonable requirements for conversion are:
+    * By default, the conversion will make a best-effort at inferring the
+      corresponding Dhall type
 
-    1. The Dhall type expression @/t/@ passed as an argument to @json-to-dhall@ should be a valid type of the resulting Dhall expression
-    2. A JSON data produced by the corresponding @dhall-to-json@ from the Dhall expression of type @/t/@ should (under reasonable assumptions) reproduce the original Dhall expression using @json-to-dhall@ with type argument @/t/@
+    * Optionally, you can specify an expected Dhall type necessary to make the
+      translation unambiguous.
 
-    Only a subset of Dhall types consisting of all the primitive types as well as @Optional@, @Union@ and @Record@ constructs, is used for reading JSON data:
+    Either way, if you supply the generated Dhall result to @dhall-to-json@ you
+    should get back the original JSON.
 
-    * @Bool@s
-    * @Natural@s
-    * @Integer@s
-    * @Double@s
-    * @Text@s
-    * @List@s
-    * @Optional@ values
+    Only a subset of Dhall types are supported when converting from JSON:
+
+    * @Bool@
+    * @Natural@
+    * @Integer@
+    * @Double@
+    * @Text@
+    * @List@
+    * @Optional@
     * unions
     * records
+    * @Prelude.Type.Map@
+    * @Prelude.Type.JSON@ - You can always convert JSON data to this type as a
+      last resort if you don't know the schema in advance.
 
-    Additionally, you can read in arbitrary JSON data into a Dhall value of
-    type @https://prelude.dhall-lang.org/JSON/Type@ if you don't know the
-    schema of the JSON data in advance.
+    You can use this code as a library (this module) or as an executable
+    named @json-to-dhall@, which is used in the examples below.
 
-    This library can be used to implement an executable which takes any data
-    serialisation format which can be parsed as an Aeson @Value@ and converts
-    the result to a Dhall value. One such executable is @json-to-dhall@ which
-    is used in the examples below.
+    By default the @json-to-dhall@ executable attempts to infer the
+    appropriate Dhall type from the JSON data, like this:
+
+> $ json-to-dhall <<< 1
+> 1
+
+    ... but you can also provide an explicit schema on the command line if you
+    prefer a slightly different Dhall type which still represents the same JSON
+    value:
+
+> $ json-to-dhall Integer <<< 1
+> +1
+
+    The following examples will use both forms of the command (with and without
+    an explicit schema).
 
 == Primitive types
 
     JSON @Bool@s translate to Dhall bools:
 
-> $ json-to-dhall Bool <<< 'true'
+> $ json-to-dhall <<< 'true'
 > True
-> $ json-to-dhall Bool <<< 'false'
+> $ json-to-dhall <<< 'false'
 > False
 
     JSON numbers translate to Dhall numbers:
 
-> $ json-to-dhall Integer <<< 2
-> +2
+> $ json-to-dhall <<< 2
+> 2
+> $ json-to-dhall <<< -2
+> -2
+> $ json-to-dhall <<< -2.1
+> -2.1
 > $ json-to-dhall Natural <<< 2
 > 2
-> $ json-to-dhall Double <<< -2.345
-> -2.345
+> $ json-to-dhall Integer <<< 2
+> +2
+> $ json-to-dhall Double <<< 2
+> 2.0
 
-    Dhall @Text@ corresponds to JSON text:
+    JSON text corresponds to Dhall @Text@ by default:
 
-> $ json-to-dhall Text <<< '"foo bar"'
+> $ json-to-dhall <<< '"foo bar"'
 > "foo bar"
 
+    ... but you can also decode text into a more structured enum, too, if you
+    provide an explicit schema:
+
+> $ json-to-dhall '< A | B >' <<< '"A"'
+> < A | B >.A
 
 == Lists and records
 
     Dhall @List@s correspond to JSON lists:
 
-> $ json-to-dhall 'List Integer' <<< '[1, 2, 3]'
-> [ +1, +2, +3 ]
+> $ json-to-dhall <<< '[ 1, 2, 3 ]'
+> [ 1, 2, 3 ]
 
+    You can even decode an empty JSON list to Dhall:
 
-    Dhall __records__ correspond to JSON records:
+> $ json-to-dhall <<< '[]'
+> [] : List <>
 
-> $ json-to-dhall '{foo : List Integer}' <<< '{"foo": [1, 2, 3]}'
-> { foo = [ +1, +2, +3 ] }
+    ... which will infer the empty @\<\>@ type if there are no other constraints
+    on the type.  If you provide an explicit type annotation then the conversion
+    will use that instead:
 
+> $ json-to-dhall 'List Natural' <<< '[]'
+> [] : List Natural
 
-    Note, that by default, only the fields required by the Dhall type argument are parsed (as you commonly will not need all the data), the remaining ones being ignored:
+    Dhall records correspond to JSON records:
 
-> $ json-to-dhall '{foo : List Integer}' <<< '{"foo": [1, 2, 3], "bar" : "asdf"}'
-> { foo = [ +1, +2, +3 ] }
+> $ json-to-dhall <<< '{ "foo": [ 1, 2, 3 ] }'
+> { foo = [ 1, 2, 3 ] }
 
+    If you specify a schema with additional @Optional@ fields then they will be
+    @None@ if absent:
 
-    If you do need to make sure that Dhall fully reflects JSON record data comprehensively, @--records-strict@ flag should be used:
+> $ json-to-dhall '{ foo : List Natural, bar : Optional Bool }' <<< '{ "foo": [ 1, 2, 3 ] }'
+> { bar = None Bool, foo = [ 1, 2, 3 ] }
 
-> $ json-to-dhall --records-strict '{foo : List Integer}' <<< '{"foo": [1, 2, 3], "bar" : "asdf"}'
-> Error: Key(s) @bar@ present in the JSON object but not in the corresponding Dhall record. This is not allowed in presence of --records-strict:
+    ... and @Some@ if present:
 
+> $ json-to-dhall '{ foo : List Natural, bar : Optional Bool }' <<< '{ "foo": [ 1, 2, 3 ], "bar": true }'
+> { bar = Some True, foo = [ 1, 2, 3 ] }
 
-    By default, JSON key-value arrays will be converted to Dhall records:
+    If you specify a schema with too few fields, then the behavior is
+    configurable.  By default, the conversion will reject extra fields:
 
-> $ json-to-dhall '{ a : Integer, b : Text }' <<< '[{"key":"a", "value":1}, {"key":"b", "value":"asdf"}]'
-> { a = +1, b = "asdf" }
+> $ json-to-dhall '{ foo : List Natural }' <<< '{ "foo": [ 1, 2, 3 ], "bar": true }'
+>
+> Error: Key(s) bar present in the JSON object but not in the expected Dhall record type. This is not allowed unless you enable the --records-loose flag:
+>
+> Expected Dhall type:
+> { foo : List Natural }
+>
+> JSON:
+> {
+>     "foo": [
+>         1,
+>         2,
+>         3
+>     ],
+>     "bar": true
+> }
 
+  ... as the error message suggests, extra fields are ignored if you enable the
+  @--records-loose@ flag.
 
-    Attempting to do the same with @--no-keyval-arrays@ on will result in error:
+> $ json-to-dhall --records-loose '{ foo : List Natural }' <<< '{ "foo": [ 1, 2, 3 ], "bar": true }'
+> { foo = [ 1, 2, 3 ] }
 
-> $ json-to-dhall --no-keyval-arrays '{ a : Integer, b : Text }' <<< '[{"key":"a", "value":1}, {"key":"b", "value":"asdf"}]'
+    You can convert JSON key-value arrays to Dhall records, but only if you
+    supply an explicit Dhall type:
+
+> $ json-to-dhall '{ a : Natural, b : Text }' <<< '[ { "key": "a", "value": 1 }, { "key": "b", "value": "asdf" } ]'
+> { a = 1, b = "asdf" }
+
+    You can also disable this behavior using the @--no-keyval-arrays@:
+
+> $ json-to-dhall --no-keyval-arrays '{ a : Natural, b : Text }' <<< '[ { "key": "a", "value": 1 }, { "key": "b", "value": "asdf" } ]'
 > Error: JSON (key-value) arrays cannot be converted to Dhall records under --no-keyval-arrays flag:
 
-    Conversion of the homogeneous JSON maps to the corresponding Dhall association lists by default:
+    You can also convert JSON records to Dhall @Map@s, but only if you supply an
+    explicit schema:
 
-> $ json-to-dhall 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
+> $ json-to-dhall 'List { mapKey : Text, mapValue : Text }' <<< '{ "foo": "bar" }'
 > toMap { foo = "bar" }
 
     The map keys can even be union types instead of `Text`:
 
-> $ json-to-dhall 'List { mapKey : < A | B >, mapValue : Natural }' <<< '{"A": 1, "B": 2}'
+> $ json-to-dhall 'List { mapKey : < A | B >, mapValue : Natural }' <<< '{ "A": 1, "B": 2 }'
 > [ { mapKey = < A | B >.A, mapValue = 1 }, { mapKey = < A | B >.B, mapValue = 2 } ]
 
-    Flag @--no-keyval-maps@ switches off this mechanism (if one would ever need it):
+    You can similarly disable this feature using @--no-keyval-maps@:
 
-> $ json-to-dhall --no-keyval-maps 'List { mapKey : Text, mapValue : Text }' <<< '{"foo": "bar"}'
+> $ json-to-dhall --no-keyval-maps 'List { mapKey : Text, mapValue : Text }' <<< '{ "foo": "bar" }'
 > Error: Homogeneous JSON map objects cannot be converted to Dhall association lists under --no-keyval-arrays flag
 
 
 == Optional values and unions
 
-    Dhall @Optional@ Dhall type allows null or missing JSON values:
+    JSON @null@ values correspond to @Optional@ Dhall values:
 
-> $ json-to-dhall "Optional Integer" <<< '1'
-> Some +1
+> $ json-to-dhall <<< 'null'
+> None <>
 
-> $ json-to-dhall "Optional Integer" <<< null
-> None Integer
+    ... and the schema inference logic will automatically wrap other values in
+    @Optional@ to ensure that the types line up:
 
-> $ json-to-dhall '{ a : Integer, b : Optional Text }' <<< '{ "a": 1 }'
-{ a = +1, b = None Text }
+> $ json-to-dhall <<< '[ 1, null ]'
+> [ Some 1, None Natural ]
 
+    A field that might be absent also corresponds to an @Optional@ type:
 
+> $ json-to-dhall <<< '[ { "x": 1 }, { "x": 2, "y": true } ]'
+> [ { x = 1, y = None Bool }, { x = 2, y = Some True } ]
 
-    For Dhall __union types__ the correct value will be based on matching the type of JSON expression:
+    For Dhall union types the correct value will be based on matching the type
+    of JSON expression if you give an explicit type:
 
 > $ json-to-dhall 'List < Left : Text | Right : Integer >' <<< '[1, "bar"]'
 > [ < Left : Text | Right : Integer >.Right +1
-  , < Left : Text | Right : Integer >.Left "bar"
-  ]
+> , < Left : Text | Right : Integer >.Left "bar"
+> ]
 
-> $ json-to-dhall '{foo : < Left : Text | Right : Integer >}' <<< '{ "foo": "bar" }'
-> { foo = < Left : Text | Right : Integer >.Left "bar" }
+    Also, the schema inference logic will still infer a union anyway in order
+    to reconcile simple types:
 
-    In presence of multiple potential matches, the first will be selected by default:
+> $ json-to-dhall <<< '[ 1, true ]'
+> [ < Bool : Bool | Natural : Natural >.Natural 1
+> , < Bool : Bool | Natural : Natural >.Bool True
+> ]
+
+    In presence of multiple potential matches, the first will be selected by
+    default:
 
 > $ json-to-dhall '{foo : < Left : Text | Middle : Text | Right : Integer >}' <<< '{ "foo": "bar"}'
 > { foo = < Left : Text | Middle : Text | Right : Integer >.Left "bar" }
 
-    This will result in error if @--unions-strict@ flag is used, with the list of alternative matches being reported (as a Dhall list)
+    This will result in error if @--unions-strict@ flag is used, with the list
+    of alternative matches being reported (as a Dhall list)
 
 > $ json-to-dhall --unions-strict '{foo : < Left : Text | Middle : Text | Right : Integer >}' <<< '{ "foo": "bar"}'
 > Error: More than one union component type matches JSON value
 > ...
 > Possible matches:
-< Left : Text | Middle : Text | Right : Integer >.Left "bar"
+> < Left : Text | Middle : Text | Right : Integer >.Left "bar"
 > --------
-< Left : Text | Middle : Text | Right : Integer >.Middle "bar"
+> < Left : Text | Middle : Text | Right : Integer >.Middle "bar"
 
 == Weakly-typed JSON
 
@@ -199,6 +274,36 @@ You can also mix and match JSON fields whose schemas are known or unknown:
 >   , foo =
 >       None Natural
 >   }
+> ]
+
+    The schema inference algorithm will also infer this schema of last resort
+    when unifying a simple type with a record or a list:
+
+> $ json-to-dhall <<< '[ 1, [] ]'
+> [ λ(JSON : Type) →
+>   λ ( json
+>     : { array : List JSON → JSON
+>       , bool : Bool → JSON
+>       , double : Double → JSON
+>       , integer : Integer → JSON
+>       , null : JSON
+>       , object : List { mapKey : Text, mapValue : JSON } → JSON
+>       , string : Text → JSON
+>       }
+>     ) →
+>     json.integer +1
+> , λ(JSON : Type) →
+>   λ ( json
+>     : { array : List JSON → JSON
+>       , bool : Bool → JSON
+>       , double : Double → JSON
+>       , integer : Integer → JSON
+>       , null : JSON
+>       , object : List { mapKey : Text, mapValue : JSON } → JSON
+>       , string : Text → JSON
+>       }
+>     ) →
+>     json.array ([] : List JSON)
 > ]
 
 -}
