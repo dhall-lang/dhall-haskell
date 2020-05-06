@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
@@ -18,7 +19,7 @@ import Data.Text (Text)
 import Data.Text.Prettyprint.Doc  (Pretty (..))
 import GHC.Generics (Generic)
 import Instances.TH.Lift ()
-import Language.Haskell.TH.Syntax (Lift, lift)
+import Language.Haskell.TH.Syntax (Lift(..))
 import Text.Megaparsec (SourcePos (SourcePos), mkPos, unPos)
 
 import {-# SOURCE #-} qualified Dhall.Util
@@ -36,8 +37,13 @@ data Src = Src
 
 
 instance Lift Src where
+#if MIN_VERSION_template_haskell(2,16,0)
+    liftTyped (Src (SourcePos a b c) (SourcePos d e f) g) =
+        [|| Src (SourcePos a (mkPos b') (mkPos c')) (SourcePos d (mkPos e') (mkPos f')) g ||]
+#else
     lift (Src (SourcePos a b c) (SourcePos d e f) g) =
         [| Src (SourcePos a (mkPos b') (mkPos c')) (SourcePos d (mkPos e') (mkPos f')) g |]
+#endif
       where
         b' = unPos b
         c' = unPos c

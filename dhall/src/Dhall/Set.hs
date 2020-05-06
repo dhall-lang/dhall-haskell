@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveLift #-}
 
 -- | This module only exports ways of constructing a Set,
 -- retrieving List, Set, and Seq representations of the same data,
@@ -36,14 +37,13 @@ import Language.Haskell.TH.Syntax (Lift)
 import qualified Data.Set
 import qualified Data.Sequence
 import qualified Data.Foldable
-import qualified Language.Haskell.TH.Syntax as Syntax
 
 {-| This is a variation on @"Data.Set".`Data.Set.Set`@ that remembers the
     original order of elements.  This ensures that ordering is not lost when
     formatting Dhall code
 -}
 data Set a = Set (Data.Set.Set a) (Seq a)
-    deriving (Generic, Show, Data, NFData)
+    deriving (Generic, Show, Data, NFData, Lift)
 -- Invariant: In @Set set seq@, @toAscList set == sort (toList seq)@.
 
 instance Eq a => Eq (Set a) where
@@ -53,9 +53,6 @@ instance Eq a => Eq (Set a) where
 instance Ord a => Ord (Set a) where
     compare (Set _ x) (Set _ y) = compare x y
     {-# INLINABLE compare #-}
-
-instance (Data a, Lift a, Ord a) => Lift (Set a) where
-    lift = Syntax.liftData
 
 instance Foldable Set where
     foldMap f (Set _ x) = foldMap f x
