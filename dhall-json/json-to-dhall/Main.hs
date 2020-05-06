@@ -73,7 +73,7 @@ parseOptions =
     parseSchema =
         Options.strArgument
             (  Options.metavar "SCHEMA"
-            <> Options.help "Dhall type expression (schema)"
+            <> Options.help "Dhall type (schema).  You can omit the schema to let the executable infer the schema from the JSON value."
             )
 
     parseVersion =
