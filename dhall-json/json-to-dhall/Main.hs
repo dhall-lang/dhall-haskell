@@ -83,7 +83,7 @@ parseOptions =
             (Options.command "type" info <> Options.metavar "type")
       where
         info =
-            Options.info parser (Options.progDesc "Infer the Dhall type from a JSON value")
+            Options.info parser (Options.progDesc "Output the inferred Dhall type from a JSON value")
 
         parser =
                 Type
