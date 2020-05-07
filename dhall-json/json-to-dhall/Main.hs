@@ -29,6 +29,7 @@ import qualified Options.Applicative                       as Options
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.Exit
 import qualified System.IO                                 as IO
+import qualified Dhall.Core
 import qualified Dhall.Pretty
 import qualified Paths_dhall_json                          as Meta
 
@@ -46,10 +47,16 @@ parserInfo = Options.info
 
 -- | All the command arguments and options
 data Options
-    = Options
+    = Default
         { schema     :: Maybe Text
         , conversion :: Conversion
         , file       :: Maybe FilePath
+        , output     :: Maybe FilePath
+        , ascii      :: Bool
+        , plain      :: Bool
+        }
+    | Type
+        { file       :: Maybe FilePath
         , output     :: Maybe FilePath
         , ascii      :: Bool
         , plain      :: Bool
@@ -60,7 +67,8 @@ data Options
 -- | Parser for all the command arguments and options
 parseOptions :: Parser Options
 parseOptions =
-        (   Options
+        typeCommand
+    <|> (   Default
         <$> optional parseSchema
         <*> parseConversion
         <*> optional parseFile
@@ -70,6 +78,20 @@ parseOptions =
         )
     <|> parseVersion
   where
+    typeCommand =
+        Options.hsubparser
+            (Options.command "type" info <> Options.metavar "type")
+      where
+        info =
+            Options.info parser (Options.progDesc "Infer the Dhall type from a JSON value")
+
+        parser =
+                Type
+            <$> optional parseFile
+            <*> optional parseOutput
+            <*> parseASCII
+            <*> parsePlain
+
     parseSchema =
         Options.strArgument
             (  Options.metavar "SCHEMA"
@@ -120,59 +142,76 @@ main = do
 
     options <- Options.execParser parserInfo
 
+    let toCharacterSet ascii = case ascii of
+            True  -> ASCII
+            False -> Unicode
+
+    let toValue file = do
+            bytes <- case file of
+                Nothing   -> ByteString.getContents
+                Just path -> ByteString.readFile path
+
+            case Aeson.eitherDecode bytes of
+                Left err -> throwIO (userError err)
+                Right v -> pure v
+
+    let toSchema schema value = do
+            finalSchema <- case schema of
+                Just text -> resolveSchemaExpr text
+                Nothing   -> return (schemaToDhallType (inferSchema value))
+
+            typeCheckSchemaExpr id finalSchema
+
+    let renderExpression characterSet plain output expression = do
+            let document =
+                    Dhall.Pretty.prettyCharacterSet characterSet expression
+
+            let stream = Dhall.Pretty.layout document
+
+            case output of
+                Nothing -> do
+                    supportsANSI <- ANSI.hSupportsANSI IO.stdout
+
+                    let ansiStream =
+                            if supportsANSI && not plain
+                            then fmap Dhall.Pretty.annToAnsiStyle stream
+                            else Pretty.unAnnotateS stream
+
+                    Pretty.Terminal.renderIO IO.stdout ansiStream
+
+                    Text.IO.putStrLn ""
+
+                Just file_ ->
+                    IO.withFile file_ IO.WriteMode $ \h -> do
+                        Pretty.Text.renderIO h stream
+
+                        Text.IO.hPutStrLn h ""
+
     case options of
         Version -> do
             putStrLn (showVersion Meta.version)
 
-        Options {..} -> do
-            let characterSet = case ascii of
-                    True  -> ASCII
-                    False -> Unicode
+        Default{..} -> do
+            let characterSet = toCharacterSet ascii
 
             handle $ do
-                bytes <- case file of
-                    Nothing   -> ByteString.getContents
-                    Just path -> ByteString.readFile path
+                value <- toValue file
 
-                value :: Aeson.Value <- case Aeson.eitherDecode bytes of
-                  Left err -> throwIO (userError err)
-                  Right v -> pure v
+                finalSchema <- toSchema schema value
 
-                finalSchema <- do
-                    case schema of
-                        Just text -> do
-                            resolveSchemaExpr text
-                        Nothing -> do
-                            return (schemaToDhallType (inferSchema value))
+                expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
 
-                expr <- typeCheckSchemaExpr id finalSchema
+                renderExpression characterSet plain output expression
 
-                result <- case dhallFromJSON conversion expr value of
-                  Left err     -> throwIO err
-                  Right result -> return result
+        Type{..} -> do
+            let characterSet = toCharacterSet ascii
 
-                let document = Dhall.Pretty.prettyCharacterSet characterSet result
+            handle $ do
+                value <- toValue file
 
-                let stream = Dhall.Pretty.layout document
+                finalSchema <- toSchema Nothing value
 
-                case output of
-                    Nothing -> do
-                        supportsANSI <- ANSI.hSupportsANSI IO.stdout
-
-                        let ansiStream =
-                                if supportsANSI && not plain
-                                then fmap Dhall.Pretty.annToAnsiStyle stream
-                                else Pretty.unAnnotateS stream
-
-                        Pretty.Terminal.renderIO IO.stdout ansiStream
-
-                        Text.IO.putStrLn ""
-
-                    Just file_ ->
-                        IO.withFile file_ IO.WriteMode $ \h -> do
-                            Pretty.Text.renderIO h stream
-
-                            Text.IO.hPutStrLn h ""
+                renderExpression characterSet plain output finalSchema
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

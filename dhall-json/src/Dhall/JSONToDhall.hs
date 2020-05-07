@@ -50,8 +50,23 @@
 > $ json-to-dhall Integer <<< 1
 > +1
 
-    The following examples will use both forms of the command (with and without
-    an explicit schema).
+    You can also get the best of both worlds by using the @type@ subcommand to
+    infer the schema:
+
+> $ json-to-dhall type <<< '[ "up", "down" ]' | tee schema.dhall
+> List Text
+
+    ... and then edit the @./schema.dhall@ file to better match the type you
+    intended, such as:
+
+> $ $EDITOR schema.dhall
+> $ cat ./schema.dhall
+> List < up | down >
+
+    ... and then use the edited schema for subsequent conversions:
+
+> $ json-to-dhall ./schema.dhall <<< '[ "up", "down" ]'
+> [ < down | up >.up, < down | up >.down ]
 
 == Primitive types
 

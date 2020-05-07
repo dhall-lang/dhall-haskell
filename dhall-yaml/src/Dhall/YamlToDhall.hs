@@ -5,6 +5,7 @@ module Dhall.YamlToDhall
   , defaultOptions
   , YAMLCompileError(..)
   , dhallFromYaml
+  , schemaFromYaml
   ) where
 
 import Control.Exception (Exception, throwIO)
@@ -49,7 +50,6 @@ instance Exception YAMLCompileError
 -- | Transform yaml representation into dhall
 dhallFromYaml :: Options -> ByteString -> IO (Expr Src Void)
 dhallFromYaml Options{..} yaml = do
-
   value <- either (throwIO . userError) pure (yamlToJson yaml)
 
   finalSchema <- do
@@ -63,11 +63,20 @@ dhallFromYaml Options{..} yaml = do
 
   either (throwIO . YAMLCompileError) pure dhall
 
+-- | Infer the schema from YAML
+schemaFromYaml :: ByteString -> IO (Expr Src Void)
+schemaFromYaml yaml = do
+    value <- either (throwIO . userError) pure (yamlToJson yaml)
 
+    return (schemaToDhallType (inferSchema value))
+
+{-| Wrapper around `Data.YAML.Aeson.decode1Strict` that renders the error
+    message
+-}
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
 yamlToJson s = case Data.YAML.Aeson.decode1Strict s of
-                  Right v -> Right v
-                  Left (pos, err) -> Left (show pos ++ err)
+    Right v         -> Right v
+    Left (pos, err) -> Left (show pos ++ err)
 
 showYaml :: Value -> String
 showYaml value = BS8.unpack (Data.YAML.Aeson.encode1Strict value)
