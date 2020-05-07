@@ -25,6 +25,7 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Pretty
+import qualified Dhall.YamlToDhall                         as YamlToDhall
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
 import qualified System.Console.ANSI                       as ANSI
@@ -37,10 +38,16 @@ import qualified Paths_dhall_yaml                          as Meta
 -- ---------------
 
 data CommandOptions
-    = CommandOptions
+    = Default
         { schema     :: Maybe Text
         , conversion :: Conversion
         , file       :: Maybe FilePath
+        , output     :: Maybe FilePath
+        , ascii      :: Bool
+        , plain      :: Bool
+        }
+    | Type
+        { file       :: Maybe FilePath
         , output     :: Maybe FilePath
         , ascii      :: Bool
         , plain      :: Bool
@@ -59,7 +66,8 @@ parserInfo = Options.info
 -- | Parser for all the command arguments and options
 parseOptions :: Parser CommandOptions
 parseOptions =
-        (   CommandOptions
+        typeCommand
+    <|> (   Default
         <$> optional parseSchema
         <*> parseConversion
         <*> optional parseFile
@@ -69,6 +77,18 @@ parseOptions =
         )
     <|> parseVersion
   where
+    typeCommand =
+        Options.hsubparser
+            (Options.command "type" info <> Options.metavar "type")
+      where
+        info = Options.info parser (Options.progDesc "Output the inferred Dhall type from a YAML value")
+        parser =
+                Type
+            <$> optional parseFile
+            <*> optional parseOutput
+            <*> parseASCII
+            <*> parsePlain
+
     parseSchema =
         Options.strArgument
             (  Options.metavar "SCHEMA"
@@ -119,44 +139,61 @@ main = do
 
     options <- Options.execParser parserInfo
 
+    let toCharacterSet ascii = case ascii of
+            True  -> ASCII
+            False -> Unicode
+
+    let toBytes file = case file of
+            Nothing   -> BSL8.getContents
+            Just path -> BSL8.readFile path
+
+    let renderExpression characterSet plain output expression = do
+            let document = Dhall.Pretty.prettyCharacterSet characterSet expression
+
+            let stream = Dhall.Pretty.layout document
+
+            case output of
+                Nothing -> do
+                    supportsANSI <- ANSI.hSupportsANSI IO.stdout
+
+                    let ansiStream =
+                            if supportsANSI && not plain
+                            then fmap Dhall.Pretty.annToAnsiStyle stream
+                            else Pretty.unAnnotateS stream
+
+                    Pretty.Terminal.renderIO IO.stdout ansiStream
+
+                    Text.IO.putStrLn ""
+
+                Just file_ ->
+                    IO.withFile file_ IO.WriteMode $ \h -> do
+                        Pretty.Text.renderIO h stream
+
+                        Text.IO.hPutStrLn h ""
+
     case options of
         Version -> do
             putStrLn (showVersion Meta.version)
 
-        CommandOptions {..} -> do
-            let characterSet = case ascii of
-                    True  -> ASCII
-                    False -> Unicode
+        Default{..} -> do
+            let characterSet = toCharacterSet ascii
 
             handle $ do
-                bytes <- case file of
-                    Nothing   -> BSL8.getContents
-                    Just path -> BSL8.readFile path
+                yaml <- toBytes file
 
-                result <- dhallFromYaml (Options schema conversion) bytes
+                expression <- dhallFromYaml (Options schema conversion) yaml
 
-                let document = Dhall.Pretty.prettyCharacterSet characterSet result
+                renderExpression characterSet plain output expression
 
-                let stream = Dhall.Pretty.layout document
+        Type{..} -> do
+            let characterSet = toCharacterSet ascii
 
-                case output of
-                    Nothing -> do
-                        supportsANSI <- ANSI.hSupportsANSI IO.stdout
+            handle $ do
+                yaml <- toBytes file
 
-                        let ansiStream =
-                                if supportsANSI && not plain
-                                then fmap Dhall.Pretty.annToAnsiStyle stream
-                                else Pretty.unAnnotateS stream
+                schema <- YamlToDhall.schemaFromYaml yaml
 
-                        Pretty.Terminal.renderIO IO.stdout ansiStream
-
-                        Text.IO.putStrLn ""
-
-                    Just file_ ->
-                        IO.withFile file_ IO.WriteMode $ \h -> do
-                            Pretty.Text.renderIO h stream
-
-                            Text.IO.hPutStrLn h ""
+                renderExpression characterSet plain output schema
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler
