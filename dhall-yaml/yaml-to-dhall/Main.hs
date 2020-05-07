@@ -81,7 +81,7 @@ parseOptions =
         Options.hsubparser
             (Options.command "type" info <> Options.metavar "type")
       where
-        info = Options.info parser (Options.progDesc "Infer the Dhall type from a YAML value")
+        info = Options.info parser (Options.progDesc "Output the inferred Dhall type from a YAML value")
         parser =
                 Type
             <$> optional parseFile
