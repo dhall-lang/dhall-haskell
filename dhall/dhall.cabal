@@ -420,6 +420,7 @@ Extra-Source-Files:
     tests/diff/*.dhall
     tests/diff/*.txt
     tests/format/*.dhall
+    tests/freeze/*.dhall
     tests/lint/success/*.dhall
     tests/recursive/*.dhall
     tests/regression/*.dhall
@@ -611,6 +612,7 @@ Test-Suite tasty
         Dhall.Test.Diff
         Dhall.Test.Tags
         Dhall.Test.Format
+        Dhall.Test.Freeze
         Dhall.Test.Import
         Dhall.Test.Lint
         Dhall.Test.Normalization

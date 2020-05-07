@@ -40,7 +40,8 @@ testTree =
         , testJSONToDhall "./tasty/data/emptyListStrongType"
         , testJSONToDhall "./tasty/data/fromArbitraryJSON_12_0_0"
         , testJSONToDhall "./tasty/data/fromArbitraryJSON_13_0_0"
-        , testCustomConversionJSONToDhall omissibleLists "./tasty/data/missingList"
+        , inferJSONToDhall "./tasty/data/potpourri"
+        , testCustomConversionJSONToDhall False omissibleLists "./tasty/data/missingList"
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
             , testDhallToJSON "./tasty/data/nesting1"
@@ -86,11 +87,11 @@ testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
 
     Test.Tasty.HUnit.assertEqual message expectedValue actualValue
 
-testCustomConversionJSONToDhall :: JSONToDhall.Conversion -> String -> TestTree
-testCustomConversionJSONToDhall conv prefix =
+testCustomConversionJSONToDhall
+    :: Bool -> JSONToDhall.Conversion -> String -> TestTree
+testCustomConversionJSONToDhall infer conv prefix =
   Test.Tasty.HUnit.testCase prefix $ do
     let inputFile = prefix <> ".json"
-    let schemaFile = prefix <> "Schema.dhall"
     let outputFile = prefix <> ".dhall"
 
     bytes <- Data.ByteString.Lazy.readFile inputFile
@@ -100,11 +101,18 @@ testCustomConversionJSONToDhall conv prefix =
             Left string -> fail string
             Right value -> return value
 
-    schemaText <- Data.Text.IO.readFile schemaFile
+    schema <- do
+        if infer
+            then do
+                return (JSONToDhall.schemaToDhallType (JSONToDhall.inferSchema value))
+            else do
+                let schemaFile = prefix <> "Schema.dhall"
 
-    parsedSchema <- Core.throws (Dhall.Parser.exprFromText schemaFile schemaText)
+                schemaText <- Data.Text.IO.readFile schemaFile
 
-    schema <- Dhall.Import.load parsedSchema
+                parsedSchema <- Core.throws (Dhall.Parser.exprFromText schemaFile schemaText)
+
+                Dhall.Import.load parsedSchema
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf schema)
 
@@ -128,4 +136,9 @@ testCustomConversionJSONToDhall conv prefix =
     Test.Tasty.HUnit.assertEqual message expectedExpression actualExpression
 
 testJSONToDhall :: String -> TestTree
-testJSONToDhall = testCustomConversionJSONToDhall JSONToDhall.defaultConversion
+testJSONToDhall =
+    testCustomConversionJSONToDhall False JSONToDhall.defaultConversion
+
+inferJSONToDhall :: String -> TestTree
+inferJSONToDhall =
+    testCustomConversionJSONToDhall True JSONToDhall.defaultConversion
