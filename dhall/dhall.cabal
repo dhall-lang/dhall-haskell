@@ -97,6 +97,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/fold
     dhall-lang/Prelude/List/generate
     dhall-lang/Prelude/List/head
+    dhall-lang/Prelude/List/index
     dhall-lang/Prelude/List/indexed
     dhall-lang/Prelude/List/iterate
     dhall-lang/Prelude/List/last
@@ -110,6 +111,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/take
     dhall-lang/Prelude/List/unzip
+    dhall-lang/Prelude/List/zip
     dhall-lang/Prelude/Location/Type
     dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Map/Entry
@@ -167,7 +169,9 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/default
     dhall-lang/Prelude/Text/defaultMap
     dhall-lang/Prelude/Text/package.dhall
+    dhall-lang/Prelude/Text/replicate
     dhall-lang/Prelude/Text/show
+    dhall-lang/Prelude/Text/spaces
     dhall-lang/Prelude/XML/Type
     dhall-lang/Prelude/XML/attribute
     dhall-lang/Prelude/XML/element
@@ -461,6 +465,7 @@ Library
         either                      >= 5        && < 5.1,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
+        half                        >= 0.2.2.3  && < 0.4 ,
         haskeline                   >= 0.7.2.1  && < 0.9 ,
         hashable                    >= 1.2      && < 1.4 ,
         lens-family-core            >= 1.0.0    && < 2.2 ,

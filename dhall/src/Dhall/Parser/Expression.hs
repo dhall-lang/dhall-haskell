@@ -233,7 +233,12 @@ parsers embedded = Parsers {..}
             return (Assert a)
 
         alternative5 = do
-            a <- operatorExpression
+            a0 <- applicationExpression
+
+            let (parseFirstOperatorExpression, parseOperatorExpression) =
+                    operatorExpression (pure a0)
+
+            a <- parseFirstOperatorExpression
 
             let alternative4A = do
                     _arrow
@@ -255,14 +260,63 @@ parsers embedded = Parsers {..}
                             return (ToMap c (Just b))
                         _ -> return (Annot a b)
 
-            alternative4A <|> alternative4B <|> pure a
+            let alternative4C = do
+                    case shallowDenote a of
+                        Equivalent{}   -> empty
+                        ImportAlt{}    -> empty
+                        BoolOr{}       -> empty
+                        NaturalPlus{}  -> empty
+                        TextAppend{}   -> empty
+                        ListAppend{}   -> empty
+                        BoolAnd{}      -> empty
+                        Combine{}      -> empty
+                        Prefer{}       -> empty
+                        CombineTypes{} -> empty
+                        NaturalTimes{} -> empty
+                        BoolEQ{}       -> empty
+                        BoolNE{}       -> empty
+                        App{}          -> empty
+                        _              -> return ()
 
-    operatorExpression =
-        foldr makeOperatorExpression withExpression operatorParsers
+                    bs <- many (do
+                        try (whitespace *> _with *> nonemptyWhitespace)
 
-    makeOperatorExpression operatorParser subExpression =
+                        keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+
+                        whitespace
+
+                        _equal
+
+                        whitespace
+
+                        value <- parseOperatorExpression
+
+                        return (\e -> With e keys value) )
+
+                    return (foldl (\e f -> f e) a0 bs)
+
+            alternative4A <|> alternative4B <|> alternative4C <|> pure a
+
+    -- The firstApplicationExpression argument is necessary in order to
+    -- left-factor the parsers for function types and @with@ expressions to
+    -- minimize backtracking
+    --
+    -- For a longer explanation, see:
+    --
+    -- https://github.com/dhall-lang/dhall-haskell/pull/1770#discussion_r419022486
+    operatorExpression firstApplicationExpression =
+        foldr cons nil operatorParsers
+      where
+        cons operatorParser (p0, p) =
+            ( makeOperatorExpression p0 operatorParser p
+            , makeOperatorExpression p  operatorParser p
+            )
+
+        nil = (firstApplicationExpression, applicationExpression)
+
+    makeOperatorExpression firstSubExpression operatorParser subExpression =
             noted (do
-                a <- subExpression
+                a <- firstSubExpression
 
                 whitespace
 
@@ -278,7 +332,8 @@ parsers embedded = Parsers {..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ ImportAlt               <$ _importAlt    <* nonemptyWhitespace
+        [ Equivalent              <$ _equivalent   <* whitespace
+        , ImportAlt               <$ _importAlt    <* nonemptyWhitespace
         , BoolOr                  <$ _or           <* whitespace
         , NaturalPlus             <$ _plus         <* nonemptyWhitespace
         , TextAppend              <$ _textAppend   <* whitespace
@@ -288,30 +343,10 @@ parsers embedded = Parsers {..}
         , Prefer PreferFromSource <$ _prefer       <* whitespace
         , CombineTypes            <$ _combineTypes <* whitespace
         , NaturalTimes            <$ _times        <* whitespace
-        , BoolEQ                  <$ _doubleEqual  <* whitespace
+        -- Make sure that `==` is not actually the prefix of `===`
+        , BoolEQ                  <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace
         , BoolNE                  <$ _notEqual     <* whitespace
-        , Equivalent              <$ _equivalent   <* whitespace
         ]
-
-    withExpression = noted (do
-        a <- applicationExpression
-
-        bs <- many (do
-            try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
-
-            keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
-
-            whitespace
-
-            _equal
-
-            whitespace
-
-            value <- applicationExpression
-
-            return (\e -> With e keys value) )
-
-        return (foldl (\e f -> f e) a bs) )
 
     applicationExpression = do
             let alternative0 = do

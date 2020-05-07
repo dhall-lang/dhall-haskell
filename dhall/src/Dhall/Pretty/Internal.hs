@@ -692,6 +692,18 @@ prettyCharacterSet characterSet expression =
                 docs d
             | otherwise =
                 [ prettyExpression c ]
+    prettyExpression (With a b c) =
+            prettyExpression a
+        <>  Pretty.flatAlt long short
+      where
+        short = " " <> keyword "with" <> " " <> update
+
+        long =  Pretty.hardline
+            <>  "  "
+            <>  Pretty.align (keyword "with" <> " " <> update)
+
+        (update, _) =
+            prettyKeyValue prettyAnyLabels prettyOperatorExpression equals (b, c)
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -778,7 +790,7 @@ prettyCharacterSet characterSet expression =
             prettyOperatorExpression a
 
     prettyOperatorExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyOperatorExpression = prettyImportAltExpression
+    prettyOperatorExpression = prettyEquivalentExpression
 
     prettyOperator :: Text -> [Doc Ann] -> Doc Ann
     prettyOperator op docs =
@@ -792,6 +804,26 @@ prettyCharacterSet characterSet expression =
         prefix = if Text.length op == 1 then "  " else "    "
 
         spacer = if Text.length op == 1 then " "  else "  "
+
+    prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyEquivalentExpression a0@(Equivalent _ _) =
+        prettyOperator (equivalent characterSet) (docs a0)
+      where
+        docs (Equivalent a b) = prettyImportAltExpression b : docs a
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyImportAltExpression a ]
+    prettyEquivalentExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyEquivalentExpression b
+        | otherwise =
+            prettyImportAltExpression a
 
     prettyImportAltExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportAltExpression a0@(ImportAlt _ _) =
@@ -1017,27 +1049,7 @@ prettyCharacterSet characterSet expression =
     prettyNotEqualExpression a0@(BoolNE _ _) =
         prettyOperator "!=" (docs a0)
       where
-        docs (BoolNE a b) = prettyEquivalentExpression b : docs a
-        docs a
-            | Just doc <- preserveSource a =
-                [ doc ]
-            | Note _ b <- a =
-                docs b
-            | otherwise =
-                [ prettyEquivalentExpression a ]
-    prettyNotEqualExpression a
-        | Just doc <- preserveSource a =
-            doc
-        | Note _ b <- a =
-            prettyNotEqualExpression b
-        | otherwise =
-            prettyEquivalentExpression a
-
-    prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyEquivalentExpression a0@(Equivalent _ _) =
-        prettyOperator (equivalent characterSet) (docs a0)
-      where
-        docs (Equivalent a b) = prettyApplicationExpression b : docs a
+        docs (BoolNE a b) = prettyApplicationExpression b : docs a
         docs a
             | Just doc <- preserveSource a =
                 [ doc ]
@@ -1045,32 +1057,11 @@ prettyCharacterSet characterSet expression =
                 docs b
             | otherwise =
                 [ prettyApplicationExpression a ]
-    prettyEquivalentExpression a
+    prettyNotEqualExpression a
         | Just doc <- preserveSource a =
             doc
         | Note _ b <- a =
-            prettyEquivalentExpression b
-        | otherwise =
-            prettyWithExpression a
-
-    prettyWithExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyWithExpression (With a b c) =
-            prettyWithExpression a
-        <>  Pretty.flatAlt long short
-      where
-        short = " " <> keyword "with" <> " " <> update
-
-        long =  Pretty.hardline
-            <>  "  "
-            <>  Pretty.align (keyword "with" <> " " <> update)
-
-        (update, _ ) =
-            prettyKeyValue prettyAnyLabels prettyApplicationExpression equals (b, c)
-    prettyWithExpression a
-        | Just doc <- preserveSource a =
-            doc
-        | Note _ b <- a =
-            prettyWithExpression b
+            prettyNotEqualExpression b
         | otherwise =
             prettyApplicationExpression a
 
