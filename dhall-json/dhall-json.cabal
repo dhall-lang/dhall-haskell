@@ -41,7 +41,7 @@ Library
         aeson-yaml                >= 1.0.6    && < 1.1 ,
         bytestring                               < 0.11,
         containers                                     ,
-        dhall                     >= 1.31.0   && < 1.33,
+        dhall                     >= 1.32.0   && < 1.33,
         exceptions                >= 0.8.3    && < 0.11,
         filepath                                 < 1.5 ,
         optparse-applicative      >= 0.14.0.0 && < 0.16,
