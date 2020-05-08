@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.31.1
+Version: 1.32.0
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.1

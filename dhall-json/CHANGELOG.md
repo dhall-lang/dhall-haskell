@@ -1,3 +1,15 @@
+1.6.4
+
+* [Add `json-to-dhall` support for inferring the schema](https://github.com/dhall-lang/dhall-haskell/pull/1773)
+    * You no longer need to provide the command with an explicit schema.  The
+      command will infer a reasonably close schema from the provided JSON
+* [Add `json-to-dhall type` subcommand](https://github.com/dhall-lang/dhall-haskell/pull/1776)
+    * You can use this subcommand to print the inferred schema for a JSON value,
+      so that you can edit the schema and use it for subsequent invocations.
+* [Add `json-to-dhall` support for using `toMap`](https://github.com/dhall-lang/dhall-haskell/pull/1745)
+    * Now if you specify a `Map` as the schema, the generated Dhall code will
+      use `toMap` to improve the appearance
+
 1.6.3
 
 * [yaml: Single-quote date/bool string fields](https://github.com/dhall-lang/dhall-haskell/commits/master/dhall-json)

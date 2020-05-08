@@ -37,7 +37,7 @@ Library
         base                      >= 4.8.0.0  && < 5   ,
         aeson                     >= 1.0.0.0  && < 1.5 ,
         bytestring                               < 0.11,
-        dhall                     >= 1.31.0   && < 1.32,
+        dhall                     >= 1.31.0   && < 1.33,
         dhall-json                >= 1.6.0    && < 1.7 ,
         optparse-applicative      >= 0.14.0.0 && < 0.16,
         text                      >= 0.11.1.0 && < 1.3 ,
