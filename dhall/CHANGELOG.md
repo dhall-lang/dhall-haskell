@@ -1,3 +1,41 @@
+1.32.0
+
+* [Supports version 16.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v16.0.0)
+    * BREAKING CHANGE: Change the precedence of `with` and `===`
+        * The precedence change to `with` means that some old expressions that
+          were valid now require explicit parentheses
+    * BREAKING CHANGE: Use RFC7049bis encoding for `Double`s
+        * This is a breaking change because the hashes of expressions with small
+          `Double` literals will change now
+    * Add support for unions mixing terms and types
+        * For example, `< A : Bool | B : Type >` is legal now
+        * You can now write `someRecord with a.b.c = x` to update a nested
+          fields
+    * [Add support for record puns](https://github.com/dhall-lang/dhall-haskell/pull/1710)
+        * You can now write `{ x, y }` as a shorthand for `{ x = x, y = y }`
+* DEPRECATION: [Deprecate `Dhall.Parser.exprA`](https://github.com/dhall-lang/dhall-haskell/pull/1740)
+    * `Dhall.Parser` module will eventually drop support for parsing custom
+      import types
+    * This is necessary in order to fix several parsing bugs and improve
+      parsing error messages
+* BUG FIX: [GHC Generics instance for `:+:` now uses `union`](https://github.com/dhall-lang/dhall-haskell/pull/1725)
+    * This fixes a few subtle bugs in how Dhall unions are marshalled into
+      Haskell types, and also improves the error messages
+* Formatting improvements
+    * [Change formatting of `if` expressions](https://github.com/dhall-lang/dhall-haskell/pull/1767)
+    * [Change formatting for functions and their types](https://github.com/dhall-lang/dhall-haskell/pull/1759)
+    * [Prefer puns when formatting record completions](https://github.com/dhall-lang/dhall-haskell/pull/1736)
+* [Convert union alternatives to directory tree](https://github.com/dhall-lang/dhall-haskell/pull/1757)
+    * `dhall to-directory-tree` now supports unions which are automatically
+      unwrapped
+* [Fix `dhall freeze --cache` to better handle protected imports](https://github.com/dhall-lang/dhall-haskell/pull/1772)
+    * `dhall freeze --cache` will now also update imports that already have
+      integrity checks
+* [Don't normalized partially saturated `{List,Natural}/fold`](https://github.com/dhall-lang/dhall-haskell/pull/1742)
+    * The behavior now matches the standard.  Previously, the Haskell
+      implementation was not standards-compliant because it would normalize
+      these partially saturated built-ins
+
 1.31.1
 
 * BUG FIX: [Allow whitespace after record pun entry](https://github.com/dhall-lang/dhall-haskell/pull/1733)
