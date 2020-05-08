@@ -1,6 +1,6 @@
 Name: dhall-nix
 Version: 1.1.14
-Cabal-Version: >=1.8.0.2
+Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
 License: BSD3
@@ -38,6 +38,7 @@ Library
     Exposed-Modules:
         Dhall.Nix
     GHC-Options: -Wall
+    Default-Language: Haskell2010
     if os(windows) || impl(eta)
         Buildable: False
         
@@ -56,5 +57,6 @@ Executable dhall-to-nix
         optparse-generic >= 1.1.1   && < 1.4,
         text
     GHC-Options: -Wall
+    Default-Language: Haskell2010
     if os(windows)
         Buildable: False

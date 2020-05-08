@@ -1,6 +1,6 @@
 Name: dhall-yaml
-Version: 1.0.3
-Cabal-Version: >=1.8.0.2
+Version: 1.1.0
+Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.1
 License: GPL-3
@@ -46,6 +46,7 @@ Library
         Dhall.Yaml
         Dhall.YamlToDhall
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Executable dhall-to-yaml-ng
     Hs-Source-Dirs: dhall-to-yaml-ng
@@ -57,6 +58,7 @@ Executable dhall-to-yaml-ng
     Other-Modules:
         Paths_dhall_yaml
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Executable yaml-to-dhall
     Hs-Source-Dirs: yaml-to-dhall
@@ -79,6 +81,7 @@ Executable yaml-to-dhall
     Other-Modules:
         Paths_dhall_yaml
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Test-Suite tasty
     Type: exitcode-stdio-1.0
@@ -95,3 +98,4 @@ Test-Suite tasty
         text                                    ,
         tasty-hunit            >= 0.2
     GHC-Options: -Wall
+    Default-Language: Haskell2010
