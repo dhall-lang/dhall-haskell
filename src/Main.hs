@@ -7,7 +7,6 @@ import Control.Applicative.Combinators (sepBy1, option)
 import Data.Aeson (decodeFileStrict)
 import Data.Bifunctor (bimap)
 import Data.Foldable (for_)
-import Data.Maybe (maybeToList)
 import Data.Text (Text, pack)
 import Data.Void (Void)
 import Data.Yaml
@@ -231,8 +230,14 @@ main = do
         if crd then do
           crdFile <- decodeFileEither filename
           case crdFile of
-            Left e -> fail $ "Unable to decode the CRD file. " <> show e
-            Right s  -> (pure . Data.Map.fromList . maybeToList . Convert.toDefinition) s
+            Left e -> do
+                fail $ "Unable to decode the CRD file. " <> show e
+            Right s -> do
+                case Convert.toDefinition s of
+                    Left text -> do
+                        fail (Text.unpack text)
+                    Right result -> do
+                        return (Data.Map.fromList [result])
         else do
             swaggerFile <- decodeFileStrict filename
             case swaggerFile of

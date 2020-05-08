@@ -1,5 +1,6 @@
 {-# LANGUAGE NamedFieldPuns   #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE QuasiQuotes      #-}
 
 module Dhall.Kubernetes.Convert
   ( toTypes
@@ -19,13 +20,13 @@ import Data.Text (Text)
 import Dhall.Kubernetes.Types
 import GHC.Generics (Generic, Rep)
 
-import qualified Data.Char       as Char
-import qualified Data.List       as List
-import qualified Data.Map.Strict as Data.Map
-import qualified Data.Set        as Set
-import qualified Data.Sort       as Sort
-import qualified Data.Text       as Text
-import qualified Dhall.Core      as Dhall
+import qualified Data.Char         as Char
+import qualified Data.List         as List
+import qualified Data.Map.Strict   as Data.Map
+import qualified Data.Set          as Set
+import qualified Data.Sort         as Sort
+import qualified Data.Text         as Text
+import qualified Dhall.Core        as Dhall
 import qualified Dhall.Map
 import qualified Dhall.Optics
 
@@ -356,26 +357,37 @@ mkV1beta1JSONSchemaProps =
         , v1beta1JSONSchemaPropsType = Nothing
         }
 
-toDefinition :: V1beta1CustomResourceDefinition -> Maybe (ModelName, Definition)
-toDefinition crd = 
-    fmap (\d -> (modelName, d)) definition
+orDie :: Maybe a -> e -> Either e a
+Just r  `orDie` _ = Right r
+Nothing `orDie` l = Left  l
+
+toDefinition
+    :: V1beta1CustomResourceDefinition -> Either Text (ModelName, Definition)
+toDefinition crd = fmap (\d -> (modelName, d)) definition
   where
     spec = v1beta1CustomResourceDefinitionSpec crd
     group = v1beta1CustomResourceDefinitionSpecGroup spec
     crdKind = (v1beta1CustomResourceDefinitionNamesKind . v1beta1CustomResourceDefinitionSpecNames) spec
     modelName = ModelName (group <> "." <> crdKind)
+
     definition = do
-      let 
-        versionName xs = case xs of 
-          (x:_) -> Just (v1beta1CustomResourceDefinitionVersionName x)
-          _ -> Nothing
-      version <- 
-        v1beta1CustomResourceDefinitionSpecVersion spec 
-        <|> do 
-          versions <- v1beta1CustomResourceDefinitionSpecVersions spec 
-          versionName versions             
+      let versionName xs = case xs of 
+              x:_ -> pure (v1beta1CustomResourceDefinitionVersionName x)
+              _   -> empty
+
+      let inferVersion =
+                  v1beta1CustomResourceDefinitionSpecVersion spec 
+              <|> do  versions <- v1beta1CustomResourceDefinitionSpecVersions spec 
+                      versionName versions             
+      version <- inferVersion
+          `orDie` "The CustomResourceDefinitionSpec is missing both the version and versions fields"
+
       validation <- v1beta1CustomResourceDefinitionSpecValidation spec
+          `orDie` "The CustomResourceDefinitionSpec is missing the validation field"
+
       schema <- v1beta1CustomResourceValidationOpenApiv3Schema validation
+          `orDie` "The CustomResourceValidation is missing the openApiv3Schema field"
+
       let baseData = BaseData {
         kind = crdKind,
         apiVersion = version
