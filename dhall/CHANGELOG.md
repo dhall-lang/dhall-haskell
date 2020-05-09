@@ -11,8 +11,6 @@
         * For example, `< A : Bool | B : Type >` is legal now
         * You can now write `someRecord with a.b.c = x` to update a nested
           fields
-    * [Add support for record puns](https://github.com/dhall-lang/dhall-haskell/pull/1710)
-        * You can now write `{ x, y }` as a shorthand for `{ x = x, y = y }`
 * DEPRECATION: [Deprecate `Dhall.Parser.exprA`](https://github.com/dhall-lang/dhall-haskell/pull/1740)
     * `Dhall.Parser` module will eventually drop support for parsing custom
       import types
