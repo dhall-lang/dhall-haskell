@@ -10,6 +10,7 @@ in
       dhall-json
       dhall-lsp-server
       dhall-nix
+      dhall-nixpkgs
       dhall-yaml
     ;
 

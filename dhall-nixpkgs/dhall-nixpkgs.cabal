@@ -1,0 +1,22 @@
+Cabal-Version:       >=1.10
+Name:                dhall-nixpkgs
+Version:             0.1.0.0
+Synopsis:            Convert Dhall projects to buildable Nix packages
+Description:         This package provides a @dhall-to-nixpkgs@ executable that
+                     converts a Dhall project to a Nix expression
+Bug-Reports:         https://github.com/dhall-lang/dhall-haskell/issues
+License:             BSD3
+license-file:        LICENSE
+Author:              Gabriel Gonzalez
+Maintainer:          Gabriel439@gmail.com
+Copyright:           2020 Gabriel Gonzalez
+Category:            Nix
+Build-Type:          Simple
+
+Executable dhall-to-nixpkgs
+  Main-Is:             Main.hs
+  Build-Depends:       base                 >= 4.10     && < 5
+                     , dhall                >= 1.32.0   && < 1.33
+                     , hnix                 >= 0.7      && < 0.8
+                     , optparse-applicative >= 0.14.0.0 && < 0.16
+  Default-Language:    Haskell2010
