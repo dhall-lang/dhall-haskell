@@ -50,7 +50,7 @@ module Dhall
     , FromDhall(..)
     , Interpret
     , InvalidDecoder(..)
-    , ExtractErrors(..)
+    , ExtractErrors
     , ExtractError(..)
     , Extractor
     , MonadicExtractor
@@ -113,6 +113,8 @@ module Dhall
     , (>|<)
 
     -- * Miscellaneous
+    , DhallErrors(..)
+    , showDhallErrors
     , rawInput
     , (>$<)
     , (>*<)
@@ -196,6 +198,25 @@ import qualified Lens.Family
 -- >>> import Data.Word (Word8, Word16, Word32, Word64)
 -- >>> import Dhall.Pretty.Internal (prettyExpr)
 
+{-| A newtype suitable for collecting one or more errors
+-}
+newtype DhallErrors e = DhallErrors
+   { getErrors :: NonEmpty e
+   } deriving (Eq, Semigroup)
+
+instance (Show (DhallErrors e), Typeable e) => Exception (DhallErrors e)
+
+instance Functor DhallErrors where
+    fmap f (DhallErrors es) = DhallErrors $ fmap f es
+
+showDhallErrors :: Show e => String -> DhallErrors e -> String
+showDhallErrors _   (DhallErrors (e :| [])) = show e
+showDhallErrors ctx (DhallErrors es) = prefix <> (unlines . Data.List.NonEmpty.toList . fmap show $ es)
+  where
+    prefix =
+        "Multiple errors were encountered" ++ ctx ++ ": \n\
+        \                                               \n"
+
 {-| Useful synonym for the `Validation` type used when marshalling Dhall
     expressions
 -}
@@ -211,11 +232,11 @@ type MonadicExtractor s a = Either (ExtractErrors s a)
 -}
 typeError :: Expr s a -> Expr s a -> Extractor s a b
 typeError expected actual =
-    Failure . ExtractErrors . pure . TypeMismatch $ InvalidDecoder expected actual
+    Failure . DhallErrors . pure . TypeMismatch $ InvalidDecoder expected actual
 
 -- | Turn a `Text` message into an extraction failure
 extractError :: Text -> Extractor s a b
-extractError = Failure . ExtractErrors . pure . ExtractError
+extractError = Failure . DhallErrors . pure . ExtractError
 
 -- | Switches from an @Applicative@ extraction result, able to accumulate errors,
 -- to a @Monad@ extraction result, able to chain sequential operations
@@ -230,19 +251,10 @@ fromMonadic = eitherToValidation
 {-| One or more errors returned from extracting a Dhall expression to a
     Haskell expression
 -}
-newtype ExtractErrors s a = ExtractErrors
-   { getErrors :: NonEmpty (ExtractError s a)
-   } deriving Semigroup
+type ExtractErrors s a = DhallErrors (ExtractError s a)
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractErrors s a) where
-    show (ExtractErrors (e :| [])) = show e
-    show (ExtractErrors es) = prefix <> (unlines . Data.List.NonEmpty.toList . fmap show $ es)
-      where
-        prefix =
-            "Multiple errors were encountered during extraction: \n\
-            \                                                    \n"
-
-instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractErrors s a)
+    show = showDhallErrors " during extraction"
 
 {-| Extraction of a value can fail for two reasons, either a type mismatch (which should not happen,
     as expressions are type-checked against the expected type before being passed to @extract@), or

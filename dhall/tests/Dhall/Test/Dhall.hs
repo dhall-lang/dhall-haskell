@@ -454,7 +454,7 @@ shouldShowCorrectErrorForInvalidDecoderInUnion =
     let assertMsg = "The exception message did not match the expected output"
 
     case inputEx of
-      Left (Dhall.ExtractErrors errs) -> case errs of
+      Left (Dhall.DhallErrors errs) -> case errs of
         (err :| []) -> case err of
           Dhall.TypeMismatch {} -> fail "The extraction using an invalid decoder failed with a type mismatch"
           Dhall.ExtractError extractError -> assertEqual assertMsg expectedMsg extractError
