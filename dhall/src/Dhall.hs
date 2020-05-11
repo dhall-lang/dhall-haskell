@@ -283,11 +283,13 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractErrors s a
 -}
 data ExtractError s a =
     TypeMismatch (InvalidDecoder s a)
+  | ExpectedTypeError ExpectedTypeError
   | ExtractError Text
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a) where
-  show (TypeMismatch e)  = show e
-  show (ExtractError es) =
+  show (TypeMismatch e)      = show e
+  show (ExpectedTypeError e) = show e
+  show (ExtractError es)     =
       _ERROR <> ": Failed extraction                                                   \n\
       \                                                                                \n\
       \The expression type-checked successfully but the transformation to the target   \n\
