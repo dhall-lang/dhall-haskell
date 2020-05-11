@@ -64,15 +64,15 @@ tests =
 data MyType = MyType { foo :: String , bar :: Natural }
 
 wrongDhallType :: Dhall.Decoder MyType
-wrongDhallType = Dhall.Decoder { .. }
-  where expected =
+wrongDhallType = Dhall.Decoder {..}
+  where expected = pure $
           Dhall.Core.Record
             ( Dhall.Map.fromList
               [ ( "bar", Dhall.Core.Natural)
               , ( "foo", Dhall.Core.Text )
               ]
             )
-        extract expr = Dhall.typeError expected expr
+        extract expr = Dhall.typeError' expected expr
 
 shouldShowDetailedTypeError :: TestTree
 shouldShowDetailedTypeError = testCase "detailed TypeError" $ do

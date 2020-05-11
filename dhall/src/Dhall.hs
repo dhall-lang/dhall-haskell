@@ -55,6 +55,7 @@ module Dhall
     , Extractor
     , MonadicExtractor
     , typeError
+    , typeError'
     , extractError
     , toMonadic
     , fromMonadic
@@ -98,7 +99,6 @@ module Dhall
     , union
     , constructor
     , GenericFromDhall(..)
-    , GenericToDhall(..)
 
     , ToDhall(..)
     , Inject
@@ -114,6 +114,7 @@ module Dhall
     , encodeConstructor
     , unionEncoder
     , (>|<)
+    , GenericToDhall(..)
 
     -- * Miscellaneous
     , DhallErrors(..)
@@ -236,6 +237,13 @@ type MonadicExtractor s a = Either (ExtractErrors s a)
 typeError :: Expr s a -> Expr s a -> Extractor s a b
 typeError expected actual =
     Failure . DhallErrors . pure . TypeMismatch $ InvalidDecoder expected actual
+
+{-| Like `typeError`, but the expected type is not yet determined.
+-}
+typeError' :: Expector (Expr s a) -> Expr s a -> Extractor s a b
+typeError' expected actual = case expected of
+    Failure e         -> Failure $ fmap ExpectedTypeError e
+    Success expected' -> typeError expected' actual
 
 -- | Turn a `Text` message into an extraction failure
 extractError :: Text -> Extractor s a b
@@ -485,14 +493,18 @@ inputWithSettings
     -> IO a
     -- ^ The decoded value in Haskell
 inputWithSettings settings (Decoder {..}) txt = do
-    let suffix = Dhall.Pretty.Internal.prettyToStrictText expected
+    expected' <- case expected of
+        Success x -> return x
+        Failure e -> Control.Exception.throwIO e
+
+    let suffix = Dhall.Pretty.Internal.prettyToStrictText expected'
     let annotate substituted = case substituted of
             Note (Src begin end bytes) _ ->
-                Note (Src begin end bytes') (Annot substituted expected)
+                Note (Src begin end bytes') (Annot substituted expected')
               where
                 bytes' = bytes <> " : " <> suffix
             _ ->
-                Annot substituted expected
+                Annot substituted expected'
 
     normExpr <- inputHelper annotate settings txt
 
@@ -752,7 +764,7 @@ detailed =
 data Decoder a = Decoder
     { extract  :: Expr Src Void -> Extractor Src Void a
     -- ^ Extracts Haskell value from the Dhall expression
-    , expected :: Expr Src Void
+    , expected :: Expector (Expr Src Void)
     -- ^ Dhall type of the Haskell value
     }
     deriving (Functor)
@@ -766,9 +778,11 @@ bool :: Decoder Bool
 bool = Decoder {..}
   where
     extract (BoolLit b) = pure b
-    extract expr        = typeError expected expr
+    extract expr        = typeError expected' expr
 
-    expected = Bool
+    expected = pure expected'
+
+    expected' = Bool
 
 {-| Decode a `Natural`
 
@@ -779,9 +793,11 @@ natural :: Decoder Natural
 natural = Decoder {..}
   where
     extract (NaturalLit n) = pure n
-    extract  expr             = typeError Natural expr
+    extract  expr          = typeError expected' expr
 
-    expected = Natural
+    expected = pure expected'
+
+    expected' = Natural
 
 {-| Decode an `Integer`
 
@@ -792,9 +808,11 @@ integer :: Decoder Integer
 integer = Decoder {..}
   where
     extract (IntegerLit n) = pure n
-    extract  expr          = typeError Integer expr
+    extract  expr          = typeError expected' expr
 
-    expected = Integer
+    expected = pure expected'
+
+    expected' = Integer
 
 {-| Decode a `Scientific`
 
@@ -813,9 +831,11 @@ double :: Decoder Double
 double = Decoder {..}
   where
     extract (DoubleLit (DhallDouble n)) = pure n
-    extract  expr                       = typeError Double expr
+    extract  expr                       = typeError expected' expr
 
-    expected = Double
+    expected = pure expected'
+
+    expected' = Double
 
 {-| Decode lazy `Text`
 
@@ -834,9 +854,12 @@ strictText :: Decoder Text
 strictText = Decoder {..}
   where
     extract (TextLit (Chunks [] t)) = pure t
-    extract  expr = typeError Text expr
+    extract  expr                   = typeError expected' expr
 
-    expected = Text
+    expected = pure expected'
+
+    expected' = Text
+
 {-| Decode a `Maybe`
 
 >>> input (maybe natural) "Some 1"
@@ -847,9 +870,9 @@ maybe (Decoder extractIn expectedIn) = Decoder extractOut expectedOut
   where
     extractOut (Some e    ) = fmap Just (extractIn e)
     extractOut (App None _) = pure Nothing
-    extractOut expr         = typeError expectedOut expr
+    extractOut expr         = typeError' expectedOut expr
 
-    expectedOut = App Optional expectedIn
+    expectedOut = App Optional <$> expectedIn
 
 {-| Decode a `Seq`
 
@@ -860,9 +883,9 @@ sequence :: Decoder a -> Decoder (Seq a)
 sequence (Decoder extractIn expectedIn) = Decoder extractOut expectedOut
   where
     extractOut (ListLit _ es) = traverse extractIn es
-    extractOut expr           = typeError expectedOut expr
+    extractOut expr           = typeError' expectedOut expr
 
-    expectedOut = App List expectedIn
+    expectedOut = App List <$> expectedIn
 
 {-| Decode a list
 
@@ -916,7 +939,7 @@ functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
         Success o  -> o
         Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
 
-    expectedOut = Pi "_" declared expectedIn
+    expectedOut = Pi "_" declared <$> expectedIn
 
 {-| Decode a `Set` from a `List`
 
@@ -1034,9 +1057,9 @@ setHelper size toSet (Decoder extractIn expectedIn) = Decoder extractOut expecte
                      , show $ head duplicates
                      ]
         Failure f -> Failure f
-    extractOut expr = typeError expectedOut expr
+    extractOut expr = typeError' expectedOut expr
 
-    expectedOut = App List expectedIn
+    expectedOut = App List <$> expectedIn
 
 {-| Decode a `Map` from a @toMap@ expression or generally a @Prelude.Map.Type@
 
@@ -1084,9 +1107,11 @@ pairFromMapEntry k v = Decoder extractOut expectedOut
         | Just key <- Dhall.Map.lookup "mapKey" kvs
         , Just value <- Dhall.Map.lookup "mapValue" kvs
             = liftA2 (,) (extract k key) (extract v value)
-    extractOut expr = typeError expectedOut expr
+    extractOut expr = typeError' expectedOut expr
 
-    expectedOut = Record (Dhall.Map.fromList [("mapKey", expected k), ("mapValue", expected v)])
+    expectedOut = (\k' v' -> Record (Dhall.Map.fromList [("mapKey", k'), ("mapValue", v')]))
+        <$> expected k
+        <*> expected v
 
 {-| Decode @()@ from an empty record.
 
@@ -1094,13 +1119,15 @@ pairFromMapEntry k v = Decoder extractOut expectedOut
 
 -}
 unit :: Decoder ()
-unit = Decoder extractOut expectedOut
+unit = Decoder {..}
   where
-    extractOut (RecordLit fields)
+    extract (RecordLit fields)
         | Data.Foldable.null fields = pure ()
-    extractOut expr = typeError (Record mempty) expr
+    extract expr = typeError expected' expr
 
-    expectedOut = Record mempty
+    expected = pure expected'
+
+    expected' = Record mempty
 
 {-| Decode 'Void' from an empty union.
 
@@ -1127,17 +1154,13 @@ pair :: Decoder a -> Decoder b -> Decoder (a, b)
 pair l r = Decoder extractOut expectedOut
   where
     extractOut expr@(RecordLit fields) =
-      (,) <$> ( Data.Maybe.maybe (typeError expectedOut expr) (extract l) $ Dhall.Map.lookup "_1" fields)
-          <*> ( Data.Maybe.maybe (typeError expectedOut expr) (extract r) $ Dhall.Map.lookup "_2" fields)
-    extractOut expr = typeError expectedOut expr
+      (,) <$> Data.Maybe.maybe (typeError' expectedOut expr) (extract l) (Dhall.Map.lookup "_1" fields)
+          <*> Data.Maybe.maybe (typeError' expectedOut expr) (extract r) (Dhall.Map.lookup "_2" fields)
+    extractOut expr = typeError' expectedOut expr
 
-    expectedOut =
-        Record
-            (Dhall.Map.fromList
-                [ ("_1", expected l)
-                , ("_2", expected r)
-                ]
-            )
+    expectedOut = (\l' r' -> Record (Dhall.Map.fromList [("_1", l'), ("_2", r')]))
+        <$> expected l
+        <*> expected r
 
 {-| Any value that implements `FromDhall` can be automatically decoded based on
     the inferred return type of `input`
@@ -1251,14 +1274,15 @@ resultToFix :: Functor f => Result f -> Fix f
 resultToFix (Result x) = Fix (fmap resultToFix x)
 
 instance FromDhall (f (Result f)) => FromDhall (Result f) where
-    autoWith inputNormalizer = Decoder { expected = expected_, extract = extract_ }
+    autoWith inputNormalizer = Decoder {..}
       where
-        expected_ = "result"
+        extract (App _ expr) =
+            fmap Result (Dhall.extract (autoWith inputNormalizer) expr)
+        extract expr = typeError expected' expr
 
-        extract_ (App _ expression) = do
-            fmap Result (extract (autoWith inputNormalizer) expression)
-        extract_ expression = do
-            typeError expression expected_
+        expected = pure expected'
+
+        expected' = "result"
 
 -- | You can use this instance to marshal recursive types from Dhall to Haskell.
 --
@@ -1335,29 +1359,26 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
 -- >
 -- >     print (convert x :: Expr)
 instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
-    autoWith inputNormalizer = Decoder { expected = expected_, extract = extract_ }
+    autoWith inputNormalizer = Decoder {..}
       where
-        expected_ =
-            Pi "result" (Const Dhall.Core.Type)
-                (Pi "Make" (Pi "_" (expected (autoWith inputNormalizer :: Decoder (f (Result f)))) "result")
-                    "result"
-                )
-
-        extract_ expression0 = extract0 expression0
+        extract expr0 = extract0 expr0
           where
-            die = typeError expected_ expression0
+            die = typeError' expected expr0
 
-            extract0 (Lam x _ expression) = extract1 (rename x "result" expression)
-            extract0  _                   = die
+            extract0 (Lam x _ expr) = extract1 (rename x "result" expr)
+            extract0  _             = die
 
-            extract1 (Lam y _ expression) = extract2 (rename y "Make" expression)
-            extract1  _                   = die
+            extract1 (Lam y _ expr) = extract2 (rename y "Make" expr)
+            extract1  _             = die
 
-            extract2 expression = fmap resultToFix (extract (autoWith inputNormalizer) expression)
+            extract2 expr = fmap resultToFix (Dhall.extract (autoWith inputNormalizer) expr)
 
-            rename a b expression
-                | a /= b    = Dhall.Core.subst (V a 0) (Var (V b 0)) (Dhall.Core.shift 1 (V b 0) expression)
-                | otherwise = expression
+            rename a b expr
+                | a /= b    = Dhall.Core.subst (V a 0) (Var (V b 0)) (Dhall.Core.shift 1 (V b 0) expr)
+                | otherwise = expr
+
+        expected = (\x -> Pi "result" (Const Dhall.Core.Type) (Pi "Make" (Pi "_" x "result") "result"))
+            <$> Dhall.expected (autoWith inputNormalizer :: Decoder (f (Result f)))
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
     `FromDhall`.  The difference is that you can use `genericAuto` without
@@ -1452,9 +1473,11 @@ instance GenericFromDhall f => GenericFromDhall (M1 D d f) where
 instance GenericFromDhall V1 where
     genericAutoWithNormalizer _ _ = pure Decoder {..}
       where
-        extract expr = typeError expected expr
+        extract expr = typeError expected' expr
 
-        expected = Union mempty
+        expected = pure expected'
+
+        expected' = Union mempty
 
 unsafeExpectUnion
     :: Text -> Expr Src Void -> Dhall.Map.Map Text (Maybe (Expr Src Void))
@@ -1542,7 +1565,9 @@ instance GenericFromDhall U1 where
       where
         extract _ = pure U1
 
-        expected = Record (Dhall.Map.fromList [])
+        expected = pure expected'
+
+        expected' = Record (Dhall.Map.fromList [])
 
 getSelName :: Selector s => M1 i s f a -> State Int Text
 getSelName n = case selName n of
@@ -1556,10 +1581,10 @@ instance (GenericFromDhall (f :*: g), GenericFromDhall (h :*: i)) => GenericFrom
         Decoder extractL expectedL <- genericAutoWithNormalizer inputNormalizer options
         Decoder extractR expectedR <- genericAutoWithNormalizer inputNormalizer options
 
-        let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedL
-        let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedR
+        let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedL
+        let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedR
 
-        let expected = Record (Dhall.Map.union ktsL ktsR)
+        let expected = Record <$> (Dhall.Map.union <$> ktsL <*> ktsR)
 
         let extract expression =
                 liftA2 (:*:) (extractL expression) (extractR expression)
@@ -1577,12 +1602,12 @@ instance (GenericFromDhall (f :*: g), Selector s, FromDhall a) => GenericFromDha
 
         let Decoder extractR expectedR = autoWith inputNormalizer
 
-        let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedL
+        let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedL
 
-        let expected = Record (Dhall.Map.insert nameR expectedR ktsL)
+        let expected = Record <$> (Dhall.Map.insert nameR <$> expectedR <*> ktsL)
 
         let extract expression = do
-                let die = typeError expected expression
+                let die = typeError' expected expression
 
                 case expression of
                     RecordLit kvs ->
@@ -1607,12 +1632,12 @@ instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDha
 
         Decoder extractR expectedR <- genericAutoWithNormalizer inputNormalizer options
 
-        let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" expectedR
+        let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedR
 
-        let expected = Record (Dhall.Map.insert nameL expectedL ktsR)
+        let expected = Record <$> (Dhall.Map.insert nameL <$> expectedL <*> ktsR)
 
         let extract expression = do
-                let die = typeError expected expression
+                let die = typeError' expected expression
 
                 case expression of
                     RecordLit kvs ->
@@ -1641,15 +1666,16 @@ instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDh
         let Decoder extractR expectedR = autoWith inputNormalizer
 
         let expected =
-                Record
+                (\l r -> Record
                     (Dhall.Map.fromList
-                        [ (nameL, expectedL)
-                        , (nameR, expectedR)
+                        [ (nameL, l)
+                        , (nameR, r)
                         ]
                     )
+                ) <$> expectedL <*> expectedR
 
         let extract expression = do
-                let die = typeError expected expression
+                let die = typeError' expected expression
 
                 case expression of
                     RecordLit kvs -> do
@@ -1679,12 +1705,12 @@ instance (Selector s, FromDhall a) => GenericFromDhall (M1 S s (K1 i a)) where
                     Smart | selName n == "" ->
                         expected'
                     _ ->
-                        Record (Dhall.Map.singleton name expected')
+                        Record . Dhall.Map.singleton name <$> expected'
 
         let extract0 expression = fmap (M1 . K1) (extract' expression)
 
         let extract1 expression = do
-                let die = typeError expected expression
+                let die = typeError' expected expression
 
                 case expression of
                     RecordLit kvs -> do
@@ -1695,7 +1721,6 @@ instance (Selector s, FromDhall a) => GenericFromDhall (M1 S s (K1 i a)) where
                                 die
                     _ -> do
                         die
-
 
         let extract =
                 case singletonConstructors of
@@ -2338,14 +2363,9 @@ newtype RecordDecoder a =
   RecordDecoder
     ( Data.Functor.Product.Product
         ( Control.Applicative.Const
-            ( Dhall.Map.Map
-                Text
-                ( Expr Src Void )
-            )
+            (Dhall.Map.Map Text (Expector (Expr Src Void)))
         )
-        ( Data.Functor.Compose.Compose
-            ( (->) ( Expr Src Void ) )
-            (Extractor Src Void)
+        ( Data.Functor.Compose.Compose ((->) (Expr Src Void)) (Extractor Src Void)
         )
         a
     )
@@ -2354,34 +2374,26 @@ newtype RecordDecoder a =
 
 -- | Run a 'RecordDecoder' to build a 'Decoder'.
 record :: RecordDecoder a -> Dhall.Decoder a
-record ( RecordDecoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Data.Functor.Compose.Compose extractF ) ) ) =
-  Decoder
-    { extract =
-        extractF
-    , expected =
-        Record fields
-    }
+record ( RecordDecoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Data.Functor.Compose.Compose extract ) ) ) = Decoder {..}
+  where
+    expected = Record <$> traverse id fields
 
 
 -- | Parse a single field of a record.
 field :: Text -> Decoder a -> RecordDecoder a
-field key valueDecoder@(Decoder extract expected) =
-  let
+field key (Decoder {..}) =
+  RecordDecoder
+    ( Data.Functor.Product.Pair
+        ( Control.Applicative.Const
+            (Dhall.Map.singleton key expected)
+        )
+        ( Data.Functor.Compose.Compose extractBody )
+    )
+  where
     extractBody expr@(RecordLit fields) = case Dhall.Map.lookup key fields of
       Just v -> extract v
-      _ -> typeError expected expr
-    extractBody expr = typeError expected expr
-  in
-    RecordDecoder
-      ( Data.Functor.Product.Pair
-          ( Control.Applicative.Const
-              ( Dhall.Map.singleton
-                  key
-                  ( Dhall.expected valueDecoder )
-              )
-          )
-          ( Data.Functor.Compose.Compose extractBody )
-      )
+      _      -> typeError' expected expr
+    extractBody expr = typeError' expected expr
 
 {-| The 'UnionDecoder' monoid allows you to build a 'Decoder' from a Dhall union
 
@@ -2429,23 +2441,25 @@ instance Monoid (UnionDecoder a) where
 
 -- | Run a 'UnionDecoder' to build a 'Decoder'.
 union :: UnionDecoder a -> Decoder a
-union (UnionDecoder (Data.Functor.Compose.Compose mp)) = Decoder
-    { extract  = extractF
-    , expected = Union expect
-    }
+union (UnionDecoder (Data.Functor.Compose.Compose mp)) = Decoder {..}
   where
-    expect = (notEmptyRecord . Dhall.expected) <$> mp
+    extract expr = case expected' of
+        Failure e -> Failure $ fmap ExpectedTypeError e
+        Success x -> extract' expr x
 
-    extractF e0 =
-      let result = do
-            (fld, e1, rest) <- extractUnionConstructor e0
+    extract' e0 mp' = Data.Maybe.maybe (typeError' expected e0) (uncurry Dhall.extract) $ do
+        (fld, e1, rest) <- extractUnionConstructor e0
 
-            t <- Dhall.Map.lookup fld mp
+        t <- Dhall.Map.lookup fld mp
 
-            guard $ Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual`
-                      Dhall.Core.Union (Dhall.Map.delete fld expect)
-            pure (t, e1)
-      in Data.Maybe.maybe (typeError (Union expect) e0) (uncurry extract) result
+        guard $
+            Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual` Dhall.Core.Union (Dhall.Map.delete fld mp')
+
+        pure (t, e1)
+
+    expected = Union <$> expected'
+
+    expected' = traverse (fmap notEmptyRecord . Dhall.expected) mp
 
 -- | Parse a single constructor of a union
 constructor :: Text -> Decoder a -> UnionDecoder a

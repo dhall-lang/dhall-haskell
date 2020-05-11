@@ -7,6 +7,7 @@ import Data.Void (Void)
 import Dhall.Core (Expr(BoolLit, Var))
 import Dhall.Src (Src)
 
+import qualified Data.Either.Validation
 import qualified Dhall
 import qualified Dhall.Map
 import qualified Lens.Family   as Lens
@@ -25,7 +26,9 @@ resultDecoder :: Dhall.Decoder Result
 resultDecoder = Dhall.auto
 
 resultType :: Expr Src Void
-resultType = Dhall.expected resultDecoder
+resultType = case Dhall.expected resultDecoder of
+    Data.Either.Validation.Success x -> x
+    _ -> undefined
 
 substituteFoo :: FilePath -> IO Bool
 substituteFoo fp = let
