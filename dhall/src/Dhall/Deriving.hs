@@ -91,7 +91,7 @@ import qualified Data.Text.Manipulate as Case
 --   to 'genericAutoWith'.
 newtype Codec tag a = Codec { unCodec :: a }
 
-instance (Generic a, GenericFromDhall (Rep a), ModifyOptions tag) => FromDhall (Codec tag a) where
+instance (Generic a, GenericFromDhall a (Rep a), ModifyOptions tag) => FromDhall (Codec tag a) where
   autoWith _ = Codec <$> genericAutoWith (modifyOptions @tag defaultInterpretOptions)
 
 instance (Generic a, GenericToDhall (Rep a), ModifyOptions tag) => ToDhall (Codec tag a) where

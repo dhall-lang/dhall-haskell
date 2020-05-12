@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -150,7 +151,7 @@ import Data.Semigroup (Semigroup)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
-import Data.Typeable (Typeable)
+import Data.Typeable (Typeable, Proxy(..))
 import Data.Vector (Vector)
 import Data.Void (Void)
 import Data.Word (Word8, Word16, Word32, Word64)
@@ -1182,7 +1183,7 @@ fromList [("a",False),("b",True)]
 class FromDhall a where
     autoWith :: InputNormalizer -> Decoder a
     default autoWith
-        :: (Generic a, GenericFromDhall (Rep a)) => InputNormalizer -> Decoder a
+        :: (Generic a, GenericFromDhall a (Rep a)) => InputNormalizer -> Decoder a
     autoWith _ = genericAuto
 
 {-| A compatibility alias for `FromDhall`
@@ -1385,13 +1386,16 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
     having to explicitly provide a `FromDhall` instance for a type as long as
     the type derives `Generic`
 -}
-genericAuto :: (Generic a, GenericFromDhall (Rep a)) => Decoder a
+genericAuto :: (Generic a, GenericFromDhall a (Rep a)) => Decoder a
 genericAuto = genericAutoWith defaultInterpretOptions
 
 {-| `genericAutoWith` is a configurable version of `genericAuto`.
 -}
-genericAutoWith :: (Generic a, GenericFromDhall (Rep a)) => InterpretOptions -> Decoder a
-genericAutoWith options = fmap to (evalState (genericAutoWithNormalizer defaultInputNormalizer options) 1)
+genericAutoWith :: (Generic a, GenericFromDhall a (Rep a)) => InterpretOptions -> Decoder a
+genericAutoWith options = withProxy (\p -> fmap to (evalState (genericAutoWithNormalizer p defaultInputNormalizer options) 1))
+    where
+        withProxy :: (Proxy a -> Decoder a) -> Decoder a
+        withProxy f = f Proxy
 
 
 {-| Use these options to tweak how Dhall derives a generic implementation of
@@ -1462,16 +1466,16 @@ defaultInterpretOptions = InterpretOptions
 {-| This is the underlying class that powers the `FromDhall` class's support
     for automatically deriving a generic implementation
 -}
-class GenericFromDhall f where
-    genericAutoWithNormalizer :: InputNormalizer -> InterpretOptions -> State Int (Decoder (f a))
+class GenericFromDhall t f where
+    genericAutoWithNormalizer :: Proxy t -> InputNormalizer -> InterpretOptions -> State Int (Decoder (f a))
 
-instance GenericFromDhall f => GenericFromDhall (M1 D d f) where
-    genericAutoWithNormalizer inputNormalizer options = do
-        res <- genericAutoWithNormalizer inputNormalizer options
+instance GenericFromDhall t f => GenericFromDhall t (M1 D d f) where
+    genericAutoWithNormalizer p inputNormalizer options = do
+        res <- genericAutoWithNormalizer p inputNormalizer options
         pure (fmap M1 res)
 
-instance GenericFromDhall V1 where
-    genericAutoWithNormalizer _ _ = pure Decoder {..}
+instance GenericFromDhall t V1 where
+    genericAutoWithNormalizer _ _ _ = pure Decoder {..}
       where
         extract expr = typeError expected' expr
 
@@ -1533,35 +1537,35 @@ extractUnionConstructor (Field (Union kts) fld) =
 extractUnionConstructor _ =
   empty
 
-class GenericFromDhallUnion f where
-    genericUnionAutoWithNormalizer :: InputNormalizer -> InterpretOptions -> UnionDecoder (f a)
+class GenericFromDhallUnion t f where
+    genericUnionAutoWithNormalizer :: Proxy t -> InputNormalizer -> InterpretOptions -> UnionDecoder (f a)
 
-instance (GenericFromDhallUnion f1, GenericFromDhallUnion f2) => GenericFromDhallUnion (f1 :+: f2) where
-  genericUnionAutoWithNormalizer inputNormalizer options =
+instance (GenericFromDhallUnion t f1, GenericFromDhallUnion t f2) => GenericFromDhallUnion t (f1 :+: f2) where
+  genericUnionAutoWithNormalizer p inputNormalizer options =
     (<>)
-      (L1 <$> genericUnionAutoWithNormalizer inputNormalizer options)
-      (R1 <$> genericUnionAutoWithNormalizer inputNormalizer options)
+      (L1 <$> genericUnionAutoWithNormalizer p inputNormalizer options)
+      (R1 <$> genericUnionAutoWithNormalizer p inputNormalizer options)
 
-instance (Constructor c1, GenericFromDhall f1) => GenericFromDhallUnion (M1 C c1 f1) where
-  genericUnionAutoWithNormalizer inputNormalizer options@(InterpretOptions {..}) =
-    constructor name (evalState (genericAutoWithNormalizer inputNormalizer options) 1)
+instance (Constructor c1, GenericFromDhall t f1) => GenericFromDhallUnion t (M1 C c1 f1) where
+  genericUnionAutoWithNormalizer p inputNormalizer options@(InterpretOptions {..}) =
+    constructor name (evalState (genericAutoWithNormalizer p inputNormalizer options) 1)
     where
       n :: M1 C c1 f1 a
       n = undefined
 
       name = constructorModifier (Data.Text.pack (conName n))
 
-instance GenericFromDhallUnion (f :+: g) => GenericFromDhall (f :+: g) where
-  genericAutoWithNormalizer inputNormalizer options =
-    pure (union (genericUnionAutoWithNormalizer inputNormalizer options))
+instance GenericFromDhallUnion t (f :+: g) => GenericFromDhall t (f :+: g) where
+  genericAutoWithNormalizer p inputNormalizer options =
+    pure (union (genericUnionAutoWithNormalizer p inputNormalizer options))
 
-instance GenericFromDhall f => GenericFromDhall (M1 C c f) where
-    genericAutoWithNormalizer inputNormalizer options = do
-        res <- genericAutoWithNormalizer inputNormalizer options
+instance GenericFromDhall t f => GenericFromDhall t (M1 C c f) where
+    genericAutoWithNormalizer p inputNormalizer options = do
+        res <- genericAutoWithNormalizer p inputNormalizer options
         pure (fmap M1 res)
 
-instance GenericFromDhall U1 where
-    genericAutoWithNormalizer _ _ = pure (Decoder {..})
+instance GenericFromDhall t U1 where
+    genericAutoWithNormalizer _ _ _ = pure (Decoder {..})
       where
         extract _ = pure U1
 
@@ -1576,10 +1580,10 @@ getSelName n = case selName n of
              pure (Data.Text.pack ("_" ++ show i))
     nn -> pure (Data.Text.pack nn)
 
-instance (GenericFromDhall (f :*: g), GenericFromDhall (h :*: i)) => GenericFromDhall ((f :*: g) :*: (h :*: i)) where
-    genericAutoWithNormalizer inputNormalizer options = do
-        Decoder extractL expectedL <- genericAutoWithNormalizer inputNormalizer options
-        Decoder extractR expectedR <- genericAutoWithNormalizer inputNormalizer options
+instance (GenericFromDhall t (f :*: g), GenericFromDhall t (h :*: i)) => GenericFromDhall t ((f :*: g) :*: (h :*: i)) where
+    genericAutoWithNormalizer p inputNormalizer options = do
+        Decoder extractL expectedL <- genericAutoWithNormalizer p inputNormalizer options
+        Decoder extractR expectedR <- genericAutoWithNormalizer p inputNormalizer options
 
         let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedL
         let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedR
@@ -1591,14 +1595,14 @@ instance (GenericFromDhall (f :*: g), GenericFromDhall (h :*: i)) => GenericFrom
 
         return (Decoder {..})
 
-instance (GenericFromDhall (f :*: g), Selector s, FromDhall a) => GenericFromDhall ((f :*: g) :*: M1 S s (K1 i a)) where
-    genericAutoWithNormalizer inputNormalizer options@InterpretOptions{..} = do
+instance (GenericFromDhall t (f :*: g), Selector s, FromDhall a) => GenericFromDhall t ((f :*: g) :*: M1 S s (K1 i a)) where
+    genericAutoWithNormalizer p inputNormalizer options@InterpretOptions{..} = do
         let nR :: M1 S s (K1 i a) r
             nR = undefined
 
         nameR <- fmap fieldModifier (getSelName nR)
 
-        Decoder extractL expectedL <- genericAutoWithNormalizer inputNormalizer options
+        Decoder extractL expectedL <- genericAutoWithNormalizer p inputNormalizer options
 
         let Decoder extractR expectedR = autoWith inputNormalizer
 
@@ -1621,8 +1625,8 @@ instance (GenericFromDhall (f :*: g), Selector s, FromDhall a) => GenericFromDha
 
         return (Decoder {..})
 
-instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDhall (M1 S s (K1 i a) :*: (f :*: g)) where
-    genericAutoWithNormalizer inputNormalizer options@InterpretOptions{..} = do
+instance (Selector s, FromDhall a, GenericFromDhall t (f :*: g)) => GenericFromDhall t (M1 S s (K1 i a) :*: (f :*: g)) where
+    genericAutoWithNormalizer p inputNormalizer options@InterpretOptions{..} = do
         let nL :: M1 S s (K1 i a) r
             nL = undefined
 
@@ -1630,7 +1634,7 @@ instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDha
 
         let Decoder extractL expectedL = autoWith inputNormalizer
 
-        Decoder extractR expectedR <- genericAutoWithNormalizer inputNormalizer options
+        Decoder extractR expectedR <- genericAutoWithNormalizer p inputNormalizer options
 
         let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedR
 
@@ -1651,8 +1655,20 @@ instance (Selector s, FromDhall a, GenericFromDhall (f :*: g)) => GenericFromDha
 
         return (Decoder {..})
 
-instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDhall (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
-    genericAutoWithNormalizer inputNormalizer InterpretOptions{..} = do
+instance {-# OVERLAPPING #-} GenericFromDhall a1 (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+    genericAutoWithNormalizer _ _ _ = pure $ Decoder
+        { extract = \_ -> Failure $ DhallErrors $ pure $ ExpectedTypeError RecursiveTypeError
+        , expected = Failure $ DhallErrors $ pure RecursiveTypeError
+        }
+
+instance {-# OVERLAPPING #-} GenericFromDhall a2 (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+    genericAutoWithNormalizer _ _ _ = pure $ Decoder
+        { extract = \_ -> Failure $ DhallErrors $ pure $ ExpectedTypeError RecursiveTypeError
+        , expected = Failure $ DhallErrors $ pure RecursiveTypeError
+        }
+
+instance {-# OVERLAPPABLE #-} (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDhall t (M1 S s1 (K1 i1 a1) :*: M1 S s2 (K1 i2 a2)) where
+    genericAutoWithNormalizer _ inputNormalizer InterpretOptions{..} = do
         let nL :: M1 S s1 (K1 i1 a1) r
             nL = undefined
 
@@ -1689,8 +1705,14 @@ instance (Selector s1, Selector s2, FromDhall a1, FromDhall a2) => GenericFromDh
 
         return (Decoder {..})
 
-instance (Selector s, FromDhall a) => GenericFromDhall (M1 S s (K1 i a)) where
-    genericAutoWithNormalizer inputNormalizer InterpretOptions{..} = do
+instance {-# OVERLAPPING #-} GenericFromDhall a (M1 S s (K1 i a)) where
+    genericAutoWithNormalizer _ _ _ = pure $ Decoder
+        { extract = \_ -> Failure $ DhallErrors $ pure $ ExpectedTypeError RecursiveTypeError
+        , expected = Failure $ DhallErrors $ pure RecursiveTypeError
+        }
+
+instance {-# OVERLAPPABLE #-} (Selector s, FromDhall a) => GenericFromDhall t (M1 S s (K1 i a)) where
+    genericAutoWithNormalizer _ inputNormalizer InterpretOptions{..} = do
         let n :: M1 S s (K1 i a) r
             n = undefined
 

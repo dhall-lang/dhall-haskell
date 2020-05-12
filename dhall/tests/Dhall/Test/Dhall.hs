@@ -336,7 +336,7 @@ shouldHandleUnionsCorrectly =
       :: ( Generic a
          , Dhall.GenericToDhall (Rep a)
          , Generic b
-         , Dhall.GenericFromDhall (Rep b)
+         , Dhall.GenericFromDhall b (Rep b)
          )
       => Dhall.InterpretOptions -> Dhall.Decoder (a -> b)
     functionWithOptions options =
