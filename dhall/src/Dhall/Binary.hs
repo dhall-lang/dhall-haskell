@@ -1178,7 +1178,7 @@ instance Serialise (Expr Void Import) where
     decode = decodeExpressionInternal decodeImport
 
 -- | Encode a Dhall expression as a CBOR-encoded `ByteString`
-encodeExpression :: Expr Void Import -> ByteString
+encodeExpression :: Serialise (Expr Void a) => Expr Void a -> ByteString
 encodeExpression = Serialise.serialise
 
 -- | Decode a Dhall expression from a CBOR `Term`
