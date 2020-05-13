@@ -51,7 +51,6 @@ jsonToYaml
     -> Bool
     -> ByteString
 jsonToYaml json documents quoted =
-  let encoder = Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 in
   case (documents, json) of
     (True, Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"
@@ -73,3 +72,4 @@ jsonToYaml json documents quoted =
         YS.schemaEncoderScalar Y.coreSchemaEncoder s
 
     schemaEncoder = YS.setScalarStyle style Y.coreSchemaEncoder
+    encoder = Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8

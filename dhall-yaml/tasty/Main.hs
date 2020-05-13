@@ -68,15 +68,14 @@ testTree =
 testDhallToYaml :: Options -> String -> TestScope -> TestTree
 testDhallToYaml options prefix testScope =
     Test.Tasty.testGroup prefix (
-        let hsYamlTest = testCase Dhall.Yaml.dhallToYaml "HsYAML"
-            hsAesonYamlTest = testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml"
-        in
         case testScope of
             SkipAesonYaml _ -> [hsYamlTest, Tasty.ExpectedFailure.expectFail hsAesonYamlTest]
             SkipHsYAML _ -> [hsAesonYamlTest, Tasty.ExpectedFailure.expectFail hsYamlTest]
             _ -> [hsYamlTest, hsAesonYamlTest]
     )
   where
+    hsYamlTest = testCase Dhall.Yaml.dhallToYaml "HsYAML"
+    hsAesonYamlTest = testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml"
     testCase dhallToYaml s = Test.Tasty.HUnit.testCase s $ do
         let inputFile = prefix <> ".dhall"
         let outputFile = prefix <> ".yaml"
