@@ -52,12 +52,12 @@ jsonToYaml
     -> Bool
     -> ByteString
 jsonToYaml json documents quoted =
+  let encoder = Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 in
   case (documents, json) of
     (True, Data.Aeson.Array elems)
       -> Data.ByteString.intercalate "\n---\n"
-         $ fmap (Data.ByteString.Lazy.toStrict. (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8). (:[]))
-         $ Data.Vector.toList elems
-    _ -> Data.ByteString.Lazy.toStrict (Data.YAML.Aeson.encodeValue' schemaEncoder YT.UTF8 [json])
+         $ (Data.ByteString.Lazy.toStrict . encoder . (:[])) <$> Data.Vector.toList elems
+    _ -> Data.ByteString.Lazy.toStrict (encoder [json])
   where
     style (Y.SStr s)
         | "\n" `Text.isInfixOf` s =
