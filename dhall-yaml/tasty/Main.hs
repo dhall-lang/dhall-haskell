@@ -30,28 +30,48 @@ testTree =
         [ testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/normal"
+            True
+            False
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions
+            "./tasty/data/normal-aeson"
+            False
+            True
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/special"
+            True
+            True
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/emptyList"
+            True
+            True
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/emptyMap"
+            True
+            True
         , testDhallToYaml
             (Dhall.JSON.Yaml.defaultOptions { quoted = True })
             "./tasty/data/quoted"
+            False
+            True
+        , testDhallToYaml
+            (Dhall.JSON.Yaml.defaultOptions)
+            "./tasty/data/boolean-quotes"
+            True
+            False
         , testYamlToDhall
             "./tasty/data/mergify"
         ]
 
-testDhallToYaml :: Options -> String -> TestTree
-testDhallToYaml options prefix =
-    Test.Tasty.testGroup prefix
-        [ testCase Dhall.Yaml.dhallToYaml "HsYAML"
-        , testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml"
-        ]
+testDhallToYaml :: Options -> String -> Bool -> Bool -> TestTree
+testDhallToYaml options prefix testHsYaml testAesonYaml =
+    Test.Tasty.testGroup prefix (
+        [testCase Dhall.Yaml.dhallToYaml "HsYAML" | testHsYaml] <>
+        [testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml" | testAesonYaml]
+    )
   where
     testCase dhallToYaml s = Test.Tasty.HUnit.testCase s $ do
         let inputFile = prefix <> ".dhall"
