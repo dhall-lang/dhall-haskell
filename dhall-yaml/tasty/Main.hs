@@ -24,53 +24,56 @@ main = do
 
     Test.Tasty.defaultMain testTree
 
+data TestScope
+    = SkipAesonYaml String -- ^ To skip aeson-yaml tests. "String" is to let us know why are we skipping it
+    | SkipHsYAML String -- ^ As above, but for HsYAML
+    | TestBoth -- ^ Tests both integrations
+
 testTree :: TestTree
 testTree =
     Test.Tasty.testGroup "dhall-yaml"
         [ testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
-            "./tasty/data/normal"
-            True
-            False
+            "./tasty/data/normal" $
+            SkipAesonYaml "aeson-yaml uses yaml 1.2 so it doesn't quotes yaml 1.1 boolean strings"
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
-            "./tasty/data/normal-aeson"
-            False
-            True
+            "./tasty/data/normal-aeson" $
+            SkipHsYAML "HsYAML integration let us quotes boolean strings for backwards compatibility with yaml 1.1"
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/special"
-            True
-            True
+            TestBoth
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/emptyList"
-            True
-            True
+            TestBoth
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/emptyMap"
-            True
-            True
+            TestBoth
         , testDhallToYaml
             (Dhall.JSON.Yaml.defaultOptions { quoted = True })
             "./tasty/data/quoted"
-            False
-            True
+            TestBoth
         , testDhallToYaml
-            (Dhall.JSON.Yaml.defaultOptions)
-            "./tasty/data/boolean-quotes"
-            True
-            False
+            Dhall.JSON.Yaml.defaultOptions
+            "./tasty/data/boolean-quotes" $
+            SkipAesonYaml "this test is just for HsYAML integration"
         , testYamlToDhall
             "./tasty/data/mergify"
         ]
 
-testDhallToYaml :: Options -> String -> Bool -> Bool -> TestTree
-testDhallToYaml options prefix testHsYaml testAesonYaml =
+testDhallToYaml :: Options -> String -> TestScope -> TestTree
+testDhallToYaml options prefix testScope =
     Test.Tasty.testGroup prefix (
-        [testCase Dhall.Yaml.dhallToYaml "HsYAML" | testHsYaml] <>
-        [testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml" | testAesonYaml]
+        let hsYamlTest = testCase Dhall.Yaml.dhallToYaml "HsYAML"
+            hsAesonYamlTest = testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml"
+        in
+        case testScope of
+            SkipAesonYaml _ -> [hsYamlTest]
+            SkipHsYAML _ -> [hsAesonYamlTest]
+            _ -> [hsYamlTest, hsAesonYamlTest]
     )
   where
     testCase dhallToYaml s = Test.Tasty.HUnit.testCase s $ do
