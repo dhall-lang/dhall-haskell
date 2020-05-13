@@ -15,11 +15,11 @@ module Dhall.JSON.Yaml
   , jsonToYaml
   ) where
 
-import           Data.ByteString      (ByteString)
-import           Data.Monoid          ((<>))
-import           Data.Text            (Text)
-import           Dhall.JSON           (Conversion (..), SpecialDoubleMode (..))
-import           Options.Applicative  (Parser)
+import Data.ByteString (ByteString)
+import Data.Monoid ((<>))
+import Data.Text (Text)
+import Dhall.JSON (Conversion (..), SpecialDoubleMode (..))
+import Options.Applicative (Parser)
 
 import qualified Data.Aeson
 import qualified Data.Aeson.Yaml

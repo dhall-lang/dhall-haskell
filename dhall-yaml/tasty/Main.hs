@@ -4,9 +4,9 @@
 
 module Main where
 
-import           Data.Monoid       ((<>))
-import           Dhall.JSON.Yaml   (Options (..))
-import           Test.Tasty        (TestTree)
+import Data.Monoid ((<>))
+import Dhall.JSON.Yaml (Options (..))
+import Test.Tasty (TestTree)
 
 import qualified Data.ByteString
 import qualified Data.Text.IO
