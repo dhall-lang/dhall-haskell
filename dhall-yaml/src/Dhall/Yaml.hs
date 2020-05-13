@@ -66,7 +66,8 @@ jsonToYaml json documents quoted =
       where
         -- For backwards compatibility with YAML 1.1, we need to add the following to the set of boolean values:
         -- https://yaml.org/type/bool.html
-        isBoolString = Text.toLower s `elem` ["y", "yes", "n", "no", "true", "false", "on", "off"]
+        isBoolString = Text.length <= 5 &&
+                      Text.toLower s `elem` ["y", "yes", "n", "no", "true", "false", "on", "off"]
         isNumberOrDateRelated c = Char.isDigit c || c == '.' || c == 'e' || c == '-'
     style s =
         YS.schemaEncoderScalar Y.coreSchemaEncoder s
