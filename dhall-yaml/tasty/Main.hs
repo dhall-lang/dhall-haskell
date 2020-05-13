@@ -16,6 +16,7 @@ import qualified Dhall.Yaml
 import qualified Dhall.YamlToDhall as YamlToDhall
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
+import qualified Test.Tasty.ExpectedFailure as Tasty.ExpectedFailure
 import qualified Test.Tasty.HUnit
 
 main :: IO ()
@@ -71,8 +72,8 @@ testDhallToYaml options prefix testScope =
             hsAesonYamlTest = testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml"
         in
         case testScope of
-            SkipAesonYaml _ -> [hsYamlTest]
-            SkipHsYAML _ -> [hsAesonYamlTest]
+            SkipAesonYaml _ -> [hsYamlTest, Tasty.ExpectedFailure.expectFail hsAesonYamlTest]
+            SkipHsYAML _ -> [hsAesonYamlTest, Tasty.ExpectedFailure.expectFail hsYamlTest]
             _ -> [hsYamlTest, hsAesonYamlTest]
     )
   where
