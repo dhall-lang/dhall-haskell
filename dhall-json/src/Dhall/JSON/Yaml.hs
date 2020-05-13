@@ -15,11 +15,11 @@ module Dhall.JSON.Yaml
   , jsonToYaml
   ) where
 
-import Data.ByteString (ByteString)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Dhall.JSON (Conversion(..), SpecialDoubleMode(..))
-import Options.Applicative (Parser)
+import           Data.ByteString      (ByteString)
+import           Data.Monoid          ((<>))
+import           Data.Text            (Text)
+import           Dhall.JSON           (Conversion (..), SpecialDoubleMode (..))
+import           Options.Applicative  (Parser)
 
 import qualified Data.Aeson
 import qualified Data.Aeson.Yaml
@@ -63,7 +63,7 @@ parseQuoted =
             (   Options.Applicative.long "quoted"
             <>  Options.Applicative.help "Prevent from generating not quoted scalars"
             )
-                           
+
 {-| Convert a piece of Text carrying a Dhall inscription to an equivalent YAML ByteString
 -}
 dhallToYaml
@@ -73,7 +73,7 @@ dhallToYaml
   -> Text  -- ^ Input text.
   -> IO ByteString
 dhallToYaml Options{..} mFilePath code = do
-  
+
   let explaining = if explain then Dhall.detailed else id
 
   json <- omission <$> explaining (Dhall.JSON.codeToValue conversion UseYAMLEncoding mFilePath code)
