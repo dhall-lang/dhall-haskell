@@ -535,8 +535,11 @@ loadImportWithSemanticCache
 
                     return (ImportSemantics {..})
                 else do
-                    printWarning $ makeHashMismatchMessage semanticHash actualHash
-                    saveCacheToFile -- TODO: here we should show a warning that caches doesn't match
+                    printWarning $
+                        makeHashMismatchMessage semanticHash actualHash
+                        <> "\n"
+                        <> "Interpreter has automatically fixed cached import"
+                    saveCacheToFile
 
 
         Nothing -> saveCacheToFile
