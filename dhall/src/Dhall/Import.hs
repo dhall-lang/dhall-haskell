@@ -494,6 +494,10 @@ loadImportWithSemanticCache
     loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
+  import_@(Chained (Import _ Location)) = do
+    loadImportWithSemisemanticCache import_
+
+loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
     Status { .. } <- State.get
     mCached <-

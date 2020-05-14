@@ -62,9 +62,7 @@ successTest path = do
 
     let directoryString = FilePath.takeDirectory pathString
 
-    let expectedFailures =
-            [ importDirectory </> "success/unit/asLocation/HashA.dhall"
-            ]
+    let expectedFailures = []
 
     Test.Util.testCase path expectedFailures (do
 
