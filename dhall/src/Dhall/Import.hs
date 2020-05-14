@@ -297,7 +297,7 @@ newtype MissingEnvironmentVariable = MissingEnvironmentVariable { name :: Text }
 instance Exception MissingEnvironmentVariable
 
 instance Show MissingEnvironmentVariable where
-    show (MissingEnvironmentVariable {..}) =
+    show MissingEnvironmentVariable{..} =
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Missing environment variable\n"
         <>  "\n"
@@ -410,9 +410,13 @@ data HashMismatch = HashMismatch
 instance Exception HashMismatch
 
 instance Show HashMismatch where
-    show (HashMismatch {..}) =
+    show HashMismatch{..} =
             "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Import integrity check failed\n"
+        <>  "\ESC[1;31mError\ESC[0m: " <> makeHashMismatchMessage expectedHash actualHash
+
+makeHashMismatchMessage :: Dhall.Crypto.SHA256Digest -> Dhall.Crypto.SHA256Digest -> String
+makeHashMismatchMessage expectedHash actualHash =
+    "Import integrity check failed\n"
         <>  "\n"
         <>  "Expected hash:\n"
         <>  "\n"
@@ -518,7 +522,9 @@ loadImportWithSemanticCache
                         Right e   -> return e
 
                     return (ImportSemantics {..})
-                else saveCacheToFile -- TODO: here we should show a warning that caches doesn't match
+                else do
+                    printWarning $ makeHashMismatchMessage semanticHash actualHash
+                    saveCacheToFile -- TODO: here we should show a warning that caches doesn't match
 
 
         Nothing -> saveCacheToFile
@@ -767,7 +773,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
                   <> "\ESC[1;33mWarning\ESC[0m: "
                   <> message
 
-            when showWarning (liftIO (System.IO.hPutStrLn System.IO.stderr warning))
+            when showWarning (printWarning warning)
 
             empty
 
@@ -1037,6 +1043,15 @@ loadWith expr₀ = case expr₀ of
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)
 load = loadRelativeTo "." UseSemanticCache
+
+printWarning :: (MonadCatch m, Alternative m, MonadIO m) => String -> m ()
+printWarning message = do
+    let warning =
+                "\n"
+            <> "\ESC[1;33mWarning\ESC[0m: "
+            <> message
+
+    liftIO $ System.IO.hPutStrLn System.IO.stderr warning
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
