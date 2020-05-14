@@ -138,48 +138,36 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import           Control.Applicative                         (Alternative (..),
-                                                              liftA2)
-import           Control.Exception                           (Exception,
-                                                              IOException,
-                                                              SomeException,
-                                                              toException)
-import           Control.Monad                               (when)
-import           Control.Monad.Catch                         (MonadCatch (catch),
-                                                              handle, throwM)
-import           Control.Monad.IO.Class                      (MonadIO (..))
-import           Control.Monad.Trans.Class                   (lift)
-import           Control.Monad.Trans.State.Strict            (StateT)
-import           Data.ByteString                             (ByteString)
-import           Data.CaseInsensitive                        (CI)
-import           Data.List.NonEmpty                          (NonEmpty (..))
-import           Data.Semigroup                              (Semigroup (..))
-import           Data.Text                                   (Text)
-import           Data.Typeable                               (Typeable)
-import           Data.Void                                   (Void, absurd)
-import           Dhall.Binary                                (StandardVersion (..))
-import           Dhall.Syntax                                (Chunks (..),
-                                                              Directory (..),
-                                                              Expr (..),
-                                                              File (..),
-                                                              FilePrefix (..),
-                                                              Import (..),
-                                                              ImportHashed (..),
-                                                              ImportMode (..),
-                                                              ImportType (..),
-                                                              URL (..),
-                                                              bindingExprs)
-import           System.FilePath                             ((</>))
+import Control.Applicative              (Alternative (..), liftA2)
+import Control.Exception                (Exception, IOException, SomeException,
+                                         toException)
+import Control.Monad                    (when)
+import Control.Monad.Catch              (MonadCatch (catch), handle, throwM)
+import Control.Monad.IO.Class           (MonadIO (..))
+import Control.Monad.Trans.Class        (lift)
+import Control.Monad.Trans.State.Strict (StateT)
+import Data.ByteString                  (ByteString)
+import Data.CaseInsensitive             (CI)
+import Data.List.NonEmpty               (NonEmpty (..))
+import Data.Semigroup                   (Semigroup (..))
+import Data.Text                        (Text)
+import Data.Typeable                    (Typeable)
+import Data.Void                        (Void, absurd)
+import Dhall.Binary                     (StandardVersion (..))
+import Dhall.Syntax                     (Chunks (..), Directory (..), Expr (..),
+                                         File (..), FilePrefix (..),
+                                         Import (..), ImportHashed (..),
+                                         ImportMode (..), ImportType (..),
+                                         URL (..), bindingExprs)
+import System.FilePath                  ((</>))
 #ifdef WITH_HTTP
-import           Dhall.Import.HTTP
+import Dhall.Import.HTTP
 #endif
-import           Dhall.Import.Types
+import Dhall.Import.Types
 
-import           Dhall.Parser                                (ParseError (..),
-                                                              Parser (..),
-                                                              SourcedException (..),
-                                                              Src (..))
-import           Lens.Family.State.Strict                    (zoom)
+import Dhall.Parser             (ParseError (..), Parser (..),
+                                 SourcedException (..), Src (..))
+import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.CBOR.Encoding                         as Encoding
 import qualified Codec.CBOR.Write                            as Write
