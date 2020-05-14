@@ -3,9 +3,9 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -138,42 +138,48 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative (Alternative(..), liftA2)
-import Control.Exception (Exception, SomeException, IOException, toException)
-import Control.Monad (when)
-import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State.Strict (StateT)
-import Data.ByteString (ByteString)
-import Data.CaseInsensitive (CI)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup (Semigroup(..))
-import Data.Text (Text)
-import Data.Void (Void, absurd)
-import Data.Typeable (Typeable)
-import System.FilePath ((</>))
-import Dhall.Binary (StandardVersion(..))
-import Dhall.Syntax
-    ( Expr(..)
-    , Chunks(..)
-    , Directory(..)
-    , File(..)
-    , FilePrefix(..)
-    , ImportHashed(..)
-    , ImportType(..)
-    , ImportMode(..)
-    , Import(..)
-    , URL(..)
-    , bindingExprs
-    )
+import           Control.Applicative                         (Alternative (..),
+                                                              liftA2)
+import           Control.Exception                           (Exception,
+                                                              IOException,
+                                                              SomeException,
+                                                              toException)
+import           Control.Monad                               (when)
+import           Control.Monad.Catch                         (MonadCatch (catch),
+                                                              handle, throwM)
+import           Control.Monad.IO.Class                      (MonadIO (..))
+import           Control.Monad.Trans.Class                   (lift)
+import           Control.Monad.Trans.State.Strict            (StateT)
+import           Data.ByteString                             (ByteString)
+import           Data.CaseInsensitive                        (CI)
+import           Data.List.NonEmpty                          (NonEmpty (..))
+import           Data.Semigroup                              (Semigroup (..))
+import           Data.Text                                   (Text)
+import           Data.Typeable                               (Typeable)
+import           Data.Void                                   (Void, absurd)
+import           Dhall.Binary                                (StandardVersion (..))
+import           Dhall.Syntax                                (Chunks (..),
+                                                              Directory (..),
+                                                              Expr (..),
+                                                              File (..),
+                                                              FilePrefix (..),
+                                                              Import (..),
+                                                              ImportHashed (..),
+                                                              ImportMode (..),
+                                                              ImportType (..),
+                                                              URL (..),
+                                                              bindingExprs)
+import           System.FilePath                             ((</>))
 #ifdef WITH_HTTP
-import Dhall.Import.HTTP
+import           Dhall.Import.HTTP
 #endif
-import Dhall.Import.Types
+import           Dhall.Import.Types
 
-import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
-import Lens.Family.State.Strict (zoom)
+import           Dhall.Parser                                (ParseError (..),
+                                                              Parser (..),
+                                                              SourcedException (..),
+                                                              Src (..))
+import           Lens.Family.State.Strict                    (zoom)
 
 import qualified Codec.CBOR.Encoding                         as Encoding
 import qualified Codec.CBOR.Write                            as Write
@@ -185,8 +191,8 @@ import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty                          as NonEmpty
-import qualified Data.Text.Encoding
 import qualified Data.Text                                   as Text
+import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
@@ -198,11 +204,11 @@ import qualified Dhall.Substitution
 import qualified Dhall.Syntax                                as Syntax
 import qualified Dhall.TypeCheck
 import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
+import qualified System.Directory                            as Directory
 import qualified System.Environment
+import qualified System.FilePath                             as FilePath
 import qualified System.Info
 import qualified System.IO
-import qualified System.Directory                            as Directory
-import qualified System.FilePath                             as FilePath
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -611,7 +617,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
             importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
-                Left err -> throwMissingImport (Imported _stack err)
+                Left err  -> throwMissingImport (Imported _stack err)
                 Right sem -> return sem
 
             return importSemantics
@@ -768,12 +774,7 @@ warnAboutMissingCaches = warn <|> return ()
 getOrCreateCacheDirectory :: (MonadCatch m, Alternative m, MonadIO m) => Bool -> FilePath -> m FilePath
 getOrCreateCacheDirectory showWarning cacheName = do
     let warn message = do
-            let warning =
-                     "\n"
-                  <> "\ESC[1;33mWarning\ESC[0m: "
-                  <> message
-
-            when showWarning (printWarning warning)
+            when showWarning (printWarning message)
 
             empty
 
@@ -786,7 +787,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
                   <> "... the following exception was thrown:\n"
                   <> "\n"
                   <> "↳ " <> show ioex <> "\n"
-        
+
             warn ioExMsg
 
     let setPermissions dir = do
@@ -865,7 +866,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
                             createDirectory dir
 
                             setPermissions dir
-    
+
     cacheBaseDirectory <- getCacheBaseDirectory showWarning
 
     let directory = cacheBaseDirectory </> cacheName
@@ -955,7 +956,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
 
             _ <- case (Dhall.TypeCheck.typeOf annot) of
                 Left err -> throwMissingImport (Imported _stack err)
-                Right _ -> return ()
+                Right _  -> return ()
 
             return (Dhall.Core.normalize loadedExpr)
 
