@@ -1,4 +1,4 @@
 steps:
   - imports:
       align: group
-      pad_module_names: false
+      pad_module_names: true
