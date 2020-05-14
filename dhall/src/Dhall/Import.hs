@@ -1054,7 +1054,7 @@ loadWith expr₀ = case expr₀ of
 load :: Expr Src Import -> IO (Expr Src Void)
 load = loadRelativeTo "." UseSemanticCache
 
-printWarning :: (MonadCatch m, Alternative m, MonadIO m) => String -> m ()
+printWarning :: (MonadIO m) => String -> m ()
 printWarning message = do
     let warning =
                 "\n"
