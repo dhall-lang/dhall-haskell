@@ -279,7 +279,7 @@ instance Show e => Show (Imported e) where
         toDisplay = drop 1 (reverse canonical)
 
 -- | Exception thrown when an imported file is missing
-data MissingFile = MissingFile FilePath
+newtype MissingFile = MissingFile FilePath
     deriving (Typeable)
 
 instance Exception MissingFile
@@ -431,16 +431,16 @@ localToPath prefix file_ = liftIO $ do
     let Directory {..} = directory
 
     prefixPath <- case prefix of
-        Home -> do
+        Home ->
             Directory.getHomeDirectory
 
-        Absolute -> do
+        Absolute ->
             return "/"
 
-        Parent -> do
+        Parent ->
             return ".."
 
-        Here -> do
+        Here ->
             return "."
 
     let cs = map Text.unpack (file : components)
@@ -490,7 +490,7 @@ loadImport import_ = do
 --   therefore not cached semantically), as well as those that aren't cached yet.
 loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemanticCache
-  import_@(Chained (Import (ImportHashed Nothing _) _)) = do
+  import_@(Chained (Import (ImportHashed Nothing _) _)) =
     loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
@@ -510,20 +510,20 @@ loadImportWithSemanticCache
             let actualHash = Dhall.Crypto.sha256Hash bytesStrict
 
             if semanticHash == actualHash
-                then return ()
-                else do
-                    Status { _stack } <- State.get
-                    throwMissingImport (Imported _stack (HashMismatch {expectedHash = semanticHash, ..}))
+                then do
+                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
-            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+                    importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
+                        Left  err -> throwMissingImport (Imported _stack err)
+                        Right e   -> return e
 
-            importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
-                Left  err -> throwMissingImport (Imported _stack err)
-                Right e   -> return e
+                    return (ImportSemantics {..})
+                else saveCacheToFile -- TODO: here we should show a warning that caches doesn't match
 
-            return (ImportSemantics {..})
 
-        Nothing -> do
+        Nothing -> saveCacheToFile
+    where
+        saveCacheToFile = do
             ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
 
             let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
@@ -537,6 +537,8 @@ loadImportWithSemanticCache
                     throwMissingImport (Imported _stack (HashMismatch {..}))
 
             return (ImportSemantics {..})
+
+
 
 -- Fetch encoded normal form from "semantic cache"
 fetchFromSemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
