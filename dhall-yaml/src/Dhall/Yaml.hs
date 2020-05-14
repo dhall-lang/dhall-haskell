@@ -9,22 +9,22 @@ module Dhall.Yaml
     , dhallToYaml
     ) where
 
-import Data.ByteString (ByteString)
+import Data.ByteString      (ByteString)
 import Data.ByteString.Lazy (toStrict)
-import Data.Text (Text)
-import Dhall.JSON (SpecialDoubleMode (..), codeToValue)
-import Dhall.JSON.Yaml (Options (..))
+import Data.Text            (Text)
+import Dhall.JSON           (SpecialDoubleMode (..), codeToValue)
+import Dhall.JSON.Yaml      (Options (..))
 
 import qualified Data.Aeson
 import qualified Data.ByteString
-import qualified Data.Char as Char
-import qualified Data.Text as Text
+import qualified Data.Char        as Char
+import qualified Data.Text        as Text
 import qualified Data.Vector
-import qualified Data.YAML as Y
+import qualified Data.YAML        as Y
 import qualified Data.YAML.Aeson
-import qualified Data.YAML.Event as YE
+import qualified Data.YAML.Event  as YE
 import qualified Data.YAML.Schema as YS
-import qualified Data.YAML.Token as YT
+import qualified Data.YAML.Token  as YT
 import qualified Dhall
 import qualified Dhall.JSON.Yaml
 

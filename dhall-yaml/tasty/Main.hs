@@ -4,16 +4,16 @@
 
 module Main where
 
-import Data.Monoid ((<>))
+import Data.Monoid     ((<>))
 import Dhall.JSON.Yaml (Options (..))
-import Test.Tasty (TestTree)
+import Test.Tasty      (TestTree)
 
 import qualified Data.ByteString
 import qualified Data.Text.IO
 import qualified Dhall.Core
 import qualified Dhall.JSON.Yaml
 import qualified Dhall.Yaml
-import qualified Dhall.YamlToDhall as YamlToDhall
+import qualified Dhall.YamlToDhall          as YamlToDhall
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.ExpectedFailure as Tasty.ExpectedFailure

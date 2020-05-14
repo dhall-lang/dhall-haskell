@@ -6,17 +6,17 @@
 module Dhall.DhallToYaml.Main (main) where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception (SomeException)
-import Data.ByteString (ByteString)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Dhall.JSON (parseConversion, parsePreservationAndOmission)
-import Dhall.JSON.Yaml (Options (..), parseDocuments, parseQuoted)
+import Control.Exception   (SomeException)
+import Data.ByteString     (ByteString)
+import Data.Monoid         ((<>))
+import Data.Text           (Text)
+import Dhall.JSON          (parseConversion, parsePreservationAndOmission)
+import Dhall.JSON.Yaml     (Options (..), parseDocuments, parseQuoted)
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
 import qualified Data.ByteString
-import qualified Data.Text.IO as Text.IO
+import qualified Data.Text.IO        as Text.IO
 import qualified Data.Version
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative as Options

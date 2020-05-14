@@ -212,32 +212,32 @@ module Dhall.JSON (
     , CompileError(..)
     ) where
 
-import Control.Applicative (empty, (<|>))
-import Control.Exception (Exception, throwIO)
-import Control.Monad (guard)
-import Data.Aeson (ToJSON (..), Value (..))
-import Data.Maybe (fromMaybe)
-import Data.Monoid (mempty, (<>))
-import Data.Text (Text)
+import Control.Applicative       (empty, (<|>))
+import Control.Exception         (Exception, throwIO)
+import Control.Monad             (guard)
+import Data.Aeson                (ToJSON (..), Value (..))
+import Data.Maybe                (fromMaybe)
+import Data.Monoid               (mempty, (<>))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
-import Data.Void (Void)
-import Dhall.Core (Binding (..), DhallDouble (..), Expr)
-import Dhall.Import (SemanticCacheMode (..))
-import Dhall.JSON.Util (pattern V)
-import Dhall.Map (Map)
-import Options.Applicative (Parser)
-import Prelude hiding (getContents)
+import Data.Void                 (Void)
+import Dhall.Core                (Binding (..), DhallDouble (..), Expr)
+import Dhall.Import              (SemanticCacheMode (..))
+import Dhall.JSON.Util           (pattern V)
+import Dhall.Map                 (Map)
+import Options.Applicative       (Parser)
+import Prelude                   hiding (getContents)
 
-import qualified Data.Aeson as Aeson
-import qualified Data.Foldable as Foldable
-import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Aeson                            as Aeson
+import qualified Data.Foldable                         as Foldable
+import qualified Data.HashMap.Strict                   as HashMap
 import qualified Data.List
 import qualified Data.Map
 import qualified Data.Ord
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
-import qualified Data.Vector as Vector
-import qualified Dhall.Core as Core
+import qualified Data.Vector                           as Vector
+import qualified Dhall.Core                            as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Optics
