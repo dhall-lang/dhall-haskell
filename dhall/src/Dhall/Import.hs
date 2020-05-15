@@ -538,13 +538,13 @@ loadImportWithSemanticCache
                     printWarning $
                         makeHashMismatchMessage semanticHash actualHash
                         <> "\n"
-                        <> "The interpreter has automatically fixed cached import\n"
-                    saveCacheToFile
+                        <> "The interpreter will attempt to fix the cached import\n"
+                    fetch
 
 
-        Nothing -> saveCacheToFile
+        Nothing -> fetch
     where
-        saveCacheToFile = do
+        fetch = do
             ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
 
             let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
