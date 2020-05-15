@@ -78,11 +78,14 @@ successTest path = do
         let load =
                 State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
 
+        let usesCache = [ "hashFromCacheA.dhall"
+                        , "unit/asLocation/HashA.dhall"
+                        , "unit/IgnorePoisonedCacheA.dhall"]
+
+        let endsIn path' = not $ null $ Turtle.match (Turtle.ends path') path
+
         let runTest =
-                if Turtle.filename (Turtle.fromText path) `elem`
-                     [ "hashFromCacheA.dhall"
-                     , "unit/asLocation/HashA.dhall"
-                     , "unit/IgnorePoisonedCacheA.dhall"]
+                if any endsIn usesCache
                     then do
                         setCache
                         _ <- load
