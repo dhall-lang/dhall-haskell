@@ -3,13 +3,13 @@
 module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Dhall.Import (MissingImports(..))
-import Dhall.Parser (SourcedException(..))
-import Prelude hiding (FilePath)
-import Test.Tasty (TestTree)
-import Turtle (FilePath, (</>))
+import Data.Monoid       ((<>))
+import Data.Text         (Text)
+import Dhall.Import      (MissingImports (..))
+import Dhall.Parser      (SourcedException (..))
+import Prelude           hiding (FilePath)
+import Test.Tasty        (TestTree)
+import Turtle            (FilePath, (</>))
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad                    as Monad
@@ -62,7 +62,7 @@ successTest path = do
 
     let directoryString = FilePath.takeDirectory pathString
 
-    let expectedFailures = []
+    let expectedFailures = ["unit/IgnorePoisonedCacheA.dhall"]
 
     Test.Util.testCase path expectedFailures (do
 
