@@ -538,7 +538,7 @@ loadImportWithSemanticCache
                     printWarning $
                         makeHashMismatchMessage semanticHash actualHash
                         <> "\n"
-                        <> "Interpreter has automatically fixed cached import"
+                        <> "The interpreter has automatically fixed cached import\n"
                     saveCacheToFile
 
 
