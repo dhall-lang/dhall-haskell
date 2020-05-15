@@ -62,7 +62,7 @@ successTest path = do
 
     let directoryString = FilePath.takeDirectory pathString
 
-    let expectedFailures = ["unit/IgnorePoisonedCacheA.dhall"]
+    let expectedFailures = []
 
     Test.Util.testCase path expectedFailures (do
 
@@ -78,11 +78,11 @@ successTest path = do
         let load =
                 State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
 
-        let runTest = do
+        let runTest =
                 if Turtle.filename (Turtle.fromText path) `elem`
                      [ "hashFromCacheA.dhall"
                      , "unit/asLocation/HashA.dhall"
-                     ]
+                     , "unit/IgnorePoisonedCacheA.dhall"]
                     then do
                         setCache
                         _ <- load
