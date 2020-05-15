@@ -70,8 +70,9 @@ successTest path = do
 
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
 
-        let setCache =
-                Turtle.export "XDG_CACHE_HOME" "dhall-lang/tests/import/cache"
+        let originalCache = "dhall-lang/tests/import/cache"
+
+        let setCache = Turtle.export "XDG_CACHE_HOME"
 
         let unsetCache = Turtle.unset "XDG_CACHE_HOME"
 
@@ -84,11 +85,17 @@ successTest path = do
 
         let endsIn path' = not $ null $ Turtle.match (Turtle.ends path') path
 
+        let buildNewCache = do
+                                tempdir <- Turtle.mktempdir "/tmp" "dhall-cache"
+                                Turtle.liftIO $ Turtle.cptree originalCache tempdir
+                                return tempdir
+
         let runTest =
                 if any endsIn usesCache
-                    then do
-                        setCache
-                        _ <- load
+                    then Turtle.runManaged $ do
+                        cacheDir <- buildNewCache
+                        setCache $ Turtle.format Turtle.fp cacheDir
+                        _ <- Turtle.liftIO load
                         unsetCache
                     else do
                         _ <- load
