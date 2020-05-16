@@ -294,6 +294,8 @@ let
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
+    cabal2nix = pkgs.cabal2nix;
+
     cabal_patched_src = pkgsNew.fetchFromGitHub {
       owner = "nh2";
       repo = "cabal";
