@@ -191,6 +191,21 @@
 > $ json-to-dhall --no-keyval-maps 'List { mapKey : Text, mapValue : Text }' <<< '{ "foo": "bar" }'
 > Error: Homogeneous JSON map objects cannot be converted to Dhall association lists under --no-keyval-arrays flag
 
+    If you have an `Record` schema with a property of type `List` and omit that property in the JSON,
+    you'll get an error:
+
+> $ json-to-dhall  '{ a : List Natural }' <<< '{}'
+>
+>
+> Error: Key a, expected by Dhall type:
+> List Natural
+> is not present in JSON object:
+> {}
+
+    You can use the @--omissible-lists@ option to default to an empty list if the property does not exist
+
+> $ json-to-dhall --omissible-lists  '{ a : List Natural }' <<< '{}'
+> { a = [] : List Natural }
 
 == Optional values and unions
 
