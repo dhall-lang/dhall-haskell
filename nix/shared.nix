@@ -201,6 +201,15 @@ let
   };
 
   overlayCabal2nix = pkgsNew: pkgsOld: {
+
+    # we only reference git repositories with cabal2nix
+    nix-prefetch-scripts = pkgsOld.nix-prefetch-scripts.override {
+      mercurial = null;
+      bazaar = null;
+      cvs = null;
+      subversion = null;
+    };
+
     haskellPackages = pkgsOld.haskellPackages.override (old: {
         overrides =
           let
