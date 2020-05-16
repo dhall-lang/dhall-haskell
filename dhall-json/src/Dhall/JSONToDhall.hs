@@ -359,43 +359,44 @@ module Dhall.JSONToDhall (
     , showCompileError
     ) where
 
-import           Control.Applicative ((<|>))
-import           Control.Exception (Exception, throwIO)
-import           Control.Monad.Catch (throwM, MonadCatch)
-import           Data.Aeson (Value)
-import qualified Data.Aeson as A
-import           Data.Aeson.Encode.Pretty (encodePretty)
+import           Control.Applicative        ((<|>))
+import           Control.Exception          (Exception, throwIO)
+import           Control.Monad.Catch        (MonadCatch, throwM)
+import           Data.Aeson                 (Value)
+import qualified Data.Aeson                 as A
+import           Data.Aeson.Encode.Pretty   (encodePretty)
+import qualified Data.Aeson.Types           as AT
 import qualified Data.ByteString.Lazy.Char8 as BSL8
-import           Data.Either (rights)
-import           Data.Foldable (toList)
-import qualified Data.Foldable as Foldable
-import qualified Data.HashMap.Strict as HM
-import           Data.List ((\\))
-import qualified Data.List as List
+import           Data.Either                (rights)
+import           Data.Foldable              (toList)
+import qualified Data.Foldable              as Foldable
+import qualified Data.HashMap.Strict        as HM
+import           Data.List                  ((\\))
+import qualified Data.List                  as List
 import qualified Data.Map
-import qualified Data.Map.Merge.Lazy as Data.Map.Merge
-import           Data.Monoid (Any(..))
-import qualified Data.Ord as Ord
-import           Data.Scientific (floatingOrInteger, toRealFloat)
-import           Data.Semigroup (Semigroup(..))
-import qualified Data.Sequence as Seq
+import qualified Data.Map.Merge.Lazy        as Data.Map.Merge
+import           Data.Monoid                (Any (..))
+import qualified Data.Ord                   as Ord
+import           Data.Scientific            (floatingOrInteger, toRealFloat)
+import           Data.Semigroup             (Semigroup (..))
+import qualified Data.Sequence              as Seq
 import qualified Data.String
-import qualified Data.Text as Text
-import           Data.Text (Text)
-import qualified Data.Vector as Vector
-import           Data.Void (Void)
-import qualified Options.Applicative as O
-import           Options.Applicative (Parser)
+import           Data.Text                  (Text)
+import qualified Data.Text                  as Text
+import qualified Data.Vector                as Vector
+import           Data.Void                  (Void)
+import           Options.Applicative        (Parser)
+import qualified Options.Applicative        as O
 
-import           Dhall.JSON.Util (pattern V)
-import qualified Dhall.Core as D
-import           Dhall.Core (Expr(App), Chunks(..), DhallDouble(..))
+import           Dhall.Core      (Chunks (..), DhallDouble (..), Expr (App))
+import qualified Dhall.Core      as D
 import qualified Dhall.Import
-import qualified Dhall.Lint as Lint
-import qualified Dhall.Map as Map
-import qualified Dhall.Optics as Optics
+import           Dhall.JSON.Util (pattern V)
+import qualified Dhall.Lint      as Lint
+import qualified Dhall.Map       as Map
+import qualified Dhall.Optics    as Optics
+import           Dhall.Parser    (Src)
 import qualified Dhall.Parser
-import           Dhall.Parser (Src)
 import qualified Dhall.TypeCheck as D
 
 -- ---------------
@@ -805,40 +806,40 @@ Right (RecordLit (fromList [("foo",IntegerLit 1)]))
 dhallFromJSON
   :: Conversion -> ExprX -> Value -> Either CompileError ExprX
 dhallFromJSON (Conversion {..}) expressionType =
-    fmap (Optics.rewriteOf D.subExpressions Lint.useToMap) . loop (D.alphaNormalize (D.normalize expressionType))
+    fmap (Optics.rewriteOf D.subExpressions Lint.useToMap) . loop [] (D.alphaNormalize (D.normalize expressionType))
   where
     -- any ~> Union
-    loop t@(D.Union tm) v = do
+    loop jsonPath t@(D.Union tm) v = do
       let f key maybeType =
             case maybeType of
               Just _type -> do
-                expression <- loop _type v
+                expression <- loop jsonPath _type v
 
                 return (D.App (D.Field t key) expression)
 
-              Nothing -> do
+              Nothing ->
                 case v of
-                    A.String text | key == text -> do
+                    A.String text | key == text ->
                         return (D.Field t key)
-                    _ -> do
-                        Left (Mismatch t v)
+                    _ ->
+                        Left (Mismatch t v jsonPath)
 
       case (unions, rights (toList (Map.mapWithKey f tm))) of
         (UNone  , _         ) -> Left (ContainsUnion t)
         (UStrict, xs@(_:_:_)) -> Left (UndecidableUnion t v xs)
-        (_      , [ ]       ) -> Left (Mismatch t v)
+        (_      , [ ]       ) -> Left (Mismatch t v jsonPath)
         (UFirst , x:_       ) -> Right x
         (UStrict, [x]       ) -> Right x
 
     -- object ~> Record
-    loop (D.Record r) v@(A.Object o)
+    loop jsonPath (D.Record r) v@(A.Object o)
         | extraKeys <- HM.keys o \\ Map.keys r
         , strictRecs && not (null extraKeys)
         = Left (UnhandledKeys extraKeys (D.Record r) v)
         | otherwise
         = let f :: Text -> ExprX -> Either CompileError ExprX
               f k t | Just value <- HM.lookup k o
-                    = loop t value
+                    = loop (AT.Key k : jsonPath) t value
                     | App D.Optional t' <- t
                     = Right (App D.None t')
                     | App D.List _ <- t
@@ -849,30 +850,30 @@ dhallFromJSON (Conversion {..}) expressionType =
            in D.RecordLit <$> Map.traverseWithKey f r
 
     -- key-value list ~> Record
-    loop t@(D.Record _) v@(A.Array a)
+    loop jsonPath t@(D.Record _) v@(A.Array a)
         | not noKeyValArr
         , os :: [Value] <- toList a
         , Just kvs <- traverse keyValMay os
-        = loop t (A.Object $ HM.fromList kvs)
+        = loop jsonPath t (A.Object $ HM.fromList kvs)
         | noKeyValArr
         = Left (NoKeyValArray t v)
         | otherwise
-        = Left (Mismatch t v)
+        = Left (Mismatch t v jsonPath)
 
     -- object ~> List (key, value)
-    loop t@(App D.List (D.Record r)) v@(A.Object o)
+    loop jsonPath t@(App D.List (D.Record r)) v@(A.Object o)
         | not noKeyValMap
         , ["mapKey", "mapValue"] == Map.keys r
         , Just mapKey   <- Map.lookup "mapKey" r
         , Just mapValue <- Map.lookup "mapValue" r
         = do
-          keyExprMap <- traverse (loop mapValue) o
+          keyExprMap <- HM.traverseWithKey  (\k child -> loop (AT.Key k : jsonPath) mapValue child) o
 
-          toKey <- do
+          toKey <-
               case mapKey of
-                  D.Text    -> return (\key -> D.TextLit (Chunks [] key))
-                  D.Union _ -> return (\key -> D.Field mapKey key)
-                  _         -> Left (Mismatch t v)
+                  D.Text    -> return $ D.TextLit . Chunks []
+                  D.Union _ -> return $ D.Field mapKey
+                  _         -> Left (Mismatch t v jsonPath)
 
           let f :: (Text, ExprX) -> ExprX
               f (key, val) = D.RecordLit ( Map.fromList
@@ -888,59 +889,60 @@ dhallFromJSON (Conversion {..}) expressionType =
         | noKeyValMap
         = Left (NoKeyValMap t v)
         | otherwise
-        = Left (Mismatch t v)
+        = Left (Mismatch t v jsonPath)
 
     -- array ~> List
-    loop (App D.List t) (A.Array a)
+    loop jsonPath (App D.List t) (A.Array a)
         = let f :: [ExprX] -> ExprX
               f es = D.ListLit
                        (if null es then Just (App D.List t) else Nothing)
                        (Seq.fromList es)
-           in f <$> traverse (loop t) (toList a)
+           in f <$> traverse (\(idx, val) -> loop (AT.Index idx : jsonPath) t val) (zip [0..] $ toList a)
 
     -- null ~> List
-    loop t@(App D.List _) (A.Null)
+    loop jsonPath t@(App D.List _) A.Null
         = if omissibleLists
           then Right (D.ListLit (Just t) [])
-          else Left (Mismatch t A.Null)
+          else Left (Mismatch t A.Null jsonPath)
 
     -- number ~> Integer
-    loop D.Integer (A.Number x)
+    loop jsonPath D.Integer (A.Number x)
         | Right n <- floatingOrInteger x :: Either Double Integer
         = Right (D.IntegerLit n)
         | otherwise
-        = Left (Mismatch D.Integer (A.Number x))
+        = Left (Mismatch D.Integer (A.Number x) jsonPath)
 
     -- number ~> Natural
-    loop D.Natural (A.Number x)
+    loop jsonPath D.Natural (A.Number x)
         | Right n <- floatingOrInteger x :: Either Double Integer
         , n >= 0
         = Right (D.NaturalLit (fromInteger n))
         | otherwise
-        = Left (Mismatch D.Natural (A.Number x))
+        = Left (Mismatch D.Natural (A.Number x) jsonPath)
 
     -- number ~> Double
-    loop D.Double (A.Number x)
+    loop _ D.Double (A.Number x)
         = Right (D.DoubleLit $ DhallDouble $ toRealFloat x)
 
     -- string ~> Text
-    loop D.Text (A.String t)
+    loop _ D.Text (A.String t)
         = Right (D.TextLit (Chunks [] t))
 
     -- bool ~> Bool
-    loop D.Bool (A.Bool t)
+    loop _ D.Bool (A.Bool t)
         = Right (D.BoolLit t)
 
     -- null ~> Optional
-    loop (App D.Optional expr) A.Null
+    loop _ (App D.Optional expr) A.Null
         = Right $ App D.None expr
 
     -- value ~> Optional
-    loop (App D.Optional expr) value
-        = D.Some <$> loop expr value
+    loop jsonPath (App D.Optional expr) value
+        = D.Some <$> loop jsonPath expr value
 
     -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type (< v13.0.0)
     loop
+      _
       (D.Pi _ (D.Const D.Type)
           (D.Pi _
               (D.Record
@@ -980,7 +982,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       keyValues = D.ListLit elementType elements
 
-                  in  (D.App (D.Field "json" "object") keyValues)
+                  in  D.App (D.Field "json" "object") keyValues
               outer (A.Array a) =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
@@ -1017,6 +1019,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
     -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type (v13.0.0 <=)
     loop
+      _
       (D.Pi _ (D.Const D.Type)
           (D.Pi _
               (D.Record
@@ -1057,7 +1060,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       keyValues = D.ListLit elementType elements
 
-                  in  (D.App (D.Field "json" "object") keyValues)
+                  in  D.App (D.Field "json" "object") keyValues
               outer (A.Array a) =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
@@ -1096,8 +1099,8 @@ dhallFromJSON (Conversion {..}) expressionType =
           return result
 
     -- fail
-    loop expr value
-        = Left (Mismatch expr value)
+    loop jsonPath expr value
+        = Left (Mismatch expr value jsonPath)
 
 
 -- ----------
@@ -1126,6 +1129,7 @@ data CompileError
   | Mismatch
       ExprX   -- Dhall expression
       Value -- Aeson value
+      AT.JSONPath -- JSON Path to the error
   -- record specific
   | MissingKey     Text  ExprX Value
   | UnhandledKeys [Text] ExprX Value
@@ -1164,8 +1168,8 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> Text.unpack (Text.intercalate sep $ D.pretty <$> xs)
         where sep = red "\n--------\n" :: Text
 
-    Mismatch e v -> prefix
-      <> "Dhall type expression and " <> format <> " value do not match:"
+    Mismatch e v jsonPath -> prefix
+      <> AT.formatPath (reverse jsonPath) <> ": Dhall type expression and " <> format <> " value do not match:"
       <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
