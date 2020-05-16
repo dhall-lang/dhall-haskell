@@ -359,45 +359,45 @@ module Dhall.JSONToDhall (
     , showCompileError
     ) where
 
-import           Control.Applicative        ((<|>))
-import           Control.Exception          (Exception, throwIO)
-import           Control.Monad.Catch        (MonadCatch, throwM)
-import           Data.Aeson                 (Value)
+import Control.Applicative      ((<|>))
+import Control.Exception        (Exception, throwIO)
+import Control.Monad.Catch      (MonadCatch, throwM)
+import Data.Aeson               (Value)
+import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.Either              (rights)
+import Data.Foldable            (toList)
+import Data.List                ((\\))
+import Data.Monoid              (Any (..))
+import Data.Scientific          (floatingOrInteger, toRealFloat)
+import Data.Semigroup           (Semigroup (..))
+import Data.Text                (Text)
+import Data.Void                (Void)
+import Dhall.Core               (Chunks (..), DhallDouble (..), Expr (App))
+import Dhall.JSON.Util          (pattern V)
+import Dhall.Parser             (Src)
+import Options.Applicative      (Parser)
+
 import qualified Data.Aeson                 as A
-import           Data.Aeson.Encode.Pretty   (encodePretty)
 import qualified Data.Aeson.Types           as AT
 import qualified Data.ByteString.Lazy.Char8 as BSL8
-import           Data.Either                (rights)
-import           Data.Foldable              (toList)
 import qualified Data.Foldable              as Foldable
 import qualified Data.HashMap.Strict        as HM
-import           Data.List                  ((\\))
 import qualified Data.List                  as List
 import qualified Data.Map
 import qualified Data.Map.Merge.Lazy        as Data.Map.Merge
-import           Data.Monoid                (Any (..))
 import qualified Data.Ord                   as Ord
-import           Data.Scientific            (floatingOrInteger, toRealFloat)
-import           Data.Semigroup             (Semigroup (..))
 import qualified Data.Sequence              as Seq
 import qualified Data.String
-import           Data.Text                  (Text)
 import qualified Data.Text                  as Text
 import qualified Data.Vector                as Vector
-import           Data.Void                  (Void)
-import           Options.Applicative        (Parser)
-import qualified Options.Applicative        as O
-
-import           Dhall.Core      (Chunks (..), DhallDouble (..), Expr (App))
-import qualified Dhall.Core      as D
+import qualified Dhall.Core                 as D
 import qualified Dhall.Import
-import           Dhall.JSON.Util (pattern V)
-import qualified Dhall.Lint      as Lint
-import qualified Dhall.Map       as Map
-import qualified Dhall.Optics    as Optics
-import           Dhall.Parser    (Src)
+import qualified Dhall.Lint                 as Lint
+import qualified Dhall.Map                  as Map
+import qualified Dhall.Optics               as Optics
 import qualified Dhall.Parser
-import qualified Dhall.TypeCheck as D
+import qualified Dhall.TypeCheck            as D
+import qualified Options.Applicative        as O
 
 -- ---------------
 -- Command options
