@@ -5,10 +5,12 @@
 module Main where
 
 import Data.Monoid ((<>))
-import Test.Tasty (TestTree)
+import Data.Void   (Void)
+import Test.Tasty  (TestTree)
 
 import qualified Data.Aeson           as Aeson
 import qualified Data.ByteString.Lazy
+import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Dhall.Core           as Core
 import qualified Dhall.Import
@@ -19,6 +21,7 @@ import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
+import qualified Test.Tasty.Silver
 
 main :: IO ()
 main = do
@@ -42,6 +45,8 @@ testTree =
         , testJSONToDhall "./tasty/data/fromArbitraryJSON_13_0_0"
         , inferJSONToDhall "./tasty/data/potpourri"
         , testCustomConversionJSONToDhall False omissibleLists "./tasty/data/missingList"
+        , Test.Tasty.testGroup "Errors"
+            [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage" ]
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
             , testDhallToJSON "./tasty/data/nesting1"
@@ -96,23 +101,15 @@ testCustomConversionJSONToDhall infer conv prefix =
 
     bytes <- Data.ByteString.Lazy.readFile inputFile
 
-    value <- do
+    value <-
         case Aeson.eitherDecode bytes of
             Left string -> fail string
             Right value -> return value
 
-    schema <- do
+    schema <-
         if infer
-            then do
-                return (JSONToDhall.schemaToDhallType (JSONToDhall.inferSchema value))
-            else do
-                let schemaFile = prefix <> "Schema.dhall"
-
-                schemaText <- Data.Text.IO.readFile schemaFile
-
-                parsedSchema <- Core.throws (Dhall.Parser.exprFromText schemaFile schemaText)
-
-                Dhall.Import.load parsedSchema
+            then return (JSONToDhall.schemaToDhallType (JSONToDhall.inferSchema value))
+            else let schemaFile = prefix <> "Schema.dhall" in loadSchemaFromFile schemaFile
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf schema)
 
@@ -142,3 +139,39 @@ testJSONToDhall =
 inferJSONToDhall :: String -> TestTree
 inferJSONToDhall =
     testCustomConversionJSONToDhall True JSONToDhall.defaultConversion
+
+loadSchemaFromFile :: FilePath -> IO (Core.Expr Dhall.Parser.Src Void)
+loadSchemaFromFile schemaFile = do
+    schemaText <- Data.Text.IO.readFile schemaFile
+
+    parsedSchema <- Core.throws (Dhall.Parser.exprFromText schemaFile schemaText)
+
+    Dhall.Import.load parsedSchema
+
+testJSONToDhallErrorMessage :: String -> TestTree
+testJSONToDhallErrorMessage prefix =
+    let goldenFile = prefix <> ".txt"
+        outputFile = prefix <> ".output.txt" in
+    Test.Tasty.Silver.goldenVsFile prefix goldenFile outputFile $ do
+        let conv = JSONToDhall.defaultConversion
+        let inputFile = prefix <> ".json"
+        let schemaFile = prefix <> "Schema.dhall"
+
+        Data.Text.IO.writeFile outputFile "" -- erase its contents before writting again
+
+        bytes <- Data.ByteString.Lazy.readFile inputFile
+
+        value <-
+            case Aeson.eitherDecode bytes of
+                Left string -> fail string
+                Right value -> return value
+
+        schema <- loadSchemaFromFile schemaFile
+
+        _ <- Core.throws (Dhall.TypeCheck.typeOf schema)
+
+        case JSONToDhall.dhallFromJSON conv schema value of
+            Right _ -> fail $ prefix <> " should fail"
+            Left compileError -> do
+                print compileError
+                Data.Text.IO.writeFile outputFile (Data.Text.pack $ show compileError)
