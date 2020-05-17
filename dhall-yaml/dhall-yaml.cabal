@@ -88,14 +88,16 @@ Test-Suite tasty
     Hs-Source-Dirs: tasty
     Main-Is: Main.hs
     Build-Depends:
-        base                                    ,
-        bytestring                              ,
-        dhall                                   ,
-        dhall-json                              ,
-        dhall-yaml                              ,
-        tasty                             <  1.4,
-        tasty-expected-failure            < 0.12,
-        text                                    ,
-        tasty-hunit            >= 0.2
+        base                         ,
+        bytestring                   ,
+        dhall                        ,
+        dhall-json                   ,
+        dhall-yaml                   ,
+        tasty                  <  1.4,
+        tasty-expected-failure < 0.12,
+        text                         ,
+        tasty-hunit            >= 0.2,
+        tasty-silver           >= 3.0
+
     GHC-Options: -Wall
     Default-Language: Haskell2010
