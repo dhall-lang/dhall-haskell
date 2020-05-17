@@ -1169,7 +1169,7 @@ showCompileError format showValue = let prefix = red "\nError: "
         where sep = red "\n--------\n" :: Text
 
     Mismatch e v jsonPath -> prefix
-      <> AT.formatPath (reverse jsonPath) <> ": Dhall type expression and " <> format <> " value do not match:"
+      <> showJsonPath jsonPath <> ": Dhall type expression and " <> format <> " value do not match:"
       <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
@@ -1181,7 +1181,7 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> showValue v <> "\n"
 
     UnhandledKeys ks e v jsonPath -> prefix
-      <> AT.formatPath (reverse jsonPath) <> ": Key(s) " <> purple (Text.unpack (Text.intercalate ", " ks))
+      <> showJsonPath jsonPath <> ": Key(s) " <> purple (Text.unpack (Text.intercalate ", " ks))
       <> " present in the " <> format <> " object but not in the expected Dhall record type. This is not allowed unless you enable the "
       <> green "--records-loose" <> " flag:"
       <> "\n\nExpected Dhall type:\n" <> showExpr e
@@ -1201,3 +1201,6 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
+
+showJsonPath :: AT.JSONPath -> String
+showJsonPath = AT.formatPath . reverse
