@@ -1197,7 +1197,7 @@ showCompileError format showValue = let prefix = red "\nError: "
 
     NoKeyValMap e v -> prefix
       <> "Homogeneous " <> format <> " map objects cannot be converted to Dhall association lists under "
-      <> green "--no-keyval-arrays" <> " flag"
+      <> green "--no-keyval-maps" <> " flag"
       <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
