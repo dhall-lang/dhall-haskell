@@ -1182,7 +1182,8 @@ showCompileError format showValue = let prefix = red "\nError: "
 
     UnhandledKeys ks e v jsonPath -> prefix
       <> showJsonPath jsonPath <> ": Key(s) " <> purple (Text.unpack (Text.intercalate ", " ks))
-      <> " present in the " <> format <> " object but not in the expected Dhall record type. This is not allowed unless you enable the "
+      <> " present in the " <> format <> " object but not in the expected Dhall"
+      <> " record type. This is not allowed unless you enable the "
       <> green "--records-loose" <> " flag:"
       <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
