@@ -1,5 +1,0 @@
-[1;31m
-Error: [0m$.a: Key [1;35mb[0m, expected by Dhall type:
-Bool
-is not present in JSON object:
-{}

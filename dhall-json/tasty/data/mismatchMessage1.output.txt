@@ -1,8 +1,0 @@
-[1;31m
-Error: [0m$: Dhall type expression and JSON value do not match:
-
-Expected Dhall type:
-Text
-
-JSON:
-1
