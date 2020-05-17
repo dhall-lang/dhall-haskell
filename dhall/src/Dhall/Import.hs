@@ -3,9 +3,9 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -138,41 +138,53 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative (Alternative(..), liftA2)
-import Control.Exception (Exception, SomeException, IOException, toException)
-import Control.Monad (when)
-import Control.Monad.Catch (throwM, MonadCatch(catch), handle)
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans.Class (lift)
+import Control.Applicative              (Alternative (..), liftA2)
+import Control.Exception
+    ( Exception
+    , IOException
+    , SomeException
+    , toException
+    )
+import Control.Monad                    (when)
+import Control.Monad.Catch              (MonadCatch (catch), handle, throwM)
+import Control.Monad.IO.Class           (MonadIO (..))
+import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
-import Data.ByteString (ByteString)
-import Data.CaseInsensitive (CI)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup (Semigroup(..))
-import Data.Text (Text)
-import Data.Void (Void, absurd)
-import Data.Typeable (Typeable)
-import System.FilePath ((</>))
-import Dhall.Binary (StandardVersion(..))
+import Data.ByteString                  (ByteString)
+import Data.CaseInsensitive             (CI)
+import Data.List.NonEmpty               (NonEmpty (..))
+import Data.Semigroup                   (Semigroup (..))
+import Data.Text                        (Text)
+import Data.Typeable                    (Typeable)
+import Data.Void                        (Void, absurd)
+import Dhall.Binary                     (StandardVersion (..))
+
 import Dhall.Syntax
-    ( Expr(..)
-    , Chunks(..)
-    , Directory(..)
-    , File(..)
-    , FilePrefix(..)
-    , ImportHashed(..)
-    , ImportType(..)
-    , ImportMode(..)
-    , Import(..)
-    , URL(..)
+    ( Chunks (..)
+    , Directory (..)
+    , Expr (..)
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportMode (..)
+    , ImportType (..)
+    , URL (..)
     , bindingExprs
     )
+
+import System.FilePath ((</>))
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Types
 
-import Dhall.Parser (Parser(..), ParseError(..), Src(..), SourcedException(..))
+import Dhall.Parser
+    ( ParseError (..)
+    , Parser (..)
+    , SourcedException (..)
+    , Src (..)
+    )
 import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.CBOR.Encoding                         as Encoding
@@ -185,8 +197,8 @@ import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty                          as NonEmpty
-import qualified Data.Text.Encoding
 import qualified Data.Text                                   as Text
+import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core
@@ -198,11 +210,11 @@ import qualified Dhall.Substitution
 import qualified Dhall.Syntax                                as Syntax
 import qualified Dhall.TypeCheck
 import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
+import qualified System.Directory                            as Directory
 import qualified System.Environment
+import qualified System.FilePath                             as FilePath
 import qualified System.Info
 import qualified System.IO
-import qualified System.Directory                            as Directory
-import qualified System.FilePath                             as FilePath
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -279,7 +291,7 @@ instance Show e => Show (Imported e) where
         toDisplay = drop 1 (reverse canonical)
 
 -- | Exception thrown when an imported file is missing
-data MissingFile = MissingFile FilePath
+newtype MissingFile = MissingFile FilePath
     deriving (Typeable)
 
 instance Exception MissingFile
@@ -297,7 +309,7 @@ newtype MissingEnvironmentVariable = MissingEnvironmentVariable { name :: Text }
 instance Exception MissingEnvironmentVariable
 
 instance Show MissingEnvironmentVariable where
-    show (MissingEnvironmentVariable {..}) =
+    show MissingEnvironmentVariable{..} =
             "\n"
         <>  "\ESC[1;31mError\ESC[0m: Missing environment variable\n"
         <>  "\n"
@@ -410,9 +422,13 @@ data HashMismatch = HashMismatch
 instance Exception HashMismatch
 
 instance Show HashMismatch where
-    show (HashMismatch {..}) =
+    show HashMismatch{..} =
             "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Import integrity check failed\n"
+        <>  "\ESC[1;31mError\ESC[0m: " <> makeHashMismatchMessage expectedHash actualHash
+
+makeHashMismatchMessage :: Dhall.Crypto.SHA256Digest -> Dhall.Crypto.SHA256Digest -> String
+makeHashMismatchMessage expectedHash actualHash =
+    "Import integrity check failed\n"
         <>  "\n"
         <>  "Expected hash:\n"
         <>  "\n"
@@ -431,16 +447,16 @@ localToPath prefix file_ = liftIO $ do
     let Directory {..} = directory
 
     prefixPath <- case prefix of
-        Home -> do
+        Home ->
             Directory.getHomeDirectory
 
-        Absolute -> do
+        Absolute ->
             return "/"
 
-        Parent -> do
+        Parent ->
             return ".."
 
-        Here -> do
+        Here ->
             return "."
 
     let cs = map Text.unpack (file : components)
@@ -490,7 +506,7 @@ loadImport import_ = do
 --   therefore not cached semantically), as well as those that aren't cached yet.
 loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemanticCache
-  import_@(Chained (Import (ImportHashed Nothing _) _)) = do
+  import_@(Chained (Import (ImportHashed Nothing _) _)) =
     loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
@@ -510,20 +526,25 @@ loadImportWithSemanticCache
             let actualHash = Dhall.Crypto.sha256Hash bytesStrict
 
             if semanticHash == actualHash
-                then return ()
+                then do
+                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+
+                    importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
+                        Left  err -> throwMissingImport (Imported _stack err)
+                        Right e   -> return e
+
+                    return (ImportSemantics {..})
                 else do
-                    Status { _stack } <- State.get
-                    throwMissingImport (Imported _stack (HashMismatch {expectedHash = semanticHash, ..}))
+                    printWarning $
+                        makeHashMismatchMessage semanticHash actualHash
+                        <> "\n"
+                        <> "The interpreter will attempt to fix the cached import\n"
+                    fetch
 
-            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
-            importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
-                Left  err -> throwMissingImport (Imported _stack err)
-                Right e   -> return e
-
-            return (ImportSemantics {..})
-
-        Nothing -> do
+        Nothing -> fetch
+    where
+        fetch = do
             ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
 
             let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
@@ -537,6 +558,8 @@ loadImportWithSemanticCache
                     throwMissingImport (Imported _stack (HashMismatch {..}))
 
             return (ImportSemantics {..})
+
+
 
 -- Fetch encoded normal form from "semantic cache"
 fetchFromSemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
@@ -603,7 +626,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
             importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
-                Left err -> throwMissingImport (Imported _stack err)
+                Left err  -> throwMissingImport (Imported _stack err)
                 Right sem -> return sem
 
             return importSemantics
@@ -760,12 +783,7 @@ warnAboutMissingCaches = warn <|> return ()
 getOrCreateCacheDirectory :: (MonadCatch m, Alternative m, MonadIO m) => Bool -> FilePath -> m FilePath
 getOrCreateCacheDirectory showWarning cacheName = do
     let warn message = do
-            let warning =
-                     "\n"
-                  <> "\ESC[1;33mWarning\ESC[0m: "
-                  <> message
-
-            when showWarning (liftIO (System.IO.hPutStrLn System.IO.stderr warning))
+            when showWarning (printWarning message)
 
             empty
 
@@ -778,7 +796,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
                   <> "... the following exception was thrown:\n"
                   <> "\n"
                   <> "↳ " <> show ioex <> "\n"
-        
+
             warn ioExMsg
 
     let setPermissions dir = do
@@ -857,7 +875,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
                             createDirectory dir
 
                             setPermissions dir
-    
+
     cacheBaseDirectory <- getCacheBaseDirectory showWarning
 
     let directory = cacheBaseDirectory </> cacheName
@@ -947,7 +965,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
 
             _ <- case (Dhall.TypeCheck.typeOf annot) of
                 Left err -> throwMissingImport (Imported _stack err)
-                Right _ -> return ()
+                Right _  -> return ()
 
             return (Dhall.Core.normalize loadedExpr)
 
@@ -1035,6 +1053,15 @@ loadWith expr₀ = case expr₀ of
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)
 load = loadRelativeTo "." UseSemanticCache
+
+printWarning :: (MonadIO m) => String -> m ()
+printWarning message = do
+    let warning =
+                "\n"
+            <> "\ESC[1;33mWarning\ESC[0m: "
+            <> message
+
+    liftIO $ System.IO.hPutStrLn System.IO.stderr warning
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
