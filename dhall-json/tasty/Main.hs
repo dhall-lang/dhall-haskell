@@ -46,7 +46,8 @@ testTree =
         , inferJSONToDhall "./tasty/data/potpourri"
         , testCustomConversionJSONToDhall False omissibleLists "./tasty/data/missingList"
         , Test.Tasty.testGroup "Errors"
-            [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage" ]
+            [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage0"
+            ]
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
             , testDhallToJSON "./tasty/data/nesting1"
@@ -150,7 +151,7 @@ loadSchemaFromFile schemaFile = do
 
 testJSONToDhallErrorMessage :: String -> TestTree
 testJSONToDhallErrorMessage prefix =
-    let goldenFile = prefix <> ".txt"
+    let goldenFile = prefix <> ".golden"
         outputFile = prefix <> ".output.txt" in
     Test.Tasty.Silver.goldenVsFile prefix goldenFile outputFile $ do
         let conv = JSONToDhall.defaultConversion
@@ -173,5 +174,4 @@ testJSONToDhallErrorMessage prefix =
         case JSONToDhall.dhallFromJSON conv schema value of
             Right _ -> fail $ prefix <> " should fail"
             Left compileError -> do
-                print compileError
                 Data.Text.IO.writeFile outputFile (Data.Text.pack $ show compileError)
