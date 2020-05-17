@@ -846,7 +846,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                     , omissibleLists
                     = Right (D.ListLit (Just t) [])
                     | otherwise
-                    = Left (MissingKey k t v)
+                    = Left (MissingKey k t v jsonPath)
            in D.RecordLit <$> Map.traverseWithKey f r
 
     -- key-value list ~> Record
@@ -1131,7 +1131,7 @@ data CompileError
       Value -- Aeson value
       AT.JSONPath -- JSON Path to the error
   -- record specific
-  | MissingKey     Text  ExprX Value
+  | MissingKey     Text  ExprX Value AT.JSONPath
   | UnhandledKeys [Text] ExprX Value AT.JSONPath
   | NoKeyValArray        ExprX Value
   | NoKeyValMap          ExprX Value
@@ -1174,8 +1174,8 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
 
-    MissingKey k e v -> prefix
-      <> "Key " <> purple (Text.unpack k) <> ", expected by Dhall type:\n"
+    MissingKey k e v jsonPath -> prefix
+      <> showJsonPath jsonPath <> ": Key " <> purple (Text.unpack k) <> ", expected by Dhall type:\n"
       <> showExpr e
       <> "\nis not present in " <> format <> " object:\n"
       <> showValue v <> "\n"
