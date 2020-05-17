@@ -158,26 +158,27 @@ loadSchemaFromFile schemaFile = do
 
 testJSONToDhallErrorMessage :: String -> JSONToDhall.Conversion -> TestTree
 testJSONToDhallErrorMessage prefix conv =
-    let goldenFile = prefix <> ".golden"
-        outputFile = prefix <> ".output.txt" in
-    Test.Tasty.Silver.goldenVsFile prefix goldenFile outputFile $ do
-        let inputFile = prefix <> ".json"
-        let schemaFile = prefix <> "Schema.dhall"
+    Test.Tasty.Silver.goldenVsAction prefix goldenFile action converter
+    where
+        goldenFile = prefix <> ".golden"
+        schemaFile = prefix <> "Schema.dhall"
+        inputFile  = prefix <> ".json"
 
-        Data.Text.IO.writeFile outputFile "" -- erase its contents before writting again
+        action = do
+            bytes <- Data.ByteString.Lazy.readFile inputFile
 
-        bytes <- Data.ByteString.Lazy.readFile inputFile
+            value <-
+                case Aeson.eitherDecode bytes of
+                    Left string -> fail string
+                    Right value -> return value
 
-        value <-
-            case Aeson.eitherDecode bytes of
-                Left string -> fail string
-                Right value -> return value
+            schema <- loadSchemaFromFile schemaFile
 
-        schema <- loadSchemaFromFile schemaFile
+            _ <- Core.throws (Dhall.TypeCheck.typeOf schema)
 
-        _ <- Core.throws (Dhall.TypeCheck.typeOf schema)
+            case JSONToDhall.dhallFromJSON conv schema value of
+                Right _ -> fail $ prefix <> " should fail"
+                Left compileError ->
+                    return (Data.Text.pack $ show compileError)
 
-        case JSONToDhall.dhallFromJSON conv schema value of
-            Right _ -> fail $ prefix <> " should fail"
-            Left compileError -> do
-                Data.Text.IO.writeFile outputFile (Data.Text.pack $ show compileError)
+        converter = id

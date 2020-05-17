@@ -95,9 +95,8 @@ Test-Suite tasty
         dhall-yaml                   ,
         tasty                  <  1.4,
         tasty-expected-failure < 0.12,
-        text                         ,
-        tasty-hunit            >= 0.2,
-        tasty-silver           >= 3.0
+        text                                    ,
+        tasty-hunit            >= 0.2
 
     GHC-Options: -Wall
     Default-Language: Haskell2010
