@@ -46,10 +46,10 @@ testTree =
         , inferJSONToDhall "./tasty/data/potpourri"
         , testCustomConversionJSONToDhall False omissibleLists "./tasty/data/missingList"
         , Test.Tasty.testGroup "Errors"
-            [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage0"
-            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage1"
-            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage2"
-            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage3"
+            [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage0" defaultConversion
+            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage1" defaultConversion
+            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage2" defaultConversion
+            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage3" strictRecs
             ]
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
@@ -64,7 +64,10 @@ testTree =
             , testDhallToJSON "./tasty/data/unionKeys"
             ]
         ]
-    where omissibleLists = JSONToDhall.defaultConversion{JSONToDhall.omissibleLists = True}
+    where
+        defaultConversion = JSONToDhall.defaultConversion
+        omissibleLists = defaultConversion{JSONToDhall.omissibleLists = True}
+        strictRecs = defaultConversion{JSONToDhall.strictRecs = True}
 
 testDhallToJSON :: String -> TestTree
 testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
@@ -152,12 +155,11 @@ loadSchemaFromFile schemaFile = do
 
     Dhall.Import.load parsedSchema
 
-testJSONToDhallErrorMessage :: String -> TestTree
-testJSONToDhallErrorMessage prefix =
+testJSONToDhallErrorMessage :: String -> JSONToDhall.Conversion -> TestTree
+testJSONToDhallErrorMessage prefix conv =
     let goldenFile = prefix <> ".golden"
         outputFile = prefix <> ".output.txt" in
     Test.Tasty.Silver.goldenVsFile prefix goldenFile outputFile $ do
-        let conv = JSONToDhall.defaultConversion
         let inputFile = prefix <> ".json"
         let schemaFile = prefix <> "Schema.dhall"
 

@@ -835,7 +835,7 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop jsonPath (D.Record r) v@(A.Object o)
         | extraKeys <- HM.keys o \\ Map.keys r
         , strictRecs && not (null extraKeys)
-        = Left (UnhandledKeys extraKeys (D.Record r) v)
+        = Left (UnhandledKeys extraKeys (D.Record r) v jsonPath)
         | otherwise
         = let f :: Text -> ExprX -> Either CompileError ExprX
               f k t | Just value <- HM.lookup k o
@@ -1132,7 +1132,7 @@ data CompileError
       AT.JSONPath -- JSON Path to the error
   -- record specific
   | MissingKey     Text  ExprX Value
-  | UnhandledKeys [Text] ExprX Value
+  | UnhandledKeys [Text] ExprX Value AT.JSONPath
   | NoKeyValArray        ExprX Value
   | NoKeyValMap          ExprX Value
   -- union specific
@@ -1180,8 +1180,8 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> "\nis not present in " <> format <> " object:\n"
       <> showValue v <> "\n"
 
-    UnhandledKeys ks e v -> prefix
-      <> "Key(s) " <> purple (Text.unpack (Text.intercalate ", " ks))
+    UnhandledKeys ks e v jsonPath -> prefix
+      <> AT.formatPath (reverse jsonPath) <> ": Key(s) " <> purple (Text.unpack (Text.intercalate ", " ks))
       <> " present in the " <> format <> " object but not in the expected Dhall record type. This is not allowed unless you enable the "
       <> green "--records-loose" <> " flag:"
       <> "\n\nExpected Dhall type:\n" <> showExpr e
