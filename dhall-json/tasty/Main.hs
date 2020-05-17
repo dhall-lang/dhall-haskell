@@ -49,6 +49,7 @@ testTree =
             [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage0"
             , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage1"
             , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage2"
+            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage3"
             ]
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
