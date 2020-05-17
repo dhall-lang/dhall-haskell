@@ -414,11 +414,11 @@ parseConversion = Conversion <$> parseStrict
     parseStrict =
             O.flag' True
             (  O.long "records-strict"
-            <> O.help "Fail if any YAML fields are missing from the expected Dhall type"
+            <> O.help "Fail if any JSON fields are missing from the expected Dhall type"
             )
         <|> O.flag' False
             (  O.long "records-loose"
-            <> O.help "Tolerate YAML fields not present within the expected Dhall type"
+            <> O.help "Tolerate JSON fields not present within the expected Dhall type"
             )
         <|> pure True
 
