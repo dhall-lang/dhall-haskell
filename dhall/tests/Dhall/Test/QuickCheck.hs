@@ -14,7 +14,7 @@ import Data.Either (isRight)
 import Data.Either.Validation (Validation(..))
 import Data.Monoid ((<>))
 import Data.Void (Void)
-import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector, rawInput)
+import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector)
 import Dhall.Map (Map)
 import Dhall.Core
     ( Binding(..)
@@ -423,22 +423,6 @@ instance Arbitrary Var where
 
     shrink = genericShrink
 
-embedComposesWithBinaryEncode :: forall a. (ToDhall a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
-    => Proxy a
-    -> (String, Property, TestTree -> TestTree)
-embedComposesWithBinaryEncode p =
-    ( "Embed composes with encodeExpression for " ++ show (typeRep p)
-    , Test.QuickCheck.property (prop :: a -> Bool)
-    , adjustQuickCheckTests 1000
-    )
-  where
-    prop a = (fmap fromExpr . Dhall.Binary.decodeExpression . Dhall.Binary.encodeExpression . toExpr $ a) == Right (Just a)
-    toExpr :: a -> Expr Void Void
-    toExpr = Dhall.Core.denote . Dhall.embed inject
-
-    fromExpr :: Expr Void Void -> Maybe a
-    fromExpr = Dhall.rawInput auto
-
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
         Dhall.Binary.decodeExpression (Dhall.Binary.encodeExpression denotedExpression)
@@ -563,7 +547,6 @@ tests =
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , adjustQuickCheckTests 10000
           )
-        , embedComposesWithBinaryEncode (Proxy :: Proxy (Data.Map.Map Double Bool))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
         , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])
         , embedThenExtractIsIdentity (Proxy :: Proxy (Bool, Double))
