@@ -47,6 +47,7 @@ testTree =
         , testCustomConversionJSONToDhall False omissibleLists "./tasty/data/missingList"
         , Test.Tasty.testGroup "Errors"
             [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage0"
+            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage1"
             ]
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
