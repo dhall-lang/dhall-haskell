@@ -808,6 +808,7 @@ dhallFromJSON
 dhallFromJSON (Conversion {..}) expressionType =
     fmap (Optics.rewriteOf D.subExpressions Lint.useToMap) . loop [] (D.alphaNormalize (D.normalize expressionType))
   where
+    loop :: AT.JSONPath -> ExprX -> A.Value -> Either CompileError ExprX
     -- any ~> Union
     loop jsonPath t@(D.Union tm) v = do
       let f key maybeType =
