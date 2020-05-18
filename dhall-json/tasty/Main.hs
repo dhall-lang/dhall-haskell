@@ -46,11 +46,11 @@ testTree =
         , inferJSONToDhall "./tasty/data/potpourri"
         , testCustomConversionJSONToDhall False omissibleLists "./tasty/data/missingList"
         , Test.Tasty.testGroup "Errors"
-            [ testJSONToDhallErrorMessage "./tasty/data/mismatchMessage0" defaultConversion
-            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage1" defaultConversion
-            , testJSONToDhallErrorMessage "./tasty/data/mismatchMessage2" defaultConversion
-            , testJSONToDhallErrorMessage "./tasty/data/unhandledKeys" strictRecs
-            , testJSONToDhallErrorMessage "./tasty/data/missingKey" strictRecs
+            [ testJSONToDhallErrorMessage "./tasty/data/error/mismatchMessage0" defaultConversion
+            , testJSONToDhallErrorMessage "./tasty/data/error/mismatchMessage1" defaultConversion
+            , testJSONToDhallErrorMessage "./tasty/data/error/mismatchMessage2" defaultConversion
+            , testJSONToDhallErrorMessage "./tasty/data/error/unhandledKeys" strictRecs
+            , testJSONToDhallErrorMessage "./tasty/data/error/missingKey" strictRecs
             ]
         , Test.Tasty.testGroup "Nesting"
             [ testDhallToJSON "./tasty/data/nesting0"
