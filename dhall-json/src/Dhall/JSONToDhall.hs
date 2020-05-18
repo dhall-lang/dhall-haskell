@@ -377,8 +377,8 @@ import Dhall.JSON.Util          (pattern V)
 import Dhall.Parser             (Src)
 import Options.Applicative      (Parser)
 
-import qualified Data.Aeson                 as A
-import qualified Data.Aeson.Types           as AT
+import qualified Data.Aeson                 as Aeson
+import qualified Data.Aeson.Types           as Aeson.Types
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import qualified Data.Foldable              as Foldable
 import qualified Data.HashMap.Strict        as HM
@@ -518,8 +518,8 @@ typeCheckSchemaExpr compileException expr =
       _              -> throwM . compileException $ BadDhallType t expr
 
 keyValMay :: Value -> Maybe (Text, Value)
-keyValMay (A.Object o) = do
-     A.String k <- HM.lookup "key" o
+keyValMay (Aeson.Object o) = do
+     Aeson.String k <- HM.lookup "key" o
      v <- HM.lookup "value" o
      return (k, v)
 keyValMay _ = Nothing
@@ -531,26 +531,26 @@ keyValMay _ = Nothing
     on the command line
 -}
 inferSchema :: Value -> Schema
-inferSchema (A.Object m) =
+inferSchema (Aeson.Object m) =
     let convertMap = Data.Map.fromList . HM.toList
 
     in (Record . RecordSchema . convertMap) (fmap inferSchema m)
-inferSchema (A.Array xs) =
+inferSchema (Aeson.Array xs) =
     List (Foldable.foldMap inferSchema xs)
-inferSchema (A.String _) =
+inferSchema (Aeson.String _) =
     Text
-inferSchema (A.Number n) =
+inferSchema (Aeson.Number n) =
     case floatingOrInteger n of
         Left (_ :: Double) -> Double
         Right (integer :: Integer)
             | 0 <= integer -> Natural
             | otherwise    -> Integer
-inferSchema (A.Bool _) =
+inferSchema (Aeson.Bool _) =
     Bool
-inferSchema A.Null =
+inferSchema Aeson.Null =
     Optional mempty
 
--- | A record type that `inferSchema` can infer
+-- | Aeson record type that `inferSchema` can infer
 newtype RecordSchema =
     RecordSchema { getRecordSchema :: Data.Map.Map Text Schema }
 
@@ -794,11 +794,11 @@ schemaToDhallType ArbitraryJSON =
 >>> :set -XOverloadedStrings
 >>> import qualified Dhall.Core as D
 >>> import qualified Dhall.Map as Map
->>> import qualified Data.Aeson as A
+>>> import qualified Data.Aeson as Aeson
 >>> import qualified Data.HashMap.Strict as HM
 
 >>> s = D.Record (Map.fromList [("foo", D.Integer)])
->>> v = A.Object (HM.fromList [("foo", A.Number 1)])
+>>> v = Aeson.Object (HM.fromList [("foo", Aeson.Number 1)])
 >>> dhallFromJSON defaultConversion s v
 Right (RecordLit (fromList [("foo",IntegerLit 1)]))
 
@@ -808,7 +808,7 @@ dhallFromJSON
 dhallFromJSON (Conversion {..}) expressionType =
     fmap (Optics.rewriteOf D.subExpressions Lint.useToMap) . loop [] (D.alphaNormalize (D.normalize expressionType))
   where
-    loop :: AT.JSONPath -> ExprX -> A.Value -> Either CompileError ExprX
+    loop :: Aeson.Types.JSONPath -> ExprX -> Aeson.Value -> Either CompileError ExprX
     -- any ~> Union
     loop jsonPath t@(D.Union tm) v = do
       let f key maybeType =
@@ -820,7 +820,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
               Nothing ->
                 case v of
-                    A.String text | key == text ->
+                    Aeson.String text | key == text ->
                         return (D.Field t key)
                     _ ->
                         Left (Mismatch t v jsonPath)
@@ -833,14 +833,14 @@ dhallFromJSON (Conversion {..}) expressionType =
         (UStrict, [x]       ) -> Right x
 
     -- object ~> Record
-    loop jsonPath (D.Record r) v@(A.Object o)
+    loop jsonPath (D.Record r) v@(Aeson.Object o)
         | extraKeys <- HM.keys o \\ Map.keys r
         , strictRecs && not (null extraKeys)
         = Left (UnhandledKeys extraKeys (D.Record r) v jsonPath)
         | otherwise
         = let f :: Text -> ExprX -> Either CompileError ExprX
               f k t | Just value <- HM.lookup k o
-                    = loop (AT.Key k : jsonPath) t value
+                    = loop (Aeson.Types.Key k : jsonPath) t value
                     | App D.Optional t' <- t
                     = Right (App D.None t')
                     | App D.List _ <- t
@@ -851,24 +851,24 @@ dhallFromJSON (Conversion {..}) expressionType =
            in D.RecordLit <$> Map.traverseWithKey f r
 
     -- key-value list ~> Record
-    loop jsonPath t@(D.Record _) v@(A.Array a)
+    loop jsonPath t@(D.Record _) v@(Aeson.Array a)
         | not noKeyValArr
         , os :: [Value] <- toList a
         , Just kvs <- traverse keyValMay os
-        = loop jsonPath t (A.Object $ HM.fromList kvs)
+        = loop jsonPath t (Aeson.Object $ HM.fromList kvs)
         | noKeyValArr
         = Left (NoKeyValArray t v)
         | otherwise
         = Left (Mismatch t v jsonPath)
 
     -- object ~> List (key, value)
-    loop jsonPath t@(App D.List (D.Record r)) v@(A.Object o)
+    loop jsonPath t@(App D.List (D.Record r)) v@(Aeson.Object o)
         | not noKeyValMap
         , ["mapKey", "mapValue"] == Map.keys r
         , Just mapKey   <- Map.lookup "mapKey" r
         , Just mapValue <- Map.lookup "mapValue" r
         = do
-          keyExprMap <- HM.traverseWithKey  (\k child -> loop (AT.Key k : jsonPath) mapValue child) o
+          keyExprMap <- HM.traverseWithKey  (\k child -> loop (Aeson.Types.Key k : jsonPath) mapValue child) o
 
           toKey <-
               case mapKey of
@@ -893,48 +893,48 @@ dhallFromJSON (Conversion {..}) expressionType =
         = Left (Mismatch t v jsonPath)
 
     -- array ~> List
-    loop jsonPath (App D.List t) (A.Array a)
+    loop jsonPath (App D.List t) (Aeson.Array a)
         = let f :: [ExprX] -> ExprX
               f es = D.ListLit
                        (if null es then Just (App D.List t) else Nothing)
                        (Seq.fromList es)
-           in f <$> traverse (\(idx, val) -> loop (AT.Index idx : jsonPath) t val) (zip [0..] $ toList a)
+           in f <$> traverse (\(idx, val) -> loop (Aeson.Types.Index idx : jsonPath) t val) (zip [0..] $ toList a)
 
     -- null ~> List
-    loop jsonPath t@(App D.List _) A.Null
+    loop jsonPath t@(App D.List _) Aeson.Null
         = if omissibleLists
           then Right (D.ListLit (Just t) [])
-          else Left (Mismatch t A.Null jsonPath)
+          else Left (Mismatch t Aeson.Null jsonPath)
 
     -- number ~> Integer
-    loop jsonPath D.Integer (A.Number x)
+    loop jsonPath D.Integer (Aeson.Number x)
         | Right n <- floatingOrInteger x :: Either Double Integer
         = Right (D.IntegerLit n)
         | otherwise
-        = Left (Mismatch D.Integer (A.Number x) jsonPath)
+        = Left (Mismatch D.Integer (Aeson.Number x) jsonPath)
 
     -- number ~> Natural
-    loop jsonPath D.Natural (A.Number x)
+    loop jsonPath D.Natural (Aeson.Number x)
         | Right n <- floatingOrInteger x :: Either Double Integer
         , n >= 0
         = Right (D.NaturalLit (fromInteger n))
         | otherwise
-        = Left (Mismatch D.Natural (A.Number x) jsonPath)
+        = Left (Mismatch D.Natural (Aeson.Number x) jsonPath)
 
     -- number ~> Double
-    loop _ D.Double (A.Number x)
+    loop _ D.Double (Aeson.Number x)
         = Right (D.DoubleLit $ DhallDouble $ toRealFloat x)
 
     -- string ~> Text
-    loop _ D.Text (A.String t)
+    loop _ D.Text (Aeson.String t)
         = Right (D.TextLit (Chunks [] t))
 
     -- bool ~> Bool
-    loop _ D.Bool (A.Bool t)
+    loop _ D.Bool (Aeson.Bool t)
         = Right (D.BoolLit t)
 
     -- null ~> Optional
-    loop _ (App D.Optional expr) A.Null
+    loop _ (App D.Optional expr) Aeson.Null
         = Right $ App D.None expr
 
     -- value ~> Optional
@@ -959,7 +959,7 @@ dhallFromJSON (Conversion {..}) expressionType =
           )
       )
       value = do
-          let outer (A.Object o) =
+          let outer (Aeson.Object o) =
                   let inner (key, val) =
                           D.RecordLit
                               [ ("mapKey"  , D.TextLit (D.Chunks [] key))
@@ -984,7 +984,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                       keyValues = D.ListLit elementType elements
 
                   in  D.App (D.Field "json" "object") keyValues
-              outer (A.Array a) =
+              outer (Aeson.Array a) =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
                       elementType
@@ -992,13 +992,13 @@ dhallFromJSON (Conversion {..}) expressionType =
                           | otherwise     = Nothing
 
                   in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
-              outer (A.String s) =
+              outer (Aeson.String s) =
                   D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
-              outer (A.Number n) =
+              outer (Aeson.Number n) =
                   D.App (D.Field "json" "number") (D.DoubleLit (DhallDouble (toRealFloat n)))
-              outer (A.Bool b) =
+              outer (Aeson.Bool b) =
                   D.App (D.Field "json" "bool") (D.BoolLit b)
-              outer A.Null =
+              outer Aeson.Null =
                   D.Field "json" "null"
 
           let result =
@@ -1037,7 +1037,7 @@ dhallFromJSON (Conversion {..}) expressionType =
           )
       )
       value = do
-          let outer (A.Object o) =
+          let outer (Aeson.Object o) =
                   let inner (key, val) =
                           D.RecordLit
                               [ ("mapKey"  , D.TextLit (D.Chunks [] key))
@@ -1062,7 +1062,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                       keyValues = D.ListLit elementType elements
 
                   in  D.App (D.Field "json" "object") keyValues
-              outer (A.Array a) =
+              outer (Aeson.Array a) =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
                       elementType
@@ -1070,15 +1070,15 @@ dhallFromJSON (Conversion {..}) expressionType =
                           | otherwise     = Nothing
 
                   in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
-              outer (A.String s) =
+              outer (Aeson.String s) =
                   D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
-              outer (A.Number n) =
+              outer (Aeson.Number n) =
                   case floatingOrInteger n of
                       Left floating -> D.App (D.Field "json" "double") (D.DoubleLit (DhallDouble floating))
                       Right integer -> D.App (D.Field "json" "integer") (D.IntegerLit integer)
-              outer (A.Bool b) =
+              outer (Aeson.Bool b) =
                   D.App (D.Field "json" "bool") (D.BoolLit b)
-              outer A.Null =
+              outer Aeson.Null =
                   D.Field "json" "null"
 
           let result =
@@ -1130,10 +1130,10 @@ data CompileError
   | Mismatch
       ExprX   -- Dhall expression
       Value -- Aeson value
-      AT.JSONPath -- JSON Path to the error
+      Aeson.Types.JSONPath -- JSON Path to the error
   -- record specific
-  | MissingKey     Text  ExprX Value AT.JSONPath
-  | UnhandledKeys [Text] ExprX Value AT.JSONPath
+  | MissingKey     Text  ExprX Value Aeson.Types.JSONPath
+  | UnhandledKeys [Text] ExprX Value Aeson.Types.JSONPath
   | NoKeyValArray        ExprX Value
   | NoKeyValMap          ExprX Value
   -- union specific
@@ -1204,5 +1204,5 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
 
-showJsonPath :: AT.JSONPath -> String
-showJsonPath = AT.formatPath . reverse
+showJsonPath :: Aeson.Types.JSONPath -> String
+showJsonPath = Aeson.Types.formatPath . reverse
