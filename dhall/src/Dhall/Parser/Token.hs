@@ -108,16 +108,16 @@ module Dhall.Parser.Token (
     _with,
     ) where
 
-import           Dhall.Parser.Combinators
+import Dhall.Parser.Combinators
 
-import Control.Applicative (Alternative(..), optional)
-import Data.Bits ((.&.))
-import Data.Functor (void, ($>))
-import Data.Semigroup (Semigroup(..))
-import Data.Text (Text)
+import Control.Applicative     (Alternative (..), optional)
+import Data.Bits               ((.&.))
+import Data.Functor            (void, ($>))
+import Data.Semigroup          (Semigroup (..))
+import Data.Text               (Text)
+import Dhall.Set               (Set)
 import Dhall.Syntax
-import Dhall.Set (Set)
-import Prelude hiding (const, pi)
+import Prelude                 hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
@@ -133,11 +133,11 @@ import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
-import qualified Text.Parser.Token
 import qualified Text.Parser.Combinators
+import qualified Text.Parser.Token
 
 import Numeric.Natural (Natural)
-import Prelude hiding (const, pi)
+import Prelude         hiding (const, pi)
 
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
@@ -407,13 +407,14 @@ blockCommentContinue = endOfComment <|> continue
         blockCommentContinue
 
 simpleLabel :: Bool -> Parser Text
-simpleLabel allowReserved = try (do
+simpleLabel allowReserved = try $ do
     c    <- Text.Parser.Char.satisfy headCharacter
     rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
     let t = Data.Text.cons c rest
-    Control.Monad.guard (allowReserved || not (Data.HashSet.member t reservedIdentifiers))
-    return t )
-  where
+    let isNotAKeyword = not $ t `Data.HashSet.member` reservedKeywords
+    let isNotAReservedIdentifier = not $ t `Data.HashSet.member` reservedIdentifiers
+    Control.Monad.guard (isNotAKeyword && (allowReserved || isNotAReservedIdentifier))
+    return t
 
 headCharacter :: Char -> Bool
 headCharacter c = alpha c || c == '_'
