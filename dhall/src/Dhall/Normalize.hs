@@ -28,13 +28,15 @@ import Instances.TH.Lift ()
 import Prelude hiding (succ)
 
 import Dhall.Syntax
-    ( Expr(..)
-    , Var(..)
-    , Binding(Binding)
+    ( Binding(Binding)
     , Chunks(..)
-    , DhallDouble(..)
     , Const(..)
+    , DhallDouble(..)
+    , Expr(..)
+    , HasLeadingSeparator(..)
+    , IsMultiLine(..)
     , PreferAnnotation(..)
+    , Var(..)
     )
 
 import qualified Data.Sequence
@@ -190,8 +192,8 @@ boundedType Double           = True
 boundedType Text             = True
 boundedType (App List _)     = False
 boundedType (App Optional t) = boundedType t
-boundedType (Record kvs)     = all boundedType kvs
-boundedType (Union kvs)      = all (all boundedType) kvs
+boundedType (Record _ _ kvs) = all boundedType kvs
+boundedType (Union _ _ kvs)  = all (all boundedType) kvs
 boundedType _                = False
 
 {-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
@@ -386,7 +388,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                       where
                         as₁ = Data.Sequence.mapWithIndex adapt as₀
 
-                        _A₂ = Record (Dhall.Map.fromList kts)
+                        _A₂ =
+                            Record
+                                DefaultLeadingSeparator
+                                DefaultLine
+                                (Dhall.Map.fromList kts)
                           where
                             kts = [ ("index", Natural)
                                   , ("value", _A₀)
@@ -396,7 +402,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                           | otherwise = Nothing
 
                         adapt n a_ =
-                            RecordLit (Dhall.Map.fromList kvs)
+                            RecordLit
+                                DefaultLeadingSeparator
+                                DefaultLine
+                                (Dhall.Map.fromList kvs)
                           where
                             kvs = [ ("index", NaturalLit (fromIntegral n))
                                   , ("value", a_)
@@ -552,43 +561,52 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     None -> pure None
     OptionalFold -> pure OptionalFold
     OptionalBuild -> pure OptionalBuild
-    Record kts -> Record . Dhall.Map.sort <$> kts'
+    Record _ _ kts ->
+        Record DefaultLeadingSeparator DefaultLine . Dhall.Map.sort <$> kts'
       where
         kts' = traverse loop kts
-    RecordLit kvs -> RecordLit . Dhall.Map.sort <$> kvs'
+    RecordLit _ _ kvs ->
+        RecordLit DefaultLeadingSeparator DefaultLine . Dhall.Map.sort <$> kvs'
       where
         kvs' = traverse loop kvs
-    Union kts -> Union . Dhall.Map.sort <$> kts'
+    Union _ _ kts ->
+        Union DefaultLeadingSeparator DefaultLine . Dhall.Map.sort <$> kts'
       where
         kts' = traverse (traverse loop) kts
     Combine mk x y -> decide <$> loop x <*> loop y
       where
-        decide (RecordLit m) r | Data.Foldable.null m =
+        decide (RecordLit _ _ m) r | Data.Foldable.null m =
             r
-        decide l (RecordLit n) | Data.Foldable.null n =
+        decide l (RecordLit _ _ n) | Data.Foldable.null n =
             l
-        decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.unionWith decide m n)
+        decide (RecordLit _ _ m) (RecordLit _ _ n) =
+            RecordLit
+                DefaultLeadingSeparator
+                DefaultLine
+                (Dhall.Map.unionWith decide m n)
         decide l r =
             Combine mk l r
     CombineTypes x y -> decide <$> loop x <*> loop y
       where
-        decide (Record m) r | Data.Foldable.null m =
+        decide (Record _ _ m) r | Data.Foldable.null m =
             r
-        decide l (Record n) | Data.Foldable.null n =
+        decide l (Record _ _ n) | Data.Foldable.null n =
             l
-        decide (Record m) (Record n) =
-            Record (Dhall.Map.unionWith decide m n)
+        decide (Record _ _ m) (Record _ _ n) =
+            Record
+                DefaultLeadingSeparator
+                DefaultLine
+                (Dhall.Map.unionWith decide m n)
         decide l r =
             CombineTypes l r
     Prefer _ x y -> decide <$> loop x <*> loop y
       where
-        decide (RecordLit m) r | Data.Foldable.null m =
+        decide (RecordLit _ _ m) r | Data.Foldable.null m =
             r
-        decide l (RecordLit n) | Data.Foldable.null n =
+        decide l (RecordLit _ _ n) | Data.Foldable.null n =
             l
-        decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.union n m)
+        decide (RecordLit _ _ m) (RecordLit _ _ n) =
+            RecordLit DefaultLeadingSeparator DefaultLine (Dhall.Map.union n m)
         decide l r | Eval.judgmentallyEqual l r =
             l
         decide l r =
@@ -599,9 +617,9 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         x' <- loop x
         y' <- loop y
         case x' of
-            RecordLit kvsX ->
+            RecordLit _ _ kvsX ->
                 case y' of
-                    Field (Union ktsY) kY ->
+                    Field (Union _ _ ktsY) kY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just Nothing ->
                                 case Dhall.Map.lookup kY kvsX of
@@ -609,7 +627,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                     Nothing -> Merge x' y' <$> t'
                             _ ->
                                 Merge x' y' <$> t'
-                    App (Field (Union ktsY) kY) vY ->
+                    App (Field (Union _ _ ktsY) kY) vY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just (Just _) ->
                                 case Dhall.Map.lookup kY kvsX of
@@ -633,9 +651,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         x' <- loop x
         t' <- traverse loop t
         case x' of
-            RecordLit kvsX -> do
+            RecordLit _ _ kvsX -> do
                 let entry (key, value) =
                         RecordLit
+                            DefaultLeadingSeparator
+                            DefaultLine
                             (Dhall.Map.fromList
                                 [ ("mapKey"  , TextLit (Chunks [] key))
                                 , ("mapValue", value                  )
@@ -654,25 +674,30 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             _ -> do
                 return (ToMap x' t')
     Field r x        -> do
-        let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
+        let singletonRecordLit v =
+                RecordLit
+                    DefaultLeadingSeparator
+                    DefaultLine
+                    (Dhall.Map.singleton x v)
 
         r' <- loop r
         case r' of
-            RecordLit kvs ->
+            RecordLit _ _ kvs ->
                 case Dhall.Map.lookup x kvs of
                     Just v  -> pure v
-                    Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
+                    Nothing ->
+                        Field <$> (RecordLit DefaultLeadingSeparator DefaultLine <$> traverse loop kvs) <*> pure x
             Project r_ _ -> loop (Field r_ x)
-            Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+            Prefer _ (RecordLit _ _ kvs) r_ -> case Dhall.Map.lookup x kvs of
                 Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
-            Prefer _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+            Prefer _ l (RecordLit _ _ kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure v
                 Nothing -> loop (Field l x)
-            Combine m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+            Combine m (RecordLit _ _ kvs) r_ -> case Dhall.Map.lookup x kvs of
                 Just v -> pure (Field (Combine m (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
-            Combine m l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+            Combine m l (RecordLit _ _ kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure (Field (Combine m l (singletonRecordLit v)) x)
                 Nothing -> loop (Field l x)
             _ -> pure (Field r' x)
@@ -680,22 +705,25 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         x' <- loop x
         let fieldsSet = Dhall.Set.toSet fields
         case x' of
-            RecordLit kvs ->
-                pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
+            RecordLit _ _ kvs ->
+                pure (RecordLit DefaultLeadingSeparator DefaultLine (Dhall.Map.restrictKeys kvs fieldsSet))
             Project y _ ->
                 loop (Project y (Left fields))
-            Prefer _ l (RecordLit rKvs) -> do
+            Prefer _ l (RecordLit _ _ rKvs) -> do
                 let rKs = Dhall.Map.keysSet rKvs
                 let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
-                let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
+                let r' =
+                        RecordLit DefaultLeadingSeparator DefaultLine (Dhall.Map.restrictKeys rKvs fieldsSet)
+
                 loop (Prefer PreferFromSource l' r')
-            _ | null fields -> pure (RecordLit mempty)
+            _ | null fields ->
+                pure (RecordLit DefaultLeadingSeparator DefaultLine mempty)
               | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
     Project r (Right e1) -> do
         e2 <- loop e1
 
         case e2 of
-            Record kts -> do
+            Record _ _ kts -> do
                 loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
             _ -> do
                 r' <- loop r
@@ -875,56 +903,56 @@ isNormalized e0 = loop (Syntax.denote e0)
       None -> True
       OptionalFold -> True
       OptionalBuild -> True
-      Record kts -> Dhall.Map.isSorted kts && all loop kts
-      RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
-      Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
+      Record _ _ kts -> Dhall.Map.isSorted kts && all loop kts
+      RecordLit _ _ kvs -> Dhall.Map.isSorted kvs && all loop kvs
+      Union _ _ kts -> Dhall.Map.isSorted kts && all (all loop) kts
       Combine _ x y -> loop x && loop y && decide x y
         where
-          decide (RecordLit m) _ | Data.Foldable.null m = False
-          decide _ (RecordLit n) | Data.Foldable.null n = False
-          decide (RecordLit _) (RecordLit _) = False
+          decide (RecordLit _ _ m) _ | Data.Foldable.null m = False
+          decide _ (RecordLit _ _ n) | Data.Foldable.null n = False
+          decide (RecordLit _ _ _) (RecordLit _ _ _) = False
           decide  _ _ = True
       CombineTypes x y -> loop x && loop y && decide x y
         where
-          decide (Record m) _ | Data.Foldable.null m = False
-          decide _ (Record n) | Data.Foldable.null n = False
-          decide (Record _) (Record _) = False
+          decide (Record _ _ m) _ | Data.Foldable.null m = False
+          decide _ (Record _ _ n) | Data.Foldable.null n = False
+          decide (Record _ _ _) (Record _ _ _) = False
           decide  _ _ = True
       Prefer _ x y -> loop x && loop y && decide x y
         where
-          decide (RecordLit m) _ | Data.Foldable.null m = False
-          decide _ (RecordLit n) | Data.Foldable.null n = False
-          decide (RecordLit _) (RecordLit _) = False
+          decide (RecordLit _ _ m) _ | Data.Foldable.null m = False
+          decide _ (RecordLit _ _ n) | Data.Foldable.null n = False
+          decide (RecordLit _ _ _) (RecordLit _ _ _) = False
           decide l r = not (Eval.judgmentallyEqual l r)
       RecordCompletion _ _ -> False
       Merge x y t -> loop x && loop y && all loop t && case x of
-          RecordLit _ -> case y of
-              Field (Union _) _ -> False
-              App (Field (Union _) _) _ -> False
+          RecordLit _ _ _ -> case y of
+              Field (Union _ _ _) _ -> False
+              App (Field (Union _ _ _) _) _ -> False
               Some _ -> False
               App None _ -> False
               _ -> True
           _ -> True
       ToMap x t -> case x of
-          RecordLit _ -> False
+          RecordLit _ _ _ -> False
           _ -> loop x && all loop t
       Field r k -> case r of
-          RecordLit _ -> False
+          RecordLit _ _ _ -> False
           Project _ _ -> False
-          Prefer _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Prefer _ _ (RecordLit _) -> False
-          Combine _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Combine _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
+          Prefer _ (RecordLit _ _ m) _ -> Dhall.Map.keys m == [k] && loop r
+          Prefer _ _ (RecordLit _ _ _) -> False
+          Combine _ (RecordLit _ _ m) _ -> Dhall.Map.keys m == [k] && loop r
+          Combine _ _ (RecordLit _ _ m) -> Dhall.Map.keys m == [k] && loop r
           _ -> loop r
       Project r p -> loop r &&
           case p of
               Left s -> case r of
-                  RecordLit _ -> False
+                  RecordLit _ _ _ -> False
                   Project _ _ -> False
-                  Prefer _ _ (RecordLit _) -> False
+                  Prefer _ _ (RecordLit _ _ _) -> False
                   _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
               Right e' -> case e' of
-                  Record _ -> False
+                  Record _ _ _ -> False
                   _ -> loop e'
       Assert t -> loop t
       Equivalent l r -> loop l && loop r

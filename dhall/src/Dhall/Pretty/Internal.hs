@@ -1103,7 +1103,8 @@ prettyCharacterSet characterSet expression =
     prettyCompletionExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyCompletionExpression (RecordCompletion a b) =
         case shallowDenote b of
-            RecordLit kvs ->
+            -- Ignore the user's original formatting for completion expressions
+            RecordLit _ _ kvs ->
                 Pretty.align
                     (   prettySelectorExpression a
                     <>  doubleColon
@@ -1219,8 +1220,8 @@ prettyCharacterSet characterSet expression =
         prettyDouble a
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a
-    prettyPrimitiveExpression (Record a) =
-        prettyRecord a
+    prettyPrimitiveExpression (Record a b c) =
+        prettyRecord a b c
     prettyPrimitiveExpression (RecordLit a) =
         prettyRecordLit a
     prettyPrimitiveExpression (Union a) =
@@ -1321,8 +1322,13 @@ prettyCharacterSet characterSet expression =
                         <>  "    "
                         <>  prettyValue val
 
-    prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
-    prettyRecord =
+    prettyRecord
+        :: Pretty a
+        => HasLeadingSeparator
+        -> IsMultiLine
+        -> Map Text (Expr Src a)
+        -> Doc Ann
+    prettyRecord isMultiLine hasLeadingSeparator =
           braces
         . map (prettyKeyValue prettyAnyLabel prettyExpression colon)
         . Map.toList

@@ -68,6 +68,8 @@ import Dhall.Syntax
   , Chunks(..)
   , Const(..)
   , DhallDouble(..)
+  , HasLeadingSeparator(..)
+  , IsMultiLine(..)
   , PreferAnnotation(..)
   , Var(..)
   )
@@ -697,11 +699,11 @@ eval !env t0 =
                     `vApp` VOptional a
                     `vApp` VHLam (Typed "a" a) VSome
                     `vApp` VNone a
-        Record kts ->
+        Record _ _ kts ->
             VRecord (Map.sort (fmap (eval env) kts))
-        RecordLit kts ->
+        RecordLit _ _ kts ->
             VRecordLit (Map.sort (fmap (eval env) kts))
-        Union kts ->
+        Union _ _ kts ->
             VUnion (Map.sort (fmap (fmap (eval env)) kts))
         Combine mk t u ->
             vCombine mk (eval env t) (eval env u)
@@ -1128,11 +1130,11 @@ quote !env !t0 =
         VOptionalBuild a t ->
             OptionalBuild `qApp` a `qApp` t
         VRecord m ->
-            Record (fmap (quote env) m)
+            Record DefaultLeadingSeparator DefaultLine (fmap (quote env) m)
         VRecordLit m ->
-            RecordLit (fmap (quote env) m)
+            RecordLit DefaultLeadingSeparator DefaultLine (fmap (quote env) m)
         VUnion m ->
-            Union (fmap (fmap (quote env)) m)
+            Union DefaultLeadingSeparator DefaultLine (fmap (fmap (quote env)) m)
         VCombine mk t u ->
             Combine mk (quote env t) (quote env u)
         VCombineTypes t u ->
@@ -1152,9 +1154,9 @@ quote !env !t0 =
         VEquivalent t u ->
             Equivalent (quote env t) (quote env u)
         VInject m k Nothing ->
-            Field (Union (fmap (fmap (quote env)) m)) k
+            Field (Union DefaultLeadingSeparator DefaultLine (fmap (fmap (quote env)) m)) k
         VInject m k (Just t) ->
-            Field (Union (fmap (fmap (quote env)) m)) k `qApp` t
+            Field (Union DefaultLeadingSeparator DefaultLine (fmap (fmap (quote env)) m)) k `qApp` t
         VEmbed a ->
             Embed a
         VPrimVar ->
@@ -1307,12 +1309,12 @@ alphaNormalize = goEnv EmptyNames
                 OptionalFold
             OptionalBuild ->
                 OptionalBuild
-            Record kts ->
-                Record (fmap go kts)
-            RecordLit kts ->
-                RecordLit (fmap go kts)
-            Union kts ->
-                Union (fmap (fmap go) kts)
+            Record a b kts ->
+                Record a b (fmap go kts)
+            RecordLit a b kts ->
+                RecordLit a b (fmap go kts)
+            Union a b kts ->
+                Union a b (fmap (fmap go) kts)
             Combine m t u ->
                 Combine m (go t) (go u)
             CombineTypes t u ->

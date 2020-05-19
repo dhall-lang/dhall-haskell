@@ -465,9 +465,9 @@ parsers embedded = Parsers {..}
 
                 whitespace
 
-                _ <- optional (_comma *> whitespace)
+                leadingComma <- (_comma *> pure True) <|> pure False
 
-                a <- recordTypeOrLiteral
+                a <- recordTypeOrLiteral leadingComma
 
                 whitespace
 
@@ -749,7 +749,7 @@ parsers embedded = Parsers {..}
             literal <- doubleQuotedLiteral <|> singleQuoteLiteral
             return (TextLit literal) ) <?> "literal"
 
-    recordTypeOrLiteral =
+    recordTypeOrLiteral leadingComma =
             choice
                 [ alternative0
                 , alternative1

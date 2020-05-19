@@ -28,6 +28,8 @@ module Dhall.Syntax (
     , Chunks(..)
     , DhallDouble(..)
     , PreferAnnotation(..)
+    , HasLeadingSeparator(..)
+    , IsMultiLine(..)
     , Expr(..)
 
     -- ** 'Let'-blocks
@@ -278,6 +280,18 @@ instance Bifunctor PreferAnnotation where
 
     second = fmap
 
+data HasLeadingSeparator
+    = LeadingSeparator
+    | NoLeadingSeparator
+    | DefaultLeadingSeparator
+    deriving (Data, Eq, Generic, Lift, NFData, Ord, Show)
+
+data IsMultiLine
+    = MultiLine
+    | SingleLine
+    | DefaultLine
+    deriving (Data, Eq, Generic, Lift, NFData, Ord, Show)
+
 {-| Syntax tree for expressions
 
     The @s@ type parameter is used to track the presence or absence of `Src`
@@ -431,12 +445,12 @@ data Expr s a
     | OptionalFold
     -- | > OptionalBuild                            ~  Optional/build
     | OptionalBuild
-    -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
-    | Record    (Map Text (Expr s a))
-    -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
-    | RecordLit (Map Text (Expr s a))
-    -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
-    | Union     (Map Text (Maybe (Expr s a)))
+    -- | > Record    _ _ [(k1, t1), (k2, t2)]       ~  { k1 : t1, k2 : t1 }
+    | Record HasLeadingSeparator IsMultiLine (Map Text (Expr s a))
+    -- | > RecordLit _ _ [(k1, v1), (k2, v2)]       ~  { k1 = v1, k2 = v2 }
+    | RecordLit HasLeadingSeparator IsMultiLine (Map Text (Expr s a))
+    -- | > Union     _ _ [(k1, Just t1), (k2, Nothing)] ~ < k1 : t1 | k2 >
+    | Union     HasLeadingSeparator IsMultiLine (Map Text (Maybe (Expr s a)))
     -- | > Combine Nothing x y                      ~  x ∧ y
     --
     -- The first field is a `Just` when the `Combine` operator is introduced
@@ -659,9 +673,9 @@ unsafeSubExpressions f (Some a) = Some <$> f a
 unsafeSubExpressions _ None = pure None
 unsafeSubExpressions _ OptionalFold = pure OptionalFold
 unsafeSubExpressions _ OptionalBuild = pure OptionalBuild
-unsafeSubExpressions f (Record a) = Record <$> traverse f a
-unsafeSubExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
-unsafeSubExpressions f (Union a) = Union <$> traverse (traverse f) a
+unsafeSubExpressions f (Record a b c) = Record a b <$> traverse f c
+unsafeSubExpressions f (RecordLit a b c) = RecordLit a b <$> traverse f c
+unsafeSubExpressions f (Union a b c) = Union a b <$> traverse (traverse f) c
 unsafeSubExpressions f (Combine a b c) = Combine a <$> f b <*> f c
 unsafeSubExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
 unsafeSubExpressions f (Prefer a b c) = Prefer <$> a' <*> f b <*> f c
@@ -1107,11 +1121,22 @@ desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
     rewrite e@(With record (key :| []) value) =
-        Just (Prefer (PreferFromWith e) record (RecordLit [ (key, value) ]))
+        Just
+            (Prefer
+                (PreferFromWith e)
+                record
+                (RecordLit
+                    DefaultLeadingSeparator
+                    DefaultLine
+                    [ (key, value) ]
+                )
+            )
     rewrite e@(With record (key0 :| key1 : keys) value) =
         Just
             (Prefer (PreferFromWith e) record
                 (RecordLit
+                    DefaultLeadingSeparator
+                    DefaultLine
                     [ (key0, With (Field record key0) (key1 :| keys) value) ]
                 )
             )

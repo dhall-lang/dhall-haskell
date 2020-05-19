@@ -43,6 +43,8 @@ import Dhall.Syntax
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
+    , IsMultiLine(..)
+    , HasLeadingSeparator(..)
     , MultiLet(..)
     , PreferAnnotation(..)
     , Scheme(..)
@@ -368,7 +370,12 @@ decodeExpressionInternal decodeEmbed = go
 
                                     return (x, _T)
 
-                                return (Record (Dhall.Map.fromList xTs))
+                                return
+                                    (Record
+                                        DefaultLeadingSeparator
+                                        DefaultLine
+                                        (Dhall.Map.fromList xTs)
+                                    )
 
                             8 -> do
                                 mapLength <- Decoding.decodeMapLen
@@ -380,7 +387,12 @@ decodeExpressionInternal decodeEmbed = go
 
                                     return (x, t)
 
-                                return (RecordLit (Dhall.Map.fromList xts))
+                                return
+                                    (RecordLit
+                                        DefaultLeadingSeparator
+                                        DefaultLine
+                                        (Dhall.Map.fromList xts)
+                                    )
 
                             9 -> do
                                 t <- go
@@ -439,7 +451,12 @@ decodeExpressionInternal decodeEmbed = go
 
                                     return (x, mT)
 
-                                return (Union (Dhall.Map.fromList xTs))
+                                return
+                                    (Union
+                                        DefaultLeadingSeparator
+                                        DefaultLine
+                                        (Dhall.Map.fromList xTs)
+                                    )
 
                             14 -> do
                                 t <- go
@@ -811,12 +828,12 @@ encodeExpressionInternal encodeEmbed = go
                 (go u)
                 (go _T)
 
-        Record xTs ->
+        Record _ _ xTs ->
             encodeList2
                 (Encoding.encodeInt 7)
                 (encodeMapWith go xTs)
 
-        RecordLit xts ->
+        RecordLit _ _ xts ->
             encodeList2
                 (Encoding.encodeInt 8)
                 (encodeMapWith go xts)
@@ -841,7 +858,7 @@ encodeExpressionInternal encodeEmbed = go
                 (go t)
                 (encodeList1 (go _T))
 
-        Union xTs ->
+        Union _ _ xTs ->
             encodeList2
                 (Encoding.encodeInt 11)
                 (encodeMapWith encodeValue xTs)
