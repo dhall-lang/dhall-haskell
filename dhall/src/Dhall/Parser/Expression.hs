@@ -844,7 +844,7 @@ parsers embedded = Parsers {..}
             _ <- optional (_bar *> whitespace)
 
             let unionTypeEntry = do
-                    a <- anyLabel
+                    a <- anyLabelOrSome
                     whitespace
                     b <- optional (_colon *> nonemptyWhitespace *> expression <* whitespace)
                     return (a, b)
