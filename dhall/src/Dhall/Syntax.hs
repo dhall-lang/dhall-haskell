@@ -109,6 +109,9 @@ import qualified Dhall.Optics               as Optics
 import qualified Lens.Family                as Lens
 import qualified Network.URI                as URI
 
+-- $setup
+-- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
+
 {-| Constants for a pure type system
 
     The axioms are:
