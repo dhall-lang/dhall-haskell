@@ -18,7 +18,9 @@ Executable dhall-to-nixpkgs
   Build-Depends:       base                 >= 4.10     && < 5
                      , dhall                >= 1.32.0   && < 1.33
                      , hnix                 >= 0.7      && < 0.8
+                     , megaparsec           >= 7.0.0    && < 8.1
                      , optparse-applicative >= 0.14.0.0 && < 0.16
+                     , prettyprinter        >= 1.5.1    && < 1.7
                      , text                 >= 0.11.1.0 && < 1.3
                      , turtle                              < 1.6
                      , network-uri                         < 2.8
