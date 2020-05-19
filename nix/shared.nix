@@ -210,6 +210,15 @@ let
   };
 
   overlayCabal2nix = pkgsNew: pkgsOld: {
+
+    # we only reference git repositories with cabal2nix
+    nix-prefetch-scripts = pkgsOld.nix-prefetch-scripts.override {
+      mercurial = null;
+      bazaar = null;
+      cvs = null;
+      subversion = null;
+    };
+
     haskellPackages = pkgsOld.haskellPackages.override (old: {
         overrides =
           let
@@ -303,6 +312,8 @@ let
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
+    cabal2nix = pkgs.cabal2nix;
+
     cabal_patched_src = pkgsNew.fetchFromGitHub {
       owner = "nh2";
       repo = "cabal";
