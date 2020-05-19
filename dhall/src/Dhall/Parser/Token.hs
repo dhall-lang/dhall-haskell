@@ -451,9 +451,9 @@ labels = do
     emptyLabels = pure Dhall.Set.empty
 
     nonEmptyLabels = do
-        x  <- anyLabel
+        x  <- anyLabelOrSome
         whitespace
-        xs <- many (do _comma; whitespace; l <- anyLabel; whitespace; return l)
+        xs <- many (do _comma; whitespace; l <- anyLabelOrSome; whitespace; return l)
         noDuplicates (x : xs)
 
 {-| Parse a label (e.g. a variable\/field\/alternative name)
