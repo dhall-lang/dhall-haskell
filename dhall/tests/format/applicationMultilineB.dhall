@@ -20,7 +20,7 @@
   , cccccccccccccccccccccccc
   , dddddddddddddd
   ]
-, merge =
+, merge1 =
     merge
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
