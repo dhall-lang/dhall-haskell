@@ -14,6 +14,7 @@ module Dhall.Parser.Token (
     char,
     file_,
     label,
+    anyLabelOrSome,
     anyLabel,
     labels,
     httpRaw,
@@ -472,6 +473,14 @@ anyLabel :: Parser Text
 anyLabel = (do
     t <- backtickLabel <|> simpleLabel True
     return t ) <?> "any label"
+
+{-| Same as `anyLabel` except that `Some` is allowed
+
+    This corresponds to the @any-label-or-some@ rule in the official grammar
+-}
+
+anyLabelOrSome :: Parser Text
+anyLabelOrSome = try anyLabel <|> ("Some" <$ _Some)
 
 {-| Parse a valid Bash environment variable name
 
