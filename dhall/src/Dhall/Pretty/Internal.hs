@@ -1205,10 +1205,6 @@ prettyCharacterSet characterSet expression =
         builtin "Optional"
     prettyPrimitiveExpression None =
         builtin "None"
-    prettyPrimitiveExpression OptionalFold =
-        builtin "Optional/fold"
-    prettyPrimitiveExpression OptionalBuild =
-        builtin "Optional/build"
     prettyPrimitiveExpression (BoolLit True) =
         builtin "True"
     prettyPrimitiveExpression (BoolLit False) =

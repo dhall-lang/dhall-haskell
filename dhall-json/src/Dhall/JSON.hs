@@ -963,12 +963,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.None ->
             Core.None
 
-        Core.OptionalFold ->
-            Core.OptionalFold
-
-        Core.OptionalBuild ->
-            Core.OptionalBuild
-
         Core.Record a ->
             Core.Record a'
           where

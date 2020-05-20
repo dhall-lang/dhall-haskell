@@ -15,8 +15,9 @@ Text , user : Optional Text } xs Text ( λ ( x : { cores : Natural , host : Text
 {} | MIPS64el_Linux : {} | PowerPC_Linux : {} | X86_64_Cygwin : {} |
 X86_64_Darwin : {} | X86_64_FreeBSD : {} | X86_64_Linux : {} | X86_64_Solaris :
 {} > , speedFactor : Natural , supportedFeatures : List Text , user : Optional
-Text } ) → λ(y : Text) → Optional/fold Text x.user Text (λ(user : Text) → user
-++ "@" ++ x.host ++ "") x.host ++ " " ++ ( merge { Empty = λ(_ : {}) → "",
+Text } ) → λ(y : Text) →
+merge { None = x.host, Some = λ(user : Text) → "${user}@${x.host}" } x.user
+++ " " ++ ( merge { Empty = λ(_ : {}) → "",
 NonEmpty = λ(result : Text) → result } ( List/fold < AArch64_Linux : {} |
 ARMv5tel_Linux : {} | ARMv7l_Linux : {} | I686_Cygwin : {} | I686_Linux : {} |
 MIPS64el_Linux : {} | PowerPC_Linux : {} | X86_64_Cygwin : {} | X86_64_Darwin :

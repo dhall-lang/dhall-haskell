@@ -433,10 +433,6 @@ data Expr s a
     | Some (Expr s a)
     -- | > None                                     ~  None
     | None
-    -- | > OptionalFold                             ~  Optional/fold
-    | OptionalFold
-    -- | > OptionalBuild                            ~  Optional/build
-    | OptionalBuild
     -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr s a))
     -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
@@ -663,8 +659,6 @@ unsafeSubExpressions _ ListReverse = pure ListReverse
 unsafeSubExpressions _ Optional = pure Optional
 unsafeSubExpressions f (Some a) = Some <$> f a
 unsafeSubExpressions _ None = pure None
-unsafeSubExpressions _ OptionalFold = pure OptionalFold
-unsafeSubExpressions _ OptionalBuild = pure OptionalBuild
 unsafeSubExpressions f (Record a) = Record <$> traverse f a
 unsafeSubExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 unsafeSubExpressions f (Union a) = Union <$> traverse (traverse f) a
@@ -1006,8 +1000,6 @@ reservedIdentifiers = reservedKeywords <>
         , "List/last"
         , "List/indexed"
         , "List/reverse"
-        , "Optional/fold"
-        , "Optional/build"
         , "Text/show"
         , "Bool"
         , "True"

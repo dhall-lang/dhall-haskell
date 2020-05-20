@@ -725,34 +725,6 @@ infer typer = loop
 
             return (VOptional _A')
 
-        OptionalFold -> do
-            return
-                (   VHPi "a" (VConst Type) (\a ->
-                            VOptional a
-                        ~>  VHPi "optional" (VConst Type) (\optional ->
-                                VHPi "just" (a ~> optional) (\_just ->
-                                    VHPi "nothing" optional (\_nothing ->
-                                        optional
-                                    )
-                                )
-                            )
-                    )
-                )
-
-        OptionalBuild -> do
-            return
-                (   VHPi "a" (VConst Type) (\a ->
-                            VHPi "optional" (VConst Type) (\optional ->
-                                VHPi "just" (a ~> optional) (\_just ->
-                                    VHPi "nothing" optional (\_nothing ->
-                                        optional
-                                    )
-                                )
-                            )
-                        ~>  VOptional a
-                    )
-                )
-
         Record xTs -> do
             let process x _T = do
                     tT' <- lift (loop ctx _T)

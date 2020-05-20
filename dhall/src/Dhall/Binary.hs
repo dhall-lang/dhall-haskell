@@ -190,10 +190,8 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Natural/show"      -> return NaturalShow
                     13 | sb == "Integer/clamp"     -> return IntegerClamp
                        | sb == "Natural/build"     -> return NaturalBuild
-                       | sb == "Optional/fold"     -> return OptionalFold
                     14 | sb == "Integer/negate"    -> return IntegerNegate
                        | sb == "Natural/isZero"    -> return NaturalIsZero
-                       | sb == "Optional/build"    -> return OptionalBuild
                     16 | sb == "Integer/toDouble"  -> return IntegerToDouble
                        | sb == "Natural/subtract"  -> return NaturalSubtract
                     17 | sb == "Natural/toInteger" -> return NaturalToInteger
@@ -661,12 +659,6 @@ encodeExpressionInternal encodeEmbed = go
 
         ListReverse ->
             Encoding.encodeUtf8ByteArray "List/reverse"
-
-        OptionalFold ->
-            Encoding.encodeUtf8ByteArray "Optional/fold"
-
-        OptionalBuild ->
-            Encoding.encodeUtf8ByteArray "Optional/build"
 
         Bool ->
             Encoding.encodeUtf8ByteArray "Bool"

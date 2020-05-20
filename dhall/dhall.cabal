@@ -189,7 +189,8 @@ Extra-Source-Files:
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/imports/*.dhall
     dhall-lang/tests/binary-decode/success/unit/imports/*.dhallb
-    dhall-lang/tests/import/cache/dhall/1220efc43103e49b56c5bf089db8e0365bbfc455b8a2f0dc6ee5727a3586f85969fd
+    dhall-lang/tests/import/cache/dhall/12203871180b87ecaba8b53fffb2a8b52d3fce98098fab09a6f759358b9e8042eedc
+    dhall-lang/tests/import/cache/dhall/1220618f785ce8f3930a9144398f576f0a992544b51212bc9108c31b4e670dc6ed21
     dhall-lang/tests/import/data/*.dhall
     dhall-lang/tests/import/data/*.txt
     dhall-lang/tests/import/failure/*.dhall
