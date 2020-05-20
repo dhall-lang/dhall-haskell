@@ -7,16 +7,16 @@
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
-import Control.Applicative (liftA2, Alternative(..), optional)
-import Data.ByteArray.Encoding (Base(..))
-import Data.Foldable (foldl')
-import Data.Functor (void)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup (Semigroup(..))
-import Data.Text (Text)
+import Control.Applicative     (Alternative (..), liftA2, optional)
+import Data.ByteArray.Encoding (Base (..))
+import Data.Foldable           (foldl')
+import Data.Functor            (void)
+import Data.List.NonEmpty      (NonEmpty (..))
+import Data.Semigroup          (Semigroup (..))
+import Data.Text               (Text)
+import Dhall.Src               (Src (..))
 import Dhall.Syntax
-import Dhall.Src (Src(..))
-import Prelude hiding (const, pi)
+import Prelude                 hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
@@ -766,7 +766,7 @@ parsers embedded = Parsers {..}
 
     nonEmptyRecordTypeOrLiteral = do
             let nonEmptyRecordType = do
-                    a <- try (anyLabel <* whitespace <* _colon)
+                    a <- try (anyLabelOrSome <* whitespace <* _colon)
 
                     nonemptyWhitespace
 
@@ -779,7 +779,7 @@ parsers embedded = Parsers {..}
 
                         whitespace
 
-                        c <- anyLabel
+                        c <- anyLabelOrSome
 
                         whitespace
 
@@ -798,7 +798,7 @@ parsers embedded = Parsers {..}
                     return (Record m)
 
             let keysValue = do
-                    keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+                    keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
 
                     let normalRecordEntry = do
                             try (whitespace *> _equal)
@@ -844,7 +844,7 @@ parsers embedded = Parsers {..}
             _ <- optional (_bar *> whitespace)
 
             let unionTypeEntry = do
-                    a <- anyLabel
+                    a <- anyLabelOrSome
                     whitespace
                     b <- optional (_colon *> nonemptyWhitespace *> expression <* whitespace)
                     return (a, b)
