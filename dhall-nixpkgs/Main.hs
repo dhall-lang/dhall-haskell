@@ -165,9 +165,7 @@ githubToNixpkgs GitHub{..} = do
         "" -> return ()
         _  -> Turtle.die "Non-empty query fragments are not supported"
 
-    let githubBase = uriUserInfo <> uriRegName <> uriPort
-
-    let baseUrl = uriScheme <> githubBase <> uriPath <> uriQuery <> uriFragment
+    let githubBase = Text.pack (uriUserInfo <> uriRegName <> uriPort)
 
     let parsePath :: Parsec Void String (Text, Text)
         parsePath = do
@@ -189,6 +187,9 @@ githubToNixpkgs GitHub{..} = do
         Just (owner, repo) -> do
             return (owner, repo)
 
+    let baseUrl =
+            Text.pack uriScheme <> "//" <> githubBase <> "/" <> owner <> "/" <> repo
+
     let finalName =
             case name of
                 Just n  -> n
@@ -196,19 +197,19 @@ githubToNixpkgs GitHub{..} = do
 
     (rev, sha256) <- case rev of
         Just r | not fetchSubmodules -> do
-            -- TODO
             return (r, undefined)
+
         _ -> do
             -- TODO: Don't use the default error handling
             (exitCode, text) <- do
                 Turtle.procStrict
                     "nix-prefetch-git"
-                    (   [ "--url", Text.pack (baseUrl <> ".git")
-                        , "--fetch-submodules"
+                    (   [ "--url", baseUrl <> ".git"
                         , "--quiet"
                         ]
-                    <>  toListWith (\x -> [ "--rev", x ]) rev
-                    <>  toListWith (\x -> [ "--hash", x ]) hash
+                    <>  toListWith (\t -> [ "--rev", t ]) rev
+                    <>  toListWith (\t -> [ "--hash", t ]) hash
+                    <>  (if fetchSubmodules then [ "--fetch-submodules" ] else [])
                     )
                     empty
 
@@ -246,7 +247,7 @@ githubToNixpkgs GitHub{..} = do
                         , ("rev", Nix.mkStr rev)
                         , ("fetchSubmodules", Nix.mkBool fetchSubmodules)
                         -- TODO: Support `private` / `varBase` options
-                        , ("githubBase", Nix.mkStr (Text.pack githubBase))
+                        , ("githubBase", Nix.mkStr githubBase)
                         , ("sha256", Nix.mkStr sha256)
                         ]
                 )
