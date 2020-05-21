@@ -52,6 +52,7 @@ import qualified Nix.Pretty
 import qualified Options.Applicative                   as Options
 import qualified Text.Megaparsec                       as Megaparsec
 import qualified Text.Megaparsec.Char                  as Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Char.Lexer
 import qualified Turtle
 
 data Options
@@ -216,29 +217,80 @@ dependencyToNix import_ = do
 
     let ImportHashed{..} = importHashed
 
+    let prelude = "Prelude"
+
     case importType of
         Remote URL{..} -> do
             case authority of
                 "raw.githubusercontent.com" -> do
-                    return ()
-                _ -> do
-                    Turtle.die "Non-GitHub dependencies are not supported"
+                    let File{..} = path
 
-            let File{..} = path
+                    let Dhall.Core.Directory{..} = directory
 
-            let Dhall.Core.Directory{..} = directory
+                    case reverse (file : components) of
+                        "dhall-lang" : "dhall-lang" : _rev : "Prelude" : rest -> do
+                            let fileArgument = Text.intercalate "/" rest
 
-            case reverse (file : components) of
-                _owner : repo : _rev : rest -> do
+                            return
+                                (   (prelude, Nothing)
+                                ,       (Nix.mkSym prelude @. "override")
+                                    @@  Nix.attrsE
+                                            [ ("file", Nix.mkStr fileArgument ) ]
+                                )
+                        _owner : repo : _rev : rest -> do
+                            let fileArgument = Text.intercalate "/" rest
+
+                            return
+                                (   (repo, Nothing)
+                                ,       (Nix.mkSym repo @. "override")
+                                    @@  Nix.attrsE
+                                            [ ("file", Nix.mkStr fileArgument ) ]
+                                )
+                        _ -> do
+                            Turtle.die "Not a valid GitHub repository URL"
+                "prelude.dhall-lang.org" -> do
+                    let File{..} = path
+
+                    let Dhall.Core.Directory{..} = directory
+
+                    let component :: Parsec Void Text Integer
+                        component = Megaparsec.Char.Lexer.decimal
+
+                    let version :: Parsec Void Text ()
+                        version = do
+                            _ <- Megaparsec.Char.char 'v'
+
+                            _ <- component
+
+                            _ <- Megaparsec.Char.char '.'
+
+                            _ <- component
+
+                            _ <- Megaparsec.Char.char '.'
+
+                            _ <- component
+
+                            return ()
+
+                    let path =
+                            case reverse (file : components) of
+                                first : rest
+                                    | Just _ <- Megaparsec.parseMaybe version first ->
+                                        rest
+                                rest ->
+                                    rest
+                                
+                    let fileArgument = Text.intercalate "/" path
+
                     return
-                        (   (repo, Nothing)
-                        ,   (Nix.mkSym repo @. "override")
-                        @@  Nix.attrsE
-                                [ ("file", Nix.mkStr (Text.intercalate "/" rest))
-                                ]
+                        (   (prelude, Nothing)
+                        ,       (Nix.mkSym prelude @. "override")
+                            @@  Nix.attrsE
+                                    [ ("file", Nix.mkStr fileArgument) ]
                         )
                 _ -> do
-                    Turtle.die "Not a valid GitHub repository URL"
+                    Turtle.die "Unsupported dependency"
+
         _ -> do
             Turtle.die "Internal error"
 
@@ -375,7 +427,7 @@ githubToNixpkgs GitHub{..} = do
 
 directoryToNixpkgs :: Main.Directory -> IO ()
 directoryToNixpkgs Main.Directory{..} = do
-    let directoryName = Turtle.format fp (Turtle.basename directory)
+    let directoryName = Turtle.format fp (Turtle.dirname directory)
 
     expressionText <- Turtle.readTextFile (directory </> file)
 
