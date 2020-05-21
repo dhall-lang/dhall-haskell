@@ -60,7 +60,8 @@ data Options
     | OptionsDirectory Main.Directory
 
 data GitHub = GitHub
-    { uri :: Text
+    { name :: Maybe Text
+    , uri :: Text
     , rev :: Maybe Text
     , hash :: Maybe Text
     , fetchSubmodules :: Bool
@@ -69,7 +70,8 @@ data GitHub = GitHub
     }
 
 data Directory = Directory
-    { directory :: FilePath
+    { name :: Maybe Text
+    , directory :: FilePath
     , file :: FilePath
     , source :: Bool
     }
@@ -108,8 +110,19 @@ parseFile =
 parseSource :: Parser Bool
 parseSource = Options.switch (Options.long "source")
 
+parseName :: Parser (Maybe Text)
+parseName =
+    optional
+        (Options.strOption
+            (   Options.long "name"
+            <>  Options.help "Name for the Nix derivation"
+            )
+        )
+
 parseGitHub :: Parser GitHub
 parseGitHub = do
+    name <- parseName
+
     uri <- Options.strArgument (Options.metavar "URL")
 
     rev <- do
@@ -138,6 +151,8 @@ parseGitHub = do
 
 parseDirectory :: Parser Main.Directory
 parseDirectory = do
+    name <- parseName
+
     directory <- Options.strArgument (Options.metavar "DIRECTORY")
 
     file <- parseFile
@@ -385,6 +400,11 @@ githubToNixpkgs GitHub{..} = do
 
             return (rev, sha256, Turtle.fromText path)
 
+    let finalName =
+            case name of
+                Nothing -> repo
+                Just n  -> n
+
     let expressionFile = directory </> file
 
     let baseDirectory = Turtle.directory (directory </> file)
@@ -409,7 +429,7 @@ githubToNixpkgs GitHub{..} = do
                 )
                 (   Nix.mkSym buildDhallGitHubPackage
                 @@  Nix.attrsE
-                        [ ("name", Nix.mkStr repo)
+                        [ ("name", Nix.mkStr finalName)
                         , ("githubBase", Nix.mkStr githubBase)
                         , ("owner", Nix.mkStr owner)
                         , ("repo", Nix.mkStr repo)
@@ -427,7 +447,10 @@ githubToNixpkgs GitHub{..} = do
 
 directoryToNixpkgs :: Main.Directory -> IO ()
 directoryToNixpkgs Main.Directory{..} = do
-    let directoryName = Turtle.format fp (Turtle.dirname directory)
+    let finalName =
+            case name of
+                Nothing -> Turtle.format fp (Turtle.dirname directory)
+                Just n  -> n
 
     expressionText <- Turtle.readTextFile (directory </> file)
 
@@ -449,7 +472,7 @@ directoryToNixpkgs Main.Directory{..} = do
                 )
                 (   Nix.mkSym buildDhallDirectoryPackage
                 @@  Nix.attrsE
-                        [ ("name", Nix.mkStr directoryName)
+                        [ ("name", Nix.mkStr finalName)
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
                         , ("dependencies", Nix.mkList (fmap snd nixDependencies))
