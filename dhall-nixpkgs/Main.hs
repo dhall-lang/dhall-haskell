@@ -14,17 +14,37 @@ import Control.Applicative (empty, optional, (<|>))
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
 import Data.Void (Void)
+import Dhall.Import (SemanticCacheMode(..), Status(..))
+import Dhall.Parser (Src)
 import GHC.Generics (Generic)
 import Network.URI (URI(..), URIAuth(..))
-import Nix.Expr.Shorthands ((@@))
+import Nix.Expr.Shorthands ((@@), (@.))
+import Nix.Expr.Types (NExpr)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode(..))
 import Text.Megaparsec (Parsec)
+import Turtle ((</>))
 
+import Dhall.Core
+    ( Directory(..)
+    , Expr
+    , File(..)
+    , Import(..)
+    , ImportHashed(..)
+    , ImportType(..)
+    , URL(..)
+    )
+
+import qualified Control.Foldl                         as Foldl
+import qualified Control.Monad.Trans.State.Strict      as State
 import qualified Data.Aeson                            as Aeson
 import qualified Data.Text                             as Text
 import qualified Data.Text.Encoding                    as Text.Encoding
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Prettyprint.Text
+import qualified Dhall.Core
+import qualified Dhall.Import
+import qualified Dhall.Map
+import qualified Dhall.Parser
 import qualified Network.URI                           as URI
 import qualified Nix.Expr.Shorthands                   as Nix
 import qualified Nix.Pretty
@@ -35,14 +55,15 @@ import qualified Turtle
 
 data Options
     = OptionsGitHub GitHub
-    | OptionsDirectory Directory
+    | OptionsDirectory Main.Directory
 
 data GitHub = GitHub
     { uri :: Text
-    , name :: Maybe Text
     , rev :: Maybe Text
     , hash :: Maybe Text
     , fetchSubmodules :: Bool
+    , file :: Text
+    , source :: Bool
     }
 
 data Directory = Directory { path :: FilePath }
@@ -50,6 +71,7 @@ data Directory = Directory { path :: FilePath }
 data NixPrefetchGit = NixPrefetchGit
     { url :: Text
     , rev :: Text
+    , path :: Text
     , sha256 :: Text
     , fetchSubmodules :: Bool 
     , deepClone :: Bool
@@ -66,14 +88,6 @@ parseOptions =
 parseGitHub :: Parser Options
 parseGitHub = do
     uri <- Options.strArgument (Options.metavar "URL")
-
-    name <- do
-        optional
-            (Options.strOption
-                (   Options.long "name"
-                <>  Options.help "Name for the generated derivation"
-                )
-            )
 
     rev <- do
         optional
@@ -93,13 +107,22 @@ parseGitHub = do
 
     fetchSubmodules <- Options.switch (Options.long "fetch-submodules")
 
+    file <- do
+        Options.strOption
+            (   Options.long "file"
+            <>  Options.help "File to import"
+            <>  Options.value "package.dhall"
+            )
+
+    source <- Options.switch (Options.long "source")
+
     return (OptionsGitHub GitHub{..})
 
 parseDirectory :: Parser Options
 parseDirectory = do
     path <- Options.strArgument (Options.metavar "DIRECTORY")
 
-    return (OptionsDirectory Directory{..})
+    return (OptionsDirectory Main.Directory{..})
 
 subcommand :: String -> String -> Parser a -> Parser a
 subcommand name description parser =
@@ -132,6 +155,68 @@ main = do
 toListWith :: (a -> [ Text ]) -> Maybe a -> [ Text ]
 toListWith f (Just x ) = f x
 toListWith _  Nothing  = [ ]
+
+findExternalDependencies :: FilePath -> Expr Src Import -> IO [Import]
+findExternalDependencies baseDirectory expression = do
+    -- Load the expression once to populate the cache
+    _ <- Dhall.Import.loadRelativeTo baseDirectory UseSemanticCache expression
+
+    -- Now load the same expression a second time so that transitive
+    -- dependencies of cached imports are not resolved, and therefore won't
+    -- be included in the list
+    Status{..} <- State.execStateT (Dhall.Import.loadWith expression) (Dhall.Import.emptyStatus baseDirectory)
+
+    Turtle.reduce Foldl.list $ do
+        let imports = fmap Dhall.Import.chainedImport (Dhall.Map.keys _cache)
+
+        import_@Import{..} <- Turtle.select imports
+
+        let ImportHashed{..} = importHashed
+
+        case importType of
+            Remote{} -> case hash of
+                Nothing -> do
+                    Turtle.die "Unprotected remote imports are not supported"
+                Just _ -> do
+                    return import_
+            Local{} -> do
+                empty
+            Env{} -> do
+                Turtle.die "Environment variable imports are not supported"
+            Missing -> do
+                Turtle.die "Missing imports are not supported"
+
+dependencyToNix :: Import -> IO ((Text, Maybe nExpr), NExpr)
+dependencyToNix import_ = do
+    let Import{..} = import_
+
+    let ImportHashed{..} = importHashed
+
+    case importType of
+        Remote URL{..} -> do
+            case authority of
+                "raw.githubusercontent.com" -> do
+                    return ()
+                _ -> do
+                    Turtle.die "Non-GitHub dependencies are not supported"
+
+            let File{..} = path
+
+            let Dhall.Core.Directory{..} = directory
+
+            case reverse (file : components) of
+                _owner : repo : _rev : rest -> do
+                    return
+                        (   (repo, Nothing)
+                        ,   (Nix.mkSym repo @. "override")
+                        @@  Nix.attrsE
+                                [ ("file", Nix.mkStr (Text.intercalate "/" rest))
+                                ]
+                        )
+                _ -> do
+                    Turtle.die "Not a valid GitHub repository URL"
+        _ -> do
+            Turtle.die "Internal error"
 
 githubToNixpkgs :: GitHub -> IO ()
 githubToNixpkgs GitHub{..} = do
@@ -190,17 +275,11 @@ githubToNixpkgs GitHub{..} = do
     let baseUrl =
             Text.pack uriScheme <> "//" <> githubBase <> "/" <> owner <> "/" <> repo
 
-    let finalName =
-            case name of
-                Just n  -> n
-                Nothing -> repo
-
-    (rev, sha256) <- case rev of
+    (rev, sha256, path) <- case rev of
         Just r | not fetchSubmodules -> do
-            return (r, undefined)
+            return (r, undefined, undefined)
 
         _ -> do
-            -- TODO: Don't use the default error handling
             (exitCode, text) <- do
                 Turtle.procStrict
                     "nix-prefetch-git"
@@ -228,27 +307,43 @@ githubToNixpkgs GitHub{..} = do
                 Right n -> do
                     return n
 
-            return (rev, sha256)
+            return (rev, sha256, path)
+
+    let expressionFile = Turtle.fromText path </> Turtle.fromText file
+
+    let baseDirectory = Turtle.directory expressionFile
+
+    expressionText <- Turtle.readTextFile expressionFile
+
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString baseDirectory) expressionText)
+
+    dependencies <- findExternalDependencies (Turtle.encodeString baseDirectory) expression
+
+    nixDependencies <- traverse dependencyToNix dependencies
 
     let buildDhallGitHubPackage = "buildDhallGitHubPackage"
 
     let nixExpression =
             Nix.mkFunction
                 (Nix.mkParamset
-                    [ (buildDhallGitHubPackage, Nothing) ]
+                    (   [ (buildDhallGitHubPackage, Nothing) ]
+                    <>  fmap fst nixDependencies
+                    )
                     False
                 )
                 (   Nix.mkSym buildDhallGitHubPackage
                 @@  Nix.attrsE
-                        [ ("name", Nix.mkStr finalName)
-
+                        [ ("name", Nix.mkStr repo)
+                        , ("githubBase", Nix.mkStr githubBase)
                         , ("owner", Nix.mkStr owner)
                         , ("repo", Nix.mkStr repo)
                         , ("rev", Nix.mkStr rev)
                         , ("fetchSubmodules", Nix.mkBool fetchSubmodules)
                         -- TODO: Support `private` / `varBase` options
-                        , ("githubBase", Nix.mkStr githubBase)
                         , ("sha256", Nix.mkStr sha256)
+                        , ("file", Nix.mkStr file)
+                        , ("source", Nix.mkBool source)
+                        , ("dependencies", Nix.mkList (fmap snd nixDependencies))
                         ]
                 )
 
