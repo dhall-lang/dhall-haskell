@@ -21,9 +21,10 @@ import Network.URI (URI(..), URIAuth(..))
 import Nix.Expr.Shorthands ((@@), (@.))
 import Nix.Expr.Types (NExpr)
 import Options.Applicative (Parser, ParserInfo)
+import Prelude hiding (FilePath)
 import System.Exit (ExitCode(..))
 import Text.Megaparsec (Parsec)
-import Turtle (fp, (</>))
+import Turtle (FilePath, fp, (</>))
 
 import Dhall.Core
     ( Directory(..)
@@ -62,13 +63,13 @@ data GitHub = GitHub
     , rev :: Maybe Text
     , hash :: Maybe Text
     , fetchSubmodules :: Bool
-    , file :: Text
+    , file :: FilePath
     , source :: Bool
     }
 
 data Directory = Directory
-    { directory :: Text
-    , file :: Text
+    { directory :: FilePath
+    , file :: FilePath
     , source :: Bool
     }
 
@@ -95,7 +96,7 @@ parseOptions =
             "Use a local directory"
             (fmap OptionsDirectory parseDirectory)
 
-parseFile :: Parser Text
+parseFile :: Parser FilePath
 parseFile =
     Options.strOption
         (   Options.long "file"
@@ -179,13 +180,15 @@ toListWith _  Nothing  = [ ]
 
 findExternalDependencies :: FilePath -> Expr Src Import -> IO [Import]
 findExternalDependencies baseDirectory expression = do
+    let directoryString = Turtle.encodeString baseDirectory
+
     -- Load the expression once to populate the cache
-    _ <- Dhall.Import.loadRelativeTo baseDirectory UseSemanticCache expression
+    _ <- Dhall.Import.loadRelativeTo directoryString UseSemanticCache expression
 
     -- Now load the same expression a second time so that transitive
     -- dependencies of cached imports are not resolved, and therefore won't
     -- be included in the list
-    Status{..} <- State.execStateT (Dhall.Import.loadWith expression) (Dhall.Import.emptyStatus baseDirectory)
+    Status{..} <- State.execStateT (Dhall.Import.loadWith expression) (Dhall.Import.emptyStatus directoryString)
 
     Turtle.reduce Foldl.list $ do
         let imports = fmap Dhall.Import.chainedImport (Dhall.Map.keys _cache)
@@ -296,7 +299,7 @@ githubToNixpkgs GitHub{..} = do
     let baseUrl =
             Text.pack uriScheme <> "//" <> githubBase <> "/" <> owner <> "/" <> repo
 
-    (rev, sha256, path) <- case rev of
+    (rev, sha256, directory) <- case rev of
         Just r | not fetchSubmodules -> do
             return (r, undefined, undefined)
 
@@ -328,17 +331,17 @@ githubToNixpkgs GitHub{..} = do
                 Right n -> do
                     return n
 
-            return (rev, sha256, path)
+            return (rev, sha256, Turtle.fromText path)
 
-    let expressionFile = Turtle.fromText path </> Turtle.fromText file
+    let expressionFile = directory </> file
 
-    let baseDirectory = Turtle.directory expressionFile
+    let baseDirectory = Turtle.directory (directory </> file)
 
     expressionText <- Turtle.readTextFile expressionFile
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString baseDirectory) expressionText)
 
-    dependencies <- findExternalDependencies (Turtle.encodeString baseDirectory) expression
+    dependencies <- findExternalDependencies baseDirectory expression
 
     nixDependencies <- traverse dependencyToNix dependencies
 
@@ -362,7 +365,7 @@ githubToNixpkgs GitHub{..} = do
                         , ("fetchSubmodules", Nix.mkBool fetchSubmodules)
                         -- TODO: Support `private` / `varBase` options
                         , ("sha256", Nix.mkStr sha256)
-                        , ("file", Nix.mkStr file)
+                        , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
                         , ("dependencies", Nix.mkList (fmap snd nixDependencies))
                         ]
@@ -372,16 +375,13 @@ githubToNixpkgs GitHub{..} = do
 
 directoryToNixpkgs :: Main.Directory -> IO ()
 directoryToNixpkgs Main.Directory{..} = do
-    let directoryName =
-            Turtle.format fp (Turtle.basename (Turtle.fromText directory))
+    let directoryName = Turtle.format fp (Turtle.basename directory)
 
-    let expressionFile = Turtle.fromText directory </> Turtle.fromText file
+    expressionText <- Turtle.readTextFile (directory </> file)
 
-    expressionText <- Turtle.readTextFile expressionFile
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString directory) expressionText)
 
-    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Text.unpack directory) expressionText)
-
-    dependencies <- findExternalDependencies (Text.unpack directory) expression
+    dependencies <- findExternalDependencies directory expression
 
     nixDependencies <- traverse dependencyToNix dependencies
 
@@ -398,7 +398,7 @@ directoryToNixpkgs Main.Directory{..} = do
                 (   Nix.mkSym buildDhallDirectoryPackage
                 @@  Nix.attrsE
                         [ ("name", Nix.mkStr directoryName)
-                        , ("file", Nix.mkStr file)
+                        , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
                         , ("dependencies", Nix.mkList (fmap snd nixDependencies))
                         ]
