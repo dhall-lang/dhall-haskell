@@ -23,7 +23,7 @@ import Nix.Expr.Types (NExpr)
 import Options.Applicative (Parser, ParserInfo)
 import System.Exit (ExitCode(..))
 import Text.Megaparsec (Parsec)
-import Turtle ((</>))
+import Turtle (fp, (</>))
 
 import Dhall.Core
     ( Directory(..)
@@ -66,7 +66,11 @@ data GitHub = GitHub
     , source :: Bool
     }
 
-data Directory = Directory { path :: FilePath }
+data Directory = Directory
+    { directory :: Text
+    , file :: Text
+    , source :: Bool
+    }
 
 data NixPrefetchGit = NixPrefetchGit
     { url :: Text
@@ -82,10 +86,27 @@ data NixPrefetchGit = NixPrefetchGit
 
 parseOptions :: Parser Options
 parseOptions =
-        subcommand "github"    "Use a GitHub repository" parseGitHub
-    <|> subcommand "directory" "Use a local directory"   parseDirectory
+        subcommand
+            "github"
+            "Use a GitHub repository"
+            (fmap OptionsGitHub parseGitHub)
+    <|> subcommand
+            "directory"
+            "Use a local directory"
+            (fmap OptionsDirectory parseDirectory)
 
-parseGitHub :: Parser Options
+parseFile :: Parser Text
+parseFile =
+    Options.strOption
+        (   Options.long "file"
+        <>  Options.help "File to import"
+        <>  Options.value "package.dhall"
+        )
+
+parseSource :: Parser Bool
+parseSource = Options.switch (Options.long "source")
+
+parseGitHub :: Parser GitHub
 parseGitHub = do
     uri <- Options.strArgument (Options.metavar "URL")
 
@@ -107,22 +128,21 @@ parseGitHub = do
 
     fetchSubmodules <- Options.switch (Options.long "fetch-submodules")
 
-    file <- do
-        Options.strOption
-            (   Options.long "file"
-            <>  Options.help "File to import"
-            <>  Options.value "package.dhall"
-            )
+    file <- parseFile
 
-    source <- Options.switch (Options.long "source")
+    source <- parseSource
 
-    return (OptionsGitHub GitHub{..})
+    return GitHub{..}
 
-parseDirectory :: Parser Options
+parseDirectory :: Parser Main.Directory
 parseDirectory = do
-    path <- Options.strArgument (Options.metavar "DIRECTORY")
+    directory <- Options.strArgument (Options.metavar "DIRECTORY")
 
-    return (OptionsDirectory Main.Directory{..})
+    file <- parseFile
+
+    source <- parseSource
+
+    return Main.Directory{..}
 
 subcommand :: String -> String -> Parser a -> Parser a
 subcommand name description parser =
@@ -150,7 +170,8 @@ main = do
     options <- Options.execParser parserInfoOptions
 
     case options of
-        OptionsGitHub github -> githubToNixpkgs github
+        OptionsGitHub    github    -> githubToNixpkgs    github
+        OptionsDirectory directory -> directoryToNixpkgs directory
 
 toListWith :: (a -> [ Text ]) -> Maybe a -> [ Text ]
 toListWith f (Just x ) = f x
@@ -341,6 +362,42 @@ githubToNixpkgs GitHub{..} = do
                         , ("fetchSubmodules", Nix.mkBool fetchSubmodules)
                         -- TODO: Support `private` / `varBase` options
                         , ("sha256", Nix.mkStr sha256)
+                        , ("file", Nix.mkStr file)
+                        , ("source", Nix.mkBool source)
+                        , ("dependencies", Nix.mkList (fmap snd nixDependencies))
+                        ]
+                )
+
+    Prettyprint.Text.putDoc (Nix.Pretty.prettyNix nixExpression)
+
+directoryToNixpkgs :: Main.Directory -> IO ()
+directoryToNixpkgs Main.Directory{..} = do
+    let directoryName =
+            Turtle.format fp (Turtle.basename (Turtle.fromText directory))
+
+    let expressionFile = Turtle.fromText directory </> Turtle.fromText file
+
+    expressionText <- Turtle.readTextFile expressionFile
+
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Text.unpack directory) expressionText)
+
+    dependencies <- findExternalDependencies (Text.unpack directory) expression
+
+    nixDependencies <- traverse dependencyToNix dependencies
+
+    let buildDhallDirectoryPackage = "buildDhallDirectoryPackage"
+
+    let nixExpression =
+            Nix.mkFunction
+                (Nix.mkParamset
+                    (   [ (buildDhallDirectoryPackage, Nothing) ]
+                    <>  fmap fst nixDependencies
+                    )
+                    False
+                )
+                (   Nix.mkSym buildDhallDirectoryPackage
+                @@  Nix.attrsE
+                        [ ("name", Nix.mkStr directoryName)
                         , ("file", Nix.mkStr file)
                         , ("source", Nix.mkBool source)
                         , ("dependencies", Nix.mkList (fmap snd nixDependencies))
