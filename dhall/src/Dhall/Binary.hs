@@ -61,7 +61,6 @@ import qualified Codec.CBOR.Decoding  as Decoding
 import qualified Codec.CBOR.Encoding  as Encoding
 import qualified Codec.CBOR.Read      as Read
 import qualified Codec.Serialise      as Serialise
-import qualified Control.Monad        as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
@@ -237,7 +236,7 @@ decodeExpressionInternal decodeEmbed = go
                             0 -> do
                                 f <- go
 
-                                xs <- Monad.replicateM (len - 2) go
+                                xs <- replicateDecoder (len - 2) go
 
                                 if null xs
                                     then die "Non-standard encoding of a function with no arguments"
@@ -331,7 +330,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         Decoding.decodeNull
 
-                                        xs <- Monad.replicateM (len - 2) go
+                                        xs <- replicateDecoder (len - 2) go
                                         return (ListLit Nothing (Data.Sequence.fromList xs))
 
                             5 -> do
@@ -361,7 +360,7 @@ decodeExpressionInternal decodeEmbed = go
                             7 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xTs <- Monad.replicateM mapLength $ do
+                                xTs <- replicateDecoder mapLength $ do
                                     x <- Decoding.decodeString
 
                                     _T <- go
@@ -373,7 +372,7 @@ decodeExpressionInternal decodeEmbed = go
                             8 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xts <- Monad.replicateM mapLength $ do
+                                xts <- replicateDecoder mapLength $ do
                                     x <- Decoding.decodeString
 
                                     t <- go
@@ -412,7 +411,7 @@ decodeExpressionInternal decodeEmbed = go
                                                 die ("Unexpected token type for projection: " <> show tokenType₂)
 
                                     _ -> do
-                                        xs <- Monad.replicateM (len - 2) Decoding.decodeString
+                                        xs <- replicateDecoder (len - 2) Decoding.decodeString
 
                                         return (Left (Dhall.Set.fromList xs))
 
@@ -421,7 +420,7 @@ decodeExpressionInternal decodeEmbed = go
                             11 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xTs <- Monad.replicateM mapLength $ do
+                                xTs <- replicateDecoder mapLength $ do
                                     x <- Decoding.decodeString
 
                                     tokenType₂ <- Decoding.peekTokenType
@@ -502,7 +501,7 @@ decodeExpressionInternal decodeEmbed = go
                                         die ("Unexpected token type for Integer literal: " <> show tokenType₂)
 
                             18 -> do
-                                xys <- Monad.replicateM ((len - 2) `quot` 2) $ do
+                                xys <- replicateDecoder ((len - 2) `quot` 2) $ do
                                     x <- Decoding.decodeString
 
                                     y <- go
@@ -522,7 +521,7 @@ decodeExpressionInternal decodeEmbed = go
                                 fmap Embed (decodeEmbed len)
 
                             25 -> do
-                                bindings <- Monad.replicateM ((len - 2) `quot` 3) $ do
+                                bindings <- replicateDecoder ((len - 2) `quot` 3) $ do
                                     x <- Decoding.decodeString
 
                                     tokenType₂ <- Decoding.peekTokenType
@@ -1034,7 +1033,7 @@ decodeImport len = do
 
             authority <- Decoding.decodeString
 
-            paths <- Monad.replicateM (len - 8) Decoding.decodeString
+            paths <- replicateDecoder (len - 8) Decoding.decodeString
 
             file <- Decoding.decodeString
 
@@ -1054,7 +1053,7 @@ decodeImport len = do
             return (Remote (URL {..}))
 
     let local prefix = do
-            paths <- Monad.replicateM (len - 5) Decoding.decodeString
+            paths <- replicateDecoder (len - 5) Decoding.decodeString
 
             file <- Decoding.decodeString
 
@@ -1251,3 +1250,15 @@ instance Show DecodingFailure where
         <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack bytes) <> "\n"
       where
         toHex = Printf.printf "%02x "
+
+-- | This specialized version of 'Control.Monad.replicateM' reduces
+-- decoding timings by roughly 10%.
+replicateDecoder :: Int -> Decoder s a -> Decoder s [a]
+replicateDecoder n0 decoder = go n0
+  where
+    go n
+      | n <= 0    = pure []
+      | otherwise = do
+            x <- decoder
+            xs <- go (n - 1)
+            pure (x:xs)
