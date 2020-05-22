@@ -439,7 +439,7 @@ escapeLabel :: Bool -> Text -> Text
 escapeLabel allowReserved l =
     case Text.uncons l of
         Just (h, t)
-            | headCharacter h && Text.all tailCharacter t && someOrNotLanguageKeyword && (allowReserved || notReservedIdentifier)
+            | headCharacter h && Text.all tailCharacter t && (notReservedIdentifier || (allowReserved && someOrNotLanguageKeyword))
                 -> l
         _       -> "`" <> l <> "`"
     where
