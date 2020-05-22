@@ -12,6 +12,7 @@
 module Main where
 
 import Control.Applicative (empty, optional, (<|>))
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
 import Data.Void (Void)
@@ -43,6 +44,7 @@ import qualified Control.Monad.Trans.State.Strict      as State
 import qualified Data.Aeson                            as Aeson
 import qualified Data.Text                             as Text
 import qualified Data.Text.Encoding                    as Text.Encoding
+import qualified Data.Text.IO                          as Text.IO
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Prettyprint.Text
 import qualified Dhall.Core
 import qualified Dhall.Import
@@ -54,6 +56,7 @@ import qualified Network.URI                           as URI
 import qualified Nix.Expr.Shorthands                   as Nix
 import qualified Nix.Pretty
 import qualified Options.Applicative                   as Options
+import qualified System.Exit
 import qualified System.IO
 import qualified Text.Megaparsec                       as Megaparsec
 import qualified Text.Megaparsec.Char                  as Megaparsec.Char
@@ -193,6 +196,12 @@ parserInfoOptions =
         <>  Options.fullDesc
         )
 
+die :: MonadIO io => Text -> io a
+die text = liftIO $ do
+    Text.IO.hPutStr System.IO.stderr text
+
+    System.Exit.exitFailure
+
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
@@ -244,7 +253,7 @@ findExternalDependencies baseDirectory expression = do
                 Nothing -> do
                     let dependency = Dhall.Core.pretty import_
 
-                    Turtle.die [NeatInterpolation.text|
+                    die [NeatInterpolation.text|
 Error: Remote imports require integrity checks
 
 The Nixpkgs support for Dhall replaces all remote imports with cache hits in
@@ -319,7 +328,7 @@ dependencyToNix url@URL{..} = do
                                     [ ("file", Nix.mkStr fileArgument ) ]
                         )
                 _ -> do
-                    Turtle.die [NeatInterpolation.text|
+                    die [NeatInterpolation.text|
 Error: Not a valid GitHub repository URL
 
 Your Dhall package appears to depend on the following import:
@@ -374,7 +383,7 @@ normally have.  The URL should minimally have the following path components:
                             [ ("file", Nix.mkStr fileArgument) ]
                 )
         _ -> do
-            Turtle.die [NeatInterpolation.text|
+            die [NeatInterpolation.text|
 Error: Unsupported domain
 
 This tool currently only translates the following domains into Nix dependencies:
@@ -396,7 +405,7 @@ githubToNixpkgs :: GitHub -> IO ()
 githubToNixpkgs GitHub{..} = do
     URI{ uriAuthority = Just URIAuth{..}, .. } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
-            Nothing -> Turtle.die [NeatInterpolation.text|
+            Nothing -> die [NeatInterpolation.text|
 Error: The specified repository is not a valid URI
 
 You provided the following argument:
@@ -414,7 +423,7 @@ You provided the following argument:
         _ -> do
             let uriSchemeText = Text.pack uriScheme
 
-            Turtle.die [NeatInterpolation.text|
+            die [NeatInterpolation.text|
 Error: URI schemes other than https are not supported
 
 You specified the following URI:
@@ -434,7 +443,7 @@ You specified the following URI:
         _ -> do
             let uriRegNameText = Text.pack uriRegName
 
-            Turtle.die [NeatInterpolation.text|
+            die [NeatInterpolation.text|
 Error: Domains other than github.com are not supported
 
 You specified the following URI:
@@ -453,7 +462,7 @@ You specified the following URI:
         _ -> do
             let uriPortText = Text.pack uriPort
 
-            Turtle.die [NeatInterpolation.text|
+            die [NeatInterpolation.text|
 Error: Non-default ports are not supported
 
 You specified the following URI:
@@ -472,7 +481,7 @@ You specified the following URI:
         _  -> do
             let uriQueryText = Text.pack uriQuery
 
-            Turtle.die [NeatInterpolation.text|
+            die [NeatInterpolation.text|
 Error: Non-empty query strings are not supported
 
 You specified the following URI:
@@ -491,7 +500,7 @@ You specified the following URI:
         _  -> do
             let uriFragmentText = Text.pack uriFragment
 
-            Turtle.die [NeatInterpolation.text|
+            die [NeatInterpolation.text|
 Error: Non-empty query fragments are not supported
 
 You specified the following URI:
@@ -523,7 +532,7 @@ You specified the following URI:
 
     (owner, repo) <- case Megaparsec.parseMaybe parsePath uriPath of
         Nothing -> do
-            Turtle.die [NeatInterpolation.text|
+            die [NeatInterpolation.text|
 Error: Not a valid GitHub repository
 
 You specified the following URI:
@@ -560,7 +569,7 @@ following format:
             case exitCode of
                 ExitSuccess -> return ()
                 ExitFailure _ -> do
-                    Turtle.die [NeatInterpolation.text|
+                    die [NeatInterpolation.text|
 Error: Failed to fetch the GitHub's repository archive
 
 The following command failed to fetch the following archive for the repository:
@@ -570,7 +579,7 @@ The following command failed to fetch the following archive for the repository:
 
             case Text.lines text of
                 [ sha256, path ] -> return (r, sha256, Turtle.fromText path)
-                _ -> Turtle.die [NeatInterpolation.text|
+                _ -> die [NeatInterpolation.text|
 Error: Failed to parse the nix-prefetch-url output
 
 The following command:
@@ -602,7 +611,7 @@ with this tool or with nix-prefetch-url
                 ExitSuccess -> return ()
                 ExitFailure _ -> do
                     -- TODO: Include the nix-prefetch-git invocation here
-                    Turtle.die [NeatInterpolation.text|
+                    die [NeatInterpolation.text|
 Error: Failed to clone the GitHub repository
 
 The following command failed to clone the repository:
@@ -616,7 +625,7 @@ The following command failed to clone the repository:
                 Left message -> do
                     let messageText = Text.pack message
 
-                    Turtle.die [NeatInterpolation.text|
+                    die [NeatInterpolation.text|
 Error: Failed to parse the output of nix-prefetch-git
 
 The following command:
