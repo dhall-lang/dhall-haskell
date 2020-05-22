@@ -27,6 +27,9 @@ Extra-Source-Files:
     CHANGELOG.md
     tasty/data/*.dhall
     tasty/data/*.json
+    tasty/data/error/*.golden
+    tasty/data/error/*.json
+    tasty/data/error/*.dhall
 
 Source-Repository head
     Type: git
@@ -115,13 +118,14 @@ Test-Suite tasty
     Hs-Source-Dirs: tasty
     Main-Is: Main.hs
     Build-Depends:
-        base              ,
-        aeson             ,
-        bytestring        ,
-        dhall             ,
-        dhall-json        ,
-        tasty       <  1.4,
-        text              ,
-        tasty-hunit >= 0.2
+        base               ,
+        aeson              ,
+        bytestring         ,
+        dhall              ,
+        dhall-json         ,
+        tasty        <  1.4,
+        text               ,
+        tasty-hunit  >= 0.2,
+        tasty-silver >= 3.0
     GHC-Options: -Wall
     Default-Language: Haskell2010
