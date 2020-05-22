@@ -120,8 +120,9 @@ unApply e₀ = (baseFunction₀, diffArguments₀ [])
 decodeExpressionInternal :: (Int -> Decoder s a) -> Decoder s (Expr t a)
 decodeExpressionInternal decodeEmbed = go
   where
+    die message = fail ("Dhall.Binary.decodeExpressionInternal: " <> message)
+
     go = do
-        let die message = fail ("Dhall.Binary.decodeExpressionInternal: " <> message)
 
         tokenType₀ <- Decoding.peekTokenType
 
@@ -156,45 +157,7 @@ decodeExpressionInternal decodeEmbed = go
 
                 return (BoolLit b)
 
-            TypeString -> do
-                s <- Decoding.decodeString
-
-                case s of
-                    "Natural/build"     -> return NaturalBuild
-                    "Natural/fold"      -> return NaturalFold
-                    "Natural/isZero"    -> return NaturalIsZero
-                    "Natural/even"      -> return NaturalEven
-                    "Natural/odd"       -> return NaturalOdd
-                    "Natural/toInteger" -> return NaturalToInteger
-                    "Natural/show"      -> return NaturalShow
-                    "Natural/subtract"  -> return NaturalSubtract
-                    "Integer/toDouble"  -> return IntegerToDouble
-                    "Integer/clamp"     -> return IntegerClamp
-                    "Integer/negate"    -> return IntegerNegate
-                    "Integer/show"      -> return IntegerShow
-                    "Double/show"       -> return DoubleShow
-                    "List/build"        -> return ListBuild
-                    "List/fold"         -> return ListFold
-                    "List/length"       -> return ListLength
-                    "List/head"         -> return ListHead
-                    "List/last"         -> return ListLast
-                    "List/indexed"      -> return ListIndexed
-                    "List/reverse"      -> return ListReverse
-                    "Optional/fold"     -> return OptionalFold
-                    "Optional/build"    -> return OptionalBuild
-                    "Bool"              -> return Bool
-                    "Optional"          -> return Optional
-                    "None"              -> return None
-                    "Natural"           -> return Natural
-                    "Integer"           -> return Integer
-                    "Double"            -> return Double
-                    "Text"              -> return Text
-                    "Text/show"         -> return TextShow
-                    "List"              -> return List
-                    "Type"              -> return (Const Type)
-                    "Kind"              -> return (Const Kind)
-                    "Sort"              -> return (Const Sort)
-                    _                   -> die ("Unrecognized built-in: " <> Text.unpack s)
+            TypeString -> decodeBuiltin
 
             TypeListLen -> do
                 len <- Decoding.decodeListLen
@@ -586,6 +549,47 @@ decodeExpressionInternal decodeEmbed = go
 
             _ -> do
                 die ("Unexpected initial token: " <> show tokenType₀)
+
+    decodeBuiltin = do
+        s <- Decoding.decodeString
+
+        case s of
+            "Natural/build"     -> return NaturalBuild
+            "Natural/fold"      -> return NaturalFold
+            "Natural/isZero"    -> return NaturalIsZero
+            "Natural/even"      -> return NaturalEven
+            "Natural/odd"       -> return NaturalOdd
+            "Natural/toInteger" -> return NaturalToInteger
+            "Natural/show"      -> return NaturalShow
+            "Natural/subtract"  -> return NaturalSubtract
+            "Integer/toDouble"  -> return IntegerToDouble
+            "Integer/clamp"     -> return IntegerClamp
+            "Integer/negate"    -> return IntegerNegate
+            "Integer/show"      -> return IntegerShow
+            "Double/show"       -> return DoubleShow
+            "List/build"        -> return ListBuild
+            "List/fold"         -> return ListFold
+            "List/length"       -> return ListLength
+            "List/head"         -> return ListHead
+            "List/last"         -> return ListLast
+            "List/indexed"      -> return ListIndexed
+            "List/reverse"      -> return ListReverse
+            "Optional/fold"     -> return OptionalFold
+            "Optional/build"    -> return OptionalBuild
+            "Bool"              -> return Bool
+            "Optional"          -> return Optional
+            "None"              -> return None
+            "Natural"           -> return Natural
+            "Integer"           -> return Integer
+            "Double"            -> return Double
+            "Text"              -> return Text
+            "Text/show"         -> return TextShow
+            "List"              -> return List
+            "Type"              -> return (Const Type)
+            "Kind"              -> return (Const Kind)
+            "Sort"              -> return (Const Sort)
+            _                   -> die ("Unrecognized built-in: " <> Text.unpack s)
+    {-# NOINLINE decodeBuiltin #-}
 
 encodeExpressionInternal :: (a -> Encoding) -> Expr Void a -> Encoding
 encodeExpressionInternal encodeEmbed = go
