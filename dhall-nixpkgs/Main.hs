@@ -27,8 +27,7 @@ import Text.Megaparsec (Parsec)
 import Turtle (FilePath, fp, (</>))
 
 import Dhall.Core
-    ( Directory(..)
-    , Expr
+    ( Expr
     , File(..)
     , Import(..)
     , ImportHashed(..)
@@ -57,7 +56,7 @@ import qualified Turtle
 
 data Options
     = OptionsGitHub GitHub
-    | OptionsDirectory Main.Directory
+    | OptionsDirectory Directory
 
 data GitHub = GitHub
     { name :: Maybe Text
@@ -92,23 +91,40 @@ parseOptions :: Parser Options
 parseOptions =
         subcommand
             "github"
-            "Use a GitHub repository"
+            "Create a Nix package from a GitHub repository"
             (fmap OptionsGitHub parseGitHub)
     <|> subcommand
             "directory"
-            "Use a local directory"
+            "Create a Nix package from a local directory"
             (fmap OptionsDirectory parseDirectory)
+  where
+    subcommand name description parser =
+        Options.hsubparser
+            (   Options.command name parserInfo
+            <>  Options.metavar name
+            )
+      where
+        parserInfo =
+            Options.info parser
+                (   Options.fullDesc
+                <>  Options.progDesc description
+                )
+
 
 parseFile :: Parser FilePath
 parseFile =
     Options.strOption
         (   Options.long "file"
-        <>  Options.help "File to import"
+        <>  Options.help "File to import, relative to the top-level directory"
         <>  Options.value "package.dhall"
         )
 
 parseSource :: Parser Bool
-parseSource = Options.switch (Options.long "source")
+parseSource =
+    Options.switch
+        (   Options.long "source"
+        <>  Options.help "Configure the Nix package to include source code"
+        )
 
 parseName :: Parser (Maybe Text)
 parseName =
@@ -129,7 +145,7 @@ parseGitHub = do
         optional
             (Options.strOption
                 (   Options.long "rev"
-                <>  Options.help "Revision to use"
+                <>  Options.help "Git revision to use"
                 )
             )
 
@@ -137,11 +153,15 @@ parseGitHub = do
         optional
             (Options.strOption
                 (   Options.long "hash"
-                <>  Options.help "Expected hash"
+                <>  Options.help "Expected SHA256 hash"
                 )
             )
 
-    fetchSubmodules <- Options.switch (Options.long "fetch-submodules")
+    fetchSubmodules <-
+        Options.switch
+            (   Options.long "fetch-submodules"
+            <>  Options.help "Fetch git submodules"
+            )
 
     file <- parseFile
 
@@ -149,7 +169,7 @@ parseGitHub = do
 
     return GitHub{..}
 
-parseDirectory :: Parser Main.Directory
+parseDirectory :: Parser Directory
 parseDirectory = do
     name <- parseName
 
@@ -159,26 +179,13 @@ parseDirectory = do
 
     source <- parseSource
 
-    return Main.Directory{..}
-
-subcommand :: String -> String -> Parser a -> Parser a
-subcommand name description parser =
-    Options.hsubparser
-        (   Options.command name parserInfo
-        <>  Options.metavar name
-        )
-  where
-    parserInfo =
-        Options.info parser
-            (   Options.fullDesc
-            <>  Options.progDesc description
-            )
+    return Directory{..}
 
 parserInfoOptions :: ParserInfo Options
 parserInfoOptions =
     Options.info
         (Options.helper <*> parseOptions)
-        (   Options.progDesc "Convert a Dhall project to a buildable Nix package"
+        (   Options.progDesc "Convert a Dhall project to a Nix package"
         <>  Options.fullDesc
         )
 
@@ -190,10 +197,20 @@ main = do
         OptionsGitHub    github    -> githubToNixpkgs    github
         OptionsDirectory directory -> directoryToNixpkgs directory
 
+-- | Convenient utility for generating command-line options
 toListWith :: (a -> [ Text ]) -> Maybe a -> [ Text ]
 toListWith f (Just x ) = f x
 toListWith _  Nothing  = [ ]
 
+{-| The following Nix code is required reading for understanding how
+    `findExternalDependencies` needs to work:
+
+    <https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/dhall/build-dhall-package.nix>
+
+    The Nixpkgs support for Dhall essentially replaces all remote imports with
+    cache hits, but doing so implies that all remote imports must be protected
+    by an integrity check.
+-}
 findExternalDependencies :: FilePath -> Expr Src Import -> IO [Import]
 findExternalDependencies baseDirectory expression = do
     let directoryString = Turtle.encodeString baseDirectory
@@ -465,8 +482,8 @@ githubToNixpkgs GitHub{..} = do
 
     Prettyprint.Text.putDoc (Nix.Pretty.prettyNix nixExpression)
 
-directoryToNixpkgs :: Main.Directory -> IO ()
-directoryToNixpkgs Main.Directory{..} = do
+directoryToNixpkgs :: Directory -> IO ()
+directoryToNixpkgs Directory{..} = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
