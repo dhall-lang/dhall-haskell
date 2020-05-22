@@ -87,8 +87,6 @@ data NixPrefetchGit = NixPrefetchGit
     , path :: Text
     , sha256 :: Text
     , fetchSubmodules :: Bool 
-    , deepClone :: Bool
-    , leaveDotGit :: Bool
     }
     deriving stock (Generic)
     deriving anyclass (FromJSON)
@@ -219,7 +217,7 @@ toListWith _  Nothing  = [ ]
     cache hits, but doing so implies that all remote imports must be protected
     by an integrity check.
 -}
-findExternalDependencies :: FilePath -> Expr Src Import -> IO [Import]
+findExternalDependencies :: FilePath -> Expr Src Import -> IO [URL]
 findExternalDependencies baseDirectory expression = do
     let directoryString = Turtle.encodeString baseDirectory
 
@@ -242,7 +240,7 @@ findExternalDependencies baseDirectory expression = do
         let ImportHashed{..} = importHashed
 
         case importType of
-            Remote{} -> case hash of
+            Remote url -> case hash of
                 Nothing -> do
                     let dependency = Dhall.Core.pretty import_
 
@@ -259,11 +257,11 @@ The following dependency is missing an integrity check:
 ↳ $dependency
 |]
                 Just _ -> do
-                    return import_
+                    return url
             Local{} -> do
                 empty
             Env{} -> do
-                -- We intentionally perrmit Dhall packages built using Nix to
+                -- We intentionally permit Dhall packages built using Nix to
                 -- refer to environment variables
                 empty
             Missing -> do
@@ -287,45 +285,41 @@ The following dependency is missing an integrity check:
 
         dhall-packages.override { file = "kubernetes/k8s/1.14.dhall"; }
 -}
-dependencyToNix :: Import -> IO ((Text, Maybe nExpr), NExpr)
-dependencyToNix import_ = do
-    let Import{..} = import_
-
-    let dependency = Dhall.Core.pretty import_
-
-    let ImportHashed{..} = importHashed
+dependencyToNix :: URL -> IO ((Text, Maybe nExpr), NExpr)
+dependencyToNix url@URL{..} = do
+    let dependency = Dhall.Core.pretty url
 
     let prelude = "Prelude"
 
-    case importType of
-        Remote URL{..} -> do
-            case authority of
-                "raw.githubusercontent.com" -> do
-                    let File{..} = path
+    case authority of
+        "raw.githubusercontent.com" -> do
+            let File{..} = path
 
-                    let Dhall.Core.Directory{..} = directory
+            let Dhall.Core.Directory{..} = directory
 
-                    case reverse (file : components) of
-                        "dhall-lang" : "dhall-lang" : _rev : "Prelude" : rest -> do
-                            let fileArgument = Text.intercalate "/" rest
+            case reverse (file : components) of
+                -- Special case to recognize a Prelude import and treat it as if
+                -- it were an import of prelude.dhall-lang.org
+                "dhall-lang" : "dhall-lang" : _rev : "Prelude" : rest -> do
+                    let fileArgument = Text.intercalate "/" rest
 
-                            return
-                                (   (prelude, Nothing)
-                                ,       (Nix.mkSym prelude @. "override")
-                                    @@  Nix.attrsE
-                                            [ ("file", Nix.mkStr fileArgument ) ]
-                                )
-                        _owner : repo : _rev : rest -> do
-                            let fileArgument = Text.intercalate "/" rest
+                    return
+                        (   (prelude, Nothing)
+                        ,       (Nix.mkSym prelude @. "override")
+                            @@  Nix.attrsE
+                                    [ ("file", Nix.mkStr fileArgument ) ]
+                        )
+                _owner : repo : _rev : rest -> do
+                    let fileArgument = Text.intercalate "/" rest
 
-                            return
-                                (   (repo, Nothing)
-                                ,       (Nix.mkSym repo @. "override")
-                                    @@  Nix.attrsE
-                                            [ ("file", Nix.mkStr fileArgument ) ]
-                                )
-                        _ -> do
-                            Turtle.die [NeatInterpolation.text|
+                    return
+                        (   (repo, Nothing)
+                        ,       (Nix.mkSym repo @. "override")
+                            @@  Nix.attrsE
+                                    [ ("file", Nix.mkStr fileArgument ) ]
+                        )
+                _ -> do
+                    Turtle.die [NeatInterpolation.text|
 Error: Not a valid GitHub repository URL
 
 Your Dhall package appears to depend on the following import:
@@ -337,48 +331,50 @@ normally have.  The URL should minimally have the following path components:
 
 ↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
 |]
-                "prelude.dhall-lang.org" -> do
-                    let File{..} = path
+        "prelude.dhall-lang.org" -> do
+            let File{..} = path
 
-                    let Dhall.Core.Directory{..} = directory
+            let Dhall.Core.Directory{..} = directory
 
-                    let component :: Parsec Void Text Integer
-                        component = Megaparsec.Char.Lexer.decimal
+            let component :: Parsec Void Text Integer
+                component = Megaparsec.Char.Lexer.decimal
 
-                    let version :: Parsec Void Text ()
-                        version = do
-                            _ <- Megaparsec.Char.char 'v'
+            let version :: Parsec Void Text ()
+                version = do
+                    _ <- Megaparsec.Char.char 'v'
 
-                            _ <- component
+                    _ <- component
 
-                            _ <- Megaparsec.Char.char '.'
+                    _ <- Megaparsec.Char.char '.'
 
-                            _ <- component
+                    _ <- component
 
-                            _ <- Megaparsec.Char.char '.'
+                    _ <- Megaparsec.Char.char '.'
 
-                            _ <- component
+                    _ <- component
 
-                            return ()
+                    return ()
 
-                    let path =
-                            case reverse (file : components) of
-                                first : rest
-                                    | Just _ <- Megaparsec.parseMaybe version first ->
-                                        rest
-                                rest ->
-                                    rest
-                                
-                    let fileArgument = Text.intercalate "/" path
+            let path =
+                    case reverse (file : components) of
+                        first : rest
+                            -- Ignore the version.  The Nixpkgs support assumes
+                            -- a curated set of package versions.
+                            | Just _ <- Megaparsec.parseMaybe version first ->
+                                rest
+                        rest ->
+                            rest
+                        
+            let fileArgument = Text.intercalate "/" path
 
-                    return
-                        (   (prelude, Nothing)
-                        ,       (Nix.mkSym prelude @. "override")
-                            @@  Nix.attrsE
-                                    [ ("file", Nix.mkStr fileArgument) ]
-                        )
-                _ -> do
-                    Turtle.die [NeatInterpolation.text|
+            return
+                (   (prelude, Nothing)
+                ,       (Nix.mkSym prelude @. "override")
+                    @@  Nix.attrsE
+                            [ ("file", Nix.mkStr fileArgument) ]
+                )
+        _ -> do
+            Turtle.die [NeatInterpolation.text|
 Error: Unsupported domain
 
 This tool currently only translates the following domains into Nix dependencies:
@@ -396,14 +392,19 @@ issue here:
 ↳ https://github.com/dhall-lang/dhall-haskell/issues
 |]
 
-        _ -> do
-            Turtle.die "Internal error"
-
 githubToNixpkgs :: GitHub -> IO ()
 githubToNixpkgs GitHub{..} = do
     URI{ uriAuthority = Just URIAuth{..}, .. } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
-            Nothing -> Turtle.die "The given repository is not a valid URI"
+            Nothing -> Turtle.die [NeatInterpolation.text|
+Error: The specified repository is not a valid URI
+
+You provided the following argument:
+
+↳ $uri
+
+... which is not a valid URI
+|]
 
             Just u  -> return u
 
@@ -411,25 +412,98 @@ githubToNixpkgs GitHub{..} = do
         "https:" -> do
             return ()
         _ -> do
-            Turtle.die "URI schemes other than HTTPS are not supported"
+            let uriSchemeText = Text.pack uriScheme
+
+            Turtle.die [NeatInterpolation.text|
+Error: URI schemes other than https are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following scheme:
+
+↳ $uriSchemeText
+
+... which is not https
+|]
 
     case uriRegName of
         "github.com" -> do
             return ()
         _ -> do
-            Turtle.die "Domains other than github.com are not supported"
+            let uriRegNameText = Text.pack uriRegName
+
+            Turtle.die [NeatInterpolation.text|
+Error: Domains other than github.com are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following domain:
+
+↳ $uriRegNameText
+
+... which is not github.com
+|]
 
     case uriPort of
         "" -> return ()
-        _  -> Turtle.die "Non-default ports are not supported"
+        _ -> do
+            let uriPortText = Text.pack uriPort
+
+            Turtle.die [NeatInterpolation.text|
+Error: Non-default ports are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following explicit port specification:
+
+↳ $uriPortText
+
+... which is not permitted by this tool
+|]
 
     case uriQuery of
         "" -> return ()
-        _  -> Turtle.die "Non-empty query strings are not supported"
+        _  -> do
+            let uriQueryText = Text.pack uriQuery
+
+            Turtle.die [NeatInterpolation.text|
+Error: Non-empty query strings are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following query string:
+
+↳ $uriQueryText
+
+... which is not permitted by this tool
+|]
 
     case uriFragment of
         "" -> return ()
-        _  -> Turtle.die "Non-empty query fragments are not supported"
+        _  -> do
+            let uriFragmentText = Text.pack uriFragment
+
+            Turtle.die [NeatInterpolation.text|
+Error: Non-empty query fragments are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following query fragment:
+
+↳ $uriFragmentText
+
+... which is not permitted by this tool
+|]
 
     let githubBase = Text.pack (uriUserInfo <> uriRegName <> uriPort)
 
@@ -449,7 +523,19 @@ githubToNixpkgs GitHub{..} = do
 
     (owner, repo) <- case Megaparsec.parseMaybe parsePath uriPath of
         Nothing -> do
-            Turtle.die "The given URL is not a valid GitHub repository"
+            Turtle.die [NeatInterpolation.text|
+Error: Not a valid GitHub repository
+
+You specified the following URI:
+
+↳ $uri
+
+... which is not a valid GitHub repository.  A valid repository must match the
+following format:
+
+↳ https://github.com/$${owner}/$${repository}[.git]
+|]
+
         Just (owner, repo) -> do
             return (owner, repo)
 
@@ -458,53 +544,98 @@ githubToNixpkgs GitHub{..} = do
 
     (rev, sha256, directory) <- case rev of
         Just r | not fetchSubmodules -> do
-            (exitCode, text) <- do
-                Turtle.procStrict
-                    "nix-prefetch-url"
-                    (   [ "--unpack"
+            let archiveURL = baseUrl <> "/archive/" <> r <> ".tar.gz"
+
+            let args =  [ "--unpack"
                         , "--type", "sha256"
                         , "--print-path"
-                        , baseUrl <> "/archive/" <> r <> ".tar.gz"
+                        , archiveURL
                         ]
                     <>  toListWith (\t -> [ t ]) hash
-                    )
-                    empty
+
+            let argsText = Text.intercalate " " args
+
+            (exitCode, text) <- Turtle.procStrict "nix-prefetch-url" args empty
 
             case exitCode of
                 ExitSuccess -> return ()
                 ExitFailure _ -> do
-                    -- TODO: Include the nix-prefetch-url invocation here
-                    Turtle.die "Failed to fetch the repository archive"
+                    Turtle.die [NeatInterpolation.text|
+Error: Failed to fetch the GitHub's repository archive
+
+The following command failed to fetch the following archive for the repository:
+
+    nix-prefetch-url $argsText
+|]
 
             case Text.lines text of
                 [ sha256, path ] -> return (r, sha256, Turtle.fromText path)
-                _ -> Turtle.die "Failed to parse the nix-prefetch-url output"
+                _ -> Turtle.die [NeatInterpolation.text|
+Error: Failed to parse the nix-prefetch-url output
+
+The following command:
+
+    nix-prefetch-url $argsText
+
+... should have produced two lines of output:
+
+* First the SHA256 hash of the GitHub project
+* Then the /nix/store/… path of the downloaded project
+
+However, the output did not match, possibly indicating an internal error, either
+with this tool or with nix-prefetch-url
+|]
 
         _ -> do
-            (exitCode, text) <- do
-                Turtle.procStrict
-                    "nix-prefetch-git"
-                    (   [ "--url", baseUrl <> ".git"
+            let args =  [ "--url", baseUrl <> ".git"
                         , "--quiet"
                         ]
                     <>  toListWith (\t -> [ "--rev", t ]) rev
                     <>  toListWith (\t -> [ "--hash", t ]) hash
                     <>  (if fetchSubmodules then [ "--fetch-submodules" ] else [])
-                    )
-                    empty
+
+            let argsText = Text.intercalate " " args
+
+            (exitCode, text) <- Turtle.procStrict "nix-prefetch-git" args empty
 
             case exitCode of
                 ExitSuccess -> return ()
                 ExitFailure _ -> do
                     -- TODO: Include the nix-prefetch-git invocation here
-                    Turtle.die "Failed to fetch the GitHub repository"
+                    Turtle.die [NeatInterpolation.text|
+Error: Failed to clone the GitHub repository
+
+The following command failed to clone the repository:
+
+    nix-prefetch-git $argsText
+|]
 
             let bytes = Text.Encoding.encodeUtf8 text
 
             NixPrefetchGit{..} <- case Aeson.eitherDecodeStrict' bytes of
-                -- TODO: Better error message
-                Left _ -> do
-                    Turtle.die "Failed to parse the output of nix-prefetch-git"
+                Left message -> do
+                    let messageText = Text.pack message
+
+                    Turtle.die [NeatInterpolation.text|
+Error: Failed to parse the output of nix-prefetch-git
+
+The following command:
+
+    nix-prefetch-url $argsText
+
+... should have produced a JSON output matching the following shape:
+
+↳ { url : Text
+  , rev : Text
+  , path : Text
+  , sha256 : Text
+  , fetchSubmodules : Bool 
+  }
+
+... but JSON decoding failed with the following error:
+
+↳ $messageText
+|]
                 Right n -> do
                     return n
 
