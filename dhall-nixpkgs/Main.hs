@@ -368,7 +368,27 @@ githubToNixpkgs GitHub{..} = do
 
     (rev, sha256, directory) <- case rev of
         Just r | not fetchSubmodules -> do
-            return (r, undefined, undefined)
+            (exitCode, text) <- do
+                Turtle.procStrict
+                    "nix-prefetch-url"
+                    (   [ "--unpack"
+                        , "--type", "sha256"
+                        , "--print-path"
+                        , baseUrl <> "/archive/" <> r <> ".tar.gz"
+                        ]
+                    <>  toListWith (\t -> [ t ]) hash
+                    )
+                    empty
+
+            case exitCode of
+                ExitSuccess -> return ()
+                ExitFailure _ -> do
+                    -- TODO: Include the nix-prefetch-url invocation here
+                    Turtle.die "Failed to fetch the repository archive"
+
+            case Text.lines text of
+                [ sha256, path ] -> return (r, sha256, Turtle.fromText path)
+                _ -> Turtle.die "Failed to parse the nix-prefetch-url output"
 
         _ -> do
             (exitCode, text) <- do
