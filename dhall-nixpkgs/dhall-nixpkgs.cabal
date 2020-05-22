@@ -21,6 +21,7 @@ Executable dhall-to-nixpkgs
                      , foldl                               < 1.5
                      , hnix                 >= 0.7      && < 0.8
                      , megaparsec           >= 7.0.0    && < 8.1
+                     , neat-interpolation                  < 0.6
                      , optparse-applicative >= 0.14.0.0 && < 0.16
                      , prettyprinter        >= 1.5.1    && < 1.7
                      , text                 >= 0.11.1.0 && < 1.3

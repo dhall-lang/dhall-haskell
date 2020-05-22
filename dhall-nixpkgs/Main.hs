@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
@@ -31,11 +32,13 @@ import Dhall.Core
     , File(..)
     , Import(..)
     , ImportHashed(..)
+    , ImportMode(..)
     , ImportType(..)
     , URL(..)
     )
 
 import qualified Control.Foldl                         as Foldl
+import qualified Control.Monad                         as Monad
 import qualified Control.Monad.Trans.State.Strict      as State
 import qualified Data.Aeson                            as Aeson
 import qualified Data.Text                             as Text
@@ -45,10 +48,13 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
+import qualified GHC.IO.Encoding
+import qualified NeatInterpolation
 import qualified Network.URI                           as URI
 import qualified Nix.Expr.Shorthands                   as Nix
 import qualified Nix.Pretty
 import qualified Options.Applicative                   as Options
+import qualified System.IO
 import qualified Text.Megaparsec                       as Megaparsec
 import qualified Text.Megaparsec.Char                  as Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Char.Lexer
@@ -191,6 +197,8 @@ parserInfoOptions =
 
 main :: IO ()
 main = do
+    GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
+
     options <- Options.execParser parserInfoOptions
 
     case options of
@@ -228,24 +236,62 @@ findExternalDependencies baseDirectory expression = do
 
         import_@Import{..} <- Turtle.select imports
 
+        -- `as Location` imports do not pull in external dependencies
+        Monad.guard (importMode /= Location)
+
         let ImportHashed{..} = importHashed
 
         case importType of
             Remote{} -> case hash of
                 Nothing -> do
-                    Turtle.die "Unprotected remote imports are not supported"
+                    let dependency = Dhall.Core.pretty import_
+
+                    Turtle.die [NeatInterpolation.text|
+Error: Remote imports require integrity checks
+
+The Nixpkgs support for Dhall replaces all remote imports with cache hits in
+order to ensure that Dhall packages built with Nix don't need to make any HTTP
+requests.  However, in order for this to work you need to ensure that all remote
+imports are protected by integrity checks (e.g. sha256:…).
+
+The following dependency is missing an integrity check:
+
+↳ $dependency
+|]
                 Just _ -> do
                     return import_
             Local{} -> do
                 empty
             Env{} -> do
-                Turtle.die "Environment variable imports are not supported"
+                -- We intentionally perrmit Dhall packages built using Nix to
+                -- refer to environment variables
+                empty
             Missing -> do
-                Turtle.die "Missing imports are not supported"
+                -- No need to explicitly fail on missing imports.  Import
+                -- resolution will fail anyway before we get to this point.
+                empty
 
+{-| The Nixpkgs support for Dhall implements two conventions that
+    @dhall-to-nixpkgs@ depends on:
+
+    * Packages are named after their repository name
+    * You can import a specific file `packageName.override { file = …; }`
+
+    This function is responsible for converting Dhall imports to package
+    names and files that follow this convention.  For example, given a Dhall
+    import like:
+
+        https://raw.githubusercontent.com/EarnestResearch/dhall-packages/master/kubernetes/k8s/1.14.dhall
+
+    ... this will create the corresponding Nix dependency of the form:
+
+        dhall-packages.override { file = "kubernetes/k8s/1.14.dhall"; }
+-}
 dependencyToNix :: Import -> IO ((Text, Maybe nExpr), NExpr)
 dependencyToNix import_ = do
     let Import{..} = import_
+
+    let dependency = Dhall.Core.pretty import_
 
     let ImportHashed{..} = importHashed
 
@@ -279,7 +325,18 @@ dependencyToNix import_ = do
                                             [ ("file", Nix.mkStr fileArgument ) ]
                                 )
                         _ -> do
-                            Turtle.die "Not a valid GitHub repository URL"
+                            Turtle.die [NeatInterpolation.text|
+Error: Not a valid GitHub repository URL
+
+Your Dhall package appears to depend on the following import:
+
+↳ $dependency
+
+... which is missing one or more path components that a raw GitHub import would
+normally have.  The URL should minimally have the following path components:
+
+↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
+|]
                 "prelude.dhall-lang.org" -> do
                     let File{..} = path
 
@@ -321,7 +378,23 @@ dependencyToNix import_ = do
                                     [ ("file", Nix.mkStr fileArgument) ]
                         )
                 _ -> do
-                    Turtle.die "Unsupported dependency"
+                    Turtle.die [NeatInterpolation.text|
+Error: Unsupported domain
+
+This tool currently only translates the following domains into Nix dependencies:
+
+* raw.githubusercontent.com
+* prelude.dhall-lang.org
+
+One of the Dhall project's dependencies was for an unexpected domain:
+
+↳ $dependency
+
+If you would like to support a new domain for Dhall dependencies, please open an
+issue here:
+
+↳ https://github.com/dhall-lang/dhall-haskell/issues
+|]
 
         _ -> do
             Turtle.die "Internal error"
