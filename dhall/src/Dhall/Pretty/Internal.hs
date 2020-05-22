@@ -64,28 +64,28 @@ module Dhall.Pretty.Internal (
     ) where
 
 import Data.Foldable
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid ((<>))
-import Data.Text (Text)
+import Data.List.NonEmpty        (NonEmpty (..))
+import Data.Monoid               ((<>))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import Dhall.Src (Src(..))
+import Dhall.Map                 (Map)
+import Dhall.Set                 (Set)
+import Dhall.Src                 (Src (..))
 import Dhall.Syntax
-import Numeric.Natural (Natural)
-import Prelude hiding (succ)
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
+import Numeric.Natural           (Natural)
+import Prelude                   hiding (succ)
 
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
-import qualified Data.List.NonEmpty                      as NonEmpty
+import qualified Data.List.NonEmpty                        as NonEmpty
 import qualified Data.Set
-import qualified Data.Text                               as Text
-import qualified Data.Text.Prettyprint.Doc               as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Dhall.Map                               as Map
+import qualified Data.Text                                 as Text
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.String   as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
+import qualified Dhall.Map                                 as Map
 import qualified Dhall.Set
 
 {-| Annotation type used to tag elements in a pretty-printed document for
@@ -439,9 +439,12 @@ escapeLabel :: Bool -> Text -> Text
 escapeLabel allowReserved l =
     case Text.uncons l of
         Just (h, t)
-            | headCharacter h && Text.all tailCharacter t && (allowReserved || not (Data.HashSet.member l reservedIdentifiers))
+            | headCharacter h && Text.all tailCharacter t && (notReservedIdentifier || (allowReserved && someOrNotLanguageKeyword))
                 -> l
         _       -> "`" <> l <> "`"
+    where
+        notReservedIdentifier = not (Data.HashSet.member l reservedIdentifiers)
+        someOrNotLanguageKeyword = l == "Some" || not (Data.HashSet.member l reservedKeywords)
 
 prettyLabelShared :: Bool -> Text -> Doc Ann
 prettyLabelShared b l = label (Pretty.pretty (escapeLabel b l))
