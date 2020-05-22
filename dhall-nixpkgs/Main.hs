@@ -391,9 +391,13 @@ This tool currently only translates the following domains into Nix dependencies:
 * raw.githubusercontent.com
 * prelude.dhall-lang.org
 
-One of the Dhall project's dependencies was for an unexpected domain:
+One of the Dhall project's dependencies:
 
 ↳ $dependency
+
+... used the following unexpected domain:
+
+↳ $authority
 
 If you would like to support a new domain for Dhall dependencies, please open an
 issue here:
@@ -558,6 +562,7 @@ following format:
             let args =  [ "--unpack"
                         , "--type", "sha256"
                         , "--print-path"
+                        , "--name", repo
                         , archiveURL
                         ]
                     <>  toListWith (\t -> [ t ]) hash
@@ -659,6 +664,24 @@ The following command:
 
     let baseDirectory = Turtle.directory (directory </> file)
 
+    exists <- Turtle.testfile expressionFile
+
+    if exists
+        then return ()
+        else do
+            let expressionFileText = Turtle.format fp expressionFile
+
+            die [NeatInterpolation.text|
+Error: Missing file
+
+The following file does not exist:
+
+↳ $expressionFileText
+
+Perhaps you meant to specify a different file within the project using the
+--file option?
+|]
+
     expressionText <- Turtle.readTextFile expressionFile
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString baseDirectory) expressionText)
@@ -702,7 +725,27 @@ directoryToNixpkgs Directory{..} = do
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
                 Just n  -> n
 
-    expressionText <- Turtle.readTextFile (directory </> file)
+    let expressionFile = directory </> file
+
+    exists <- Turtle.testfile expressionFile
+
+    if exists
+        then return ()
+        else do
+            let expressionFileText = Turtle.format fp expressionFile
+
+            die [NeatInterpolation.text|
+Error: Missing file
+
+The following file does not exist:
+
+↳ $expressionFileText
+
+Perhaps you meant to specify a different file within the project using the
+--file option?
+|]
+
+    expressionText <- Turtle.readTextFile expressionFile
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString directory) expressionText)
 
