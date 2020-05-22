@@ -1,0 +1,8 @@
+[1;31m
+Error: [0m$.a.b[1]: Dhall type expression and JSON value do not match:
+
+Expected Dhall type:
+Natural
+
+JSON:
+0.5
