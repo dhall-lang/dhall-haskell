@@ -30,6 +30,7 @@ import Codec.Serialise (Serialise(encode, decode))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
 import Data.ByteString.Lazy (ByteString)
+import Dhall.Map (Map)
 import Dhall.Syntax
     ( Binding(..)
     , Chunks(..)
@@ -360,26 +361,26 @@ decodeExpressionInternal decodeEmbed = go
                             7 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xTs <- replicateDecoder mapLength $ do
+                                map_<- decodeMap mapLength $ do
                                     x <- Decoding.decodeString
 
                                     _T <- go
 
                                     return (x, _T)
 
-                                return (Record (Dhall.Map.fromList xTs))
+                                return (Record map_)
 
                             8 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xts <- replicateDecoder mapLength $ do
+                                map_ <- decodeMap mapLength $ do
                                     x <- Decoding.decodeString
 
                                     t <- go
 
                                     return (x, t)
 
-                                return (RecordLit (Dhall.Map.fromList xts))
+                                return (RecordLit map_)
 
                             9 -> do
                                 t <- go
@@ -420,7 +421,7 @@ decodeExpressionInternal decodeEmbed = go
                             11 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xTs <- replicateDecoder mapLength $ do
+                                map_ <- decodeMap mapLength $ do
                                     x <- Decoding.decodeString
 
                                     tokenType₂ <- Decoding.peekTokenType
@@ -438,7 +439,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                     return (x, mT)
 
-                                return (Union (Dhall.Map.fromList xTs))
+                                return (Union map_)
 
                             14 -> do
                                 t <- go
@@ -582,6 +583,9 @@ decodeExpressionInternal decodeEmbed = go
 
             _ -> do
                 die ("Unexpected initial token: " <> show tokenType₀)
+
+decodeMap :: Ord k => Int -> Decoder s (k, v) -> Decoder s (Map k v)
+decodeMap n decoder = Dhall.Map.fromList <$> replicateDecoder n decoder
 
 encodeExpressionInternal :: (a -> Encoding) -> Expr Void a -> Encoding
 encodeExpressionInternal encodeEmbed = go
