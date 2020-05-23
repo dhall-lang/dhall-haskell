@@ -126,37 +126,37 @@ decodeExpressionInternal decodeEmbed = go
         tokenType₀ <- Decoding.peekTokenType
 
         case tokenType₀ of
-            TypeUInt -> do
+            TypeUInt -> {-# SCC "dEI_Var-_-UInt" #-} do
                 !n <- Decoding.decodeWord
 
                 return (Var (V "_" (fromIntegral n)))
 
-            TypeUInt64 -> do
+            TypeUInt64 -> {-# SCC "dEI_Var-_-UInt64" #-} do
                 !n <- Decoding.decodeWord64
 
                 return (Var (V "_" (fromIntegral n)))
 
-            TypeFloat16 -> do
+            TypeFloat16 -> {-# SCC dEI_DoubleLit_Float16 #-} do
                 !n <- Decoding.decodeFloat
 
                 return (DoubleLit (DhallDouble (float2Double n)))
 
-            TypeFloat32 -> do
+            TypeFloat32 -> {-# SCC dEI_DoubleLit_Float32 #-} do
                 !n <- Decoding.decodeFloat
 
                 return (DoubleLit (DhallDouble (float2Double n)))
 
-            TypeFloat64 -> do
+            TypeFloat64 -> {-# SCC dEI_DoubleLit_Float64 #-} do
                 !n <- Decoding.decodeDouble
 
                 return (DoubleLit (DhallDouble n))
 
-            TypeBool -> do
+            TypeBool -> {-# SCC dEI_BoolLit #-} do
                 !b <- Decoding.decodeBool
 
                 return (BoolLit b)
 
-            TypeString -> do
+            TypeString -> {-# SCC dEI_builtin #-} do
                 s <- Decoding.decodeString
 
                 case s of
@@ -206,7 +206,7 @@ decodeExpressionInternal decodeEmbed = go
                 tokenType₁ <- Decoding.peekTokenType
 
                 case tokenType₁ of
-                    TypeString -> do
+                    TypeString -> {-# SCC "dEI_Var_not-_" #-} do
                         x <- Decoding.decodeString
 
                         if x == "_"
@@ -233,7 +233,7 @@ decodeExpressionInternal decodeEmbed = go
                         tag <- Decoding.decodeWord
 
                         case tag of
-                            0 -> do
+                            0 -> {-# SCC dEI_App #-} do
                                 f <- go
 
                                 xs <- replicateDecoder (len - 2) go
@@ -244,7 +244,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (foldl' App f xs)
 
-                            1 -> do
+                            1 -> {-# SCC dEI_Lam #-} do
                                 case len of
                                     3 -> do
                                         _A <- go
@@ -269,7 +269,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         die ("Incorrect number of tokens used to encode a λ expression: " <> show len)
 
-                            2 -> do
+                            2 -> {-# SCC dEI_Pi #-} do
                                 case len of
                                     3 -> do
                                         _A <- go
@@ -294,7 +294,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         die ("Incorrect number of tokens used to encode a ∀ expression: " <> show len)
 
-                            3 -> do
+                            3 -> {-# SCC dEI_operator #-} do
                                 opcode <- Decoding.decodeWord
 
                                 op <- case opcode of
@@ -320,7 +320,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (op l r)
 
-                            4 -> do
+                            4 -> {-# SCC dEI_ListLit #-} do
                                 case len of
                                     2 -> do
                                         _T <- go
@@ -333,14 +333,14 @@ decodeExpressionInternal decodeEmbed = go
                                         xs <- replicateDecoder (len - 2) go
                                         return (ListLit Nothing (Data.Sequence.fromList xs))
 
-                            5 -> do
+                            5 -> {-# SCC dEI_Some #-} do
                                 Decoding.decodeNull
 
                                 t <- go
 
                                 return (Some t)
 
-                            6 -> do
+                            6 -> {-# SCC dEI_Merge #-} do
                                 t <- go
 
                                 u <- go
@@ -357,7 +357,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         die ("Incorrect number of tokens used to encode a `merge` expression: " <> show len)
 
-                            7 -> do
+                            7 -> {-# SCC dEI_Record #-} do
                                 mapLength <- Decoding.decodeMapLen
 
                                 xTs <- replicateDecoder mapLength $ do
@@ -369,7 +369,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (Record (Dhall.Map.fromList xTs))
 
-                            8 -> do
+                            8 -> {-# SCC dEI_RecordLit #-} do
                                 mapLength <- Decoding.decodeMapLen
 
                                 xts <- replicateDecoder mapLength $ do
@@ -381,14 +381,14 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (RecordLit (Dhall.Map.fromList xts))
 
-                            9 -> do
+                            9 -> {-# SCC dEI_Field #-} do
                                 t <- go
 
                                 x <- Decoding.decodeString
 
                                 return (Field t x)
 
-                            10 -> do
+                            10 -> {-# SCC dEI_Project #-} do
                                 t <- go
 
                                 xs <- case len of
@@ -417,7 +417,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (Project t xs)
 
-                            11 -> do
+                            11 -> {-# SCC dEI_Union #-} do
                                 mapLength <- Decoding.decodeMapLen
 
                                 xTs <- replicateDecoder mapLength $ do
@@ -440,7 +440,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (Union (Dhall.Map.fromList xTs))
 
-                            14 -> do
+                            14 -> {-# SCC dEI_BoolIf #-} do
                                 t <- go
 
                                 l <- go
@@ -449,7 +449,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (BoolIf t l r)
 
-                            15 -> do
+                            15 -> {-# SCC dEI_NaturalLit #-} do
                                 tokenType₂ <- Decoding.peekTokenType
 
                                 case tokenType₂ of
@@ -470,7 +470,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         die ("Unexpected token type for Natural literal: " <> show tokenType₂)
 
-                            16 -> do
+                            16 -> {-# SCC dEI_IntegerLit #-} do
                                 tokenType₂ <- Decoding.peekTokenType
 
                                 case tokenType₂ of
@@ -500,7 +500,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         die ("Unexpected token type for Integer literal: " <> show tokenType₂)
 
-                            18 -> do
+                            18 -> {-# SCC dEI_TextLit #-} do
                                 xys <- replicateDecoder ((len - 2) `quot` 2) $ do
                                     x <- Decoding.decodeString
 
@@ -512,15 +512,15 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (TextLit (Chunks xys z))
 
-                            19 -> do
+                            19 -> {-# SCC dEI_Assert #-} do
                                 t <- go
 
                                 return (Assert t)
 
-                            24 -> do
+                            24 -> {-# SCC dEI_Embed #-} do
                                 fmap Embed (decodeEmbed len)
 
-                            25 -> do
+                            25 -> {-# SCC dEI_Let #-} do
                                 bindings <- replicateDecoder ((len - 2) `quot` 3) $ do
                                     x <- Decoding.decodeString
 
@@ -545,14 +545,14 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (foldr Let b bindings)
 
-                            26 -> do
+                            26 -> {-# SCC dEI_Annot #-} do
                                 t <- go
 
                                 _T <- go
 
                                 return (Annot t _T)
 
-                            27 -> do
+                            27 -> {-# SCC dEI_ToMap #-} do
                                 t <- go
 
                                 mT <- case len of
@@ -569,7 +569,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (ToMap t mT)
 
-                            28 -> do
+                            28 -> {-# SCC dEI_ListLit_empty #-} do
                                 _T <- go
 
                                 return (ListLit (Just _T) empty)
