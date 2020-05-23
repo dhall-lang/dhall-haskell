@@ -359,9 +359,7 @@ decodeExpressionInternal decodeEmbed = go
                                         die ("Incorrect number of tokens used to encode a `merge` expression: " <> show len)
 
                             7 -> do
-                                mapLength <- Decoding.decodeMapLen
-
-                                map_<- decodeMap mapLength $ do
+                                map_<- decodeMap $ do
                                     x <- Decoding.decodeString
 
                                     _T <- go
@@ -371,9 +369,7 @@ decodeExpressionInternal decodeEmbed = go
                                 return (Record map_)
 
                             8 -> do
-                                mapLength <- Decoding.decodeMapLen
-
-                                map_ <- decodeMap mapLength $ do
+                                map_ <- decodeMap $ do
                                     x <- Decoding.decodeString
 
                                     t <- go
@@ -419,9 +415,7 @@ decodeExpressionInternal decodeEmbed = go
                                 return (Project t xs)
 
                             11 -> do
-                                mapLength <- Decoding.decodeMapLen
-
-                                map_ <- decodeMap mapLength $ do
+                                map_ <- decodeMap $ do
                                     x <- Decoding.decodeString
 
                                     tokenType₂ <- Decoding.peekTokenType
@@ -584,8 +578,11 @@ decodeExpressionInternal decodeEmbed = go
             _ -> do
                 die ("Unexpected initial token: " <> show tokenType₀)
 
-decodeMap :: Ord k => Int -> Decoder s (k, v) -> Decoder s (Map k v)
-decodeMap n decoder = Dhall.Map.fromList <$> replicateDecoder n decoder
+decodeMap :: Ord k => Decoder s (k, v) -> Decoder s (Map k v)
+decodeMap decoder = do
+    mapLength <- Decoding.decodeMapLen
+
+    Dhall.Map.fromList <$> replicateDecoder mapLength decoder
 
 encodeExpressionInternal :: (a -> Encoding) -> Expr Void a -> Encoding
 encodeExpressionInternal encodeEmbed = go
