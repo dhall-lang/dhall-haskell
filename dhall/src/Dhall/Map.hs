@@ -22,6 +22,7 @@ module Dhall.Map
       -- * Constructing unordered 'Map's
     , unorderedSingleton
     , unorderedFromList
+    , unorderedFromMap
 
       -- * Sorting
     , sort
@@ -259,10 +260,14 @@ fromList [("A",2),("B",1)]
 fromList [("A",2)]
 -}
 unorderedFromList :: Ord k => [(k, v)] -> Map k v
-unorderedFromList kvs = Map m Sorted
+unorderedFromList kvs = unorderedFromMap m
   where
     m = Data.Map.fromList kvs
 {-# INLINABLE unorderedFromList #-}
+
+unorderedFromMap :: Data.Map.Map k v -> Map k v
+unorderedFromMap m = Map m Sorted
+{-# INLINABLE unorderedFromMap #-}
 
 {-| Sort the keys of a `Map`, forgetting the original ordering
 

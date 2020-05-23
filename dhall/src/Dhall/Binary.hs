@@ -29,6 +29,7 @@ import Codec.CBOR.Encoding (Encoding)
 import Codec.Serialise (Serialise(encode, decode))
 import Control.Applicative (empty, (<|>))
 import Control.Exception (Exception)
+import Data.Bits (unsafeShiftR)
 import Data.ByteString.Lazy (ByteString)
 import Dhall.Map (Map)
 import Dhall.Syntax
@@ -65,6 +66,8 @@ import qualified Codec.Serialise      as Serialise
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
+import qualified Data.Map
+import qualified Data.Map.Internal
 import qualified Data.Sequence
 import qualified Data.Text            as Text
 import qualified Dhall.Crypto
@@ -578,11 +581,26 @@ decodeExpressionInternal decodeEmbed = go
             _ -> do
                 die ("Unexpected initial token: " <> show tokenType₀)
 
-decodeMap :: Ord k => Decoder s (k, v) -> Decoder s (Map k v)
+decodeMap :: Decoder s (k, v) -> Decoder s (Map k v)
 decodeMap decoder = do
+    !dataMap <- unsafeDecodeDataMap decoder
+
+    return (Dhall.Map.unorderedFromMap dataMap)
+
+unsafeDecodeDataMap :: Decoder s (k, v) -> Decoder s (Data.Map.Map k v)
+unsafeDecodeDataMap decoder = do
     mapLength <- Decoding.decodeMapLen
 
-    Dhall.Map.fromList <$> replicateDecoder mapLength decoder
+    go mapLength
+  where
+    go n
+      | n <= 0    = pure Data.Map.Internal.Tip
+      | otherwise = do
+           !l <- go n_half
+           (!k, !v) <- decoder
+           !r <- go (n - n_half - 1)
+           pure $! Data.Map.Internal.Bin n k v l r
+      where n_half = n `unsafeShiftR` 1
 
 encodeExpressionInternal :: (a -> Encoding) -> Expr Void a -> Encoding
 encodeExpressionInternal encodeEmbed = go
