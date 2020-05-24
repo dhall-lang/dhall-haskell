@@ -50,7 +50,7 @@ import Dhall.Syntax
     , Var(..)
     )
 
-import Data.Foldable (toList, foldl')
+import Data.Foldable (toList)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
@@ -237,15 +237,19 @@ decodeExpressionInternal decodeEmbed = go
 
                         case tag of
                             0 -> do
-                                f <- go
+                                !f <- go
 
-                                xs <- replicateDecoder (len - 2) go
+                                let loop n !acc
+                                        | n <= 0    = return acc
+                                        | otherwise = do
+                                              !x <- go
+                                              loop (n - 1) (App acc x)
 
-                                if null xs
+                                let nArgs = len - 2
+
+                                if nArgs <= 0
                                     then die "Non-standard encoding of a function with no arguments"
-                                    else return ()
-
-                                return (foldl' App f xs)
+                                    else loop nArgs f
 
                             1 -> do
                                 case len of
