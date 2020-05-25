@@ -56,8 +56,9 @@ import Data.Primitive.ByteArray (ByteArray(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
+import Foreign.C.Types (CInt(..), CSize(..))
 import GHC.Float (double2Float, float2Double)
-import GHC.Exts (Int(..), compareByteArrays#)
+import GHC.Exts (ByteArray#, Int(..))
 import Numeric.Half (fromHalf, toHalf)
 
 import qualified Codec.CBOR.ByteArray
@@ -73,6 +74,7 @@ import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Syntax         as Syntax
+import qualified System.IO.Unsafe
 import qualified Text.Printf          as Printf
 
 {-| Supported version strings
@@ -1276,5 +1278,13 @@ replicateDecoder n0 decoder = go n0
 
 equalByteArrays :: ByteArray -> ByteArray -> Int -> Bool
 {-# INLINE equalByteArrays #-}
-equalByteArrays (ByteArray ba1#) (ByteArray ba2#) (I# n#) =
-  (I# (compareByteArrays# ba1# 0# ba2# 0# n#)) == 0
+equalByteArrays ba1 ba2 len =
+     0 == System.IO.Unsafe.unsafeDupablePerformIO
+               (memcmp_ByteArray ba1 ba2 len)
+
+memcmp_ByteArray :: ByteArray -> ByteArray -> Int -> IO CInt
+memcmp_ByteArray (ByteArray ba1#) (ByteArray ba2#) len =
+  c_memcmp_ByteArray ba1# ba2# (fromIntegral len)
+
+foreign import ccall unsafe "string.h memcmp"
+  c_memcmp_ByteArray :: ByteArray# -> ByteArray# -> CSize -> IO CInt
