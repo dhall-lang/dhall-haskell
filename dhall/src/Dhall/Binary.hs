@@ -57,6 +57,7 @@ import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
 import Numeric.Half (fromHalf, toHalf)
 
+import qualified Codec.CBOR.ByteArray
 import qualified Codec.CBOR.Decoding  as Decoding
 import qualified Codec.CBOR.Encoding  as Encoding
 import qualified Codec.CBOR.Read      as Read
@@ -64,8 +65,8 @@ import qualified Codec.Serialise      as Serialise
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Short
 import qualified Data.Sequence
-import qualified Data.Text            as Text
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
@@ -157,44 +158,46 @@ decodeExpressionInternal decodeEmbed = go
                 return (BoolLit b)
 
             TypeString -> do
-                s <- Decoding.decodeString
+                !ba <- Decoding.decodeUtf8ByteArray
 
-                case s of
-                    "Natural/build"     -> return NaturalBuild
-                    "Natural/fold"      -> return NaturalFold
-                    "Natural/isZero"    -> return NaturalIsZero
-                    "Natural/even"      -> return NaturalEven
-                    "Natural/odd"       -> return NaturalOdd
-                    "Natural/toInteger" -> return NaturalToInteger
-                    "Natural/show"      -> return NaturalShow
-                    "Natural/subtract"  -> return NaturalSubtract
-                    "Integer/toDouble"  -> return IntegerToDouble
-                    "Integer/clamp"     -> return IntegerClamp
-                    "Integer/negate"    -> return IntegerNegate
-                    "Integer/show"      -> return IntegerShow
-                    "Double/show"       -> return DoubleShow
-                    "List/build"        -> return ListBuild
-                    "List/fold"         -> return ListFold
-                    "List/length"       -> return ListLength
-                    "List/head"         -> return ListHead
-                    "List/last"         -> return ListLast
-                    "List/indexed"      -> return ListIndexed
-                    "List/reverse"      -> return ListReverse
-                    "Optional/fold"     -> return OptionalFold
-                    "Optional/build"    -> return OptionalBuild
-                    "Bool"              -> return Bool
-                    "Optional"          -> return Optional
-                    "None"              -> return None
-                    "Natural"           -> return Natural
-                    "Integer"           -> return Integer
-                    "Double"            -> return Double
-                    "Text"              -> return Text
-                    "Text/show"         -> return TextShow
-                    "List"              -> return List
-                    "Type"              -> return (Const Type)
-                    "Kind"              -> return (Const Kind)
-                    "Sort"              -> return (Const Sort)
-                    _                   -> die ("Unrecognized built-in: " <> Text.unpack s)
+                let sb = Codec.CBOR.ByteArray.toShortByteString ba
+
+                case Data.ByteString.Short.length sb of
+                    4  | sb == "Bool"              -> return Bool
+                       | sb == "List"              -> return List
+                       | sb == "None"              -> return None
+                       | sb == "Text"              -> return Text
+                       | sb == "Type"              -> return (Const Type)
+                       | sb == "Kind"              -> return (Const Kind)
+                       | sb == "Sort"              -> return (Const Sort)
+                    6  | sb == "Double"            -> return Double
+                    7  | sb == "Integer"           -> return Integer
+                       | sb == "Natural"           -> return Natural
+                    8  | sb == "Optional"          -> return Optional
+                    9  | sb == "List/fold"         -> return ListFold
+                       | sb == "List/head"         -> return ListHead
+                       | sb == "List/last"         -> return ListLast
+                       | sb == "Text/show"         -> return TextShow
+                    10 | sb == "List/build"        -> return ListBuild
+                    11 | sb == "Double/show"       -> return DoubleShow
+                       | sb == "List/length"       -> return ListLength
+                       | sb == "Natural/odd"       -> return NaturalOdd
+                    12 | sb == "Integer/show"      -> return IntegerShow
+                       | sb == "List/indexed"      -> return ListIndexed
+                       | sb == "List/reverse"      -> return ListReverse
+                       | sb == "Natural/even"      -> return NaturalEven
+                       | sb == "Natural/fold"      -> return NaturalFold
+                       | sb == "Natural/show"      -> return NaturalShow
+                    13 | sb == "Integer/clamp"     -> return IntegerClamp
+                       | sb == "Natural/build"     -> return NaturalBuild
+                       | sb == "Optional/fold"     -> return OptionalFold
+                    14 | sb == "Integer/negate"    -> return IntegerNegate
+                       | sb == "Natural/isZero"    -> return NaturalIsZero
+                       | sb == "Optional/build"    -> return OptionalBuild
+                    16 | sb == "Integer/toDouble"  -> return IntegerToDouble
+                       | sb == "Natural/subtract"  -> return NaturalSubtract
+                    17 | sb == "Natural/toInteger" -> return NaturalToInteger
+                    _                              -> die ("Unrecognized built-in: " <> show sb)
 
             TypeListLen -> do
                 len <- Decoding.decodeListLen
@@ -600,106 +603,106 @@ encodeExpressionInternal encodeEmbed = go
             <>  Encoding.encodeInt n
 
         NaturalBuild ->
-            Encoding.encodeString "Natural/build"
+            Encoding.encodeUtf8ByteArray "Natural/build"
 
         NaturalFold ->
-            Encoding.encodeString "Natural/fold"
+            Encoding.encodeUtf8ByteArray "Natural/fold"
 
         NaturalIsZero ->
-            Encoding.encodeString "Natural/isZero"
+            Encoding.encodeUtf8ByteArray "Natural/isZero"
 
         NaturalEven ->
-            Encoding.encodeString "Natural/even"
+            Encoding.encodeUtf8ByteArray "Natural/even"
 
         NaturalOdd ->
-            Encoding.encodeString "Natural/odd"
+            Encoding.encodeUtf8ByteArray "Natural/odd"
 
         NaturalToInteger ->
-            Encoding.encodeString "Natural/toInteger"
+            Encoding.encodeUtf8ByteArray "Natural/toInteger"
 
         NaturalShow ->
-            Encoding.encodeString "Natural/show"
+            Encoding.encodeUtf8ByteArray "Natural/show"
 
         NaturalSubtract ->
-            Encoding.encodeString "Natural/subtract"
+            Encoding.encodeUtf8ByteArray "Natural/subtract"
 
         IntegerToDouble ->
-            Encoding.encodeString "Integer/toDouble"
+            Encoding.encodeUtf8ByteArray "Integer/toDouble"
 
         IntegerClamp ->
-            Encoding.encodeString "Integer/clamp"
+            Encoding.encodeUtf8ByteArray "Integer/clamp"
 
         IntegerNegate ->
-            Encoding.encodeString "Integer/negate"
+            Encoding.encodeUtf8ByteArray "Integer/negate"
 
         IntegerShow ->
-            Encoding.encodeString "Integer/show"
+            Encoding.encodeUtf8ByteArray "Integer/show"
 
         DoubleShow ->
-            Encoding.encodeString "Double/show"
+            Encoding.encodeUtf8ByteArray "Double/show"
 
         ListBuild ->
-            Encoding.encodeString "List/build"
+            Encoding.encodeUtf8ByteArray "List/build"
 
         ListFold ->
-            Encoding.encodeString "List/fold"
+            Encoding.encodeUtf8ByteArray "List/fold"
 
         ListLength ->
-            Encoding.encodeString "List/length"
+            Encoding.encodeUtf8ByteArray "List/length"
 
         ListHead ->
-            Encoding.encodeString "List/head"
+            Encoding.encodeUtf8ByteArray "List/head"
 
         ListLast ->
-            Encoding.encodeString "List/last"
+            Encoding.encodeUtf8ByteArray "List/last"
 
         ListIndexed ->
-            Encoding.encodeString "List/indexed"
+            Encoding.encodeUtf8ByteArray "List/indexed"
 
         ListReverse ->
-            Encoding.encodeString "List/reverse"
+            Encoding.encodeUtf8ByteArray "List/reverse"
 
         OptionalFold ->
-            Encoding.encodeString "Optional/fold"
+            Encoding.encodeUtf8ByteArray "Optional/fold"
 
         OptionalBuild ->
-            Encoding.encodeString "Optional/build"
+            Encoding.encodeUtf8ByteArray "Optional/build"
 
         Bool ->
-            Encoding.encodeString "Bool"
+            Encoding.encodeUtf8ByteArray "Bool"
 
         Optional ->
-            Encoding.encodeString "Optional"
+            Encoding.encodeUtf8ByteArray "Optional"
 
         None ->
-            Encoding.encodeString "None"
+            Encoding.encodeUtf8ByteArray "None"
 
         Natural ->
-            Encoding.encodeString "Natural"
+            Encoding.encodeUtf8ByteArray "Natural"
 
         Integer ->
-            Encoding.encodeString "Integer"
+            Encoding.encodeUtf8ByteArray "Integer"
 
         Double ->
-            Encoding.encodeString "Double"
+            Encoding.encodeUtf8ByteArray "Double"
 
         Text ->
-            Encoding.encodeString "Text"
+            Encoding.encodeUtf8ByteArray "Text"
 
         TextShow ->
-            Encoding.encodeString "Text/show"
+            Encoding.encodeUtf8ByteArray "Text/show"
 
         List ->
-            Encoding.encodeString "List"
+            Encoding.encodeUtf8ByteArray "List"
 
         Const Type ->
-            Encoding.encodeString "Type"
+            Encoding.encodeUtf8ByteArray "Type"
 
         Const Kind ->
-            Encoding.encodeString "Kind"
+            Encoding.encodeUtf8ByteArray "Kind"
 
         Const Sort ->
-            Encoding.encodeString "Sort"
+            Encoding.encodeUtf8ByteArray "Sort"
 
         a@App{} ->
             encodeListN
