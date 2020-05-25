@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE MagicHash          #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 
@@ -51,10 +52,12 @@ import Dhall.Syntax
     )
 
 import Data.Foldable (toList, foldl')
+import Data.Primitive.ByteArray (ByteArray(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
+import GHC.Exts (Int(..), compareByteArrays#)
 import Numeric.Half (fromHalf, toHalf)
 
 import qualified Codec.CBOR.ByteArray
@@ -65,7 +68,6 @@ import qualified Codec.Serialise      as Serialise
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
-import qualified Data.ByteString.Short
 import qualified Data.Sequence
 import qualified Dhall.Crypto
 import qualified Dhall.Map
@@ -160,44 +162,50 @@ decodeExpressionInternal decodeEmbed = go
             TypeString -> do
                 !ba <- Decoding.decodeUtf8ByteArray
 
-                let sb = Codec.CBOR.ByteArray.toShortByteString ba
+                let !baLength = Codec.CBOR.ByteArray.sizeofByteArray ba
 
-                case Data.ByteString.Short.length sb of
-                    4  | sb == "Bool"              -> return Bool
-                       | sb == "List"              -> return List
-                       | sb == "None"              -> return None
-                       | sb == "Text"              -> return Text
-                       | sb == "Type"              -> return (Const Type)
-                       | sb == "Kind"              -> return (Const Kind)
-                       | sb == "Sort"              -> return (Const Sort)
-                    6  | sb == "Double"            -> return Double
-                    7  | sb == "Integer"           -> return Integer
-                       | sb == "Natural"           -> return Natural
-                    8  | sb == "Optional"          -> return Optional
-                    9  | sb == "List/fold"         -> return ListFold
-                       | sb == "List/head"         -> return ListHead
-                       | sb == "List/last"         -> return ListLast
-                       | sb == "Text/show"         -> return TextShow
-                    10 | sb == "List/build"        -> return ListBuild
-                    11 | sb == "Double/show"       -> return DoubleShow
-                       | sb == "List/length"       -> return ListLength
-                       | sb == "Natural/odd"       -> return NaturalOdd
-                    12 | sb == "Integer/show"      -> return IntegerShow
-                       | sb == "List/indexed"      -> return ListIndexed
-                       | sb == "List/reverse"      -> return ListReverse
-                       | sb == "Natural/even"      -> return NaturalEven
-                       | sb == "Natural/fold"      -> return NaturalFold
-                       | sb == "Natural/show"      -> return NaturalShow
-                    13 | sb == "Integer/clamp"     -> return IntegerClamp
-                       | sb == "Natural/build"     -> return NaturalBuild
-                       | sb == "Optional/fold"     -> return OptionalFold
-                    14 | sb == "Integer/negate"    -> return IntegerNegate
-                       | sb == "Natural/isZero"    -> return NaturalIsZero
-                       | sb == "Optional/build"    -> return OptionalBuild
-                    16 | sb == "Integer/toDouble"  -> return IntegerToDouble
-                       | sb == "Natural/subtract"  -> return NaturalSubtract
-                    17 | sb == "Natural/toInteger" -> return NaturalToInteger
-                    _                              -> die ("Unrecognized built-in: " <> show sb)
+                let match !literal =
+                        equalByteArrays
+                            (Codec.CBOR.ByteArray.unBA ba)
+                            (Codec.CBOR.ByteArray.unBA literal)
+                            baLength
+
+                case baLength of
+                    4  | match "Bool"              -> return Bool
+                       | match "List"              -> return List
+                       | match "None"              -> return None
+                       | match "Text"              -> return Text
+                       | match "Type"              -> return (Const Type)
+                       | match "Kind"              -> return (Const Kind)
+                       | match "Sort"              -> return (Const Sort)
+                    6  | match "Double"            -> return Double
+                    7  | match "Integer"           -> return Integer
+                       | match "Natural"           -> return Natural
+                    8  | match "Optional"          -> return Optional
+                    9  | match "List/fold"         -> return ListFold
+                       | match "List/head"         -> return ListHead
+                       | match "List/last"         -> return ListLast
+                       | match "Text/show"         -> return TextShow
+                    10 | match "List/build"        -> return ListBuild
+                    11 | match "Double/show"       -> return DoubleShow
+                       | match "List/length"       -> return ListLength
+                       | match "Natural/odd"       -> return NaturalOdd
+                    12 | match "Integer/show"      -> return IntegerShow
+                       | match "List/indexed"      -> return ListIndexed
+                       | match "List/reverse"      -> return ListReverse
+                       | match "Natural/even"      -> return NaturalEven
+                       | match "Natural/fold"      -> return NaturalFold
+                       | match "Natural/show"      -> return NaturalShow
+                    13 | match "Integer/clamp"     -> return IntegerClamp
+                       | match "Natural/build"     -> return NaturalBuild
+                       | match "Optional/fold"     -> return OptionalFold
+                    14 | match "Integer/negate"    -> return IntegerNegate
+                       | match "Natural/isZero"    -> return NaturalIsZero
+                       | match "Optional/build"    -> return OptionalBuild
+                    16 | match "Integer/toDouble"  -> return IntegerToDouble
+                       | match "Natural/subtract"  -> return NaturalSubtract
+                    17 | match "Natural/toInteger" -> return NaturalToInteger
+                    _                              -> die ("Unrecognized built-in: " <> show ba)
 
             TypeListLen -> do
                 len <- Decoding.decodeListLen
@@ -1265,3 +1273,8 @@ replicateDecoder n0 decoder = go n0
             x <- decoder
             xs <- go (n - 1)
             pure (x:xs)
+
+equalByteArrays :: ByteArray -> ByteArray -> Int -> Bool
+{-# INLINE equalByteArrays #-}
+equalByteArrays (ByteArray ba1#) (ByteArray ba2#) (I# n#) =
+  (I# (compareByteArrays# ba1# 0# ba2# 0# n#)) == 0
