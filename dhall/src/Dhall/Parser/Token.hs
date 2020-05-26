@@ -130,7 +130,6 @@ import qualified Data.List.NonEmpty
 import qualified Data.Scientific            as Scientific
 import qualified Data.Text
 import qualified Dhall.Set
-import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
@@ -426,7 +425,7 @@ tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 backtickLabel :: Parser Text
 backtickLabel = do
     _ <- char '`'
-    t <- takeWhile1 predicate
+    t <- Dhall.Parser.Combinators.takeWhile predicate
     _ <- char '`'
     return t
   where
@@ -557,14 +556,11 @@ pathComponent componentType = do
             _ <- char '"'
             t <- Text.Megaparsec.takeWhile1P Nothing quotedPathCharacter
             _ <- char '"'
+            return t
 
-            case componentType of
-              FileComponent -> do
-                return t
-              URLComponent -> do
-                return (URI.Encode.encodeText t)
-
-    quotedPathData <|> pathData
+    case componentType of
+        FileComponent -> quotedPathData <|> pathData
+        URLComponent -> pathData
 
 -- | Parse a `File`
 file_ :: ComponentType -> Parser File

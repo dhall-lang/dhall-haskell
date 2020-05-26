@@ -110,6 +110,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/take
+    dhall-lang/Prelude/List/unpackOptionals
     dhall-lang/Prelude/List/unzip
     dhall-lang/Prelude/List/zip
     dhall-lang/Prelude/Location/Type
