@@ -182,7 +182,9 @@ instance Pretty Var where
 {- | Record the binding part of a @let@ expression.
 
 For example,
+
 > let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+
 will be instantiated as follows:
 
 * @bindingSrc0@ corresponds to the @A@ comment.
