@@ -426,7 +426,7 @@ tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 backtickLabel :: Parser Text
 backtickLabel = do
     _ <- char '`'
-    t <- takeWhile1 predicate
+    t <- Dhall.Parser.Combinators.takeWhile predicate
     _ <- char '`'
     return t
   where
