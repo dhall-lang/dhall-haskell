@@ -39,7 +39,7 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.8.0.0  && < 5   ,
-        aeson                     >= 1.0.0.0  && < 1.5 ,
+        aeson                     >= 1.0.0.0  && < 1.6 ,
         aeson-pretty                             < 0.9 ,
         aeson-yaml                >= 1.0.6    && < 1.1 ,
         bytestring                               < 0.11,
