@@ -18,6 +18,7 @@ Executable dhall-to-nixpkgs
   Main-Is:             Main.hs
   Build-Depends:       base                 >= 4.10     && < 5
                      , aeson                >= 1.0.0.0  && < 1.5
+                     , data-fix
                      , dhall                >= 1.32.0   && < 1.33
                      , foldl                               < 1.5
                      , hnix                 >= 0.7      && < 0.8

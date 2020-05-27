@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -14,6 +15,7 @@ module Main where
 import Control.Applicative (empty, optional, (<|>))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Aeson (FromJSON)
+import Data.Fix (Fix)
 import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Import (SemanticCacheMode(..), Status(..))
@@ -26,10 +28,10 @@ import Options.Applicative (Parser, ParserInfo)
 import Prelude hiding (FilePath)
 import System.Exit (ExitCode(..))
 import Text.Megaparsec (Parsec)
-import Turtle (FilePath, fp, (</>))
+import Turtle (FilePath, Shell, fp, (</>))
 
 import Dhall.Core
-    ( Expr
+    ( Expr(..)
     , File(..)
     , Import(..)
     , ImportHashed(..)
@@ -217,6 +219,16 @@ toListWith :: (a -> [ Text ]) -> Maybe a -> [ Text ]
 toListWith f (Just x ) = f x
 toListWith _  Nothing  = [ ]
 
+nub :: Ord a => [a] -> [a]
+nub = Foldl.fold Foldl.nub
+
+{-| This specialization of `nub` is necessary to work around a type-checking
+    loop
+-}
+nub'
+    :: Ord (f (Fix f)) => [ (Text, Maybe (Fix f)) ] -> [ (Text, Maybe (Fix f)) ]
+nub' = nub
+
 {-| The following Nix code is required reading for understanding how
     `findExternalDependencies` needs to work:
 
@@ -226,34 +238,33 @@ toListWith _  Nothing  = [ ]
     cache hits, but doing so implies that all remote imports must be protected
     by an integrity check.
 -}
-findExternalDependencies :: FilePath -> Expr Src Import -> IO [URL]
+findExternalDependencies :: FilePath -> Expr Src Import -> Shell URL
 findExternalDependencies baseDirectory expression = do
     let directoryString = Turtle.encodeString baseDirectory
 
     -- Load the expression once to populate the cache
-    _ <- Dhall.Import.loadRelativeTo directoryString UseSemanticCache expression
+    _ <- liftIO (Dhall.Import.loadRelativeTo directoryString UseSemanticCache expression)
 
     -- Now load the same expression a second time so that transitive
     -- dependencies of cached imports are not resolved, and therefore won't
     -- be included in the list
-    Status{..} <- State.execStateT (Dhall.Import.loadWith expression) (Dhall.Import.emptyStatus directoryString)
+    Status{..} <- liftIO (State.execStateT (Dhall.Import.loadWith expression) (Dhall.Import.emptyStatus directoryString))
 
-    Turtle.reduce Foldl.list $ do
-        let imports = fmap Dhall.Import.chainedImport (Dhall.Map.keys _cache)
+    let imports = fmap Dhall.Import.chainedImport (Dhall.Map.keys _cache)
 
-        import_@Import{..} <- Turtle.select imports
+    import_@Import{..} <- Turtle.select imports
 
-        -- `as Location` imports do not pull in external dependencies
-        Monad.guard (importMode /= Location)
+    -- `as Location` imports do not pull in external dependencies
+    Monad.guard (importMode /= Location)
 
-        let ImportHashed{..} = importHashed
+    let ImportHashed{..} = importHashed
 
-        case importType of
-            Remote url -> case hash of
-                Nothing -> do
-                    let dependency = Dhall.Core.pretty import_
+    case importType of
+        Remote url -> case hash of
+            Nothing -> do
+                let dependency = Dhall.Core.pretty import_
 
-                    die [NeatInterpolation.text|
+                die [NeatInterpolation.text|
 Error: Remote imports require integrity checks
 
 The Nixpkgs support for Dhall replaces all remote imports with cache hits in
@@ -265,18 +276,27 @@ The following dependency is missing an integrity check:
 
 ↳ $dependency
 |]
-                Just _ -> do
-                    return url
-            Local{} -> do
+            Just _ -> do
+                return url
+        Local{} -> case hash of
+            Just _ -> do
+                let unprotectedImport = import_{
+                        importHashed = importHashed{
+                            hash = Nothing
+                        }
+                    }
+
+                findExternalDependencies "/" (Embed unprotectedImport)
+            Nothing -> do
                 empty
-            Env{} -> do
-                -- We intentionally permit Dhall packages built using Nix to
-                -- refer to environment variables
-                empty
-            Missing -> do
-                -- No need to explicitly fail on missing imports.  Import
-                -- resolution will fail anyway before we get to this point.
-                empty
+        Env{} -> do
+            -- We intentionally permit Dhall packages built using Nix to
+            -- refer to environment variables
+            empty
+        Missing -> do
+            -- No need to explicitly fail on missing imports.  Import
+            -- resolution will fail anyway before we get to this point.
+            empty
 
 {-| The Nixpkgs support for Dhall implements two conventions that
     @dhall-to-nixpkgs@ depends on:
@@ -686,7 +706,7 @@ Perhaps you meant to specify a different file within the project using the
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString baseDirectory) expressionText)
 
-    dependencies <- findExternalDependencies baseDirectory expression
+    dependencies <- Turtle.reduce Foldl.nub (findExternalDependencies baseDirectory expression)
 
     nixDependencies <- traverse dependencyToNix dependencies
 
@@ -696,7 +716,7 @@ Perhaps you meant to specify a different file within the project using the
             Nix.mkFunction
                 (Nix.mkParamset
                     (   [ (buildDhallGitHubPackage, Nothing) ]
-                    <>  fmap fst nixDependencies
+                    <>  nub' (fmap fst nixDependencies)
                     )
                     False
                 )
@@ -712,7 +732,7 @@ Perhaps you meant to specify a different file within the project using the
                         , ("sha256", Nix.mkStr sha256)
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
-                        , ("dependencies", Nix.mkList (fmap snd nixDependencies))
+                        , ("dependencies", Nix.mkList (nub (fmap snd nixDependencies)))
                         ]
                 )
 
@@ -749,7 +769,7 @@ Perhaps you meant to specify a different file within the project using the
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString directory) expressionText)
 
-    dependencies <- findExternalDependencies directory expression
+    dependencies <- Turtle.reduce Foldl.nub (findExternalDependencies directory expression)
 
     nixDependencies <- traverse dependencyToNix dependencies
 
@@ -759,7 +779,7 @@ Perhaps you meant to specify a different file within the project using the
             Nix.mkFunction
                 (Nix.mkParamset
                     (   [ (buildDhallDirectoryPackage, Nothing) ]
-                    <>  fmap fst nixDependencies
+                    <>  nub' (fmap fst nixDependencies)
                     )
                     False
                 )
@@ -768,7 +788,7 @@ Perhaps you meant to specify a different file within the project using the
                         [ ("name", Nix.mkStr finalName)
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
-                        , ("dependencies", Nix.mkList (fmap snd nixDependencies))
+                        , ("dependencies", Nix.mkList (nub (fmap snd nixDependencies)))
                         ]
                 )
 
