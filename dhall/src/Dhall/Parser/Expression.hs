@@ -547,12 +547,7 @@ parsers embedded = Parsers {..}
                             , ListReverse      <$ _ListReverse
                             , List             <$ _List
                             ]
-                    'O' ->
-                        choice
-                            [ OptionalFold     <$ _OptionalFold
-                            , OptionalBuild    <$ _OptionalBuild
-                            , Optional         <$ _Optional
-                            ]
+                    'O' ->    Optional         <$ _Optional
                     'B' ->    Bool             <$ _Bool
                     'S' ->    Const Sort       <$ _Sort
                     'T' ->

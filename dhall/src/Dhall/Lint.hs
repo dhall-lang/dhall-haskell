@@ -14,8 +14,6 @@ module Dhall.Lint
     , fixAssert
     , fixParentPath
     , removeLetInLet
-    , replaceOptionalBuildFold
-    , replaceSaturatedOptionalFold
     , useToMap
     ) where
 
@@ -24,7 +22,6 @@ import Control.Applicative ((<|>))
 import Dhall.Syntax
     ( Binding(..)
     , Chunks(..)
-    , Const(..)
     , Directory(..)
     , Expr(..)
     , File(..)
@@ -51,20 +48,15 @@ import qualified Lens.Family
     * fixes @let a = x ≡ y@ to be @let a = assert : x ≡ y@
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
-    * Replaces deprecated @Optional\/fold@ and @Optional\/build@ built-ins
 -}
 lint :: Expr s Import -> Expr s Import
-lint =  Dhall.Optics.rewriteOf subExpressions lowerPriorityRewrite
-    .   Dhall.Optics.rewriteOf subExpressions higherPriorityRewrite
+lint =  Dhall.Optics.rewriteOf subExpressions rewrite
   where
-    lowerPriorityRewrite e =
+    rewrite e =
             fixAssert                e
         <|> removeUnusedBindings     e
         <|> fixParentPath            e
         <|> removeLetInLet           e
-        <|> replaceOptionalBuildFold e
-
-    higherPriorityRewrite = replaceSaturatedOptionalFold
 
 -- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -131,68 +123,6 @@ isOrContainsAssert e = Lens.Family.anyOf subExpressions isOrContainsAssert e
 removeLetInLet :: Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let binding (Note _ l@Let{})) = Just (Let binding l)
 removeLetInLet _ = Nothing
-
--- | This replaces @Optional/fold@ and @Optional/build@, both of which can be
--- implemented within the language
-replaceOptionalBuildFold :: Expr s a -> Maybe (Expr s a)
-replaceOptionalBuildFold OptionalBuild =
-    Just
-        (Lam "a" (Const Type)
-            (Lam "build"
-                (Pi "optional" (Const Type)
-                    (Pi "some" (Pi "_" "a" "optional")
-                        (Pi "none" "optional" "optional")
-                    )
-                )
-                (App (App (App "build" (App Optional "a")) (Lam "x" "a" (Some "x"))) (App None "a"))
-            )
-        )
-replaceOptionalBuildFold OptionalFold =
-    Just
-        (Lam "a" (Const Type)
-            (Lam "o" (App Optional "a")
-                (Lam "optional" (Const Type)
-                    (Lam "some" (Pi "_" "a" "optional")
-                        (Lam "none" "optional"
-                            (Merge
-                                (RecordLit
-                                    [ ("Some", "some")
-                                    , ("None", "none")
-                                    ]
-                                )
-                                "o"
-                                Nothing
-                            )
-                        )
-                    )
-                )
-            )
-        )
-replaceOptionalBuildFold _ =
-    Nothing
-
--- | This replaces a saturated @Optional/fold@ with the equivalent @merge@
--- expression
-replaceSaturatedOptionalFold :: Expr s a -> Maybe (Expr s a)
-replaceSaturatedOptionalFold
-    (App
-        (Core.shallowDenote -> App
-            (Core.shallowDenote -> App
-                (Core.shallowDenote -> App
-                    (Core.shallowDenote -> App
-                        (Core.shallowDenote -> OptionalFold)
-                        _
-                    )
-                    o
-                )
-                _
-            )
-            some
-        )
-        none
-    ) = Just (Merge (RecordLit [ ("Some", some), ("None", none) ]) o Nothing)
-replaceSaturatedOptionalFold _ =
-    Nothing
 
 -- | This replaces a record of key-value pairs with the equivalent use of
 --   @toMap@

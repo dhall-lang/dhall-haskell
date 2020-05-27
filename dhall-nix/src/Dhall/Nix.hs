@@ -101,7 +101,6 @@ import Data.Void (Void, absurd)
 import Dhall.Core
     ( Binding(..)
     , Chunks(..)
-    , Const(..)
     , DhallDouble(..)
     , Expr(..)
     , MultiLet(..)
@@ -524,19 +523,6 @@ dhallToNix e =
     loop Optional = return (Fix (NAbs "t" untranslatable))
     loop (Some a) = loop a
     loop None = return (Fix (NConstant NNull))
-    loop OptionalFold = do
-        let e0 = Fix (NBinary NEq "x" (Fix (NConstant NNull)))
-        let e1 = Fix (NIf e0 "nothing" (Fix (NBinary NApp "just" "x")))
-        let e2 = Fix (NAbs "t" (Fix (NAbs "just" (Fix (NAbs "nothing" e1)))))
-        return (Fix (NAbs "t" (Fix (NAbs "x" e2))))
-    loop OptionalBuild = do
-        let e0 = Pi "nothing" "optional" "optional"
-        let e1 = Pi "just" (Pi "_" "a" "optional") e0
-        let e2 = Pi "optional" (Const Type) e1
-        let e3 = App None "a"
-        let e4 = Lam "x" "a" (Some "x")
-        let e5 = App (App (App "f" (App Optional "a")) e4) e3
-        loop (Lam "a" (Const Type) (Lam "f" e2 e5))
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse loop a

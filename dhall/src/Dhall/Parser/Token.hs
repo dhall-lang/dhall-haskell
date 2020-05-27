@@ -58,8 +58,6 @@ module Dhall.Parser.Token (
     _ListLast,
     _ListIndexed,
     _ListReverse,
-    _OptionalFold,
-    _OptionalBuild,
     _Bool,
     _Natural,
     _Integer,
@@ -993,20 +991,6 @@ _ListIndexed = builtin "List/indexed"
 -}
 _ListReverse :: Parser ()
 _ListReverse = builtin "List/reverse"
-
-{-| Parse the @Optional/fold@ built-in
-
-    This corresponds to the @Optional-fold@ rule from the official grammar
--}
-_OptionalFold :: Parser ()
-_OptionalFold = builtin "Optional/fold"
-
-{-| Parse the @Optional/build@ built-in
-
-    This corresponds to the @Optional-build@ rule from the official grammar
--}
-_OptionalBuild :: Parser ()
-_OptionalBuild = builtin "Optional/build"
 
 {-| Parse the @Bool@ built-in
 
