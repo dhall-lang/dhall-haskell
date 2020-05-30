@@ -58,6 +58,9 @@ module Dhall
     , extractError
     , toMonadic
     , fromMonadic
+    , ExpectedTypeErrors
+    , ExpectedTypeError(..)
+    , Expector
     , auto
     , genericAuto
     , genericAutoWith
@@ -237,6 +240,24 @@ typeError expected actual =
 -- | Turn a `Text` message into an extraction failure
 extractError :: Text -> Extractor s a b
 extractError = Failure . DhallErrors . pure . ExtractError
+
+{-| Useful synonym for the `Validation` type used when marshalling Dhall
+    expressions
+-}
+type Expector = Validation ExpectedTypeErrors
+
+{-| One or more errors returned when determining the Dhall type of a
+    Haskell expression
+-}
+type ExpectedTypeErrors = DhallErrors ExpectedTypeError
+
+data ExpectedTypeError = RecursiveTypeError
+    deriving (Eq, Show)
+
+instance Exception ExpectedTypeError
+
+instance Show ExpectedTypeErrors where
+    show = showDhallErrors " while determining the expected type"
 
 -- | Switches from an @Applicative@ extraction result, able to accumulate errors,
 -- to a @Monad@ extraction result, able to chain sequential operations
