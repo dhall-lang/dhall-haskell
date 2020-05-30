@@ -28,6 +28,9 @@ before_install:
   - unset CC
   - CABALARGS=""
   - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$HOME/.local/bin:/opt/alex/$ALEXVER/bin:/opt/happy/$HAPPYVER/bin:$HOME/.cabal/bin:$PATH
+  # Install libsodium for use in dhall-nix via hnix, hnix-store-core, saltine
+  - brew update
+  - brew install libsodium
   - | # Install stack
     mkdir -p ~/.local/bin
     travis_retry curl -L https://get.haskellstack.org/stable/osx-x86_64.tar.gz | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
