@@ -314,10 +314,10 @@ parsers embedded = Parsers {..}
 
         nil = (firstApplicationExpression, applicationExpression)
 
-    makeOperatorExpression firstSubExpression operatorParser subExpression =
-            noted (do
-                a <- firstSubExpression
+    makeOperatorExpression firstSubExpression operatorParser subExpression = do
+            a <- firstSubExpression
 
+            e <- noted (do
                 whitespace
 
                 b <- Text.Megaparsec.many $ do
@@ -328,7 +328,14 @@ parsers embedded = Parsers {..}
                     whitespace
 
                     return (\l -> l `op` r)
-                return (foldl' (\x f -> f x) a b))
+
+                return (foldl' (\x f -> f x) a b) )
+
+            case (a, e) of
+                (Note (Src start _ text0) _, Note (Src _ end text1) e') ->
+                    return (Note (Src start end (text0 <> text1)) e')
+                _ ->
+                    return e
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
