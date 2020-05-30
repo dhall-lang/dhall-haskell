@@ -46,8 +46,7 @@ in
           shared_8_6_1.dhall-yaml
           # `base-noprelude` depends on a specific version of `base`
           # shared_8_6_1.dhall-lsp-server
-          # `hnix` depends on `unix-2.7.*` and doesn't work with GHC 8.6
-          # shared_8_6_1.dhall-nix
+          shared_8_6_1.dhall-nix
 
           shared_ghcjs.dhall-try
 
