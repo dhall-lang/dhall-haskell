@@ -335,6 +335,8 @@ parsers embedded = Parsers {..}
                 (Note (Src start _ text0) _, Note (Src _ end text1) e') ->
                     return (Note (Src start end (text0 <> text1)) e')
                 _ ->
+                    -- We shouldn't hit this branch if things are working, but
+                    -- that is not enforced in the types
                     return e
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
