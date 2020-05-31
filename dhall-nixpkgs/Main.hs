@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -124,7 +123,6 @@ parseOptions =
                 (   Options.fullDesc
                 <>  Options.progDesc description
                 )
-
 
 parseFile :: Parser FilePath
 parseFile =
