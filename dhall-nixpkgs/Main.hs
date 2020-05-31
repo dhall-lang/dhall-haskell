@@ -80,6 +80,7 @@ data GitHub = GitHub
     , rev :: Maybe Text
     , hash :: Maybe Text
     , fetchSubmodules :: Bool
+    , directory :: FilePath
     , file :: FilePath
     , source :: Bool
     }
@@ -174,6 +175,13 @@ parseGitHub = do
         Options.switch
             (   Options.long "fetch-submodules"
             <>  Options.help "Fetch git submodules"
+            )
+
+    directory <-
+        Options.strOption
+            (   Options.long "directory"
+            <>  Options.help "Subdirectory containing the Dhall package"
+            <>  Options.value ""
             )
 
     file <- parseFile
@@ -588,7 +596,7 @@ following format:
     let baseUrl =
             Text.pack uriScheme <> "//" <> githubBase <> "/" <> owner <> "/" <> repo
 
-    (rev, sha256, directory) <- case rev of
+    (rev, sha256, repository) <- case rev of
         Just r | not fetchSubmodules -> do
             let archiveURL = baseUrl <> "/archive/" <> r <> ".tar.gz"
 
@@ -648,7 +656,6 @@ with this tool or with nix-prefetch-url
             case exitCode of
                 ExitSuccess -> return ()
                 ExitFailure _ -> do
-                    -- TODO: Include the nix-prefetch-git invocation here
                     die [NeatInterpolation.text|
 Error: Failed to clone the GitHub repository
 
@@ -693,9 +700,9 @@ The following command:
                 Nothing -> repo
                 Just n  -> n
 
-    let expressionFile = directory </> file
+    let expressionFile = repository </> directory </> file
 
-    let baseDirectory = Turtle.directory (directory </> file)
+    let baseDirectory = Turtle.directory expressionFile
 
     let baseDirectoryString = Turtle.encodeString baseDirectory
 
@@ -747,6 +754,7 @@ Perhaps you meant to specify a different file within the project using the
                         , ("fetchSubmodules", Nix.mkBool fetchSubmodules)
                         -- TODO: Support `private` / `varBase` options
                         , ("sha256", Nix.mkStr sha256)
+                        , ("directory", Nix.mkStr (Turtle.format fp directory))
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
                         , ("dependencies", Nix.mkList (nub (fmap snd nixDependencies)))
