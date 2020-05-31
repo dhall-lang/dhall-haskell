@@ -14,13 +14,18 @@ module Main where
 
 import Control.Applicative (empty, optional, (<|>))
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Morph (hoist)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson (FromJSON)
 import Data.Fix (Fix)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import Data.Void (Void)
-import Dhall.Import (SemanticCacheMode(..), Status(..))
+import Dhall.Import (Status(..), stack)
 import Dhall.Parser (Src)
 import GHC.Generics (Generic)
+import Lens.Family.State.Strict (zoom)
 import Network.URI (URI(..), URIAuth(..))
 import Nix.Expr.Shorthands ((@@), (@.))
 import Nix.Expr.Types (NExpr)
@@ -41,16 +46,17 @@ import Dhall.Core
     )
 
 import qualified Control.Foldl                         as Foldl
-import qualified Control.Monad                         as Monad
 import qualified Control.Monad.Trans.State.Strict      as State
 import qualified Data.Aeson                            as Aeson
+import qualified Data.Foldable                         as Foldable
+import qualified Data.List.NonEmpty                    as NonEmpty
 import qualified Data.Text                             as Text
 import qualified Data.Text.Encoding                    as Text.Encoding
 import qualified Data.Text.IO                          as Text.IO
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Prettyprint.Text
 import qualified Dhall.Core
 import qualified Dhall.Import
-import qualified Dhall.Map
+import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified GHC.IO.Encoding
 import qualified NeatInterpolation
@@ -238,65 +244,66 @@ nub' = nub
     cache hits, but doing so implies that all remote imports must be protected
     by an integrity check.
 -}
-findExternalDependencies :: FilePath -> Expr Src Import -> Shell URL
-findExternalDependencies baseDirectory expression = do
-    let directoryString = Turtle.encodeString baseDirectory
+findExternalDependencies :: Expr Src Import -> StateT Status Shell URL
+findExternalDependencies expression = do
+    parent :| _ <- zoom stack State.get
 
-    -- Load the expression once to populate the cache
-    _ <- liftIO (Dhall.Import.loadRelativeTo directoryString UseSemanticCache expression)
+    let firstAlt (ImportAlt e _) = Just e
+        firstAlt  _              = Nothing
 
-    -- Now load the same expression a second time so that transitive
-    -- dependencies of cached imports are not resolved, and therefore won't
-    -- be included in the list
-    Status{..} <- liftIO (State.execStateT (Dhall.Import.loadWith expression) (Dhall.Import.emptyStatus directoryString))
+    let rewrittenExpression =
+            Dhall.Optics.rewriteOf Dhall.Core.subExpressions firstAlt expression
 
-    let imports = fmap Dhall.Import.chainedImport (Dhall.Map.keys _cache)
+    import_ <- lift (Turtle.select (Foldable.toList rewrittenExpression))
 
-    import_@Import{..} <- Turtle.select imports
+    child <- hoist liftIO (Dhall.Import.chainImport parent import_)
 
-    -- `as Location` imports do not pull in external dependencies
-    Monad.guard (importMode /= Location)
+    let Import{..} = Dhall.Import.chainedImport child
 
     let ImportHashed{..} = importHashed
 
+    case importMode of
+        Code     -> return ()
+        RawText  -> return ()
+        Location -> empty
+
     case importType of
-        Remote url -> case hash of
-            Nothing -> do
-                let dependency = Dhall.Core.pretty import_
+        Missing ->
+            empty
 
-                die [NeatInterpolation.text|
-Error: Remote imports require integrity checks
+        Env {} ->
+            empty
 
-The Nixpkgs support for Dhall replaces all remote imports with cache hits in
-order to ensure that Dhall packages built with Nix don't need to make any HTTP
-requests.  However, in order for this to work you need to ensure that all remote
-imports are protected by integrity checks (e.g. sha256:…).
+        Remote url ->
+            case hash of
+                Nothing -> do
+                    return url
+                Just _ -> do
+                    let dependency = Dhall.Core.pretty url
 
-The following dependency is missing an integrity check:
+                    die [NeatInterpolation.text|
+Error: Dependency missing a semantic integrity check
+
+Dhall's Nixpkgs requires that all of your remote dependencies are protected by
+by semantic integrity checks.  This ensures that Nix can replace the remote
+imports with cached imports built by Nix instead of the imports being fetched
+via HTTP requests using Dhall.
+
+The following dependency is missing a semantic integrity check:
 
 ↳ $dependency
 |]
-            Just _ -> do
-                return url
-        Local{} -> case hash of
-            Just _ -> do
-                let unprotectedImport = import_{
-                        importHashed = importHashed{
-                            hash = Nothing
-                        }
-                    }
 
-                findExternalDependencies "/" (Embed unprotectedImport)
-            Nothing -> do
-                empty
-        Env{} -> do
-            -- We intentionally permit Dhall packages built using Nix to
-            -- refer to environment variables
-            empty
-        Missing -> do
-            -- No need to explicitly fail on missing imports.  Import
-            -- resolution will fail anyway before we get to this point.
-            empty
+        Local filePrefix file -> do
+            filepath <- liftIO (Dhall.Import.localToPath filePrefix file)
+
+            expressionText <- liftIO (Text.IO.readFile filepath)
+
+            parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText filepath expressionText)
+
+            zoom stack (State.modify (NonEmpty.cons child))
+
+            findExternalDependencies parsedExpression
 
 {-| The Nixpkgs support for Dhall implements two conventions that
     @dhall-to-nixpkgs@ depends on:
@@ -684,6 +691,8 @@ The following command:
 
     let baseDirectory = Turtle.directory (directory </> file)
 
+    let baseDirectoryString = Turtle.encodeString baseDirectory
+
     exists <- Turtle.testfile expressionFile
 
     if exists
@@ -704,9 +713,11 @@ Perhaps you meant to specify a different file within the project using the
 
     expressionText <- Turtle.readTextFile expressionFile
 
-    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString baseDirectory) expressionText)
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText baseDirectoryString expressionText)
 
-    dependencies <- Turtle.reduce Foldl.nub (findExternalDependencies baseDirectory expression)
+    let status = Dhall.Import.emptyStatus baseDirectoryString
+
+    dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
     nixDependencies <- traverse dependencyToNix dependencies
 
@@ -767,9 +778,13 @@ Perhaps you meant to specify a different file within the project using the
 
     expressionText <- Turtle.readTextFile expressionFile
 
-    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText (Turtle.encodeString directory) expressionText)
+    let directoryString = Turtle.encodeString directory
 
-    dependencies <- Turtle.reduce Foldl.nub (findExternalDependencies directory expression)
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText directoryString expressionText)
+
+    let status = Dhall.Import.emptyStatus directoryString
+
+    dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
     nixDependencies <- traverse dependencyToNix dependencies
 
