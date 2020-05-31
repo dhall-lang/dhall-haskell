@@ -19,6 +19,7 @@ let
     "dhall-json"
     "dhall-lsp-server"
     "dhall-nix"
+    "dhall-nixpkgs"
     "dhall-yaml"
   ];
 
@@ -90,6 +91,7 @@ let
                           # to ../dhall/dhall-lang/
                           # "dhall-lsp-server"
                           "dhall-nix"
+                          "dhall-nixpkgs"
                           "dhall-yaml"
                         ]
                         # Test suite doesn't work on GHCJS
@@ -106,6 +108,7 @@ let
                     "dhall-json"
                     "dhall-lsp-server"
                     "dhall-nix"
+                    "dhall-nixpkgs"
                     "dhall-yaml"
                   ];
 
@@ -154,6 +157,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-nix"
                         (pkgsNew.sdist ../dhall-nix)
+                        { };
+
+                    dhall-nixpkgs =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-nixpkgs"
+                        (pkgsNew.sdist ../dhall-nixpkgs)
                         { };
 
                     dhall-lsp-server =
@@ -377,6 +386,9 @@ let
                     dhall-nix-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nix;
 
+                    dhall-nixpkgs-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nixpkgs;
+
                     dhall-yaml-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-yaml;
                   };
@@ -424,6 +436,7 @@ let
     dhall-json       = makeStaticIfPossible "dhall-json"      ;
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
+    dhall-nixpkgs    = makeStaticIfPossible "dhall-nixpkgs"   ;
     dhall-yaml       = makeStaticIfPossible "dhall-yaml"      ;
   };
 
@@ -452,6 +465,7 @@ in
     tarball-dhall-json       = makeTarball "dhall-json"      ;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
     tarball-dhall-nix        = makeTarball "dhall-nix"       ;
+    tarball-dhall-nixpkgs    = makeTarball "dhall-nixpkgs"   ;
     tarball-dhall-yaml       = makeTarball "dhall-yaml"      ;
 
     inherit (pkgs) tarball-website website;
@@ -463,6 +477,7 @@ in
       dhall-json
       dhall-lsp-server
       dhall-nix
+      dhall-nixpkgs
       dhall-try
       dhall-yaml
     ;
@@ -474,6 +489,7 @@ in
     shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
+    shell-dhall-nixpkgs    = pkgs.haskell.packages."${compiler}".dhall-nixpkgs.env   ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
     shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
 
@@ -482,6 +498,7 @@ in
     image-dhall-json       = toDockerImage "dhall-json"      ;
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
+    image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
     test-dhall =
