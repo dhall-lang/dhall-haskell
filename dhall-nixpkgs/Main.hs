@@ -249,11 +249,22 @@ nub' = nub
 -}
 findExternalDependencies :: Expr Src Import -> StateT Status Shell URL
 findExternalDependencies expression = do
-    let firstAlt (ImportAlt e _) = Just e
-        firstAlt  _              = Nothing
+    -- This is a best-effort attempt to pick an import alternative if there is
+    -- more than one
+    let pickAlt (ImportAlt e0 e1)
+            -- If only the latter import has an integrity check, then select
+            -- that
+            | Embed Import{ importHashed = ImportHashed{ hash = Nothing } } <- Dhall.Core.shallowDenote e0
+            , Embed Import{ importHashed = ImportHashed{ hash = Just _  } } <- Dhall.Core.shallowDenote e1 =
+                Just e1
+            -- Otherwise prefer the first import
+            | otherwise =
+                Just e0
+        pickAlt _ =
+            Nothing
 
     let rewrittenExpression =
-            Dhall.Optics.rewriteOf Dhall.Core.subExpressions firstAlt expression
+            Dhall.Optics.rewriteOf Dhall.Core.subExpressions pickAlt expression
 
     import_ <- lift (Turtle.select (Foldable.toList rewrittenExpression))
 
