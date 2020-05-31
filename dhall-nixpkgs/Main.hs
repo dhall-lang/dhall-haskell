@@ -243,11 +243,12 @@ nub' = nub
     The Nixpkgs support for Dhall essentially replaces all remote imports with
     cache hits, but doing so implies that all remote imports must be protected
     by an integrity check.
+
+    This function finds all remote imports that are transitive dependencies of
+    the given expression, failing if any of them are missing integrity checks.
 -}
 findExternalDependencies :: Expr Src Import -> StateT Status Shell URL
 findExternalDependencies expression = do
-    parent :| _ <- zoom stack State.get
-
     let firstAlt (ImportAlt e _) = Just e
         firstAlt  _              = Nothing
 
@@ -255,6 +256,8 @@ findExternalDependencies expression = do
             Dhall.Optics.rewriteOf Dhall.Core.subExpressions firstAlt expression
 
     import_ <- lift (Turtle.select (Foldable.toList rewrittenExpression))
+
+    parent :| _ <- zoom stack State.get
 
     child <- hoist liftIO (Dhall.Import.chainImport parent import_)
 
@@ -265,7 +268,7 @@ findExternalDependencies expression = do
     case importMode of
         Code     -> return ()
         RawText  -> return ()
-        Location -> empty
+        Location -> empty  -- "as Location" imports aren't real dependencies
 
     case importType of
         Missing ->
@@ -276,9 +279,9 @@ findExternalDependencies expression = do
 
         Remote url ->
             case hash of
-                Nothing -> do
-                    return url
                 Just _ -> do
+                    return url
+                Nothing -> do
                     let dependency = Dhall.Core.pretty url
 
                     die [NeatInterpolation.text|
@@ -378,17 +381,11 @@ normally have.  The URL should minimally have the following path components:
             let version :: Parsec Void Text ()
                 version = do
                     _ <- Megaparsec.Char.char 'v'
-
                     _ <- component
-
                     _ <- Megaparsec.Char.char '.'
-
                     _ <- component
-
                     _ <- Megaparsec.Char.char '.'
-
                     _ <- component
-
                     return ()
 
             let path =
