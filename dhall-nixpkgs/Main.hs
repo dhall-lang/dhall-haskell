@@ -804,6 +804,9 @@ Perhaps you meant to specify a different file within the project using the
 
     let buildDhallDirectoryPackage = "buildDhallDirectoryPackage"
 
+    let src | null directoryString = directoryString
+            | otherwise            = init directoryString
+
     let nixExpression =
             Nix.mkFunction
                 (Nix.mkParamset
@@ -815,6 +818,7 @@ Perhaps you meant to specify a different file within the project using the
                 (   Nix.mkSym buildDhallDirectoryPackage
                 @@  Nix.attrsE
                         [ ("name", Nix.mkStr finalName)
+                        , ("src", Nix.mkPath False src)
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
                         , ("dependencies", Nix.mkList (nub (fmap snd nixDependencies)))
