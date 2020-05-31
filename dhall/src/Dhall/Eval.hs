@@ -211,8 +211,6 @@ data Val a
     | VOptional (Val a)
     | VSome (Val a)
     | VNone (Val a)
-    | VOptionalFold (Val a) !(Val a) (Val a) !(Val a) !(Val a)
-    | VOptionalBuild (Val a) !(Val a)
     | VRecord !(Map Text (Val a))
     | VRecordLit !(Map Text (Val a))
     | VUnion !(Map Text (Maybe (Val a)))
@@ -671,32 +669,6 @@ eval !env t0 =
             VSome (eval env t)
         None ->
             VPrim $ \ ~a -> VNone a
-        OptionalFold ->
-            VPrim $ \ ~a ->
-            VPrim $ \case
-                VNone _ ->
-                    VHLam (Typed "optional" (VConst Type)) $ \optional ->
-                    VHLam (Typed "some" (a ~> optional)) $ \_some ->
-                    VHLam (Typed "none" optional) $ \none ->
-                    none
-                VSome t ->
-                    VHLam (Typed "optional" (VConst Type)) $ \optional ->
-                    VHLam (Typed "some" (a ~> optional)) $ \some ->
-                    VHLam (Typed "none" optional) $ \_none ->
-                    some `vApp` t
-                opt ->
-                    VPrim $ \o ->
-                    VPrim $ \s ->
-                    VPrim $ \n ->
-                    VOptionalFold a opt o s n
-        OptionalBuild ->
-            VPrim $ \ ~a ->
-            VPrim $ \case
-                VPrimVar -> VOptionalBuild a VPrimVar
-                t ->       t
-                    `vApp` VOptional a
-                    `vApp` VHLam (Typed "a" a) VSome
-                    `vApp` VNone a
         Record kts ->
             VRecord (Map.sort (fmap (eval env) kts))
         RecordLit kts ->
@@ -937,8 +909,6 @@ conv !env t0 t0' =
             conv env t t'
         (VNone _, VNone _) ->
             True
-        (VOptionalBuild _ t, VOptionalBuild _ t') ->
-            conv env t t'
         (VRecord m, VRecord m') ->
             eqMapsBy (conv env) m m'
         (VRecordLit m, VRecordLit m') ->
@@ -969,8 +939,6 @@ conv !env t0 t0' =
             eqMapsBy (eqMaybeBy (conv env)) m m' && k == k' && eqMaybeBy (conv env) mt mt'
         (VEmbed a, VEmbed a') ->
             a == a'
-        (VOptionalFold a t _ u v, VOptionalFold a' t' _ u' v') ->
-            conv env a a' && conv env t t' && conv env u u' && conv env v v'
         (_, _) ->
             False
   where
@@ -1123,10 +1091,6 @@ quote !env !t0 =
             Some (quote env t)
         VNone t ->
             None `qApp` t
-        VOptionalFold a o t u v ->
-            OptionalFold `qApp` a `qApp` o `qApp` t `qApp` u `qApp` v
-        VOptionalBuild a t ->
-            OptionalBuild `qApp` a `qApp` t
         VRecord m ->
             Record (fmap (quote env) m)
         VRecordLit m ->
@@ -1303,10 +1267,6 @@ alphaNormalize = goEnv EmptyNames
                 Some (go t)
             None ->
                 None
-            OptionalFold ->
-                OptionalFold
-            OptionalBuild ->
-                OptionalBuild
             Record kts ->
                 Record (fmap go kts)
             RecordLit kts ->

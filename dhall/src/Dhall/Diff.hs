@@ -1272,18 +1272,6 @@ diffPrimitiveExpression l@None r =
     mismatch l r
 diffPrimitiveExpression l r@None =
     mismatch l r
-diffPrimitiveExpression OptionalFold OptionalFold =
-    "…"
-diffPrimitiveExpression l@OptionalFold r =
-    mismatch l r
-diffPrimitiveExpression l r@OptionalFold =
-    mismatch l r
-diffPrimitiveExpression OptionalBuild OptionalBuild =
-    "…"
-diffPrimitiveExpression l@OptionalBuild r =
-    mismatch l r
-diffPrimitiveExpression l r@OptionalBuild =
-    mismatch l r
 diffPrimitiveExpression (BoolLit aL) (BoolLit aR) =
     diffBool aL aR
 diffPrimitiveExpression l@(BoolLit {}) r =

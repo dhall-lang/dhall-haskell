@@ -20,7 +20,7 @@
   , cccccccccccccccccccccccc
   , dddddddddddddd
   ]
-, merge =
+, merge1 =
     merge
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -29,6 +29,6 @@
       a
       b
       ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-, toMap = toMap
+, toMap1 = toMap
     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 }

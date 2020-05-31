@@ -1,0 +1,10 @@
+[1;31m
+Error: [0m$[1]: Key(s) [1;35mb[0m present in the JSON object but not in the expected Dhall record type. This is not allowed unless you enable the [0;32m--records-loose[0m flag:
+
+Expected Dhall type:
+{ a : Natural }
+
+JSON:
+{
+    "b": 2
+}

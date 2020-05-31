@@ -81,22 +81,6 @@ in
             then (Some 0)
             else (None Natural)
         '';
-        testOptionalFold = dhallToNix ''
-          Optional/fold
-          Natural
-          (Some 1)
-          Natural
-        '';
-        testOptionalBuild = dhallToNix ''
-            λ(b : Bool)
-          → Optional/build
-            Natural
-            ( λ(optional : Type)
-            → λ(just : Natural → optional)
-            → λ(nothing : optional)
-            → if b then just 1 else nothing
-            )
-        '';
         testNone = dhallToNix "None Natural";
         testSome = dhallToNix "Some 4";
         testRecord = dhallToNix "{}";
@@ -182,9 +166,6 @@ in
         assert (testOptional {} == {});
         assert (testOptionalLit true == 0);
         assert (testOptionalLit false == null);
-        assert (testOptionalFold (n : n) 0 == 1);
-        assert (testOptionalBuild true == 1);
-        assert (testOptionalBuild false == null);
         assert (testRecord == {});
         assert (testRecordLit == { foo = 1; bar = true; });
         assert (testUnion == {});

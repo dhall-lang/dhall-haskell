@@ -33,7 +33,6 @@ import Dhall.Syntax
     , Binding(Binding)
     , Chunks(..)
     , DhallDouble(..)
-    , Const(..)
     , PreferAnnotation(..)
     )
 
@@ -335,14 +334,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((DhallDouble . read . show) n))
                     App DoubleShow (DoubleLit (DhallDouble n)) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-                    App (App OptionalBuild _A₀) g ->
-                        loop (App (App (App g optional) just) nothing)
-                      where
-                        optional = App Optional _A₀
-
-                        just = Lam "a" _A₀ (Some "a")
-
-                        nothing = App None _A₀
                     App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
                       where
                         _A₁ = shift 1 "a" _A₀
@@ -403,21 +394,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                   ]
                     App (App ListReverse _) (ListLit t xs) ->
                         loop (ListLit t (Data.Sequence.reverse xs))
-
-                    App (App OptionalFold t0) x0 -> do
-                        t1 <- loop t0
-                        let optional = Var (V "optional" 0)
-                        let lam term = (Lam "optional"
-                                           (Const Type)
-                                           (Lam "some"
-                                               (Pi "_" t1 optional)
-                                               (Lam "none" optional term)))
-                        x1 <- loop x0
-                        pure $ case x1 of
-                            App None _ -> lam (Var (V "none" 0))
-                            Some x'    -> lam (App (Var (V "some" 0)) x')
-                            _          -> App (App OptionalFold t1) x1
-
                     App TextShow (TextLit (Chunks [] oldText)) ->
                         loop (TextLit (Chunks [] newText))
                       where
@@ -550,8 +526,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
       where
         a' = loop a
     None -> pure None
-    OptionalFold -> pure OptionalFold
-    OptionalBuild -> pure OptionalBuild
     Record kts -> Record . Dhall.Map.sort <$> kts'
       where
         kts' = traverse loop kts
@@ -770,7 +744,6 @@ isNormalized e0 = loop (Syntax.denote e0)
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
           App DoubleShow (DoubleLit _) -> False
-          App (App OptionalBuild _) _ -> False
           App (App ListBuild _) _ -> False
           App (App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _) _ -> False
           App (App ListLength _) (ListLit _ _) -> False
@@ -778,8 +751,6 @@ isNormalized e0 = loop (Syntax.denote e0)
           App (App ListLast _) (ListLit _ _) -> False
           App (App ListIndexed _) (ListLit _ _) -> False
           App (App ListReverse _) (ListLit _ _) -> False
-          App (App OptionalFold _) (Some _) -> False
-          App (App OptionalFold _) (App None _) -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
           _ -> True
@@ -873,8 +844,6 @@ isNormalized e0 = loop (Syntax.denote e0)
       Optional -> True
       Some a -> loop a
       None -> True
-      OptionalFold -> True
-      OptionalBuild -> True
       Record kts -> Dhall.Map.isSorted kts && all loop kts
       RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
@@ -951,3 +920,7 @@ variable@(V var i) `freeIn` expression =
     denote' = Syntax.denote
 
     strippedExpression = denote' expression
+
+{- $setup
+>>> import Dhall.Syntax (Const(..))
+-}
