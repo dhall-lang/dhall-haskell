@@ -211,6 +211,8 @@ newtype DhallErrors e = DhallErrors
 
 instance (Show (DhallErrors e), Typeable e) => Exception (DhallErrors e)
 
+{-| Render a given prefix and some errors to a string.
+-}
 showDhallErrors :: Show e => String -> DhallErrors e -> String
 showDhallErrors _   (DhallErrors (e :| [])) = show e
 showDhallErrors ctx (DhallErrors es) = prefix <> (unlines . Data.List.NonEmpty.toList . fmap show $ es)
@@ -252,6 +254,8 @@ type Expector = Validation ExpectedTypeErrors
 -}
 type ExpectedTypeErrors = DhallErrors ExpectedTypeError
 
+{-| Error type used when determining the Dhall type of a Haskell expression
+-}
 data ExpectedTypeError = RecursiveTypeError
     deriving (Eq, Show)
 
