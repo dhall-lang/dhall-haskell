@@ -286,7 +286,7 @@ nub :: Ord a => [a] -> [a]
 nub = Foldl.fold Foldl.nub
 
 {-| This specialization of `nub` is necessary to work around a type-checking
-    loop
+    loop with GHC 8.4
 -}
 nub'
     :: Ord (f (Fix f)) => [ (Text, Maybe (Fix f)) ] -> [ (Text, Maybe (Fix f)) ]
