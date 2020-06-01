@@ -3,6 +3,7 @@
 
 module Dhall.Test.Substitution where
 
+import Control.Exception (throwIO)
 import Data.Void (Void)
 import Dhall.Core (Expr(BoolLit, Var))
 import Dhall.Src (Src)
@@ -18,17 +19,18 @@ data Result = Failure Integer | Success String
 instance Dhall.FromDhall Result
 
 substituteResult :: FilePath -> IO Result
-substituteResult fp = let
-    evaluateSettings = Lens.over Dhall.substitutions (Dhall.Map.insert "Result" resultType) Dhall.defaultEvaluateSettings
-    in Dhall.inputFileWithSettings evaluateSettings resultDecoder fp
+substituteResult fp = do
+    rt <- resultType
+    let evaluateSettings = Lens.over Dhall.substitutions (Dhall.Map.insert "Result" rt) Dhall.defaultEvaluateSettings
+    Dhall.inputFileWithSettings evaluateSettings resultDecoder fp
 
 resultDecoder :: Dhall.Decoder Result
 resultDecoder = Dhall.auto
 
-resultType :: Expr Src Void
+resultType :: IO (Expr Src Void)
 resultType = case Dhall.expected resultDecoder of
-    Data.Either.Validation.Success x -> x
-    _ -> undefined
+    Data.Either.Validation.Failure e -> throwIO e
+    Data.Either.Validation.Success x -> return x
 
 substituteFoo :: FilePath -> IO Bool
 substituteFoo fp = let

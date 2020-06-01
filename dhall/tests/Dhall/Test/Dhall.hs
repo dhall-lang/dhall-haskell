@@ -72,7 +72,7 @@ wrongDhallType = Dhall.Decoder {..}
               , ( "foo", Dhall.Core.Text )
               ]
             )
-        extract expr = Dhall.typeError' expected expr
+        extract expr = Dhall.typeError expected expr
 
 shouldShowDetailedTypeError :: TestTree
 shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
