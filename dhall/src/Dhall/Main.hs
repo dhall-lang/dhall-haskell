@@ -149,7 +149,7 @@ data Mode
           , followSymlinks :: Bool
           }
     | Encode { file :: Input, json :: Bool }
-    | Decode { file :: Input, json :: Bool }
+    | Decode { file :: Input, json :: Bool, quiet :: Bool }
     | Text { file :: Input }
     | DirectoryTree { file :: Input, path :: FilePath }
     | SyntaxTree { file :: Input }
@@ -263,7 +263,7 @@ parseMode =
             Convert
             "decode"
             "Decode a Dhall expression from binary"
-            (Decode <$> parseFile <*> parseJSONFlag)
+            (Decode <$> parseFile <*> parseJSONFlag <*> parseQuiet)
     <|> subcommand
             Miscellaneous
             "repl"
@@ -380,7 +380,7 @@ parseMode =
     parseQuiet =
         Options.Applicative.switch
             (   Options.Applicative.long "quiet"
-            <>  Options.Applicative.help "Don't print the inferred type"
+            <>  Options.Applicative.help "Don't print the result"
             )
 
     parseInplace = fmap f (optional p)
@@ -822,9 +822,15 @@ command (Options {..}) = do
                         Dhall.Core.throws (Dhall.Binary.decodeExpression bytes)
 
 
-            let doc = Dhall.Pretty.prettyCharacterSet characterSet (Dhall.Core.renote expression :: Expr Src Import)
+            if quiet
+                then return ()
+                else do
+                    let doc =
+                            Dhall.Pretty.prettyCharacterSet
+                                characterSet
+                                (Dhall.Core.renote expression :: Expr Src Import)
 
-            renderDoc System.IO.stdout doc
+                    renderDoc System.IO.stdout doc
 
         Text {..} -> do
             expression <- getExpression file

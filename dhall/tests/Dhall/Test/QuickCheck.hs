@@ -307,8 +307,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "Optional")
             % (7 :: W "Some")
             % (1 :: W "None")
-            % (1 :: W "OptionalFold")
-            % (1 :: W "OptionalBuild")
             % (1 :: W "Record")
             % (7 :: W "RecordLit")
             % (1 :: W "Union")

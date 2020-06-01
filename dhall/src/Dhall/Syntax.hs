@@ -60,6 +60,7 @@ module Dhall.Syntax (
 
     -- * Reserved identifiers
     , reservedIdentifiers
+    , reservedKeywords
 
     -- * `Text` manipulation
     , toDoubleQuoted
@@ -74,40 +75,43 @@ module Dhall.Syntax (
     , internalError
     ) where
 
-import Control.DeepSeq (NFData)
-import Data.Bifunctor (Bifunctor(..))
-import Data.Bits (xor)
-import Data.Data (Data)
+import Control.DeepSeq            (NFData)
+import Data.Bifunctor             (Bifunctor (..))
+import Data.Bits                  (xor)
+import Data.Data                  (Data)
 import Data.Foldable
-import Data.HashSet (HashSet)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.String (IsString(..))
-import Data.Semigroup (Semigroup(..))
-import Data.Sequence (Seq)
-import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.HashSet               (HashSet)
+import Data.List.NonEmpty         (NonEmpty (..))
+import Data.Semigroup             (Semigroup (..))
+import Data.Sequence              (Seq)
+import Data.String                (IsString (..))
+import Data.Text                  (Text)
+import Data.Text.Prettyprint.Doc  (Doc, Pretty)
 import Data.Traversable
-import Data.Void (Void)
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import Dhall.Src (Src(..))
+import Data.Void                  (Void)
+import Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import GHC.Generics (Generic)
-import Instances.TH.Lift ()
+import Dhall.Set                  (Set)
+import Dhall.Src                  (Src (..))
+import GHC.Generics               (Generic)
+import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
-import Numeric.Natural (Natural)
-import Prelude hiding (succ)
-import Unsafe.Coerce (unsafeCoerce)
+import Numeric.Natural            (Natural)
+import Prelude                    hiding (succ)
+import Unsafe.Coerce              (unsafeCoerce)
 
 import qualified Control.Monad
 import qualified Data.HashSet
-import qualified Data.List.NonEmpty         as NonEmpty
+import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc  as Pretty
+import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Dhall.Crypto
-import qualified Dhall.Optics               as Optics
-import qualified Lens.Family                as Lens
-import qualified Network.URI                as URI
+import qualified Dhall.Optics              as Optics
+import qualified Lens.Family               as Lens
+import qualified Network.URI               as URI
+
+-- $setup
+-- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
 
 {-| Constants for a pure type system
 
@@ -178,7 +182,9 @@ instance Pretty Var where
 {- | Record the binding part of a @let@ expression.
 
 For example,
+
 > let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+
 will be instantiated as follows:
 
 * @bindingSrc0@ corresponds to the @A@ comment.
@@ -427,10 +433,6 @@ data Expr s a
     | Some (Expr s a)
     -- | > None                                     ~  None
     | None
-    -- | > OptionalFold                             ~  Optional/fold
-    | OptionalFold
-    -- | > OptionalBuild                            ~  Optional/build
-    | OptionalBuild
     -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr s a))
     -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
@@ -657,8 +659,6 @@ unsafeSubExpressions _ ListReverse = pure ListReverse
 unsafeSubExpressions _ Optional = pure Optional
 unsafeSubExpressions f (Some a) = Some <$> f a
 unsafeSubExpressions _ None = pure None
-unsafeSubExpressions _ OptionalFold = pure OptionalFold
-unsafeSubExpressions _ OptionalBuild = pure OptionalBuild
 unsafeSubExpressions f (Record a) = Record <$> traverse f a
 unsafeSubExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 unsafeSubExpressions f (Union a) = Union <$> traverse (traverse f) a
@@ -948,11 +948,11 @@ shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
 shallowDenote         e  = e
 
--- | The set of reserved identifiers for the Dhall language
-reservedIdentifiers :: HashSet Text
-reservedIdentifiers =
+-- | The set of reserved keywords according to the `keyword` rule in the grammar
+reservedKeywords :: HashSet Text
+reservedKeywords =
     Data.HashSet.fromList
-        [ -- Keywords according to the `keyword` rule in the grammar
+        [
           "if"
         , "then"
         , "else"
@@ -969,9 +969,15 @@ reservedIdentifiers =
         , "assert"
         , "forall"
         , "with"
+        ]
 
-          -- Builtins according to the `builtin` rule in the grammar
-        , "Natural/fold"
+-- | The set of reserved identifiers for the Dhall language
+-- | Contains also all keywords from "reservedKeywords"
+reservedIdentifiers :: HashSet Text
+reservedIdentifiers = reservedKeywords <>
+    Data.HashSet.fromList
+        [ -- Builtins according to the `builtin` rule in the grammar
+          "Natural/fold"
         , "Natural/build"
         , "Natural/isZero"
         , "Natural/even"
@@ -994,8 +1000,6 @@ reservedIdentifiers =
         , "List/last"
         , "List/indexed"
         , "List/reverse"
-        , "Optional/fold"
-        , "Optional/build"
         , "Text/show"
         , "Bool"
         , "True"

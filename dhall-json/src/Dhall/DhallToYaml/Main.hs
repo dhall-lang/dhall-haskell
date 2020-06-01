@@ -6,12 +6,12 @@
 module Dhall.DhallToYaml.Main (main) where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception (SomeException)
-import Data.ByteString (ByteString)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Dhall.JSON (parsePreservationAndOmission, parseConversion)
-import Dhall.JSON.Yaml (Options(..), parseDocuments, parseQuoted)
+import Control.Exception   (SomeException)
+import Data.ByteString     (ByteString)
+import Data.Monoid         ((<>))
+import Data.Text           (Text)
+import Dhall.JSON          (parseConversion, parsePreservationAndOmission)
+import Dhall.JSON.Yaml     (Options (..), parseDocuments, parseQuoted)
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -82,10 +82,10 @@ main version dhallToYaml = do
     maybeOptions <- Options.execParser parserInfo
 
     case maybeOptions of
-        Nothing -> do
+        Nothing ->
             putStrLn (Data.Version.showVersion version)
 
-        Just options@(Options {..}) -> do
+        Just options@Options{..} ->
             handle $ do
                 contents <- case file of
                     Nothing   -> Text.IO.getContents
@@ -93,7 +93,7 @@ main version dhallToYaml = do
 
                 let write =
                         case output of
-                            Nothing -> Data.ByteString.putStr
+                            Nothing    -> Data.ByteString.putStr
                             Just file_ -> Data.ByteString.writeFile file_
 
                 write =<< dhallToYaml options file contents
