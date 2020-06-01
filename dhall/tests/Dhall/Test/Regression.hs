@@ -22,6 +22,7 @@ import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
+import Data.Either.Validation (Validation(..))
 import Data.Void (Void)
 import Dhall.Import (Imported, MissingImports(..))
 import Dhall.Parser (Src, SourcedException(..))
@@ -60,7 +61,7 @@ unnamedFields :: TestTree
 unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
     let ty = Dhall.auto :: Dhall.Decoder Foo
     Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
-        (Dhall.Core.Union
+        (Success (Dhall.Core.Union
             (Dhall.Map.fromList
                 [   ("Foo",Just (Dhall.Core.Record (Dhall.Map.fromList [
                         ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)])))
@@ -70,17 +71,17 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
                         ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)])))
                 ]
             )
-        )
+        ))
 
     let inj = Dhall.inject :: Dhall.Encoder Foo
-    Test.Tasty.HUnit.assertEqual "Good ToDhall" (Dhall.declared inj) (Dhall.expected ty)
+    Test.Tasty.HUnit.assertEqual "Good ToDhall" (Success $ Dhall.declared inj) (Dhall.expected ty)
 
     let tu_ty = Dhall.auto :: Dhall.Decoder (Integer, Bool)
-    Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Dhall.Core.Record (
+    Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Success $ Dhall.Core.Record (
             Dhall.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
 
     let tu_in = Dhall.inject :: Dhall.Encoder (Integer, Bool)
-    Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Dhall.declared tu_in) (Dhall.expected tu_ty)
+    Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Success $ Dhall.declared tu_in) (Dhall.expected tu_ty)
 
     return () )
 

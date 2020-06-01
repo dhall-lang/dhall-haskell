@@ -80,6 +80,9 @@ module Dhall.Tutorial (
     -- * Prelude
     -- $prelude
 
+    -- * Limitations
+    -- $limitations
+
     -- * Conclusion
     -- $conclusion
 
@@ -125,6 +128,8 @@ import Dhall
 -- >     x <- input auto "./config.dhall"
 -- >     print (x :: Example)
 -- 
+-- __WARNING__: You must not instantiate FromDhall with a recursive type. See [Limitations](#limitations).
+--
 -- If you compile and run the above example, the program prints the corresponding
 -- Haskell record:
 -- 
@@ -2241,6 +2246,35 @@ import Dhall
 -- __Exercise__: Browse the Prelude by running:
 --
 -- > $ dhall <<< 'https://prelude.dhall-lang.org/package.dhall'
+
+-- $limitations
+-- #limitations#
+--
+-- `FromDhall` has a limitiation: It won't work for recursive types.
+-- If you instantiate these using their Generic instance you end up with one of
+-- the following two cases:
+-- 
+-- If the type appears in it's own definition like
+--
+-- > data Foo = Foo Foo
+-- >     deriving Generic
+-- >
+-- > instance FromDhall Foo
+--
+-- the resulting Decoder will throw an exception /ON USAGE/.
+-- However, if the recursion is indirect like
+--
+-- > data Foo = Foo Bar
+-- >     deriving Generic
+-- >
+-- > instance FromDhall Foo
+-- >
+-- > data Bar = Bar Foo
+-- >     deriving Generic
+-- >
+-- > instance FromDhall Bar
+--
+-- the resulting Decoder will __NOT TERMINATE__ /ON USAGE/.
 
 -- $conclusion
 --
