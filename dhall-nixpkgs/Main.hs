@@ -322,11 +322,23 @@ The following dependency is missing a semantic integrity check:
 
             findExternalDependencies parsedExpression
 
+data Dependency = Dependency
+    { functionParameter :: (Text, Maybe NExpr)
+      -- ^ Function parameter used to bring the dependency into scope for the
+      --   Nix package.  The @`Maybe` `NExpr`@ is always `Nothing`, but we
+      --   include it here for convenience
+    , dependencyExpression :: NExpr
+      -- ^ The dependency expression to include in the dependency list.  This
+      --   will be an expression of the form:
+      --
+      --   > someDependency.override { file = "./someFile.dhall" }
+    }
+
 {-| The Nixpkgs support for Dhall implements two conventions that
     @dhall-to-nixpkgs@ depends on:
 
     * Packages are named after their repository name
-    * You can import a specific file `packageName.override { file = …; }`
+    * You can import a specific file using `packageName.override { file = …; }`
 
     This function is responsible for converting Dhall imports to package
     names and files that follow this convention.  For example, given a Dhall
@@ -338,7 +350,7 @@ The following dependency is missing a semantic integrity check:
 
         dhall-packages.override { file = "kubernetes/k8s/1.14.dhall"; }
 -}
-dependencyToNix :: URL -> IO ((Text, Maybe nExpr), NExpr)
+dependencyToNix :: URL -> IO Dependency
 dependencyToNix url@URL{..} = do
     let dependency = Dhall.Core.pretty url
 
@@ -356,21 +368,27 @@ dependencyToNix url@URL{..} = do
                 "dhall-lang" : "dhall-lang" : _rev : "Prelude" : rest -> do
                     let fileArgument = Text.intercalate "/" rest
 
-                    return
-                        (   (prelude, Nothing)
-                        ,       (Nix.mkSym prelude @. "override")
+                    let functionParameter = (prelude, Nothing)
+
+                    let dependencyExpression =
+                                (Nix.mkSym prelude @. "override")
                             @@  Nix.attrsE
                                     [ ("file", Nix.mkStr fileArgument ) ]
-                        )
+
+                    return Dependency{..}
+
                 _owner : repo : _rev : rest -> do
                     let fileArgument = Text.intercalate "/" rest
 
-                    return
-                        (   (repo, Nothing)
-                        ,       (Nix.mkSym repo @. "override")
+                    let functionParameter = (repo, Nothing)
+
+                    let dependencyExpression =
+                                (Nix.mkSym repo @. "override")
                             @@  Nix.attrsE
                                     [ ("file", Nix.mkStr fileArgument ) ]
-                        )
+
+                    return Dependency{..}
+
                 _ -> do
                     die [NeatInterpolation.text|
 Error: Not a valid GitHub repository URL
@@ -414,12 +432,14 @@ normally have.  The URL should minimally have the following path components:
                         
             let fileArgument = Text.intercalate "/" pathComponents
 
-            return
-                (   (prelude, Nothing)
-                ,       (Nix.mkSym prelude @. "override")
+            let functionParameter = (prelude, Nothing)
+
+            let dependencyExpression =
+                        (Nix.mkSym prelude @. "override")
                     @@  Nix.attrsE
+
                             [ ("file", Nix.mkStr fileArgument) ]
-                )
+            return Dependency{..}
         _ -> do
             die [NeatInterpolation.text|
 Error: Unsupported domain
@@ -737,7 +757,7 @@ Perhaps you meant to specify a different file within the project using the
             Nix.mkFunction
                 (Nix.mkParamset
                     (   [ (buildDhallGitHubPackage, Nothing) ]
-                    <>  nub' (fmap fst nixDependencies)
+                    <>  nub' (fmap functionParameter nixDependencies)
                     )
                     False
                 )
@@ -754,7 +774,7 @@ Perhaps you meant to specify a different file within the project using the
                         , ("directory", Nix.mkStr (Turtle.format fp directory))
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
-                        , ("dependencies", Nix.mkList (nub (fmap snd nixDependencies)))
+                        , ("dependencies", Nix.mkList (nub (fmap dependencyExpression nixDependencies)))
                         ]
                 )
 
@@ -808,7 +828,7 @@ Perhaps you meant to specify a different file within the project using the
             Nix.mkFunction
                 (Nix.mkParamset
                     (   [ (buildDhallDirectoryPackage, Nothing) ]
-                    <>  nub' (fmap fst nixDependencies)
+                    <>  nub' (fmap functionParameter nixDependencies)
                     )
                     False
                 )
@@ -818,7 +838,7 @@ Perhaps you meant to specify a different file within the project using the
                         , ("src", Nix.mkPath False src)
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
-                        , ("dependencies", Nix.mkList (nub (fmap snd nixDependencies)))
+                        , ("dependencies", Nix.mkList (nub (fmap dependencyExpression nixDependencies)))
                         ]
                 )
 
