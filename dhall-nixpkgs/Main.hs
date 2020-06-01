@@ -7,8 +7,6 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
-
 module Main where
 
 import Control.Applicative (empty, optional, (<|>))
@@ -97,7 +95,6 @@ data NixPrefetchGit = NixPrefetchGit
     , rev :: Text
     , path :: Text
     , sha256 :: Text
-    , fetchSubmodules :: Bool 
     }
     deriving stock (Generic)
     deriving anyclass (FromJSON)
@@ -405,7 +402,7 @@ normally have.  The URL should minimally have the following path components:
                     _ <- component
                     return ()
 
-            let path =
+            let pathComponents =
                     case reverse (file : components) of
                         first : rest
                             -- Ignore the version.  The Nixpkgs support assumes
@@ -415,7 +412,7 @@ normally have.  The URL should minimally have the following path components:
                         rest ->
                             rest
                         
-            let fileArgument = Text.intercalate "/" path
+            let fileArgument = Text.intercalate "/" pathComponents
 
             return
                 (   (prelude, Nothing)
@@ -447,7 +444,7 @@ issue here:
 |]
 
 githubToNixpkgs :: GitHub -> IO ()
-githubToNixpkgs GitHub{..} = do
+githubToNixpkgs GitHub{ rev = maybeRev, ..} = do
     URI{ uriAuthority = Just URIAuth{..}, .. } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
             Nothing -> die [NeatInterpolation.text|
@@ -596,7 +593,7 @@ following format:
     let baseUrl =
             Text.pack uriScheme <> "//" <> githubBase <> "/" <> owner <> "/" <> repo
 
-    (rev, sha256, repository) <- case rev of
+    (rev, sha256, repository) <- case maybeRev of
         Just r | not fetchSubmodules -> do
             let archiveURL = baseUrl <> "/archive/" <> r <> ".tar.gz"
 
@@ -645,7 +642,7 @@ with this tool or with nix-prefetch-url
             let args =  [ "--url", baseUrl <> ".git"
                         , "--quiet"
                         ]
-                    <>  toListWith (\t -> [ "--rev", t ]) rev
+                    <>  toListWith (\t -> [ "--rev", t ]) maybeRev
                     <>  toListWith (\t -> [ "--hash", t ]) hash
                     <>  (if fetchSubmodules then [ "--fetch-submodules" ] else [])
 
