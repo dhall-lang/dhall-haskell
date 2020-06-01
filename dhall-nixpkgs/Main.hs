@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -275,9 +276,9 @@ findExternalDependencies expression = do
 
     child <- hoist liftIO (Dhall.Import.chainImport parent import_)
 
-    let Import{..} = Dhall.Import.chainedImport child
+    let Import{ importHashed, importMode } = Dhall.Import.chainedImport child
 
-    let ImportHashed{..} = importHashed
+    let ImportHashed{ hash, importType } = importHashed
 
     case importMode of
         Code     -> return ()
@@ -351,16 +352,16 @@ data Dependency = Dependency
         dhall-packages.override { file = "kubernetes/k8s/1.14.dhall"; }
 -}
 dependencyToNix :: URL -> IO Dependency
-dependencyToNix url@URL{..} = do
+dependencyToNix url@URL{ authority, path } = do
     let dependency = Dhall.Core.pretty url
 
     let prelude = "Prelude"
 
     case authority of
         "raw.githubusercontent.com" -> do
-            let File{..} = path
+            let File{ directory, file } = path
 
-            let Dhall.Core.Directory{..} = directory
+            let Dhall.Core.Directory{ components } = directory
 
             case reverse (file : components) of
                 -- Special case to recognize a Prelude import and treat it as if
@@ -403,9 +404,9 @@ normally have.  The URL should minimally have the following path components:
 ↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
 |]
         "prelude.dhall-lang.org" -> do
-            let File{..} = path
+            let File{ directory, file } = path
 
-            let Dhall.Core.Directory{..} = directory
+            let Dhall.Core.Directory{ components } = directory
 
             let component :: Parsec Void Text Integer
                 component = Megaparsec.Char.Lexer.decimal
@@ -439,6 +440,7 @@ normally have.  The URL should minimally have the following path components:
                     @@  Nix.attrsE
 
                             [ ("file", Nix.mkStr fileArgument) ]
+
             return Dependency{..}
         _ -> do
             die [NeatInterpolation.text|
@@ -464,8 +466,8 @@ issue here:
 |]
 
 githubToNixpkgs :: GitHub -> IO ()
-githubToNixpkgs GitHub{ rev = maybeRev, ..} = do
-    URI{ uriAuthority = Just URIAuth{..}, .. } <- do
+githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source } = do
+    URI{ uriScheme, uriAuthority = Just URIAuth{ uriUserInfo, uriRegName, uriPort }, uriPath, uriQuery, uriFragment } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
             Nothing -> die [NeatInterpolation.text|
 Error: The specified repository is not a valid URI
@@ -683,7 +685,7 @@ The following command failed to clone the repository:
 
             let bytes = Text.Encoding.encodeUtf8 text
 
-            NixPrefetchGit{..} <- case Aeson.eitherDecodeStrict' bytes of
+            NixPrefetchGit{ rev, sha256, path } <- case Aeson.eitherDecodeStrict' bytes of
                 Left message -> do
                     let messageText = Text.pack message
 
@@ -781,7 +783,7 @@ Perhaps you meant to specify a different file within the project using the
     Prettyprint.Text.putDoc (Nix.Pretty.prettyNix nixExpression)
 
 directoryToNixpkgs :: Directory -> IO ()
-directoryToNixpkgs Directory{..} = do
+directoryToNixpkgs Directory{ name, directory, file, source } = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
