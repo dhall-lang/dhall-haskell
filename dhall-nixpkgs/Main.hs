@@ -208,12 +208,6 @@ parserInfoOptions =
         <>  Options.fullDesc
         )
 
-die :: MonadIO io => Text -> io a
-die text = liftIO $ do
-    Text.IO.hPutStr System.IO.stderr text
-
-    System.Exit.exitFailure
-
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
@@ -294,23 +288,10 @@ findExternalDependencies expression = do
 
         Remote url ->
             case hash of
-                Just _ -> do
+                Just _ ->
                     return url
-                Nothing -> do
-                    let dependency = Dhall.Core.pretty url
-
-                    die [NeatInterpolation.text|
-Error: Dependency missing a semantic integrity check
-
-Dhall's Nixpkgs requires that all of your remote dependencies are protected by
-by semantic integrity checks.  This ensures that Nix can replace the remote
-imports with cached imports built by Nix instead of the imports being fetched
-via HTTP requests using Dhall.
-
-The following dependency is missing a semantic integrity check:
-
-↳ $dependency
-|]
+                Nothing ->
+                    die (MissingSemanticIntegrityCheck url)
 
         Local filePrefix file -> do
             filepath <- liftIO (Dhall.Import.localToPath filePrefix file)
@@ -353,8 +334,6 @@ data Dependency = Dependency
 -}
 dependencyToNix :: URL -> IO Dependency
 dependencyToNix url@URL{ authority, path } = do
-    let dependency = Dhall.Core.pretty url
-
     let prelude = "Prelude"
 
     case authority of
@@ -391,18 +370,8 @@ dependencyToNix url@URL{ authority, path } = do
                     return Dependency{..}
 
                 _ -> do
-                    die [NeatInterpolation.text|
-Error: Not a valid GitHub repository URL
+                    die (NotAValidGitHubRepositoryURL url)
 
-Your Dhall package appears to depend on the following import:
-
-↳ $dependency
-
-... which is missing one or more path components that a raw GitHub import would
-normally have.  The URL should minimally have the following path components:
-
-↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
-|]
         "prelude.dhall-lang.org" -> do
             let File{ directory, file } = path
 
@@ -443,140 +412,34 @@ normally have.  The URL should minimally have the following path components:
 
             return Dependency{..}
         _ -> do
-            die [NeatInterpolation.text|
-Error: Unsupported domain
-
-This tool currently only translates the following domains into Nix dependencies:
-
-* raw.githubusercontent.com
-* prelude.dhall-lang.org
-
-One of the Dhall project's dependencies:
-
-↳ $dependency
-
-... used the following unexpected domain:
-
-↳ $authority
-
-If you would like to support a new domain for Dhall dependencies, please open an
-issue here:
-
-↳ https://github.com/dhall-lang/dhall-haskell/issues
-|]
+            die (UnsupportedDomainDependency url authority)
 
 githubToNixpkgs :: GitHub -> IO ()
 githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source } = do
     URI{ uriScheme, uriAuthority = Just URIAuth{ uriUserInfo, uriRegName, uriPort }, uriPath, uriQuery, uriFragment } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
-            Nothing -> die [NeatInterpolation.text|
-Error: The specified repository is not a valid URI
-
-You provided the following argument:
-
-↳ $uri
-
-... which is not a valid URI
-|]
-
+            Nothing -> die (RepositoryIsNotAValidURI uri)
             Just u  -> return u
 
     case uriScheme of
-        "https:" -> do
-            return ()
-        _ -> do
-            let uriSchemeText = Text.pack uriScheme
-
-            die [NeatInterpolation.text|
-Error: URI schemes other than https are not supported
-
-You specified the following URI:
-
-↳ $uri
-
-... which has the following scheme:
-
-↳ $uriSchemeText
-
-... which is not https
-|]
+        "https:" -> return ()
+        _        -> die (UnsupportedURIScheme uri uriScheme)
 
     case uriRegName of
-        "github.com" -> do
-            return ()
-        _ -> do
-            let uriRegNameText = Text.pack uriRegName
-
-            die [NeatInterpolation.text|
-Error: Domains other than github.com are not supported
-
-You specified the following URI:
-
-↳ $uri
-
-... which has the following domain:
-
-↳ $uriRegNameText
-
-... which is not github.com
-|]
+        "github.com" -> return ()
+        _            -> die (UnsupportedDomain uri uriRegName)
 
     case uriPort of
         "" -> return ()
-        _ -> do
-            let uriPortText = Text.pack uriPort
-
-            die [NeatInterpolation.text|
-Error: Non-default ports are not supported
-
-You specified the following URI:
-
-↳ $uri
-
-... which has the following explicit port specification:
-
-↳ $uriPortText
-
-... which is not permitted by this tool
-|]
+        _  -> die (UnsupportedPort uri uriPort)
 
     case uriQuery of
         "" -> return ()
-        _  -> do
-            let uriQueryText = Text.pack uriQuery
-
-            die [NeatInterpolation.text|
-Error: Non-empty query strings are not supported
-
-You specified the following URI:
-
-↳ $uri
-
-... which has the following query string:
-
-↳ $uriQueryText
-
-... which is not permitted by this tool
-|]
+        _  -> die (UnsupportedQuery uri uriQuery)
 
     case uriFragment of
         "" -> return ()
-        _  -> do
-            let uriFragmentText = Text.pack uriFragment
-
-            die [NeatInterpolation.text|
-Error: Non-empty query fragments are not supported
-
-You specified the following URI:
-
-↳ $uri
-
-... which has the following query fragment:
-
-↳ $uriFragmentText
-
-... which is not permitted by this tool
-|]
+        _  -> die (UnsupportedFragment uri uriFragment)
 
     let githubBase = Text.pack (uriUserInfo <> uriRegName <> uriPort)
 
@@ -595,19 +458,7 @@ You specified the following URI:
             return (Text.pack owner, Text.pack repo)
 
     (owner, repo) <- case Megaparsec.parseMaybe parsePath uriPath of
-        Nothing -> do
-            die [NeatInterpolation.text|
-Error: Not a valid GitHub repository
-
-You specified the following URI:
-
-↳ $uri
-
-... which is not a valid GitHub repository.  A valid repository must match the
-following format:
-
-↳ https://github.com/$${owner}/$${repository}[.git]
-|]
+        Nothing -> die (NotAValidGitHubRepository uri)
 
         Just (owner, repo) -> do
             return (owner, repo)
@@ -627,38 +478,15 @@ following format:
                         ]
                     <>  toListWith (\t -> [ t ]) hash
 
-            let argsText = Text.intercalate " " args
-
             (exitCode, text) <- Turtle.procStrict "nix-prefetch-url" args empty
 
             case exitCode of
-                ExitSuccess -> return ()
-                ExitFailure _ -> do
-                    die [NeatInterpolation.text|
-Error: Failed to fetch the GitHub's repository archive
-
-The following command failed to fetch the following archive for the repository:
-
-    nix-prefetch-url $argsText
-|]
+                ExitSuccess   -> return ()
+                ExitFailure _ -> die (FailedToFetchGitHubArchive args)
 
             case Text.lines text of
                 [ sha256, path ] -> return (r, sha256, Turtle.fromText path)
-                _ -> die [NeatInterpolation.text|
-Error: Failed to parse the nix-prefetch-url output
-
-The following command:
-
-    nix-prefetch-url $argsText
-
-... should have produced two lines of output:
-
-* First the SHA256 hash of the GitHub project
-* Then the /nix/store/… path of the downloaded project
-
-However, the output did not match, possibly indicating an internal error, either
-with this tool or with nix-prefetch-url
-|]
+                _                -> die (FailedToParseNixPrefetchURL args)
 
         _ -> do
             let args =  [ "--url", baseUrl <> ".git"
@@ -668,47 +496,17 @@ with this tool or with nix-prefetch-url
                     <>  toListWith (\t -> [ "--hash", t ]) hash
                     <>  (if fetchSubmodules then [ "--fetch-submodules" ] else [])
 
-            let argsText = Text.intercalate " " args
-
             (exitCode, text) <- Turtle.procStrict "nix-prefetch-git" args empty
 
             case exitCode of
-                ExitSuccess -> return ()
-                ExitFailure _ -> do
-                    die [NeatInterpolation.text|
-Error: Failed to clone the GitHub repository
-
-The following command failed to clone the repository:
-
-    nix-prefetch-git $argsText
-|]
+                ExitSuccess   -> return ()
+                ExitFailure _ -> die (FailedToCloneRepository args)
 
             let bytes = Text.Encoding.encodeUtf8 text
 
             NixPrefetchGit{ rev, sha256, path } <- case Aeson.eitherDecodeStrict' bytes of
                 Left message -> do
-                    let messageText = Text.pack message
-
-                    die [NeatInterpolation.text|
-Error: Failed to parse the output of nix-prefetch-git
-
-The following command:
-
-    nix-prefetch-url $argsText
-
-... should have produced a JSON output matching the following shape:
-
-↳ { url : Text
-  , rev : Text
-  , path : Text
-  , sha256 : Text
-  , fetchSubmodules : Bool 
-  }
-
-... but JSON decoding failed with the following error:
-
-↳ $messageText
-|]
+                    die (FailedToParseNixPrefetchGit args message)
                 Right n -> do
                     return n
 
@@ -729,19 +527,7 @@ The following command:
 
     if exists
         then return ()
-        else do
-            let expressionFileText = Turtle.format fp expressionFile
-
-            die [NeatInterpolation.text|
-Error: Missing file
-
-The following file does not exist:
-
-↳ $expressionFileText
-
-Perhaps you meant to specify a different file within the project using the
---file option?
-|]
+        else die (MissingFile expressionFile)
 
     expressionText <- Turtle.readTextFile expressionFile
 
@@ -796,18 +582,7 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
     if exists
         then return ()
         else do
-            let expressionFileText = Turtle.format fp expressionFile
-
-            die [NeatInterpolation.text|
-Error: Missing file
-
-The following file does not exist:
-
-↳ $expressionFileText
-
-Perhaps you meant to specify a different file within the project using the
---file option?
-|]
+            die (MissingFile expressionFile)
 
     expressionText <- Turtle.readTextFile expressionFile
 
@@ -845,3 +620,275 @@ Perhaps you meant to specify a different file within the project using the
                 )
 
     Prettyprint.Text.putDoc (Nix.Pretty.prettyNix nixExpression)
+
+die :: MonadIO io => Error -> io a
+die e = liftIO $ do
+    Text.IO.hPutStr System.IO.stderr (renderError e)
+
+    System.Exit.exitFailure
+
+data Error
+    = MissingSemanticIntegrityCheck URL
+    | NotAValidGitHubRepositoryURL URL
+    | UnsupportedDomainDependency URL Text
+    | RepositoryIsNotAValidURI Text
+    | UnsupportedURIScheme Text String
+    | UnsupportedDomain Text String
+    | UnsupportedPort Text String
+    | UnsupportedQuery Text String
+    | UnsupportedFragment Text String
+    | NotAValidGitHubRepository Text
+    | FailedToFetchGitHubArchive [Text]
+    | FailedToParseNixPrefetchURL [Text]
+    | FailedToCloneRepository [Text]
+    | FailedToParseNixPrefetchGit [Text] String
+    | MissingFile FilePath
+    
+renderError :: Error -> Text
+renderError e = case e of
+    MissingSemanticIntegrityCheck url ->
+        let dependency = Dhall.Core.pretty url
+
+        in  [NeatInterpolation.text|
+Error: Dependency missing a semantic integrity check
+
+Dhall's Nixpkgs requires that all of your remote dependencies are protected by
+by semantic integrity checks.  This ensures that Nix can replace the remote
+imports with cached imports built by Nix instead of the imports being fetched
+via HTTP requests using Dhall.
+
+The following dependency is missing a semantic integrity check:
+
+↳ $dependency
+|]
+
+    NotAValidGitHubRepositoryURL url ->
+        let dependency = Dhall.Core.pretty url
+
+        in  [NeatInterpolation.text|
+Error: Not a valid GitHub repository URL
+
+Your Dhall package appears to depend on the following import:
+
+↳ $dependency
+
+... which is missing one or more path components that a raw GitHub import would
+normally have.  The URL should minimally have the following path components:
+
+↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
+|]
+
+    UnsupportedDomainDependency url authority ->
+        let dependency = Dhall.Core.pretty url
+
+        in  [NeatInterpolation.text|
+Error: Unsupported domain
+
+This tool currently only translates the following domains into Nix dependencies:
+
+* raw.githubusercontent.com
+* prelude.dhall-lang.org
+
+One of the Dhall project's dependencies:
+
+↳ $dependency
+
+... used the following unexpected domain:
+
+↳ $authority
+
+If you would like to support a new domain for Dhall dependencies, please open an
+issue here:
+
+↳ https://github.com/dhall-lang/dhall-haskell/issues
+|]
+
+    RepositoryIsNotAValidURI uri ->
+        [NeatInterpolation.text|
+Error: The specified repository is not a valid URI
+
+You provided the following argument:
+
+↳ $uri
+
+... which is not a valid URI
+|]
+    UnsupportedURIScheme uri uriScheme ->
+        let uriSchemeText = Text.pack uriScheme
+
+        in  [NeatInterpolation.text|
+Error: URI schemes other than https are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following scheme:
+
+↳ $uriSchemeText
+
+... which is not https
+|]
+
+    UnsupportedDomain uri uriRegName ->
+        let uriRegNameText = Text.pack uriRegName
+
+        in  [NeatInterpolation.text|
+Error: Domains other than github.com are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following domain:
+
+↳ $uriRegNameText
+
+... which is not github.com
+|]
+
+    UnsupportedPort uri uriPort ->
+        let uriPortText = Text.pack uriPort
+
+        in  [NeatInterpolation.text|
+Error: Non-default ports are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following explicit port specification:
+
+↳ $uriPortText
+
+... which is not permitted by this tool
+|]
+
+    UnsupportedQuery uri uriQuery ->
+        let uriQueryText = Text.pack uriQuery
+
+        in  [NeatInterpolation.text|
+Error: Non-empty query strings are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following query string:
+
+↳ $uriQueryText
+
+... which is not permitted by this tool
+|]
+
+    UnsupportedFragment uri uriFragment ->
+        let uriFragmentText = Text.pack uriFragment
+
+        in  [NeatInterpolation.text|
+Error: Non-empty query fragments are not supported
+
+You specified the following URI:
+
+↳ $uri
+
+... which has the following query fragment:
+
+↳ $uriFragmentText
+
+... which is not permitted by this tool
+|]
+
+    NotAValidGitHubRepository uri ->
+        [NeatInterpolation.text|
+Error: Not a valid GitHub repository
+
+You specified the following URI:
+
+↳ $uri
+
+... which is not a valid GitHub repository.  A valid repository must match the
+following format:
+
+↳ https://github.com/$${owner}/$${repository}[.git]
+|]
+
+    FailedToFetchGitHubArchive args ->
+        let argsText = Text.intercalate " " args
+
+        in  [NeatInterpolation.text|
+Error: Failed to fetch the GitHub's repository archive
+
+The following command failed to fetch the following archive for the repository:
+
+    nix-prefetch-url $argsText
+|]
+
+    FailedToParseNixPrefetchURL args ->
+        let argsText = Text.intercalate " " args
+
+        in  [NeatInterpolation.text|
+Error: Failed to parse the nix-prefetch-url output
+
+The following command:
+
+    nix-prefetch-url $argsText
+
+... should have produced two lines of output:
+
+* First the SHA256 hash of the GitHub project
+* Then the /nix/store/… path of the downloaded project
+
+However, the output did not match, possibly indicating an internal error, either
+with this tool or with nix-prefetch-url
+|]
+
+    FailedToCloneRepository args ->
+        let argsText = Text.intercalate " " args
+
+        in  [NeatInterpolation.text|
+Error: Failed to clone the GitHub repository
+
+The following command failed to clone the repository:
+
+    nix-prefetch-git $argsText
+|]
+
+    FailedToParseNixPrefetchGit args message ->
+        let argsText = Text.intercalate " " args
+
+            messageText = Text.pack message
+
+        in  [NeatInterpolation.text|
+Error: Failed to parse the output of nix-prefetch-git
+
+The following command:
+
+    nix-prefetch-url $argsText
+
+... should have produced a JSON output matching the following shape:
+
+↳ { url : Text
+  , rev : Text
+  , path : Text
+  , sha256 : Text
+  , fetchSubmodules : Bool 
+  }
+
+... but JSON decoding failed with the following error:
+
+↳ $messageText
+|]
+
+    MissingFile expressionFile ->
+        let expressionFileText = Turtle.format fp expressionFile
+
+        in  [NeatInterpolation.text|
+Error: Missing file
+
+The following file does not exist:
+
+↳ $expressionFileText
+
+Perhaps you meant to specify a different file within the project using the
+--file option?
+|]
