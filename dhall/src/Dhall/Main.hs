@@ -23,7 +23,6 @@ module Dhall.Main
 import Control.Applicative (optional, (<|>))
 import Control.Exception (Handler(..), SomeException)
 import Control.Monad (when)
-import Data.Bifunctor (first)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -82,7 +81,6 @@ import qualified Dhall.Freeze
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
-import qualified Dhall.Parser                              as Parser
 import qualified Dhall.Map
 import qualified Dhall.Tags
 import qualified Dhall.Pretty
@@ -501,8 +499,7 @@ command (Options {..}) = do
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
-    let getExpression          = Dhall.Util.getExpression          censor
-    let getExpressionAndHeader = Dhall.Util.getExpressionAndHeader censor
+    let getExpression = Dhall.Util.getExpression censor
 
     let handle io =
             Control.Exception.catches io
@@ -739,42 +736,34 @@ command (Options {..}) = do
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
         Lint {..} -> do
+            originalText <- case input of
+                InputFile file -> Data.Text.IO.readFile file
+                StandardInput  -> Data.Text.IO.getContents
+
+            (Header header, expression) <- do
+                Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+
+            let lintedExpression = Dhall.Lint.lint expression
+
+            let doc =   Pretty.pretty header
+                    <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
+
+            let stream = Dhall.Pretty.layout doc
+
+            let modifiedText = Pretty.Text.renderStrict stream <> "\n"
+
             case outputMode of
                 Write -> do
-                    (Header header, expression) <- do
-                        getExpressionAndHeader input
-
-                    let lintedExpression = Dhall.Lint.lint expression
-
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
-
                     case input of
-                        InputFile file -> writeDocToFile file doc
+                        InputFile file ->
+                            if originalText == modifiedText
+                                then return ()
+                                else writeDocToFile file doc
 
-                        StandardInput -> renderDoc System.IO.stdout doc
+                        StandardInput ->
+                            renderDoc System.IO.stdout doc
 
                 Check -> do
-                    originalText <- case input of
-                        InputFile file -> Data.Text.IO.readFile file
-                        StandardInput  -> Data.Text.IO.getContents
-
-                    let name = case input of
-                            InputFile file -> file
-                            StandardInput  -> "(input)"
-
-                    (Header header, expression) <- do
-                        Dhall.Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
-
-                    let lintedExpression = Dhall.Lint.lint expression
-
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
-
-                    let stream = Dhall.Pretty.layout doc
-
-                    let modifiedText = Pretty.Text.renderStrict stream <> "\n"
-
                     if originalText == modifiedText
                         then return ()
                         else do

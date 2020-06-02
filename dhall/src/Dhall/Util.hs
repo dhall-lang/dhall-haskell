@@ -181,6 +181,7 @@ getExpressionAndHeader censor =
 
 -- | Convenient utility for retrieving an expression along with its header from
 -- | text already read from STDIN (so it's not re-read)
-getExpressionAndHeaderFromStdinText :: Censor -> Text -> IO (Header, Expr Src Import)
+getExpressionAndHeaderFromStdinText
+    :: Censor -> Text -> IO (Header, Expr Src Import)
 getExpressionAndHeaderFromStdinText censor =
     get Dhall.Parser.exprAndHeaderFromText censor . StdinText
