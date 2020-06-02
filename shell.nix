@@ -11,6 +11,7 @@ shared.pkgs.runCommand "dhall-shell-${shell}" {
     static.dhall-nix
     static.dhall-yaml
   ];
+
   shellHook = ''
     echo "Dhall core tools shell"
     echo "USAGE EXAMPLES"
@@ -21,13 +22,39 @@ shared.pkgs.runCommand "dhall-shell-${shell}" {
     echo "    Overriding option completion shell flavor:"
     echo "        $ nix-shell --argstr shell zsh"
 
-    source <(dhall            --${shell}-completion-script dhall)
-    source <(dhall-to-bash    --${shell}-completion-script dhall-to-bash)
-    source <(dhall-to-nix     --${shell}-completion-script dhall-to-nix)
-    source <(dhall-to-json    --${shell}-completion-script dhall-to-json)
-    source <(dhall-to-yaml    --${shell}-completion-script dhall-to-yaml)
-    source <(dhall-to-yaml-ng --${shell}-completion-script dhall-to-yaml-ng)
-    source <(json-to-dhall    --${shell}-completion-script json-to-dhall)
-    source <(yaml-to-dhall    --${shell}-completion-script yaml-to-dhall)
+    EXECUTABLES=(
+      dhall
+      dhall-to-bash
+      dhall-to-nix
+      dhall-to-json
+      dhall-to-yaml
+      dhall-to-yaml-ng
+      json-to-dhall
+      yaml-to-dhall
+    )
+
+    if [ "${shell}" == "zsh" ]; then
+      # zsh does not support loading completions using `source`, so we need to
+      # add a special case for zsh
+
+      COMPLETIONS=$(mktemp -d)
+      export ZDOTDIR=$(mktemp -d)
+      trap "rm --recursive -- $COMPLETIONS $ZDOTDIR" INT EXIT
+
+      for EXECUTABLE in "''${EXECUTABLES[@]}"; do
+          "$EXECUTABLE" --${shell}-completion-script "$EXECUTABLE" > "$COMPLETIONS/_$EXECUTABLE"
+      done
+
+      echo "export fpath=($COMPLETIONS \$fpath)" >> "$ZDOTDIR/.zshenv"
+      echo 'autoload -Uz compinit'               >> "$ZDOTDIR/.zshrc"
+      echo 'compinit'                            >> "$ZDOTDIR/.zshrc"
+
+      # nix-shell uses bash, even if your original shell was zsh
+      zsh -i
+    else
+      for EXECUTABLE in "''${EXECUTABLES[@]}"; do
+          source <("$EXECUTABLE" --${shell}-completion-script "$EXECUTABLE")
+      done
+    fi
   '';
 } ""
