@@ -1,4 +1,4 @@
-Name: dhocs
+Name: dhall-docs
 Version: 0.0.1
 Cabal-Version: >=1.10
 Build-Type: Simple
@@ -14,11 +14,11 @@ Description:
     Use this package if you want to create HTML documentation from your dhall
     packages:
     .
-    * See the "Dhall.Dhocs" module if you want to use this package as a library
+    * See the "Dhall.Docs" module if you want to use this package as a library
     .
-    * Use the @dhocs@ program from this package if you want an executable
+    * Use the @dhall-docs@ program from this package if you want an executable
     .
-    The "Dhall.Dhocs" module also contains instructions for how to use this package
+    The "Dhall.Docs" module also contains instructions for how to use this package
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
@@ -32,18 +32,18 @@ Library
         base                 >= 4.8.0.0  && < 5,
         optparse-applicative >= 0.14.0.0 && < 0.16
     Exposed-Modules:
-        Dhall.Dhocs
+        Dhall.Docs
     Other-Modules:
     GHC-Options: -Wall
     Default-Language: Haskell2010
 
-Executable dhocs
-    Hs-Source-Dirs: dhocs
+Executable dhall-docs
+    Hs-Source-Dirs: dhall-docs
     Main-Is: Main.hs
     Build-Depends:
         base ,
-        dhocs
+        dhall-docs
     Other-Modules:
-        Paths_dhocs
+        Paths_dhall_docs
     GHC-Options: -Wall
     Default-Language: Haskell2010

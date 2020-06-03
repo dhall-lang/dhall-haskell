@@ -1,8 +1,9 @@
-{-| This module contains the top level and options parsing of the @dhocs@ executable
+{-| This module contains the top level and options parsing of the @dhall-docs@
+    executable
 -}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Dhall.Dhocs
+module Dhall.Docs
     ( -- * Options
       Options(..)
     , GenerationStrategy(..)
@@ -17,8 +18,10 @@ import Data.Semigroup      ((<>))
 import Options.Applicative
 
 
--- | To specify if we should generate a single HTML page with all your package info
---   or one for each file in your package
+
+{-| To specify if we should generate a single HTML page with all your package
+    info or one for each file in your package
+-}
 data GenerationStrategy
     = SinglePage
     | MultiPage
@@ -62,6 +65,6 @@ parserInfoOptions =
         <>  Options.Applicative.progDesc "Generate HTML documentation from a dhall package or file"
         )
 
--- |
+-- | Entry point for the @dhall-docs@ executable
 main :: IO ()
 main = Options.Applicative.execParser parserInfoOptions >>= print

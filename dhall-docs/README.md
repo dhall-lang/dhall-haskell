@@ -1,4 +1,4 @@
-# `dhocs`
+# `dhall-docs`
 
 For installation or development instructions, see:
 
@@ -6,6 +6,6 @@ For installation or development instructions, see:
 
 ## Introduction
 
-This `dhocs` package provides a cli utility that takes a dhall package or file and outputs
+This `dhall-docs` package provides a cli utility that takes a dhall package or file and outputs
 a HTML documentation of it.
 
