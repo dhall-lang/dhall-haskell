@@ -1,4 +1,4 @@
-Name: dhall-json
+Name: dhocs
 Version: 0.0.1
 Cabal-Version: >=1.10
 Build-Type: Simple
@@ -40,7 +40,8 @@ Executable dhocs
     Hs-Source-Dirs: dhocs
     Main-Is: Main.hs
     Build-Depends:
-        base
+        base ,
+        dhocs
     Other-Modules:
         Paths_dhocs
     GHC-Options: -Wall
