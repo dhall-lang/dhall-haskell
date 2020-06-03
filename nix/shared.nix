@@ -16,6 +16,7 @@ let
   allDhallPackages = [
     "dhall"
     "dhall-bash"
+    "dhall-docs"
     "dhall-json"
     "dhall-lsp-server"
     "dhall-nix"
@@ -85,6 +86,7 @@ let
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
+                          "dhall-docs"
                           "dhall-json"
                           # The test suite fails due to a relative reference
                           # to ../dhall/dhall-lang/
@@ -103,6 +105,7 @@ let
                   mass failOnAllWarnings [
                     "dhall"
                     "dhall-bash"
+                    "dhall-docs"
                     "dhall-json"
                     "dhall-lsp-server"
                     "dhall-nix"
@@ -142,6 +145,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-bash"
                         (pkgsNew.sdist ../dhall-bash)
+                        { };
+
+                    dhall-docs =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-docs"
+                        (pkgsNew.sdist ../dhall-docs)
                         { };
 
                     dhall-json =
@@ -368,6 +377,9 @@ let
                     dhall-bash-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-bash;
 
+                    dhall-docs-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-docs;
+
                     dhall-json-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-json;
 
@@ -421,6 +433,7 @@ let
   possibly-static = {
     dhall            = makeStaticIfPossible "dhall"           ;
     dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
+    dhall-docs       = makeStaticIfPossible "dhall-docs"      ;
     dhall-json       = makeStaticIfPossible "dhall-json"      ;
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
@@ -449,6 +462,7 @@ in
 
     tarball-dhall            = makeTarball "dhall"           ;
     tarball-dhall-bash       = makeTarball "dhall-bash"      ;
+    tarball-dhall-docs       = makeTarball "dhall-docs"      ;
     tarball-dhall-json       = makeTarball "dhall-json"      ;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
     tarball-dhall-nix        = makeTarball "dhall-nix"       ;
@@ -460,6 +474,7 @@ in
       dhall
       dhall-no-http
       dhall-bash
+      dhall-docs
       dhall-json
       dhall-lsp-server
       dhall-nix
@@ -471,6 +486,7 @@ in
 
     shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
     shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
+    shell-dhall-docs       = pkgs.haskell.packages."${compiler}".dhall-docs.env      ;
     shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
@@ -479,6 +495,7 @@ in
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;
+    image-dhall-docs       = toDockerImage "dhall-docs"      ;
     image-dhall-json       = toDockerImage "dhall-json"      ;
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
