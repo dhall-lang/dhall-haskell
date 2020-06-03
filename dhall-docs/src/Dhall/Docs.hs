@@ -35,7 +35,7 @@ data Options = Options
     }
     deriving Show
 
-parseStrategy :: Parser GenerationStrategy
+parseStrategy :: Options.Applicative.Parser GenerationStrategy
 parseStrategy =
     Options.Applicative.flag
         MultiPage
@@ -47,7 +47,7 @@ parseStrategy =
         )
 
 -- | `Parser` for the `Options` type
-parseOptions :: Parser Options
+parseOptions :: Options.Applicative.Parser Options
 parseOptions =
         Options
     <$> Options.Applicative.strOption
@@ -57,7 +57,7 @@ parseOptions =
     <*> parseStrategy
 
 -- | `ParserInfo` for the `Options` type
-parserInfoOptions :: ParserInfo Options
+parserInfoOptions :: Options.Applicative.ParserInfo Options
 parserInfoOptions =
     Options.Applicative.info
         (Options.Applicative.helper <*> parseOptions)
