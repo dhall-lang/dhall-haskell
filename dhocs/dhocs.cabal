@@ -1,0 +1,47 @@
+Name: dhall-json
+Version: 0.0.1
+Cabal-Version: >=1.10
+Build-Type: Simple
+Tested-With: GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.1
+License: BSD3
+License-File: LICENSE
+Copyright: 2020 Germán Robayo
+Author: Germán Robayo
+Maintainer: Gabriel439@gmail.com
+Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
+Synopsis: Generate HTML docs from a dhall package
+Description:
+    Use this package if you want to create HTML documentation from your dhall
+    packages:
+    .
+    * See the "Dhall.Dhocs" module if you want to use this package as a library
+    .
+    * Use the @dhocs@ program from this package if you want an executable
+    .
+    The "Dhall.Dhocs" module also contains instructions for how to use this package
+Category: Compiler
+Extra-Source-Files:
+    CHANGELOG.md
+Source-Repository head
+    Type: git
+    Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
+
+Library
+    Hs-Source-Dirs: src
+    Build-Depends:
+        base                      >= 4.8.0.0  && < 5
+    Exposed-Modules:
+        Dhall.Dhocs
+    Other-Modules:
+    GHC-Options: -Wall
+    Default-Language: Haskell2010
+
+Executable dhocs
+    Hs-Source-Dirs: dhocs
+    Main-Is: Main.hs
+    Build-Depends:
+        base
+    Other-Modules:
+        Paths_dhocs
+    GHC-Options: -Wall
+    Default-Language: Haskell2010
