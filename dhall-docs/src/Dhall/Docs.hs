@@ -14,13 +14,14 @@ module Dhall.Docs
     , main
     ) where
 
-import Data.Semigroup      ((<>))
-import Options.Applicative
+import Data.Semigroup ((<>))
+
+import qualified Options.Applicative
 
 
 
-{-| To specify if we should generate a single HTML page with all your package
-    info or one for each file in your package
+{-| To specify if the tool should generate a single HTML page with all the
+    package information or one for each file in your package
 -}
 data GenerationStrategy
     = SinglePage
@@ -49,11 +50,10 @@ parseStrategy =
 parseOptions :: Parser Options
 parseOptions =
         Options
-    <$> strOption
-        ( long "path"
-       <> short 'p'
-       <> metavar "PATH"
-       <> help "Root folder of your dhall package" )
+    <$> Options.Applicative.strOption
+        ( Options.Applicative.long "path"
+       <> Options.Applicative.metavar "PATH"
+       <> Options.Applicative.help "Root folder of your dhall package" )
     <*> parseStrategy
 
 -- | `ParserInfo` for the `Options` type
