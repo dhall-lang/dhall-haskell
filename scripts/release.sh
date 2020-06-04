@@ -35,6 +35,6 @@ function release {
   rm "${DOCKER_ARCHIVE}"
 }
 
-for package in dhall-lsp-server dhall-json dhall-yaml dhall-bash dhall-nix dhall; do
+for package in dhall-lsp-server dhall-json dhall-yaml dhall-bash dhall-docs dhall-nix dhall; do
   release "${package}"
 done
