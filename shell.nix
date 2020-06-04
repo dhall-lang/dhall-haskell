@@ -24,6 +24,7 @@ shared.pkgs.runCommand "dhall-shell-${shell}" {
 
     EXECUTABLES=(
       dhall
+      dhall-docs
       dhall-to-bash
       dhall-to-nix
       dhall-to-json
