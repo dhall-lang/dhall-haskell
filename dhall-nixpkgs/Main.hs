@@ -677,7 +677,7 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
 
 die :: MonadIO io => Error -> io a
 die e = liftIO $ do
-    Text.IO.hPutStr System.IO.stderr (renderError e)
+    Text.IO.hPutStrLn System.IO.stderr (renderError e)
 
     System.Exit.exitFailure
 
