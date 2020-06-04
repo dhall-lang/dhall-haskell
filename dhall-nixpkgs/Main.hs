@@ -620,7 +620,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
                         ]
                 )
 
-    Prettyprint.Text.putDoc (Nix.Pretty.prettyNix nixExpression)
+    Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 directoryToNixpkgs :: Directory -> IO ()
 directoryToNixpkgs Directory{ name, directory, file, source } = do
@@ -673,7 +673,7 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
                         ]
                 )
 
-    Prettyprint.Text.putDoc (Nix.Pretty.prettyNix nixExpression)
+    Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 die :: MonadIO io => Error -> io a
 die e = liftIO $ do
@@ -917,7 +917,7 @@ Error: Failed to parse the output of nix-prefetch-git
 
 The following command:
 
-    nix-prefetch-url $argsText
+    nix-prefetch-git $argsText
 
 ... should have produced a JSON output matching the following shape:
 
