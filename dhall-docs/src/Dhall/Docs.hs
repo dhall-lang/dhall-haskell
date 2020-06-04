@@ -42,7 +42,7 @@ parseStrategy =
         SinglePage
         (   Options.Applicative.long "single-page"
         <>  Options.Applicative.help
-                "Generate a single page HTML documentation. By default, it will generate \
+                "Generate a single page HTML documentation. By default, the tool will generate \
                 \a multi-page documentation"
         )
 
