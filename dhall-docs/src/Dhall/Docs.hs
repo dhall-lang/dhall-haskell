@@ -14,7 +14,8 @@ module Dhall.Docs
     , main
     ) where
 
-import Data.Semigroup ((<>))
+import Data.Semigroup      ((<>))
+import Options.Applicative (Parser, ParserInfo)
 
 import qualified Options.Applicative
 
@@ -35,7 +36,7 @@ data Options = Options
     }
     deriving Show
 
-parseStrategy :: Options.Applicative.Parser GenerationStrategy
+parseStrategy :: Parser GenerationStrategy
 parseStrategy =
     Options.Applicative.flag
         MultiPage
@@ -47,7 +48,7 @@ parseStrategy =
         )
 
 -- | `Parser` for the `Options` type
-parseOptions :: Options.Applicative.Parser Options
+parseOptions :: Parser Options
 parseOptions =
         Options
     <$> Options.Applicative.strOption
@@ -57,7 +58,7 @@ parseOptions =
     <*> parseStrategy
 
 -- | `ParserInfo` for the `Options` type
-parserInfoOptions :: Options.Applicative.ParserInfo Options
+parserInfoOptions :: ParserInfo Options
 parserInfoOptions =
     Options.Applicative.info
         (Options.Applicative.helper <*> parseOptions)
