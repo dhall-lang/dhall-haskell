@@ -67,7 +67,7 @@ parseOptions =
 
     parseNoEdit =
         Options.switch
-           (   Options.long "no-edit"
+           (   Options.long "generated-comment"
            <>  Options.help "Include a comment header warning not to edit the generated file"
            )
 
