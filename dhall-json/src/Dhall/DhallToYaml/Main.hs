@@ -34,6 +34,7 @@ parseOptions =
             <*> Dhall.JSON.parseConversion
             <*> optional parseFile
             <*> optional parseOutput
+            <*> parseNoEdit
             )
     <|> parseVersion
   where
@@ -63,6 +64,12 @@ parseOptions =
             <>  Options.help "Write YAML to a file instead of standard output"
             <>  Options.metavar "FILE"
             )
+
+    parseNoEdit =
+        Options.switch
+           (   Options.long "no-edit"
+           <>  Options.help "Include a comment header warning not to edit the generated file"
+           )
 
 parserInfo :: ParserInfo (Maybe Options)
 parserInfo =
