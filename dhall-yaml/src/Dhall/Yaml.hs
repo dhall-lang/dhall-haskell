@@ -42,7 +42,12 @@ dhallToYaml Options{..} mFilePath code = do
 
   json <- omission <$> explaining (codeToValue conversion UseYAMLEncoding mFilePath code)
 
-  return $ jsonToYaml json documents quoted
+  let header =
+          if noEdit
+          then Dhall.JSON.Yaml.generatedCodeNotice
+          else mempty
+
+  return $ header <> jsonToYaml json documents quoted
 
 -- | Transform json representation into yaml
 jsonToYaml
