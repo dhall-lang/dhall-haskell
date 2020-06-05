@@ -49,20 +49,25 @@ format (Format {..}) = do
                 <>  Dhall.Pretty.prettyCharacterSet characterSet expr 
                 <>  "\n")
 
-    let layoutInput = do
-            headerAndExpr <- Dhall.Util.getExpressionAndHeader censor input
+    originalText <- case input of
+        InputFile file -> Data.Text.IO.readFile file
+        StandardInput  -> Data.Text.IO.getContents
 
-            return (layoutHeaderAndExpr headerAndExpr)
+    headerAndExpr <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+
+    let docStream = layoutHeaderAndExpr headerAndExpr
+
+    let formattedText = Pretty.Text.renderStrict docStream
 
     case outputMode of
         Write -> do
-            docStream <- layoutInput
-
             case input of
                 InputFile file -> do
-                    AtomicWrite.LazyText.atomicWriteFile
-                        file
-                        (Pretty.Text.renderLazy docStream)
+                    if originalText == formattedText
+                        then return ()
+                        else AtomicWrite.LazyText.atomicWriteFile
+                                file
+                                (Pretty.Text.renderLazy docStream)
 
                 StandardInput -> do
                     supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
@@ -74,18 +79,6 @@ format (Format {..}) = do
                             else (Pretty.unAnnotateS docStream))
 
         Check -> do
-            originalText <- case input of
-                InputFile file -> Data.Text.IO.readFile file
-                StandardInput  -> Data.Text.IO.getContents
-
-            docStream <- case input of
-                InputFile _    -> layoutInput
-                StandardInput  -> do
-                    headerAndExpr <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
-                    return (layoutHeaderAndExpr headerAndExpr)
-
-            let formattedText = Pretty.Text.renderStrict docStream
-
             if originalText == formattedText
                 then return ()
                 else do

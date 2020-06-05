@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveFoldable      #-}
 {-# LANGUAGE DeriveFunctor       #-}
@@ -18,6 +19,7 @@ module Dhall.Test.Dhall where
 
 import Control.Exception (SomeException, try)
 import Data.Fix (Fix(..))
+import Data.Maybe (isJust)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence (Seq)
 import Data.Scientific (Scientific)
@@ -28,6 +30,7 @@ import Dhall (ToDhall, FromDhall)
 import Dhall.Core (Expr(..))
 import GHC.Generics (Generic, Rep)
 import Numeric.Natural (Natural)
+import System.Timeout (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -61,8 +64,8 @@ tests =
 data MyType = MyType { foo :: String , bar :: Natural }
 
 wrongDhallType :: Dhall.Decoder MyType
-wrongDhallType = Dhall.Decoder { .. }
-  where expected =
+wrongDhallType = Dhall.Decoder {..}
+  where expected = pure $
           Dhall.Core.Record
             ( Dhall.Map.fromList
               [ ( "bar", Dhall.Core.Natural)
@@ -119,6 +122,11 @@ shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit con
 
     Dhall.embed exampleEncoder () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
 
+data RecursiveType a = RecursiveType (RecursiveType a)
+    deriving Generic
+
+instance FromDhall (RecursiveType a)
+
 shouldHaveWorkingRecursiveFromDhall :: TestTree
 shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
     [ testCase "works for a recursive expression" $ do
@@ -129,6 +137,16 @@ shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
         actual <- Dhall.input Dhall.auto "./tests/recursive/expr1.dhall"
 
         expected @=? actual
+    , testCase "terminate if type is recursive (monomorphic)" $ do
+        actual <- timeout (1 * 1000000) $ do
+            !typ <- return $ Dhall.expected (Dhall.auto :: Dhall.Decoder (RecursiveType Void))
+            return typ
+        assertBool "Does not terminate!" $ isJust actual
+    , testCase "terminate if type is recursive (polymorphic)" $ do
+        actual <- timeout (1 * 1000000) $ do
+            !typ <- return $ Dhall.expected (Dhall.auto :: Dhall.Decoder (RecursiveType a))
+            return typ
+        assertBool "Does not terminate!" $ isJust actual
     ]
   where
     expected =
@@ -318,7 +336,7 @@ shouldHandleUnionsCorrectly =
       :: ( Generic a
          , Dhall.GenericToDhall (Rep a)
          , Generic b
-         , Dhall.GenericFromDhall (Rep b)
+         , Dhall.GenericFromDhall b (Rep b)
          )
       => Dhall.InterpretOptions -> Dhall.Decoder (a -> b)
     functionWithOptions options =
@@ -454,9 +472,10 @@ shouldShowCorrectErrorForInvalidDecoderInUnion =
     let assertMsg = "The exception message did not match the expected output"
 
     case inputEx of
-      Left (Dhall.ExtractErrors errs) -> case errs of
+      Left (Dhall.DhallErrors errs) -> case errs of
         (err :| []) -> case err of
           Dhall.TypeMismatch {} -> fail "The extraction using an invalid decoder failed with a type mismatch"
+          Dhall.ExpectedTypeError _ -> fail "An error occured while determining the expected Dhall type"
           Dhall.ExtractError extractError -> assertEqual assertMsg expectedMsg extractError
         _ -> fail "The extraction using an invalid decoder failed with multiple errors"
       Right _ -> fail "The extraction using an invalid decoder succeeded"
