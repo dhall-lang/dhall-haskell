@@ -29,7 +29,8 @@ Source-Repository head
 Library
     Hs-Source-Dirs: src
     Build-Depends:
-        base                 >= 4.8.0.0  && < 5,
+        base                 >= 4.8.0.0  && < 5   ,
+        lucid                == 2.9.*             ,
         optparse-applicative >= 0.14.0.0 && < 0.16
     Exposed-Modules:
         Dhall.Docs
