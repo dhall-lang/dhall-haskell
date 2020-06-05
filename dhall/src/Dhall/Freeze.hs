@@ -16,10 +16,7 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
-import Data.Bifunctor (first)
 import Data.Monoid ((<>))
-import Data.Text
-import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet)
 import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util
@@ -40,7 +37,6 @@ import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Core                                as Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
-import qualified Dhall.Parser                              as Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util                                as Util
@@ -95,30 +91,6 @@ freezeRemoteImport directory import_ = do
         Remote {} -> freezeImport directory import_
         _         -> return import_
 
-writeExpr :: Input -> (Text, Expr Src Import) -> CharacterSet -> IO ()
-writeExpr input (header, expr) characterSet = do
-    let doc =  Pretty.pretty header
-            <> Dhall.Pretty.prettyCharacterSet characterSet expr
-            <> "\n"
-
-    let stream = Dhall.Pretty.layout doc
-
-    let unAnnotated = Pretty.unAnnotateS stream
-
-    case input of
-        InputFile file ->
-            AtomicWrite.LazyText.atomicWriteFile
-                file
-                (Pretty.Text.renderLazy unAnnotated)
-
-        StandardInput -> do
-            supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
-            if supportsANSI
-               then
-                 Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
-               else
-                 Pretty.renderIO System.IO.stdout unAnnotated
-
 -- | Specifies which imports to freeze
 data Scope
     = OnlyRemoteImports
@@ -153,37 +125,44 @@ freeze outputMode input scope intent characterSet censor = do
 
     let rewrite = freezeExpression directory scope intent
 
+    originalText <- case input of
+        InputFile file -> Text.IO.readFile file
+        StandardInput  -> Text.IO.getContents
+
+    (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+
+    frozenExpression <- rewrite parsedExpression
+
+    let doc =  Pretty.pretty header
+            <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
+            <> "\n"
+
+    let stream = Dhall.Pretty.layout doc
+
+    let modifiedText = Pretty.Text.renderStrict stream
+
     case outputMode of
         Write -> do
-            (Header header, parsedExpression) <- do
-                Util.getExpressionAndHeader censor input
+            let unAnnotated = Pretty.unAnnotateS stream
 
-            frozenExpression <- rewrite parsedExpression
+            case input of
+                InputFile file ->
+                    if originalText == modifiedText
+                        then return ()
+                        else
+                            AtomicWrite.LazyText.atomicWriteFile
+                                file
+                                (Pretty.Text.renderLazy unAnnotated)
 
-            writeExpr input (header, frozenExpression) characterSet
+                StandardInput -> do
+                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+                    if supportsANSI
+                       then
+                         Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
+                       else
+                         Pretty.renderIO System.IO.stdout unAnnotated
 
         Check -> do
-            originalText <- case input of
-                InputFile file -> Text.IO.readFile file
-                StandardInput  -> Text.IO.getContents
-
-            let name = case input of
-                    InputFile file -> file
-                    StandardInput  -> "(input)"
-
-            (Header header, parsedExpression) <- do
-                Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
-
-            frozenExpression <- rewrite parsedExpression
-
-            let doc =  Pretty.pretty header
-                    <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
-                    <> "\n"
-
-            let stream = Dhall.Pretty.layout doc
-
-            let modifiedText = Pretty.Text.renderStrict stream
-
             if originalText == modifiedText
                 then return ()
                 else do

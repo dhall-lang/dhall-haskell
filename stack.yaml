@@ -6,6 +6,7 @@ packages:
   - dhall-nix
   - dhall-lsp-server
   - dhall-yaml
+  - dhall-docs
 extra-deps:
   - hnix-0.7.1@sha256:7b09f3aa4a54b26772dcce8a974389f39b6009375c888d221b85f4af24a247d1,39720
   - HsYAML-0.2.1.0@sha256:e4677daeba57f7a1e9a709a1f3022fe937336c91513e893166bd1f023f530d68,5311

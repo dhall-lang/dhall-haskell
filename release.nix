@@ -30,6 +30,7 @@ in
           # of the compiler
           shared_8_2_2.dhall
           shared_8_2_2.dhall-bash
+          shared_8_2_2.dhall-docs
           shared_8_2_2.dhall-json
           # `dhall-nix` → `hnix` → `4.11 <= base` → `8.4.1 <= ghc`
           # shared_8_2_2.dhall-nix
@@ -42,6 +43,7 @@ in
           # of the compiler
           shared_8_6_1.dhall
           shared_8_6_1.dhall-bash
+          shared_8_6_1.dhall-docs
           shared_8_6_1.dhall-json
           shared_8_6_1.dhall-yaml
           # `base-noprelude` depends on a specific version of `base`
@@ -57,6 +59,7 @@ in
           # https://ghc.haskell.org/trac/ghc/ticket/15696
           shared.tarball-dhall
           shared.tarball-dhall-bash
+          shared.tarball-dhall-docs
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix
@@ -79,6 +82,7 @@ in
     inherit (shared)
       tarball-dhall
       tarball-dhall-bash
+      tarball-dhall-docs
       tarball-dhall-json
       tarball-dhall-lsp-server
       tarball-dhall-nix
@@ -87,6 +91,7 @@ in
 
     linux-dhall            = shared_linux.possibly-static.dhall;
     linux-dhall-bash       = shared_linux.possibly-static.dhall-bash;
+    linux-dhall-docs       = shared_linux.possibly-static.dhall-docs;
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
@@ -95,6 +100,7 @@ in
     inherit (shared_linux)
       image-dhall
       image-dhall-bash
+      image-dhall-docs
       image-dhall-json
       image-dhall-lsp-server
       image-dhall-nix
