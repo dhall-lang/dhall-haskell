@@ -1,21 +1,25 @@
 { mkDerivation, array, base, base-compat, bytestring
 , case-insensitive, containers, hashable, old-time, QuickCheck
-, scientific, stdenv, tagged, text, time, transformers
-, transformers-compat, unordered-containers, uuid-types, vector
+, scientific, splitmix, stdenv, tagged, text, these, time
+, time-compat, transformers, transformers-compat
+, unordered-containers, uuid-types, vector
 }:
 mkDerivation {
   pname = "quickcheck-instances";
-  version = "0.3.19";
-  sha256 = "57a4aefff05313fb07a651934088d18a584f8bcfeaa02305be65525f12409a56";
+  version = "0.3.23";
+  sha256 = "11303b91bae2ecc1569a34e3922b06d0ca4593e30654067e7b172afd782b2fbe";
+  revision = "1";
+  editedCabalFile = "1lir5ryv2b1hn5n5fbgs9syram71zv4p4chb9xzkxvbszl5inw8k";
   libraryHaskellDepends = [
     array base base-compat bytestring case-insensitive containers
-    hashable old-time QuickCheck scientific tagged text time
-    transformers transformers-compat unordered-containers uuid-types
-    vector
+    hashable old-time QuickCheck scientific splitmix tagged text these
+    time time-compat transformers transformers-compat
+    unordered-containers uuid-types vector
   ];
   testHaskellDepends = [
     base containers QuickCheck tagged uuid-types
   ];
+  benchmarkHaskellDepends = [ base bytestring QuickCheck ];
   homepage = "https://github.com/phadej/qc-instances";
   description = "Common quickcheck instances";
   license = stdenv.lib.licenses.bsd3;
