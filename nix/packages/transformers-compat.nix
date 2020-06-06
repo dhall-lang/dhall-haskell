@@ -1,8 +1,8 @@
 { mkDerivation, base, ghc-prim, stdenv, transformers }:
 mkDerivation {
   pname = "transformers-compat";
-  version = "0.6.4";
-  sha256 = "ad7fb455d636533ba37fcae7b01666ebca07f668f3bd773d754b76f82d3ece0c";
+  version = "0.6.5";
+  sha256 = "da67cf11515da751b32a8ce6e96549f7268f7c435769ad19dc9766b69774620b";
   libraryHaskellDepends = [ base ghc-prim transformers ];
   homepage = "http://github.com/ekmett/transformers-compat/";
   description = "A small compatibility shim for the transformers library";

@@ -90,7 +90,7 @@ let
                           "dhall-json"
                           # The test suite fails due to a relative reference
                           # to ../dhall/dhall-lang/
-                          # "dhall-lsp-server"
+                          "dhall-lsp-server"
                           "dhall-nix"
                           "dhall-yaml"
                         ]
