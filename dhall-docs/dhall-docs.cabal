@@ -30,10 +30,14 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                 >= 4.8.0.0  && < 5   ,
+        dhall                >= 1.32.0   && < 1.33,
+        foldl                               < 1.5 ,
         lucid                == 2.9.*             ,
+        turtle                              < 1.6 ,
         optparse-applicative >= 0.14.0.0 && < 0.16
     Exposed-Modules:
         Dhall.Docs
+        Dhall.Docs.Html
     Other-Modules:
     GHC-Options: -Wall
     Default-Language: Haskell2010
@@ -42,7 +46,8 @@ Executable dhall-docs
     Hs-Source-Dirs: dhall-docs
     Main-Is: Main.hs
     Build-Depends:
-        base ,
+        base      ,
+        dhall     ,
         dhall-docs
     Other-Modules:
         Paths_dhall_docs

@@ -2,6 +2,7 @@
     executable
 -}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Docs
     ( -- * Options
@@ -12,13 +13,18 @@ module Dhall.Docs
 
       -- * Execution
     , main
+    , defaultMain
+    , getAllDhallFiles
     ) where
 
 import Data.Semigroup      ((<>))
 import Options.Applicative (Parser, ParserInfo)
+import Prelude             hiding (FilePath)
+import Turtle              (FilePath, fp)
 
+import qualified Control.Foldl       as Foldl
 import qualified Options.Applicative
-
+import qualified Turtle
 
 {-| To specify if the tool should generate a single HTML page with all the
     package information or one for each file in your package
@@ -30,7 +36,8 @@ data GenerationStrategy
 
 -- | Command line options
 data Options = Options
-    { packageFile :: FilePath -- ^ `FilePath` to directory where your package resides
+    { packageDir :: FilePath         -- ^ `FilePath` to directory where your
+                                     -- package resides
     , strategy :: GenerationStrategy -- ^ Output strategy of the tool
     }
     deriving Show
@@ -65,6 +72,19 @@ parserInfoOptions =
         <>  Options.Applicative.progDesc "Generate HTML documentation from a dhall package or file"
         )
 
+-- use `readTextFile` to read on Turtle module
+getAllDhallFiles :: FilePath -> IO ()
+getAllDhallFiles baseDir = do
+    let shell = Turtle.find (Turtle.suffix ".dhall") baseDir
+
+    dhallFiles <- Turtle.fold shell Foldl.list
+
+    print dhallFiles
+    return ()
+
+defaultMain :: Options -> IO ()
+defaultMain Options{..} = getAllDhallFiles packageDir
+
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
-main = Options.Applicative.execParser parserInfoOptions >>= print
+main = Options.Applicative.execParser parserInfoOptions >>= defaultMain
