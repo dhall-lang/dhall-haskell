@@ -20,7 +20,6 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative
 
 
-
 {-| To specify if the tool should generate a single HTML page with all the
     package information or one for each file in your package
 -}

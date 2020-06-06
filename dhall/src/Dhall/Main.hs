@@ -20,40 +20,49 @@ module Dhall.Main
     , main
     ) where
 
-import Control.Applicative (optional, (<|>))
-import Control.Exception (Handler(..), SomeException)
-import Control.Monad (when)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid ((<>))
-import Data.Text (Text)
+import Control.Applicative       (optional, (<|>))
+import Control.Exception         (Handler (..), SomeException)
+import Control.Monad             (when)
+import Data.List.NonEmpty        (NonEmpty (..))
+import Data.Monoid               ((<>))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Void (Void)
-import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
-import Dhall.Parser (Src)
-import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle)
-import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
-import Dhall.Version (dhallVersionString)
-import Options.Applicative (Parser, ParserInfo)
-import System.Exit (ExitCode, exitFailure)
-import System.IO (Handle)
-import Text.Dot ((.->.))
+import Data.Void                 (Void)
+import Dhall.Freeze              (Intent (..), Scope (..))
+import Dhall.Import
+    ( Depends (..)
+    , Imported (..)
+    , SemanticCacheMode (..)
+    , _semanticCacheMode
+    )
+import Dhall.Parser              (Src)
+import Dhall.Pretty              (Ann, CharacterSet (..), annToAnsiStyle)
+import Dhall.TypeCheck
+    ( Censored (..)
+    , DetailedTypeError (..)
+    , TypeError
+    )
+import Dhall.Version             (dhallVersionString)
+import Options.Applicative       (Parser, ParserInfo)
+import System.Exit               (ExitCode, exitFailure)
+import System.IO                 (Handle)
+import Text.Dot                  ((.->.))
 
 import Dhall.Core
-    ( Expr(Annot)
-    , Import(..)
-    , ImportHashed(..)
-    , ImportType(..)
-    , URL(..)
+    ( Expr (Annot)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    , URL (..)
     , pretty
     )
 import Dhall.Util
-    ( Censor(..)
-    , CheckFailed(..)
+    ( Censor (..)
+    , CheckFailed (..)
     , Header (..)
-    , Input(..)
-    , OutputMode(..)
-    , Output(..)
+    , Input (..)
+    , Output (..)
+    , OutputMode (..)
     )
 
 import qualified Codec.CBOR.JSON
@@ -82,9 +91,9 @@ import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Map
-import qualified Dhall.Tags
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
+import qualified Dhall.Tags
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
@@ -92,8 +101,8 @@ import qualified Options.Applicative
 import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.Console.ANSI
 import qualified System.Exit                               as Exit
-import qualified System.IO
 import qualified System.FilePath
+import qualified System.IO
 import qualified Text.Dot
 import qualified Text.Pretty.Simple
 
@@ -150,7 +159,7 @@ data Mode
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
     | Text { file :: Input }
     | DirectoryTree { file :: Input, path :: FilePath }
-    | SyntaxTree { file :: Input }
+    | SyntaxTree { file :: Input, noted :: Bool }
 
 data ResolveMode
     = Dot
@@ -291,7 +300,7 @@ parseMode =
             Debugging
             "haskell-syntax-tree"
             "Output the parsed syntax tree (for debugging)"
-            (SyntaxTree <$> parseFile)
+            (SyntaxTree <$> parseFile <*> parseNoted)
     <|> (   Default
         <$> parseFile
         <*> parseOutput
@@ -466,6 +475,12 @@ parseMode =
             (   Options.Applicative.long "output"
             <>  Options.Applicative.help "The destination path to create"
             <>  Options.Applicative.metavar "PATH"
+            )
+
+    parseNoted =
+        Options.Applicative.switch
+            (   Options.Applicative.long "noted"
+            <>  Options.Applicative.help "Print `Note` constructors"
             )
 
 -- | `ParserInfo` for the `Options` type
@@ -867,10 +882,12 @@ command (Options {..}) = do
         SyntaxTree {..} -> do
             expression <- getExpression file
 
-            let denoted :: Expr Void Import
-                denoted = Dhall.Core.denote expression
-
-            Text.Pretty.Simple.pPrintNoColor denoted
+            if noted then
+                Text.Pretty.Simple.pPrintNoColor expression
+            else
+                let denoted :: Expr Void Import
+                    denoted = Dhall.Core.denote expression
+                in Text.Pretty.Simple.pPrintNoColor denoted
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()
