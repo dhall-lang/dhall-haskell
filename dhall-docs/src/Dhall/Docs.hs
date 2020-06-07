@@ -18,6 +18,7 @@ module Dhall.Docs
     ) where
 
 import Data.Semigroup      ((<>))
+import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Options.Applicative (Parser, ParserInfo)
 import Prelude             hiding (FilePath)
@@ -116,7 +117,7 @@ getAllDhallFiles baseDir = do
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
-    mapM_ print dhallFiles
+    mapM_ (print . headerToHtml . fst) dhallFiles
     return ()
 
 -- | Entry point for the @dhall-docs@ executable
