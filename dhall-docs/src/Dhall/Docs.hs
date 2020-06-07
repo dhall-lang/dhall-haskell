@@ -40,9 +40,10 @@ data GenerationStrategy
 
 -- | Command line options
 data Options = Options
-    { packageDir :: FilePath         -- ^ `FilePath` to directory where your
-                                     -- package resides
+    { packageDir :: FilePath         -- ^ Directory where your package resides
     , strategy :: GenerationStrategy -- ^ Output strategy of the tool
+    , outDir :: FilePath             -- ^ Directory where your documentation
+                                     --   will be placed
     }
     deriving Show
 
@@ -62,10 +63,16 @@ parseOptions :: Parser Options
 parseOptions =
         Options
     <$> Options.Applicative.strOption
-        ( Options.Applicative.long "path"
-       <> Options.Applicative.metavar "PATH"
-       <> Options.Applicative.help "Root folder of your dhall package" )
+        ( Options.Applicative.long "input"
+       <> Options.Applicative.metavar "INPUT"
+       <> Options.Applicative.help "Directory of your dhall package. It should \
+                                    \contain only text files" )
     <*> parseStrategy
+    <*> Options.Applicative.strOption
+        ( Options.Applicative.long "output"
+       <> Options.Applicative.metavar "OUTPUT"
+       <> Options.Applicative.help "Directory where your docs will be generated"
+       <> Options.Applicative.value "docs" )
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
