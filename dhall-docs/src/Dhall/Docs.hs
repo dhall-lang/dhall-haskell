@@ -18,11 +18,15 @@ module Dhall.Docs
     ) where
 
 import Data.Semigroup      ((<>))
+import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Options.Applicative (Parser, ParserInfo)
 import Prelude             hiding (FilePath)
 import Turtle              (FilePath, fp)
 
 import qualified Control.Foldl       as Foldl
+import qualified Control.Monad
+import qualified Data.Text           as Text
+import qualified Data.Text.IO        as Text.IO
 import qualified Options.Applicative
 import qualified Turtle
 
@@ -66,24 +70,45 @@ parseOptions =
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
 parserInfoOptions =
+    let progDesc = "Generate HTML documentation from a dhall package or file" in
     Options.Applicative.info
         (Options.Applicative.helper <*> parseOptions)
         (   Options.Applicative.fullDesc
-        <>  Options.Applicative.progDesc "Generate HTML documentation from a dhall package or file"
+        <>  Options.Applicative.progDesc progDesc
         )
 
--- use `readTextFile` to read on Turtle module
-getAllDhallFiles :: FilePath -> IO ()
+{-| Fetches a list of all dhall files in a directory. This is not the same
+    as finding all files that ends in @.dhall@, but finds all files that
+    successfully parses as a valid dhall file.
+
+    The reason it doesn't guide the search by its extension is because of the
+    dhall @Prelude@ (<https://github.com/dhall-lang/dhall-lang/tree/master/Prelude>)
+    That package doesn't ends any of their files in @.dhall@.
+-}
+getAllDhallFiles
+    :: FilePath -- ^ Base directory to do the search
+    -> IO [(Header, FilePath)]
 getAllDhallFiles baseDir = do
-    let shell = Turtle.find (Turtle.suffix ".dhall") baseDir
 
-    dhallFiles <- Turtle.fold shell Foldl.list
+    let shell = do
+            path_ <- Turtle.lstree baseDir
+            isNotDir <- not <$> Turtle.testdir path_
+            Control.Monad.guard isNotDir
 
-    print dhallFiles
-    return ()
+            let pathStr = Text.unpack $ Turtle.format fp path_
+            contents <- Turtle.liftIO $ Text.IO.readFile pathStr
+
+            case exprAndHeaderFromText pathStr contents of
+                Right (header, _) -> return (header, path_)
+                _ -> Turtle.empty
+
+    Turtle.fold shell Foldl.list
 
 defaultMain :: Options -> IO ()
-defaultMain Options{..} = getAllDhallFiles packageDir
+defaultMain Options{..} = do
+    dhallFiles <- getAllDhallFiles packageDir
+    mapM_ print dhallFiles
+    return ()
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
