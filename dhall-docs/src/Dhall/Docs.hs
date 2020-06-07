@@ -84,6 +84,8 @@ parserInfoOptions =
     The reason it doesn't guide the search by its extension is because of the
     dhall @Prelude@ (<https://github.com/dhall-lang/dhall-lang/tree/master/Prelude>)
     That package doesn't ends any of their files in @.dhall@.
+
+    TODO: Avoid processing images
 -}
 getAllDhallFiles
     :: FilePath -- ^ Base directory to do the search
