@@ -145,8 +145,6 @@ saveHtml inputPath outputPath t@(filePath, _) = do
 
     Turtle.mktree $ Turtle.directory htmlOutputFile
 
-    -- print outputPath
-    -- print htmlOutputDir
     let relativeResources = resolveRelativePath outputPath htmlOutputDir
 
     renderToFile (Turtle.encodeString htmlOutputFile)
@@ -175,11 +173,8 @@ createIndexes outputPath htmlFiles = do
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
-    print "step 1"
     generatedHtmlFiles <- mapM (saveHtml packageDir outDir) dhallFiles
-    print "step 2"
     createIndexes outDir generatedHtmlFiles
-    print "step 3"
 
     dataDir <- Turtle.directory . Turtle.decodeString <$> getDataFileName "src/Dhall/data/index.css"
     Turtle.view $ Turtle.lstree dataDir
