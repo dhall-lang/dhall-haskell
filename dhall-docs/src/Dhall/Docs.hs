@@ -70,8 +70,7 @@ parseOptions =
     <$> Options.Applicative.strOption
         ( Options.Applicative.long "input"
        <> Options.Applicative.metavar "INPUT"
-       <> Options.Applicative.help "Directory of your dhall package. It should \
-                                    \contain only text files" )
+       <> Options.Applicative.help "Directory of your dhall package" )
     <*> parseStrategy
     <*> Options.Applicative.strOption
         ( Options.Applicative.long "output"
