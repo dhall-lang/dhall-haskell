@@ -18,7 +18,6 @@ module Dhall.Docs
     ) where
 
 import Data.Monoid         ((<>))
-import Debug.Trace         (trace)
 import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Lucid               (renderToFile)
@@ -127,7 +126,6 @@ getAllDhallFiles baseDir = do
 -}
 resolveRelativePath :: FilePath -> FilePath -> FilePath
 resolveRelativePath outDir currentDir =
-    -- trace (Turtle.encodeString outDir <> " " <> Turtle.encodeString currentDir) $
     if outDir == currentDir then ""
     else ".." </> resolveRelativePath (outDir </> "") (Turtle.parent currentDir)
 
