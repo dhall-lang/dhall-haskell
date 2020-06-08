@@ -116,9 +116,8 @@ getAllDhallFiles baseDir = do
 
     Turtle.fold shell Foldl.list
 
-saveHtml :: FilePath -> FilePath -> (FilePath, Header) -> IO ()
+saveHtml :: FilePath -> FilePath -> (FilePath, Header) -> IO FilePath
 saveHtml inputPath outputPath t@(filePath, _) = do
-    let html = filePathHeaderToHtml t
     let inputPathText = Turtle.format fp inputPath
     let filePathText = Turtle.format fp (filePath <.> "html")
     let strippedFilename =
@@ -126,18 +125,16 @@ saveHtml inputPath outputPath t@(filePath, _) = do
                 $ Text.stripPrefix inputPathText filePathText
     let htmlOutputFile =
             outputPath </> Turtle.decodeString strippedFilename
-    -- Turtle.mktree $ Turtle.directory strippedFilename
-    -- print filePathText
-    -- print strippedFilename
-    -- print $ Turtle.directory htmlOutputFile
+
     Turtle.mktree $ Turtle.directory htmlOutputFile
     renderToFile (Turtle.encodeString htmlOutputFile) $ filePathHeaderToHtml t
+    return htmlOutputFile
 
 -- | Default execution of @dhall-docs@ command
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
-    mapM_ (saveHtml packageDir outDir) dhallFiles
+    mapM (saveHtml packageDir outDir) dhallFiles
     return ()
 
 -- | Entry point for the @dhall-docs@ executable
