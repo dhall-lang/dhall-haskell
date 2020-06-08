@@ -97,7 +97,7 @@ parserInfoOptions =
 -}
 getAllDhallFiles
     :: FilePath -- ^ Base directory to do the search
-    -> IO [(Header, FilePath)]
+    -> IO [(FilePath, Header)]
 getAllDhallFiles baseDir = do
 
     let shell = do
@@ -109,7 +109,7 @@ getAllDhallFiles baseDir = do
             contents <- Turtle.liftIO $ Text.IO.readFile pathStr
 
             case exprAndHeaderFromText pathStr contents of
-                Right (header, _) -> return (header, path_)
+                Right (header, _) -> return (path_, header)
                 _ -> Turtle.empty
 
     Turtle.fold shell Foldl.list
@@ -117,7 +117,7 @@ getAllDhallFiles baseDir = do
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
-    mapM_ (print . headerToHtml . fst) dhallFiles
+    mapM_ (print . filePathHeaderToHtml) dhallFiles
     return ()
 
 -- | Entry point for the @dhall-docs@ executable

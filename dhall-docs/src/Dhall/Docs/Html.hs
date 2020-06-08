@@ -4,21 +4,39 @@
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE OverloadedStrings    #-}
 
-module Dhall.Docs.Html (headerToHtml) where
+module Dhall.Docs.Html (headerToHtml, filePathHeaderToHtml) where
 
 import Data.Text
 import Dhall.Parser (Header (..))
 import Lucid
+import Prelude      hiding (FilePath)
+import Turtle       (FilePath, fp)
+
+import qualified Turtle
 
 -- | Takes a `Header` and generates its `Html`
 headerToHtml :: Header -> Html ()
-headerToHtml (Header header) = p_ $ toHtml removeComments
+headerToHtml = p_ . toHtml . removeComments
+
+removeComments :: Header -> Text
+removeComments (Header header)
+    | "--" `isPrefixOf` strippedHeader = Data.Text.drop 2 strippedHeader
+    | "{-" `isPrefixOf` strippedHeader =
+        Data.Text.drop 2 $ Data.Text.dropEnd 2 strippedHeader
+    | otherwise = strippedHeader
+
   where
     strippedHeader = strip header
 
-    removeComments :: Text
-    removeComments
-        | "--" `isPrefixOf` strippedHeader = Data.Text.drop 2 strippedHeader
-        | "{-" `isPrefixOf` strippedHeader =
-            Data.Text.drop 2 $ Data.Text.dropEnd 2 strippedHeader
-        | otherwise = strippedHeader
+filePathHeaderToHtml
+    :: (FilePath, Header)
+    -> Html ()
+filePathHeaderToHtml (filePath, header) =
+    html_ $ do
+        head_ $
+            title_ $ toHtml title
+        body_ $ do
+            h1_ $ toHtml title
+            headerToHtml header
+  where
+    title = Turtle.format fp $ Turtle.basename filePath
