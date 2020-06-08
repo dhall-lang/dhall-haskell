@@ -22,6 +22,7 @@ import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Lucid               (renderToFile)
 import Options.Applicative (Parser, ParserInfo)
+import Paths_dhall_docs
 import Prelude             hiding (FilePath)
 import Turtle              (FilePath, fp, (<.>), (</>))
 
@@ -153,6 +154,10 @@ defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
     generatedHtmlFiles <- mapM (saveHtml packageDir outDir) dhallFiles
     createIndexes generatedHtmlFiles
+
+    dataDir <- Turtle.directory . Turtle.decodeString <$> getDataFileName "src/Dhall/data/index.css"
+    Turtle.view $ Turtle.lstree dataDir
+    Turtle.cptree dataDir outDir
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()

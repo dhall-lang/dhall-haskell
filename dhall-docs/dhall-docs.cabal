@@ -22,6 +22,10 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
+Data-Files:
+    src/Dhall/data/*.css,
+    src/Dhall/data/*.ttf
+
 Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
@@ -41,6 +45,7 @@ Library
         Dhall.Docs
         Dhall.Docs.Html
     Other-Modules:
+        Paths_dhall_docs
     GHC-Options: -Wall
     Default-Language: Haskell2010
 
