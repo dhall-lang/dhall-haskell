@@ -1,4 +1,4 @@
-{-| This module expors all functions used to generate HTML from a dhall package
+{-| This module exports all functions used to generate HTML from a dhall package
 -}
 
 {-# LANGUAGE ExtendedDefaultRules #-}
@@ -36,7 +36,7 @@ removeComments (Header header)
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 filePathHeaderToHtml
-    :: (FilePath, Header)
+    :: (FilePath, Header) -- ^ (source file name, parsed header)
     -> Html ()
 filePathHeaderToHtml (filePath, header) =
     html_ $ do
@@ -46,13 +46,13 @@ filePathHeaderToHtml (filePath, header) =
             h1_ $ toHtml title
             headerToHtml header
   where
-    title = Turtle.format fp $ Turtle.basename filePath
+    title = Turtle.format fp $ Turtle.filename filePath
 
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
-    :: FilePath
-    -> [FilePath]
+    :: FilePath   -- ^ Index directory
+    -> [FilePath] -- ^ Generated files in that directory
     -> Html ()
 indexToHtml dir files = html_ $ do
     head_ $
