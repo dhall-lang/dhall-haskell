@@ -27,11 +27,11 @@ import Prelude             hiding (FilePath)
 import Turtle              (FilePath, Shell, fp, (<.>), (</>))
 
 import qualified Control.Foldl       as Foldl
-import qualified Control.Monad
+import qualified Data.ByteString
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
 import qualified Data.Text           as Text
-import qualified Data.Text.IO        as Text.IO
+import qualified Data.Text.Encoding  as Text.Encoding
 import qualified Options.Applicative
 import qualified Turtle
 
@@ -96,8 +96,6 @@ parserInfoOptions =
     The reason it doesn't guide the search by its extension is because of the
     dhall @Prelude@ (<https://github.com/dhall-lang/dhall-lang/tree/master/Prelude>)
     That package doesn't ends any of their files in @.dhall@.
-
-    TODO: Avoid processing images
 -}
 getAllDhallFiles
     :: FilePath -- ^ Base directory to do the search
@@ -110,7 +108,9 @@ getAllDhallFiles baseDir = Turtle.fold shell Foldl.list
         False <- Turtle.testdir path_
 
         let pathStr = Text.unpack $ Turtle.format fp path_
-        contents <- Turtle.liftIO $ Text.IO.readFile pathStr
+        Right contents <- Turtle.liftIO $ Text.Encoding.decodeUtf8'
+                            <$> Data.ByteString.readFile pathStr
+        -- contents <- Turtle.liftIO $ Text.IO.readFile pathStr
 
         case exprAndHeaderFromText pathStr contents of
             Right (header, _) -> return (path_, header)
@@ -174,7 +174,6 @@ defaultMain Options{..} = do
     createIndexes outDir generatedHtmlFiles
 
     dataDir <- Turtle.directory . Turtle.decodeString <$> getDataFileName "src/Dhall/data/index.css"
-    Turtle.view $ Turtle.lstree dataDir
     Turtle.cptree dataDir outDir
 
 -- | Entry point for the @dhall-docs@ executable
