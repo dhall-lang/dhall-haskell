@@ -24,7 +24,7 @@ import Lucid               (renderToFile)
 import Options.Applicative (Parser, ParserInfo)
 import Paths_dhall_docs
 import Prelude             hiding (FilePath)
-import Turtle              (FilePath, fp, (<.>), (</>))
+import Turtle              (FilePath, Shell, fp, (<.>), (</>))
 
 import qualified Control.Foldl       as Foldl
 import qualified Control.Monad
@@ -102,21 +102,20 @@ parserInfoOptions =
 getAllDhallFiles
     :: FilePath -- ^ Base directory to do the search
     -> IO [(FilePath, Header)]
-getAllDhallFiles baseDir = do
+getAllDhallFiles baseDir = Turtle.fold shell Foldl.list
+  where
+    shell :: Shell (FilePath, Header)
+    shell = do
+        path_ <- Turtle.lstree baseDir
+        False <- Turtle.testdir path_
 
-    let shell = do
-            path_ <- Turtle.lstree baseDir
-            isNotDir <- not <$> Turtle.testdir path_
-            Control.Monad.guard isNotDir
+        let pathStr = Text.unpack $ Turtle.format fp path_
+        contents <- Turtle.liftIO $ Text.IO.readFile pathStr
 
-            let pathStr = Text.unpack $ Turtle.format fp path_
-            contents <- Turtle.liftIO $ Text.IO.readFile pathStr
+        case exprAndHeaderFromText pathStr contents of
+            Right (header, _) -> return (path_, header)
+            _ -> Turtle.empty
 
-            case exprAndHeaderFromText pathStr contents of
-                Right (header, _) -> return (path_, header)
-                _ -> Turtle.empty
-
-    Turtle.fold shell Foldl.list
 
 {-| Calculate the relative path needed to access files on the first argument
     relative from the second argument.
