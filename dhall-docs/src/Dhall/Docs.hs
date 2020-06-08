@@ -149,12 +149,8 @@ saveHtml inputPath outputPath t@(filePath, _) = do
 
 createIndexes :: FilePath -> [FilePath] -> IO ()
 createIndexes outputPath htmlFiles = do
-    let groupByDir accMap file =
-            let directory = Turtle.directory file in
-            if directory `Map.notMember` accMap then Map.insert directory [file] accMap
-            else Map.adjust ((:) file) directory accMap
-
-    let filesGroupedByDir = foldl groupByDir Map.empty htmlFiles
+    let toMap file = Map.singleton (Turtle.directory file) [file]
+    let filesGroupedByDir = Map.unionsWith (<>) $ map toMap htmlFiles
 
     let createIndex index files =
             let relativeResources = resolveRelativePath outputPath index
