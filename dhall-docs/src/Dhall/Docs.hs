@@ -18,15 +18,16 @@ module Dhall.Docs
     ) where
 
 import Data.Monoid         ((<>))
+import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Lucid               (renderToFile)
 import Options.Applicative (Parser, ParserInfo)
-import Paths_dhall_docs
 import Prelude             hiding (FilePath)
 import Turtle              (FilePath, Shell, fp, (<.>), (</>))
 
 import qualified Control.Foldl       as Foldl
+import qualified Control.Monad
 import qualified Data.ByteString
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
@@ -164,12 +165,20 @@ createIndexes outputPath htmlFiles = do
 -- | Default execution of @dhall-docs@ command
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
+    putStrLn "1"
     dhallFiles <- getAllDhallFiles packageDir
+    putStrLn "2"
     generatedHtmlFiles <- mapM (saveHtml packageDir outDir) dhallFiles
+    putStrLn "3"
     createIndexes outDir generatedHtmlFiles
+    putStrLn "4"
 
-    dataDir <- Turtle.directory . Turtle.decodeString <$> getDataFileName "src/Dhall/data/index.css"
-    Turtle.cptree dataDir outDir
+    Control.Monad.forM_ dataDir $ \(filename, contents) ->
+        let finalPath = Turtle.encodeString $
+                outDir </> Turtle.decodeString filename
+        in
+        Data.ByteString.writeFile finalPath contents
+    -- Turtle.cptree dataDir outDir
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
