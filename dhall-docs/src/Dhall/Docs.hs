@@ -18,6 +18,7 @@ module Dhall.Docs
     ) where
 
 import Data.Monoid         ((<>))
+import Debug.Trace         (trace)
 import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Lucid               (renderToFile)
@@ -118,6 +119,18 @@ getAllDhallFiles baseDir = do
 
     Turtle.fold shell Foldl.list
 
+{-| Calculate the relative path needed to access files on the first argument
+    relative from the second argument.
+
+    The second argument needs to be a child of the first, otherwise it will
+    loop forever
+-}
+resolveRelativePath :: FilePath -> FilePath -> FilePath
+resolveRelativePath outDir currentDir =
+    -- trace (Turtle.encodeString outDir <> " " <> Turtle.encodeString currentDir) $
+    if outDir == currentDir then ""
+    else ".." </> resolveRelativePath (outDir </> "") (Turtle.parent currentDir)
+
 saveHtml :: FilePath -> FilePath -> (FilePath, Header) -> IO FilePath
 saveHtml inputPath outputPath t@(filePath, _) = do
     let inputPathText = Turtle.format fp inputPath
@@ -128,12 +141,20 @@ saveHtml inputPath outputPath t@(filePath, _) = do
     let htmlOutputFile =
             outputPath </> Turtle.decodeString strippedFilename
 
+    let htmlOutputDir = Turtle.directory htmlOutputFile
+
     Turtle.mktree $ Turtle.directory htmlOutputFile
-    renderToFile (Turtle.encodeString htmlOutputFile) $ filePathHeaderToHtml t
+
+    -- print outputPath
+    -- print htmlOutputDir
+    let relativeResources = resolveRelativePath outputPath htmlOutputDir
+
+    renderToFile (Turtle.encodeString htmlOutputFile)
+        $ filePathHeaderToHtml t (relativeResources </> "index.css")
     return htmlOutputFile
 
-createIndexes :: [FilePath] -> IO ()
-createIndexes htmlFiles = do
+createIndexes :: FilePath -> [FilePath] -> IO ()
+createIndexes outputPath htmlFiles = do
     let groupByDir accMap file =
             let directory = Turtle.directory file in
             if directory `Map.notMember` accMap then Map.insert directory [file] accMap
@@ -142,8 +163,10 @@ createIndexes htmlFiles = do
     let filesGroupedByDir = foldl groupByDir Map.empty htmlFiles
 
     let createIndex index files =
+            let relativeResources = resolveRelativePath outputPath index
+            in
             renderToFile (Turtle.encodeString (index </> "index.html")) $
-                indexToHtml index files
+                indexToHtml index files (relativeResources </> "index.css")
 
     _ <- Map.traverseWithKey createIndex filesGroupedByDir
     return ()
@@ -152,8 +175,11 @@ createIndexes htmlFiles = do
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
+    print "step 1"
     generatedHtmlFiles <- mapM (saveHtml packageDir outDir) dhallFiles
-    createIndexes generatedHtmlFiles
+    print "step 2"
+    createIndexes outDir generatedHtmlFiles
+    print "step 3"
 
     dataDir <- Turtle.directory . Turtle.decodeString <$> getDataFileName "src/Dhall/data/index.css"
     Turtle.view $ Turtle.lstree dataDir

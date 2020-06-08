@@ -1,4 +1,6 @@
-{-| This module exports all functions used to generate HTML from a dhall package
+{-| Functions used to generate HTML from a dhall package.
+    You can see this module as logic-less HTML building blocks for the whole
+    generator tool
 -}
 
 {-# LANGUAGE ExtendedDefaultRules #-}
@@ -37,11 +39,13 @@ removeComments (Header header)
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 filePathHeaderToHtml
     :: (FilePath, Header) -- ^ (source file name, parsed header)
+    -> FilePath           -- ^ Relative path to the css of the tool
     -> Html ()
-filePathHeaderToHtml (filePath, header) =
+filePathHeaderToHtml (filePath, header) cssFile =
     html_ $ do
-        head_ $
+        head_ $ do
             title_ $ toHtml title
+            stylesheet cssFile
         body_ $ do
             h1_ $ toHtml title
             headerToHtml header
@@ -53,10 +57,12 @@ filePathHeaderToHtml (filePath, header) =
 indexToHtml
     :: FilePath   -- ^ Index directory
     -> [FilePath] -- ^ Generated files in that directory
+    -> FilePath   -- ^ Relative path to the css of the tool
     -> Html ()
-indexToHtml dir files = html_ $ do
-    head_ $
+indexToHtml dir files cssFile = html_ $ do
+    head_ $ do
         title_ $ toHtml title
+        stylesheet cssFile
     body_ $ do
         h1_ $ toHtml title
         p_ "Exported files: "
@@ -64,3 +70,10 @@ indexToHtml dir files = html_ $ do
 
   where
     title = Turtle.format fp dir <> " index"
+
+stylesheet :: FilePath -> Html ()
+stylesheet filePath =
+    link_
+        [ rel_ "stylesheet"
+        , type_ "text/css"
+        , href_ $ Turtle.format fp filePath]
