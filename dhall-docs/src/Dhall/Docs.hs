@@ -20,12 +20,14 @@ module Dhall.Docs
 import Data.Semigroup      ((<>))
 import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
+import Lucid               (renderToFile)
 import Options.Applicative (Parser, ParserInfo)
 import Prelude             hiding (FilePath)
-import Turtle              (FilePath, fp)
+import Turtle              (FilePath, fp, (<.>), (</>))
 
 import qualified Control.Foldl       as Foldl
 import qualified Control.Monad
+import qualified Data.Maybe
 import qualified Data.Text           as Text
 import qualified Data.Text.IO        as Text.IO
 import qualified Options.Applicative
@@ -114,10 +116,28 @@ getAllDhallFiles baseDir = do
 
     Turtle.fold shell Foldl.list
 
+saveHtml :: FilePath -> FilePath -> (FilePath, Header) -> IO ()
+saveHtml inputPath outputPath t@(filePath, _) = do
+    let html = filePathHeaderToHtml t
+    let inputPathText = Turtle.format fp inputPath
+    let filePathText = Turtle.format fp (filePath <.> "html")
+    let strippedFilename =
+            Text.unpack $ Data.Maybe.fromJust
+                $ Text.stripPrefix inputPathText filePathText
+    let htmlOutputFile =
+            outputPath </> Turtle.decodeString strippedFilename
+    -- Turtle.mktree $ Turtle.directory strippedFilename
+    -- print filePathText
+    -- print strippedFilename
+    -- print $ Turtle.directory htmlOutputFile
+    Turtle.mktree $ Turtle.directory htmlOutputFile
+    renderToFile (Turtle.encodeString htmlOutputFile) $ filePathHeaderToHtml t
+
+-- | Default execution of @dhall-docs@ command
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
-    mapM_ (print . filePathHeaderToHtml) dhallFiles
+    mapM_ (saveHtml packageDir outDir) dhallFiles
     return ()
 
 -- | Entry point for the @dhall-docs@ executable
