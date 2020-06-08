@@ -30,6 +30,7 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                 >= 4        && < 5   ,
+        containers                                ,
         dhall                >= 1.32.0   && < 1.33,
         foldl                               < 1.5 ,
         lucid                == 2.9.*             ,

@@ -17,7 +17,7 @@ module Dhall.Docs
     , getAllDhallFiles
     ) where
 
-import Data.Semigroup      ((<>))
+import Data.Monoid         ((<>))
 import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Lucid               (renderToFile)
@@ -27,6 +27,7 @@ import Turtle              (FilePath, fp, (<.>), (</>))
 
 import qualified Control.Foldl       as Foldl
 import qualified Control.Monad
+import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
 import qualified Data.Text           as Text
 import qualified Data.Text.IO        as Text.IO
@@ -130,12 +131,28 @@ saveHtml inputPath outputPath t@(filePath, _) = do
     renderToFile (Turtle.encodeString htmlOutputFile) $ filePathHeaderToHtml t
     return htmlOutputFile
 
+createIndexes :: [FilePath] -> IO ()
+createIndexes htmlFiles = do
+    let groupByDir accMap file =
+            let directory = Turtle.directory file in
+            if directory `Map.notMember` accMap then Map.insert directory [file] accMap
+            else Map.adjust ((:) file) directory accMap
+
+    let filesGroupedByDir = foldl groupByDir Map.empty htmlFiles
+
+    let createIndex index files =
+            renderToFile (Turtle.encodeString (index </> "index.html")) $
+                indexToHtml index files
+
+    _ <- Map.traverseWithKey createIndex filesGroupedByDir
+    return ()
+
 -- | Default execution of @dhall-docs@ command
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
     dhallFiles <- getAllDhallFiles packageDir
-    mapM (saveHtml packageDir outDir) dhallFiles
-    return ()
+    generatedHtmlFiles <- mapM (saveHtml packageDir outDir) dhallFiles
+    createIndexes generatedHtmlFiles
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
