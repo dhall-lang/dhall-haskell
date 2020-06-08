@@ -14,13 +14,13 @@ a HTML documentation of it.
 The easiest usage is the following:
 
 ```bash
-dhall-docs --input <YOUR-PACKAGE-FOLDER>
+dhall-docs --input ${PACKAGE-FOLDER}
 ```
 
 By default it will save the documentation of your package in `$PWD/docs`, but
 you can change that using the `--output` flag
 
 ```bash
-dhall-docs --input . --output other-dir
+dhall-docs --input . --output ${OTHER_DIR}
 ```
 
