@@ -170,10 +170,9 @@ defaultMain Options{..} = do
     createIndexes outDir generatedHtmlFiles
 
     dataDir <- getDataDir
-    Control.Monad.forM_ dataDir $ \(filename, contents) ->
+    Control.Monad.forM_ dataDir $ \(filename, contents) -> do
         let finalPath = Turtle.encodeString $
                 outDir </> Turtle.decodeString filename
-        in
         Data.ByteString.writeFile finalPath contents
 
 -- | Entry point for the @dhall-docs@ executable
