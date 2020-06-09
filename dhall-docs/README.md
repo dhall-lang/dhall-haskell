@@ -17,7 +17,7 @@ The easiest usage is the following:
 dhall-docs --input ${PACKAGE-FOLDER}
 ```
 
-By default it will save the documentation of your package in `$PWD/docs`, but
+By default it will save the documentation of your package in `./docs`, but
 you can change that using the `--output` flag
 
 ```bash
