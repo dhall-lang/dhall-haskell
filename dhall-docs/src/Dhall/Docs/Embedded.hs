@@ -4,13 +4,17 @@
 
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections   #-}
 
 module Dhall.Docs.Embedded (getDataDir) where
 
-import Data.ByteString
+import Data.ByteString (ByteString)
 
 #if defined(EMBED)
 import Data.FileEmbed (embedDir)
+import Path           (File, Path, Rel)
+
+import qualified Path
 #else
 import Paths_dhall_docs hiding (getDataDir)
 
@@ -19,9 +23,12 @@ import qualified Data.ByteString as ByteString
 import qualified Turtle
 #endif
 
-getDataDir :: IO [(FilePath, ByteString)]
+getDataDir :: IO [(Path Rel File, ByteString)]
 #if defined(EMBED)
-getDataDir = return $(embedDir "src/Dhall/data")
+getDataDir = return $(embedDir "src/Dhall/data") >>= mapM f
+  where
+    f :: (FilePath, ByteString) -> IO (Path Rel File, ByteString)
+    f (filePath, contents) = (,contents) <$> Path.parseRelFile filePath
 #else
 getDataDir = do
     dir <- Turtle.directory . Turtle.decodeString

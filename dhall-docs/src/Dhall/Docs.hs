@@ -178,8 +178,7 @@ defaultMain Options{..} = do
 
     dataDir <- getDataDir
     Control.Monad.forM_ dataDir $ \(filename, contents) -> do
-        relFile <- Path.parseRelFile filename
-        let finalPath = Path.fromAbsFile $ resolvedOutDir </> relFile
+        let finalPath = Path.fromAbsFile $ resolvedOutDir </> filename
         Data.ByteString.writeFile finalPath contents
 
 -- | Entry point for the @dhall-docs@ executable
