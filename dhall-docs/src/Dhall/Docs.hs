@@ -175,7 +175,6 @@ defaultMain Options{..} = do
                 outDir </> Turtle.decodeString filename
         in
         Data.ByteString.writeFile finalPath contents
-    -- Turtle.cptree dataDir outDir
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
