@@ -94,7 +94,7 @@ parserInfoOptions =
     successfully parses as a valid dhall file.
 
     The reason it doesn't guide the search by its extension is because of the
-    dhall @Prelude@ (<https://github.com/dhall-lang/dhall-lang/tree/master/Prelude>)
+    dhall <https://prelude.dhall-lang.org Prelude>
     That package doesn't ends any of their files in @.dhall@.
 -}
 getAllDhallFiles
