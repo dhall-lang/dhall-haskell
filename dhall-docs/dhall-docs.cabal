@@ -23,12 +23,19 @@ Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
 Data-Files:
-    src/Dhall/data/*.css
-    src/Dhall/data/*.ttf
+    *.css
+    *.ttf
+Data-Dir:
+    src/Dhall/data
 
 Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
+
+
+Flag ghci-data-files
+  description: To enable use of data-files while running `stack ghci`
+  default: False
 
 Library
     Hs-Source-Dirs: src
@@ -40,15 +47,22 @@ Library
         file-embed           >= 0.0.11.0          ,
         foldl                               < 1.5 ,
         lucid                == 2.9.*             ,
+        path                 >= 0.6.0             ,
+        path-io              >= 1.4.0             ,
         text                 >= 0.11.1.0 && < 1.3 ,
         turtle                              < 1.6 ,
         optparse-applicative >= 0.14.0.0 && < 0.16
     Exposed-Modules:
         Dhall.Docs
         Dhall.Docs.Html
+    Other-Modules:
         Dhall.Docs.Embedded
     GHC-Options: -Wall
     Default-Language: Haskell2010
+    if flag(ghci-data-files)
+        Other-Modules: Paths_dhall_docs
+    else
+        Cpp-Options: "-DEMBED"
 
 Executable dhall-docs
     Hs-Source-Dirs: dhall-docs

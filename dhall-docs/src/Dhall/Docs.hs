@@ -165,14 +165,11 @@ createIndexes outputPath htmlFiles = do
 -- | Default execution of @dhall-docs@ command
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
-    putStrLn "1"
     dhallFiles <- getAllDhallFiles packageDir
-    putStrLn "2"
     generatedHtmlFiles <- mapM (saveHtml packageDir outDir) dhallFiles
-    putStrLn "3"
     createIndexes outDir generatedHtmlFiles
-    putStrLn "4"
 
+    dataDir <- getDataDir
     Control.Monad.forM_ dataDir $ \(filename, contents) ->
         let finalPath = Turtle.encodeString $
                 outDir </> Turtle.decodeString filename
