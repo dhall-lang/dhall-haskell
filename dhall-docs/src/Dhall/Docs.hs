@@ -23,18 +23,16 @@ import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
 import Lucid               (renderToFile)
 import Options.Applicative (Parser, ParserInfo)
-import Prelude             hiding (FilePath)
-import Turtle              (FilePath, Shell, fp, (<.>), (</>))
+import Path                (Abs, Dir, File, Path, (</>))
 
-import qualified Control.Foldl       as Foldl
 import qualified Control.Monad
 import qualified Data.ByteString
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
-import qualified Data.Text           as Text
 import qualified Data.Text.Encoding  as Text.Encoding
 import qualified Options.Applicative
-import qualified Turtle
+import qualified Path
+import qualified Path.IO
 
 {-| To specify if the tool should generate a single HTML page with all the
     package information or one for each file in your package
@@ -98,23 +96,22 @@ parserInfoOptions =
     That package doesn't ends any of their files in @.dhall@.
 -}
 getAllDhallFiles
-    :: FilePath -- ^ Base directory to do the search
-    -> IO [(FilePath, Header)]
-getAllDhallFiles baseDir = Turtle.fold shell Foldl.list
+    :: Path Abs Dir -- ^ Base directory to do the search
+    -> IO [(Path Abs File, Header)]
+getAllDhallFiles baseDir = do
+    files <- snd <$> Path.IO.listDirRecur baseDir
+    Data.Maybe.catMaybes <$> mapM readDhall files
   where
-    shell :: Shell (FilePath, Header)
-    shell = do
-        path_ <- Turtle.lstree baseDir
-        False <- Turtle.testdir path_
-
-        let pathStr = Text.unpack $ Turtle.format fp path_
-        Right contents <- Turtle.liftIO $ Text.Encoding.decodeUtf8'
-                            <$> Data.ByteString.readFile pathStr
-        -- contents <- Turtle.liftIO $ Text.IO.readFile pathStr
-
-        case exprAndHeaderFromText pathStr contents of
-            Right (header, _) -> return (path_, header)
-            _ -> Turtle.empty
+    readDhall :: Path Abs File -> IO (Maybe (Path Abs File, Header))
+    readDhall absFile = do
+        let filePath = Path.fromAbsFile absFile
+        fileContents <- Data.ByteString.readFile filePath
+        return $ case Text.Encoding.decodeUtf8' fileContents of
+            Left _ -> Nothing
+            Right contents ->
+                case exprAndHeaderFromText filePath contents of
+                    Right (header, _) -> return (absFile, header)
+                    _ -> Nothing
 
 
 {-| Calculate the relative path needed to access files on the first argument
@@ -123,41 +120,48 @@ getAllDhallFiles baseDir = Turtle.fold shell Foldl.list
     The second argument needs to be a child of the first, otherwise it will
     loop forever
 -}
-resolveRelativePath :: FilePath -> FilePath -> FilePath
+resolveRelativePath :: Path Abs Dir -> Path Abs Dir -> FilePath
 resolveRelativePath outDir currentDir =
     if outDir == currentDir then ""
-    else ".." </> resolveRelativePath (outDir </> "") (Turtle.parent currentDir)
+    else "../" <> resolveRelativePath outDir (Path.parent currentDir)
 
-saveHtml :: FilePath -> FilePath -> (FilePath, Header) -> IO FilePath
-saveHtml inputPath outputPath t@(filePath, _) = do
-    let inputPathText = Turtle.format fp inputPath
-    let filePathText = Turtle.format fp (filePath <.> "html")
-    let strippedFilename =
-            Text.unpack $ Data.Maybe.fromJust
-                $ Text.stripPrefix inputPathText filePathText
-    let htmlOutputFile =
-            outputPath </> Turtle.decodeString strippedFilename
+{-
+    Saves the HTML file from the input package to the output destination
+-}
+saveHtml
+    :: Path Abs Dir             -- ^ Input package as an absolute directory.
+                                --   Used to remove the prefix from all other dhall
+                                --   files in the package
+    -> Path Abs Dir             -- ^ Output directory
+    -> (Path Abs File, Header)  -- ^ (Input absolute file, Parsed header)
+    -> IO (Path Abs File)       -- ^ Final absolute file wrapped on `IO` context
+saveHtml inputAbsDir outputAbsDir t@(absFile, _) = do
+    htmlOutputFile <-
+            (outputAbsDir </>) <$> Path.stripProperPrefix inputAbsDir absFile
 
-    let htmlOutputDir = Turtle.directory htmlOutputFile
+    let htmlOutputDir = Path.parent htmlOutputFile
 
-    Turtle.mktree $ Turtle.directory htmlOutputFile
+    Path.IO.ensureDir htmlOutputDir
 
-    let relativeResources = resolveRelativePath outputPath htmlOutputDir
+    let relativeResources = resolveRelativePath outputAbsDir htmlOutputDir
 
-    renderToFile (Turtle.encodeString htmlOutputFile)
-        $ filePathHeaderToHtml t (relativeResources </> "index.css")
+    renderToFile (Path.fromAbsFile htmlOutputFile)
+        $ filePathHeaderToHtml t (relativeResources <> "index.css")
     return htmlOutputFile
 
-createIndexes :: FilePath -> [FilePath] -> IO ()
+createIndexes :: Path Abs Dir -> [Path Abs File] -> IO ()
 createIndexes outputPath htmlFiles = do
-    let toMap file = Map.singleton (Turtle.directory file) [file]
+    let toMap file = Map.singleton (Path.parent file) [file]
     let filesGroupedByDir = Map.unionsWith (<>) $ map toMap htmlFiles
 
-    let createIndex index files =
+    let createIndex index files = do
+            indexFile <- Path.fromAbsFile . (index </>) <$> Path.parseRelFile "index.html"
             let relativeResources = resolveRelativePath outputPath index
-            in
-            renderToFile (Turtle.encodeString (index </> "index.html")) $
-                indexToHtml index files (relativeResources </> "index.css")
+            renderToFile indexFile $
+                indexToHtml
+                    (Path.fromAbsDir index)
+                    (map Path.fromAbsFile files)
+                    (relativeResources <> "index.css")
 
     _ <- Map.traverseWithKey createIndex filesGroupedByDir
     return ()
@@ -165,14 +169,17 @@ createIndexes outputPath htmlFiles = do
 -- | Default execution of @dhall-docs@ command
 defaultMain :: Options -> IO ()
 defaultMain Options{..} = do
-    dhallFiles <- getAllDhallFiles packageDir
-    generatedHtmlFiles <- mapM (saveHtml packageDir outDir) dhallFiles
-    createIndexes outDir generatedHtmlFiles
+    resolvedPackageDir <- Path.IO.resolveDir' packageDir
+    resolvedOutDir <- Path.IO.resolveDir' outDir
+    dhallFiles <- getAllDhallFiles resolvedPackageDir
+    generatedHtmlFiles <-
+        mapM (saveHtml resolvedPackageDir resolvedOutDir) dhallFiles
+    createIndexes resolvedOutDir generatedHtmlFiles
 
     dataDir <- getDataDir
     Control.Monad.forM_ dataDir $ \(filename, contents) -> do
-        let finalPath = Turtle.encodeString $
-                outDir </> Turtle.decodeString filename
+        relFile <- Path.parseRelFile filename
+        let finalPath = Path.fromAbsFile $ resolvedOutDir </> relFile
         Data.ByteString.writeFile finalPath contents
 
 -- | Entry point for the @dhall-docs@ executable
