@@ -18,6 +18,7 @@ module Dhall.Docs
 
       -- * Miscelaneous
     , saveHtml
+    , createIndexes
     ) where
 
 import Data.Monoid         ((<>))
