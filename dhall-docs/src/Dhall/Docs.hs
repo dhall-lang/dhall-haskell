@@ -1,6 +1,7 @@
 {-| This module contains the top level and options parsing of the @dhall-docs@
     executable
 -}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -148,7 +149,7 @@ saveHtml
 saveHtml inputAbsDir outputAbsDir t@(absFile, _) = do
     htmlOutputFile <- (outputAbsDir </>)
             <$> (Path.stripProperPrefix inputAbsDir absFile
-                >>= Path.addExtension ".html")
+                >>= addHtmlExt)
 
     let htmlOutputDir = Path.parent htmlOutputFile
 
@@ -159,6 +160,13 @@ saveHtml inputAbsDir outputAbsDir t@(absFile, _) = do
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
         $ filePathHeaderToHtml t (relativeResources <> "index.css")
     return htmlOutputFile
+  where
+    addHtmlExt :: Path b File -> IO (Path b File)
+#if MIN_VERSION_path(0,7,0)
+    addHtmlExt = Path.addExtension ".html"
+#else
+    addHtmlExt = Path.addFileExtension "html"
+#endif
 
 {-| Create an index.html file on each folder available in the second argument
     that lists all the contents on that folder.

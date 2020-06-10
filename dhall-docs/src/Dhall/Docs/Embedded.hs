@@ -15,7 +15,6 @@ import qualified Path
 
 #if defined(EMBED)
 
-
 import Data.FileEmbed (embedDir)
 
 #else
