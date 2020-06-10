@@ -136,8 +136,9 @@ saveHtml
     -> (Path Abs File, Header)  -- ^ (Input absolute file, Parsed header)
     -> IO (Path Abs File)       -- ^ Final absolute file wrapped on `IO` context
 saveHtml inputAbsDir outputAbsDir t@(absFile, _) = do
-    htmlOutputFile <-
-            (outputAbsDir </>) <$> Path.stripProperPrefix inputAbsDir absFile
+    htmlOutputFile <- (outputAbsDir </>)
+            <$> (Path.stripProperPrefix inputAbsDir absFile
+                >>= Path.addExtension ".html")
 
     let htmlOutputDir = Path.parent htmlOutputFile
 
