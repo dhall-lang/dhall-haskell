@@ -119,6 +119,13 @@ getAllDhallFiles baseDir = do
 
     The second argument needs to be a child of the first, otherwise it will
     loop forever
+
+    Examples:
+
+    >>> resolveRelativePath $(mkAbsDir "/a/b/c/") $(mkAbsDir "/a/b/c/d/e/")
+    "../../"
+    >>> resolveRelativePath $(mkAbsDir "/a/") $(mkAbsDir "/a/")
+    ""
 -}
 resolveRelativePath :: Path Abs Dir -> Path Abs Dir -> FilePath
 resolveRelativePath outDir currentDir =
