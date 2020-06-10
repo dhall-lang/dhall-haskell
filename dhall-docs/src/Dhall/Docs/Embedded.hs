@@ -9,18 +9,23 @@
 module Dhall.Docs.Embedded (getDataDir) where
 
 import Data.ByteString (ByteString)
-
-#if defined(EMBED)
-import Data.FileEmbed (embedDir)
-import Path           (File, Path, Rel)
+import Path            (File, Path, Rel)
 
 import qualified Path
+
+#if defined(EMBED)
+
+
+import Data.FileEmbed (embedDir)
+
 #else
+
 import Paths_dhall_docs hiding (getDataDir)
 
-import qualified Control.Foldl   as Foldl
+import qualified Control.Monad
 import qualified Data.ByteString as ByteString
-import qualified Turtle
+import qualified Path.IO
+
 #endif
 
 getDataDir :: IO [(Path Rel File, ByteString)]
@@ -31,12 +36,11 @@ getDataDir = return $(embedDir "src/Dhall/data") >>= mapM f
     f (filePath, contents) = (,contents) <$> Path.parseRelFile filePath
 #else
 getDataDir = do
-    dir <- Turtle.directory . Turtle.decodeString
-            <$> getDataFileName "src/Dhall/data/index.css"
-
-    flip Turtle.fold Foldl.list $ do
-        file <- Turtle.lstree dir
-        contents <- Turtle.liftIO $ ByteString.readFile $ Turtle.encodeString file
-        return (Turtle.encodeString $ Turtle.filename file, contents)
+    dir <- Path.parent
+        <$> (getDataFileName "src/Dhall/data/index.css" >>= Path.parseAbsFile)
+    files <- snd <$> Path.IO.listDir dir
+    Control.Monad.forM files $ \file -> do
+        contents <- ByteString.readFile $ Path.fromAbsFile file
+        return (Path.filename file, contents)
 
 #endif
