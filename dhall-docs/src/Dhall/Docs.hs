@@ -15,6 +15,9 @@ module Dhall.Docs
     , main
     , defaultMain
     , getAllDhallFiles
+
+      -- * Miscelaneous
+    , saveHtml
     ) where
 
 import Data.Monoid         ((<>))
@@ -132,16 +135,15 @@ resolveRelativePath outDir currentDir =
     if outDir == currentDir then ""
     else "../" <> resolveRelativePath outDir (Path.parent currentDir)
 
-{-
-    Saves the HTML file from the input package to the output destination
+{-| Saves the HTML file from the input package to the output destination
 -}
 saveHtml
-    :: Path Abs Dir             -- ^ Input package as an absolute directory.
+    :: Path Abs Dir             -- ^ Input package directory.
                                 --   Used to remove the prefix from all other dhall
                                 --   files in the package
     -> Path Abs Dir             -- ^ Output directory
-    -> (Path Abs File, Header)  -- ^ (Input absolute file, Parsed header)
-    -> IO (Path Abs File)       -- ^ Final absolute file wrapped on `IO` context
+    -> (Path Abs File, Header)  -- ^ (Input file, Parsed header)
+    -> IO (Path Abs File)       -- ^ Output path file
 saveHtml inputAbsDir outputAbsDir t@(absFile, _) = do
     htmlOutputFile <- (outputAbsDir </>)
             <$> (Path.stripProperPrefix inputAbsDir absFile
