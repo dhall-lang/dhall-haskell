@@ -12,6 +12,7 @@ module Dhall.Docs.Html
     , indexToHtml
     ) where
 
+import Data.Monoid  ((<>))
 import Data.Text    (Text)
 import Dhall.Parser (Header (..))
 import Lucid
@@ -67,6 +68,7 @@ indexToHtml dir files cssFile = html_ $ do
         ul_ $ mconcat $ map (li_ . toHtml) files
 
   where
+    title :: String
     title = dir <> " index"
 
 stylesheet :: FilePath -> Html ()
