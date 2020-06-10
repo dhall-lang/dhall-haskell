@@ -24,7 +24,6 @@ import Data.Monoid         ((<>))
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Parser        (Header, exprAndHeaderFromText)
-import Lucid               (renderToFile)
 import Options.Applicative (Parser, ParserInfo)
 import Path                (Abs, Dir, File, Path, (</>))
 
@@ -33,6 +32,7 @@ import qualified Data.ByteString
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
 import qualified Data.Text.Encoding  as Text.Encoding
+import qualified Lucid
 import qualified Options.Applicative
 import qualified Path
 import qualified Path.IO
@@ -155,7 +155,7 @@ saveHtml inputAbsDir outputAbsDir t@(absFile, _) = do
 
     let relativeResources = resolveRelativePath outputAbsDir htmlOutputDir
 
-    renderToFile (Path.fromAbsFile htmlOutputFile)
+    Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
         $ filePathHeaderToHtml t (relativeResources <> "index.css")
     return htmlOutputFile
 
@@ -167,7 +167,7 @@ createIndexes outputPath htmlFiles = do
     let createIndex index files = do
             indexFile <- Path.fromAbsFile . (index </>) <$> Path.parseRelFile "index.html"
             let relativeResources = resolveRelativePath outputPath index
-            renderToFile indexFile $
+            Lucid.renderToFile indexFile $
                 indexToHtml
                     (Path.fromAbsDir index)
                     (map Path.fromAbsFile files)
