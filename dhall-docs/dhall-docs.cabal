@@ -40,7 +40,7 @@ Flag ghci-data-files
 Library
     Hs-Source-Dirs: src
     Build-Depends:
-        base                 >= 4.11     && < 5   ,
+        base                 >= 4.9.1.0  && < 5   ,
         bytestring                          < 0.11,
         containers                                ,
         dhall                >= 1.32.0            ,
