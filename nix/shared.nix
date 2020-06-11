@@ -1,7 +1,7 @@
 let
   pinned = import ./pinnedNixpkgs.nix;
   
-  defaultCompiler = "ghc843";
+  defaultCompiler = "ghc822";
 
 in
 
@@ -253,6 +253,10 @@ let
                       haskellPackagesOld.lens-family-core_1_2_1;
 
                     lens-family = haskellPackagesOld.lens-family_1_2_1;
+
+                    parser-combinators =
+                      pkgsNew.haskell.lib.doJailbreak
+                        haskellPackagesOld.parser-combinators;
                   };
 
               in
