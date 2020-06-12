@@ -1,15 +1,12 @@
-{ mkDerivation, aeson, assoc, base, base-compat, binary, deepseq
-, hashable, QuickCheck, semigroupoids, stdenv, unordered-containers
+{ mkDerivation, assoc, base, base-compat, binary, deepseq, hashable
+, stdenv
 }:
 mkDerivation {
   pname = "these";
-  version = "1.0.1";
-  sha256 = "79cc1ee35d268c5871f585681c649daded2ffe5fc657c3db87a9b2f38a8917cc";
-  revision = "1";
-  editedCabalFile = "0923r86fnmgpx0msm68aszirh2n19nn5bccgjxfh2146jw4z7w3z";
+  version = "1.1";
+  sha256 = "bb0beb19e4f2722e09d02413f657c456c490ea9b256b6c9f167645a8b84cb137";
   libraryHaskellDepends = [
-    aeson assoc base base-compat binary deepseq hashable QuickCheck
-    semigroupoids unordered-containers
+    assoc base base-compat binary deepseq hashable
   ];
   homepage = "https://github.com/isomorphism/these";
   description = "An either-or-both data type";
