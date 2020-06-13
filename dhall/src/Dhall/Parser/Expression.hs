@@ -64,6 +64,13 @@ src parser = do
     after       <- getSourcePos
     return (Src before after tokens)
 
+srcAnd :: Parser a -> Parser (Src, a)
+srcAnd parser = do
+    before      <- getSourcePos
+    (tokens, x) <- Text.Megaparsec.match parser
+    after       <- getSourcePos
+    return (Src before after tokens, x)
+
 {-| Wrap a `Parser` to still match the same text, but to wrap the resulting
     `Expr` in a `Note` constructor containing the `Src` span
 -}
@@ -240,6 +247,8 @@ parsers embedded = Parsers {..}
 
             a <- parseFirstOperatorExpression
 
+            whitespace
+
             let alternative4A = do
                     _arrow
                     whitespace
@@ -317,27 +326,21 @@ parsers embedded = Parsers {..}
     makeOperatorExpression firstSubExpression operatorParser subExpression = do
             a <- firstSubExpression
 
-            e <- noted (do
-                whitespace
+            bs <- Text.Megaparsec.many $ do
+                (Src _ _ textOp, op0) <- srcAnd (try (whitespace *> operatorParser))
 
-                b <- Text.Megaparsec.many $ do
-                    op <- operatorParser
+                r0 <- subExpression
 
-                    r  <- subExpression
-
-                    whitespace
-
-                    return (\l -> l `op` r)
-
-                return (foldl' (\x f -> f x) a b) )
-
-            case (a, e) of
-                (Note (Src start _ text0) _, Note (Src _ end text1) e') ->
-                    return (Note (Src start end (text0 <> text1)) e')
-                _ ->
+                let l@(Note (Src startL _ textL) _) `op` r@(Note (Src _ endR textR) _) =
+                        Note (Src startL endR (textL <> textOp <> textR)) (l `op0` r)
                     -- We shouldn't hit this branch if things are working, but
                     -- that is not enforced in the types
-                    return e
+                    l `op` r =
+                        l `op0` r
+
+                return (`op` r0)
+
+            return (foldl' (\x f -> f x) a bs)
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
