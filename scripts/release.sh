@@ -17,7 +17,7 @@ function release {
   cabal upload --publish "dist/${NAME}-${VERSION}.tar.gz"
   if [ "${NAME}" = "dhall-nix" ]
   then
-    cabal v2-haddock --builddir=docs --haddock-for-hackage --enable-documentation
+    cabal v1-haddock --builddir=docs --for-hackage --haddock-options="--hyperlinked-source --quickjump"
     cabal upload --documentation --publish "docs/${NAME}-${VERSION}-docs.tar.gz"
   fi
   git clean --force -d -x .
