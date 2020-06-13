@@ -15,6 +15,11 @@ function release {
   cabal v1-configure --disable-tests --disable-benchmarks
   cabal v1-sdist
   cabal upload --publish "dist/${NAME}-${VERSION}.tar.gz"
+  if [ "${NAME}" = "dhall-nix" ]
+  then
+    cabal v2-haddock --builddir=docs --haddock-for-hackage --enable-documentation
+    cabal upload --documentation --publish "docs/${NAME}-${VERSION}-docs.tar.gz"
+  fi
   git clean --force -d -x .
   popd
 
