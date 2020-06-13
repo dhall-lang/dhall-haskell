@@ -556,6 +556,7 @@ skeleton (Record {}) =
     <>  ignore
     <>  " "
     <>  rbrace
+    <>  " (a record)"
 skeleton (RecordLit {}) =
         lbrace
     <>  " "
@@ -576,6 +577,7 @@ skeleton (Union {}) =
     <>  ignore
     <>  " "
     <>  rangle
+    <> " (an union)"
 skeleton (Combine {}) =
         ignore
     <>  " "
