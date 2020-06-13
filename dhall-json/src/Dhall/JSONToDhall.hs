@@ -401,6 +401,10 @@ import qualified Dhall.Parser
 import qualified Dhall.TypeCheck            as D
 import qualified Options.Applicative        as O
 
+
+-- debug
+import Debug.Trace
+
 -- ---------------
 -- Command options
 -- ---------------
@@ -1131,23 +1135,28 @@ getCompletableRecords (D.RecordLit schemas) = go (Map.toList schemas)
       where
         go' attr = case Map.lookup attr fields of
           Just (D.RecordLit schema) -> Map.toList schema
+          Just (D.Record schema) -> Map.toList schema
           _ -> []
 getCompletableRecords _ = []
 
 type ExprS = Expr Src D.Import
 
--- Give a record attributes map, look for matching completable record and return the correct default attributes
+-- Given a record attributes map, look for matching completable record and return the minimum attributes that complete the record
 findMatchingRecords :: Map.Map Text ExprS -> [(Text, CompletableRecord)] -> [(Text, Map.Map Text ExprS)]
 findMatchingRecords schema = map go
   where
     go :: (Text, CompletableRecord) -> (Text, Map.Map Text ExprS)
-    go (name, (rtype, rdefault)) =
-      if recordFit rtype rdefault
+    go (name, (rtype, rdefault)) = -- trace ("Testing " <> Text.unpack name <> " : " <> show (Map.fromList rtype)) $
+      if recordFit (Map.fromList rtype) rdefault
       then (name, removeDefault rdefault)
       else (name, Map.empty)
-    -- TODO
-    recordFit _ _ = True
-    -- TODO
+
+    -- TODO: check for default and matching types
+    recordFit rtype rdefault
+      | Map.keysSet schema `Set.isSubsetOf` Map.keysSet rtype = True
+      | otherwise = False
+
+    -- TODO: remove un-necessary defaults
     removeDefault _ = schema
 
 dhallFromJSONSchemas :: FilePath -> ExprX -> ExprS -> Either CompileError ExprS
