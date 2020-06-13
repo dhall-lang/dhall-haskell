@@ -346,6 +346,7 @@ module Dhall.JSONToDhall (
     , resolveSchemaExpr
     , typeCheckSchemaExpr
     , dhallFromJSON
+    , dhallFromJSONSchemas
 
     -- * Schema inference
     , Schema(..)
@@ -1103,6 +1104,27 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop jsonPath expr value
         = Left (Mismatch expr value jsonPath)
 
+{-| Another conversion function that generates a record schemas:
+
+>>> :set -XOverloadedStrings
+>>> import qualified Dhall.Core as D
+>>> import qualified Dhall.Map as Map
+>>> import qualified Data.Aeson as Aeson
+>>> import qualified Data.HashMap.Strict as HM
+
+>>> schemas = parseExpr "(input)" "{ Test = { Type = { a : Bool, b : Optional Bool }, default = { b = None Bool }}, Other = { Type = {}, default = {=} } }"
+>>> s = D.Record (Map.fromList [("a", D.Bool)])
+>>> v = Aeson.Object (HM.fromList [("a", Aeson.Bool True)])
+>>> dhallFromJSONSchemas defaultConversion schemas s v
+Right (Let (Binding {bindingSrc0 = Nothing, variable = "schemas", bindingSrc1 = Nothing, annotation = Nothing, bindingSrc2 = Nothing,
+                     value = Embed (Import {importHashed = ImportHashed {hash = Nothing, importType = Local Here (File {directory = Directory {components = []}, file = "package.dhall"})}, importMode = Code})})
+      (RecordCompletion (Field (Var (V "schemas" 0)) "Test") (RecordLit (fromList [("a",Bool)])))
+
+-}
+--
+dhallFromJSONSchemas
+  :: Conversion -> Dhall.Core.Expr s D.Import -> ExprX -> Aeson.Value -> Either CompileError ExprX
+dhallFromJSONSchemas _conversion _schemas _expr _val = Right D.Bool
 
 -- ----------
 -- EXCEPTIONS

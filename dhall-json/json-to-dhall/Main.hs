@@ -11,6 +11,7 @@ module Main where
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException, throwIO)
 import Data.Monoid ((<>))
+import Dhall.Parser (exprFromText)
 import Data.Text (Text)
 import Data.Version (showVersion)
 import Dhall.JSONToDhall
@@ -46,9 +47,14 @@ parserInfo = Options.info
           )
 
 -- | All the command arguments and options
+data Schemas
+    =  SchemaName (Maybe Text)
+    |  SchemasFile FilePath
+    deriving Show
+
 data Options
     = Default
-        { schema     :: Maybe Text
+        { schemas    :: Schemas
         , conversion :: Conversion
         , file       :: Maybe FilePath
         , output     :: Maybe FilePath
@@ -69,7 +75,9 @@ parseOptions :: Parser Options
 parseOptions =
         typeCommand
     <|> (   Default
-        <$> optional parseSchema
+        <$> (   SchemaName  <$> optional parseSchema
+            <|> SchemasFile <$> parseSchemas
+            )
         <*> parseConversion
         <*> optional parseFile
         <*> optional parseOutput
@@ -96,6 +104,13 @@ parseOptions =
         Options.strArgument
             (  Options.metavar "SCHEMA"
             <> Options.help "Dhall type (schema).  You can omit the schema to let the executable infer the schema from the JSON value."
+            )
+
+    parseSchemas =
+        Options.strOption
+            (   Options.long "schemas"
+            <>  Options.help "List of schemas to look for record completion output"
+            <>  Options.metavar "FILE"
             )
 
     parseVersion =
@@ -162,6 +177,12 @@ main = do
 
             typeCheckSchemaExpr id finalSchema
 
+    let loadSchemas filePath = do
+          fileContent <- Text.IO.readFile filePath
+          case exprFromText filePath fileContent of
+                Left _ -> throwIO (userError "Couldn't parse schemas file")
+                Right v -> return (Dhall.Core.denote v)
+
     let renderExpression characterSet plain output expression = do
             let document =
                     Dhall.Pretty.prettyCharacterSet characterSet expression
@@ -197,9 +218,18 @@ main = do
             handle $ do
                 value <- toValue file
 
-                finalSchema <- toSchema schema value
+                expression <- case schemas of
+                    SchemaName name -> do
+                        finalSchema <- toSchema name value
 
-                expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
+                        Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
+
+                    SchemasFile filePath -> do
+                        inputSchemas <- loadSchemas filePath
+
+                        finalSchema <- toSchema Nothing value
+
+                        Dhall.Core.throws (dhallFromJSONSchemas conversion inputSchemas finalSchema value)
 
                 renderExpression characterSet plain output expression
 
