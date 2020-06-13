@@ -652,8 +652,9 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
 
     let buildDhallDirectoryPackage = "buildDhallDirectoryPackage"
 
-    let src | null directoryString = directoryString
-            | otherwise            = init directoryString
+    let src | null directoryString        = directoryString
+            | last directoryString == '/' = init directoryString
+            | otherwise                   = directoryString
 
     let nixExpression =
             Nix.mkFunction
