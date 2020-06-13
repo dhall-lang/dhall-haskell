@@ -11,9 +11,11 @@ module Main where
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException, throwIO)
 import Data.Monoid ((<>))
+import Dhall.Import (load)
 import Dhall.Parser (exprFromText)
 import Data.Text (Text)
 import Data.Version (showVersion)
+import Data.Void (absurd)
 import Dhall.JSONToDhall
 import Dhall.Pretty (CharacterSet(..))
 import Options.Applicative (Parser, ParserInfo)
@@ -181,7 +183,9 @@ main = do
           fileContent <- Text.IO.readFile filePath
           case exprFromText filePath fileContent of
                 Left _ -> throwIO (userError "Couldn't parse schemas file")
-                Right v -> return (Dhall.Core.denote v)
+                Right v -> do
+                    resolved <- Dhall.Import.load v
+                    return $ Dhall.Core.denote resolved
 
     let renderExpression characterSet plain output expression = do
             let document =
@@ -218,20 +222,32 @@ main = do
             handle $ do
                 value <- toValue file
 
-                expression <- case schemas of
+                case schemas of
                     SchemaName name -> do
                         finalSchema <- toSchema name value
 
-                        Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
+                        expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
+
+                        renderExpression characterSet plain output expression
 
                     SchemasFile filePath -> do
                         inputSchemas <- loadSchemas filePath
 
+                        -- print $ "inputSchemas => " <> (show inputSchemas)
+
                         finalSchema <- toSchema Nothing value
 
-                        Dhall.Core.throws (dhallFromJSONSchemas conversion inputSchemas finalSchema value)
+                        -- print $ "finalSchema => " <> show finalSchema
 
-                renderExpression characterSet plain output expression
+                        expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
+
+                        let expression' = fmap Data.Void.absurd expression
+
+                        -- print $ "expression => " <> show expression
+
+                        finalExpression <- Dhall.Core.throws (dhallFromJSONSchemas filePath inputSchemas expression')
+
+                        renderExpression characterSet plain output finalExpression
 
         Type{..} -> do
             let characterSet = toCharacterSet ascii

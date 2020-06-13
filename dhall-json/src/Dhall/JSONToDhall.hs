@@ -388,6 +388,7 @@ import qualified Data.Map
 import qualified Data.Map.Merge.Lazy        as Data.Map.Merge
 import qualified Data.Ord                   as Ord
 import qualified Data.Sequence              as Seq
+import qualified Data.Set                   as Set
 import qualified Data.String
 import qualified Data.Text                  as Text
 import qualified Data.Vector                as Vector
@@ -1104,27 +1105,88 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop jsonPath expr value
         = Left (Mismatch expr value jsonPath)
 
-{-| Another conversion function that generates a record schemas:
+{-| Another conversion function that generates a record schemas
 
->>> :set -XOverloadedStrings
->>> import qualified Dhall.Core as D
->>> import qualified Dhall.Map as Map
->>> import qualified Data.Aeson as Aeson
->>> import qualified Data.HashMap.Strict as HM
-
->>> schemas = parseExpr "(input)" "{ Test = { Type = { a : Bool, b : Optional Bool }, default = { b = None Bool }}, Other = { Type = {}, default = {=} } }"
->>> s = D.Record (Map.fromList [("a", D.Bool)])
->>> v = Aeson.Object (HM.fromList [("a", Aeson.Bool True)])
->>> dhallFromJSONSchemas defaultConversion schemas s v
-Right (Let (Binding {bindingSrc0 = Nothing, variable = "schemas", bindingSrc1 = Nothing, annotation = Nothing, bindingSrc2 = Nothing,
-                     value = Embed (Import {importHashed = ImportHashed {hash = Nothing, importType = Local Here (File {directory = Directory {components = []}, file = "package.dhall"})}, importMode = Code})})
-      (RecordCompletion (Field (Var (V "schemas" 0)) "Test") (RecordLit (fromList [("a",Bool)])))
-
+TODO: add >>> doctest
 -}
---
-dhallFromJSONSchemas
-  :: Conversion -> Dhall.Core.Expr s D.Import -> ExprX -> Aeson.Value -> Either CompileError ExprX
-dhallFromJSONSchemas _conversion _schemas _expr _val = Right D.Bool
+
+-- Utility function to get the list of completable record from the input schemas
+type CompletableRecord = ([(Text, ExprX)], [(Text, ExprX)])
+getCompletableRecords :: ExprX -> [(Text, CompletableRecord)]
+getCompletableRecords (D.RecordLit schemas) = go (Map.toList schemas)
+  where
+    go :: [(Text, ExprX)] -> [(Text, CompletableRecord)]
+    go [] = []
+    go ((name, D.RecordLit schema):xs) =
+      if isSchema schema
+      then getCompletableRecord name schema : go xs
+      else go xs
+    go (_:xs) = go xs
+    isSchema recordItems
+      -- TODO: check that `Type` is a Record Type and `default` is a Record literal
+      | Map.keysSet recordItems == Set.fromList [Text.pack "Type", Text.pack "default"] = True
+      | otherwise = False
+    getCompletableRecord :: Text -> Map.Map Text ExprX -> (Text, CompletableRecord)
+    getCompletableRecord name fields = (name, (go' "Type", go' "default"))
+      where
+        go' attr = case Map.lookup attr fields of
+          Just (D.RecordLit schema) -> Map.toList schema
+          _ -> []
+getCompletableRecords _ = []
+
+type ExprS = Expr Src D.Import
+
+-- Give a record attributes map, look for matching completable record and return the correct default attributes
+findMatchingRecords :: Map.Map Text ExprS -> [(Text, CompletableRecord)] -> [(Text, Map.Map Text ExprS)]
+findMatchingRecords schema = map go
+  where
+    go :: (Text, CompletableRecord) -> (Text, Map.Map Text ExprS)
+    go (name, (rtype, rdefault)) =
+      if recordFit rtype rdefault
+      then (name, removeDefault rdefault)
+      else (name, Map.empty)
+    -- TODO
+    recordFit _ _ = True
+    -- TODO
+    removeDefault _ = schema
+
+dhallFromJSONSchemas :: FilePath -> ExprX -> ExprS -> Either CompileError ExprS
+dhallFromJSONSchemas filePath schemas (D.RecordLit schema) =
+  do
+    if null completableRecords
+      then Left NoSchemas
+      else if null completedRecords
+           then Left NoMatchingSchema
+           else Right $ mkExpression $ head completedRecords
+  where
+    completableRecords = getCompletableRecords schemas
+    completedRecords :: [(Text, Map.Map Text ExprS)]
+    completedRecords =
+      filter
+        (\(_, attr) -> attr /= Map.empty)
+        (findMatchingRecords schema completableRecords)
+    mkExpression :: (Text, Map.Map Text ExprS) -> ExprS
+    mkExpression (name, attrs) = D.Let
+      (D.Binding {
+          bindingSrc0 = Nothing,
+          variable = "schemas",
+          bindingSrc1 = Nothing,
+          annotation = Nothing,
+          bindingSrc2 = Nothing,
+          value = D.Embed mkImport
+          })
+      (mkRecordCompletion name attrs)
+    mkRecordCompletion :: Text -> Map.Map Text ExprS -> ExprS
+    mkRecordCompletion name attrs = D.RecordCompletion (D.Field (D.Var (D.V "schemas" 0)) name) (D.RecordLit attrs)
+    mkImport = D.Import {
+      importMode = D.Code,
+      importHashed = D.ImportHashed {
+          hash = Nothing,
+          importType = D.Local D.Here (D.File {directory = D.Directory {components = []},
+                                               file = Text.pack (drop 2 filePath) })
+          }
+      }
+dhallFromJSONSchemas _ _ _ = Left NoInputSchemas
 
 -- ----------
 -- EXCEPTIONS
@@ -1161,6 +1223,10 @@ data CompileError
   -- union specific
   | ContainsUnion        ExprX
   | UndecidableUnion     ExprX Value [ExprX]
+  -- schemas specific
+  | NoSchemas
+  | NoInputSchemas
+  | NoMatchingSchema
 
 instance Show CompileError where
     show = showCompileError "JSON" showJSON
@@ -1225,6 +1291,12 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> "\n\nExpected Dhall type:\n" <> showExpr e
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
+
+    NoSchemas -> prefix <> "No schemas record found"
+
+    NoInputSchemas -> prefix <> "Input is not a schema"
+
+    NoMatchingSchema -> prefix <> "Input does not match any schema"
 
 showJsonPath :: Aeson.Types.JSONPath -> String
 showJsonPath = Aeson.Types.formatPath . reverse
