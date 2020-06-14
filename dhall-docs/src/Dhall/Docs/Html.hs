@@ -7,7 +7,6 @@
     here to properly link css and images.
 -}
 
-{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE RecordWildCards      #-}
@@ -28,10 +27,6 @@ import Path         (Abs, Dir, File, Path, Rel)
 import qualified Control.Monad
 import qualified Data.Text
 import qualified Path
-
-#if !MIN_VERSION_path(0,7,0)
-import qualified System.FilePath as FilePath
-#endif
 
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams
@@ -107,15 +102,9 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     tryToTakeExt :: Path Rel File -> FilePath
 
-#if MIN_VERSION_path(0,7,0)
     tryToTakeExt file = Path.fromRelFile $ case Path.splitExtension file of
         Nothing -> file
         Just (f, _) -> f
-#else
-    -- Sadly `path` < 0.7.0 doesn't provide a way to remove the extension
-    -- so we have to convert it to `FilePath` to do further manipulations
-    tryToTakeExt file = FilePath.replaceExtension (Path.fromRelFile file) ""
-#endif
 
     title :: String
     title = indexDir <> " index"
