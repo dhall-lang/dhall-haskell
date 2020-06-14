@@ -160,20 +160,24 @@ a:active {
     font-size: 1.3rem;
     margin: 0;
     margin-left: 1rem;
-    cursor: pointer;
 }
 
-.nav-bar .nav-option {
+.nav-bar a.nav-option {
     font-size: 1rem;
     height: 100%;
     margin: 0 0.5rem;
     cursor: pointer;
     transition: 0.5s;
+    text-decoration: none;
 }
 
-.nav-bar .nav-option:hover {
+.nav-bar a.nav-option:hover {
     text-decoration: underline;
     text-decoration-color: #EBEBEB;
+}
+
+.nav-bar a.nav-option:active, .nav-bar a.nav-option, .nav-bar a.nav-option:visited {
+    color: #EBEBEB;
 }
 
 .nav-bar .nav-bar-content-divider {

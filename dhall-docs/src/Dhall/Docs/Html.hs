@@ -135,15 +135,14 @@ navBar DocParams{..} = div_ [class_ "nav-bar"] $ do
     div_ [class_ "nav-bar-content-divider"] ""
 
     -- Right side of the nav-bar
-    makeOption ("go-to-source-code", "Source code")
-    makeOption ("switch-light-dark-mode", "Switch Light/Dark Mode")
-    makeOption ("go-to-index", "Go to package index")
+    -- with makeOption [id_ "go-to-source-code"] "Source code"
+    with makeOption [id_ "switch-light-dark-mode"] "Switch Light/Dark Mode"
+    with makeOption
+        [ id_ "go-to-index"
+        , href_ $ Data.Text.pack $ relativeResourcesPath <> "index.html"
+        ] "Go to package index"
   where
-    makeOption :: (Text, Text) -> Html ()
-    makeOption (htmlId, content) = p_
-        [ class_ "nav-option"
-        , id_ htmlId
-        ] $ toHtml content
+    makeOption = with a_ [class_ "nav-option"]
 
 
 headContents :: String -> DocParams -> Html ()
