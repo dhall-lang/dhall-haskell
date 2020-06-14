@@ -14,7 +14,5 @@ main = do
     prefix <- System.Directory.makeAbsolute pwd
     Test.DocTest.doctest
         [ "--fast"
-        , "-XOverloadedStrings"
-        , "-XRecordWildCards"
         , prefix </> "src"
         ]
