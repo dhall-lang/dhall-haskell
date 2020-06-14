@@ -54,6 +54,7 @@ import Test.Tasty.QuickCheck (QuickCheckTests(..))
 import Text.Megaparsec (SourcePos(..), Pos)
 
 import qualified Control.Spoon
+import qualified Data.Foldable as Foldable
 import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.SpecialValues
@@ -71,6 +72,7 @@ import qualified Dhall.Parser as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
+import qualified Lens.Family as Lens
 import qualified Numeric.Natural as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
@@ -492,6 +494,18 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds :: Typer a
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
+noDoubleNotes :: Expr () Import -> Property
+noDoubleNotes expression =
+    length
+        [ ()
+        | e <- Foldable.toList parsedExpression
+        , Note _ (Note _ _) <- Lens.toListOf Dhall.Core.subExpressions e
+        ] === 0
+  where
+    text = Dhall.Core.pretty expression
+
+    parsedExpression = Parser.exprFromText "" text
+
 embedThenExtractIsIdentity
     :: forall a. (ToDhall a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
     => Proxy a
@@ -544,6 +558,10 @@ tests =
         , ( "Normalizing an expression doesn't change its inferred type"
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , adjustQuickCheckTests 10000
+          )
+        , ( "Parsing an expression doesn't generated doubly-nested Note constructors"
+          , Test.QuickCheck.property noDoubleNotes
+          , adjustQuickCheckTests 100
           )
         , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
         , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])
