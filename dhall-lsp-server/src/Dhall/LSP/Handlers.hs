@@ -15,7 +15,8 @@ import Dhall.Parser (Src(..))
 import Dhall.Pretty (CharacterSet(..))
 
 import Dhall.LSP.Backend.Completion (Completion(..), completionQueryAt,
-  completeEnvironmentImport, completeLocalImport, buildCompletionContext, completeProjections, completeFromContext)
+  completeEnvironmentImport, completeLocalImport, buildCompletionContext,
+  completeProjections, completeFromContext, completeFromErrors)
 import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
   fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
 import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
@@ -147,16 +148,17 @@ fileIdentifierFromUri uri =
 rangeToJSON :: Range -> J.Range
 rangeToJSON (Range (x1,y1) (x2,y2)) = J.Range (J.Position x1 y1) (J.Position x2 y2)
 
+isHovered :: Diagnosis -> Int -> Int -> Bool
+isHovered (Diagnosis _ (Just (Range left right)) _) line col =
+        left <= (line,col) && (line,col) <= right
+isHovered _ _ _= False
+
 hoverExplain :: J.HoverRequest -> HandlerM ()
 hoverExplain request = do
   let uri = request ^. J.params . J.textDocument . J.uri
       J.Position line col = request ^. J.params . J.position
   mError <- uses errors $ Map.lookup uri
-  let isHovered (Diagnosis _ (Just (Range left right)) _) =
-        left <= (line,col) && (line,col) <= right
-      isHovered _ = False
-
-      hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) =
+  let hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) =
         let _range = Just $ J.Range (uncurry J.Position left)
                                     (uncurry J.Position right)
             encodedDiag = URI.encode (Text.unpack diagnosis)
@@ -168,7 +170,7 @@ hoverExplain request = do
 
       mHover = do err <- mError
                   explanation <- explain err
-                  guard (isHovered explanation)
+                  guard (isHovered explanation line col)
                   hoverFromDiagnosis explanation
   lspRespond LSP.RspHover request mHover
 
@@ -194,7 +196,7 @@ hoverHandler request = do
   errorMap <- use errors
   case Map.lookup uri errorMap of
     Nothing -> hoverType request
-    _ -> hoverExplain request
+    _ -> hoverType request
 
 
 documentLinkHandler :: J.DocumentLinkRequest -> HandlerM ()
@@ -457,6 +459,19 @@ executeFreezeImport request = do
   lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
     (J.ApplyWorkspaceEditParams edit)
 
+errorCompletionHandler :: J.CompletionRequest -> HandlerM [Completion]
+errorCompletionHandler request = do
+  let uri = request ^. J.params . J.textDocument . J.uri
+      line = request ^. J.params . J.position . J.line
+      col = request ^. J.params . J.position . J.character
+  mError <- uses errors $ Map.lookup uri
+  return $ do
+        err <- maybeToList mError
+        explanation <- maybeToList $ explain err
+        guard (isHovered explanation line col)
+        completeFromErrors err
+
+
 completionHandler :: J.CompletionRequest -> HandlerM ()
 completionHandler request = do
   let uri = request ^. J.params . J.textDocument . J.uri
@@ -466,6 +481,7 @@ completionHandler request = do
   txt <- readUri uri
   let (completionLeadup, completionPrefix) = completionQueryAt txt (line, col)
 
+  completionsFromErrors <- errorCompletionHandler request
   let computeCompletions
         -- environment variable
         | "env:" `isPrefixOf` completionPrefix =
@@ -504,12 +520,14 @@ completionHandler request = do
               assign importCache cache''
               return (completeProjections completionContext targetExpr')
             Left _ -> return []
-
+        -- in error
+        | not (null completionsFromErrors) = return completionsFromErrors
         -- complete identifiers in scope
         | otherwise = do
           let bindersExpr = binderExprFromText completionLeadup
 
           fileIdentifier <- fileIdentifierFromUri uri
+
           cache <- use importCache  -- todo save cache afterwards
           loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
 
@@ -519,9 +537,8 @@ completionHandler request = do
                 assign importCache cache'
                 return binders
               Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
-
           let context = buildCompletionContext bindersExpr'
-          return (completeFromContext context)
+          return $ completeFromContext context
 
   completions <- computeCompletions
 

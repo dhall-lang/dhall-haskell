@@ -125,6 +125,15 @@ codeCompletionSpec fixtureDir =
           let firstItem = head cs
           _label firstItem `shouldBe` "bob"
           _detail firstItem `shouldBe` Just "Text"
+    it "suggests record labels even in error"
+      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ do
+        docId <- openDoc "TypedRecordError.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 13})
+        liftIO $ do
+          let firstItem = head cs
+          _label firstItem `shouldBe` ", name"
+          _detail firstItem `shouldBe` Just "Text"
     it "suggests functions from imports"
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
       $ do

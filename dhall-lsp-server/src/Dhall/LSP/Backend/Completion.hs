@@ -3,8 +3,11 @@ module Dhall.LSP.Backend.Completion where
 import Data.List (foldl')
 import Data.Text (Text)
 import Data.Void (Void, absurd)
+import qualified Data.Set as Set
 import Dhall.Context (Context, insert)
 import Dhall.Context (empty, toList)
+import qualified Dhall.TypeCheck as Dhall
+import Dhall.LSP.Backend.Dhall (DhallError(..))
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
 import Dhall.LSP.Backend.Parsing (holeExpr)
 import Dhall.Parser (Src, exprFromText)
@@ -152,6 +155,27 @@ contextToVariables ((name, _) : rest) =
   V name 0 : map (inc name) (contextToVariables rest)
  where inc x (V y i) | x == y = V x (i + 1)
                      | otherwise = V y i
+
+completeFromAnnotMismatch :: Expr Src Void -> Expr Src Void -> [Completion]
+-- Completing from record mismatch
+completeFromAnnotMismatch (Record annot) (Record literal) =
+  let present = Set.fromList $ map fst (Dhall.Map.toList literal)
+      toCompletion (name, typ) =
+          Completion (", " <> (Dhall.Pretty.escapeLabel True name)) (Just typ)
+  in map toCompletion $ filter (\(n, _) -> not (Set.member n present)) (Dhall.Map.toList annot)
+
+-- Catch-all for AnnotMismatch completion
+completeFromAnnotMismatch _ _ = []
+
+completeFromErrors :: DhallError -> [Completion]
+completeFromErrors (ErrorTypecheck Dhall.TypeError {typeMessage = msg}) =
+  let
+    fromAnnotation (Dhall.AnnotMismatch _ expr1 expr2) =
+      completeFromAnnotMismatch expr1 expr2
+    fromAnnotation _ = []
+  in
+    fromAnnotation msg
+completeFromErrors _ = []
 
 -- | Complete identifiers from the given completion context.
 completeFromContext :: CompletionContext -> [Completion]
