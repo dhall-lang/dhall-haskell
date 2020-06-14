@@ -430,6 +430,7 @@ skeleton (Lam {}) =
     <>  rarrow
     <>  " "
     <>  ignore
+    <> " (a function)"
 skeleton (Pi {}) =
         ignore
     <>  " "
