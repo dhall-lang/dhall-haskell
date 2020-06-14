@@ -127,6 +127,7 @@ body * {
 }
 
 a {
+    transition: 0.5s;
     color: #008489;
 }
 
@@ -199,4 +200,16 @@ body.dark-mode {
 
 .dark-mode .nav-bar {
     background-color: #5d5d5d;
+}
+
+.dark-mode a {
+    color: #FFA632;
+}
+
+.dark-mode a:visited {
+    color: #008489;
+}
+
+.dark-mode a:active {
+    color: #914669;
 }
