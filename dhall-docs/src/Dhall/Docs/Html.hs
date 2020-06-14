@@ -60,7 +60,7 @@ filePathHeaderToHtml
     -> DocParams               -- ^ Parameters for the documentation
     -> Html ()
 filePathHeaderToHtml (filePath, header) params@DocParams{..} =
-    html_ $ do
+    doctypehtml_ $ do
         headContents title params
         body_ $ do
             navBar params
@@ -78,7 +78,7 @@ indexToHtml
     -> [Path Rel Dir]  -- ^ Generated directories in that directory
     -> DocParams       -- ^ Parameters for the documentation
     -> Html ()
-indexToHtml indexDir files dirs params@DocParams{..} = html_ $ do
+indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     headContents title params
     body_ $ do
         navBar params
