@@ -128,24 +128,24 @@ decodeExpressionInternal decodeEmbed = go
 
         case tokenType₀ of
             TypeUInt -> do
-                !n <- Decoding.decodeWord
+                !n <- fromIntegral <$> Decoding.decodeWord
 
-                return (Var (V "_" (fromIntegral n)))
+                return (Var (V "_" n))
 
             TypeUInt64 -> do
-                !n <- Decoding.decodeWord64
+                !n <- fromIntegral <$> Decoding.decodeWord64
 
-                return (Var (V "_" (fromIntegral n)))
+                return (Var (V "_" n))
 
             TypeFloat16 -> do
-                !n <- Decoding.decodeFloat
+                !n <- float2Double <$> Decoding.decodeFloat
 
-                return (DoubleLit (DhallDouble (float2Double n)))
+                return (DoubleLit (DhallDouble n))
 
             TypeFloat32 -> do
-                !n <- Decoding.decodeFloat
+                !n <- float2Double <$> Decoding.decodeFloat
 
-                return (DoubleLit (DhallDouble (float2Double n)))
+                return (DoubleLit (DhallDouble n))
 
             TypeFloat64 -> do
                 !n <- Decoding.decodeDouble
@@ -218,14 +218,14 @@ decodeExpressionInternal decodeEmbed = go
 
                         case tokenType₂ of
                             TypeUInt -> do
-                                !n <- Decoding.decodeWord
+                                !n <- fromIntegral <$> Decoding.decodeWord
 
-                                return (Var (V x (fromIntegral n)))
+                                return (Var (V x n))
 
                             TypeUInt64 -> do
-                                !n <- Decoding.decodeWord64
+                                !n <- fromIntegral <$> Decoding.decodeWord64
 
-                                return (Var (V x (fromIntegral n)))
+                                return (Var (V x n))
 
                             _ -> do
                                 die ("Unexpected token type for variable index: " <> show tokenType₂)
@@ -459,18 +459,18 @@ decodeExpressionInternal decodeEmbed = go
 
                                 case tokenType₂ of
                                     TypeUInt -> do
-                                        n <- Decoding.decodeWord
+                                        !n <- fromIntegral <$> Decoding.decodeWord
 
-                                        return (NaturalLit (fromIntegral n))
+                                        return (NaturalLit n)
 
                                     TypeUInt64 -> do
-                                        n <- Decoding.decodeWord64
+                                        !n <- fromIntegral <$> Decoding.decodeWord64
 
-                                        return (NaturalLit (fromIntegral n))
+                                        return (NaturalLit n)
 
                                     TypeInteger -> do
-                                        n <- Decoding.decodeInteger
-                                        return (NaturalLit (fromIntegral n))
+                                        !n <- fromIntegral <$> Decoding.decodeInteger
+                                        return (NaturalLit n)
 
                                     _ -> do
                                         die ("Unexpected token type for Natural literal: " <> show tokenType₂)
@@ -480,24 +480,24 @@ decodeExpressionInternal decodeEmbed = go
 
                                 case tokenType₂ of
                                     TypeUInt -> do
-                                        n <- Decoding.decodeWord
+                                        !n <- fromIntegral <$> Decoding.decodeWord
 
-                                        return (IntegerLit (fromIntegral n))
+                                        return (IntegerLit n)
 
                                     TypeUInt64 -> do
-                                        n <- Decoding.decodeWord64
+                                        !n <- fromIntegral <$> Decoding.decodeWord64
 
-                                        return (IntegerLit (fromIntegral n))
+                                        return (IntegerLit n)
 
                                     TypeNInt -> do
-                                        n <- Decoding.decodeNegWord
+                                        !n <- fromIntegral <$> Decoding.decodeNegWord
 
-                                        return (IntegerLit (-1 - fromIntegral n))
+                                        return (IntegerLit $! (-1 - n))
 
                                     TypeNInt64 -> do
-                                        n <- Decoding.decodeNegWord64
+                                        !n <- fromIntegral <$> Decoding.decodeNegWord64
 
-                                        return (IntegerLit (-1 - fromIntegral n))
+                                        return (IntegerLit $! (-1 - n))
                                     TypeInteger -> do
                                         n <- Decoding.decodeInteger
                                         return (IntegerLit n)
