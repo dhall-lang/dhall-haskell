@@ -335,8 +335,8 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         Decoding.decodeNull
 
-                                        xs <- replicateDecoder (len - 2) go
-                                        return (ListLit Nothing (Data.Sequence.fromList xs))
+                                        xs <- Data.Sequence.replicateA (len - 2) go
+                                        return (ListLit Nothing xs)
 
                             5 -> do
                                 Decoding.decodeNull
