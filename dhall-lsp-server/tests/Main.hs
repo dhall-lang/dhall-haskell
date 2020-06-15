@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromJust)
@@ -6,13 +7,14 @@ import qualified Data.Text as T
 import qualified GHC.IO.Encoding
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
-  ( CompletionItem (..),
-    Diagnostic (..),
-    DiagnosticSeverity (..),
-    Hover (..),
-    HoverContents (..),
-    MarkupContent (..),
-    Position (..),
+  ( CompletionItem(..)
+  , Diagnostic(..)
+  , DiagnosticSeverity(..)
+  , Hover(..)
+  , HoverContents(..)
+  , MarkupContent(..)
+  , Position(..)
+  , Range(..)
   )
 import Test.Tasty
 import Test.Tasty.Hspec
@@ -48,15 +50,36 @@ lintingSpec fixtureDir =
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
       $ do
         _ <- openDoc "UnusedBindings.dhall" "dhall"
+
         diags <- waitForDiagnosticsSource "Dhall.Lint"
-        _ <-
-          liftIO $
-            mapM
-              ( \diag -> do
-                  _severity diag `shouldBe` Just DsHint
-                  T.unpack (_message diag) `shouldContain` "Unused let binding"
-              )
-              diags
+
+        liftIO $ diags `shouldBe`
+            [ Diagnostic
+                { _range = Range
+                    {_start = Position { _line = 2, _character = 10 }
+                    , _end = Position { _line = 2, _character = 36 }
+                    }
+                , _severity = Just DsHint
+                , _code = Nothing
+                , _source = Just "Dhall.Lint"
+                , _message = "Unused let binding 'bob'"
+                , _tags = Nothing
+                , _relatedInformation = Nothing
+                }
+            , Diagnostic
+                { _range = Range
+                    { _start = Position { _line = 4, _character = 11 }
+                    , _end = Position { _line = 4, _character = 38 }
+                    }
+                , _severity = Just DsHint
+                , _code = Nothing
+                , _source = Just "Dhall.Lint"
+                , _message = "Unused let binding 'carl'"
+                , _tags = Nothing
+                , _relatedInformation = Nothing
+                }
+            ]
+
         pure ()
     it "reports multiple hints"
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
