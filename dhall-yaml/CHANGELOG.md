@@ -1,8 +1,11 @@
 1.2.0
 
-* [Add `--generated-comment` flag for `dhall-to-yaml{-ng}`](https://github.com/dhall-lang/dhall-haskell/pull/1840)
+* BREAKING CHANGE: [Add `--generated-comment` flag for `dhall-to-yaml{-ng}`](https://github.com/dhall-lang/dhall-haskell/pull/1840)
     * You can now optionally add a comment header to the YAML output
       indicating that the file is generated and should not be hand-edited
+    * This is a breaking change because this adds a new `noEdit` field to the
+      options type
+    * In practice this breakage won't affect most users
 * [Produce output compatible with YAML 1.1](https://github.com/dhall-lang/dhall-haskell/pull/1788)
     * Special strings like `on` are now quoted in order to avoid being
       misinterpreted as boolean values by YAML 1.1 implementations

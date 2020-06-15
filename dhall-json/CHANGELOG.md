@@ -1,9 +1,14 @@
 1.7.0
 
-* BREAKING CHANGE: [Add `noEdit` field to `Options` type](https://github.com/dhall-lang/dhall-haskell/pull/1840)
-    * This is mainly to power a new feature for the `dhall-yaml` package since
-      they share the same `Options` type
+* BREAKING CHANGE: [Add `--generated-comment` flag for `dhall-to-yaml{-ng}`](https://github.com/dhall-lang/dhall-haskell/pull/1840)
+    * You can now optionally add a comment header to the YAML output
+      indicating that the file is generated and should not be hand-edited
+    * This is a breaking change because this adds a new `noEdit` field to the
+      options type
     * In practice this breakage won't affect most users
+* [Produce output compatible with YAML 1.1](https://github.com/dhall-lang/dhall-haskell/pull/1788)
+    * Special strings like `on` are now quoted in order to avoid being
+      misinterpreted as boolean values by YAML 1.1 implementations
 * [Show JSON/YAML path on error reporting](https://github.com/dhall-lang/dhall-haskell/pull/1799)
     * Error messages will now include the path to the error in the diagnostic
       output
