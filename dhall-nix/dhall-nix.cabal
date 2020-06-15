@@ -54,7 +54,7 @@ Executable dhall-to-nix
         dhall                               ,
         dhall-nix                           ,
         hnix                                ,
-        optparse-generic >= 1.1.1   && < 1.4,
+        optparse-generic >= 1.1.1   && < 1.5,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010
