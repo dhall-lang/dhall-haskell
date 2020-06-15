@@ -437,6 +437,7 @@ skeleton (Pi {}) =
     <>  rarrow
     <>  " "
     <>  ignore
+    <> " (a function type)"
 skeleton (App Optional _) =
         "Optional "
     <>  ignore
