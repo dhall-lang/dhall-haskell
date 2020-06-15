@@ -17,7 +17,7 @@
     * Specifically, if there is a hash mismatch from the cached expression the
       interpreter will resolve the import again and fix the cache if the
       resolved import matches the expected hash
-* [Make `encodeExpression` polymorphic](Make encodeExpression polymorphic)
+* [Make `encodeExpression` polymorphic](https://github.com/dhall-lang/dhall-haskell/pull/1789)
     * `encodeExpression` now has a more general type, which means that you
       can use it to serialise expressions without imports (i.e.
       ones of type `Expr Void Void`)
