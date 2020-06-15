@@ -1,5 +1,7 @@
 # `dhall-docs`
 
+:construction: **This tool is on development phase yet. It is not usable right now.**
+
 For installation or development instructions, see:
 
 * [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md)
@@ -24,3 +26,13 @@ you can change that using the `--output` flag
 dhall-docs --input . --output ${OTHER_DIR}
 ```
 
+## Development
+
+If you want to open the `ghci` repl on this package using `stack`, you have to
+provide an additional flag:
+
+```bash
+stack ghci dhall-docs --flag dhall-docs:ghci-data-files
+```
+
+... otherwise the file-embedded css and fonts won't be properly linked
