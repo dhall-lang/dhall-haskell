@@ -1,4 +1,4 @@
-1.1.1
+1.2.0
 
 * [Add `--generated-comment` flag for `dhall-to-yaml{-ng}`](https://github.com/dhall-lang/dhall-haskell/pull/1840)
     * You can now optionally add a comment header to the YAML output
