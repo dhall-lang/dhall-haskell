@@ -11,6 +11,7 @@ import Test.Tasty (TestTree)
 import Turtle (FilePath, (</>))
 
 import qualified Control.Exception as Exception
+import qualified Control.Monad     as Monad
 import qualified Data.Text         as Text
 import qualified Data.Text.IO      as Text.IO
 import qualified Dhall.Core        as Core
@@ -28,7 +29,18 @@ typeInferenceDirectory = "./dhall-lang/tests/type-inference"
 
 getTests :: IO TestTree
 getTests = do
-    let successTestFiles = Turtle.lstree (typeInferenceDirectory </> "success")
+    let successTestFiles = do
+            path <- Turtle.lstree (typeInferenceDirectory </> "success")
+
+            let skip =
+                    -- This test intermittently fails with:
+                    -- "Error: Remote host not found"
+                    [ typeInferenceDirectory </> "success/CacheImportsCanonicalize"
+                    ]
+
+            Monad.guard (path `notElem` skip)
+
+            return path
 
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest successTestFiles
 
@@ -47,11 +59,9 @@ successTest :: Text -> TestTree
 successTest prefix = do
     let expectedFailures =
                 []
-
 #ifdef WITH_HTTP
 #else
             ++  [ typeInferenceDirectory </> "success/CacheImports"
-                , typeInferenceDirectory </> "success/CacheImportsCanonicalize"
                 ]
 #endif
 
