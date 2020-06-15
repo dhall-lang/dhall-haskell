@@ -1,3 +1,13 @@
+1.7.0
+
+* BREAKING CHANGE: [Add `noEdit` field to `Options` type](https://github.com/dhall-lang/dhall-haskell/pull/1840)
+    * This is mainly to power a new feature for the `dhall-yaml` package since
+      they share the same `Options` type
+    * In practice this breakage won't affect most users
+* [Show JSON/YAML path on error reporting](https://github.com/dhall-lang/dhall-haskell/pull/1799)
+    * Error messages will now include the path to the error in the diagnostic
+      output
+
 1.6.4
 
 * [Add `json-to-dhall` support for inferring the schema](https://github.com/dhall-lang/dhall-haskell/pull/1773)

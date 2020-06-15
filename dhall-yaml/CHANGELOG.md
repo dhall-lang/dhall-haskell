@@ -1,3 +1,15 @@
+1.1.1
+
+* [Add `--generated-comment` flag for `dhall-to-yaml{-ng}`](https://github.com/dhall-lang/dhall-haskell/pull/1840)
+    * You can now optionally add a comment header to the YAML output
+      indicating that the file is generated and should not be hand-edited
+* [Produce output compatible with YAML 1.1](https://github.com/dhall-lang/dhall-haskell/pull/1788)
+    * Special strings like `on` are now quoted in order to avoid being
+      misinterpreted as boolean values by YAML 1.1 implementations
+* [Show JSON/YAML path on error reporting](https://github.com/dhall-lang/dhall-haskell/pull/1799)
+    * Error messages will now include the path to the error in the diagnostic
+      output
+
 1.1.0
 
 * BREAKING CHANGE: [Add `yaml-to-dhall` support for inferring the schema](https://github.com/dhall-lang/dhall-haskell/pull/1773)
