@@ -208,17 +208,17 @@ saveHtml inputAbsDir outputAbsDir packageName (absFile, Header header) = do
 
     @
     createIndexes [absdir|/|]
-        [ [absfile|/a/b.txt|]
-        , [absfile|/a/c/b.txt|]
-        , [absfile|/a/c.txt"|]
+        [ [absfile|\/a\/b.txt|]
+        , [absfile|\/a\/c/b.txt|]
+        , [absfile|\/a\/c.txt"|]
         ]
     @
 
     ... will create two index.html files:
 
-    1. @/a/index.html@, that will list the @/a/b.txt@ and
-    @/a/c.txt@ files
-    2. @/a/c/index.html@ that will list the @a/c/b.txt@ file
+    1. @\/a\/index.html@, that will list the @\/a\/b.txt@ and
+    @\/a\/c.txt@ files
+    2. @\/a\/c\/index.html@ that will list the @\/a\/c\/b.txt@ file
 
 -}
 createIndexes
