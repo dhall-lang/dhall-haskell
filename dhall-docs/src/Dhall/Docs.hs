@@ -22,16 +22,20 @@ module Dhall.Docs
     ) where
 
 import Data.Monoid         ((<>))
+import Data.Text           (Text)
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
-import Dhall.Parser        (Header, ParseError (..), exprAndHeaderFromText)
+import Dhall.Docs.Markdown
+import Dhall.Parser        (Header (..), ParseError (..), exprAndHeaderFromText)
 import Options.Applicative (Parser, ParserInfo)
 import Path                (Abs, Dir, File, Path, (</>))
+import Text.Megaparsec     (ParseErrorBundle (..))
 
 import qualified Control.Monad
 import qualified Data.ByteString
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
+import qualified Data.Text
 import qualified Data.Text.IO        as Text.IO
 import qualified Lucid
 import qualified Options.Applicative
@@ -95,6 +99,15 @@ parserInfoOptions =
         <>  Options.Applicative.progDesc progDesc
         )
 
+showParseError
+    :: (Text.Megaparsec.Stream a, Text.Megaparsec.ShowErrorComponent b)
+    => ParseErrorBundle a b
+    -> String
+showParseError err =
+    "\n\ESC[1;33mWarning\ESC[0m: Invalid input\n\n" <>
+    Text.Megaparsec.errorBundlePretty err <>
+    "... documentation won't be generated for this file"
+
 {-| Fetches a list of all dhall files in a directory along with its `Header`.
     This is not the same as finding all files that ends in @.dhall@,
     but finds all files that successfully parses as a valid dhall file.
@@ -120,15 +133,19 @@ getAllDhallFilesAndHeaders baseDir = do
         let filePath = Path.fromAbsFile absFile
         contents <- Text.IO.readFile filePath
         case exprAndHeaderFromText filePath contents of
-            Right (header, _) -> return $ Just (absFile, header)
+            Right (header, _) -> return $ Just (absFile, removeComments header)
             Left ParseError{..} -> do
                 putStrLn $ showParseError unwrap
                 return Nothing
 
-    showParseError err =
-        "\n\ESC[1;33mWarning\ESC[0m: Invalid input\n\n" <>
-        Text.Megaparsec.errorBundlePretty err <>
-        "... documentation won't be generated for this file"
+    removeComments :: Header -> Header
+    removeComments (Header header)
+        | "--" `Data.Text.isPrefixOf` strippedHeader = Header $ Data.Text.drop 2 strippedHeader
+        | "{-" `Data.Text.isPrefixOf` strippedHeader =
+            Header $ Data.Text.drop 2 $ Data.Text.dropEnd 2 strippedHeader
+        | otherwise = Header strippedHeader
+      where
+        strippedHeader = Data.Text.strip header
 
 {-| Calculate the relative path needed to access files on the first argument
     relative from the second argument.
@@ -159,7 +176,7 @@ saveHtml
     -> String                   -- ^ Package name
     -> (Path Abs File, Header)  -- ^ (Input file, Parsed header)
     -> IO (Path Abs File)       -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName t@(absFile, _) = do
+saveHtml inputAbsDir outputAbsDir packageName t@(absFile, Header header) = do
     htmlOutputFile <- do
         strippedPath <- Path.stripProperPrefix inputAbsDir absFile
         strippedPathWithExt <- addHtmlExt strippedPath
@@ -171,8 +188,14 @@ saveHtml inputAbsDir outputAbsDir packageName t@(absFile, _) = do
 
     let relativeResourcesPath = resolveRelativePath outputAbsDir htmlOutputDir
 
+    let (maybeMmarkError, headerAsHtml) = markdownToHtml htmlOutputFile header
+
+    case maybeMmarkError of
+        Just e -> putStrLn $ showParseError e
+        Nothing -> return ()
+
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
-        $ filePathHeaderToHtml t DocParams {..}
+        $ filePathHeaderToHtml (absFile, headerAsHtml) DocParams {..}
 
     return htmlOutputFile
   where

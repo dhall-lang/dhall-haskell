@@ -1,6 +1,8 @@
 {-| Contains all utilities related to markdown processing
 -}
-module Dhall.Docs.Markdown where
+module Dhall.Docs.Markdown (
+    markdownToHtml
+) where
 
 import Data.Text       (Text)
 import Lucid           (Html)
