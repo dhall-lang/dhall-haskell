@@ -6,8 +6,10 @@
 }:
 mkDerivation {
   pname = "mmark";
-  version = "0.0.7.1";
-  sha256 = "d60458bd46649a5fa43da3ca25ccb38618adb7d392b29b018ce581c9042aec2a";
+  version = "0.0.7.0";
+  sha256 = "9dba16ca0c1b4c0e6a83ae139ce51fffdc993efd6108dd227b1bc9bdfbe8f53c";
+  revision = "2";
+  editedCabalFile = "06hr9p2lqyh4zx38i601yd24acbl08p69l0pwh8266qvfripcsm9";
   enableSeparateDataOutput = true;
   libraryHaskellDepends = [
     aeson base case-insensitive containers deepseq dlist email-validate
