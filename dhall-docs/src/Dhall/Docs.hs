@@ -24,7 +24,7 @@ module Dhall.Docs
 import Data.Monoid         ((<>))
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
-import Dhall.Parser        (Header, exprAndHeaderFromText)
+import Dhall.Parser        (Header, ParseError (..), exprAndHeaderFromText)
 import Options.Applicative (Parser, ParserInfo)
 import Path                (Abs, Dir, File, Path, (</>))
 
@@ -32,11 +32,12 @@ import qualified Control.Monad
 import qualified Data.ByteString
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
-import qualified Data.Text.Encoding  as Text.Encoding
+import qualified Data.Text.IO        as Text.IO
 import qualified Lucid
 import qualified Options.Applicative
 import qualified Path
 import qualified Path.IO
+import qualified Text.Megaparsec
 
 -- $setup
 -- >>> :set -XQuasiQuotes
@@ -106,20 +107,28 @@ getAllDhallFilesAndHeaders
     :: Path Abs Dir -- ^ Base directory to do the search
     -> IO [(Path Abs File, Header)]
 getAllDhallFilesAndHeaders baseDir = do
-    files <- snd <$> Path.IO.listDirRecur baseDir
+    files <- filter hasDhallExtension . snd <$> Path.IO.listDirRecur baseDir
     Data.Maybe.catMaybes <$> mapM readDhall files
   where
+    hasDhallExtension :: Path Abs File -> Bool
+    hasDhallExtension absFile = case Path.splitExtension absFile of
+        Nothing -> False
+        Just (_, ext) -> ext == ".dhall"
+
     readDhall :: Path Abs File -> IO (Maybe (Path Abs File, Header))
     readDhall absFile = do
         let filePath = Path.fromAbsFile absFile
-        fileContents <- Data.ByteString.readFile filePath
-        return $ case Text.Encoding.decodeUtf8' fileContents of
-            Left _ -> Nothing
-            Right contents ->
-                case exprAndHeaderFromText filePath contents of
-                    Right (header, _) -> return (absFile, header)
-                    _ -> Nothing
+        contents <- Text.IO.readFile filePath
+        case exprAndHeaderFromText filePath contents of
+            Right (header, _) -> return $ Just (absFile, header)
+            Left ParseError{..} -> do
+                putStrLn $ showParseError unwrap
+                return Nothing
 
+    showParseError err =
+        "\n\ESC[1;33mWarning\ESC[0m: Invalid input\n\n" <>
+        Text.Megaparsec.errorBundlePretty err <>
+        "... documentation won't be generated for this file"
 
 {-| Calculate the relative path needed to access files on the first argument
     relative from the second argument.
@@ -236,15 +245,19 @@ defaultMain Options{..} = do
     let packageName = packageNameResolver resolvedPackageDir
 
     dhallFilesAndHeaders <- getAllDhallFilesAndHeaders resolvedPackageDir
-    generatedHtmlFiles <-
-        mapM (saveHtml resolvedPackageDir resolvedOutDir packageName)
-            dhallFilesAndHeaders
-    createIndexes resolvedOutDir generatedHtmlFiles packageName
+    if null dhallFilesAndHeaders then
+        putStrLn "No documentation was generated"
+    else do
+        generatedHtmlFiles <-
+            mapM (saveHtml resolvedPackageDir resolvedOutDir packageName)
+                dhallFilesAndHeaders
+        createIndexes resolvedOutDir generatedHtmlFiles packageName
 
-    dataDir <- getDataDir
-    Control.Monad.forM_ dataDir $ \(filename, contents) -> do
-        let finalPath = Path.fromAbsFile $ resolvedOutDir </> filename
-        Data.ByteString.writeFile finalPath contents
+        dataDir <- getDataDir
+        Path.IO.ensureDir resolvedOutDir
+        Control.Monad.forM_ dataDir $ \(filename, contents) -> do
+            let finalPath = Path.fromAbsFile $ resolvedOutDir </> filename
+            Data.ByteString.writeFile finalPath contents
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
