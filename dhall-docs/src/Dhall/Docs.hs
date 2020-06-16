@@ -22,7 +22,6 @@ module Dhall.Docs
     ) where
 
 import Data.Monoid         ((<>))
-import Data.Text           (Text)
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
@@ -176,7 +175,7 @@ saveHtml
     -> String                   -- ^ Package name
     -> (Path Abs File, Header)  -- ^ (Input file, Parsed header)
     -> IO (Path Abs File)       -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName t@(absFile, Header header) = do
+saveHtml inputAbsDir outputAbsDir packageName (absFile, Header header) = do
     htmlOutputFile <- do
         strippedPath <- Path.stripProperPrefix inputAbsDir absFile
         strippedPathWithExt <- addHtmlExt strippedPath
