@@ -32,6 +32,7 @@
 * Improvements to error messages
     * [#1824](https://github.com/dhall-lang/dhall-haskell/pull/1824)
     * [#1849](https://github.com/dhall-lang/dhall-haskell/pull/1849)
+    * [#1851](https://github.com/dhall-lang/dhall-haskell/pull/1851)
 * Fixes to haddocks
     * [#1815](https://github.com/dhall-lang/dhall-haskell/pull/1815)
 
