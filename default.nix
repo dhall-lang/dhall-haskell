@@ -15,4 +15,6 @@ in
     ;
 
     inherit (shared_ghcjs) dhall-try;
+
+    dhall-ghcjs = shared_ghcjs.dhall;
   }
