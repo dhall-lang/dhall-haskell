@@ -430,12 +430,14 @@ skeleton (Lam {}) =
     <>  rarrow
     <>  " "
     <>  ignore
+    <> " (a function)"
 skeleton (Pi {}) =
         ignore
     <>  " "
     <>  rarrow
     <>  " "
     <>  ignore
+    <> " (a function type)"
 skeleton (App Optional _) =
         "Optional "
     <>  ignore
@@ -556,6 +558,7 @@ skeleton (Record {}) =
     <>  ignore
     <>  " "
     <>  rbrace
+    <>  " (a record type)"
 skeleton (RecordLit {}) =
         lbrace
     <>  " "
@@ -566,6 +569,7 @@ skeleton (RecordLit {}) =
     <>  ignore
     <>  " "
     <>  rbrace
+    <> " (a record)"
 skeleton (Union {}) =
         langle
     <>  " "
@@ -576,6 +580,7 @@ skeleton (Union {}) =
     <>  ignore
     <>  " "
     <>  rangle
+    <> " (a union type)"
 skeleton (Combine {}) =
         ignore
     <>  " "
