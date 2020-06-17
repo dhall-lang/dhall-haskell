@@ -187,7 +187,7 @@ saveHtml inputAbsDir outputAbsDir packageName (absFile, Header header) = do
 
     let relativeResourcesPath = resolveRelativePath outputAbsDir htmlOutputDir
 
-    let (maybeMmarkError, headerAsHtml) = markdownToHtml htmlOutputFile header
+    let (maybeMmarkError, headerAsHtml) = markdownToHtml absFile header
 
     case maybeMmarkError of
         Just e -> putStrLn $ showParseError e
