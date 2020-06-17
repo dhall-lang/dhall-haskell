@@ -58,8 +58,8 @@ jsonToYaml
 jsonToYaml json documents quoted =
   case (documents, json) of
     (True, Data.Aeson.Array elems)
-      -> Data.ByteString.intercalate "\n---\n"
-         $ (Data.ByteString.Lazy.toStrict . encoder . (:[])) <$> Data.Vector.toList elems
+      -> Data.ByteString.intercalate "\n"
+         $ (("---\n" <>) . Data.ByteString.Lazy.toStrict . encoder . (:[])) <$> Data.Vector.toList elems
     _ -> Data.ByteString.Lazy.toStrict (encoder [json])
   where
     style (Y.SStr s)
