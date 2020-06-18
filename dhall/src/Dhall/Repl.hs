@@ -446,6 +446,11 @@ helpOptions =
       "Print help text and describe options"
       (dontCrash . help helpOptions)
   , HelpOption
+      "paste"
+      ""
+      "Start a multi-line input. Submit with <Ctrl-D>"
+      (error "Dhall.Repl.helpOptions: Unreachable")
+  , HelpOption
       "type"
       "EXPRESSION"
       "Infer the type of an expression"
