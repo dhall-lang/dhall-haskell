@@ -1,3 +1,41 @@
+1.33.0
+
+* [Supports version 17.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v17.0.0)
+    * BREAKING CHANGE: [URLs no longer support quoted path components](https://github.com/dhall-lang/dhall-haskell/pull/1812)
+    * BREAKING CHANGE: [`Optional/{fold,build}` are no longer built-ins](https://github.com/dhall-lang/dhall-haskell/pull/1802)
+    * [Record fields now permit empty labels](https://github.com/dhall-lang/dhall-haskell/pull/1812)
+* BREAKING CHANGE: [Fail instead of hanging when deriving `FromDhall` for recursive types](https://github.com/dhall-lang/dhall-haskell/pull/1825)
+    * This is a breaking change as now the `expected` type returns an
+      `Expector (Expr Src Void)` (essentially an `Either`) instead of
+      `Expr Src Void`
+    * If you really don't want to handle the new error-related wrapper, you can
+      get the old behavior using a partial pattern match (which will be partial,
+      still an improvement over the previous behavior, which was hanging)
+* [Fix invalid cache entries](https://github.com/dhall-lang/dhall-haskell/pull/1793)
+    * The interpreter will now correct cached expressions that are incorrect
+      and warn you when this happens
+    * Specifically, if there is a hash mismatch from the cached expression the
+      interpreter will resolve the import again and fix the cache if the
+      resolved import matches the expected hash
+* [Make `encodeExpression` polymorphic](https://github.com/dhall-lang/dhall-haskell/pull/1789)
+    * `encodeExpression` now has a more general type, which means that you
+      can use it to serialise expressions without imports (i.e.
+      ones of type `Expr Void Void`)
+* [Add `--quiet` option for `dhall decode`](https://github.com/dhall-lang/dhall-haskell/pull/1803)
+* [Add `--noted` flag for `dhall haskell-syntax-tree`](https://github.com/dhall-lang/dhall-haskell/pull/1843)
+* Performance improvements:
+    * There were several performance improvements related to binary decoding,
+      which should improve cache lookup speed
+    * [#1807](https://github.com/dhall-lang/dhall-haskell/pull/1807)
+    * [#1809](https://github.com/dhall-lang/dhall-haskell/pull/1809)
+    * [#1857](https://github.com/dhall-lang/dhall-haskell/pull/1857)
+* Improvements to error messages
+    * [#1824](https://github.com/dhall-lang/dhall-haskell/pull/1824)
+    * [#1849](https://github.com/dhall-lang/dhall-haskell/pull/1849)
+    * [#1851](https://github.com/dhall-lang/dhall-haskell/pull/1851)
+* Fixes to haddocks
+    * [#1815](https://github.com/dhall-lang/dhall-haskell/pull/1815)
+
 1.32.0
 
 * [Supports version 16.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v16.0.0)
