@@ -22,7 +22,7 @@ import Control.Monad.State.Strict ( evalStateT )
 -- For the MonadFail instance for StateT.
 import Control.Monad.Trans.Instances ()
 import Data.Char ( isSpace )
-import Data.List ( dropWhileEnd, isPrefixOf, nub )
+import Data.List ( dropWhileEnd, groupBy, isPrefixOf, nub )
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
@@ -214,8 +214,7 @@ typeCheck expression = do
     Left  e -> liftIO ( wrap (throwIO e) )
     Right a -> return a
 
--- Separate the equal sign to be its own word in order to simplify parsing
--- This is intended to be used with the options that require assignment
+-- Split on the first '=' if there is any
 parseAssignment :: String -> Either String (String, String)
 parseAssignment str
   | (var, '=' : expr) <- break (== '=') str
@@ -310,14 +309,22 @@ loadBinding "" = do
 
 loadBinding file = do
   -- Read commands from the save file
-  replLines <- lines <$> liftIO (readFile file)
+  -- Some commands can span multiple lines, only the first line will start with
+  -- the optionsPrefix
+  loadedLines <- lines <$> liftIO (readFile file)
 
-  let runCommand line@(words -> (c:cmd):_)
+  let -- Group lines that belong to the same command
+      commands = flip groupBy loadedLines $ \_prev next ->
+        not $ [optionsPrefix] `isPrefixOf` next
+
+      runCommand line@(words -> (c:cmd):_)
         | c == optionsPrefix
-        , Just action <- lookup cmd options
-        = action (drop (1 + length cmd + 1) line)
+        = case lookup cmd options of
+            Just action -> action (drop (1 + length cmd + 1) line)
+            Nothing -> Fail.fail $
+              ":load unexpected command `" <> cmd <> "` in file `" <> file <> "`"
       runCommand _ = Fail.fail $
-        ":load expects `" <> file <> "` to contain one command per line"
+        ":load expects `" <> file <> "` to contain a command"
 
   -- Keep current handle in scope
   Env { outputHandle } <- get
@@ -326,7 +333,7 @@ loadBinding file = do
   modify (\e -> e { outputHandle = Nothing })
 
   -- Run all the commands
-  forM_ replLines runCommand
+  forM_ commands (runCommand . unlines)
 
   -- Restore the previous handle
   modify (\e -> e { outputHandle = outputHandle })
