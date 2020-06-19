@@ -22,6 +22,8 @@ module Dhall.Docs
     ) where
 
 import Data.Monoid         ((<>))
+import Data.Text           (Text)
+import Data.Void           (Void)
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
@@ -98,14 +100,6 @@ parserInfoOptions =
         <>  Options.Applicative.progDesc progDesc
         )
 
-showParseError
-    :: (Text.Megaparsec.Stream a, Text.Megaparsec.ShowErrorComponent b)
-    => ParseErrorBundle a b
-    -> String
-showParseError err =
-    "\n\ESC[1;33mWarning\ESC[0m: Invalid input\n\n" <>
-    Text.Megaparsec.errorBundlePretty err <>
-    "... documentation won't be generated for this file"
 
 {-| Fetches a list of all dhall files in a directory along with its `Header`.
     This is not the same as finding all files that ends in @.dhall@,
@@ -134,8 +128,14 @@ getAllDhallFilesAndHeaders baseDir = do
         case exprAndHeaderFromText filePath contents of
             Right (header, _) -> return $ Just (absFile, removeComments header)
             Left ParseError{..} -> do
-                putStrLn $ showParseError unwrap
+                putStrLn $ showDhallParseError unwrap
                 return Nothing
+
+    showDhallParseError :: Text.Megaparsec.ParseErrorBundle Text Void -> String
+    showDhallParseError err =
+        "\n\ESC[1;33mWarning\ESC[0m: Invalid Input\n\n" <>
+        Text.Megaparsec.errorBundlePretty err <>
+        "... documentation won't be generated for this file"
 
     removeComments :: Header -> Header
     removeComments (Header header)
@@ -158,7 +158,6 @@ getAllDhallFilesAndHeaders baseDir = do
 "../../"
 >>> resolveRelativePath [absdir|/a/|] [absdir|/a/|]
 ""
-
 -}
 resolveRelativePath :: Path Abs Dir -> Path Abs Dir -> FilePath
 resolveRelativePath outDir currentDir =
@@ -175,7 +174,7 @@ saveHtml
     -> String                   -- ^ Package name
     -> (Path Abs File, Header)  -- ^ (Input file, Parsed header)
     -> IO (Path Abs File)       -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName (absFile, Header header) = do
+saveHtml inputAbsDir outputAbsDir packageName (absFile, Header headerContents) = do
     htmlOutputFile <- do
         strippedPath <- Path.stripProperPrefix inputAbsDir absFile
         strippedPathWithExt <- addHtmlExt strippedPath
@@ -187,11 +186,11 @@ saveHtml inputAbsDir outputAbsDir packageName (absFile, Header header) = do
 
     let relativeResourcesPath = resolveRelativePath outputAbsDir htmlOutputDir
 
-    let (maybeMmarkError, headerAsHtml) = markdownToHtml absFile header
-
-    case maybeMmarkError of
-        Just e -> putStrLn $ showParseError e
-        Nothing -> return ()
+    headerAsHtml <- case markdownToHtml absFile headerContents of
+        Left err -> do
+            putStrLn $ markdownParseErrorAsWarning err
+            return $ Lucid.toHtml headerContents
+        Right html -> return html
 
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
         $ filePathHeaderToHtml (absFile, headerAsHtml) DocParams {..}
@@ -200,6 +199,13 @@ saveHtml inputAbsDir outputAbsDir packageName (absFile, Header header) = do
   where
     addHtmlExt :: Path b File -> IO (Path b File)
     addHtmlExt = Path.addExtension ".html"
+
+    markdownParseErrorAsWarning :: MarkdownParseError -> String
+    markdownParseErrorAsWarning MarkdownParseError{..} =
+        "\n\ESC[1;33mWarning\ESC[0m\n\n" <>
+        Text.Megaparsec.errorBundlePretty unwrap <>
+        "The original non-markdown text will be pasted in the documentation"
+
 
 {-| Create an index.html file on each folder available in the second argument
     that lists all the contents on that folder.
