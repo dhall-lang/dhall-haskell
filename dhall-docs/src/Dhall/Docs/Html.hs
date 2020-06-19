@@ -35,10 +35,11 @@ data DocParams = DocParams
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 filePathHeaderToHtml
-    :: (Path Abs File, Html ()) -- ^ (source file name, header document as html)
-    -> DocParams                -- ^ Parameters for the documentation
+    :: Path Abs File -- ^ Source file name, used to extract the title
+    -> Html ()       -- ^ Header document as HTML
+    -> DocParams     -- ^ Parameters for the documentation
     -> Html ()
-filePathHeaderToHtml (filePath, header) params@DocParams{..} =
+filePathHeaderToHtml filePath header params@DocParams{..} =
     doctypehtml_ $ do
         headContents title params
         body_ $ do

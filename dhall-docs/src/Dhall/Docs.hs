@@ -159,14 +159,15 @@ resolveRelativePath outDir currentDir =
 {-| Saves the HTML file from the input package to the output destination
 -}
 saveHtml
-    :: Path Abs Dir             -- ^ Input package directory.
-                                --   Used to remove the prefix from all other dhall
-                                --   files in the package
-    -> Path Abs Dir             -- ^ Output directory
-    -> String                   -- ^ Package name
-    -> (Path Abs File, Header)  -- ^ (Input file, Parsed header)
-    -> IO (Path Abs File)       -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName (absFile, header) = do
+    :: Path Abs Dir         -- ^ Input package directory.
+                            --   Used to remove the prefix from all other dhall
+                            --   files in the package
+    -> Path Abs Dir         -- ^ Output directory
+    -> String               -- ^ Package name
+    -> Path Abs File        -- ^ Input file
+    -> Header               -- ^ Parsed header
+    -> IO (Path Abs File)   -- ^ Output path file
+saveHtml inputAbsDir outputAbsDir packageName absFile header = do
     htmlOutputFile <- do
         strippedPath <- Path.stripProperPrefix inputAbsDir absFile
         strippedPathWithExt <- addHtmlExt strippedPath
@@ -186,7 +187,7 @@ saveHtml inputAbsDir outputAbsDir packageName (absFile, header) = do
         Right html -> return html
 
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
-        $ filePathHeaderToHtml (absFile, headerAsHtml) DocParams {..}
+        $ filePathHeaderToHtml absFile headerAsHtml DocParams {..}
 
     return htmlOutputFile
   where
@@ -278,10 +279,12 @@ defaultMain Options{..} = do
 
     dhallFilesAndHeaders <- getAllDhallFilesAndHeaders resolvedPackageDir
     if null dhallFilesAndHeaders then
-        putStrLn "No documentation was generated"
+        putStrLn $
+            "No documentation was generated because no file with .dhall " <>
+            "extension was found"
     else do
         generatedHtmlFiles <-
-            mapM (saveHtml resolvedPackageDir resolvedOutDir packageName)
+            mapM (uncurry $ saveHtml resolvedPackageDir resolvedOutDir packageName)
                 dhallFilesAndHeaders
         createIndexes resolvedOutDir generatedHtmlFiles packageName
 
