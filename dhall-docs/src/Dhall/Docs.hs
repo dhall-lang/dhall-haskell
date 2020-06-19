@@ -2,6 +2,7 @@
     executable
 -}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Docs
@@ -126,7 +127,7 @@ getAllDhallFilesAndHeaders baseDir = do
         let filePath = Path.fromAbsFile absFile
         contents <- Text.IO.readFile filePath
         case exprAndHeaderFromText filePath contents of
-            Right (header, _) -> return $ Just (absFile, removeComments header)
+            Right (header, _) -> return $ Just (absFile, header)
             Left ParseError{..} -> do
                 putStrLn $ showDhallParseError unwrap
                 return Nothing
@@ -136,15 +137,6 @@ getAllDhallFilesAndHeaders baseDir = do
         "\n\ESC[1;33mWarning\ESC[0m: Invalid Input\n\n" <>
         Text.Megaparsec.errorBundlePretty err <>
         "... documentation won't be generated for this file"
-
-    removeComments :: Header -> Header
-    removeComments (Header header)
-        | "--" `Data.Text.isPrefixOf` strippedHeader = Header $ Data.Text.drop 2 strippedHeader
-        | "{-" `Data.Text.isPrefixOf` strippedHeader =
-            Header $ Data.Text.drop 2 $ Data.Text.dropEnd 2 strippedHeader
-        | otherwise = Header strippedHeader
-      where
-        strippedHeader = Data.Text.strip header
 
 {-| Calculate the relative path needed to access files on the first argument
     relative from the second argument.
@@ -174,7 +166,7 @@ saveHtml
     -> String                   -- ^ Package name
     -> (Path Abs File, Header)  -- ^ (Input file, Parsed header)
     -> IO (Path Abs File)       -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName (absFile, Header headerContents) = do
+saveHtml inputAbsDir outputAbsDir packageName (absFile, header) = do
     htmlOutputFile <- do
         strippedPath <- Path.stripProperPrefix inputAbsDir absFile
         strippedPathWithExt <- addHtmlExt strippedPath
@@ -186,10 +178,11 @@ saveHtml inputAbsDir outputAbsDir packageName (absFile, Header headerContents) =
 
     let relativeResourcesPath = resolveRelativePath outputAbsDir htmlOutputDir
 
-    headerAsHtml <- case markdownToHtml absFile headerContents of
+    let strippedHeader = stripCommentSyntax header
+    headerAsHtml <- case markdownToHtml absFile strippedHeader of
         Left err -> do
             putStrLn $ markdownParseErrorAsWarning err
-            return $ Lucid.toHtml headerContents
+            return $ Lucid.toHtml strippedHeader
         Right html -> return html
 
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
@@ -205,6 +198,17 @@ saveHtml inputAbsDir outputAbsDir packageName (absFile, Header headerContents) =
         "\n\ESC[1;33mWarning\ESC[0m\n\n" <>
         Text.Megaparsec.errorBundlePretty unwrap <>
         "The original non-markdown text will be pasted in the documentation"
+
+    stripCommentSyntax :: Header -> Text
+    stripCommentSyntax (Header h)
+        | Just s <- Data.Text.stripPrefix "--" strippedHeader
+            = s
+        | Just commentPrefixStripped <- Data.Text.stripPrefix "{-" strippedHeader
+        , Just commentSuffixStripped <- Data.Text.stripSuffix "-}" commentPrefixStripped
+            = commentSuffixStripped
+        | otherwise = strippedHeader
+      where
+        strippedHeader = Data.Text.strip h
 
 
 {-| Create an index.html file on each folder available in the second argument
