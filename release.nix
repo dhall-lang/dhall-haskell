@@ -34,8 +34,9 @@ in
           # see http://hackage.haskell.org/package/path-io-1.6.0/changelog`
           # shared_8_2_2.dhall-docs
           shared_8_2_2.dhall-json
-          # `dhall-nix` → `hnix` → `4.11 <= base` → `8.4.1 <= ghc`
+          # `dhall-nix/dhall-nixpkgs` → `hnix` → `4.11 <= base` → `8.4.1 <= ghc`
           # shared_8_2_2.dhall-nix
+          # shared_8_2_2.dhall-nixpkgs
           # `HsYAML-aeson` requires Cabal >= 2.2, which implies GHC 8.4 or newer
           # shared_8_2_2.dhall-yaml
           # `base-noprelude` depends on a specific version of `base`
@@ -52,6 +53,7 @@ in
           # shared_8_6_1.dhall-lsp-server
           # `hnix` depends on `unix-2.7.*` and doesn't work with GHC 8.6
           # shared_8_6_1.dhall-nix
+          # shared_8_6_1.dhall-nixpkgs
 
           shared_ghcjs.dhall-try
 
@@ -67,6 +69,7 @@ in
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix
+          shared.tarball-dhall-nixpkgs
           shared.tarball-dhall-yaml
 
           # This is the only `dhall` build that runs the test suite
@@ -90,6 +93,7 @@ in
       tarball-dhall-json
       tarball-dhall-lsp-server
       tarball-dhall-nix
+      tarball-dhall-nixpkgs
       tarball-dhall-yaml
     ;
 
@@ -99,6 +103,7 @@ in
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
+    linux-dhall-nixpkgs    = shared_linux.possibly-static.dhall-nixpkgs;
     linux-dhall-yaml       = shared_linux.possibly-static.dhall-yaml;
 
     inherit (shared_linux)
@@ -108,6 +113,7 @@ in
       image-dhall-json
       image-dhall-lsp-server
       image-dhall-nix
+      image-dhall-nixpkgs
       image-dhall-yaml
     ;
   }
