@@ -40,6 +40,8 @@ function release {
   rm "${DOCKER_ARCHIVE}"
 }
 
+git submodule update
+
 for package in dhall-lsp-server dhall-json dhall-yaml dhall-bash dhall-nix dhall; do
   release "${package}"
 done
