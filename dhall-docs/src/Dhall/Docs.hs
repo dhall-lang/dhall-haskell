@@ -2,6 +2,7 @@
     executable
 -}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Docs
@@ -22,21 +23,27 @@ module Dhall.Docs
     ) where
 
 import Data.Monoid         ((<>))
+import Data.Text           (Text)
+import Data.Void           (Void)
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
-import Dhall.Parser        (Header, exprAndHeaderFromText)
+import Dhall.Docs.Markdown
+import Dhall.Parser        (Header (..), ParseError (..), exprAndHeaderFromText)
 import Options.Applicative (Parser, ParserInfo)
 import Path                (Abs, Dir, File, Path, (</>))
+import Text.Megaparsec     (ParseErrorBundle (..))
 
 import qualified Control.Monad
 import qualified Data.ByteString
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
-import qualified Data.Text.Encoding  as Text.Encoding
+import qualified Data.Text
+import qualified Data.Text.IO        as Text.IO
 import qualified Lucid
 import qualified Options.Applicative
 import qualified Path
 import qualified Path.IO
+import qualified Text.Megaparsec
 
 -- $setup
 -- >>> :set -XQuasiQuotes
@@ -94,6 +101,7 @@ parserInfoOptions =
         <>  Options.Applicative.progDesc progDesc
         )
 
+
 {-| Fetches a list of all dhall files in a directory along with its `Header`.
     This is not the same as finding all files that ends in @.dhall@,
     but finds all files that successfully parses as a valid dhall file.
@@ -106,20 +114,29 @@ getAllDhallFilesAndHeaders
     :: Path Abs Dir -- ^ Base directory to do the search
     -> IO [(Path Abs File, Header)]
 getAllDhallFilesAndHeaders baseDir = do
-    files <- snd <$> Path.IO.listDirRecur baseDir
+    files <- filter hasDhallExtension . snd <$> Path.IO.listDirRecur baseDir
     Data.Maybe.catMaybes <$> mapM readDhall files
   where
+    hasDhallExtension :: Path Abs File -> Bool
+    hasDhallExtension absFile = case Path.splitExtension absFile of
+        Nothing -> False
+        Just (_, ext) -> ext == ".dhall"
+
     readDhall :: Path Abs File -> IO (Maybe (Path Abs File, Header))
     readDhall absFile = do
         let filePath = Path.fromAbsFile absFile
-        fileContents <- Data.ByteString.readFile filePath
-        return $ case Text.Encoding.decodeUtf8' fileContents of
-            Left _ -> Nothing
-            Right contents ->
-                case exprAndHeaderFromText filePath contents of
-                    Right (header, _) -> return (absFile, header)
-                    _ -> Nothing
+        contents <- Text.IO.readFile filePath
+        case exprAndHeaderFromText filePath contents of
+            Right (header, _) -> return $ Just (absFile, header)
+            Left ParseError{..} -> do
+                putStrLn $ showDhallParseError unwrap
+                return Nothing
 
+    showDhallParseError :: Text.Megaparsec.ParseErrorBundle Text Void -> String
+    showDhallParseError err =
+        "\n\ESC[1;33mWarning\ESC[0m: Invalid Input\n\n" <>
+        Text.Megaparsec.errorBundlePretty err <>
+        "... documentation won't be generated for this file"
 
 {-| Calculate the relative path needed to access files on the first argument
     relative from the second argument.
@@ -133,7 +150,6 @@ getAllDhallFilesAndHeaders baseDir = do
 "../../"
 >>> resolveRelativePath [absdir|/a/|] [absdir|/a/|]
 ""
-
 -}
 resolveRelativePath :: Path Abs Dir -> Path Abs Dir -> FilePath
 resolveRelativePath outDir currentDir =
@@ -143,14 +159,15 @@ resolveRelativePath outDir currentDir =
 {-| Saves the HTML file from the input package to the output destination
 -}
 saveHtml
-    :: Path Abs Dir             -- ^ Input package directory.
-                                --   Used to remove the prefix from all other dhall
-                                --   files in the package
-    -> Path Abs Dir             -- ^ Output directory
-    -> String                   -- ^ Package name
-    -> (Path Abs File, Header)  -- ^ (Input file, Parsed header)
-    -> IO (Path Abs File)       -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName t@(absFile, _) = do
+    :: Path Abs Dir         -- ^ Input package directory.
+                            --   Used to remove the prefix from all other dhall
+                            --   files in the package
+    -> Path Abs Dir         -- ^ Output directory
+    -> String               -- ^ Package name
+    -> Path Abs File        -- ^ Input file
+    -> Header               -- ^ Parsed header
+    -> IO (Path Abs File)   -- ^ Output path file
+saveHtml inputAbsDir outputAbsDir packageName absFile header = do
     htmlOutputFile <- do
         strippedPath <- Path.stripProperPrefix inputAbsDir absFile
         strippedPathWithExt <- addHtmlExt strippedPath
@@ -162,13 +179,38 @@ saveHtml inputAbsDir outputAbsDir packageName t@(absFile, _) = do
 
     let relativeResourcesPath = resolveRelativePath outputAbsDir htmlOutputDir
 
+    let strippedHeader = stripCommentSyntax header
+    headerAsHtml <- case markdownToHtml absFile strippedHeader of
+        Left err -> do
+            putStrLn $ markdownParseErrorAsWarning err
+            return $ Lucid.toHtml strippedHeader
+        Right html -> return html
+
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
-        $ filePathHeaderToHtml t DocParams {..}
+        $ filePathHeaderToHtml absFile headerAsHtml DocParams {..}
 
     return htmlOutputFile
   where
     addHtmlExt :: Path b File -> IO (Path b File)
     addHtmlExt = Path.addExtension ".html"
+
+    markdownParseErrorAsWarning :: MarkdownParseError -> String
+    markdownParseErrorAsWarning MarkdownParseError{..} =
+        "\n\ESC[1;33mWarning\ESC[0m\n\n" <>
+        Text.Megaparsec.errorBundlePretty unwrap <>
+        "The original non-markdown text will be pasted in the documentation"
+
+    stripCommentSyntax :: Header -> Text
+    stripCommentSyntax (Header h)
+        | Just s <- Data.Text.stripPrefix "--" strippedHeader
+            = Data.Text.strip s
+        | Just commentPrefixStripped <- Data.Text.stripPrefix "{-" strippedHeader
+        , Just commentSuffixStripped <- Data.Text.stripSuffix "-}" commentPrefixStripped
+            = Data.Text.strip commentSuffixStripped
+        | otherwise = strippedHeader
+      where
+        strippedHeader = Data.Text.strip h
+
 
 {-| Create an index.html file on each folder available in the second argument
     that lists all the contents on that folder.
@@ -177,17 +219,17 @@ saveHtml inputAbsDir outputAbsDir packageName t@(absFile, _) = do
 
     @
     createIndexes [absdir|/|]
-        [ [absfile|/a/b.txt|]
-        , [absfile|/a/c/b.txt|]
-        , [absfile|/a/c.txt"|]
+        [ [absfile|\/a\/b.txt|]
+        , [absfile|\/a\/c/b.txt|]
+        , [absfile|\/a\/c.txt"|]
         ]
     @
 
     ... will create two index.html files:
 
-    1. @/a/index.html@, that will list the @/a/b.txt@ and
-    @/a/c.txt@ files
-    2. @/a/c/index.html@ that will list the @a/c/b.txt@ file
+    1. @\/a\/index.html@, that will list the @\/a\/b.txt@ and
+    @\/a\/c.txt@ files
+    2. @\/a\/c\/index.html@ that will list the @\/a\/c\/b.txt@ file
 
 -}
 createIndexes
@@ -236,15 +278,21 @@ defaultMain Options{..} = do
     let packageName = packageNameResolver resolvedPackageDir
 
     dhallFilesAndHeaders <- getAllDhallFilesAndHeaders resolvedPackageDir
-    generatedHtmlFiles <-
-        mapM (saveHtml resolvedPackageDir resolvedOutDir packageName)
-            dhallFilesAndHeaders
-    createIndexes resolvedOutDir generatedHtmlFiles packageName
+    if null dhallFilesAndHeaders then
+        putStrLn $
+            "No documentation was generated because no file with .dhall " <>
+            "extension was found"
+    else do
+        generatedHtmlFiles <-
+            mapM (uncurry $ saveHtml resolvedPackageDir resolvedOutDir packageName)
+                dhallFilesAndHeaders
+        createIndexes resolvedOutDir generatedHtmlFiles packageName
 
-    dataDir <- getDataDir
-    Control.Monad.forM_ dataDir $ \(filename, contents) -> do
-        let finalPath = Path.fromAbsFile $ resolvedOutDir </> filename
-        Data.ByteString.writeFile finalPath contents
+        dataDir <- getDataDir
+        Path.IO.ensureDir resolvedOutDir
+        Control.Monad.forM_ dataDir $ \(filename, contents) -> do
+            let finalPath = Path.fromAbsFile $ resolvedOutDir </> filename
+            Data.ByteString.writeFile finalPath contents
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()

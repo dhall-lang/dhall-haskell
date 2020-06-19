@@ -139,6 +139,18 @@ a:active {
     color: #FFA632;
 }
 
+/******** Markdown specific code ********/
+
+code {
+    font-family: 'Roboto Mono', monospace;
+}
+
+blockquote {
+    border-left: 9px solid #aaa;
+    background-color: #bdbdbd;
+    padding: 0.2rem;
+    color: #616161;
+}
 
 /******** Nav bar **********/
 
