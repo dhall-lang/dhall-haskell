@@ -372,7 +372,7 @@ import Data.Monoid              (Any (..))
 import Data.Scientific          (floatingOrInteger, toRealFloat)
 import Data.Semigroup           (Semigroup (..))
 import Data.Text                (Text)
-import Data.Void                (Void)
+import Data.Void                (Void, absurd)
 import Dhall.Core               (Chunks (..), DhallDouble (..), Expr (App))
 import Dhall.JSON.Util          (pattern V)
 import Dhall.Parser             (Src)
@@ -401,9 +401,6 @@ import qualified Dhall.Parser
 import qualified Dhall.TypeCheck            as D
 import qualified Options.Applicative        as O
 
-
--- debug
-import Debug.Trace
 
 -- ---------------
 -- Command options
@@ -1113,9 +1110,10 @@ dhallFromJSON (Conversion {..}) expressionType =
 
 TODO: add >>> doctest
 -}
+-- A completable records contains the Type and default RecordLit values
+type CompletableRecord = ([(Text, ExprX)], [(Text, ExprX)])
 
 -- Utility function to get the list of completable record from the input schemas
-type CompletableRecord = ([(Text, ExprX)], [(Text, ExprX)])
 getCompletableRecords :: ExprX -> [(Text, CompletableRecord)]
 getCompletableRecords (D.RecordLit schemas) = go (Map.toList schemas)
   where
@@ -1139,43 +1137,60 @@ getCompletableRecords (D.RecordLit schemas) = go (Map.toList schemas)
           _ -> []
 getCompletableRecords _ = []
 
-type ExprS = Expr Src D.Import
-
--- Given a record attributes map, look for matching completable record and return the minimum attributes that complete the record
-findMatchingRecords :: Map.Map Text ExprS -> [(Text, CompletableRecord)] -> [(Text, Map.Map Text ExprS)]
-findMatchingRecords schema = map go
+tryCompleteRecord :: ExprX -> [(Text, CompletableRecord)] -> Maybe ExprX
+tryCompleteRecord (D.RecordLit schema) completables = go completables
   where
-    go :: (Text, CompletableRecord) -> (Text, Map.Map Text ExprS)
-    go (name, (rtype, rdefault)) = -- trace ("Testing " <> Text.unpack name <> " : " <> show (Map.fromList rtype)) $
-      if recordFit (Map.fromList rtype) rdefault
-      then (name, removeDefault rdefault)
-      else (name, Map.empty)
+    go :: [(Text, CompletableRecord)] -> Maybe ExprX
+    go [] = Nothing
+    go ((name, (rtype, rdefault)):xs) = case completeRecord rtype (mergeDefaults rdefault) [] of
+        Just recordAttrs -> Just $ mkRecordCompletion name
+                                 $ D.RecordLit (Map.fromList $ filter (`notElem` rdefault) recordAttrs)
+        Nothing          -> go xs
 
-    -- TODO: check for default and matching types
-    recordFit rtype rdefault
-      | Map.keysSet schema `Set.isSubsetOf` Map.keysSet rtype = True
-      | otherwise = False
+    -- Prepent the defaults to fill missing values
+    mergeDefaults :: [(Text, ExprX)] -> [(Text, ExprX)]
+    mergeDefaults rdefault = Map.toList $ Map.fromList $ rdefault <> Map.toList schema
 
-    -- TODO: remove un-necessary defaults
-    removeDefault _ = schema
+    -- Try to complete a single record type
+    completeRecord :: [(Text, ExprX)] -> [(Text, ExprX)] -> [(Text, ExprX)] -> Maybe [(Text, ExprX)]
+    completeRecord rtype [] acc
+      | length rtype == length acc = Just acc
+      | otherwise                  = Nothing
+    completeRecord rtype ((attrName, attrValue):xs) acc = case findAttribute rtype of
+        Just attr -> completeRecord rtype xs (attr:acc)
+        Nothing   -> case attrValue of
+          v@(D.RecordLit _)
+            -> case tryCompleteRecord v completables of
+              Just expr -> completeRecord rtype xs ((attrName, expr):acc)
+              Nothing   -> Nothing
+          _ -> Nothing
+      where
+        -- Try to find a single attribute value in a record type attr
+        findAttribute :: [(Text, ExprX)] -> Maybe (Text, ExprX)
+        findAttribute [] = Nothing
+        findAttribute ((typeName, typeValue):ts)
+          | typeName == attrName && sameType typeValue = Just (attrName, attrValue)
+          | otherwise                                  = findAttribute ts
 
-dhallFromJSONSchemas :: FilePath -> ExprX -> ExprS -> Either CompileError ExprS
-dhallFromJSONSchemas filePath schemas (D.RecordLit schema) =
-  do
+        sameType typeValue = case D.typeOf attrValue of
+          Right attrType -> typeValue == attrType
+          Left _ -> False
+
+    mkRecordCompletion :: Text -> ExprX -> ExprX
+    mkRecordCompletion name = D.RecordCompletion (D.Field (D.Var (D.V "schemas" 0)) name)
+tryCompleteRecord _ _ = Nothing
+
+dhallFromJSONSchemas :: FilePath -> ExprX -> ExprX -> Either CompileError (Expr Src D.Import)
+dhallFromJSONSchemas filePath schemas schema@(D.RecordLit _) =
     if null completableRecords
-      then Left NoSchemas
-      else if null completedRecords
-           then Left NoMatchingSchema
-           else Right $ mkExpression $ head completedRecords
+    then Left NoSchemas
+    else case tryCompleteRecord schema completableRecords of
+           Just completedRecord -> Right $ mkExpression completedRecord
+           Nothing              -> Left NoMatchingSchema
   where
     completableRecords = getCompletableRecords schemas
-    completedRecords :: [(Text, Map.Map Text ExprS)]
-    completedRecords =
-      filter
-        (\(_, attr) -> attr /= Map.empty)
-        (findMatchingRecords schema completableRecords)
-    mkExpression :: (Text, Map.Map Text ExprS) -> ExprS
-    mkExpression (name, attrs) = D.Let
+    mkExpression :: ExprX -> Expr Src D.Import
+    mkExpression completedRecord = D.Let
       (D.Binding {
           bindingSrc0 = Nothing,
           variable = "schemas",
@@ -1184,11 +1199,10 @@ dhallFromJSONSchemas filePath schemas (D.RecordLit schema) =
           bindingSrc2 = Nothing,
           value = D.Embed mkImport
           })
-      (mkRecordCompletion name attrs)
-    mkRecordCompletion :: Text -> Map.Map Text ExprS -> ExprS
-    mkRecordCompletion name attrs = D.RecordCompletion (D.Field (D.Var (D.V "schemas" 0)) name) (D.RecordLit attrs)
+      (fmap absurd completedRecord)
     mkImport = D.Import {
       importMode = D.Code,
+      -- TODO: support non local schemas file
       importHashed = D.ImportHashed {
           hash = Nothing,
           importType = D.Local D.Here (D.File {directory = D.Directory {components = []},

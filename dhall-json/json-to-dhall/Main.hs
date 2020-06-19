@@ -11,8 +11,6 @@ module Main where
 import Control.Applicative (optional, (<|>))
 import Control.Exception (SomeException, throwIO)
 import Data.Monoid ((<>))
-import Dhall.Import (load)
-import Dhall.Parser (exprFromText)
 import Data.Text (Text)
 import Data.Version (showVersion)
 import Data.Void (absurd)
@@ -32,6 +30,7 @@ import qualified Options.Applicative                       as Options
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.Exit
 import qualified System.IO                                 as IO
+import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Pretty
 import qualified Paths_dhall_json                          as Meta
@@ -49,14 +48,10 @@ parserInfo = Options.info
           )
 
 -- | All the command arguments and options
-data Schemas
-    =  SchemaName (Maybe Text)
-    |  SchemasFile FilePath
-    deriving Show
-
 data Options
     = Default
-        { schemas    :: Schemas
+        { schema     :: Maybe Text
+        , schemas    :: Maybe FilePath
         , conversion :: Conversion
         , file       :: Maybe FilePath
         , output     :: Maybe FilePath
@@ -77,9 +72,8 @@ parseOptions :: Parser Options
 parseOptions =
         typeCommand
     <|> (   Default
-        <$> (   SchemaName  <$> optional parseSchema
-            <|> SchemasFile <$> parseSchemas
-            )
+        <$> optional parseSchema
+        <*> optional parseSchemas
         <*> parseConversion
         <*> optional parseFile
         <*> optional parseOutput
@@ -180,12 +174,9 @@ main = do
             typeCheckSchemaExpr id finalSchema
 
     let loadSchemas filePath = do
+          -- TODO: support for non local schemas file
           fileContent <- Text.IO.readFile filePath
-          case exprFromText filePath fileContent of
-                Left _ -> throwIO (userError "Couldn't parse schemas file")
-                Right v -> do
-                    resolved <- Dhall.Import.load v
-                    return $ Dhall.Core.denote resolved
+          Dhall.inputExpr fileContent
 
     let renderExpression characterSet plain output expression = do
             let document =
@@ -222,32 +213,26 @@ main = do
             handle $ do
                 value <- toValue file
 
-                case schemas of
-                    SchemaName name -> do
-                        finalSchema <- toSchema name value
+                finalSchema <- toSchema schema value
 
-                        expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
+                expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
 
-                        renderExpression characterSet plain output expression
+                finalExpression <- case schemas of
+                      Just filePath -> do
+                          inputSchemas <- loadSchemas filePath
 
-                    SchemasFile filePath -> do
-                        inputSchemas <- loadSchemas filePath
+{- TODO: remove debug...
+                          putStrLn $ "value        => " <> show value
+                          putStrLn $ "finalSchema  => " <> show finalSchema
+                          putStrLn $ "inputSchemas => " <> show inputSchemas
+                          putStrLn $ "expr         => " <> show expression
+-}
 
-                        -- print $ "inputSchemas => " <> (show inputSchemas)
+                          Dhall.Core.throws (dhallFromJSONSchemas filePath inputSchemas expression)
 
-                        finalSchema <- toSchema Nothing value
+                      Nothing -> return $ fmap absurd $ expression
 
-                        -- print $ "finalSchema => " <> show finalSchema
-
-                        expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
-
-                        let expression' = fmap Data.Void.absurd expression
-
-                        -- print $ "expression => " <> show expression
-
-                        finalExpression <- Dhall.Core.throws (dhallFromJSONSchemas filePath inputSchemas expression')
-
-                        renderExpression characterSet plain output finalExpression
+                renderExpression characterSet plain output finalExpression
 
         Type{..} -> do
             let characterSet = toCharacterSet ascii
