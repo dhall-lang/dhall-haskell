@@ -30,7 +30,9 @@ in
           # of the compiler
           shared_8_2_2.dhall
           shared_8_2_2.dhall-bash
-          shared_8_2_2.dhall-docs
+          # path >= 0.7.0 → path-io >= 1.6.0 which drops support for ghc <= 8.2
+          # see http://hackage.haskell.org/package/path-io-1.6.0/changelog`
+          # shared_8_2_2.dhall-docs
           shared_8_2_2.dhall-json
           # `dhall-nix/dhall-nixpkgs` → `hnix` → `4.11 <= base` → `8.4.1 <= ghc`
           # shared_8_2_2.dhall-nix
@@ -61,7 +63,9 @@ in
           # https://ghc.haskell.org/trac/ghc/ticket/15696
           shared.tarball-dhall
           shared.tarball-dhall-bash
-          shared.tarball-dhall-docs
+          # path-io >= 1.6.0 → directory >= 1.3.20 → ghc >= 8.6
+          # see http://hackage.haskell.org/package/path-io-1.6.0/changelog`
+          # shared.tarball-dhall-docs
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix

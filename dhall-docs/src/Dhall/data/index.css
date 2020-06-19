@@ -1,0 +1,219 @@
+/* latin-ext */
+
+@font-face {
+    font-family: 'Lato';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Lato Regular'), local('Lato-Regular'), url(https://fonts.gstatic.com/s/lato/v16/S6uyw4BMUTPHjxAwXjeu.woff2) format('woff2');
+    unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+/* latin */
+
+@font-face {
+    font-family: 'Lato';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Lato Regular'), local('Lato-Regular'), url(https://fonts.gstatic.com/s/lato/v16/S6uyw4BMUTPHjx4wXg.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+/* cyrillic-ext */
+
+@font-face {
+    font-family: 'Roboto Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto Mono'), local('RobotoMono-Regular'), url(https://fonts.gstatic.com/s/robotomono/v7/L0x5DF4xlVMF-BfR8bXMIjhGq3-OXg.woff2) format('woff2');
+    unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+
+
+/* cyrillic */
+
+@font-face {
+    font-family: 'Roboto Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto Mono'), local('RobotoMono-Regular'), url(https://fonts.gstatic.com/s/robotomono/v7/L0x5DF4xlVMF-BfR8bXMIjhPq3-OXg.woff2) format('woff2');
+    unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+
+/* greek-ext */
+
+@font-face {
+    font-family: 'Roboto Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto Mono'), local('RobotoMono-Regular'), url(https://fonts.gstatic.com/s/robotomono/v7/L0x5DF4xlVMF-BfR8bXMIjhHq3-OXg.woff2) format('woff2');
+    unicode-range: U+1F00-1FFF;
+}
+
+
+/* greek */
+
+@font-face {
+    font-family: 'Roboto Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto Mono'), local('RobotoMono-Regular'), url(https://fonts.gstatic.com/s/robotomono/v7/L0x5DF4xlVMF-BfR8bXMIjhIq3-OXg.woff2) format('woff2');
+    unicode-range: U+0370-03FF;
+}
+
+
+/* vietnamese */
+
+@font-face {
+    font-family: 'Roboto Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto Mono'), local('RobotoMono-Regular'), url(https://fonts.gstatic.com/s/robotomono/v7/L0x5DF4xlVMF-BfR8bXMIjhEq3-OXg.woff2) format('woff2');
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB;
+}
+
+
+/* latin-ext */
+
+@font-face {
+    font-family: 'Roboto Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto Mono'), local('RobotoMono-Regular'), url(https://fonts.gstatic.com/s/robotomono/v7/L0x5DF4xlVMF-BfR8bXMIjhFq3-OXg.woff2) format('woff2');
+    unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+/* latin */
+
+@font-face {
+    font-family: 'Roboto Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto Mono'), local('RobotoMono-Regular'), url(https://fonts.gstatic.com/s/robotomono/v7/L0x5DF4xlVMF-BfR8bXMIjhLq38.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+    primary-color: #C4C4C4
+    secondary-color: #EBEBEB
+    accent-color1: #FFA632
+    accent-color2: #008489
+    accent-color3: #914669
+*/
+
+/******** Common rules ********/
+
+body {
+    padding: 0;
+    margin: 0;
+    background-color: #EBEBEB;
+    transition: 0.5s;
+}
+
+body * {
+    font-family: 'Lato';
+}
+
+a {
+    transition: 0.5s;
+    color: #008489;
+}
+
+a:visited {
+    color: #914669;
+}
+
+a:active {
+    color: #FFA632;
+}
+
+
+/******** Nav bar **********/
+
+.nav-bar {
+    display: flex;
+    align-items: center;
+    padding: 0.3rem;
+    background-color: #484848;
+    color: #EBEBEB;
+    transition: 0.5s;
+}
+
+.nav-bar .dhall-icon {
+    max-width: 2.5rem;
+    margin: 0.5rem;
+}
+
+.nav-bar .package-title {
+    font-size: 1.3rem;
+    margin: 0;
+    margin-left: 1rem;
+}
+
+.nav-bar a.nav-option {
+    font-size: 1rem;
+    height: 100%;
+    margin: 0 0.5rem;
+    cursor: pointer;
+    transition: 0.5s;
+    text-decoration: none;
+}
+
+.nav-bar a.nav-option:hover {
+    text-decoration: underline;
+    text-decoration-color: #EBEBEB;
+}
+
+.nav-bar a.nav-option:active, .nav-bar a.nav-option, .nav-bar a.nav-option:visited {
+    color: #EBEBEB;
+}
+
+.nav-bar .nav-bar-content-divider {
+    flex: 1;
+}
+
+/******** Main content **********/
+
+.main-container {
+    padding: 2rem;
+    padding-top: 0;
+    transition: 0.5s;
+}
+
+/******** Dark mode styling ********/
+
+.dark-mode .main-container {
+    color: #EBEBEB;
+}
+
+body.dark-mode {
+    background-color: #484848;
+}
+
+.dark-mode .nav-bar {
+    background-color: #5d5d5d;
+}
+
+.dark-mode a {
+    color: #FFA632;
+}
+
+.dark-mode a:visited {
+    color: #008489;
+}
+
+.dark-mode a:active {
+    color: #914669;
+}

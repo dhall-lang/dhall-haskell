@@ -1,14 +1,14 @@
-{ mkDerivation, base, containers, deepseq, erf, process, random
-, stdenv, template-haskell, tf-random, transformers
+{ mkDerivation, base, containers, deepseq, process, random
+, splitmix, stdenv, template-haskell, transformers
 }:
 mkDerivation {
   pname = "QuickCheck";
-  version = "2.12.6.1";
-  sha256 = "0b2aa7f5c625b5875c36f5f548926fcdaedf4311bd3a4c291fcf10b8d7faa170";
+  version = "2.14";
+  sha256 = "52be1407fb19f5f3b5aa06d41fac745536d08306adaf6dde46a62255d16c384a";
   revision = "1";
-  editedCabalFile = "0w5gygp6pmyjzjjx5irfflcbx586zfnqidq669ssqqfsadf944xv";
+  editedCabalFile = "0i8hh6f8y2jxn9hfchhbp9w5mb65fs6yy12z08wyrxxyhr5nllrz";
   libraryHaskellDepends = [
-    base containers deepseq erf random template-haskell tf-random
+    base containers deepseq random splitmix template-haskell
     transformers
   ];
   testHaskellDepends = [ base deepseq process ];
