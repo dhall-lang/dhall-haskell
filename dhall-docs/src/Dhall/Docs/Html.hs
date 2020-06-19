@@ -12,17 +12,15 @@
 {-# LANGUAGE RecordWildCards      #-}
 
 module Dhall.Docs.Html
-    ( headerToHtml
-    , filePathHeaderToHtml
+    ( filePathHeaderToHtml
     , indexToHtml
     , DocParams(..)
     ) where
 
-import Data.Monoid  ((<>))
-import Data.Text    (Text)
-import Dhall.Parser (Header (..))
+import Data.Monoid ((<>))
+import Data.Text   (Text)
 import Lucid
-import Path         (Abs, Dir, File, Path, Rel)
+import Path        (Abs, Dir, File, Path, Rel)
 
 import qualified Control.Monad
 import qualified Data.Text
@@ -35,33 +33,20 @@ data DocParams = DocParams
     , packageName :: !String               -- ^ Name of the package
     }
 
--- | Takes a `Header` and generates its `Html`
-headerToHtml :: Header -> Html ()
-headerToHtml = p_ . toHtml . removeComments
-
-removeComments :: Header -> Text
-removeComments (Header header)
-    | "--" `Data.Text.isPrefixOf` strippedHeader = Data.Text.drop 2 strippedHeader
-    | "{-" `Data.Text.isPrefixOf` strippedHeader =
-        Data.Text.drop 2 $ Data.Text.dropEnd 2 strippedHeader
-    | otherwise = strippedHeader
-
-  where
-    strippedHeader = Data.Text.strip header
-
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 filePathHeaderToHtml
-    :: (Path Abs File, Header) -- ^ (source file name, parsed header)
-    -> DocParams               -- ^ Parameters for the documentation
+    :: Path Abs File -- ^ Source file name, used to extract the title
+    -> Html ()       -- ^ Header document as HTML
+    -> DocParams     -- ^ Parameters for the documentation
     -> Html ()
-filePathHeaderToHtml (filePath, header) params@DocParams{..} =
+filePathHeaderToHtml filePath header params@DocParams{..} =
     doctypehtml_ $ do
         headContents title params
         body_ $ do
             navBar params
             mainContainer $ do
                 h1_ $ toHtml title
-                headerToHtml header
+                div_ [class_ "doc-contents"] header
   where
     title = Path.fromRelFile $ Path.filename filePath
 

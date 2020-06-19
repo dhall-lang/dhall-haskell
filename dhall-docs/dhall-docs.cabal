@@ -46,14 +46,17 @@ Library
         dhall                >= 1.32.0            ,
         file-embed           >= 0.0.10.0          ,
         filepath             >= 1.4      && < 1.5 ,
-        lucid                >= 2.9.12            ,
-        path                 >= 0.7.0             ,
-        path-io              >= 1.6.0             ,
+        lucid                >= 2.9.12   && < 2.10,
+        mmark                >= 0.0.7.0  && < 0.8 ,
+        megaparsec           >= 7        && < 8.1 ,
+        path                 >= 0.7.0    && < 0.8 ,
+        path-io              >= 1.6.0    && < 1.7 ,
         text                 >= 0.11.1.0 && < 1.3 ,
         optparse-applicative >= 0.14.0.0 && < 0.16
     Exposed-Modules:
         Dhall.Docs
         Dhall.Docs.Html
+        Dhall.Docs.Markdown
     Other-Modules:
         Dhall.Docs.Embedded
     GHC-Options: -Wall
