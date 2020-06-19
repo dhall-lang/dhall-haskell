@@ -57,6 +57,10 @@ import Data.Semigroup (Semigroup(..))
 import Data.Sequence (Seq, ViewL(..), ViewR(..))
 import Data.Text (Text)
 import Data.Void (Void)
+import Dhall.Map (Map)
+import Dhall.Set (Set)
+import GHC.Natural (Natural)
+import Prelude hiding (succ)
 
 import Dhall.Syntax
   ( Binding(..)
@@ -64,13 +68,9 @@ import Dhall.Syntax
   , Chunks(..)
   , Const(..)
   , DhallDouble(..)
+  , PreferAnnotation(..)
   , Var(..)
   )
-
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import GHC.Natural (Natural)
-import Prelude hiding (succ)
 
 import qualified Data.Char
 import qualified Data.Sequence   as Sequence
@@ -211,12 +211,10 @@ data Val a
     | VOptional (Val a)
     | VSome (Val a)
     | VNone (Val a)
-    | VOptionalFold (Val a) !(Val a) (Val a) !(Val a) !(Val a)
-    | VOptionalBuild (Val a) !(Val a)
     | VRecord !(Map Text (Val a))
     | VRecordLit !(Map Text (Val a))
     | VUnion !(Map Text (Maybe (Val a)))
-    | VCombine !(Val a) !(Val a)
+    | VCombine !(Maybe Text) !(Val a) !(Val a)
     | VCombineTypes !(Val a) !(Val a)
     | VPrefer !(Val a) !(Val a)
     | VMerge !(Val a) !(Val a) !(Maybe (Val a))
@@ -288,17 +286,17 @@ vPrefer env t u =
             VPrefer t' u'
 {-# INLINE vPrefer #-}
 
-vCombine :: Val a -> Val a -> Val a
-vCombine t u =
+vCombine :: Maybe Text -> Val a -> Val a -> Val a
+vCombine mk t u =
     case (t, u) of
         (VRecordLit m, u') | null m ->
             u'
         (t', VRecordLit m) | null m ->
             t'
         (VRecordLit m, VRecordLit m') ->
-            VRecordLit (Map.unionWith vCombine m m')
+            VRecordLit (Map.unionWith (vCombine Nothing) m m')
         (t', u') ->
-            VCombine t' u'
+            VCombine mk t' u'
 
 vCombineTypes :: Val a -> Val a -> Val a
 vCombineTypes t u =
@@ -356,11 +354,11 @@ vField t0 k = go t0
         VPrefer l (VRecordLit m) -> case Map.lookup k m of
             Just v -> v
             Nothing -> go l
-        VCombine (VRecordLit m) r -> case Map.lookup k m of
-            Just v -> VField (VCombine (singletonVRecordLit v) r) k
+        VCombine mk (VRecordLit m) r -> case Map.lookup k m of
+            Just v -> VField (VCombine mk (singletonVRecordLit v) r) k
             Nothing -> go r
-        VCombine l (VRecordLit m) -> case Map.lookup k m of
-            Just v -> VField (VCombine l (singletonVRecordLit v)) k
+        VCombine mk l (VRecordLit m) -> case Map.lookup k m of
+            Just v -> VField (VCombine mk l (singletonVRecordLit v)) k
             Nothing -> go l
         t -> VField t k
 
@@ -452,19 +450,27 @@ eval !env t0 =
         NaturalLit n ->
             VNaturalLit n
         NaturalFold ->
-            VPrim $ \case
-                VNaturalLit n ->
-                    VHLam (Typed "natural" (VConst Type)) $ \natural ->
-                    VHLam (Typed "succ" (natural ~> natural)) $ \succ ->
-                    VHLam (Typed "zero" natural) $ \zero ->
-                    let go !acc 0 = acc
-                        go  acc m = go (vApp succ acc) (m - 1)
-                    in  go zero (fromIntegral n :: Integer)
-                n ->
-                    VPrim $ \natural ->
-                    VPrim $ \succ ->
-                    VPrim $ \zero ->
-                    VNaturalFold n natural succ zero
+            VPrim $ \n ->
+            VPrim $ \natural ->
+            VPrim $ \succ ->
+            VPrim $ \zero ->
+            let inert = VNaturalFold n natural succ zero
+            in  case zero of
+                VPrimVar -> inert
+                _ -> case succ of
+                    VPrimVar -> inert
+                    _ -> case natural of
+                        VPrimVar -> inert
+                        _ -> case n of
+                            VNaturalLit n' ->
+                                -- Use an `Integer` for the loop, due to the
+                                -- following issue:
+                                --
+                                -- https://github.com/ghcjs/ghcjs/issues/782
+                                let go !acc 0 = acc
+                                    go  acc m = go (vApp succ acc) (m - 1)
+                                in  go zero (fromIntegral n' :: Integer)
+                            _ -> inert
         NaturalBuild ->
             VPrim $ \case
                 VPrimVar ->
@@ -495,7 +501,12 @@ eval !env t0 =
             x@(VNaturalLit m) ->
                 VPrim $ \case
                     VNaturalLit n
-                        | n >= m    -> VNaturalLit (subtract m n)
+                        | n >= m ->
+                            -- Use an `Integer` for the subtraction, due to the
+                            -- following issue:
+                            --
+                            -- https://github.com/ghcjs/ghcjs/issues/782
+                            VNaturalLit (fromIntegral (subtract (fromIntegral m :: Integer) (fromIntegral n :: Integer)))
                         | otherwise -> VNaturalLit 0
                     y -> VNaturalSubtract x y
             x ->
@@ -580,17 +591,23 @@ eval !env t0 =
 
         ListFold ->
             VPrim $ \a ->
-            VPrim $ \case
-                VListLit _ as ->
-                    VHLam (Typed "list" (VConst Type)) $ \list ->
-                    VHLam (Typed "cons" (a ~> list ~> list) ) $ \cons ->
-                    VHLam (Typed "nil"  list) $ \nil ->
-                    foldr' (\x b -> cons `vApp` x `vApp` b) nil as
-                as ->
-                    VPrim $ \t ->
-                    VPrim $ \c ->
-                    VPrim $ \n ->
-                    VListFold a as t c n
+            VPrim $ \as ->
+            VPrim $ \list ->
+            VPrim $ \cons ->
+            VPrim $ \nil ->
+            let inert = VListFold a as list cons nil
+            in  case nil of
+                VPrimVar -> inert
+                _ -> case cons of
+                    VPrimVar -> inert
+                    _ -> case list of
+                        VPrimVar -> inert
+                        _ -> case a of
+                            VPrimVar -> inert
+                            _ -> case as of
+                                VListLit _ as' ->
+                                    foldr' (\x b -> cons `vApp` x `vApp` b) nil as'
+                                _ -> inert
         ListLength ->
             VPrim $ \ a ->
             VPrim $ \case
@@ -652,46 +669,20 @@ eval !env t0 =
             VSome (eval env t)
         None ->
             VPrim $ \ ~a -> VNone a
-        OptionalFold ->
-            VPrim $ \ ~a ->
-            VPrim $ \case
-                VNone _ ->
-                    VHLam (Typed "optional" (VConst Type)) $ \optional ->
-                    VHLam (Typed "some" (a ~> optional)) $ \_some ->
-                    VHLam (Typed "none" optional) $ \none ->
-                    none
-                VSome t ->
-                    VHLam (Typed "optional" (VConst Type)) $ \optional ->
-                    VHLam (Typed "some" (a ~> optional)) $ \some ->
-                    VHLam (Typed "none" optional) $ \_none ->
-                    some `vApp` t
-                opt ->
-                    VPrim $ \o ->
-                    VPrim $ \s ->
-                    VPrim $ \n ->
-                    VOptionalFold a opt o s n
-        OptionalBuild ->
-            VPrim $ \ ~a ->
-            VPrim $ \case
-                VPrimVar -> VOptionalBuild a VPrimVar
-                t ->       t
-                    `vApp` VOptional a
-                    `vApp` VHLam (Typed "a" a) VSome
-                    `vApp` VNone a
         Record kts ->
             VRecord (Map.sort (fmap (eval env) kts))
         RecordLit kts ->
             VRecordLit (Map.sort (fmap (eval env) kts))
         Union kts ->
             VUnion (Map.sort (fmap (fmap (eval env)) kts))
-        Combine t u ->
-            vCombine (eval env t) (eval env u)
+        Combine mk t u ->
+            vCombine mk (eval env t) (eval env u)
         CombineTypes t u ->
             vCombineTypes (eval env t) (eval env u)
-        Prefer t u ->
+        Prefer _ t u ->
             vPrefer env (eval env t) (eval env u)
         RecordCompletion t u ->
-            eval env (Annot (Prefer (Field t "default") u) (Field t "Type"))
+            eval env (Annot (Prefer PreferFromCompletion (Field t "default") u) (Field t "Type"))
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
@@ -736,6 +727,8 @@ eval !env t0 =
             VAssert (eval env t)
         Equivalent t u ->
             VEquivalent (eval env t) (eval env u)
+        e@With{} ->
+            eval env (Syntax.desugarWith e)
         Note _ e ->
             eval env e
         ImportAlt t _ ->
@@ -916,15 +909,13 @@ conv !env t0 t0' =
             conv env t t'
         (VNone _, VNone _) ->
             True
-        (VOptionalBuild _ t, VOptionalBuild _ t') ->
-            conv env t t'
         (VRecord m, VRecord m') ->
             eqMapsBy (conv env) m m'
         (VRecordLit m, VRecordLit m') ->
             eqMapsBy (conv env) m m'
         (VUnion m, VUnion m') ->
             eqMapsBy (eqMaybeBy (conv env)) m m'
-        (VCombine t u, VCombine t' u') ->
+        (VCombine _ t u, VCombine _ t' u') ->
             conv env t t' && conv env u u'
         (VCombineTypes t u, VCombineTypes t' u') ->
             conv env t t' && conv env u u'
@@ -948,8 +939,6 @@ conv !env t0 t0' =
             eqMapsBy (eqMaybeBy (conv env)) m m' && k == k' && eqMaybeBy (conv env) mt mt'
         (VEmbed a, VEmbed a') ->
             a == a'
-        (VOptionalFold a t _ u v, VOptionalFold a' t' _ u' v') ->
-            conv env a a' && conv env t t' && conv env u u' && conv env v v'
         (_, _) ->
             False
   where
@@ -1102,22 +1091,18 @@ quote !env !t0 =
             Some (quote env t)
         VNone t ->
             None `qApp` t
-        VOptionalFold a o t u v ->
-            OptionalFold `qApp` a `qApp` o `qApp` t `qApp` u `qApp` v
-        VOptionalBuild a t ->
-            OptionalBuild `qApp` a `qApp` t
         VRecord m ->
             Record (fmap (quote env) m)
         VRecordLit m ->
             RecordLit (fmap (quote env) m)
         VUnion m ->
             Union (fmap (fmap (quote env)) m)
-        VCombine t u ->
-            Combine (quote env t) (quote env u)
+        VCombine mk t u ->
+            Combine mk (quote env t) (quote env u)
         VCombineTypes t u ->
             CombineTypes (quote env t) (quote env u)
         VPrefer t u ->
-            Prefer (quote env t) (quote env u)
+            Prefer PreferFromSource (quote env t) (quote env u)
         VMerge t u ma ->
             Merge (quote env t) (quote env u) (fmap (quote env) ma)
         VToMap t ma ->
@@ -1282,22 +1267,18 @@ alphaNormalize = goEnv EmptyNames
                 Some (go t)
             None ->
                 None
-            OptionalFold ->
-                OptionalFold
-            OptionalBuild ->
-                OptionalBuild
             Record kts ->
                 Record (fmap go kts)
             RecordLit kts ->
                 RecordLit (fmap go kts)
             Union kts ->
                 Union (fmap (fmap go) kts)
-            Combine t u ->
-                Combine (go t) (go u)
+            Combine m t u ->
+                Combine m (go t) (go u)
             CombineTypes t u ->
                 CombineTypes (go t) (go u)
-            Prefer t u ->
-                Prefer (go t) (go u)
+            Prefer b t u ->
+                Prefer b (go t) (go u)
             RecordCompletion t u ->
                 RecordCompletion (go t) (go u)
             Merge x y ma ->
@@ -1312,6 +1293,8 @@ alphaNormalize = goEnv EmptyNames
                 Assert (go t)
             Equivalent t u ->
                 Equivalent (go t) (go u)
+            With e k v ->
+                With (go e) k (go v)
             Note s e ->
                 Note s (go e)
             ImportAlt t u ->

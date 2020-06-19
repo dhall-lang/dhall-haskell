@@ -6,7 +6,8 @@ module Dhall.Test.Tutorial where
 
 import qualified Data.Vector
 import qualified Dhall
-import qualified Dhall.Test.Util as Util
+import qualified Dhall.Test.Substitution as Substitution
+import qualified Dhall.Test.Util         as Util
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
@@ -35,6 +36,17 @@ tests =
             , example 1 "./tests/tutorial/unions1A.dhall" "./tests/tutorial/unions1B.dhall"
             , example 3 "./tests/tutorial/unions3A.dhall" "./tests/tutorial/unions3B.dhall"
             , example 4 "./tests/tutorial/unions4A.dhall" "./tests/tutorial/unions4B.dhall"
+            ]
+        , Test.Tasty.testGroup "Substitutions"
+            [ Test.Tasty.HUnit.testCase "substitution1.dhall" $ do
+                res <- Substitution.substituteResult "tests/tutorial/substitution1.dhall"
+                res @?= Substitution.Failure 1
+            , Test.Tasty.HUnit.testCase "substitution2.dhall" $ do
+                res <- Substitution.substituteResult "tests/tutorial/substitution2.dhall"
+                res @?= Substitution.Failure 1
+            , Test.Tasty.HUnit.testCase "substitution3.dhall" $ do
+                res <- Substitution.substituteFoo "tests/tutorial/substitution3.dhall"
+                res @?= True
             ]
         ]
 

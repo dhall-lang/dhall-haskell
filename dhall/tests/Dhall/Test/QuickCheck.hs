@@ -29,6 +29,7 @@ import Dhall.Core
     , ImportHashed(..)
     , ImportMode(..)
     , ImportType(..)
+    , PreferAnnotation(..)
     , Scheme(..)
     , URL(..)
     , Var(..)
@@ -53,6 +54,7 @@ import Test.Tasty.QuickCheck (QuickCheckTests(..))
 import Text.Megaparsec (SourcePos(..), Pos)
 
 import qualified Control.Spoon
+import qualified Data.Foldable as Foldable
 import qualified Data.List
 import qualified Data.Sequence
 import qualified Data.SpecialValues
@@ -70,6 +72,7 @@ import qualified Dhall.Parser as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
+import qualified Lens.Family as Lens
 import qualified Numeric.Natural as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
@@ -219,6 +222,14 @@ instance Arbitrary Directory where
 
     shrink = genericShrink
 
+instance (Arbitrary s, Arbitrary a) => Arbitrary (PreferAnnotation s a) where
+    arbitrary =
+        Test.QuickCheck.oneof
+            [ pure PreferFromSource
+            , PreferFromWith <$> arbitrary
+            , pure PreferFromCompletion
+            ]
+
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =
         Test.QuickCheck.suchThat
@@ -298,8 +309,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "Optional")
             % (7 :: W "Some")
             % (1 :: W "None")
-            % (1 :: W "OptionalFold")
-            % (1 :: W "OptionalBuild")
             % (1 :: W "Record")
             % (7 :: W "RecordLit")
             % (1 :: W "Union")
@@ -313,6 +322,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "Project")
             % (1 :: W "Assert")
             % (1 :: W "Equivalent")
+            % (1 :: W "With")
             % (0 :: W "Note")
             % (7 :: W "ImportAlt")
             % (7 :: W "Embed")
@@ -321,10 +331,22 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     shrink expression = filter standardizedExpression (genericShrink expression)
 
 standardizedExpression :: Expr s a -> Bool
-standardizedExpression (ListLit  Nothing  xs) = not (Data.Sequence.null xs)
-standardizedExpression (ListLit (Just _ ) xs) = Data.Sequence.null xs
-standardizedExpression (Note _ _            ) = False
-standardizedExpression  _                     = True
+standardizedExpression (ListLit  Nothing  xs) =
+    not (Data.Sequence.null xs)
+standardizedExpression (ListLit (Just _ ) xs) =
+    Data.Sequence.null xs
+standardizedExpression (Note _ _) =
+    False
+standardizedExpression (Combine (Just _) _ _) =
+    False
+standardizedExpression With{} =
+    False
+standardizedExpression (Prefer PreferFromCompletion _ _) =
+    False
+standardizedExpression (Prefer (PreferFromWith _) _ _) =
+    False
+standardizedExpression _ =
+    True
 
 instance Arbitrary File where
     arbitrary = lift2 File
@@ -472,6 +494,18 @@ normalizingAnExpressionDoesntChangeItsInferredType expression =
     filterOutEmbeds :: Typer a
     filterOutEmbeds _ = Const Sort -- This could be any ill-typed expression.
 
+noDoubleNotes :: Expr () Import -> Property
+noDoubleNotes expression =
+    length
+        [ ()
+        | e <- Foldable.toList parsedExpression
+        , Note _ (Note _ _) <- Lens.toListOf Dhall.Core.subExpressions e
+        ] === 0
+  where
+    text = Dhall.Core.pretty expression
+
+    parsedExpression = Parser.exprFromText "" text
+
 embedThenExtractIsIdentity
     :: forall a. (ToDhall a, FromDhall a, Eq a, Typeable a, Arbitrary a, Show a)
     => Proxy a
@@ -524,6 +558,10 @@ tests =
         , ( "Normalizing an expression doesn't change its inferred type"
           , Test.QuickCheck.property normalizingAnExpressionDoesntChangeItsInferredType
           , adjustQuickCheckTests 10000
+          )
+        , ( "Parsing an expression doesn't generated doubly-nested Note constructors"
+          , Test.QuickCheck.property noDoubleNotes
+          , adjustQuickCheckTests 100
           )
         , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
         , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])

@@ -1,0 +1,27 @@
+[ { "bool": true
+  , "text": "abc"
+  , "natural": 0
+  , "integer": 0
+  , "double": 0.0
+  , "unifyEmpty": []
+  , "preferInteger": 0
+  , "preferDouble": 0
+  , "unifySimple": true
+  , "optional": 1
+  , "null": null
+  , "arbitraryJSON": 1
+  }
+, { "bool": false
+  , "text": "def"
+  , "natural": 1
+  , "integer": -1
+  , "double": 1.1
+  , "unifyEmpty": [1]
+  , "preferInteger": -1
+  , "preferDouble": 1.1
+  , "unifySimple": "abc"
+  , "optional": null
+  , "extraField": true
+  , "arbitraryJSON": []
+  }
+]

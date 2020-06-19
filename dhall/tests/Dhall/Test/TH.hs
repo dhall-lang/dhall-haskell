@@ -1,13 +1,17 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
 
+#if MIN_VERSION_template_haskell(2,12,0)
+{-# LANGUAGE DerivingStrategies #-}
+#endif
+
 module Dhall.Test.TH where
 
-import Dhall (FromDhall(..))
-import GHC.Generics
+import Dhall.TH (HaskellType(..))
 import Test.Tasty (TestTree)
 
 import qualified Dhall
@@ -17,10 +21,19 @@ import qualified Test.Tasty.HUnit as Tasty.HUnit
 
 Dhall.TH.makeHaskellTypeFromUnion "T" "./tests/th/example.dhall"
 
-deriving instance Eq        T
-deriving instance Show      T
-deriving instance Generic   T
-deriving instance FromDhall T
+deriving instance Eq   T
+deriving instance Show T
+
+Dhall.TH.makeHaskellTypes
+    [ MultipleConstructors "Department" "./tests/th/Department.dhall"
+    , SingleConstructor "Employee" "MakeEmployee" "./tests/th/Employee.dhall"
+    ]
+
+deriving instance Eq   Department
+deriving instance Show Department
+
+deriving instance Eq   Employee
+deriving instance Show Employee
 
 tests :: TestTree
 tests = Tasty.testGroup "Template Haskell" [ makeHaskellTypeFromUnion ]
@@ -38,3 +51,7 @@ makeHaskellTypeFromUnion = Tasty.HUnit.testCase "makeHaskellTypeFromUnion" $ do
     t2 <- Dhall.input Dhall.auto "let T = ./tests/th/example.dhall in T.C"
 
     Tasty.HUnit.assertEqual "" t2 C
+
+    employee <- Dhall.input Dhall.auto "let Department = ./tests/th/Department.dhall in { name = \"John\", department = Department.Marketing }"
+
+    Tasty.HUnit.assertEqual "" employee MakeEmployee{ name = "John", department = Marketing }

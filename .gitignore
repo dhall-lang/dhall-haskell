@@ -23,3 +23,5 @@ cabal.project.local~
 .cache
 .history
 stack*.yaml.lock
+.vscode
+docs

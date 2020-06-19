@@ -15,7 +15,10 @@
 , some =
     Some
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-, merge =
+, someList =
+    Some
+      [ aaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccc, dddddddddddddd ]
+, merge1 =
     merge
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -24,7 +27,7 @@
       a
       b
       ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-, toMap =
+, toMap1 =
     toMap
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 }

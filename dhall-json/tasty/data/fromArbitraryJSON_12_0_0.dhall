@@ -9,9 +9,11 @@
       }
     )
 → json.object
-    [ { mapKey = "array", mapValue = json.array ([] : List JSON) }
-    , { mapKey = "bool", mapValue = json.bool False }
-    , { mapKey = "null", mapValue = json.null }
-    , { mapKey = "number", mapValue = json.number 1.0 }
-    , { mapKey = "string", mapValue = json.string "ABC" }
-    ]
+    ( toMap
+        { array = json.array ([] : List JSON)
+        , bool = json.bool False
+        , null = json.null
+        , number = json.number 1.0
+        , string = json.string "ABC"
+        }
+    )

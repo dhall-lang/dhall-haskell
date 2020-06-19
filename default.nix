@@ -3,18 +3,19 @@ let
 
   shared_ghcjs = import ./nix/shared.nix { compiler = "ghcjs"; };
 
-  shared_ghcjs_linux =
-    import ./nix/shared.nix { compiler = "ghcjs"; system = "x86_64-linux"; };
-
 in
   { inherit (shared.possibly-static)
       dhall
       dhall-bash
+      dhall-docs
       dhall-json
       dhall-lsp-server
       dhall-nix
+      dhall-nixpkgs
       dhall-yaml
     ;
 
     inherit (shared_ghcjs) dhall-try;
+
+    dhall-ghcjs = shared_ghcjs.dhall;
   }

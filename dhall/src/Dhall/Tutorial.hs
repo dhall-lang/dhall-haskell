@@ -74,8 +74,14 @@ module Dhall.Tutorial (
     -- ** Extending the language
     -- $extending
 
+    -- ** Substitutions
+    -- $substitutions
+
     -- * Prelude
     -- $prelude
+
+    -- * Limitations
+    -- $limitations
 
     -- * Conclusion
     -- $conclusion
@@ -122,6 +128,8 @@ import Dhall
 -- >     x <- input auto "./config.dhall"
 -- >     print (x :: Example)
 -- 
+-- __WARNING__: You must not instantiate FromDhall with a recursive type. See [Limitations](#limitations).
+--
 -- If you compile and run the above example, the program prints the corresponding
 -- Haskell record:
 -- 
@@ -541,7 +549,15 @@ import Dhall
 -- >     }
 -- > }
 --
--- You can access a field of a record using the following syntax:
+-- You can specify nested fields using dot-separated keys, like this:
+--
+-- > { foo = 1, bar.baz = 2.0, bar.qux = True }
+--
+-- ... which is equivalent to:
+--
+-- > { foo = 1, bar = { baz = 2.0, qux = True } }
+--
+-- You can also access a field of a record using the following syntax:
 --
 -- > record.fieldName
 --
@@ -825,6 +841,24 @@ import Dhall
 -- Note that the order of record fields does not matter.  The compiler
 -- automatically sorts the fields.
 --
+-- If you need to set or add a deeply nested field you can use the @with@
+-- keyword, like this:
+--
+-- > $ dhall <<< '{ x.y = 1 } with x.z = True'
+-- > { x = { y = 1, z = True } }
+--
+-- > $ dhall <<< '{ x.y = 1 } with x.y = 2'
+-- > { x.y = 2 }
+--
+-- The @with@ keyword is syntactic sugar for the @//@ operator which follows
+-- these rules:
+--
+-- > -- Nested case
+-- > record with k.ks… = value  ⇒  record // { k = record.k with ks… = value }
+-- >
+-- > -- Base case
+-- > record with k = value      ⇒  record // { k = value }
+--
 -- The @(/\\)@ operator (or @(∧)@ U+2227) also lets you combine records, but
 -- behaves differently if the records share fields in common.  The operator
 -- combines shared fields recursively if they are both records:
@@ -845,7 +879,7 @@ import Dhall
 -- > 
 -- > { foo = 1, bar = "ABC" } ∧ { foo = True }
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- __Exercise__: Combine any record with the empty record.  What do you expect
 -- to happen?
@@ -912,7 +946,7 @@ import Dhall
 -- > <Ctrl-D>
 -- > Error: Invalid input
 -- > 
--- > (stdin):1:11:
+-- > (input):1:11:
 -- >   |
 -- > 1 | let twice (x : Text) = x ++ x in twice "ha"
 -- >   |           ^
@@ -1352,7 +1386,7 @@ import Dhall
 -- > 
 -- > 1│ ./test.dhall
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- You can compare expressions that contain variables, too, which is equivalent
 -- to symbolic reasoning:
@@ -1381,7 +1415,7 @@ import Dhall
 -- > 
 -- > 1│                   assert : Natural/even (n + n) === True
 -- > 
--- > (stdin):1:19
+-- > (input):1:19
 --
 -- Here the interpreter is not smart enough to simplify @Natural/even (n + n)@
 -- to @True@ so the assertion fails.
@@ -1820,7 +1854,7 @@ import Dhall
 -- > 
 -- > +2 + +2
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- In fact, there are no built-in functions for @Integer@s (or @Double@s) other
 -- than @Integer/show@ and @Double/show@.  As far as the language is concerned
@@ -1903,7 +1937,7 @@ import Dhall
 -- > 
 -- > Natural/equal 
 -- > 
--- > (stdin):1:1
+-- > (input):1:1
 --
 -- You will need to either:
 -- 
@@ -1915,6 +1949,64 @@ import Dhall
 -- * Keep built-ins easy to implement across language bindings
 -- * Prefer general purpose built-ins or built-ins appropriate for the task of program configuration
 -- * Design built-ins to catch errors as early as possible (i.e. when type-checking the configuration)
+
+-- $substitutions
+--
+-- Substitutions are another way to extend the language.
+-- Suppose we have the following Haskell datatype:
+--
+-- > data Result = Failure Integer | Success String
+-- >     deriving (Eq, Generic, Show)
+-- >
+-- > instance FromDhall Result
+--
+-- We can use it in Dhall like that:
+--
+-- > -- example.dhall
+-- >
+-- > let Result = < Failure : Integer | Success Text >
+-- > in Result.Failure 1
+--
+-- Right now it is quite easy to keep these two definitions (the one in Haskell source and the one in the Dhall file) synchronized:
+-- If we implement a new feature in the Haskell source we update the corresponding type in the Dhall file.
+-- But what happens if our application is growing and our Result type contains e.g. 10 unions with possible types embedded in it?
+-- Maintaining the code will get tedious. Luckily we can extract the correct Dhall type from the Haskell definition:
+--
+-- > resultDecoder :: Dhall.Decoder Result
+-- > resultDecoder = Dhall.auto
+-- >
+-- > resultType :: Expr Src Void
+-- > resultType = Dhall.expected resultDecoder
+-- >
+-- > resultTypeString :: String
+-- > resultTypeString = show $ pretty resultType
+--
+-- Now we just have to inject that type into the Dhall code and we are done. One common way to do that is to wrap the import of example.dhall in a let expression:
+--
+-- > Dhall.input (Dhall.auto :: Dhall.Decoder Result) ("let Result = " ++ Data.Text.pack resultTypeString ++ " in ./example.dhall")
+--
+-- Now we can omit the definition of Result in our example.dhall file. While this will work perfectly Dhall provides a cleaner solution for our \"injection problem\":
+--
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- >
+-- > myexample :: IO Result
+-- > myexample = let
+-- >    evaluateSettings = Lens.over Dhall.substitutions (Dhall.Map.insert "Result" resultType) Dhall.defaultEvaluateSettings
+-- >    in Dhall.inputFileWithSettings evaluateSettings resultDecoder "example.dhall"
+--
+-- Substitutions are a simple 'Dhall.Map.Map' mapping variables to expressions. The application of these substitutions reflect the order of the insertions in the substitution map:
+--
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- >
+-- > substitute (Dhall.Core.Var "Foo") (Dhall.Map.fromList [("Foo", Dhall.Core.Var "Bar"), ("Bar", Dhall.Core.BoolLit True)])
+--
+-- results in @Dhall.Core.Var \"Baz\"@ since we first substitute \"Foo\" with \"Bar\" and then the resulting \"Bar\" with the final @True@.
+--
+-- Notable differences to the other extensions of the builtin language:
+--
+--  * This approach works well with the inputFile/inputFileWithSettings functions while the let-wrapping will not.
+--
+--  * In contrast to the custom built-ins described above substitutions are made BEFORE the type-checking.
 
 -- $prelude
 --
@@ -2154,6 +2246,35 @@ import Dhall
 -- __Exercise__: Browse the Prelude by running:
 --
 -- > $ dhall <<< 'https://prelude.dhall-lang.org/package.dhall'
+
+-- $limitations
+-- #limitations#
+--
+-- `FromDhall` has a limitiation: It won't work for recursive types.
+-- If you instantiate these using their Generic instance you end up with one of
+-- the following two cases:
+-- 
+-- If the type appears in it's own definition like
+--
+-- > data Foo = Foo Foo
+-- >     deriving Generic
+-- >
+-- > instance FromDhall Foo
+--
+-- the resulting Decoder will throw an exception /ON USAGE/.
+-- However, if the recursion is indirect like
+--
+-- > data Foo = Foo Bar
+-- >     deriving Generic
+-- >
+-- > instance FromDhall Foo
+-- >
+-- > data Bar = Bar Foo
+-- >     deriving Generic
+-- >
+-- > instance FromDhall Bar
+--
+-- the resulting Decoder will __NOT TERMINATE__ /ON USAGE/.
 
 -- $conclusion
 --

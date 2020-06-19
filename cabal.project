@@ -1,5 +1,1 @@
-packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-lsp-server ./dhall-nix
-
--- TODO: Remove this once hnix has a compatible release:
--- https://github.com/haskell-nix/hnix/issues/524
-allow-newer: hnix:prettyprinter, hnix:megaparsec
+packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-lsp-server ./dhall-nix ./dhall-docs

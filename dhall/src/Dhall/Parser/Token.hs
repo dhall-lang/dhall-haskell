@@ -14,6 +14,7 @@ module Dhall.Parser.Token (
     char,
     file_,
     label,
+    anyLabelOrSome,
     anyLabel,
     labels,
     httpRaw,
@@ -57,8 +58,6 @@ module Dhall.Parser.Token (
     _ListLast,
     _ListIndexed,
     _ListReverse,
-    _OptionalFold,
-    _OptionalBuild,
     _Bool,
     _Natural,
     _Integer,
@@ -105,36 +104,38 @@ module Dhall.Parser.Token (
     _forall,
     _arrow,
     _doubleColon,
+    _with,
     ) where
 
-import           Dhall.Parser.Combinators
+import Dhall.Parser.Combinators
 
-import Control.Applicative (Alternative(..), optional)
-import Data.Bits ((.&.))
-import Data.Functor (void)
-import Data.Semigroup (Semigroup(..))
-import Data.Text (Text)
+import Control.Applicative     (Alternative (..), optional)
+import Data.Bits               ((.&.))
+import Data.Functor            (void, ($>))
+import Data.Semigroup          (Semigroup (..))
+import Data.Text               (Text)
+import Dhall.Set               (Set)
 import Dhall.Syntax
-import Dhall.Set (Set)
-import Prelude hiding (const, pi)
+import Prelude                 hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
 import qualified Data.Char                  as Char
+import qualified Data.Foldable
 import qualified Data.HashSet
+import qualified Data.List                  as List
 import qualified Data.List.NonEmpty
+import qualified Data.Scientific            as Scientific
 import qualified Data.Text
 import qualified Dhall.Set
-import qualified Network.URI.Encode         as URI.Encode
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
+import qualified Text.Parser.Token
 
 import Numeric.Natural (Natural)
-import Prelude hiding (const, pi)
-
-import qualified Text.Parser.Token
+import Prelude         hiding (const, pi)
 
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
@@ -190,9 +191,59 @@ signPrefix = (do
 -}
 doubleLiteral :: Parser Double
 doubleLiteral = (do
+    -- We don't use `Text.Parser.Token.double` since that consumes trailing
+    -- whitespace and there is no whitespace-free alternative.  See:
+    --
+    -- https://github.com/dhall-lang/dhall-haskell/pull/1646
+    -- https://github.com/dhall-lang/dhall-haskell/pull/1647
+    --
+    -- We also don't use `Text.Megaparsec.Char.Lexer.float` because that
+    -- transitively depends on `Data.Char.toTitle` which is broken on older
+    -- versions of GHCJS that we still support.  See:
+    --
+    -- https://github.com/dhall-lang/dhall-haskell/pull/1681
+    -- https://github.com/ghcjs/ghcjs-base/issues/62
+    --
+    -- Also, hand-writing the parser code for `Double` literals helps to better
+    -- ensure that we follow the standard exactly as written.
     sign <- signPrefix <|> pure id
-    a <- Text.Parser.Token.double
-    return (sign a) ) <?> "literal"
+
+    x <- Text.Parser.Token.decimal
+
+    let alternative0 = do
+            y <- fraction
+
+            e <- exponent' <|> pure 1
+
+            return ((fromInteger x + y) * e)
+
+    let alternative1 = do
+            expo <- exponent'
+
+            return (fromInteger x * expo)
+
+    n <- alternative0 <|> alternative1
+
+    return (sign (Scientific.toRealFloat n)) ) <?> "literal"
+  where
+    fraction = do
+        _ <- Text.Parser.Char.char '.'
+
+        digits <- some Text.Parser.Char.digit
+
+        let snoc y d =
+              y + Scientific.scientific (fromIntegral (Char.digitToInt d)) (Scientific.base10Exponent y - 1)
+
+        return (List.foldl' snoc 0 digits)
+
+    exponent' = do
+        _ <- Text.Parser.Char.oneOf "eE"
+
+        sign <- signPrefix <|> pure id
+
+        x <- Text.Parser.Token.decimal
+
+        return (Scientific.scientific 1 (fromInteger (sign x)))
 
 {-| Parse a signed @Infinity@
 
@@ -223,8 +274,29 @@ integerLiteral = (do
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
     a <-    try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
-        <|> Text.Megaparsec.Char.Lexer.decimal
+        <|> decimal
+        <|> (char '0' $> 0)
     return a ) <?> "literal"
+  where
+    decimal = do
+        n <- headDigit
+        ns <- many tailDigit
+        return (mkNum (n:ns))
+      where
+        headDigit = decimalDigit nonZeroDigit <?> "non-zero digit"
+          where
+            nonZeroDigit c = '1' <= c && c <= '9'
+
+        tailDigit = decimalDigit digit <?> "digit"
+
+        decimalDigit predicate = do
+            c <- Text.Parser.Char.satisfy predicate
+            return (fromIntegral (Char.ord c - Char.ord '0'))
+
+        mkNum = Data.Foldable.foldl' step 0
+          where
+            step acc x = acc * 10 + x
+
 
 {-| Parse an identifier (i.e. a variable or built-in)
 
@@ -333,13 +405,14 @@ blockCommentContinue = endOfComment <|> continue
         blockCommentContinue
 
 simpleLabel :: Bool -> Parser Text
-simpleLabel allowReserved = try (do
+simpleLabel allowReserved = try $ do
     c    <- Text.Parser.Char.satisfy headCharacter
     rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
     let t = Data.Text.cons c rest
-    Control.Monad.guard (allowReserved || not (Data.HashSet.member t reservedIdentifiers))
-    return t )
-  where
+    let isNotAKeyword = not $ t `Data.HashSet.member` reservedKeywords
+    let isNotAReservedIdentifier = not $ t `Data.HashSet.member` reservedIdentifiers
+    Control.Monad.guard (isNotAKeyword && (allowReserved || isNotAReservedIdentifier))
+    return t
 
 headCharacter :: Char -> Bool
 headCharacter c = alpha c || c == '_'
@@ -350,7 +423,7 @@ tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 backtickLabel :: Parser Text
 backtickLabel = do
     _ <- char '`'
-    t <- takeWhile1 predicate
+    t <- Dhall.Parser.Combinators.takeWhile predicate
     _ <- char '`'
     return t
   where
@@ -375,9 +448,9 @@ labels = do
     emptyLabels = pure Dhall.Set.empty
 
     nonEmptyLabels = do
-        x  <- anyLabel
+        x  <- anyLabelOrSome
         whitespace
-        xs <- many (do _comma; whitespace; l <- anyLabel; whitespace; return l)
+        xs <- many (do _comma; whitespace; l <- anyLabelOrSome; whitespace; return l)
         noDuplicates (x : xs)
 
 {-| Parse a label (e.g. a variable\/field\/alternative name)
@@ -397,6 +470,14 @@ anyLabel :: Parser Text
 anyLabel = (do
     t <- backtickLabel <|> simpleLabel True
     return t ) <?> "any label"
+
+{-| Same as `anyLabel` except that `Some` is allowed
+
+    This corresponds to the @any-label-or-some@ rule in the official grammar
+-}
+
+anyLabelOrSome :: Parser Text
+anyLabelOrSome = try anyLabel <|> ("Some" <$ _Some)
 
 {-| Parse a valid Bash environment variable name
 
@@ -473,14 +554,11 @@ pathComponent componentType = do
             _ <- char '"'
             t <- Text.Megaparsec.takeWhile1P Nothing quotedPathCharacter
             _ <- char '"'
+            return t
 
-            case componentType of
-              FileComponent -> do
-                return t
-              URLComponent -> do
-                return (URI.Encode.encodeText t)
-
-    quotedPathData <|> pathData
+    case componentType of
+        FileComponent -> quotedPathData <|> pathData
+        URLComponent -> pathData
 
 -- | Parse a `File`
 file_ :: ComponentType -> Parser File
@@ -756,6 +834,10 @@ _toMap = keyword "toMap"
 _assert :: Parser ()
 _assert = keyword "assert"
 
+-- | Parse the @with@ keyword
+_with :: Parser ()
+_with = keyword "with"
+
 {-| Parse the @Some@ built-in
 
     This corresponds to the @Some@ rule from the official grammar
@@ -909,20 +991,6 @@ _ListIndexed = builtin "List/indexed"
 -}
 _ListReverse :: Parser ()
 _ListReverse = builtin "List/reverse"
-
-{-| Parse the @Optional/fold@ built-in
-
-    This corresponds to the @Optional-fold@ rule from the official grammar
--}
-_OptionalFold :: Parser ()
-_OptionalFold = builtin "Optional/fold"
-
-{-| Parse the @Optional/build@ built-in
-
-    This corresponds to the @Optional-build@ rule from the official grammar
--}
-_OptionalBuild :: Parser ()
-_OptionalBuild = builtin "Optional/build"
 
 {-| Parse the @Bool@ built-in
 

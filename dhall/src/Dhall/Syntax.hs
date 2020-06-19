@@ -3,8 +3,10 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -25,6 +27,7 @@ module Dhall.Syntax (
     , makeBinding
     , Chunks(..)
     , DhallDouble(..)
+    , PreferAnnotation(..)
     , Expr(..)
 
     -- ** 'Let'-blocks
@@ -34,6 +37,7 @@ module Dhall.Syntax (
 
     -- ** Optics
     , subExpressions
+    , unsafeSubExpressions
     , chunkExprs
     , bindingExprs
 
@@ -56,46 +60,58 @@ module Dhall.Syntax (
 
     -- * Reserved identifiers
     , reservedIdentifiers
+    , reservedKeywords
 
     -- * `Text` manipulation
     , toDoubleQuoted
     , longestSharedWhitespacePrefix
     , linesLiteral
     , unlinesLiteral
+
+    -- * Desugaring
+    , desugarWith
+
+    -- * Utilities
+    , internalError
     ) where
 
-import Control.DeepSeq (NFData)
-import Data.Bifunctor (Bifunctor(..))
-import Data.Bits (xor)
-import Data.Data (Data)
+import Control.DeepSeq            (NFData)
+import Data.Bifunctor             (Bifunctor (..))
+import Data.Bits                  (xor)
+import Data.Data                  (Data)
 import Data.Foldable
-import Data.HashSet (HashSet)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.String (IsString(..))
-import Data.Semigroup (Semigroup(..))
-import Data.Sequence (Seq)
-import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
+import Data.HashSet               (HashSet)
+import Data.List.NonEmpty         (NonEmpty (..))
+import Data.Semigroup             (Semigroup (..))
+import Data.Sequence              (Seq)
+import Data.String                (IsString (..))
+import Data.Text                  (Text)
+import Data.Text.Prettyprint.Doc  (Doc, Pretty)
 import Data.Traversable
-import Data.Void (Void)
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import Dhall.Src (Src(..))
+import Data.Void                  (Void)
+import Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import GHC.Generics (Generic)
-import Instances.TH.Lift ()
+import Dhall.Set                  (Set)
+import Dhall.Src                  (Src (..))
+import GHC.Generics               (Generic)
+import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
-import Numeric.Natural (Natural)
-import Prelude hiding (succ)
-import Unsafe.Coerce (unsafeCoerce)
+import Numeric.Natural            (Natural)
+import Prelude                    hiding (succ)
+import Unsafe.Coerce              (unsafeCoerce)
 
 import qualified Control.Monad
 import qualified Data.HashSet
-import qualified Data.List.NonEmpty
+import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc    as Pretty
+import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Dhall.Crypto
-import qualified Network.URI                  as URI
+import qualified Dhall.Optics              as Optics
+import qualified Lens.Family               as Lens
+import qualified Network.URI               as URI
+
+-- $setup
+-- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
 
 {-| Constants for a pure type system
 
@@ -117,9 +133,7 @@ import qualified Network.URI                  as URI
     Dhall is not a dependently typed language
 -}
 data Const = Type | Kind | Sort
-    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, NFData)
-
-instance Lift Const
+    deriving (Show, Eq, Ord, Data, Bounded, Enum, Generic, Lift, NFData)
 
 instance Pretty Const where
     pretty = Pretty.unAnnotate . prettyConst
@@ -157,9 +171,7 @@ instance Pretty Const where
     appear as a numeric suffix.
 -}
 data Var = V Text !Int
-    deriving (Data, Generic, Eq, Ord, Show, NFData)
-
-instance Lift Var
+    deriving (Data, Generic, Eq, Ord, Show, Lift, NFData)
 
 instance IsString Var where
     fromString str = V (fromString str) 0
@@ -170,7 +182,9 @@ instance Pretty Var where
 {- | Record the binding part of a @let@ expression.
 
 For example,
+
 > let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+
 will be instantiated as follows:
 
 * @bindingSrc0@ corresponds to the @A@ comment.
@@ -187,7 +201,7 @@ data Binding s a = Binding
     , annotation  :: Maybe (Maybe s, Expr s a)
     , bindingSrc2 :: Maybe s
     , value       :: Expr s a
-    } deriving (Data, Eq, Foldable, Functor, Generic, NFData, Ord, Show, Traversable)
+    } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 instance Bifunctor Binding where
     first k (Binding src0 a src1 b src2 c) =
@@ -205,7 +219,7 @@ makeBinding name = Binding Nothing name Nothing Nothing Nothing
 -- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
 -- defined via the binary encoding of Dhall @Double@s.
 newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
-    deriving (Show, Data, NFData, Generic)
+    deriving (Show, Data, Lift, NFData, Generic)
 
 -- | This instance satisfies all the customary 'Eq' laws except substitutivity.
 --
@@ -236,9 +250,7 @@ instance Ord DhallDouble where
 
 -- | The body of an interpolated @Text@ literal
 data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, NFData)
-
-instance (Lift s, Lift a, Data s, Data a) => Lift (Chunks s a)
+    deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, Lift, NFData)
 
 instance Data.Semigroup.Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
@@ -255,6 +267,22 @@ instance Monoid (Chunks s a) where
 
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
+
+-- | Used to record the origin of a @//@ operator (i.e. from source code or a
+-- product of desugaring)
+data PreferAnnotation s a
+    = PreferFromSource
+    | PreferFromWith (Expr s a)
+      -- ^ Stores the original @with@ expression
+    | PreferFromCompletion
+    deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
+
+instance Bifunctor PreferAnnotation where
+    first _  PreferFromSource      = PreferFromSource
+    first f (PreferFromWith e    ) = PreferFromWith (first f e)
+    first _  PreferFromCompletion  = PreferFromCompletion
+
+    second = fmap
 
 {-| Syntax tree for expressions
 
@@ -344,9 +372,9 @@ data Expr s a
     | Integer
     -- | > IntegerLit n                             ~  ±n
     | IntegerLit Integer
-    -- | IntegerClamp                               ~  Integer/clamp
+    -- | > IntegerClamp                               ~  Integer/clamp
     | IntegerClamp
-    -- | IntegerNegate                              ~  Integer/negate
+    -- | > IntegerNegate                              ~  Integer/negate
     | IntegerNegate
     -- | > IntegerShow                              ~  Integer/show
     | IntegerShow
@@ -405,22 +433,26 @@ data Expr s a
     | Some (Expr s a)
     -- | > None                                     ~  None
     | None
-    -- | > OptionalFold                             ~  Optional/fold
-    | OptionalFold
-    -- | > OptionalBuild                            ~  Optional/build
-    | OptionalBuild
     -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
     | Record    (Map Text (Expr s a))
     -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
     | RecordLit (Map Text (Expr s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
     | Union     (Map Text (Maybe (Expr s a)))
-    -- | > Combine x y                              ~  x ∧ y
-    | Combine (Expr s a) (Expr s a)
+    -- | > Combine Nothing x y                      ~  x ∧ y
+    --
+    -- The first field is a `Just` when the `Combine` operator is introduced
+    -- as a result of desugaring duplicate record fields:
+    --
+    --   > RecordLit [ (k, Combine (Just k) x y) ]  ~ { k = x, k = y }
+    | Combine (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
     | CombineTypes (Expr s a) (Expr s a)
-    -- | > Prefer x y                               ~  x ⫽ y
-    | Prefer (Expr s a) (Expr s a)
+    -- | > Prefer False x y                         ~  x ⫽ y
+    --
+    -- The first field is a `True` when the `Prefer` operator is introduced as a
+    -- result of desugaring a @with@ expression
+    | Prefer (PreferAnnotation s a) (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -432,19 +464,21 @@ data Expr s a
     -- | > Field e x                                ~  e.x
     | Field (Expr s a) Text
     -- | > Project e (Left xs)                      ~  e.{ xs }
-    -- | > Project e (Right t)                      ~  e.(t)
+    --   > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
     -- | > Assert e                                 ~  assert : e
     | Assert (Expr s a)
     -- | > Equivalent x y                           ~  x ≡ y
     | Equivalent (Expr s a) (Expr s a)
+    -- | > With x y                                 ~  x with y
+    | With (Expr s a) (NonEmpty Text) (Expr s a)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
     -- | > ImportAlt                                ~  e1 ? e2
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving (Foldable, Generic, Traversable, Show, Data, NFData)
+    deriving (Foldable, Generic, Traversable, Show, Data, Lift, NFData)
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
 
@@ -461,83 +495,15 @@ deriving instance (Eq s, Eq a) => Eq (Expr s a)
 -- | Note that this 'Ord' instance inherits `DhallDouble`'s defects.
 deriving instance (Ord s, Ord a) => Ord (Expr s a)
 
-instance (Lift s, Lift a, Data s, Data a) => Lift (Expr s a)
-
 -- This instance is hand-written due to the fact that deriving
 -- it does not give us an INLINABLE pragma. We annotate this fmap
 -- implementation with this pragma below to allow GHC to, possibly,
 -- inline the implementation for performance improvements.
 instance Functor (Expr s) where
-  fmap _ (Const c) = Const c
-  fmap _ (Var v) = Var v
-  fmap f (Lam v e1 e2) = Lam v (fmap f e1) (fmap f e2)
-  fmap f (Pi v e1 e2) = Pi v (fmap f e1) (fmap f e2)
-  fmap f (App e1 e2) = App (fmap f e1) (fmap f e2)
-  fmap f (Let b e2) = Let (fmap f b) (fmap f e2)
-  fmap f (Annot e1 e2) = Annot (fmap f e1) (fmap f e2)
-  fmap _ Bool = Bool
-  fmap _ (BoolLit b) = BoolLit b
-  fmap f (BoolAnd e1 e2) = BoolAnd (fmap f e1) (fmap f e2)
-  fmap f (BoolOr e1 e2) = BoolOr (fmap f e1) (fmap f e2)
-  fmap f (BoolEQ e1 e2) = BoolEQ (fmap f e1) (fmap f e2)
-  fmap f (BoolNE e1 e2) = BoolNE (fmap f e1) (fmap f e2)
-  fmap f (BoolIf e1 e2 e3) = BoolIf (fmap f e1) (fmap f e2) (fmap f e3)
-  fmap _ Natural = Natural
-  fmap _ (NaturalLit n) = NaturalLit n
-  fmap _ NaturalFold = NaturalFold
-  fmap _ NaturalBuild = NaturalBuild
-  fmap _ NaturalIsZero = NaturalIsZero
-  fmap _ NaturalEven = NaturalEven
-  fmap _ NaturalOdd = NaturalOdd
-  fmap _ NaturalToInteger = NaturalToInteger
-  fmap _ NaturalShow = NaturalShow
-  fmap _ NaturalSubtract = NaturalSubtract
-  fmap f (NaturalPlus e1 e2) = NaturalPlus (fmap f e1) (fmap f e2)
-  fmap f (NaturalTimes e1 e2) = NaturalTimes (fmap f e1) (fmap f e2)
-  fmap _ Integer = Integer
-  fmap _ (IntegerLit i) = IntegerLit i
-  fmap _ IntegerClamp = IntegerClamp
-  fmap _ IntegerNegate = IntegerNegate
-  fmap _ IntegerShow = IntegerShow
-  fmap _ IntegerToDouble = IntegerToDouble
-  fmap _ Double = Double
-  fmap _ (DoubleLit d) = DoubleLit d
-  fmap _ DoubleShow = DoubleShow
-  fmap _ Text = Text
-  fmap f (TextLit cs) = TextLit (fmap f cs)
-  fmap f (TextAppend e1 e2) = TextAppend (fmap f e1) (fmap f e2)
-  fmap _ TextShow = TextShow
-  fmap _ List = List
-  fmap f (ListLit maybeE seqE) = ListLit (fmap (fmap f) maybeE) (fmap (fmap f) seqE)
-  fmap f (ListAppend e1 e2) = ListAppend (fmap f e1) (fmap f e2)
-  fmap _ ListBuild = ListBuild
-  fmap _ ListFold = ListFold
-  fmap _ ListLength = ListLength
-  fmap _ ListHead = ListHead
-  fmap _ ListLast = ListLast
-  fmap _ ListIndexed = ListIndexed
-  fmap _ ListReverse = ListReverse
-  fmap _ Optional = Optional
-  fmap f (Some e) = Some (fmap f e)
-  fmap _ None = None
-  fmap _ OptionalFold = OptionalFold
-  fmap _ OptionalBuild = OptionalBuild
-  fmap f (Record r) = Record (fmap (fmap f) r)
-  fmap f (RecordLit r) = RecordLit (fmap (fmap f) r)
-  fmap f (Union u) = Union (fmap (fmap (fmap f)) u)
-  fmap f (Combine e1 e2) = Combine (fmap f e1) (fmap f e2)
-  fmap f (CombineTypes e1 e2) = CombineTypes (fmap f e1) (fmap f e2)
-  fmap f (Prefer e1 e2) = Prefer (fmap f e1) (fmap f e2)
-  fmap f (RecordCompletion e1 e2) = RecordCompletion (fmap f e1) (fmap f e2)
-  fmap f (Merge e1 e2 maybeE) = Merge (fmap f e1) (fmap f e2) (fmap (fmap f) maybeE)
-  fmap f (ToMap e maybeE) = ToMap (fmap f e) (fmap (fmap f) maybeE)
-  fmap f (Field e1 v) = Field (fmap f e1) v
-  fmap f (Project e1 vs) = Project (fmap f e1) (fmap (fmap f) vs)
-  fmap f (Assert t) = Assert (fmap f t)
-  fmap f (Equivalent e1 e2) = Equivalent (fmap f e1) (fmap f e2)
-  fmap f (Note s e1) = Note s (fmap f e1)
-  fmap f (ImportAlt e1 e2) = ImportAlt (fmap f e1) (fmap f e2)
   fmap f (Embed a) = Embed (f a)
+  fmap f (Let b e2) = Let (fmap f b) (fmap f e2)
+  fmap f (Note s e1) = Note s (fmap f e1)
+  fmap f expression = Lens.over unsafeSubExpressions (fmap f) expression
   {-# INLINABLE fmap #-}
 
 instance Applicative (Expr s) where
@@ -548,153 +514,21 @@ instance Applicative (Expr s) where
 instance Monad (Expr s) where
     return = pure
 
-    Const a              >>= _ = Const a
-    Var a                >>= _ = Var a
-    Lam a b c            >>= k = Lam a (b >>= k) (c >>= k)
-    Pi  a b c            >>= k = Pi a (b >>= k) (c >>= k)
-    App a b              >>= k = App (a >>= k) (b >>= k)
-    Let a b              >>= k = Let (adapt0 a) (b >>= k)
+    Embed a    >>= k = k a
+    Let a b    >>= k = Let (adapt0 a) (b >>= k)
       where
         adapt0 (Binding src0 c src1 d src2 e) =
             Binding src0 c src1 (fmap adapt1 d) src2 (e >>= k)
 
         adapt1 (src3, f) = (src3, f >>= k)
-    Annot a b            >>= k = Annot (a >>= k) (b >>= k)
-    Bool                 >>= _ = Bool
-    BoolLit a            >>= _ = BoolLit a
-    BoolAnd a b          >>= k = BoolAnd (a >>= k) (b >>= k)
-    BoolOr  a b          >>= k = BoolOr  (a >>= k) (b >>= k)
-    BoolEQ  a b          >>= k = BoolEQ  (a >>= k) (b >>= k)
-    BoolNE  a b          >>= k = BoolNE  (a >>= k) (b >>= k)
-    BoolIf a b c         >>= k = BoolIf (a >>= k) (b >>= k) (c >>= k)
-    Natural              >>= _ = Natural
-    NaturalLit a         >>= _ = NaturalLit a
-    NaturalFold          >>= _ = NaturalFold
-    NaturalBuild         >>= _ = NaturalBuild
-    NaturalIsZero        >>= _ = NaturalIsZero
-    NaturalEven          >>= _ = NaturalEven
-    NaturalOdd           >>= _ = NaturalOdd
-    NaturalToInteger     >>= _ = NaturalToInteger
-    NaturalShow          >>= _ = NaturalShow
-    NaturalSubtract      >>= _ = NaturalSubtract
-    NaturalPlus  a b     >>= k = NaturalPlus  (a >>= k) (b >>= k)
-    NaturalTimes a b     >>= k = NaturalTimes (a >>= k) (b >>= k)
-    Integer              >>= _ = Integer
-    IntegerLit a         >>= _ = IntegerLit a
-    IntegerClamp         >>= _ = IntegerClamp
-    IntegerNegate        >>= _ = IntegerNegate
-    IntegerShow          >>= _ = IntegerShow
-    IntegerToDouble      >>= _ = IntegerToDouble
-    Double               >>= _ = Double
-    DoubleLit a          >>= _ = DoubleLit a
-    DoubleShow           >>= _ = DoubleShow
-    Text                 >>= _ = Text
-    TextLit (Chunks a b) >>= k = TextLit (Chunks (fmap (fmap (>>= k)) a) b)
-    TextAppend a b       >>= k = TextAppend (a >>= k) (b >>= k)
-    TextShow             >>= _ = TextShow
-    List                 >>= _ = List
-    ListLit a b          >>= k = ListLit (fmap (>>= k) a) (fmap (>>= k) b)
-    ListAppend a b       >>= k = ListAppend (a >>= k) (b >>= k)
-    ListBuild            >>= _ = ListBuild
-    ListFold             >>= _ = ListFold
-    ListLength           >>= _ = ListLength
-    ListHead             >>= _ = ListHead
-    ListLast             >>= _ = ListLast
-    ListIndexed          >>= _ = ListIndexed
-    ListReverse          >>= _ = ListReverse
-    Optional             >>= _ = Optional
-    Some a               >>= k = Some (a >>= k)
-    None                 >>= _ = None
-    OptionalFold         >>= _ = OptionalFold
-    OptionalBuild        >>= _ = OptionalBuild
-    Record    a          >>= k = Record (fmap (>>= k) a)
-    RecordLit a          >>= k = RecordLit (fmap (>>= k) a)
-    Union     a          >>= k = Union (fmap (fmap (>>= k)) a)
-    Combine a b          >>= k = Combine (a >>= k) (b >>= k)
-    CombineTypes a b     >>= k = CombineTypes (a >>= k) (b >>= k)
-    Prefer a b           >>= k = Prefer (a >>= k) (b >>= k)
-    RecordCompletion a b >>= k = RecordCompletion (a >>= k) (b >>= k)
-    Merge a b c          >>= k = Merge (a >>= k) (b >>= k) (fmap (>>= k) c)
-    ToMap a b            >>= k = ToMap (a >>= k) (fmap (>>= k) b)
-    Field a b            >>= k = Field (a >>= k) b
-    Project a b          >>= k = Project (a >>= k) (fmap (>>= k) b)
-    Assert a             >>= k = Assert (a >>= k)
-    Equivalent a b       >>= k = Equivalent (a >>= k) (b >>= k)
-    Note a b             >>= k = Note a (b >>= k)
-    ImportAlt a b        >>= k = ImportAlt (a >>= k) (b >>= k)
-    Embed a              >>= k = k a
+    Note a b   >>= k = Note a (b >>= k)
+    expression >>= k = Lens.over unsafeSubExpressions (>>= k) expression
 
 instance Bifunctor Expr where
-    first _ (Const a             ) = Const a
-    first _ (Var a               ) = Var a
-    first k (Lam a b c           ) = Lam a (first k b) (first k c)
-    first k (Pi a b c            ) = Pi a (first k b) (first k c)
-    first k (App a b             ) = App (first k a) (first k b)
-    first k (Let a b             ) = Let (first k a) (first k b)
-    first k (Annot a b           ) = Annot (first k a) (first k b)
-    first _  Bool                  = Bool
-    first _ (BoolLit a           ) = BoolLit a
-    first k (BoolAnd a b         ) = BoolAnd (first k a) (first k b)
-    first k (BoolOr a b          ) = BoolOr (first k a) (first k b)
-    first k (BoolEQ a b          ) = BoolEQ (first k a) (first k b)
-    first k (BoolNE a b          ) = BoolNE (first k a) (first k b)
-    first k (BoolIf a b c        ) = BoolIf (first k a) (first k b) (first k c)
-    first _  Natural               = Natural
-    first _ (NaturalLit a        ) = NaturalLit a
-    first _  NaturalFold           = NaturalFold
-    first _  NaturalBuild          = NaturalBuild
-    first _  NaturalIsZero         = NaturalIsZero
-    first _  NaturalEven           = NaturalEven
-    first _  NaturalOdd            = NaturalOdd
-    first _  NaturalToInteger      = NaturalToInteger
-    first _  NaturalShow           = NaturalShow
-    first _  NaturalSubtract       = NaturalSubtract
-    first k (NaturalPlus a b     ) = NaturalPlus (first k a) (first k b)
-    first k (NaturalTimes a b    ) = NaturalTimes (first k a) (first k b)
-    first _  Integer               = Integer
-    first _ (IntegerLit a        ) = IntegerLit a
-    first _  IntegerClamp          = IntegerClamp
-    first _  IntegerNegate         = IntegerNegate
-    first _  IntegerShow           = IntegerShow
-    first _  IntegerToDouble       = IntegerToDouble
-    first _  Double                = Double
-    first _ (DoubleLit a         ) = DoubleLit a
-    first _  DoubleShow            = DoubleShow
-    first _  Text                  = Text
-    first k (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap (first k)) a) b)
-    first k (TextAppend a b      ) = TextAppend (first k a) (first k b)
-    first _  TextShow              = TextShow
-    first _  List                  = List
-    first k (ListLit a b         ) = ListLit (fmap (first k) a) (fmap (first k) b)
-    first k (ListAppend a b      ) = ListAppend (first k a) (first k b)
-    first _  ListBuild             = ListBuild
-    first _  ListFold              = ListFold
-    first _  ListLength            = ListLength
-    first _  ListHead              = ListHead
-    first _  ListLast              = ListLast
-    first _  ListIndexed           = ListIndexed
-    first _  ListReverse           = ListReverse
-    first _  Optional              = Optional
-    first k (Some a              ) = Some (first k a)
-    first _  None                  = None
-    first _  OptionalFold          = OptionalFold
-    first _  OptionalBuild         = OptionalBuild
-    first k (Record a            ) = Record (fmap (first k) a)
-    first k (RecordLit a         ) = RecordLit (fmap (first k) a)
-    first k (Union a             ) = Union (fmap (fmap (first k)) a)
-    first k (Combine a b         ) = Combine (first k a) (first k b)
-    first k (CombineTypes a b    ) = CombineTypes (first k a) (first k b)
-    first k (Prefer a b          ) = Prefer (first k a) (first k b)
-    first k (RecordCompletion a b) = RecordCompletion (first k a) (first k b)
-    first k (Merge a b c         ) = Merge (first k a) (first k b) (fmap (first k) c)
-    first k (ToMap a b           ) = ToMap (first k a) (fmap (first k) b)
-    first k (Field a b           ) = Field (first k a) b
-    first k (Assert a            ) = Assert (first k a)
-    first k (Equivalent a b      ) = Equivalent (first k a) (first k b)
-    first k (Project a b         ) = Project (first k a) (fmap (first k) b)
-    first k (Note a b            ) = Note (k a) (first k b)
-    first k (ImportAlt a b       ) = ImportAlt (first k a) (first k b)
-    first _ (Embed a             ) = Embed a
+    first k (Note a b  ) = Note (k a) (first k b)
+    first _ (Embed a   ) = Embed a
+    first k (Let a b   ) = Let (first k a) (first k b)
+    first k  expression  = Lens.over unsafeSubExpressions (first k) expression
 
     second = fmap
 
@@ -736,7 +570,7 @@ multiLet :: Binding s a -> Expr s a -> MultiLet s a
 multiLet b0 = \case
     Let b1 e1 ->
         let MultiLet bs e = multiLet b1 e1
-        in  MultiLet (Data.List.NonEmpty.cons b0 bs) e
+        in  MultiLet (NonEmpty.cons b0 bs) e
     e -> MultiLet (b0 :| []) e
 
 {-| Wrap let-'Binding's around an 'Expr'.
@@ -756,78 +590,107 @@ wrapInLets bs e = foldr Let e bs
 data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 
 -- | A traversal over the immediate sub-expressions of an expression.
-subExpressions :: Applicative f => (Expr s a -> f (Expr s a)) -> Expr s a -> f (Expr s a)
-subExpressions _ (Const c) = pure (Const c)
-subExpressions _ (Var v) = pure (Var v)
-subExpressions f (Lam a b c) = Lam a <$> f b <*> f c
-subExpressions f (Pi a b c) = Pi a <$> f b <*> f c
-subExpressions f (App a b) = App <$> f a <*> f b
-subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
-subExpressions f (Annot a b) = Annot <$> f a <*> f b
-subExpressions _ Bool = pure Bool
-subExpressions _ (BoolLit b) = pure (BoolLit b)
-subExpressions f (BoolAnd a b) = BoolAnd <$> f a <*> f b
-subExpressions f (BoolOr a b) = BoolOr <$> f a <*> f b
-subExpressions f (BoolEQ a b) = BoolEQ <$> f a <*> f b
-subExpressions f (BoolNE a b) = BoolNE <$> f a <*> f b
-subExpressions f (BoolIf a b c) = BoolIf <$> f a <*> f b <*> f c
-subExpressions _ Natural = pure Natural
-subExpressions _ (NaturalLit n) = pure (NaturalLit n)
-subExpressions _ NaturalFold = pure NaturalFold
-subExpressions _ NaturalBuild = pure NaturalBuild
-subExpressions _ NaturalIsZero = pure NaturalIsZero
-subExpressions _ NaturalEven = pure NaturalEven
-subExpressions _ NaturalOdd = pure NaturalOdd
-subExpressions _ NaturalToInteger = pure NaturalToInteger
-subExpressions _ NaturalShow = pure NaturalShow
-subExpressions _ NaturalSubtract = pure NaturalSubtract
-subExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
-subExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
-subExpressions _ Integer = pure Integer
-subExpressions _ (IntegerLit n) = pure (IntegerLit n)
-subExpressions _ IntegerClamp = pure IntegerClamp
-subExpressions _ IntegerNegate = pure IntegerNegate
-subExpressions _ IntegerShow = pure IntegerShow
-subExpressions _ IntegerToDouble = pure IntegerToDouble
-subExpressions _ Double = pure Double
-subExpressions _ (DoubleLit n) = pure (DoubleLit n)
-subExpressions _ DoubleShow = pure DoubleShow
-subExpressions _ Text = pure Text
-subExpressions f (TextLit chunks) =
-    TextLit <$> chunkExprs f chunks
-subExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
-subExpressions _ TextShow = pure TextShow
-subExpressions _ List = pure List
-subExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
-subExpressions f (ListAppend a b) = ListAppend <$> f a <*> f b
-subExpressions _ ListBuild = pure ListBuild
-subExpressions _ ListFold = pure ListFold
-subExpressions _ ListLength = pure ListLength
-subExpressions _ ListHead = pure ListHead
-subExpressions _ ListLast = pure ListLast
-subExpressions _ ListIndexed = pure ListIndexed
-subExpressions _ ListReverse = pure ListReverse
-subExpressions _ Optional = pure Optional
-subExpressions f (Some a) = Some <$> f a
-subExpressions _ None = pure None
-subExpressions _ OptionalFold = pure OptionalFold
-subExpressions _ OptionalBuild = pure OptionalBuild
-subExpressions f (Record a) = Record <$> traverse f a
-subExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
-subExpressions f (Union a) = Union <$> traverse (traverse f) a
-subExpressions f (Combine a b) = Combine <$> f a <*> f b
-subExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
-subExpressions f (Prefer a b) = Prefer <$> f a <*> f b
-subExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
-subExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
-subExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
-subExpressions f (Field a b) = Field <$> f a <*> pure b
-subExpressions f (Project a b) = Project <$> f a <*> traverse f b
-subExpressions f (Assert a) = Assert <$> f a
-subExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
-subExpressions f (Note a b) = Note a <$> f b
-subExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
+subExpressions
+    :: Applicative f => (Expr s a -> f (Expr s a)) -> Expr s a -> f (Expr s a)
 subExpressions _ (Embed a) = pure (Embed a)
+subExpressions f (Note a b) = Note a <$> f b
+subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
+subExpressions f expression = unsafeSubExpressions f expression
+{-# INLINABLE subExpressions #-}
+
+{-| An internal utility used to implement transformations that require changing
+    one of the type variables of the `Expr` type
+
+    This utility only works because the implementation is partial, not
+    handling the `Let`, `Note`, or `Embed` cases, which need to be handled by
+    the caller.
+-}
+unsafeSubExpressions
+    :: Applicative f => (Expr s a -> f (Expr t b)) -> Expr s a -> f (Expr t b)
+unsafeSubExpressions _ (Const c) = pure (Const c)
+unsafeSubExpressions _ (Var v) = pure (Var v)
+unsafeSubExpressions f (Lam a b c) = Lam a <$> f b <*> f c
+unsafeSubExpressions f (Pi a b c) = Pi a <$> f b <*> f c
+unsafeSubExpressions f (App a b) = App <$> f a <*> f b
+unsafeSubExpressions f (Annot a b) = Annot <$> f a <*> f b
+unsafeSubExpressions _ Bool = pure Bool
+unsafeSubExpressions _ (BoolLit b) = pure (BoolLit b)
+unsafeSubExpressions f (BoolAnd a b) = BoolAnd <$> f a <*> f b
+unsafeSubExpressions f (BoolOr a b) = BoolOr <$> f a <*> f b
+unsafeSubExpressions f (BoolEQ a b) = BoolEQ <$> f a <*> f b
+unsafeSubExpressions f (BoolNE a b) = BoolNE <$> f a <*> f b
+unsafeSubExpressions f (BoolIf a b c) = BoolIf <$> f a <*> f b <*> f c
+unsafeSubExpressions _ Natural = pure Natural
+unsafeSubExpressions _ (NaturalLit n) = pure (NaturalLit n)
+unsafeSubExpressions _ NaturalFold = pure NaturalFold
+unsafeSubExpressions _ NaturalBuild = pure NaturalBuild
+unsafeSubExpressions _ NaturalIsZero = pure NaturalIsZero
+unsafeSubExpressions _ NaturalEven = pure NaturalEven
+unsafeSubExpressions _ NaturalOdd = pure NaturalOdd
+unsafeSubExpressions _ NaturalToInteger = pure NaturalToInteger
+unsafeSubExpressions _ NaturalShow = pure NaturalShow
+unsafeSubExpressions _ NaturalSubtract = pure NaturalSubtract
+unsafeSubExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
+unsafeSubExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
+unsafeSubExpressions _ Integer = pure Integer
+unsafeSubExpressions _ (IntegerLit n) = pure (IntegerLit n)
+unsafeSubExpressions _ IntegerClamp = pure IntegerClamp
+unsafeSubExpressions _ IntegerNegate = pure IntegerNegate
+unsafeSubExpressions _ IntegerShow = pure IntegerShow
+unsafeSubExpressions _ IntegerToDouble = pure IntegerToDouble
+unsafeSubExpressions _ Double = pure Double
+unsafeSubExpressions _ (DoubleLit n) = pure (DoubleLit n)
+unsafeSubExpressions _ DoubleShow = pure DoubleShow
+unsafeSubExpressions _ Text = pure Text
+unsafeSubExpressions f (TextLit chunks) =
+    TextLit <$> chunkExprs f chunks
+unsafeSubExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
+unsafeSubExpressions _ TextShow = pure TextShow
+unsafeSubExpressions _ List = pure List
+unsafeSubExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
+unsafeSubExpressions f (ListAppend a b) = ListAppend <$> f a <*> f b
+unsafeSubExpressions _ ListBuild = pure ListBuild
+unsafeSubExpressions _ ListFold = pure ListFold
+unsafeSubExpressions _ ListLength = pure ListLength
+unsafeSubExpressions _ ListHead = pure ListHead
+unsafeSubExpressions _ ListLast = pure ListLast
+unsafeSubExpressions _ ListIndexed = pure ListIndexed
+unsafeSubExpressions _ ListReverse = pure ListReverse
+unsafeSubExpressions _ Optional = pure Optional
+unsafeSubExpressions f (Some a) = Some <$> f a
+unsafeSubExpressions _ None = pure None
+unsafeSubExpressions f (Record a) = Record <$> traverse f a
+unsafeSubExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
+unsafeSubExpressions f (Union a) = Union <$> traverse (traverse f) a
+unsafeSubExpressions f (Combine a b c) = Combine a <$> f b <*> f c
+unsafeSubExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
+unsafeSubExpressions f (Prefer a b c) = Prefer <$> a' <*> f b <*> f c
+  where
+    a' = case a of
+        PreferFromSource     -> pure PreferFromSource
+        PreferFromWith d     -> PreferFromWith <$> f d
+        PreferFromCompletion -> pure PreferFromCompletion
+unsafeSubExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
+unsafeSubExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
+unsafeSubExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
+unsafeSubExpressions f (Field a b) = Field <$> f a <*> pure b
+unsafeSubExpressions f (Project a b) = Project <$> f a <*> traverse f b
+unsafeSubExpressions f (Assert a) = Assert <$> f a
+unsafeSubExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
+unsafeSubExpressions f (With a b c) = With <$> f a <*> pure b <*> f c
+unsafeSubExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
+unsafeSubExpressions _ (Let {}) = unhandledConstructor "Let"
+unsafeSubExpressions _ (Note {}) = unhandledConstructor "Note"
+unsafeSubExpressions _ (Embed {}) = unhandledConstructor "Embed"
+{-# INLINABLE unsafeSubExpressions #-}
+
+unhandledConstructor :: Text -> a
+unhandledConstructor constructor =
+    internalError
+        (   "Dhall.Syntax.unsafeSubExpressions: Unhandled "
+        <>  constructor
+        <>  " construtor"
+        )
 
 {-| Traverse over the immediate 'Expr' children in a 'Binding'.
 -}
@@ -843,6 +706,7 @@ bindingExprs f (Binding s0 n s1 t s2 v) =
     <*> traverse (traverse f) t
     <*> pure s2
     <*> f v
+{-# INLINABLE bindingExprs #-}
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
@@ -851,6 +715,7 @@ chunkExprs
   -> Chunks s a -> f (Chunks t b)
 chunkExprs f (Chunks chunks final) =
   flip Chunks final <$> traverse (traverse f) chunks
+{-# INLINABLE chunkExprs #-}
 
 {-| Internal representation of a directory that stores the path components in
     reverse order
@@ -1058,81 +923,16 @@ pathCharacter c =
 
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
 denote :: Expr s a -> Expr t a
-denote (Note _ b            ) = denote b
-denote (Const a             ) = Const a
-denote (Var a               ) = Var a
-denote (Lam a b c           ) = Lam a (denote b) (denote c)
-denote (Pi a b c            ) = Pi a (denote b) (denote c)
-denote (App a b             ) = App (denote a) (denote b)
-denote (Let a b             ) = Let (adapt0 a) (denote b)
+denote (Note _ b     ) = denote b
+denote (Let a b      ) = Let (adapt0 a) (denote b)
   where
     adapt0 (Binding _ c _ d _ e) =
         Binding Nothing c Nothing (fmap adapt1 d) Nothing (denote e)
 
     adapt1 (_, f) = (Nothing, denote f)
-denote (Annot a b           ) = Annot (denote a) (denote b)
-denote  Bool                  = Bool
-denote (BoolLit a           ) = BoolLit a
-denote (BoolAnd a b         ) = BoolAnd (denote a) (denote b)
-denote (BoolOr a b          ) = BoolOr (denote a) (denote b)
-denote (BoolEQ a b          ) = BoolEQ (denote a) (denote b)
-denote (BoolNE a b          ) = BoolNE (denote a) (denote b)
-denote (BoolIf a b c        ) = BoolIf (denote a) (denote b) (denote c)
-denote  Natural               = Natural
-denote (NaturalLit a        ) = NaturalLit a
-denote  NaturalFold           = NaturalFold
-denote  NaturalBuild          = NaturalBuild
-denote  NaturalIsZero         = NaturalIsZero
-denote  NaturalEven           = NaturalEven
-denote  NaturalOdd            = NaturalOdd
-denote  NaturalToInteger      = NaturalToInteger
-denote  NaturalShow           = NaturalShow
-denote  NaturalSubtract       = NaturalSubtract
-denote (NaturalPlus a b     ) = NaturalPlus (denote a) (denote b)
-denote (NaturalTimes a b    ) = NaturalTimes (denote a) (denote b)
-denote  Integer               = Integer
-denote (IntegerLit a        ) = IntegerLit a
-denote  IntegerClamp          = IntegerClamp
-denote  IntegerNegate         = IntegerNegate
-denote  IntegerShow           = IntegerShow
-denote  IntegerToDouble       = IntegerToDouble
-denote  Double                = Double
-denote (DoubleLit a         ) = DoubleLit a
-denote  DoubleShow            = DoubleShow
-denote  Text                  = Text
-denote (TextLit (Chunks a b)) = TextLit (Chunks (fmap (fmap denote) a) b)
-denote (TextAppend a b      ) = TextAppend (denote a) (denote b)
-denote  TextShow              = TextShow
-denote  List                  = List
-denote (ListLit a b         ) = ListLit (fmap denote a) (fmap denote b)
-denote (ListAppend a b      ) = ListAppend (denote a) (denote b)
-denote  ListBuild             = ListBuild
-denote  ListFold              = ListFold
-denote  ListLength            = ListLength
-denote  ListHead              = ListHead
-denote  ListLast              = ListLast
-denote  ListIndexed           = ListIndexed
-denote  ListReverse           = ListReverse
-denote  Optional              = Optional
-denote (Some a              ) = Some (denote a)
-denote  None                  = None
-denote  OptionalFold          = OptionalFold
-denote  OptionalBuild         = OptionalBuild
-denote (Record a            ) = Record (fmap denote a)
-denote (RecordLit a         ) = RecordLit (fmap denote a)
-denote (Union a             ) = Union (fmap (fmap denote) a)
-denote (Combine a b         ) = Combine (denote a) (denote b)
-denote (CombineTypes a b    ) = CombineTypes (denote a) (denote b)
-denote (Prefer a b          ) = Prefer (denote a) (denote b)
-denote (RecordCompletion a b) = RecordCompletion (denote a) (denote b)
-denote (Merge a b c         ) = Merge (denote a) (denote b) (fmap denote c)
-denote (ToMap a b           ) = ToMap (denote a) (fmap denote b)
-denote (Field a b           ) = Field (denote a) b
-denote (Project a b         ) = Project (denote a) (fmap denote b)
-denote (Assert a            ) = Assert (denote a)
-denote (Equivalent a b      ) = Equivalent (denote a) (denote b)
-denote (ImportAlt a b       ) = ImportAlt (denote a) (denote b)
-denote (Embed a             ) = Embed a
+denote (Embed a      ) = Embed a
+denote (Combine _ b c) = Combine Nothing (denote b) (denote c)
+denote  expression     = Lens.over unsafeSubExpressions denote expression
 
 -- | The \"opposite\" of `denote`, like @first absurd@ but faster
 renote :: Expr Void a -> Expr s a
@@ -1148,11 +948,11 @@ shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
 shallowDenote         e  = e
 
--- | The set of reserved identifiers for the Dhall language
-reservedIdentifiers :: HashSet Text
-reservedIdentifiers =
+-- | The set of reserved keywords according to the `keyword` rule in the grammar
+reservedKeywords :: HashSet Text
+reservedKeywords =
     Data.HashSet.fromList
-        [ -- Keywords according to the `keyword` rule in the grammar
+        [
           "if"
         , "then"
         , "else"
@@ -1168,9 +968,16 @@ reservedIdentifiers =
         , "toMap"
         , "assert"
         , "forall"
+        , "with"
+        ]
 
-          -- Builtins according to the `builtin` rule in the grammar
-        , "Natural/fold"
+-- | The set of reserved identifiers for the Dhall language
+-- | Contains also all keywords from "reservedKeywords"
+reservedIdentifiers :: HashSet Text
+reservedIdentifiers = reservedKeywords <>
+    Data.HashSet.fromList
+        [ -- Builtins according to the `builtin` rule in the grammar
+          "Natural/fold"
         , "Natural/build"
         , "Natural/isZero"
         , "Natural/even"
@@ -1193,8 +1000,6 @@ reservedIdentifiers =
         , "List/last"
         , "List/indexed"
         , "List/reverse"
-        , "Optional/fold"
-        , "Optional/build"
         , "Text/show"
         , "Bool"
         , "True"
@@ -1224,21 +1029,21 @@ linesLiteral (Chunks [] suffix) =
     fmap (Chunks []) (splitOn "\n" suffix)
 linesLiteral (Chunks ((prefix, interpolation) : pairs₀) suffix₀) =
     foldr
-        Data.List.NonEmpty.cons
+        NonEmpty.cons
         (Chunks ((lastLine, interpolation) : pairs₁) suffix₁ :| chunks)
         (fmap (Chunks []) initLines)
   where
     splitLines = splitOn "\n" prefix
 
-    initLines = Data.List.NonEmpty.init splitLines
-    lastLine  = Data.List.NonEmpty.last splitLines
+    initLines = NonEmpty.init splitLines
+    lastLine  = NonEmpty.last splitLines
 
     Chunks pairs₁ suffix₁ :| chunks = linesLiteral (Chunks pairs₀ suffix₀)
 
 -- | Flatten several `Chunks` back into a single `Chunks` by inserting newlines
 unlinesLiteral :: NonEmpty (Chunks s a) -> Chunks s a
 unlinesLiteral chunks =
-    Data.Foldable.fold (Data.List.NonEmpty.intersperse "\n" chunks)
+    Data.Foldable.fold (NonEmpty.intersperse "\n" chunks)
 
 -- | Returns `True` if the `Chunks` represents a blank line
 emptyLine :: Chunks s a -> Bool
@@ -1275,9 +1080,9 @@ longestSharedWhitespacePrefix literals =
     -- for the last line
     filteredLines = newInit <> pure oldLast
       where
-        oldInit = Data.List.NonEmpty.init literals
+        oldInit = NonEmpty.init literals
 
-        oldLast = Data.List.NonEmpty.last literals
+        oldLast = NonEmpty.last literals
 
         newInit = filter (not . emptyLine) oldInit
 
@@ -1300,3 +1105,41 @@ toDoubleQuoted literal =
     longestSharedPrefix = longestSharedWhitespacePrefix literals
 
     indent = Data.Text.length longestSharedPrefix
+
+-- | Desugar all @with@ expressions
+desugarWith :: Expr s a -> Expr s a
+desugarWith = Optics.rewriteOf subExpressions rewrite
+  where
+    rewrite e@(With record (key :| []) value) =
+        Just (Prefer (PreferFromWith e) record (RecordLit [ (key, value) ]))
+    rewrite e@(With record (key0 :| key1 : keys) value) =
+        Just
+            (Prefer (PreferFromWith e) record
+                (RecordLit
+                    [ (key0, With (Field record key0) (key1 :| keys) value) ]
+                )
+            )
+    rewrite _ = Nothing
+
+_ERROR :: String
+_ERROR = "\ESC[1;31mError\ESC[0m"
+
+{-| Utility function used to throw internal errors that should never happen
+    (in theory) but that are not enforced by the type system
+-}
+internalError :: Data.Text.Text -> forall b . b
+internalError text = error (unlines
+    [ _ERROR <> ": Compiler bug                                                        "
+    , "                                                                                "
+    , "Explanation: This error message means that there is a bug in the Dhall compiler."
+    , "You didn't do anything wrong, but if you would like to see this problem fixed   "
+    , "then you should report the bug at:                                              "
+    , "                                                                                "
+    , "https://github.com/dhall-lang/dhall-haskell/issues                              "
+    , "                                                                                "
+    , "Please include the following text in your bug report:                           "
+    , "                                                                                "
+    , "```                                                                             "
+    , Data.Text.unpack text <> "                                                       "
+    , "```                                                                             "
+    ] )

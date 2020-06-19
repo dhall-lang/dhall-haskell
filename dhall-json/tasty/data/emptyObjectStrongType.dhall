@@ -1,1 +1,1 @@
-[] : List { mapKey : Text, mapValue : Natural }
+toMap {=} : List { mapKey : Text, mapValue : Natural }

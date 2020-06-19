@@ -16,9 +16,11 @@ let
   allDhallPackages = [
     "dhall"
     "dhall-bash"
+    "dhall-docs"
     "dhall-json"
     "dhall-lsp-server"
     "dhall-nix"
+    "dhall-nixpkgs"
     "dhall-yaml"
   ];
 
@@ -35,6 +37,10 @@ let
 
   overlayShared = pkgsNew: pkgsOld: {
     sdist = pkgsNew.callPackage ./sdist.nix { };
+
+    dhallToNix = pkgsOld.dhallToNix.override {
+      inherit (pkgsNew.haskell.packages."${compiler}") dhall-nix;
+    };
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
@@ -60,9 +66,8 @@ let
                     pkgsNew.haskell.lib.dontCheck drv;
 
                 failOnAllWarnings = drv:
-                  # Older versions of GHC incorrectly detect non-exhaustive
-                  # pattern matches
-                  if compiler == "ghc7103" || compiler == "ghcjs"
+                  # GHCJS incorrectly detects non-exhaustive pattern matches
+                  if compiler == "ghcjs"
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;
 
@@ -82,32 +87,31 @@ let
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
+                          "dhall-docs"
                           "dhall-json"
                           # The test suite fails due to a relative reference
                           # to ../dhall/dhall-lang/
                           # "dhall-lsp-server"
                           "dhall-nix"
+                          "dhall-nixpkgs"
                           "dhall-yaml"
                         ]
-                        # Test suite doesn't work on GHCJS or GHC 7.10.3
-                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs" || compiler == "ghc7103")) "dhall"
+                        # Test suite doesn't work on GHCJS
+                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs")) "dhall"
                     );
 
                 doBenchmarkExtension =
                   mass pkgsNew.haskell.lib.doBenchmark allDhallPackages;
 
-                doJailbreakExtension =
-                  mass pkgsNew.haskell.lib.doJailbreak [
-                    "hnix"
-                  ];
-
                 failOnAllWarningsExtension =
                   mass failOnAllWarnings [
                     "dhall"
                     "dhall-bash"
+                    "dhall-docs"
                     "dhall-json"
                     "dhall-lsp-server"
                     "dhall-nix"
+                    "dhall-nixpkgs"
                     "dhall-yaml"
                   ];
 
@@ -133,14 +137,23 @@ let
                         );
 
                     dhall-no-http =
-                      pkgsNew.haskell.lib.appendConfigureFlag
-                        haskellPackagesNew.dhall
-                        [ "-f-with-http" ];
+                      # The import tests fail with HTTP support compiled out
+                      pkgsNew.haskell.lib.dontCheck
+                        (pkgsNew.haskell.lib.appendConfigureFlag
+                          haskellPackagesNew.dhall
+                          [ "-f-with-http" ]
+                        );
 
                     dhall-bash =
                       haskellPackagesNew.callCabal2nix
                         "dhall-bash"
                         (pkgsNew.sdist ../dhall-bash)
+                        { };
+
+                    dhall-docs =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-docs"
+                        (pkgsNew.sdist ../dhall-docs)
                         { };
 
                     dhall-json =
@@ -153,6 +166,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-nix"
                         (pkgsNew.sdist ../dhall-nix)
+                        { };
+
+                    dhall-nixpkgs =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-nixpkgs"
+                        (pkgsNew.sdist ../dhall-nixpkgs)
                         { };
 
                     dhall-lsp-server =
@@ -186,11 +205,10 @@ let
                 pkgsNew.lib.fold
                   pkgsNew.lib.composeExtensions
                   (old.overrides or (_: _: {}))
-                  [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./.; })
+                  [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./packages; })
                     extension
                     doCheckExtension
                     doBenchmarkExtension
-                    doJailbreakExtension
                     failOnAllWarningsExtension
                     failOnMissingHaddocksExtension
                   ];
@@ -201,6 +219,15 @@ let
   };
 
   overlayCabal2nix = pkgsNew: pkgsOld: {
+
+    # we only reference git repositories with cabal2nix
+    nix-prefetch-scripts = pkgsOld.nix-prefetch-scripts.override {
+      mercurial = null;
+      bazaar = null;
+      cvs = null;
+      subversion = null;
+    };
+
     haskellPackages = pkgsOld.haskellPackages.override (old: {
         overrides =
           let
@@ -219,7 +246,7 @@ let
     );
   };
 
-  overlayGHC7103 = pkgsNew: pkgsOld: {
+  overlayGHC822 = pkgsNew: pkgsOld: {
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
         "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
@@ -227,131 +254,18 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    # Newer version of these packages have bounds incompatible
-                    # with GHC 7.10.3
+                    # Compilation of Dhall.Test.QuickCheck tends to OOM
+                    dhall =
+                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.dhall;
+
                     lens-family-core =
                       haskellPackagesOld.lens-family-core_1_2_1;
 
-                    memory =
-                      haskellPackagesOld.memory_0_14_16;
-
-                    basement =
-                      haskellPackagesOld.basement_0_0_6;
-
-                    foundation =
-                      haskellPackagesOld.foundation_0_0_19;
-
-                    # Most of these fixes are due to certain dependencies being
-                    # hidden behind a conditional compiler version directive, so
-                    # they aren't included by default in the default Hackage
-                    # package set (which was generated for `ghc-8.4.3`)
-                    base-compat-batteries =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.base-compat-batteries
-                        [ haskellPackagesNew.bifunctors
-                          haskellPackagesNew.fail
-                        ];
-
-                    blaze-builder =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.blaze-builder
-                        haskellPackagesNew.semigroups;
-
-                    cborg =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.cborg
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.semigroups
-                        ];
-
-                    conduit =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.conduit
-                        haskellPackagesNew.semigroups;
-
-                    contravariant =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.contravariant
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.semigroups
-                        ];
-
-                    dhall =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.dhall
-                        [ haskellPackagesNew.doctest
-                          haskellPackagesNew.mockery
-                        ];
-
-                    generic-deriving =
-                      pkgsNew.haskell.lib.dontCheck
-                        haskellPackagesOld.generic-deriving;
-
-                    haskell-src =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.haskell-src
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.semigroups
-                        ];
-
-                    managed =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.managed
-                        haskellPackagesNew.semigroups;
-
-                    megaparsec =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.megaparsec
-                        haskellPackagesNew.fail;
-
-                    neat-interpolation =
-                      pkgsNew.haskell.lib.doJailbreak
-                        haskellPackagesOld.neat-interpolation;
-
-                    optparse-applicative =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.optparse-applicative
-                        haskellPackagesNew.fail;
-
-                    optional-args =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.optional-args
-                        haskellPackagesNew.semigroups;
+                    lens-family = haskellPackagesOld.lens-family_1_2_1;
 
                     parser-combinators =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.parser-combinators
-                        haskellPackagesNew.semigroups;
-
-                    prettyprinter =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.prettyprinter
-                        haskellPackagesNew.semigroups;
-
-                    transformers-compat =
-                      pkgsNew.haskell.lib.addBuildDepends
-                        haskellPackagesOld.transformers-compat
-                        [ haskellPackagesNew.fail
-                          haskellPackagesNew.generic-deriving
-                        ];
-
-                    vector =
-                      pkgsNew.haskell.lib.addBuildDepend
-                        haskellPackagesOld.vector
-                        haskellPackagesNew.semigroups;
-
-                    # For some reason, `Cabal-1.22.5` does not respect the
-                    # `buildable: False` directive for the executable section
-                    # even when configured with `-f -cli`.  Fixing this requires
-                    # patching out the executable section of `wcwidth` in order
-                    # to avoid pulling in some extra dependencies which cause a
-                    # a dependency cycle.
-                    wcwidth =
-                      pkgsNew.haskell.lib.appendPatch
-                        haskellPackagesOld.wcwidth ./wcwidth.patch;
-
-                    yaml =
-                      pkgsNew.haskell.lib.doJailbreak haskellPackagesOld.yaml;
+                      pkgsNew.haskell.lib.doJailbreak
+                        haskellPackagesOld.parser-combinators;
                   };
 
               in
@@ -372,6 +286,9 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
+                    lens-family-core =
+                        haskellPackagesOld.lens-family-core_1_2_3;
+
                     # GHC 8.6.1 accidentally shipped with an unpublished
                     # unix-2.8 package.  Normally we'd deal with that by
                     # using `pkgsNew.haskell.lib.jailbreak` but it doesn't
@@ -401,13 +318,15 @@ let
 
     overlays =
           [ overlayShared overlayCabal2nix ]
-      ++  (      if compiler == "ghc7103" then [ overlayGHC7103 ]
-            else if compiler == "ghc861"  then [ overlayGHC861  ]
-            else                               [                ]
+      ++  (      if compiler == "ghc822" then [ overlayGHC822 ]
+            else if compiler == "ghc861" then [ overlayGHC861 ]
+            else                              [               ]
           );
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
+    cabal2nix = pkgs.cabal2nix;
+
     cabal_patched_src = pkgsNew.fetchFromGitHub {
       owner = "nh2";
       repo = "cabal";
@@ -471,6 +390,9 @@ let
                     dhall-bash-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-bash;
 
+                    dhall-docs-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-docs;
+
                     dhall-json-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-json;
 
@@ -479,6 +401,9 @@ let
 
                     dhall-nix-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nix;
+
+                    dhall-nixpkgs-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nixpkgs;
 
                     dhall-yaml-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-yaml;
@@ -524,9 +449,11 @@ let
   possibly-static = {
     dhall            = makeStaticIfPossible "dhall"           ;
     dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
+    dhall-docs       = makeStaticIfPossible "dhall-docs"      ;
     dhall-json       = makeStaticIfPossible "dhall-json"      ;
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
+    dhall-nixpkgs    = makeStaticIfPossible "dhall-nixpkgs"   ;
     dhall-yaml       = makeStaticIfPossible "dhall-yaml"      ;
   };
 
@@ -552,9 +479,11 @@ in
 
     tarball-dhall            = makeTarball "dhall"           ;
     tarball-dhall-bash       = makeTarball "dhall-bash"      ;
+    tarball-dhall-docs       = makeTarball "dhall-docs"      ;
     tarball-dhall-json       = makeTarball "dhall-json"      ;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
     tarball-dhall-nix        = makeTarball "dhall-nix"       ;
+    tarball-dhall-nixpkgs    = makeTarball "dhall-nixpkgs"   ;
     tarball-dhall-yaml       = makeTarball "dhall-yaml"      ;
 
     inherit (pkgs) tarball-website website;
@@ -563,9 +492,11 @@ in
       dhall
       dhall-no-http
       dhall-bash
+      dhall-docs
       dhall-json
       dhall-lsp-server
       dhall-nix
+      dhall-nixpkgs
       dhall-try
       dhall-yaml
     ;
@@ -574,17 +505,21 @@ in
 
     shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
     shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
+    shell-dhall-docs       = pkgs.haskell.packages."${compiler}".dhall-docs.env      ;
     shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
+    shell-dhall-nixpkgs    = pkgs.haskell.packages."${compiler}".dhall-nixpkgs.env   ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
     shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;
+    image-dhall-docs       = toDockerImage "dhall-docs"      ;
     image-dhall-json       = toDockerImage "dhall-json"      ;
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
+    image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
     test-dhall =

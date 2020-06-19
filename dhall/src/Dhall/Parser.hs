@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP             #-}
 {-# LANGUAGE DeriveAnyClass  #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveGeneric   #-}
@@ -51,6 +50,7 @@ expr = exprA (Text.Megaparsec.try import_)
 -- over any parseable type, allowing the language to be extended as needed.
 exprA :: Parser a -> Parser (Expr Src a)
 exprA = completeExpression
+{-# DEPRECATED exprA "Support for parsing custom imports will be dropped in a future release" #-}
 
 -- | A parsing error
 data ParseError = ParseError {
@@ -101,18 +101,17 @@ createHeader :: Text -> Header
 createHeader =
     Header . Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')
 
-{-| Like `exprFromText` but also returns the leading comments and whitespace
-    (i.e. header) up to the last newline before the code begins
-
-    In other words, if you have a Dhall file of the form:
-
-> -- Comment 1
-> {- Comment -} 2
-
-    Then this will preserve @Comment 1@, but not @Comment 2@
-
-    This is used by @dhall-format@ to preserve leading comments and whitespace
--}
+-- | Like `exprFromText` but also returns the leading comments and whitespace
+-- (i.e. header) up to the last newline before the code begins
+--
+-- In other words, if you have a Dhall file of the form:
+--
+-- > -- Comment 1
+-- > {- Comment -} 2
+--
+-- Then this will preserve @Comment 1@, but not @Comment 2@
+--
+-- This is used by @dhall-format@ to preserve leading comments and whitespace
 exprAndHeaderFromText
     :: String -- ^ User-friendly name describing the input expression,
               --   used in parsing error messages

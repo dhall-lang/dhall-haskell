@@ -1,0 +1,92 @@
+Name: dhall-docs
+Version: 0.0.1
+Cabal-Version: >=1.10
+Build-Type: Simple
+Tested-With: GHC == 8.6.1
+License: BSD3
+License-File: LICENSE
+Copyright: 2020 Germán Robayo
+Author: Germán Robayo
+Maintainer: Gabriel439@gmail.com
+Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
+Synopsis: Generate HTML docs from a dhall package
+Description:
+    Use this package if you want to create HTML documentation from your dhall
+    packages:
+    .
+    * See the "Dhall.Docs" module if you want to use this package as a library
+    .
+    * Use the @dhall-docs@ program from this package if you want an executable
+    .
+    The "Dhall.Docs" module also contains instructions for how to use this package
+Category: Compiler
+Extra-Source-Files:
+    CHANGELOG.md
+Data-Files:
+    *.css
+    *.ttf
+Data-Dir:
+    src/Dhall/data
+
+Source-Repository head
+    Type: git
+    Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
+
+
+Flag ghci-data-files
+  description: To enable use of data-files while running `stack ghci`
+  default: False
+
+Library
+    Hs-Source-Dirs: src
+    Build-Depends:
+        base                 >= 4.9.1.0  && < 5   ,
+        bytestring                          < 0.11,
+        containers                                ,
+        dhall                >= 1.32.0            ,
+        file-embed           >= 0.0.10.0          ,
+        filepath             >= 1.4      && < 1.5 ,
+        lucid                >= 2.9.12   && < 2.10,
+        mmark                >= 0.0.7.0  && < 0.8 ,
+        megaparsec           >= 7        && < 8.1 ,
+        path                 >= 0.7.0    && < 0.8 ,
+        path-io              >= 1.6.0    && < 1.7 ,
+        text                 >= 0.11.1.0 && < 1.3 ,
+        optparse-applicative >= 0.14.0.0 && < 0.16
+    Exposed-Modules:
+        Dhall.Docs
+        Dhall.Docs.Html
+        Dhall.Docs.Markdown
+    Other-Modules:
+        Dhall.Docs.Embedded
+    GHC-Options: -Wall
+    Default-Language: Haskell2010
+    if flag(ghci-data-files)
+        Other-Modules: Paths_dhall_docs
+    else
+        Cpp-Options: "-DEMBED"
+
+Executable dhall-docs
+    Hs-Source-Dirs: dhall-docs
+    Main-Is: Main.hs
+    Build-Depends:
+        base      ,
+        dhall     ,
+        dhall-docs
+    Other-Modules:
+        Paths_dhall_docs
+    GHC-Options: -Wall
+    Default-Language: Haskell2010
+
+Test-Suite doctest
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: doctest
+    Main-Is: Main.hs
+    GHC-Options: -Wall
+    Build-Depends:
+        base                           ,
+        directory,
+        filepath                 < 1.5 ,
+        doctest    >= 0.7.0   && < 0.18
+    Other-Extensions: OverloadedStrings RecordWildCards
+    Default-Language: Haskell2010

@@ -45,4 +45,4 @@ hashTest prefix =
 
         let message = "The hash did not match the expected hash."
 
-        Tasty.HUnit.assertEqual message actualHash expectedHash
+        Tasty.HUnit.assertEqual message expectedHash actualHash

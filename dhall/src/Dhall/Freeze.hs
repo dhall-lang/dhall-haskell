@@ -7,6 +7,7 @@
 module Dhall.Freeze
     ( -- * Freeze
       freeze
+    , freezeExpression
     , freezeImport
     , freezeRemoteImport
 
@@ -15,10 +16,7 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
-import Data.Bifunctor (first)
 import Data.Monoid ((<>))
-import Data.Text
-import Dhall.Parser (Src)
 import Dhall.Pretty (CharacterSet)
 import Dhall.Syntax (Expr(..), Import(..), ImportHashed(..), ImportType(..))
 import Dhall.Util
@@ -39,7 +37,6 @@ import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Core                                as Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
-import qualified Dhall.Parser                              as Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util                                as Util
@@ -94,30 +91,6 @@ freezeRemoteImport directory import_ = do
         Remote {} -> freezeImport directory import_
         _         -> return import_
 
-writeExpr :: Input -> (Text, Expr Src Import) -> CharacterSet -> IO ()
-writeExpr input (header, expr) characterSet = do
-    let doc =  Pretty.pretty header
-            <> Dhall.Pretty.prettyCharacterSet characterSet expr
-            <> "\n"
-
-    let stream = Dhall.Pretty.layout doc
-
-    let unAnnotated = Pretty.unAnnotateS stream
-
-    case input of
-        InputFile file ->
-            AtomicWrite.LazyText.atomicWriteFile
-                file
-                (Pretty.Text.renderLazy unAnnotated)
-
-        StandardInput -> do
-            supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
-            if supportsANSI
-               then
-                 Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
-               else
-                 Pretty.renderIO System.IO.stdout unAnnotated
-
 -- | Specifies which imports to freeze
 data Scope
     = OnlyRemoteImports
@@ -150,6 +123,68 @@ freeze outputMode input scope intent characterSet censor = do
             StandardInput  -> "."
             InputFile file -> System.FilePath.takeDirectory file
 
+    let rewrite = freezeExpression directory scope intent
+
+    originalText <- case input of
+        InputFile file -> Text.IO.readFile file
+        StandardInput  -> Text.IO.getContents
+
+    (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+
+    frozenExpression <- rewrite parsedExpression
+
+    let doc =  Pretty.pretty header
+            <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
+            <> "\n"
+
+    let stream = Dhall.Pretty.layout doc
+
+    let modifiedText = Pretty.Text.renderStrict stream
+
+    case outputMode of
+        Write -> do
+            let unAnnotated = Pretty.unAnnotateS stream
+
+            case input of
+                InputFile file ->
+                    if originalText == modifiedText
+                        then return ()
+                        else
+                            AtomicWrite.LazyText.atomicWriteFile
+                                file
+                                (Pretty.Text.renderLazy unAnnotated)
+
+                StandardInput -> do
+                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
+                    if supportsANSI
+                       then
+                         Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
+                       else
+                         Pretty.renderIO System.IO.stdout unAnnotated
+
+        Check -> do
+            if originalText == modifiedText
+                then return ()
+                else do
+                    let command = "freeze"
+
+                    let modified = "frozen"
+
+                    Exception.throwIO CheckFailed{..}
+
+{-| Slightly more pure version of the `freeze` function
+
+    This still requires `IO` to freeze the import, but now the input and output
+    expression are passed in explicitly
+-}
+freezeExpression
+    :: FilePath
+    -- ^ Starting directory
+    -> Scope
+    -> Intent
+    -> Expr s Import
+    -> IO (Expr s Import)
+freezeExpression directory scope intent expression = do
     let freezeScope =
             case scope of
                 AllImports        -> freezeImport
@@ -158,15 +193,36 @@ freeze outputMode input scope intent characterSet censor = do
     let freezeFunction = freezeScope directory
 
     let cache
+            -- This case is necessary because `transformOf` is a bottom-up
+            -- rewrite rule.   Without this rule, if you were to transform a
+            -- file that already has a cached expression, like this:
+            --
+            --     someImport sha256:… ? someImport
+            --
+            -- ... then you would get:
+            --
+            --       (someImport sha256:… ? someImport)
+            --     ? (someImport sha256:… ? someImport)
+            --
+            -- ... and this rule fixes that by collapsing that back to:
+            --
+            --       (someImport sha256:… ? someImport)
             (ImportAlt
-                (Core.shallowDenote -> Embed
-                    (Import { importHashed = ImportHashed { hash = Just _expectedHash } })
+                (Core.shallowDenote -> ImportAlt
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Just _expectedHash } }
+                    )
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Nothing } }
+                    )
                 )
                 import_@(Core.shallowDenote -> ImportAlt
-                    (Embed
-                        (Import { importHashed = ImportHashed { hash = Just _actualHash } })
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Just _actualHash } }
                     )
-                    _
+                    (Core.shallowDenote -> Embed
+                        Import{ importHashed = ImportHashed{ hash = Nothing } }
+                    )
                 )
             ) = do
                 {- Here we could actually compare the `_expectedHash` and
@@ -183,60 +239,31 @@ freeze outputMode input scope intent characterSet censor = do
                 frozenImport <- freezeFunction import_
 
                 {- The two imports can be the same if the import is local and
-                   `freezeFunction` only freezes remote imports
+                   `freezeFunction` only freezes remote imports by default
                 -}
                 if frozenImport /= import_
                     then return (ImportAlt (Embed frozenImport) (Embed import_))
                     else return (Embed import_)
-        cache expression = do
-            return expression
+        cache
+            (Embed import_@(Import { importHashed = ImportHashed { hash = Just _ } })) = do
+                -- Regenerate the integrity check, just in case it's wrong
+                frozenImport <- freezeFunction import_
 
-    let rewrite expression =
-            case intent of
-                Secure ->
-                    traverse freezeFunction expression
-                Cache  ->
-                    Dhall.Optics.transformMOf
-                        Core.subExpressions
-                        cache
-                        expression
+                -- `dhall freeze --cache` also works the other way around, adding an
+                -- unprotected fallback import to imports that are already
+                -- protected
+                let thawedImport = import_
+                        { importHashed = (importHashed import_)
+                            { hash = Nothing
+                            }
+                        }
 
-    case outputMode of
-        Write -> do
-            (Header header, parsedExpression) <- do
-                Util.getExpressionAndHeader censor input
+                return (ImportAlt (Embed frozenImport) (Embed thawedImport))
+        cache expression_ = do
+            return expression_
 
-            frozenExpression <- rewrite parsedExpression
-
-            writeExpr input (header, frozenExpression) characterSet
-
-        Check -> do
-            originalText <- case input of
-                InputFile file -> Text.IO.readFile file
-                StandardInput  -> Text.IO.getContents
-
-            let name = case input of
-                    InputFile file -> file
-                    StandardInput  -> "(stdin)"
-
-            (Header header, parsedExpression) <- do
-                Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
-
-            frozenExpression <- rewrite parsedExpression
-
-            let doc =  Pretty.pretty header
-                    <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
-                    <> "\n"
-
-            let stream = Dhall.Pretty.layout doc
-
-            let modifiedText = Pretty.Text.renderStrict stream
-
-            if originalText == modifiedText
-                then return ()
-                else do
-                    let command = "freeze"
-
-                    let modified = "frozen"
-
-                    Exception.throwIO CheckFailed{..}
+    case intent of
+        Secure ->
+            traverse freezeFunction expression
+        Cache  ->
+            Dhall.Optics.transformMOf Core.subExpressions cache expression

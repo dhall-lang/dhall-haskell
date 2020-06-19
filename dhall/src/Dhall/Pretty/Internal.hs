@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -64,31 +63,29 @@ module Dhall.Pretty.Internal (
     , rparen
     ) where
 
-#if MIN_VERSION_base(4,8,0)
-#else
-import Control.Applicative (Applicative(..), (<$>))
-#endif
 import Data.Foldable
-import Data.Monoid ((<>))
-import Data.Text (Text)
+import Data.List.NonEmpty        (NonEmpty (..))
+import Data.Monoid               ((<>))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import Dhall.Src (Src(..))
+import Dhall.Map                 (Map)
+import Dhall.Set                 (Set)
+import Dhall.Src                 (Src (..))
 import Dhall.Syntax
-import Numeric.Natural (Natural)
-import Prelude hiding (succ)
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
+import Numeric.Natural           (Natural)
+import Prelude                   hiding (succ)
 
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
+import qualified Data.List.NonEmpty                        as NonEmpty
 import qualified Data.Set
-import qualified Data.Text                               as Text
-import qualified Data.Text.Prettyprint.Doc               as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text   as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Dhall.Map
+import qualified Data.Text                                 as Text
+import qualified Data.Text.Prettyprint.Doc                 as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.String   as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
+import qualified Dhall.Map                                 as Map
 import qualified Dhall.Set
 
 {-| Annotation type used to tag elements in a pretty-printed document for
@@ -181,24 +178,25 @@ renderSrc strip (Just (Src {..}))
         Nothing        -> ""
         Just (c, _, _) -> c
 
+    sharedSpacePrefix []       = ""
+    sharedSpacePrefix (l : ls) = foldl' commonPrefix (spacePrefix l) ls
+
     blank = Text.all horizontalSpace
 
     newLines =
         case oldLines of
             [] ->
                []
-            l0 : [] ->
-                Pretty.pretty l0 : []
-            l0 : l1 : ls ->
+            l0 : ls ->
                 let sharedPrefix =
-                        foldl' commonPrefix (spacePrefix l1) (map spacePrefix (filter (not . blank) ls))
+                        sharedSpacePrefix (filter (not . blank) ls)
 
                     perLine l =
                         case Text.stripPrefix sharedPrefix l of
                             Nothing -> Pretty.pretty l
                             Just l' -> Pretty.pretty l'
 
-                in  Pretty.pretty l0 : map perLine (l1 : ls)
+                in  Pretty.pretty l0 : map perLine ls
 
     f x y = x <> Pretty.hardline <> y
 renderSrc _ _ =
@@ -309,20 +307,33 @@ hangingBraces n docs =
 
     combineLong x y = x <> y <> Pretty.hardline
 
+unsnoc :: [a] -> Maybe ([a], a)
+unsnoc       []   = Nothing
+unsnoc (x0 : xs0) = Just (go id x0 xs0)
+  where
+    go diffXs x      []  = (diffXs [], x)
+    go diffXs x (y : ys) = go (diffXs . (x:)) y ys
+
 -- | Pretty-print anonymous functions and function types
-arrows :: CharacterSet -> [(Doc Ann, Doc Ann)] -> Doc Ann
-arrows ASCII =
-    enclose'
-        ""
-        "    "
-        (" " <> rarrow ASCII <> " ")
-        (rarrow ASCII <> "  ")
-arrows Unicode =
-    enclose'
-        ""
-        "  "
-        (" " <> rarrow Unicode <> " ")
-        (rarrow Unicode <> " ")
+arrows :: CharacterSet -> [ Doc Ann ] -> Doc Ann
+arrows characterSet docs = Pretty.group (Pretty.flatAlt long short)
+  where
+    long = Pretty.align (mconcat (Data.List.intersperse Pretty.hardline docs'))
+      where
+        docs' = case unsnoc docs of
+            Nothing -> docs
+
+            Just (init_, last_) -> init' ++ [ last' ]
+              where
+                 appendArrow doc = doc <> space <> rarrow characterSet
+
+                 init' = map appendArrow init_
+
+                 last' = space <> space <> last_
+
+    short = mconcat (Data.List.intersperse separator docs)
+      where
+        separator = space <> rarrow characterSet <> space
 
 combine :: CharacterSet -> Text
 combine ASCII   = "/\\"
@@ -428,9 +439,12 @@ escapeLabel :: Bool -> Text -> Text
 escapeLabel allowReserved l =
     case Text.uncons l of
         Just (h, t)
-            | headCharacter h && Text.all tailCharacter t && (allowReserved || not (Data.HashSet.member l reservedIdentifiers))
+            | headCharacter h && Text.all tailCharacter t && (notReservedIdentifier || (allowReserved && someOrNotLanguageKeyword))
                 -> l
         _       -> "`" <> l <> "`"
+    where
+        notReservedIdentifier = not (Data.HashSet.member l reservedIdentifiers)
+        someOrNotLanguageKeyword = l == "Some" || not (Data.HashSet.member l reservedKeywords)
 
 prettyLabelShared :: Bool -> Text -> Doc Ann
 prettyLabelShared b l = label (Pretty.pretty (escapeLabel b l))
@@ -440,6 +454,10 @@ prettyLabel = prettyLabelShared False
 
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
+
+prettyAnyLabels :: Foldable list => list Text -> Doc Ann
+prettyAnyLabels =
+    mconcat . Pretty.punctuate dot . fmap prettyAnyLabel . toList
 
 prettyLabels :: Set Text -> Doc Ann
 prettyLabels a
@@ -471,6 +489,12 @@ prettyVar (V x n) = label (Pretty.unAnnotate (prettyLabel x <> "@" <> prettyInt 
 
 prettyEnvironmentVariable :: Text -> Doc ann
 prettyEnvironmentVariable t = Pretty.pretty (escapeEnvironmentVariable t)
+
+preserveSource :: Expr Src a -> Maybe (Doc Ann)
+preserveSource (Note Src{..} (DoubleLit  {})) = Just (Pretty.pretty srcText)
+preserveSource (Note Src{..} (IntegerLit {})) = Just (Pretty.pretty srcText)
+preserveSource (Note Src{..} (NaturalLit {})) = Just (Pretty.pretty srcText)
+preserveSource  _                             = Nothing
 
 -- | Escape an environment variable if not a valid Bash environment variable
 escapeEnvironmentVariable :: Text -> Text
@@ -513,7 +537,7 @@ prettyCharacterSet characterSet expression =
     Pretty.group (prettyExpression expression)
   where
     prettyExpression a0@(Lam _ _ _) =
-        arrows characterSet (fmap duplicate (docs a0))
+        arrows characterSet (docs a0)
       where
         docs (Lam a b c) = Pretty.group (Pretty.flatAlt long short) : docs c
           where
@@ -533,16 +557,21 @@ prettyCharacterSet characterSet expression =
                 <>  (space <> colon <> space)
                 <>  prettyExpression b
                 <>  rparen
-        docs (Note  _ c) = docs c
-        docs          c  = [ prettyExpression c ]
+        docs c
+            | Just doc <- preserveSource c =
+                [ doc ]
+            | Note _ d <- c =
+                docs d
+            | otherwise =
+                [ prettyExpression c ]
     prettyExpression a0@(BoolIf _ _ _) =
         Pretty.group (Pretty.flatAlt long short)
       where
         prefixesLong =
-                "      "
+                ""
             :   cycle
-                    [ Pretty.hardline <> keyword "then" <> "  "
-                    , Pretty.hardline <> keyword "else" <> "  "
+                    [ keyword "then" <> "  "
+                    , keyword "else" <> "  "
                     ]
 
         prefixesShort =
@@ -552,22 +581,31 @@ prettyCharacterSet characterSet expression =
                     , space <> keyword "else" <> space
                     ]
 
-        longLines = zipWith (<>) prefixesLong (docsLong a0)
+        longLines = zipWith (<>) prefixesLong (docsLong True a0)
 
         long =
             Pretty.align (mconcat (Data.List.intersperse Pretty.hardline longLines))
 
         short = mconcat (zipWith (<>) prefixesShort (docsShort a0))
 
-        docsLong (BoolIf a b c) =
-            docLong ++ docsLong c
+        docsLong initial (BoolIf a b c) =
+            docLong ++ docsLong False c
           where
+            padding
+                | initial   = "   "
+                | otherwise = mempty
+
             docLong =
-                [   keyword "if" <> " " <> prettyExpression a
+                [   keyword "if" <> padding <> " " <> prettyExpression a
                 ,   prettyExpression b
                 ]
-        docsLong (Note  _    c) = docsLong c
-        docsLong             c  = [ prettyExpression c ]
+        docsLong initial c
+            | Just doc <- preserveSource c =
+                [ doc ]
+            | Note _ d <- c =
+                docsLong initial d
+            | otherwise =
+                [ prettyExpression c ]
 
         docsShort (BoolIf a b c) =
             docShort ++ docsShort c
@@ -576,8 +614,13 @@ prettyCharacterSet characterSet expression =
                 [   keyword "if" <> " " <> prettyExpression a
                 ,   prettyExpression b
                 ]
-        docsShort (Note  _    c) = docsShort c
-        docsShort             c  = [ prettyExpression c ]
+        docsShort c
+            | Just doc <- preserveSource c =
+                [ doc ]
+            | Note _ d <- c =
+                docsShort d
+            | otherwise =
+                [ prettyExpression c ]
     prettyExpression (Let a0 b0) =
         enclose' "" "" space Pretty.hardline
             (fmap duplicate (fmap docA (toList as)) ++ [ docB ])
@@ -624,7 +667,7 @@ prettyCharacterSet characterSet expression =
             , keyword "in" <> "  "  <> prettyExpression b
             )
     prettyExpression a0@(Pi _ _ _) =
-        arrows characterSet (fmap duplicate (docs a0))
+        arrows characterSet (docs a0)
       where
         docs (Pi "_" b c) = prettyOperatorExpression b : docs c
         docs (Pi a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c
@@ -645,8 +688,25 @@ prettyCharacterSet characterSet expression =
                 <>  space <> colon <> space
                 <>  prettyExpression b
                 <>  rparen
-        docs (Note _   c) = docs c
-        docs           c  = [ prettyExpression c ]
+        docs c
+            | Just doc <- preserveSource c =
+                [ doc ]
+            | Note _ d <- c =
+                docs d
+            | otherwise =
+                [ prettyExpression c ]
+    prettyExpression (With a b c) =
+            prettyExpression a
+        <>  Pretty.flatAlt long short
+      where
+        short = " " <> keyword "with" <> " " <> update
+
+        long =  Pretty.hardline
+            <>  "  "
+            <>  Pretty.align (keyword "with" <> " " <> update)
+
+        (update, _) =
+            prettyKeyValue prettyAnyLabels prettyOperatorExpression equals (b, c)
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -657,10 +717,13 @@ prettyCharacterSet characterSet expression =
             (  "  " <> keyword "assert"
             <> Pretty.hardline <> colon <> " " <> prettyExpression a
             )
-    prettyExpression (Note _ a) =
-        prettyExpression a
-    prettyExpression a0 =
-        prettyAnnotatedExpression a0
+    prettyExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyExpression b
+        | otherwise =
+            prettyAnnotatedExpression a
 
     prettyAnnotatedExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyAnnotatedExpression (Merge a b (Just c)) =
@@ -710,19 +773,27 @@ prettyCharacterSet characterSet expression =
             (fmap duplicate (docs a0))
       where
         docs (Annot a b) = prettyOperatorExpression a : docs b
-        docs (Note  _ b) = docs b
-        docs          b  = [ prettyExpression b ]
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyExpression a ]
     prettyAnnotatedExpression (ListLit (Just a) b) =
             list (map prettyExpression (Data.Foldable.toList b))
         <>  " : "
         <>  prettyApplicationExpression a
-    prettyAnnotatedExpression (Note _ a) =
-        prettyAnnotatedExpression a
-    prettyAnnotatedExpression a0 =
-        prettyOperatorExpression a0
+    prettyAnnotatedExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyAnnotatedExpression b
+        | otherwise =
+            prettyOperatorExpression a
 
     prettyOperatorExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyOperatorExpression = prettyImportAltExpression
+    prettyOperatorExpression = prettyEquivalentExpression
 
     prettyOperator :: Text -> [Doc Ann] -> Doc Ann
     prettyOperator op docs =
@@ -737,161 +808,265 @@ prettyCharacterSet characterSet expression =
 
         spacer = if Text.length op == 1 then " "  else "  "
 
+    prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
+    prettyEquivalentExpression a0@(Equivalent _ _) =
+        prettyOperator (equivalent characterSet) (docs a0)
+      where
+        docs (Equivalent a b) = prettyImportAltExpression b : docs a
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyImportAltExpression a ]
+    prettyEquivalentExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyEquivalentExpression b
+        | otherwise =
+            prettyImportAltExpression a
+
     prettyImportAltExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportAltExpression a0@(ImportAlt _ _) =
         prettyOperator "?" (docs a0)
       where
         docs (ImportAlt a b) = prettyOrExpression b : docs a
-        docs (Note      _ b) = docs b
-        docs              b  = [ prettyOrExpression b ]
-    prettyImportAltExpression (Note _ a) =
-        prettyImportAltExpression a
-    prettyImportAltExpression a0 =
-        prettyOrExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyOrExpression a ]
+    prettyImportAltExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyImportAltExpression b
+        | otherwise =
+            prettyOrExpression a
 
     prettyOrExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyOrExpression a0@(BoolOr _ _) =
         prettyOperator "||" (docs a0)
       where
         docs (BoolOr a b) = prettyPlusExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyPlusExpression b ]
-    prettyOrExpression (Note _ a) =
-        prettyOrExpression a
-    prettyOrExpression a0 =
-        prettyPlusExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyPlusExpression a ]
+    prettyOrExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyOrExpression b
+        | otherwise =
+            prettyPlusExpression a
 
     prettyPlusExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyPlusExpression a0@(NaturalPlus _ _) =
         prettyOperator "+" (docs a0)
       where
         docs (NaturalPlus a b) = prettyTextAppendExpression b : docs a
-        docs (Note        _ b) = docs b
-        docs                b  = [ prettyTextAppendExpression b ]
-    prettyPlusExpression (Note _ a) =
-        prettyPlusExpression a
-    prettyPlusExpression a0 =
-        prettyTextAppendExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyTextAppendExpression a ]
+    prettyPlusExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyPlusExpression b
+        | otherwise =
+            prettyTextAppendExpression a
 
     prettyTextAppendExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyTextAppendExpression a0@(TextAppend _ _) =
         prettyOperator "++" (docs a0)
       where
         docs (TextAppend a b) = prettyListAppendExpression b : docs a
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyListAppendExpression b ]
-    prettyTextAppendExpression (Note _ a) =
-        prettyTextAppendExpression a
-    prettyTextAppendExpression a0 =
-        prettyListAppendExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyListAppendExpression a ]
+    prettyTextAppendExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyTextAppendExpression b
+        | otherwise =
+            prettyListAppendExpression a
 
     prettyListAppendExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyListAppendExpression a0@(ListAppend _ _) =
         prettyOperator "#" (docs a0)
       where
         docs (ListAppend a b) = prettyAndExpression b : docs a
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyAndExpression b ]
-    prettyListAppendExpression (Note _ a) =
-        prettyListAppendExpression a
-    prettyListAppendExpression a0 =
-        prettyAndExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyAndExpression a ]
+    prettyListAppendExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyListAppendExpression b
+        | otherwise =
+            prettyAndExpression a
 
     prettyAndExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyAndExpression a0@(BoolAnd _ _) =
         prettyOperator "&&" (docs a0)
       where
         docs (BoolAnd a b) = prettyCombineExpression b : docs a
-        docs (Note    _ b) = docs b
-        docs            b  = [ prettyCombineExpression b ]
-    prettyAndExpression (Note _ a) =
-        prettyAndExpression a
-    prettyAndExpression a0 =
-       prettyCombineExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyCombineExpression a ]
+    prettyAndExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyAndExpression b
+        | otherwise =
+            prettyCombineExpression a
 
     prettyCombineExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyCombineExpression a0@(Combine _ _) =
+    prettyCombineExpression a0@(Combine _ _ _) =
         prettyOperator (combine characterSet) (docs a0)
       where
-        docs (Combine a b) = prettyPreferExpression b : docs a
-        docs (Note    _ b) = docs b
-        docs            b  = [ prettyPreferExpression b ]
-    prettyCombineExpression (Note _ a) =
-        prettyCombineExpression a
-    prettyCombineExpression a0 =
-        prettyPreferExpression a0
+        docs (Combine _ a b) = prettyPreferExpression b : docs a
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyPreferExpression a ]
+    prettyCombineExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyCombineExpression b
+        | otherwise =
+            prettyPreferExpression a
 
     prettyPreferExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyPreferExpression a0@(Prefer _ _) =
+    prettyPreferExpression a0@(Prefer {}) =
         prettyOperator (prefer characterSet) (docs a0)
       where
-        docs (Prefer a b) = prettyCombineTypesExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyCombineTypesExpression b ]
-    prettyPreferExpression (Note _ a) =
-        prettyPreferExpression a
-    prettyPreferExpression a0 =
-        prettyCombineTypesExpression a0
+        docs (Prefer _ a b) = prettyCombineTypesExpression b : docs a
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyCombineTypesExpression a ]
+    prettyPreferExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyPreferExpression b
+        | otherwise =
+            prettyCombineTypesExpression a
 
     prettyCombineTypesExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyCombineTypesExpression a0@(CombineTypes _ _) =
         prettyOperator (combineTypes characterSet) (docs a0)
       where
         docs (CombineTypes a b) = prettyTimesExpression b : docs a
-        docs (Note         _ b) = docs b
-        docs                 b  = [ prettyTimesExpression b ]
-    prettyCombineTypesExpression (Note _ a) =
-        prettyCombineTypesExpression a
-    prettyCombineTypesExpression a0 =
-        prettyTimesExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyTimesExpression a ]
+    prettyCombineTypesExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyCombineTypesExpression b
+        | otherwise =
+            prettyTimesExpression a
 
     prettyTimesExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyTimesExpression a0@(NaturalTimes _ _) =
         prettyOperator "*" (docs a0)
       where
         docs (NaturalTimes a b) = prettyEqualExpression b : docs a
-        docs (Note         _ b) = docs b
-        docs                 b  = [ prettyEqualExpression b ]
-    prettyTimesExpression (Note _ a) =
-        prettyTimesExpression a
-    prettyTimesExpression a0 =
-        prettyEqualExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyEqualExpression a ]
+    prettyTimesExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyTimesExpression b
+        | otherwise =
+            prettyEqualExpression a
 
     prettyEqualExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyEqualExpression a0@(BoolEQ _ _) =
         prettyOperator "==" (docs a0)
       where
         docs (BoolEQ a b) = prettyNotEqualExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyNotEqualExpression b ]
-    prettyEqualExpression (Note _ a) =
-        prettyEqualExpression a
-    prettyEqualExpression a0 =
-        prettyNotEqualExpression a0
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyNotEqualExpression a ]
+    prettyEqualExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyEqualExpression b
+        | otherwise =
+            prettyNotEqualExpression a
 
     prettyNotEqualExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyNotEqualExpression a0@(BoolNE _ _) =
         prettyOperator "!=" (docs a0)
       where
-        docs (BoolNE a b) = prettyEquivalentExpression b : docs a
-        docs (Note   _ b) = docs b
-        docs           b  = [ prettyEquivalentExpression b ]
-    prettyNotEqualExpression (Note _ a) =
-        prettyNotEqualExpression a
-    prettyNotEqualExpression a0 =
-        prettyEquivalentExpression a0
-
-    prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyEquivalentExpression a0@(Equivalent _ _) =
-        prettyOperator (equivalent characterSet) (docs a0)
-      where
-        docs (Equivalent a b) = prettyApplicationExpression b : docs a
-        docs (Note       _ b) = docs b
-        docs               b  = [ prettyApplicationExpression b ]
-    prettyEquivalentExpression (Note _ a) =
-        prettyEquivalentExpression a
-    prettyEquivalentExpression a0 =
-        prettyApplicationExpression a0
+        docs (BoolNE a b) = prettyApplicationExpression b : docs a
+        docs a
+            | Just doc <- preserveSource a =
+                [ doc ]
+            | Note _ b <- a =
+                docs b
+            | otherwise =
+                [ prettyApplicationExpression a ]
+    prettyNotEqualExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyNotEqualExpression b
+        | otherwise =
+            prettyApplicationExpression a
 
     prettyApplicationExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyApplicationExpression = go []
@@ -901,9 +1076,14 @@ prettyCharacterSet characterSet expression =
             Some a            -> app (builtin "Some") (a : args)
             Merge a b Nothing -> app (keyword "merge") (a : b : args)
             ToMap a Nothing   -> app (keyword "toMap") (a : args)
-            Note _ b          -> go args b
-            e | null args     -> prettyImportExpression e -- just a performance optimization
-              | otherwise     -> app (prettyImportExpression e) args
+            e | Note _ b <- e ->
+                  go args b
+              | null args ->
+                  prettyImportExpression e -- just a performance optimization
+              | Just doc <- preserveSource e ->
+                  app doc args
+              | otherwise ->
+                  app (prettyImportExpression e) args
 
         app f args =
             enclose'
@@ -915,10 +1095,13 @@ prettyCharacterSet characterSet expression =
     prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyImportExpression (Embed a) =
         Pretty.pretty a
-    prettyImportExpression (Note _ a) =
-        prettyImportExpression a
-    prettyImportExpression a0 =
-        prettyCompletionExpression a0
+    prettyImportExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyImportExpression b
+        | otherwise =
+            prettyCompletionExpression a
 
     prettyCompletionExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyCompletionExpression (RecordCompletion a b) =
@@ -932,11 +1115,13 @@ prettyCharacterSet characterSet expression =
             _ ->    prettySelectorExpression a
                 <>  doubleColon
                 <>  prettySelectorExpression b
-
-    prettyCompletionExpression (Note _ a) =
-        prettyCompletionExpression a
-    prettyCompletionExpression a0 =
-        prettySelectorExpression a0
+    prettyCompletionExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyCompletionExpression b
+        | otherwise =
+            prettySelectorExpression a
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
     prettySelectorExpression (Field a b) =
@@ -949,10 +1134,13 @@ prettyCharacterSet characterSet expression =
         <>  lparen
         <>  prettyExpression b
         <>  rparen
-    prettySelectorExpression (Note _ b) =
-        prettySelectorExpression b
-    prettySelectorExpression a0 =
-        prettyPrimitiveExpression a0
+    prettySelectorExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettySelectorExpression b
+        | otherwise =
+            prettyPrimitiveExpression a
 
     prettyPrimitiveExpression :: Pretty a => Expr Src a -> Doc Ann
     prettyPrimitiveExpression (Var a) =
@@ -1017,10 +1205,6 @@ prettyCharacterSet characterSet expression =
         builtin "Optional"
     prettyPrimitiveExpression None =
         builtin "None"
-    prettyPrimitiveExpression OptionalFold =
-        builtin "Optional/fold"
-    prettyPrimitiveExpression OptionalBuild =
-        builtin "Optional/build"
     prettyPrimitiveExpression (BoolLit True) =
         builtin "True"
     prettyPrimitiveExpression (BoolLit False) =
@@ -1042,10 +1226,13 @@ prettyCharacterSet characterSet expression =
         prettyUnion a
     prettyPrimitiveExpression (ListLit Nothing b) =
         list (map prettyExpression (Data.Foldable.toList b))
-    prettyPrimitiveExpression (Note _ b) =
-        prettyPrimitiveExpression b
-    prettyPrimitiveExpression a =
-        Pretty.group (Pretty.flatAlt long short)
+    prettyPrimitiveExpression a
+        | Just doc <- preserveSource a =
+            doc
+        | Note _ b <- a =
+            prettyPrimitiveExpression b
+        | otherwise =
+            Pretty.group (Pretty.flatAlt long short)
       where
         long =
             Pretty.align
@@ -1053,8 +1240,14 @@ prettyCharacterSet characterSet expression =
 
         short = lparen <> prettyExpression a <> rparen
 
-    prettyKeyValue :: Pretty a => Doc Ann -> (Text, Expr Src a) -> (Doc Ann, Doc Ann)
-    prettyKeyValue separator (key, val) =
+    prettyKeyValue
+        :: Pretty a
+        => (k -> Doc Ann)
+        -> (Expr Src a -> Doc Ann)
+        -> Doc Ann
+        -> (k, Expr Src a)
+        -> (Doc Ann, Doc Ann)
+    prettyKeyValue prettyKey prettyValue separator (key, val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
         completion _T r =
@@ -1067,62 +1260,103 @@ prettyCharacterSet characterSet expression =
                     _ ->
                         prettySelectorExpression r
 
-        short = prettyAnyLabel key
+        short = prettyKey key
             <>  " "
             <>  separator
             <>  " "
-            <>  prettyExpression val
+            <>  prettyValue val
 
         long =
-                prettyAnyLabel key
+                prettyKey key
             <>  " "
             <>  separator
             <>  case shallowDenote val of
                     Some val' ->
-                            " Some"
+                            " " <> builtin "Some"
+                        <>  case shallowDenote val' of
+                                RecordCompletion _T r ->
+                                    completion _T r
+
+                                RecordLit _ ->
+                                        Pretty.hardline
+                                    <>  "  "
+                                    <>  prettyImportExpression val'
+
+                                ListLit _ xs
+                                    | not (null xs) ->
+                                            Pretty.hardline
+                                        <>  "  "
+                                        <>  prettyImportExpression val'
+
+                                _ ->    Pretty.hardline
+                                    <>  "    "
+                                    <>  prettyImportExpression val'
+
+                    ToMap val' Nothing ->
+                            " " <> keyword "toMap"
                         <>  case shallowDenote val' of
                                 RecordCompletion _T r ->
                                     completion _T r
                                 _ ->    Pretty.hardline
                                     <>  "    "
                                     <>  prettyImportExpression val'
+
                     RecordCompletion _T r ->
                         completion _T r
+
+                    RecordLit _ ->
+                            Pretty.hardline
+                        <>  "  "
+                        <>  prettyValue val
+
                     ListLit _ xs
                         | not (null xs) ->
                                 Pretty.hardline
                             <>  "  "
-                            <>  prettyExpression val
+                            <>  prettyValue val
+
                     _ -> 
                             Pretty.hardline
                         <>  "    "
-                        <>  prettyExpression val
+                        <>  prettyValue val
 
     prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
     prettyRecord =
-        braces . map (prettyKeyValue colon) . Dhall.Map.toList
+          braces
+        . map (prettyKeyValue prettyAnyLabel prettyExpression colon)
+        . Map.toList
 
     prettyRecordLit :: Pretty a => Map Text (Expr Src a) -> Doc Ann
-    prettyRecordLit a
+    prettyRecordLit = prettyRecordLike braces
+
+    prettyCompletionLit :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
+    prettyCompletionLit = prettyRecordLike . hangingBraces
+
+    prettyRecordLike braceStyle a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
-            braces (map (prettyKeyValue equals) (Dhall.Map.toList a))
+            braceStyle (map prettyRecordEntry (Map.toList consolidated))
+      where
+        consolidated = consolidateRecordLiteral a
 
-    prettyCompletionLit
-        :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
-    prettyCompletionLit n a
-        | Data.Foldable.null a =
-            lbrace <> equals <> rbrace
-        | otherwise =
-            hangingBraces n (map (prettyKeyValue equals) (Dhall.Map.toList a))
+        prettyRecordEntry (keys, value) =
+            case keys of
+                key :| []
+                    | Var (V key' 0) <- Dhall.Syntax.shallowDenote value
+                    , key == key' ->
+                        duplicate (prettyAnyLabel key)
+                _ ->
+                    prettyKeyValue prettyAnyLabels prettyExpression equals (keys, value)
 
-    prettyAlternative (key, Just val) = prettyKeyValue colon (key, val)
-    prettyAlternative (key, Nothing ) = duplicate (prettyAnyLabel key)
+    prettyAlternative (key, Just val) =
+        prettyKeyValue prettyAnyLabel prettyExpression colon (key, val)
+    prettyAlternative (key, Nothing) =
+        duplicate (prettyAnyLabel key)
 
     prettyUnion :: Pretty a => Map Text (Maybe (Expr Src a)) -> Doc Ann
     prettyUnion =
-        angles . map prettyAlternative . Dhall.Map.toList
+        angles . map prettyAlternative . Map.toList
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
     prettyChunks chunks@(Chunks a b)
@@ -1281,6 +1515,25 @@ escapeTrailingSingleQuote chunks@(Chunks as b) =
 -- | Pretty-print a value
 pretty_ :: Pretty a => a -> Text
 pretty_ = prettyToStrictText
+
+{- This utility function converts
+   `{ x = { y = { z = 1 } } }` to `{ x.y.z. = 1 }`
+-}
+consolidateRecordLiteral
+    :: Map Text (Expr s a) -> Map (NonEmpty Text) (Expr s a)
+consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
+  where
+    adapt :: (Text, Expr s a) -> (NonEmpty Text, Expr s a)
+    adapt (key, expression) =
+        case shallowDenote expression of
+            RecordLit m ->
+                case fmap adapt (Map.toList m) of
+                    [ (keys, expression') ] ->
+                        (NonEmpty.cons key keys, expression')
+                    _ ->
+                        (pure key, RecordLit m)
+            _ ->
+                (pure key, expression)
 
 -- | Escape a `Text` literal using Dhall's escaping rules for single-quoted
 --   @Text@

@@ -1,8 +1,8 @@
 Name: dhall
-Version: 1.29.0
+Version: 1.33.0
 Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
+Tested-With: GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez
@@ -27,6 +27,7 @@ Extra-Source-Files:
     benchmark/examples/*.dhall
     benchmark/examples/normalize/*.dhall
     benchmark/normalize/*.dhall
+    man/dhall.1
     CHANGELOG.md
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
@@ -61,6 +62,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Integer/subtract
     dhall-lang/Prelude/Integer/toDouble
     dhall-lang/Prelude/Integer/toNatural
+    dhall-lang/Prelude/JSON/Format
     dhall-lang/Prelude/JSON/Nesting
     dhall-lang/Prelude/JSON/Tagged
     dhall-lang/Prelude/JSON/Type
@@ -78,6 +80,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/omitNullFields
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
+    dhall-lang/Prelude/JSON/renderAs
     dhall-lang/Prelude/JSON/renderInteger.dhall
     dhall-lang/Prelude/JSON/renderYAML
     dhall-lang/Prelude/JSON/string
@@ -95,6 +98,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/fold
     dhall-lang/Prelude/List/generate
     dhall-lang/Prelude/List/head
+    dhall-lang/Prelude/List/index
     dhall-lang/Prelude/List/indexed
     dhall-lang/Prelude/List/iterate
     dhall-lang/Prelude/List/last
@@ -107,7 +111,9 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/reverse
     dhall-lang/Prelude/List/shifted
     dhall-lang/Prelude/List/take
+    dhall-lang/Prelude/List/unpackOptionals
     dhall-lang/Prelude/List/unzip
+    dhall-lang/Prelude/List/zip
     dhall-lang/Prelude/Location/Type
     dhall-lang/Prelude/Location/package.dhall
     dhall-lang/Prelude/Map/Entry
@@ -165,7 +171,9 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/default
     dhall-lang/Prelude/Text/defaultMap
     dhall-lang/Prelude/Text/package.dhall
+    dhall-lang/Prelude/Text/replicate
     dhall-lang/Prelude/Text/show
+    dhall-lang/Prelude/Text/spaces
     dhall-lang/Prelude/XML/Type
     dhall-lang/Prelude/XML/attribute
     dhall-lang/Prelude/XML/element
@@ -176,30 +184,41 @@ Extra-Source-Files:
     dhall-lang/Prelude/XML/text
     dhall-lang/Prelude/package.dhall
     dhall-lang/tests/alpha-normalization/success/unit/*.dhall
+    dhall-lang/tests/alpha-normalization/success/regression/*.dhall
     dhall-lang/tests/binary-decode/failure/unit/*.dhallb
     dhall-lang/tests/binary-decode/success/unit/*.dhall
     dhall-lang/tests/binary-decode/success/unit/*.dhallb
-    dhall-lang/tests/import/cache/dhall/1220efc43103e49b56c5bf089db8e0365bbfc455b8a2f0dc6ee5727a3586f85969fd
+    dhall-lang/tests/binary-decode/success/unit/imports/*.dhall
+    dhall-lang/tests/binary-decode/success/unit/imports/*.dhallb
+    dhall-lang/tests/import/cache/dhall/12203871180b87ecaba8b53fffb2a8b52d3fce98098fab09a6f759358b9e8042eedc
+    dhall-lang/tests/import/cache/dhall/1220618f785ce8f3930a9144398f576f0a992544b51212bc9108c31b4e670dc6ed21
     dhall-lang/tests/import/data/*.dhall
     dhall-lang/tests/import/data/*.txt
-    dhall-lang/tests/import/data/fieldOrder/*.dhall
     dhall-lang/tests/import/failure/*.dhall
+    dhall-lang/tests/import/failure/unit/*.dhall
     dhall-lang/tests/import/success/*.dhall
+    dhall-lang/tests/import/success/unit/*.dhall
+    dhall-lang/tests/import/success/unit/asLocation/*.dhall
     dhall-lang/tests/normalization/success/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/access/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/combineTypes/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/prefer/*.dhall
     dhall-lang/tests/normalization/success/haskell-tutorial/projection/*.dhall
+    dhall-lang/tests/normalization/success/regression/*.dhall
     dhall-lang/tests/normalization/success/simple/*.dhall
     dhall-lang/tests/normalization/success/simplifications/*.dhall
     dhall-lang/tests/normalization/success/unit/*.dhall
     dhall-lang/tests/parser/failure/*.dhall
+    dhall-lang/tests/parser/failure/spacing/*.dhall
+    dhall-lang/tests/parser/failure/unit/*.dhall
     dhall-lang/tests/parser/success/*.dhall
     dhall-lang/tests/parser/success/*.dhallb
     dhall-lang/tests/parser/success/text/*.dhall
     dhall-lang/tests/parser/success/text/*.dhallb
     dhall-lang/tests/parser/success/unit/*.dhall
     dhall-lang/tests/parser/success/unit/*.dhallb
+    dhall-lang/tests/parser/success/unit/operators/*.dhall
+    dhall-lang/tests/parser/success/unit/operators/*.dhallb
     dhall-lang/tests/parser/success/unit/import/*.dhall
     dhall-lang/tests/parser/success/unit/import/*.dhallb
     dhall-lang/tests/parser/success/unit/import/urls/*.dhall
@@ -397,12 +416,14 @@ Extra-Source-Files:
     dhall-lang/tests/type-inference/success/prelude/Text/concatMap/*.dhall
     dhall-lang/tests/type-inference/success/prelude/Text/concatMapSep/*.dhall
     dhall-lang/tests/type-inference/success/prelude/Text/concatSep/*.dhall
+    dhall-lang/tests/type-inference/success/regression/*.dhall
     dhall-lang/tests/type-inference/success/simple/*.dhall
     dhall-lang/tests/type-inference/success/simple/access/*.dhall
     dhall-lang/tests/type-inference/success/unit/*.dhall
     tests/diff/*.dhall
     tests/diff/*.txt
     tests/format/*.dhall
+    tests/freeze/*.dhall
     tests/lint/success/*.dhall
     tests/recursive/*.dhall
     tests/regression/*.dhall
@@ -428,8 +449,8 @@ Flag cross
 Library
     Hs-Source-Dirs: src
     Build-Depends:
-        base                        >= 4.8.2.0  && < 5   ,
-        aeson                       >= 1.0.0.0  && < 1.5 ,
+        base                        >= 4.9.1.0  && < 5   ,
+        aeson                       >= 1.0.0.0  && < 1.6 ,
         aeson-pretty                               < 0.9 ,
         ansi-terminal               >= 0.6.3.1  && < 0.11,
         atomic-write                >= 0.2.0.7  && < 0.3 ,
@@ -442,29 +463,32 @@ Library
         data-fix                                   < 0.3 ,
         deepseq                                    < 1.5 ,
         Diff                        >= 0.2      && < 0.5 ,
-        directory                   >= 1.2.2.0  && < 1.4 ,
+        directory                   >= 1.3.0.0  && < 1.4 ,
         dotgen                      >= 0.4.2    && < 0.5 ,
         either                      >= 5        && < 5.1,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.5 ,
+        half                        >= 0.2.2.3  && < 0.4 ,
         haskeline                   >= 0.7.2.1  && < 0.9 ,
         hashable                    >= 1.2      && < 1.4 ,
-        lens-family-core            >= 1.0.0    && < 2.1 ,
+        lens-family-core            >= 1.0.0    && < 2.2 ,
         megaparsec                  >= 7        && < 8.1 ,
         memory                      >= 0.14     && < 0.16,
         mtl                         >= 2.2.1    && < 2.3 ,
         network-uri                 >= 2.6      && < 2.7 ,
         optparse-applicative        >= 0.14.0.0 && < 0.16,
         parsers                     >= 0.12.4   && < 0.13,
+        parser-combinators                               ,
         prettyprinter               >= 1.5.1    && < 1.7 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         pretty-simple                              < 4   ,
         profunctors                 >= 3.1.2    && < 5.6 ,
-        repline                     >= 0.2.1.0  && < 0.3 ,
+        repline                     >= 0.2.1.0  && < 0.4 ,
         serialise                   >= 0.2.0.0  && < 0.3 ,
         scientific                  >= 0.3.0.0  && < 0.4 ,
-        template-haskell                           < 2.16,
+        template-haskell            >= 2.11.1.0 && < 2.17,
         text                        >= 0.11.1.0 && < 1.3 ,
+        text-manipulate             >= 0.2.0.1  && < 0.3 ,
         th-lift-instances           >= 0.1.13   && < 0.2 ,
         transformers                >= 0.2.0.0  && < 0.6 ,
         transformers-compat         >= 0.6.2    && < 0.7 ,
@@ -490,7 +514,7 @@ Library
       if flag(with-http)
         Build-Depends:
           http-types                  >= 0.7.0    && < 0.13,
-          http-client                 >= 0.4.30   && < 0.7 ,
+          http-client                 >= 0.4.30   && < 0.8 ,
           http-client-tls             >= 0.2.0    && < 0.4
 
     Other-Extensions:
@@ -543,6 +567,7 @@ Library
         Dhall.Repl
         Dhall.Set
         Dhall.Src
+        Dhall.Substitution
         Dhall.Tags
         Dhall.Tutorial
         Dhall.TypeCheck
@@ -551,6 +576,9 @@ Library
     if !flag(cross)
         Exposed-Modules:
             Dhall.TH
+    if impl(ghc >= 8.6.1)
+        Exposed-Modules:
+          Dhall.Deriving
     Other-Modules:
         Dhall.Eval
         Dhall.Import.Types
@@ -587,6 +615,7 @@ Test-Suite tasty
         Dhall.Test.Diff
         Dhall.Test.Tags
         Dhall.Test.Format
+        Dhall.Test.Freeze
         Dhall.Test.Import
         Dhall.Test.Lint
         Dhall.Test.Normalization
@@ -594,6 +623,7 @@ Test-Suite tasty
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
         Dhall.Test.SemanticHash
+        Dhall.Test.Substitution
         Dhall.Test.TH
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference
@@ -611,20 +641,21 @@ Test-Suite tasty
         filepath                                       ,
         foldl                                    < 1.5 ,
         generic-random            >= 1.3.0.0  && < 1.4 ,
-        lens-family-core          >= 1.0.0    && < 2.1 ,
+        lens-family-core                               ,
         megaparsec                                     ,
         prettyprinter                                  ,
-        QuickCheck                >= 2.10     && < 2.14,
+        QuickCheck                >= 2.10     && < 2.15,
         quickcheck-instances      >= 0.3.12   && < 0.4 ,
         scientific                                     ,
         semigroups                                     ,
         serialise                                      ,
         special-values                           < 0.2 ,
         spoon                                    < 0.4 ,
-        tasty                     >= 0.11.2   && < 1.3 ,
+        tasty                     >= 0.11.2   && < 1.4 ,
         tasty-expected-failure                   < 0.12,
         tasty-hunit               >= 0.10     && < 0.11,
         tasty-quickcheck          >= 0.9.2    && < 0.11,
+        template-haskell                               ,
         text                      >= 0.11.1.0 && < 1.3 ,
         transformers                                   ,
         turtle                                   < 1.6 ,
@@ -645,13 +676,8 @@ Test-Suite doctest
         directory                     ,
         filepath                < 1.5 ,
         mockery                 < 0.4 ,
-        doctest   >= 0.7.0   && < 0.17
+        doctest   >= 0.7.0   && < 0.18
     Default-Language: Haskell2010
-    -- `doctest` doesn't work with `MIN_VERSION` macros before GHC 8
-    --
-    --  See: https://ghc.haskell.org/trac/ghc/ticket/10970
-    if impl(ghc < 8.0)
-      Buildable: False
 
 Benchmark dhall-parser
     Type: exitcode-stdio-1.0

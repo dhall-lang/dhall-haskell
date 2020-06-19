@@ -44,7 +44,7 @@ main = handle (Dhall.detailed (do
 
     inText <- Data.Text.IO.getContents
 
-    expr <- case Dhall.Parser.exprFromText "(stdin)" inText of
+    expr <- case Dhall.Parser.exprFromText "(input)" inText of
         Left  err  -> Control.Exception.throwIO err
         Right expr -> return expr
 

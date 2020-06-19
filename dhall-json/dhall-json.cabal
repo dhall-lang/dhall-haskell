@@ -1,8 +1,8 @@
 Name: dhall-json
-Version: 1.6.1
-Cabal-Version: >=1.8.0.2
+Version: 1.7.0
+Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 7.10.3, GHC == 8.4.3, GHC == 8.6.1
+Tested-With: GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez
@@ -14,18 +14,22 @@ Description:
     Use this package if you want to convert between Dhall expressions and JSON
     or YAML. You can use this package as a library or an executable:
     .
-    * See the "Dhall.JSON" module if you want to use this package as a library
+    * See the "Dhall.JSON" or "Dhall.JSONToDhall" modules if you want to use
+      this package as a library
     .
-    * Use the @dhall-to-json@ or @dhall-to-yaml@ programs from this package if
-      you want an executable
+    * Use the @dhall-to-json@, @dhall-to-yaml@, or @json-to-dhall@ programs from
+      this package if you want an executable
     .
-    The "Dhall.JSON" module also contains instructions for how to use this
-    package
+    The "Dhall.JSON" and "Dhall.JSONToDhall" modules also contains instructions
+    for how to use this package
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
     tasty/data/*.dhall
     tasty/data/*.json
+    tasty/data/error/*.golden
+    tasty/data/error/*.json
+    tasty/data/error/*.dhall
 
 Source-Repository head
     Type: git
@@ -35,12 +39,12 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.8.0.0  && < 5   ,
-        aeson                     >= 1.0.0.0  && < 1.5 ,
+        aeson                     >= 1.0.0.0  && < 1.6 ,
         aeson-pretty                             < 0.9 ,
-        aeson-yaml                >= 1.0.5    && < 1.1 ,
+        aeson-yaml                >= 1.0.6    && < 1.1 ,
         bytestring                               < 0.11,
-        containers                                     ,
-        dhall                     >= 1.28.0   && < 1.30,
+        containers                >= 0.5.9    && < 0.7 ,
+        dhall                     >= 1.33.0   && < 1.34,
         exceptions                >= 0.8.3    && < 0.11,
         filepath                                 < 1.5 ,
         optparse-applicative      >= 0.14.0.0 && < 0.16,
@@ -57,6 +61,7 @@ Library
     Other-Modules:
         Dhall.JSON.Util
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
@@ -73,6 +78,7 @@ Executable dhall-to-json
     Other-Modules:
         Paths_dhall_json
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Executable dhall-to-yaml
     Hs-Source-Dirs: dhall-to-yaml
@@ -83,6 +89,7 @@ Executable dhall-to-yaml
     Other-Modules:
         Paths_dhall_json
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Executable json-to-dhall
     Hs-Source-Dirs: json-to-dhall
@@ -104,18 +111,21 @@ Executable json-to-dhall
     Other-Modules:
         Paths_dhall_json
     GHC-Options: -Wall
+    Default-Language: Haskell2010
 
 Test-Suite tasty
     Type: exitcode-stdio-1.0
     Hs-Source-Dirs: tasty
     Main-Is: Main.hs
     Build-Depends:
-        base              ,
-        aeson             ,
-        bytestring        ,
-        dhall             ,
-        dhall-json        ,
-        tasty       <  1.3,
-        text              ,
-        tasty-hunit >= 0.2
+        base               ,
+        aeson              ,
+        bytestring         ,
+        dhall              ,
+        dhall-json         ,
+        tasty        <  1.4,
+        text               ,
+        tasty-hunit  >= 0.2,
+        tasty-silver >= 3.0
     GHC-Options: -Wall
+    Default-Language: Haskell2010

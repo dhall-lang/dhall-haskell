@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE OverloadedLists    #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -93,10 +94,20 @@ module Dhall.Nix (
 import Control.Exception (Exception)
 import Data.Foldable (toList)
 import Data.Fix (Fix(..))
+import Data.Text (Text)
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
-import Dhall.Core (Chunks(..), Const(..), DhallDouble(..), Expr(..), MultiLet(..), Var(..))
+import Dhall.Core
+    ( Binding(..)
+    , Chunks(..)
+    , DhallDouble(..)
+    , Expr(..)
+    , MultiLet(..)
+    , PreferAnnotation(..)
+    , Var(..)
+    )
+import Lens.Family (toListOf)
 import Nix.Atoms (NAtom(..))
 import Nix.Expr
     ( Antiquoted(..)
@@ -104,6 +115,7 @@ import Nix.Expr
     , NBinaryOp(..)
     , NExprF(..)
     , NKeyName(..)
+    , NRecordType(..)
     , NString(..)
     , Params(..)
     , (@@)
@@ -114,6 +126,7 @@ import Nix.Expr
 import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Map
+import qualified Dhall.Optics
 import qualified NeatInterpolation
 import qualified Nix
 
@@ -206,15 +219,84 @@ Right x: y: x + y
     the expression to `dhallToNix`
 -}
 dhallToNix :: Expr s Void -> Either CompileError (Fix NExprF)
-dhallToNix e = loop (Dhall.Core.normalize e)
+dhallToNix e =
+    loop (rewriteShadowed (Dhall.Core.normalize e))
   where
-    loop (Const _) = return (Fix (NSet []))
+    untranslatable = Fix (NSet NNonRecursive [])
+
+    -- This is an intermediate utility used to remove all occurrences of
+    -- shadowing (since Nix does not support references to shadowed variables)
+    --
+    -- This finds how many bound variables of the same name that we need to
+    -- descend past to reach the "deepest" reference to the current bound
+    -- variable.  In other words, the result is the "depth" of the deepest
+    -- reference.
+    --
+    -- If `Nothing` then the current bound variable doesn't need to be renamed.
+    -- If any other number, then rename the variable to include the maximum
+    -- depth.
+    maximumDepth :: Var -> Expr s Void -> Maybe Int
+    maximumDepth v@(V x n) (Lam x' a b)
+        | x == x' =
+            max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
+    maximumDepth v@(V x n) (Pi x' a b)
+        | x == x' =
+            max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
+    maximumDepth (V x n) (Let (Binding { variable = x' }) a)
+        | x == x' = fmap (+ 1) (maximumDepth (V x (n + 1)) a)
+    maximumDepth v (Var v')
+        | v == v' = Just 0
+    maximumDepth v expression =
+        foldr max Nothing
+            (map
+                (maximumDepth v)
+                (toListOf Dhall.Core.subExpressions expression)
+            )
+
+    -- Higher-level utility that builds on top of `maximumDepth` to rename a
+    -- variable if there are shadowed references to that variable
+    rename :: (Text, Expr s Void) -> Maybe (Text, Expr s Void)
+    rename (x, expression) =
+        case maximumDepth (V x 0) expression of
+            Nothing ->
+                Nothing
+            Just 0 ->
+                Nothing
+            Just n ->
+                Just
+                  ( x'
+                  , Dhall.Core.subst (V x 0) (Var (V x' 0)) (Dhall.Core.shift 1 (V x' 0) expression)
+                  )
+              where
+                x' = x <> Data.Text.pack (show n)
+
+    renameShadowed :: Expr s Void -> Maybe (Expr s Void)
+    renameShadowed (Lam x a b) = do
+        (x', b') <- rename (x, b)
+
+        return (Lam x' a b')
+    renameShadowed (Pi x a b) = do
+        (x', b') <- rename (x, b)
+
+        return (Pi x' a b')
+    renameShadowed (Let Binding{ variable = x, .. } a) = do
+        (x' , a') <- rename (x, a)
+
+        return (Let Binding{ variable = x', .. } a')
+    renameShadowed _ = do
+        Nothing
+
+    -- Even higher-level utility that renames all shadowed references
+    rewriteShadowed =
+        Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
+
+    loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Fix (NSym a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam a _ c) = do
         c' <- loop c
         return (Fix (NAbs (Param a) c'))
-    loop (Pi _ _ _) = return (Fix (NSet []))
+    loop (Pi _ _ _) = return untranslatable
     -- None needs a type to convert to an Optional
     loop (App None _) = do
       return (Fix (NConstant NNull))
@@ -237,7 +319,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         b' <- loop b
         return (Fix (NLet (toList as') b'))
     loop (Annot a _) = loop a
-    loop Bool = return (Fix (NSet []))
+    loop Bool = return untranslatable
     loop (BoolLit b) = return (Fix (NConstant (NBool b)))
     loop (BoolAnd a b) = do
         a' <- loop a
@@ -260,7 +342,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         b' <- loop b
         c' <- loop c
         return (Fix (NIf a' b' c'))
-    loop Natural = return (Fix (NSet []))
+    loop Natural = return untranslatable
     loop (NaturalLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
     loop NaturalFold = do
         let e0 = Fix (NBinary NMinus "n" (Fix (NConstant (NInt 1))))
@@ -272,7 +354,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return (Fix (NLet [NamedVar ["naturalFold"] e5 Nix.nullPos] "naturalFold"))
     loop NaturalBuild = do
         let e0 = Fix (NBinary NPlus "n" (Fix (NConstant (NInt 1))))
-        let e1 = Fix (NBinary NApp (Fix (NBinary NApp "k" (Fix (NSet [])))) (Fix (NAbs "n" e0)))
+        let e1 = Fix (NBinary NApp (Fix (NBinary NApp "k" untranslatable)) (Fix (NAbs "n" e0)))
         return (Fix (NAbs "k" (Fix (NBinary NApp e1 (Fix (NConstant (NInt 0)))))))
     loop NaturalIsZero = do
         let e0 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 0))))
@@ -319,7 +401,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NMult a' b'))
-    loop Integer = return (Fix (NSet []))
+    loop Integer = return untranslatable
     loop (IntegerLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
     loop IntegerClamp = do
         let e0 = Fix (NConstant (NInt 0))
@@ -338,11 +420,11 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         return e3
     loop IntegerToDouble = do
         return (Fix (NAbs "x" "x"))
-    loop Double = return (Fix (NSet []))
+    loop Double = return untranslatable
     loop (DoubleLit (DhallDouble n)) = return (Fix (NConstant (NFloat (realToFrac n))))
     loop DoubleShow = do
         return "toString"
-    loop Text = return (Fix (NSet []))
+    loop Text = return untranslatable
     loop (TextLit (Chunks abs_ c)) = do
         let process (a, b) = do
                 b' <- loop b
@@ -386,7 +468,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
 
         return ("t" ==> quoted)
-    loop List = return (Fix (NAbs "t" (Fix (NSet []))))
+    loop List = return (Fix (NAbs "t" untranslatable))
     loop (ListAppend a b) = do
         a' <- loop a
         b' <- loop b
@@ -395,7 +477,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         bs' <- mapM loop (toList bs)
         return (Fix (NList bs'))
     loop ListBuild = do
-        let e0 = Fix (NBinary NApp "k" (Fix (NSet [])))
+        let e0 = Fix (NBinary NApp "k" untranslatable)
         let e1 = Fix (NBinary NConcat (Fix (NList ["x"])) "xs")
         let e2 = Fix (NBinary NApp e0 (Fix (NAbs "x" (Fix (NAbs "xs" e1)))))
         let e3 = Fix (NAbs "k" (Fix (NBinary NApp e2 (Fix (NList [])))))
@@ -427,7 +509,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
                 [ NamedVar ["index"] "i" Nix.nullPos
                 , NamedVar ["value"] e1  Nix.nullPos
                 ]
-        let e3 = Fix (NBinary NApp "builtins.genList" (Fix (NAbs "i" (Fix (NSet e2)))))
+        let e3 = Fix (NBinary NApp "builtins.genList" (Fix (NAbs "i" (Fix (NSet NNonRecursive e2)))))
         return (Fix (NAbs "t" (Fix (NAbs "xs" (Fix (NBinary NApp e3 e0))))))
     loop ListReverse = do
         let e0 = Fix (NBinary NMinus "n" "i")
@@ -438,31 +520,18 @@ dhallToNix e = loop (Dhall.Core.normalize e)
         let e5 = Fix (NBinary NApp "builtins.length" "xs")
         let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar ["n"] e5 Nix.nullPos] e4)))
         return (Fix (NAbs "t" e6))
-    loop Optional = return (Fix (NAbs "t" (Fix (NSet []))))
+    loop Optional = return (Fix (NAbs "t" untranslatable))
     loop (Some a) = loop a
     loop None = return (Fix (NConstant NNull))
-    loop OptionalFold = do
-        let e0 = Fix (NBinary NEq "x" (Fix (NConstant NNull)))
-        let e1 = Fix (NIf e0 "nothing" (Fix (NBinary NApp "just" "x")))
-        let e2 = Fix (NAbs "t" (Fix (NAbs "just" (Fix (NAbs "nothing" e1)))))
-        return (Fix (NAbs "t" (Fix (NAbs "x" e2))))
-    loop OptionalBuild = do
-        let e0 = Pi "nothing" "optional" "optional"
-        let e1 = Pi "just" (Pi "_" "a" "optional") e0
-        let e2 = Pi "optional" (Const Type) e1
-        let e3 = App None "a"
-        let e4 = Lam "x" "a" (Some "x")
-        let e5 = App (App (App "f" (App Optional "a")) e4) e3
-        loop (Lam "a" (Const Type) (Lam "f" e2 e5))
-    loop (Record _) = return (Fix (NSet []))
+    loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse loop a
         let a'' = do
                 (k, v) <- Dhall.Map.toList a'
                 return (NamedVar [StaticKey k] v Nix.nullPos)
-        return (Fix (NSet a''))
-    loop (Union _) = return (Fix (NSet []))
-    loop (Combine a b) = do
+        return (Fix (NSet NNonRecursive a''))
+    loop (Union _) = return untranslatable
+    loop (Combine _ a b) = do
         a' <- loop a
         b' <- loop b
         let e0 = Fix (NBinary NApp (Fix (NBinary NApp "map" "toKeyVals")) "ks")
@@ -480,7 +549,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
                         [ NamedVar ["name" ] "k" Nix.nullPos
                         , NamedVar ["value"] v   Nix.nullPos
                         ]
-                in  Fix (NList [Fix (NSet bindings)])
+                in  Fix (NList [Fix (NSet NNonRecursive bindings)])
 
         let e3 = Fix (NBinary NApp (Fix (NBinary NApp "combine" valL)) valR)
         let e4 = Fix (NBinary NApp "builtins.isAttrs" valL)
@@ -503,7 +572,7 @@ dhallToNix e = loop (Dhall.Core.normalize e)
 
         let e11 = Fix (NBinary NApp (Fix (NBinary NApp "combine" a')) b')
         return (Fix (NLet [NamedVar ["combine"] combine Nix.nullPos] e11))
-    loop (CombineTypes _ _) = return (Fix (NSet []))
+    loop (CombineTypes _ _) = return untranslatable
     loop (Merge a b _) = do
         a' <- loop a
         b' <- loop b
@@ -516,15 +585,15 @@ dhallToNix e = loop (Dhall.Core.normalize e)
                 [ NamedVar [StaticKey "mapKey"] "k" Nix.nullPos
                 , NamedVar [StaticKey "mapValue"] v Nix.nullPos
                 ]
-        let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet setBindings)))))
+        let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet NNonRecursive setBindings)))))
         let toMap = Fix (NAbs "kvs" (Fix (NBinary NApp map_ ks)))
         return (Fix (NBinary NApp toMap a'))
-    loop (Prefer a b) = do
-        a' <- loop a
+    loop (Prefer _ b c) = do
         b' <- loop b
-        return (Fix (NBinary NUpdate a' b'))
+        c' <- loop c
+        return (Fix (NBinary NUpdate b' c'))
     loop (RecordCompletion a b) = do
-        loop (Annot (Prefer (Field a "default") b) (Field a "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field a "default") b) (Field a "Type"))
     loop (Field (Union kts) k) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we
@@ -551,13 +620,15 @@ dhallToNix e = loop (Dhall.Core.normalize e)
     loop (Project a (Left b)) = do
         a' <- loop a
         let b' = fmap StaticKey (toList b)
-        return (Fix (NSet [Inherit (Just a') b' Nix.nullPos]))
+        return (Fix (NSet NNonRecursive [Inherit (Just a') b' Nix.nullPos]))
     loop (Project _ (Right _)) = do
         Left CannotProjectByType
     loop (Assert _) = do
-        return (Fix (NSet []))
+        return untranslatable
     loop (Equivalent _ _) = do
-        return (Fix (NSet []))
+        return untranslatable
+    loop a@With{} = do
+        loop (Dhall.Core.desugarWith a)
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x

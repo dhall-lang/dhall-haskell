@@ -2,13 +2,14 @@
 
 module Dhall.Test.Import where
 
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Dhall.Import (MissingImports(..))
-import Dhall.Parser (SourcedException(..))
-import Prelude hiding (FilePath)
-import Test.Tasty (TestTree)
-import Turtle (FilePath, (</>))
+import Control.Exception (SomeException)
+import Data.Monoid       ((<>))
+import Data.Text         (Text)
+import Dhall.Import      (MissingImports (..))
+import Dhall.Parser      (SourcedException (..))
+import Prelude           hiding (FilePath)
+import Test.Tasty        (TestTree)
+import Turtle            (FilePath, (</>))
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad                    as Monad
@@ -61,28 +62,49 @@ successTest path = do
 
     let directoryString = FilePath.takeDirectory pathString
 
-    Tasty.HUnit.testCase pathString (do
+    let expectedFailures = []
+
+    Test.Util.testCase path expectedFailures (do
 
         text <- Text.IO.readFile pathString
 
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
 
-        let setCache =
-                Turtle.export "XDG_CACHE_HOME" "dhall-lang/tests/import/cache"
+        let originalCache = "dhall-lang/tests/import/cache"
+
+        let setCache = Turtle.export "XDG_CACHE_HOME"
 
         let unsetCache = Turtle.unset "XDG_CACHE_HOME"
 
         let load =
                 State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
 
-        if Turtle.filename (Turtle.fromText path) == "hashFromCacheA.dhall"
-            then do
-                setCache
-                _ <- load
-                unsetCache
-            else do
-                _ <- load
-                return ()
+        let usesCache = [ "hashFromCacheA.dhall"
+                        , "unit/asLocation/HashA.dhall"
+                        , "unit/IgnorePoisonedCacheA.dhall"]
+
+        let endsIn path' = not $ null $ Turtle.match (Turtle.ends path') path
+
+        let buildNewCache = do
+                                tempdir <- Turtle.mktempdir "/tmp" "dhall-cache"
+                                Turtle.liftIO $ Turtle.cptree originalCache tempdir
+                                return tempdir
+
+        let runTest =
+                if any endsIn usesCache
+                    then Turtle.runManaged $ do
+                        cacheDir <- buildNewCache
+                        setCache $ Turtle.format Turtle.fp cacheDir
+                        _ <- Turtle.liftIO load
+                        unsetCache
+                    else do
+                        _ <- load
+                        return ()
+
+        let handler :: SomeException -> IO ()
+            handler exception = Tasty.HUnit.assertFailure (show exception)
+
+        Exception.handle handler runTest
 
         return () )
 

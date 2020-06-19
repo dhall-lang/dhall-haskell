@@ -20,41 +20,49 @@ module Dhall.Main
     , main
     ) where
 
-import Control.Applicative (optional, (<|>))
-import Control.Exception (Handler(..), SomeException)
-import Control.Monad (when)
-import Data.Bifunctor (first)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid ((<>))
-import Data.Text (Text)
+import Control.Applicative       (optional, (<|>))
+import Control.Exception         (Handler (..), SomeException)
+import Control.Monad             (when)
+import Data.List.NonEmpty        (NonEmpty (..))
+import Data.Monoid               ((<>))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Void (Void)
-import Dhall.Freeze (Intent(..), Scope(..))
-import Dhall.Import (Imported(..), Depends(..), SemanticCacheMode(..), _semanticCacheMode)
-import Dhall.Parser (Src)
-import Dhall.Pretty (Ann, CharacterSet(..), annToAnsiStyle)
-import Dhall.TypeCheck (Censored(..), DetailedTypeError(..), TypeError)
-import Dhall.Version (dhallVersionString)
-import Options.Applicative (Parser, ParserInfo)
-import System.Exit (ExitCode, exitFailure)
-import System.IO (Handle)
-import Text.Dot ((.->.))
+import Data.Void                 (Void)
+import Dhall.Freeze              (Intent (..), Scope (..))
+import Dhall.Import
+    ( Depends (..)
+    , Imported (..)
+    , SemanticCacheMode (..)
+    , _semanticCacheMode
+    )
+import Dhall.Parser              (Src)
+import Dhall.Pretty              (Ann, CharacterSet (..), annToAnsiStyle)
+import Dhall.TypeCheck
+    ( Censored (..)
+    , DetailedTypeError (..)
+    , TypeError
+    )
+import Dhall.Version             (dhallVersionString)
+import Options.Applicative       (Parser, ParserInfo)
+import System.Exit               (ExitCode, exitFailure)
+import System.IO                 (Handle)
+import Text.Dot                  ((.->.))
 
 import Dhall.Core
-    ( Expr(Annot)
-    , Import(..)
-    , ImportHashed(..)
-    , ImportType(..)
-    , URL(..)
+    ( Expr (Annot)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    , URL (..)
     , pretty
     )
 import Dhall.Util
-    ( Censor(..)
-    , CheckFailed(..)
+    ( Censor (..)
+    , CheckFailed (..)
     , Header (..)
-    , Input(..)
-    , OutputMode(..)
-    , Output(..)
+    , Input (..)
+    , Output (..)
+    , OutputMode (..)
     )
 
 import qualified Codec.CBOR.JSON
@@ -82,11 +90,10 @@ import qualified Dhall.Freeze
 import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
-import qualified Dhall.Parser                              as Parser
 import qualified Dhall.Map
-import qualified Dhall.Tags
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
+import qualified Dhall.Tags
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
@@ -94,8 +101,8 @@ import qualified Options.Applicative
 import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.Console.ANSI
 import qualified System.Exit                               as Exit
-import qualified System.IO
 import qualified System.FilePath
+import qualified System.IO
 import qualified Text.Dot
 import qualified Text.Pretty.Simple
 
@@ -149,16 +156,33 @@ data Mode
           , followSymlinks :: Bool
           }
     | Encode { file :: Input, json :: Bool }
-    | Decode { file :: Input, json :: Bool }
+    | Decode { file :: Input, json :: Bool, quiet :: Bool }
     | Text { file :: Input }
     | DirectoryTree { file :: Input, path :: FilePath }
-    | SyntaxTree { file :: Input }
+    | SyntaxTree { file :: Input, noted :: Bool }
 
 data ResolveMode
     = Dot
     | ListTransitiveDependencies
     | ListImmediateDependencies
 
+-- | Groups of subcommands
+data Group
+    = Manipulate
+    | Generate
+    | Interpret
+    | Convert
+    | Miscellaneous
+    | Debugging
+
+groupDescription :: Group -> String
+groupDescription group = case group of
+    Manipulate -> "Manipulate Dhall code"
+    Generate -> "Generate other formats from Dhall"
+    Interpret -> "Interpret Dhall"
+    Convert -> "Convert Dhall to and from its binary representation"
+    Miscellaneous -> "Miscellaneous"
+    Debugging -> "Debugging this interpreter"
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
@@ -181,12 +205,12 @@ parseOptions =
         f True  = Censor
         f False = NoCensor
 
-subcommand' :: Bool -> String -> String -> Parser a -> Parser a
-subcommand' internal name description parser =
+subcommand :: Group -> String -> String -> Parser a -> Parser a
+subcommand group name description parser =
     Options.Applicative.hsubparser
         (   Options.Applicative.command name parserInfo
         <>  Options.Applicative.metavar name
-        <>  if internal then Options.Applicative.internal else mempty
+        <>  Options.Applicative.commandGroup (groupDescription group)
         )
   where
     parserInfo =
@@ -195,78 +219,88 @@ subcommand' internal name description parser =
             <>  Options.Applicative.progDesc description
             )
 
-subcommand :: String -> String -> Parser a -> Parser a
-subcommand = subcommand' False
-
-internalSubcommand :: String -> String -> Parser a -> Parser a
-internalSubcommand = subcommand' True
-
 parseMode :: Parser Mode
 parseMode =
         subcommand
-            "version"
-            "Display version"
-            (pure Version)
-    <|> subcommand
-            "resolve"
-            "Resolve an expression's imports"
-            (Resolve <$> parseFile <*> parseResolveMode <*> parseSemanticCacheMode)
-    <|> subcommand
-            "type"
-            "Infer an expression's type"
-            (Type <$> parseFile <*> parseQuiet <*> parseSemanticCacheMode)
-    <|> subcommand
-            "normalize"
-            "Normalize an expression"
-            (Normalize <$> parseFile <*> parseAlpha)
-    <|> subcommand
-            "repl"
-            "Interpret expressions in a REPL"
-            (pure Repl)
-    <|> subcommand
-            "diff"
-            "Render the difference between the normal form of two expressions"
-            (Diff <$> argument "expr1" <*> argument "expr2")
-    <|> subcommand
-            "hash"
-            "Compute semantic hashes for Dhall expressions"
-            (Hash <$> parseFile)
-    <|> subcommand
-            "lint"
-            "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseInplace <*> parseCheck)
-    <|> subcommand
-            "tags"
-            "Generate etags file"
-            (Tags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
-    <|> subcommand
+            Manipulate
             "format"
             "Standard code formatter for the Dhall language"
-            (Format <$> parseInplace <*> parseCheck)
+            (Format <$> parseInplace <*> parseCheck "formatted")
     <|> subcommand
+            Manipulate
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck)
+            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen")
     <|> subcommand
-            "encode"
-            "Encode a Dhall expression to binary"
-            (Encode <$> parseFile <*> parseJSONFlag)
+            Manipulate
+            "lint"
+            "Improve Dhall code by using newer language features and removing dead code"
+            (Lint <$> parseInplace <*> parseCheck "linted")
     <|> subcommand
-            "decode"
-            "Decode a Dhall expression from binary"
-            (Decode <$> parseFile <*> parseJSONFlag)
-    <|> subcommand
+            Generate
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
             (Text <$> parseFile)
     <|> subcommand
+            Generate
             "to-directory-tree"
             "Convert nested records of Text literals into a directory tree"
             (DirectoryTree <$> parseFile <*> parseDirectoryTreeOutput)
-    <|> internalSubcommand
+    <|> subcommand
+            Interpret
+            "resolve"
+            "Resolve an expression's imports"
+            (Resolve <$> parseFile <*> parseResolveMode <*> parseSemanticCacheMode)
+    <|> subcommand
+            Interpret
+            "type"
+            "Infer an expression's type"
+            (Type <$> parseFile <*> parseQuiet <*> parseSemanticCacheMode)
+    <|> subcommand
+            Interpret
+            "normalize"
+            "Normalize an expression"
+            (Normalize <$> parseFile <*> parseAlpha)
+    <|> subcommand
+            Convert
+            "encode"
+            "Encode a Dhall expression to binary"
+            (Encode <$> parseFile <*> parseJSONFlag)
+    <|> subcommand
+            Convert
+            "decode"
+            "Decode a Dhall expression from binary"
+            (Decode <$> parseFile <*> parseJSONFlag <*> parseQuiet)
+    <|> subcommand
+            Miscellaneous
+            "repl"
+            "Interpret expressions in a REPL"
+            (pure Repl)
+    <|> subcommand
+            Miscellaneous
+            "diff"
+            "Render the difference between the normal form of two expressions"
+            (Diff <$> argument "expr1" <*> argument "expr2")
+    <|> subcommand
+            Miscellaneous
+            "hash"
+            "Compute semantic hashes for Dhall expressions"
+            (Hash <$> parseFile)
+    <|> subcommand
+            Miscellaneous
+            "tags"
+            "Generate etags file"
+            (Tags <$> parseInput <*> parseTagsOutput <*> parseSuffixes <*> parseFollowSymlinks)
+    <|> subcommand
+            Miscellaneous
+            "version"
+            "Display version"
+            (pure Version)
+    <|> subcommand
+            Debugging
             "haskell-syntax-tree"
             "Output the parsed syntax tree (for debugging)"
-            (SyntaxTree <$> parseFile)
+            (SyntaxTree <$> parseFile <*> parseNoted)
     <|> (   Default
         <$> parseFile
         <*> parseOutput
@@ -353,7 +387,7 @@ parseMode =
     parseQuiet =
         Options.Applicative.switch
             (   Options.Applicative.long "quiet"
-            <>  Options.Applicative.help "Don't print the inferred type"
+            <>  Options.Applicative.help "Don't print the result"
             )
 
     parseInplace = fmap f (optional p)
@@ -425,7 +459,7 @@ parseMode =
         <>  Options.Applicative.help "Add fallback unprotected imports when using integrity checks purely for caching purposes"
         )
 
-    parseCheck = fmap adapt switch
+    parseCheck processed = fmap adapt switch
       where
         adapt True  = Check
         adapt False = Write
@@ -433,7 +467,7 @@ parseMode =
         switch =
             Options.Applicative.switch
             (   Options.Applicative.long "check"
-            <>  Options.Applicative.help "Only check if the input is formatted"
+            <>  Options.Applicative.help ("Only check if the input is " <> processed)
             )
 
     parseDirectoryTreeOutput =
@@ -441,6 +475,12 @@ parseMode =
             (   Options.Applicative.long "output"
             <>  Options.Applicative.help "The destination path to create"
             <>  Options.Applicative.metavar "PATH"
+            )
+
+    parseNoted =
+        Options.Applicative.switch
+            (   Options.Applicative.long "noted"
+            <>  Options.Applicative.help "Print `Note` constructors"
             )
 
 -- | `ParserInfo` for the `Options` type
@@ -474,8 +514,7 @@ command (Options {..}) = do
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
-    let getExpression          = Dhall.Util.getExpression          censor
-    let getExpressionAndHeader = Dhall.Util.getExpressionAndHeader censor
+    let getExpression = Dhall.Util.getExpression censor
 
     let handle io =
             Control.Exception.catches io
@@ -712,42 +751,34 @@ command (Options {..}) = do
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
         Lint {..} -> do
+            originalText <- case input of
+                InputFile file -> Data.Text.IO.readFile file
+                StandardInput  -> Data.Text.IO.getContents
+
+            (Header header, expression) <- do
+                Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+
+            let lintedExpression = Dhall.Lint.lint expression
+
+            let doc =   Pretty.pretty header
+                    <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
+
+            let stream = Dhall.Pretty.layout doc
+
+            let modifiedText = Pretty.Text.renderStrict stream <> "\n"
+
             case outputMode of
                 Write -> do
-                    (Header header, expression) <- do
-                        getExpressionAndHeader input
-
-                    let lintedExpression = Dhall.Lint.lint expression
-
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
-
                     case input of
-                        InputFile file -> writeDocToFile file doc
+                        InputFile file ->
+                            if originalText == modifiedText
+                                then return ()
+                                else writeDocToFile file doc
 
-                        StandardInput -> renderDoc System.IO.stdout doc
+                        StandardInput ->
+                            renderDoc System.IO.stdout doc
 
                 Check -> do
-                    originalText <- case input of
-                        InputFile file -> Data.Text.IO.readFile file
-                        StandardInput  -> Data.Text.IO.getContents
-
-                    let name = case input of
-                            InputFile file -> file
-                            StandardInput  -> "(stdin)"
-
-                    (Header header, expression) <- do
-                        Dhall.Core.throws (first Parser.censor (Parser.exprAndHeaderFromText name originalText))
-
-                    let lintedExpression = Dhall.Lint.lint expression
-
-                    let doc =   Pretty.pretty header
-                            <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
-
-                    let stream = Dhall.Pretty.layout doc
-
-                    let modifiedText = Pretty.Text.renderStrict stream <> "\n"
-
                     if originalText == modifiedText
                         then return ()
                         else do
@@ -795,9 +826,15 @@ command (Options {..}) = do
                         Dhall.Core.throws (Dhall.Binary.decodeExpression bytes)
 
 
-            let doc = Dhall.Pretty.prettyCharacterSet characterSet (Dhall.Core.renote expression :: Expr Src Import)
+            if quiet
+                then return ()
+                else do
+                    let doc =
+                            Dhall.Pretty.prettyCharacterSet
+                                characterSet
+                                (Dhall.Core.renote expression :: Expr Src Import)
 
-            renderDoc System.IO.stdout doc
+                    renderDoc System.IO.stdout doc
 
         Text {..} -> do
             expression <- getExpression file
@@ -845,10 +882,12 @@ command (Options {..}) = do
         SyntaxTree {..} -> do
             expression <- getExpression file
 
-            let denoted :: Expr Void Import
-                denoted = Dhall.Core.denote expression
-
-            Text.Pretty.Simple.pPrintNoColor denoted
+            if noted then
+                Text.Pretty.Simple.pPrintNoColor expression
+            else
+                let denoted :: Expr Void Import
+                    denoted = Dhall.Core.denote expression
+                in Text.Pretty.Simple.pPrintNoColor denoted
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

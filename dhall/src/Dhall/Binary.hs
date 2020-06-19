@@ -44,31 +44,33 @@ import Dhall.Syntax
     , ImportMode(..)
     , ImportType(..)
     , MultiLet(..)
+    , PreferAnnotation(..)
     , Scheme(..)
     , URL(..)
     , Var(..)
     )
 
-import Data.Foldable (toList, foldl')
+import Data.Foldable (toList)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import GHC.Float (double2Float, float2Double)
+import Numeric.Half (fromHalf, toHalf)
 
+import qualified Codec.CBOR.ByteArray
 import qualified Codec.CBOR.Decoding  as Decoding
 import qualified Codec.CBOR.Encoding  as Encoding
 import qualified Codec.CBOR.Read      as Read
 import qualified Codec.Serialise      as Serialise
-import qualified Control.Monad        as Monad
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Short
 import qualified Data.Sequence
-import qualified Data.Text            as Text
-import qualified Dhall.Syntax
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
+import qualified Dhall.Syntax         as Syntax
 import qualified Text.Printf          as Printf
 
 {-| Supported version strings
@@ -126,24 +128,24 @@ decodeExpressionInternal decodeEmbed = go
 
         case tokenType₀ of
             TypeUInt -> do
-                !n <- Decoding.decodeWord
+                !n <- fromIntegral <$> Decoding.decodeWord
 
-                return (Var (V "_" (fromIntegral n)))
+                return (Var (V "_" n))
 
             TypeUInt64 -> do
-                !n <- Decoding.decodeWord64
+                !n <- fromIntegral <$> Decoding.decodeWord64
 
-                return (Var (V "_" (fromIntegral n)))
+                return (Var (V "_" n))
 
             TypeFloat16 -> do
-                !n <- Decoding.decodeFloat
+                !n <- float2Double <$> Decoding.decodeFloat
 
-                return (DoubleLit (DhallDouble (float2Double n)))
+                return (DoubleLit (DhallDouble n))
 
             TypeFloat32 -> do
-                !n <- Decoding.decodeFloat
+                !n <- float2Double <$> Decoding.decodeFloat
 
-                return (DoubleLit (DhallDouble (float2Double n)))
+                return (DoubleLit (DhallDouble n))
 
             TypeFloat64 -> do
                 !n <- Decoding.decodeDouble
@@ -156,44 +158,44 @@ decodeExpressionInternal decodeEmbed = go
                 return (BoolLit b)
 
             TypeString -> do
-                s <- Decoding.decodeString
+                !ba <- Decoding.decodeUtf8ByteArray
 
-                case s of
-                    "Natural/build"     -> return NaturalBuild
-                    "Natural/fold"      -> return NaturalFold
-                    "Natural/isZero"    -> return NaturalIsZero
-                    "Natural/even"      -> return NaturalEven
-                    "Natural/odd"       -> return NaturalOdd
-                    "Natural/toInteger" -> return NaturalToInteger
-                    "Natural/show"      -> return NaturalShow
-                    "Natural/subtract"  -> return NaturalSubtract
-                    "Integer/toDouble"  -> return IntegerToDouble
-                    "Integer/clamp"     -> return IntegerClamp
-                    "Integer/negate"    -> return IntegerNegate
-                    "Integer/show"      -> return IntegerShow
-                    "Double/show"       -> return DoubleShow
-                    "List/build"        -> return ListBuild
-                    "List/fold"         -> return ListFold
-                    "List/length"       -> return ListLength
-                    "List/head"         -> return ListHead
-                    "List/last"         -> return ListLast
-                    "List/indexed"      -> return ListIndexed
-                    "List/reverse"      -> return ListReverse
-                    "Optional/fold"     -> return OptionalFold
-                    "Optional/build"    -> return OptionalBuild
-                    "Bool"              -> return Bool
-                    "Optional"          -> return Optional
-                    "None"              -> return None
-                    "Natural"           -> return Natural
-                    "Integer"           -> return Integer
-                    "Double"            -> return Double
-                    "Text"              -> return Text
-                    "Text/show"         -> return TextShow
-                    "List"              -> return List
-                    "Type"              -> return (Const Type)
-                    "Kind"              -> return (Const Kind)
-                    "Sort"              -> return (Const Sort)
-                    _                   -> die ("Unrecognized built-in: " <> Text.unpack s)
+                let sb = Codec.CBOR.ByteArray.toShortByteString ba
+
+                case Data.ByteString.Short.length sb of
+                    4  | sb == "Bool"              -> return Bool
+                       | sb == "List"              -> return List
+                       | sb == "None"              -> return None
+                       | sb == "Text"              -> return Text
+                       | sb == "Type"              -> return (Const Type)
+                       | sb == "Kind"              -> return (Const Kind)
+                       | sb == "Sort"              -> return (Const Sort)
+                    6  | sb == "Double"            -> return Double
+                    7  | sb == "Integer"           -> return Integer
+                       | sb == "Natural"           -> return Natural
+                    8  | sb == "Optional"          -> return Optional
+                    9  | sb == "List/fold"         -> return ListFold
+                       | sb == "List/head"         -> return ListHead
+                       | sb == "List/last"         -> return ListLast
+                       | sb == "Text/show"         -> return TextShow
+                    10 | sb == "List/build"        -> return ListBuild
+                    11 | sb == "Double/show"       -> return DoubleShow
+                       | sb == "List/length"       -> return ListLength
+                       | sb == "Natural/odd"       -> return NaturalOdd
+                    12 | sb == "Integer/show"      -> return IntegerShow
+                       | sb == "List/indexed"      -> return ListIndexed
+                       | sb == "List/reverse"      -> return ListReverse
+                       | sb == "Natural/even"      -> return NaturalEven
+                       | sb == "Natural/fold"      -> return NaturalFold
+                       | sb == "Natural/show"      -> return NaturalShow
+                    13 | sb == "Integer/clamp"     -> return IntegerClamp
+                       | sb == "Natural/build"     -> return NaturalBuild
+                    14 | sb == "Integer/negate"    -> return IntegerNegate
+                       | sb == "Natural/isZero"    -> return NaturalIsZero
+                    16 | sb == "Integer/toDouble"  -> return IntegerToDouble
+                       | sb == "Natural/subtract"  -> return NaturalSubtract
+                    17 | sb == "Natural/toInteger" -> return NaturalToInteger
+                    _                              -> die ("Unrecognized built-in: " <> show sb)
 
             TypeListLen -> do
                 len <- Decoding.decodeListLen
@@ -216,14 +218,14 @@ decodeExpressionInternal decodeEmbed = go
 
                         case tokenType₂ of
                             TypeUInt -> do
-                                !n <- Decoding.decodeWord
+                                !n <- fromIntegral <$> Decoding.decodeWord
 
-                                return (Var (V x (fromIntegral n)))
+                                return (Var (V x n))
 
                             TypeUInt64 -> do
-                                !n <- Decoding.decodeWord64
+                                !n <- fromIntegral <$> Decoding.decodeWord64
 
-                                return (Var (V x (fromIntegral n)))
+                                return (Var (V x n))
 
                             _ -> do
                                 die ("Unexpected token type for variable index: " <> show tokenType₂)
@@ -233,15 +235,19 @@ decodeExpressionInternal decodeEmbed = go
 
                         case tag of
                             0 -> do
-                                f <- go
+                                !f <- go
 
-                                xs <- Monad.replicateM (len - 2) go
+                                let loop n !acc
+                                        | n <= 0    = return acc
+                                        | otherwise = do
+                                              !x <- go
+                                              loop (n - 1) (App acc x)
 
-                                if null xs
+                                let nArgs = len - 2
+
+                                if nArgs <= 0
                                     then die "Non-standard encoding of a function with no arguments"
-                                    else return ()
-
-                                return (foldl' App f xs)
+                                    else loop nArgs f
 
                             1 -> do
                                 case len of
@@ -305,8 +311,8 @@ decodeExpressionInternal decodeEmbed = go
                                     5  -> return NaturalTimes
                                     6  -> return TextAppend
                                     7  -> return ListAppend
-                                    8  -> return Combine
-                                    9  -> return Prefer
+                                    8  -> return (Combine Nothing)
+                                    9  -> return (Prefer PreferFromSource)
                                     10 -> return CombineTypes
                                     11 -> return ImportAlt
                                     12 -> return Equivalent
@@ -329,8 +335,8 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         Decoding.decodeNull
 
-                                        xs <- Monad.replicateM (len - 2) go
-                                        return (ListLit Nothing (Data.Sequence.fromList xs))
+                                        xs <- Data.Sequence.replicateA (len - 2) go
+                                        return (ListLit Nothing xs)
 
                             5 -> do
                                 Decoding.decodeNull
@@ -359,7 +365,7 @@ decodeExpressionInternal decodeEmbed = go
                             7 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xTs <- Monad.replicateM mapLength $ do
+                                xTs <- replicateDecoder mapLength $ do
                                     x <- Decoding.decodeString
 
                                     _T <- go
@@ -371,7 +377,7 @@ decodeExpressionInternal decodeEmbed = go
                             8 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xts <- Monad.replicateM mapLength $ do
+                                xts <- replicateDecoder mapLength $ do
                                     x <- Decoding.decodeString
 
                                     t <- go
@@ -410,7 +416,7 @@ decodeExpressionInternal decodeEmbed = go
                                                 die ("Unexpected token type for projection: " <> show tokenType₂)
 
                                     _ -> do
-                                        xs <- Monad.replicateM (len - 2) Decoding.decodeString
+                                        xs <- replicateDecoder (len - 2) Decoding.decodeString
 
                                         return (Left (Dhall.Set.fromList xs))
 
@@ -419,7 +425,7 @@ decodeExpressionInternal decodeEmbed = go
                             11 -> do
                                 mapLength <- Decoding.decodeMapLen
 
-                                xTs <- Monad.replicateM mapLength $ do
+                                xTs <- replicateDecoder mapLength $ do
                                     x <- Decoding.decodeString
 
                                     tokenType₂ <- Decoding.peekTokenType
@@ -453,18 +459,18 @@ decodeExpressionInternal decodeEmbed = go
 
                                 case tokenType₂ of
                                     TypeUInt -> do
-                                        n <- Decoding.decodeWord
+                                        !n <- fromIntegral <$> Decoding.decodeWord
 
-                                        return (NaturalLit (fromIntegral n))
+                                        return (NaturalLit n)
 
                                     TypeUInt64 -> do
-                                        n <- Decoding.decodeWord64
+                                        !n <- fromIntegral <$> Decoding.decodeWord64
 
-                                        return (NaturalLit (fromIntegral n))
+                                        return (NaturalLit n)
 
                                     TypeInteger -> do
-                                        n <- Decoding.decodeInteger
-                                        return (NaturalLit (fromIntegral n))
+                                        !n <- fromIntegral <$> Decoding.decodeInteger
+                                        return (NaturalLit n)
 
                                     _ -> do
                                         die ("Unexpected token type for Natural literal: " <> show tokenType₂)
@@ -474,24 +480,24 @@ decodeExpressionInternal decodeEmbed = go
 
                                 case tokenType₂ of
                                     TypeUInt -> do
-                                        n <- Decoding.decodeWord
+                                        !n <- fromIntegral <$> Decoding.decodeWord
 
-                                        return (IntegerLit (fromIntegral n))
+                                        return (IntegerLit n)
 
                                     TypeUInt64 -> do
-                                        n <- Decoding.decodeWord64
+                                        !n <- fromIntegral <$> Decoding.decodeWord64
 
-                                        return (IntegerLit (fromIntegral n))
+                                        return (IntegerLit n)
 
                                     TypeNInt -> do
-                                        n <- Decoding.decodeNegWord
+                                        !n <- fromIntegral <$> Decoding.decodeNegWord
 
-                                        return (IntegerLit (-1 - fromIntegral n))
+                                        return (IntegerLit $! (-1 - n))
 
                                     TypeNInt64 -> do
-                                        n <- Decoding.decodeNegWord64
+                                        !n <- fromIntegral <$> Decoding.decodeNegWord64
 
-                                        return (IntegerLit (-1 - fromIntegral n))
+                                        return (IntegerLit $! (-1 - n))
                                     TypeInteger -> do
                                         n <- Decoding.decodeInteger
                                         return (IntegerLit n)
@@ -500,7 +506,7 @@ decodeExpressionInternal decodeEmbed = go
                                         die ("Unexpected token type for Integer literal: " <> show tokenType₂)
 
                             18 -> do
-                                xys <- Monad.replicateM ((len - 2) `quot` 2) $ do
+                                xys <- replicateDecoder ((len - 2) `quot` 2) $ do
                                     x <- Decoding.decodeString
 
                                     y <- go
@@ -520,7 +526,7 @@ decodeExpressionInternal decodeEmbed = go
                                 fmap Embed (decodeEmbed len)
 
                             25 -> do
-                                bindings <- Monad.replicateM ((len - 2) `quot` 3) $ do
+                                bindings <- replicateDecoder ((len - 2) `quot` 3) $ do
                                     x <- Decoding.decodeString
 
                                     tokenType₂ <- Decoding.peekTokenType
@@ -595,106 +601,100 @@ encodeExpressionInternal encodeEmbed = go
             <>  Encoding.encodeInt n
 
         NaturalBuild ->
-            Encoding.encodeString "Natural/build"
+            Encoding.encodeUtf8ByteArray "Natural/build"
 
         NaturalFold ->
-            Encoding.encodeString "Natural/fold"
+            Encoding.encodeUtf8ByteArray "Natural/fold"
 
         NaturalIsZero ->
-            Encoding.encodeString "Natural/isZero"
+            Encoding.encodeUtf8ByteArray "Natural/isZero"
 
         NaturalEven ->
-            Encoding.encodeString "Natural/even"
+            Encoding.encodeUtf8ByteArray "Natural/even"
 
         NaturalOdd ->
-            Encoding.encodeString "Natural/odd"
+            Encoding.encodeUtf8ByteArray "Natural/odd"
 
         NaturalToInteger ->
-            Encoding.encodeString "Natural/toInteger"
+            Encoding.encodeUtf8ByteArray "Natural/toInteger"
 
         NaturalShow ->
-            Encoding.encodeString "Natural/show"
+            Encoding.encodeUtf8ByteArray "Natural/show"
 
         NaturalSubtract ->
-            Encoding.encodeString "Natural/subtract"
+            Encoding.encodeUtf8ByteArray "Natural/subtract"
 
         IntegerToDouble ->
-            Encoding.encodeString "Integer/toDouble"
+            Encoding.encodeUtf8ByteArray "Integer/toDouble"
 
         IntegerClamp ->
-            Encoding.encodeString "Integer/clamp"
+            Encoding.encodeUtf8ByteArray "Integer/clamp"
 
         IntegerNegate ->
-            Encoding.encodeString "Integer/negate"
+            Encoding.encodeUtf8ByteArray "Integer/negate"
 
         IntegerShow ->
-            Encoding.encodeString "Integer/show"
+            Encoding.encodeUtf8ByteArray "Integer/show"
 
         DoubleShow ->
-            Encoding.encodeString "Double/show"
+            Encoding.encodeUtf8ByteArray "Double/show"
 
         ListBuild ->
-            Encoding.encodeString "List/build"
+            Encoding.encodeUtf8ByteArray "List/build"
 
         ListFold ->
-            Encoding.encodeString "List/fold"
+            Encoding.encodeUtf8ByteArray "List/fold"
 
         ListLength ->
-            Encoding.encodeString "List/length"
+            Encoding.encodeUtf8ByteArray "List/length"
 
         ListHead ->
-            Encoding.encodeString "List/head"
+            Encoding.encodeUtf8ByteArray "List/head"
 
         ListLast ->
-            Encoding.encodeString "List/last"
+            Encoding.encodeUtf8ByteArray "List/last"
 
         ListIndexed ->
-            Encoding.encodeString "List/indexed"
+            Encoding.encodeUtf8ByteArray "List/indexed"
 
         ListReverse ->
-            Encoding.encodeString "List/reverse"
-
-        OptionalFold ->
-            Encoding.encodeString "Optional/fold"
-
-        OptionalBuild ->
-            Encoding.encodeString "Optional/build"
+            Encoding.encodeUtf8ByteArray "List/reverse"
 
         Bool ->
-            Encoding.encodeString "Bool"
+            Encoding.encodeUtf8ByteArray "Bool"
 
         Optional ->
-            Encoding.encodeString "Optional"
+            Encoding.encodeUtf8ByteArray "Optional"
 
         None ->
-            Encoding.encodeString "None"
+            Encoding.encodeUtf8ByteArray "None"
 
         Natural ->
-            Encoding.encodeString "Natural"
+            Encoding.encodeUtf8ByteArray "Natural"
 
         Integer ->
-            Encoding.encodeString "Integer"
+            Encoding.encodeUtf8ByteArray "Integer"
 
         Double ->
-            Encoding.encodeString "Double"
+            Encoding.encodeUtf8ByteArray "Double"
 
         Text ->
-            Encoding.encodeString "Text"
+            Encoding.encodeUtf8ByteArray "Text"
 
         TextShow ->
-            Encoding.encodeString "Text/show"
+            Encoding.encodeUtf8ByteArray "Text/show"
 
         List ->
-            Encoding.encodeString "List"
+            Encoding.encodeUtf8ByteArray "List"
 
         Const Type ->
-            Encoding.encodeString "Type"
+            Encoding.encodeUtf8ByteArray "Type"
 
         Const Kind ->
-            Encoding.encodeString "Kind"
+            Encoding.encodeUtf8ByteArray "Kind"
 
         Const Sort ->
-            Encoding.encodeString "Sort"
+            Encoding.encodeUtf8ByteArray "Sort"
 
         a@App{} ->
             encodeListN
@@ -756,10 +756,10 @@ encodeExpressionInternal encodeEmbed = go
         ListAppend l r ->
             encodeOperator 7 l r
 
-        Combine l r ->
+        Combine _ l r ->
             encodeOperator 8 l r
 
-        Prefer l r ->
+        Prefer _ l r ->
             encodeOperator 9 l r
 
         CombineTypes l r ->
@@ -874,11 +874,11 @@ encodeExpressionInternal encodeEmbed = go
           where
             n32 = double2Float n64
 
+            n16 = toHalf n32
+
             useFloat = n64 == float2Double n32
 
-            useHalf = n64 == 0.0 || n64 == infinity || n64 == -infinity
-
-            infinity = 1/0 :: Double
+            useHalf = n64 == (float2Double $ fromHalf n16)
 
         -- Fast path for the common case of an uninterpolated string
         TextLit (Chunks [] z) ->
@@ -910,7 +910,7 @@ encodeExpressionInternal encodeEmbed = go
                 : concatMap encodeBinding (toList as) ++ [ go b₁ ]
                 )
           where
-            MultiLet as b₁ = Dhall.Syntax.multiLet a₀ b₀
+            MultiLet as b₁ = Syntax.multiLet a₀ b₀
 
             encodeBinding (Binding _ x _ mA₀ _ a) =
                 [ Encoding.encodeString x
@@ -938,6 +938,9 @@ encodeExpressionInternal encodeEmbed = go
                 (Encoding.encodeInt 27)
                 (go t)
                 (go _T)
+
+        a@With{} ->
+            go (Syntax.desugarWith a)
 
         Note _ b ->
             go b
@@ -1029,7 +1032,7 @@ decodeImport len = do
 
             authority <- Decoding.decodeString
 
-            paths <- Monad.replicateM (len - 8) Decoding.decodeString
+            paths <- replicateDecoder (len - 8) Decoding.decodeString
 
             file <- Decoding.decodeString
 
@@ -1049,7 +1052,7 @@ decodeImport len = do
             return (Remote (URL {..}))
 
     let local prefix = do
-            paths <- Monad.replicateM (len - 5) Decoding.decodeString
+            paths <- replicateDecoder (len - 5) Decoding.decodeString
 
             file <- Decoding.decodeString
 
@@ -1104,7 +1107,7 @@ encodeImport import_ =
                 Nothing ->
                     Encoding.encodeNull
                 Just h ->
-                    encodeExpressionInternal encodeImport (Dhall.Syntax.denote h)
+                    encodeExpressionInternal encodeImport (Syntax.denote h)
 
             scheme₁ = case scheme₀ of
                 HTTP  -> 0
@@ -1173,7 +1176,7 @@ instance Serialise (Expr Void Import) where
     decode = decodeExpressionInternal decodeImport
 
 -- | Encode a Dhall expression as a CBOR-encoded `ByteString`
-encodeExpression :: Expr Void Import -> ByteString
+encodeExpression :: Serialise (Expr Void a) => Expr Void a -> ByteString
 encodeExpression = Serialise.serialise
 
 -- | Decode a Dhall expression from a CBOR `Term`
@@ -1246,3 +1249,15 @@ instance Show DecodingFailure where
         <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack bytes) <> "\n"
       where
         toHex = Printf.printf "%02x "
+
+-- | This specialized version of 'Control.Monad.replicateM' reduces
+-- decoding timings by roughly 10%.
+replicateDecoder :: Int -> Decoder s a -> Decoder s [a]
+replicateDecoder n0 decoder = go n0
+  where
+    go n
+      | n <= 0    = pure []
+      | otherwise = do
+            x <- decoder
+            xs <- go (n - 1)
+            pure (x:xs)

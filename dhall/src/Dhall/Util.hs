@@ -69,7 +69,7 @@ snip text
 
     preview =
             Data.Text.unlines header
-        <>  separator <> "\n"
+        <>  Data.Text.take 80 separator <> "\n"
         <>  Data.Text.unlines footer
 
 {-| Like `snip`, but for `Doc`s
@@ -116,8 +116,8 @@ get parser censor input = do
     let name =
             case input of
                 Input_ (InputFile file) -> file
-                Input_ StandardInput    -> "(stdin)"
-                StdinText _             -> "(stdin)"
+                Input_ StandardInput    -> "(input)"
+                StdinText _             -> "(input)"
 
     let result = parser name inText
 
@@ -181,6 +181,7 @@ getExpressionAndHeader censor =
 
 -- | Convenient utility for retrieving an expression along with its header from
 -- | text already read from STDIN (so it's not re-read)
-getExpressionAndHeaderFromStdinText :: Censor -> Text -> IO (Header, Expr Src Import)
+getExpressionAndHeaderFromStdinText
+    :: Censor -> Text -> IO (Header, Expr Src Import)
 getExpressionAndHeaderFromStdinText censor =
     get Dhall.Parser.exprAndHeaderFromText censor . StdinText

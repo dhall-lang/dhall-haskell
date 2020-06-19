@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Dhall.YamlToDhall
@@ -6,6 +5,7 @@ module Dhall.YamlToDhall
   , defaultOptions
   , YAMLCompileError(..)
   , dhallFromYaml
+  , schemaFromYaml
   ) where
 
 import Control.Exception (Exception, throwIO)
@@ -21,7 +21,9 @@ import Dhall.JSONToDhall
   , Conversion(..)
   , defaultConversion
   , dhallFromJSON
+  , inferSchema
   , resolveSchemaExpr
+  , schemaToDhallType
   , showCompileError
   , typeCheckSchemaExpr
   )
@@ -29,15 +31,14 @@ import Dhall.Src (Src)
 
 -- | Options to parametrize conversion
 data Options = Options
-    { schema     :: Text
+    { schema     :: Maybe Text
     , conversion :: Conversion
     } deriving Show
 
-defaultOptions :: Text -> Options
+defaultOptions :: Maybe Text -> Options
 defaultOptions schema = Options {..}
   where conversion = defaultConversion
 
-                        
 data YAMLCompileError = YAMLCompileError CompileError
 
 instance Show YAMLCompileError where
@@ -49,20 +50,33 @@ instance Exception YAMLCompileError
 -- | Transform yaml representation into dhall
 dhallFromYaml :: Options -> ByteString -> IO (Expr Src Void)
 dhallFromYaml Options{..} yaml = do
-
   value <- either (throwIO . userError) pure (yamlToJson yaml)
 
-  expr <- typeCheckSchemaExpr YAMLCompileError =<< resolveSchemaExpr schema
+  finalSchema <- do
+      case schema of
+          Just text -> resolveSchemaExpr text
+          Nothing   -> return (schemaToDhallType (inferSchema value))
+
+  expr <- typeCheckSchemaExpr YAMLCompileError finalSchema
 
   let dhall = dhallFromJSON conversion expr value
 
   either (throwIO . YAMLCompileError) pure dhall
 
+-- | Infer the schema from YAML
+schemaFromYaml :: ByteString -> IO (Expr Src Void)
+schemaFromYaml yaml = do
+    value <- either (throwIO . userError) pure (yamlToJson yaml)
 
+    return (schemaToDhallType (inferSchema value))
+
+{-| Wrapper around `Data.YAML.Aeson.decode1Strict` that renders the error
+    message
+-}
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
 yamlToJson s = case Data.YAML.Aeson.decode1Strict s of
-                  Right v -> Right v
-                  Left (pos, err) -> Left (show pos ++ err)
+    Right v         -> Right v
+    Left (pos, err) -> Left (show pos ++ err)
 
 showYaml :: Value -> String
 showYaml value = BS8.unpack (Data.YAML.Aeson.encode1Strict value)

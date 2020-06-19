@@ -31,15 +31,16 @@ import Dhall.Set (Set)
 import Dhall.Pretty.Internal (Ann)
 import Numeric.Natural (Natural)
 
-import qualified Data.Algorithm.Diff        as Algo.Diff
+import qualified Data.Algorithm.Diff       as Algo.Diff
 import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc  as Pretty
-import qualified Dhall.Normalize
+import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Dhall.Map
+import qualified Dhall.Normalize           as Normalize
+import qualified Dhall.Pretty.Internal     as Internal
 import qualified Dhall.Set
-import qualified Dhall.Pretty.Internal      as Internal
+import qualified Dhall.Syntax              as Syntax
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
     any difference was detected
@@ -158,8 +159,8 @@ rparen = token Internal.rparen
 diffNormalized :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
-    l1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize l0)
-    r1 = Dhall.Normalize.alphaNormalize (Dhall.Normalize.normalize r0)
+    l1 = Normalize.alphaNormalize (Normalize.normalize l0)
+    r1 = Normalize.alphaNormalize (Normalize.normalize r0)
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r
@@ -429,12 +430,14 @@ skeleton (Lam {}) =
     <>  rarrow
     <>  " "
     <>  ignore
+    <> " (a function)"
 skeleton (Pi {}) =
         ignore
     <>  " "
     <>  rarrow
     <>  " "
     <>  ignore
+    <> " (a function type)"
 skeleton (App Optional _) =
         "Optional "
     <>  ignore
@@ -555,6 +558,7 @@ skeleton (Record {}) =
     <>  ignore
     <>  " "
     <>  rbrace
+    <>  " (a record type)"
 skeleton (RecordLit {}) =
         lbrace
     <>  " "
@@ -565,6 +569,7 @@ skeleton (RecordLit {}) =
     <>  ignore
     <>  " "
     <>  rbrace
+    <> " (a record)"
 skeleton (Union {}) =
         langle
     <>  " "
@@ -575,6 +580,7 @@ skeleton (Union {}) =
     <>  ignore
     <>  " "
     <>  rangle
+    <> " (a union type)"
 skeleton (Combine {}) =
         ignore
     <>  " "
@@ -619,6 +625,12 @@ skeleton (Project {}) =
     <>  ignore
     <>  " "
     <>  rbrace
+skeleton (With {}) =
+         ignore
+    <>   " "
+    <>   keyword "with"
+    <>   " "
+    <>   ignore
 skeleton x = token (Pretty.pretty x)
 
 mismatch :: Pretty a => Expr s a -> Expr s a -> Diff
@@ -729,8 +741,8 @@ diffAnnotatedExpression (Merge aL bL cL) (Merge aR bR cR) = align doc
   where
     doc =   keyword "merge"
         <>  " "
-        <>  format " " (diffImportExpression aL aR)
-        <>  format " " (diffImportExpression bL bR)
+        <>  format " " (diffWithExpression aL aR)
+        <>  format " " (diffWithExpression bL bR)
         <>  diffMaybe (colon <> " ") diffApplicationExpression cL cR
 diffAnnotatedExpression l@(Merge {}) r =
     mismatch l r
@@ -740,7 +752,7 @@ diffAnnotatedExpression (ToMap aL bL) (ToMap aR bR) = align doc
   where
     doc =   keyword "toMap"
         <>  " "
-        <>  format " " (diffImportExpression aL aR)
+        <>  format " " (diffWithExpression aL aR)
         <>  diffMaybe (colon <> " ") diffApplicationExpression bL bR
 diffAnnotatedExpression l@(ToMap {}) r =
     mismatch l r
@@ -882,7 +894,7 @@ diffCombineExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffCombineExpression l@(Combine {}) r@(Combine {}) =
     enclosed' "  " (operator "∧" <> " ") (docs l r)
   where
-    docs (Combine aL bL) (Combine aR bR) =
+    docs (Combine _ aL bL) (Combine _ aR bR) =
         Data.List.NonEmpty.cons (diffPreferExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffPreferExpression aL aR)
@@ -897,7 +909,7 @@ diffPreferExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffPreferExpression l@(Prefer {}) r@(Prefer {}) =
     enclosed' "  " (operator "⫽" <> " ") (docs l r)
   where
-    docs (Prefer aL bL) (Prefer aR bR) =
+    docs (Prefer _ aL bL) (Prefer _ aR bR) =
         Data.List.NonEmpty.cons (diffCombineTypesExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffCombineTypesExpression aL aR)
@@ -989,26 +1001,36 @@ diffApplicationExpression l@(App {}) r@(App {}) =
     enclosed' mempty mempty (Data.List.NonEmpty.reverse (docs l r))
   where
     docs (App aL bL) (App aR bR) =
-        Data.List.NonEmpty.cons (diffImportExpression bL bR) (docs aL aR)
+        Data.List.NonEmpty.cons (diffWithExpression bL bR) (docs aL aR)
     docs (Some aL) (Some aR) =
-        diffImportExpression aL aR :| [ builtin "Some" ]
+        diffWithExpression aL aR :| [ builtin "Some" ]
     docs aL aR@(Some {}) =
         pure (mismatch aL aR)
     docs aL@(Some {}) aR =
         pure (mismatch aL aR)
     docs aL aR =
-        pure (diffImportExpression aL aR)
+        pure (diffWithExpression aL aR)
 diffApplicationExpression l@(App {}) r =
     mismatch l r
 diffApplicationExpression l r@(App {}) =
     mismatch l r
 diffApplicationExpression (Some l) (Some r) =
-    enclosed' mempty mempty (builtin "Some" :| [ diffImportExpression l r ])
+    enclosed' mempty mempty (builtin "Some" :| [ diffWithExpression l r ])
 diffApplicationExpression l@(Some {}) r =
     mismatch l r
 diffApplicationExpression l r@(Some {}) =
     mismatch l r
 diffApplicationExpression l r =
+    diffWithExpression l r
+
+diffWithExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
+diffWithExpression l@With{} r@With{} =
+    diffWithExpression (Syntax.desugarWith l) (Syntax.desugarWith r)
+diffWithExpression l r@With{} =
+    mismatch l r
+diffWithExpression l@With{} r =
+    mismatch l r
+diffWithExpression l r =
     diffImportExpression l r
 
 diffImportExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
@@ -1254,18 +1276,6 @@ diffPrimitiveExpression None None =
 diffPrimitiveExpression l@None r =
     mismatch l r
 diffPrimitiveExpression l r@None =
-    mismatch l r
-diffPrimitiveExpression OptionalFold OptionalFold =
-    "…"
-diffPrimitiveExpression l@OptionalFold r =
-    mismatch l r
-diffPrimitiveExpression l r@OptionalFold =
-    mismatch l r
-diffPrimitiveExpression OptionalBuild OptionalBuild =
-    "…"
-diffPrimitiveExpression l@OptionalBuild r =
-    mismatch l r
-diffPrimitiveExpression l r@OptionalBuild =
     mismatch l r
 diffPrimitiveExpression (BoolLit aL) (BoolLit aR) =
     diffBool aL aR

@@ -24,9 +24,17 @@ import Data.Functor.Identity (Identity(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Sequence (ViewL(..), ViewR(..))
 import Data.Traversable
-import Dhall.Syntax (Expr(..), Var(..), Binding(Binding), Chunks(..), DhallDouble(..), Const(..))
 import Instances.TH.Lift ()
 import Prelude hiding (succ)
+
+import Dhall.Syntax
+    ( Expr(..)
+    , Var(..)
+    , Binding(Binding)
+    , Chunks(..)
+    , DhallDouble(..)
+    , PreferAnnotation(..)
+    )
 
 import qualified Data.Sequence
 import qualified Data.Set
@@ -35,6 +43,7 @@ import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
+import qualified Lens.Family   as Lens
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
@@ -108,7 +117,6 @@ judgmentallyEqual = Eval.judgmentallyEqual
     name in order to avoid shifting the bound variables by mistake.
 -}
 shift :: Int -> Var -> Expr s a -> Expr s a
-shift _ _ (Const a) = Const a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
     n'' = if x == x' && n <= n' then n' + d else n'
@@ -124,10 +132,6 @@ shift d (V x n) (Pi x' _A _B) = Pi x' _A' _B'
     _B' = shift d (V x n') _B
       where
         n' = if x == x' then n + 1 else n
-shift d v (App f a) = App f' a'
-  where
-    f' = shift d v f
-    a' = shift d v a
 shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
     Let (Binding src0 f src1 mt' src2 r') e'
   where
@@ -137,150 +141,7 @@ shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
 
     mt' = fmap (fmap (shift d (V x n))) mt
     r'  =             shift d (V x n)  r
-shift d v (Annot a b) = Annot a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ Bool = Bool
-shift _ _ (BoolLit a) = BoolLit a
-shift d v (BoolAnd a b) = BoolAnd a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolOr a b) = BoolOr a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolEQ a b) = BoolEQ a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolNE a b) = BoolNE a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (BoolIf a b c) = BoolIf a' b' c'
-  where
-    a' = shift d v a
-    b' = shift d v b
-    c' = shift d v c
-shift _ _ Natural = Natural
-shift _ _ (NaturalLit a) = NaturalLit a
-shift _ _ NaturalFold = NaturalFold
-shift _ _ NaturalBuild = NaturalBuild
-shift _ _ NaturalIsZero = NaturalIsZero
-shift _ _ NaturalEven = NaturalEven
-shift _ _ NaturalOdd = NaturalOdd
-shift _ _ NaturalToInteger = NaturalToInteger
-shift _ _ NaturalShow = NaturalShow
-shift _ _ NaturalSubtract = NaturalSubtract
-shift d v (NaturalPlus a b) = NaturalPlus a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (NaturalTimes a b) = NaturalTimes a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ Integer = Integer
-shift _ _ (IntegerLit a) = IntegerLit a
-shift _ _ IntegerClamp = IntegerClamp
-shift _ _ IntegerNegate = IntegerNegate
-shift _ _ IntegerShow = IntegerShow
-shift _ _ IntegerToDouble = IntegerToDouble
-shift _ _ Double = Double
-shift _ _ (DoubleLit a) = DoubleLit a
-shift _ _ DoubleShow = DoubleShow
-shift _ _ Text = Text
-shift d v (TextLit (Chunks a b)) = TextLit (Chunks a' b)
-  where
-    a' = fmap (fmap (shift d v)) a
-shift d v (TextAppend a b) = TextAppend a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ TextShow = TextShow
-shift _ _ List = List
-shift d v (ListLit a b) = ListLit a' b'
-  where
-    a' = fmap (shift d v) a
-    b' = fmap (shift d v) b
-shift _ _ ListBuild = ListBuild
-shift d v (ListAppend a b) = ListAppend a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift _ _ ListFold = ListFold
-shift _ _ ListLength = ListLength
-shift _ _ ListHead = ListHead
-shift _ _ ListLast = ListLast
-shift _ _ ListIndexed = ListIndexed
-shift _ _ ListReverse = ListReverse
-shift _ _ Optional = Optional
-shift d v (Some a) = Some a'
-  where
-    a' = shift d v a
-shift _ _ None = None
-shift _ _ OptionalFold = OptionalFold
-shift _ _ OptionalBuild = OptionalBuild
-shift d v (Record a) = Record a'
-  where
-    a' = fmap (shift d v) a
-shift d v (RecordLit a) = RecordLit a'
-  where
-    a' = fmap (shift d v) a
-shift d v (Union a) = Union a'
-  where
-    a' = fmap (fmap (shift d v)) a
-shift d v (Combine a b) = Combine a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (CombineTypes a b) = CombineTypes a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (Prefer a b) = Prefer a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (RecordCompletion a b) = RecordCompletion a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (Merge a b c) = Merge a' b' c'
-  where
-    a' =       shift d v  a
-    b' =       shift d v  b
-    c' = fmap (shift d v) c
-shift d v (ToMap a b) = ToMap a' b'
-  where
-    a' =       shift d v  a
-    b' = fmap (shift d v) b
-shift d v (Field a b) = Field a' b
-  where
-    a' = shift d v a
-shift d v (Assert a) = Assert a'
-  where
-    a' = shift d v a
-shift d v (Equivalent a b) = Equivalent a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
-shift d v (Project a b) = Project a' b'
-  where
-    a' =       shift d v  a
-    b' = fmap (shift d v) b
-shift d v (Note a b) = Note a b'
-  where
-    b' = shift d v b
-shift d v (ImportAlt a b) = ImportAlt a' b'
-  where
-    a' = shift d v a
-    b' = shift d v b
--- The Dhall compiler enforces that all embedded values are closed expressions
--- and `shift` does nothing to a closed expression
-shift _ _ (Embed p) = Embed p
+shift d v expression = Lens.over Syntax.subExpressions (shift d v) expression
 
 {-| Substitute all occurrences of a variable with an expression
 
@@ -298,10 +159,6 @@ subst (V x n) e (Pi y _A _B) = Pi y _A' _B'
     _A' = subst (V x n )                  e  _A
     _B' = subst (V x n') (shift 1 (V y 0) e) _B
     n'  = if x == y then n + 1 else n
-subst v e (App f a) = App f' a'
-  where
-    f' = subst v e f
-    a' = subst v e a
 subst v e (Var v') = if v == v' then e else Var v'
 subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
     Let (Binding src0 f src1 mt' src2 r') b'
@@ -312,150 +169,7 @@ subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
 
     mt' = fmap (fmap (subst (V x n) e)) mt
     r'  =             subst (V x n) e  r
-subst x e (Annot a b) = Annot a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ Bool = Bool
-subst _ _ (BoolLit a) = BoolLit a
-subst x e (BoolAnd a b) = BoolAnd a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolOr a b) = BoolOr a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolEQ a b) = BoolEQ a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolNE a b) = BoolNE a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (BoolIf a b c) = BoolIf a' b' c'
-  where
-    a' = subst x e a
-    b' = subst x e b
-    c' = subst x e c
-subst _ _ Natural = Natural
-subst _ _ (NaturalLit a) = NaturalLit a
-subst _ _ NaturalFold = NaturalFold
-subst _ _ NaturalBuild = NaturalBuild
-subst _ _ NaturalIsZero = NaturalIsZero
-subst _ _ NaturalEven = NaturalEven
-subst _ _ NaturalOdd = NaturalOdd
-subst _ _ NaturalToInteger = NaturalToInteger
-subst _ _ NaturalShow = NaturalShow
-subst _ _ NaturalSubtract = NaturalSubtract
-subst x e (NaturalPlus a b) = NaturalPlus a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (NaturalTimes a b) = NaturalTimes a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ Integer = Integer
-subst _ _ (IntegerLit a) = IntegerLit a
-subst _ _ IntegerClamp = IntegerClamp
-subst _ _ IntegerNegate = IntegerNegate
-subst _ _ IntegerShow = IntegerShow
-subst _ _ IntegerToDouble = IntegerToDouble
-subst _ _ Double = Double
-subst _ _ (DoubleLit a) = DoubleLit a
-subst _ _ DoubleShow = DoubleShow
-subst _ _ Text = Text
-subst x e (TextLit (Chunks a b)) = TextLit (Chunks a' b)
-  where
-    a' = fmap (fmap (subst x e)) a
-subst x e (TextAppend a b) = TextAppend a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ TextShow = TextShow
-subst _ _ List = List
-subst x e (ListLit a b) = ListLit a' b'
-  where
-    a' = fmap (subst x e) a
-    b' = fmap (subst x e) b
-subst x e (ListAppend a b) = ListAppend a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst _ _ ListBuild = ListBuild
-subst _ _ ListFold = ListFold
-subst _ _ ListLength = ListLength
-subst _ _ ListHead = ListHead
-subst _ _ ListLast = ListLast
-subst _ _ ListIndexed = ListIndexed
-subst _ _ ListReverse = ListReverse
-subst _ _ Optional = Optional
-subst x e (Some a) = Some a'
-  where
-    a' = subst x e a
-subst _ _ None = None
-subst _ _ OptionalFold = OptionalFold
-subst _ _ OptionalBuild = OptionalBuild
-subst x e (Record kts) = Record kts'
-  where
-    kts' = fmap (subst x e) kts
-subst x e (RecordLit kvs) = RecordLit kvs'
-  where
-    kvs' = fmap (subst x e) kvs
-subst x e (Union kts) = Union kts'
-  where
-    kts' = fmap (fmap (subst x e)) kts
-subst x e (Combine a b) = Combine a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (CombineTypes a b) = CombineTypes a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (Prefer a b) = Prefer a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (RecordCompletion a b) = RecordCompletion a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (Merge a b c) = Merge a' b' c'
-  where
-    a' =       subst x e  a
-    b' =       subst x e  b
-    c' = fmap (subst x e) c
-subst x e (ToMap a b) = ToMap a' b'
-  where
-    a' =       subst x e  a
-    b' = fmap (subst x e) b
-subst x e (Field a b) = Field a' b
-  where
-    a' = subst x e a
-subst x e (Project a b) = Project a' b'
-  where
-    a' =       subst x e  a
-    b' = fmap (subst x e) b
-subst x e (Assert a) = Assert a'
-  where
-    a' = subst x e a
-subst x e (Equivalent a b) = Equivalent a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
-subst x e (Note a b) = Note a b'
-  where
-    b' = subst x e b
-subst x e (ImportAlt a b) = ImportAlt a' b'
-  where
-    a' = subst x e a
-    b' = subst x e b
--- The Dhall compiler enforces that all embedded values are closed expressions
--- and `subst` does nothing to a closed expression
-subst _ _ (Embed p) = Embed p
+subst x e expression = Lens.over Syntax.subExpressions (subst x e) expression
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
@@ -567,24 +281,14 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     loop b₂
                 _ -> do
                   case App f' a' of
-                    App NaturalFold (NaturalLit n) -> do
-                        let natural = Var (V "natural" 0)
-                        let go 0  x = x
-                            go n' x = go (n'-1) (App (Var (V "succ" 0)) x)
-                        let n' = go n (Var (V "zero" 0))
-                        pure
-                            (Lam "natural"
-                                (Const Type)
-                                (Lam "succ"
-                                    (Pi "_" natural natural)
-                                    (Lam "zero"
-                                        natural
-                                        n')))
-
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
                       where
+                        -- Use an `Integer` for the loop, due to the following
+                        -- issue:
+                        --
+                        -- https://github.com/ghcjs/ghcjs/issues/782
                         strict =       strictLoop (fromIntegral n0 :: Integer)
                         lazy   = loop (  lazyLoop (fromIntegral n0 :: Integer))
 
@@ -605,8 +309,14 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
                     App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
-                        | y >= x    -> pure (NaturalLit (subtract x y))
-                        | otherwise -> pure (NaturalLit 0)
+                        -- Use an `Integer` for the subtraction, due to the
+                        -- following issue:
+                        --
+                        -- https://github.com/ghcjs/ghcjs/issues/782
+                        | y >= x ->
+                            pure (NaturalLit (fromIntegral (subtract (fromIntegral x :: Integer) (fromIntegral y :: Integer))))
+                        | otherwise ->
+                            pure (NaturalLit 0)
                     App (App NaturalSubtract (NaturalLit 0)) y -> pure y
                     App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
                     App (App NaturalSubtract x) y | Eval.judgmentallyEqual x y -> pure (NaturalLit 0)
@@ -624,14 +334,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((DhallDouble . read . show) n))
                     App DoubleShow (DoubleLit (DhallDouble n)) ->
                         pure (TextLit (Chunks [] (Data.Text.pack (show n))))
-                    App (App OptionalBuild _A₀) g ->
-                        loop (App (App (App g optional) just) nothing)
-                      where
-                        optional = App Optional _A₀
-
-                        just = Lam "a" _A₀ (Some "a")
-
-                        nothing = App None _A₀
                     App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
                       where
                         _A₁ = shift 1 "a" _A₀
@@ -646,20 +348,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
-                    App (App ListFold t) (ListLit _ xs) -> do
-                        t' <- loop t
-                        let list = Var (V "list" 0)
-                        let lam term =
-                                Lam "list" (Const Type)
-                                    (Lam "cons" (Pi "_" t' (Pi "_" list list))
-                                        (Lam "nil" list term))
-                        term <- foldrM
-                            (\x acc -> do
-                                x' <- loop x
-                                pure (App (App (Var (V "cons" 0)) x') acc))
-                            (Var (V "nil" 0))
-                            xs
-                        pure (lam term)
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -706,21 +394,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                   ]
                     App (App ListReverse _) (ListLit t xs) ->
                         loop (ListLit t (Data.Sequence.reverse xs))
-
-                    App (App OptionalFold t0) x0 -> do
-                        t1 <- loop t0
-                        let optional = Var (V "optional" 0)
-                        let lam term = (Lam "optional"
-                                           (Const Type)
-                                           (Lam "some"
-                                               (Pi "_" t1 optional)
-                                               (Lam "none" optional term)))
-                        x1 <- loop x0
-                        pure $ case x1 of
-                            App None _ -> lam (Var (V "none" 0))
-                            Some x'    -> lam (App (Var (V "some" 0)) x')
-                            _          -> App (App OptionalFold t1) x1
-
                     App TextShow (TextLit (Chunks [] oldText)) ->
                         loop (TextLit (Chunks [] newText))
                       where
@@ -853,8 +526,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
       where
         a' = loop a
     None -> pure None
-    OptionalFold -> pure OptionalFold
-    OptionalBuild -> pure OptionalBuild
     Record kts -> Record . Dhall.Map.sort <$> kts'
       where
         kts' = traverse loop kts
@@ -864,7 +535,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
         kts' = traverse (traverse loop) kts
-    Combine x y -> decide <$> loop x <*> loop y
+    Combine mk x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
             r
@@ -873,7 +544,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.unionWith decide m n)
         decide l r =
-            Combine l r
+            Combine mk l r
     CombineTypes x y -> decide <$> loop x <*> loop y
       where
         decide (Record m) r | Data.Foldable.null m =
@@ -884,7 +555,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             Record (Dhall.Map.unionWith decide m n)
         decide l r =
             CombineTypes l r
-    Prefer x y -> decide <$> loop x <*> loop y
+    Prefer _ x y -> decide <$> loop x <*> loop y
       where
         decide (RecordLit m) r | Data.Foldable.null m =
             r
@@ -895,9 +566,9 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l r | Eval.judgmentallyEqual l r =
             l
         decide l r =
-            Prefer l r
+            Prefer PreferFromSource l r
     RecordCompletion x y -> do
-        loop (Annot (Prefer (Field x "default") y) (Field x "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field x "default") y) (Field x "Type"))
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y
@@ -966,17 +637,17 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     Just v  -> pure v
                     Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
             Project r_ _ -> loop (Field r_ x)
-            Prefer (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Prefer (singletonRecordLit v) r_) x)
+            Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
-            Prefer l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+            Prefer _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure v
                 Nothing -> loop (Field l x)
-            Combine (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine (singletonRecordLit v) r_) x)
+            Combine m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine m (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
-            Combine l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine l (singletonRecordLit v)) x)
+            Combine m l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                Just v -> pure (Field (Combine m l (singletonRecordLit v)) x)
                 Nothing -> loop (Field l x)
             _ -> pure (Field r' x)
     Project x (Left fields)-> do
@@ -987,11 +658,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
             Project y _ ->
                 loop (Project y (Left fields))
-            Prefer l (RecordLit rKvs) -> do
+            Prefer _ l (RecordLit rKvs) -> do
                 let rKs = Dhall.Map.keysSet rKvs
                 let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
                 let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
-                loop (Prefer l' r')
+                loop (Prefer PreferFromSource l' r')
             _ | null fields -> pure (RecordLit mempty)
               | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
     Project r (Right e1) -> do
@@ -1012,6 +683,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         r' <- loop r
 
         pure (Equivalent l' r')
+    With e' k v -> do
+        loop (Syntax.desugarWith (With e' k v))
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)
@@ -1056,7 +729,6 @@ isNormalized e0 = loop (Syntax.denote e0)
       App f a -> loop f && loop a && case App f a of
           App (Lam _ _ _) _ -> False
           App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
-          App NaturalFold (NaturalLit _) -> False
           App NaturalBuild _ -> False
           App NaturalIsZero (NaturalLit _) -> False
           App NaturalEven (NaturalLit _) -> False
@@ -1072,16 +744,13 @@ isNormalized e0 = loop (Syntax.denote e0)
           App IntegerShow (IntegerLit _) -> False
           App IntegerToDouble (IntegerLit _) -> False
           App DoubleShow (DoubleLit _) -> False
-          App (App OptionalBuild _) _ -> False
           App (App ListBuild _) _ -> False
-          App (App ListFold _) (ListLit _ _) -> False
+          App (App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _) _ -> False
           App (App ListLength _) (ListLit _ _) -> False
           App (App ListHead _) (ListLit _ _) -> False
           App (App ListLast _) (ListLit _ _) -> False
           App (App ListIndexed _) (ListLit _ _) -> False
           App (App ListReverse _) (ListLit _ _) -> False
-          App (App OptionalFold _) (Some _) -> False
-          App (App OptionalFold _) (App None _) -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
           _ -> True
@@ -1175,12 +844,10 @@ isNormalized e0 = loop (Syntax.denote e0)
       Optional -> True
       Some a -> loop a
       None -> True
-      OptionalFold -> True
-      OptionalBuild -> True
       Record kts -> Dhall.Map.isSorted kts && all loop kts
       RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
-      Combine x y -> loop x && loop y && decide x y
+      Combine _ x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
@@ -1192,7 +859,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide _ (Record n) | Data.Foldable.null n = False
           decide (Record _) (Record _) = False
           decide  _ _ = True
-      Prefer x y -> loop x && loop y && decide x y
+      Prefer _ x y -> loop x && loop y && decide x y
         where
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
@@ -1213,23 +880,24 @@ isNormalized e0 = loop (Syntax.denote e0)
       Field r k -> case r of
           RecordLit _ -> False
           Project _ _ -> False
-          Prefer (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Prefer _ (RecordLit _) -> False
-          Combine (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Combine _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
+          Prefer _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
+          Prefer _ _ (RecordLit _) -> False
+          Combine _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
+          Combine _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
           _ -> loop r
       Project r p -> loop r &&
           case p of
               Left s -> case r of
                   RecordLit _ -> False
                   Project _ _ -> False
-                  Prefer _ (RecordLit _) -> False
+                  Prefer _ _ (RecordLit _) -> False
                   _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
       Assert t -> loop t
       Equivalent l r -> loop l && loop r
+      With{} -> False
       Note _ e' -> loop e'
       ImportAlt _ _ -> False
       Embed _ -> True
@@ -1252,3 +920,7 @@ variable@(V var i) `freeIn` expression =
     denote' = Syntax.denote
 
     strippedExpression = denote' expression
+
+{- $setup
+>>> import Dhall.Syntax (Const(..))
+-}

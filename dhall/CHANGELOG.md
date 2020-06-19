@@ -1,3 +1,200 @@
+1.33.0
+
+* [Supports version 17.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v17.0.0)
+    * BREAKING CHANGE: [URLs no longer support quoted path components](https://github.com/dhall-lang/dhall-haskell/pull/1812)
+    * BREAKING CHANGE: [`Optional/{fold,build}` are no longer built-ins](https://github.com/dhall-lang/dhall-haskell/pull/1802)
+    * [Record fields now permit empty labels](https://github.com/dhall-lang/dhall-haskell/pull/1812)
+* BREAKING CHANGE: [Fail instead of hanging when deriving `FromDhall` for recursive types](https://github.com/dhall-lang/dhall-haskell/pull/1825)
+    * This is a breaking change as now the `expected` type returns an
+      `Expector (Expr Src Void)` (essentially an `Either`) instead of
+      `Expr Src Void`
+    * If you really don't want to handle the new error-related wrapper, you can
+      get the old behavior using a partial pattern match (which will be partial,
+      still an improvement over the previous behavior, which was hanging)
+* [Fix invalid cache entries](https://github.com/dhall-lang/dhall-haskell/pull/1793)
+    * The interpreter will now correct cached expressions that are incorrect
+      and warn you when this happens
+    * Specifically, if there is a hash mismatch from the cached expression the
+      interpreter will resolve the import again and fix the cache if the
+      resolved import matches the expected hash
+* [Make `encodeExpression` polymorphic](https://github.com/dhall-lang/dhall-haskell/pull/1789)
+    * `encodeExpression` now has a more general type, which means that you
+      can use it to serialise expressions without imports (i.e.
+      ones of type `Expr Void Void`)
+* [Add `--quiet` option for `dhall decode`](https://github.com/dhall-lang/dhall-haskell/pull/1803)
+* [Add `--noted` flag for `dhall haskell-syntax-tree`](https://github.com/dhall-lang/dhall-haskell/pull/1843)
+* Performance improvements:
+    * There were several performance improvements related to binary decoding,
+      which should improve cache lookup speed
+    * [#1807](https://github.com/dhall-lang/dhall-haskell/pull/1807)
+    * [#1809](https://github.com/dhall-lang/dhall-haskell/pull/1809)
+    * [#1857](https://github.com/dhall-lang/dhall-haskell/pull/1857)
+* Improvements to error messages
+    * [#1824](https://github.com/dhall-lang/dhall-haskell/pull/1824)
+    * [#1849](https://github.com/dhall-lang/dhall-haskell/pull/1849)
+    * [#1851](https://github.com/dhall-lang/dhall-haskell/pull/1851)
+* Fixes to haddocks
+    * [#1815](https://github.com/dhall-lang/dhall-haskell/pull/1815)
+
+1.32.0
+
+* [Supports version 16.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v16.0.0)
+    * BREAKING CHANGE: Change the precedence of `with` and `===`
+        * The precedence change to `with` means that some old expressions that
+          were valid now require explicit parentheses
+    * BREAKING CHANGE: Use RFC7049bis encoding for `Double`s
+        * This is a breaking change because the hashes of expressions with small
+          `Double` literals will change now
+    * Add support for unions mixing terms and types
+        * For example, `< A : Bool | B : Type >` is legal now
+        * You can now write `someRecord with a.b.c = x` to update a nested
+          fields
+* DEPRECATION: [Deprecate `Dhall.Parser.exprA`](https://github.com/dhall-lang/dhall-haskell/pull/1740)
+    * `Dhall.Parser` module will eventually drop support for parsing custom
+      import types
+    * This is necessary in order to fix several parsing bugs and improve
+      parsing error messages
+* BUG FIX: [GHC Generics instance for `:+:` now uses `union`](https://github.com/dhall-lang/dhall-haskell/pull/1725)
+    * This fixes a few subtle bugs in how Dhall unions are marshalled into
+      Haskell types, and also improves the error messages
+* Formatting improvements
+    * [Change formatting of `if` expressions](https://github.com/dhall-lang/dhall-haskell/pull/1767)
+    * [Change formatting for functions and their types](https://github.com/dhall-lang/dhall-haskell/pull/1759)
+    * [Prefer puns when formatting record completions](https://github.com/dhall-lang/dhall-haskell/pull/1736)
+* [Convert union alternatives to directory tree](https://github.com/dhall-lang/dhall-haskell/pull/1757)
+    * `dhall to-directory-tree` now supports unions which are automatically
+      unwrapped
+* [Fix `dhall freeze --cache` to better handle protected imports](https://github.com/dhall-lang/dhall-haskell/pull/1772)
+    * `dhall freeze --cache` will now also update imports that already have
+      integrity checks
+* [Don't normalized partially saturated `{List,Natural}/fold`](https://github.com/dhall-lang/dhall-haskell/pull/1742)
+    * The behavior now matches the standard.  Previously, the Haskell
+      implementation was not standards-compliant because it would normalize
+      these partially saturated built-ins
+
+1.31.1
+
+* BUG FIX: [Allow whitespace after record pun entry](https://github.com/dhall-lang/dhall-haskell/pull/1733)
+    * The record pun feature introduced in the previous release did not
+      correctly parse record puns with trailing whitespace, which this change
+      fixes.
+* [Expose `{default,}InputNormalizer`](https://github.com/dhall-lang/dhall-haskell/pull/1727)
+    * The previous version introduced a breaking change to the `autoWith` type
+      that required access to the implementation of `InputNormalizer`, which was
+      not exported.  This change fixes that.
+* Build against latest dependencies
+    * [`QuickCheck-2.14`](https://github.com/dhall-lang/dhall-haskell/pull/1721)
+    * [`haskell-lsp-0.21`](https://github.com/dhall-lang/dhall-haskell/pull/1730)
+    * [`repline-0.3` / `haskeline-0.8`](https://github.com/dhall-lang/dhall-haskell/pull/1717)
+    * [`template-haskell-2.16`](https://github.com/dhall-lang/dhall-haskell/pull/1719)
+* [Prefer to format using record puns when possible](https://github.com/dhall-lang/dhall-haskell/pull/1729)
+    * `dhall format` will now reformat code to use record puns when applicable
+* Fixes and improvements to error messages:
+    * [#1721](https://github.com/dhall-lang/dhall-haskell/pull/1724)
+
+1.31.0
+
+* [Supports version 15.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v15.0.0)
+    * [Implement `with` keyword](https://github.com/dhall-lang/dhall-haskell/pull/1685)
+        * You can now write `someRecord with a.b.c = x` to update a nested
+          fields
+    * [Add support for record puns](https://github.com/dhall-lang/dhall-haskell/pull/1710)
+        * You can now write `{ x, y }` as a shorthand for `{ x = x, y = y }`
+* BREAKING CHANGE TO THE API: [Auto-derive `Generic`/`FromDhall`/`ToDhall` with Template Haskell](https://github.com/dhall-lang/dhall-haskell/pull/1682)
+    * Now the `Dhall.TH.makeHaskell*` utilities will include these derived
+      instances in the generated declarations
+    * This is a breaking change since users were likely already generating these
+      instances separately, which will now conflict with the included instances
+* BREAKING CHANGE TO THE API: [`From/ToDhall` no longer takes `InterpretOptions` argument](https://github.com/dhall-lang/dhall-haskell/pull/1696)
+    * The types of the `autoWith` and `injectWith` methods have changed to
+      take an `InputNormalizer` instead of an `InterpretOptions`
+        * Note that `InputNormalizer` is a subset of `InterpretOptions`
+    * This is a breaking change to how derived `FromDhall` / `ToDhall` instances
+      are customized to more closely match how other Haskell packages customize
+      derived instances (e.g. `aeson` with `FromJSON` / `ToJSON`)
+        * Previously you would customize the behavior globally by passing in
+          a top-level `InterpretOptions` record to `autoWith`
+        * Now you can customize the behavior locally on a per-instance basis
+    * This change enables the following change ...
+* [Add `Dhall.Deriving` module for `deriving-via` helpers](https://github.com/dhall-lang/dhall-haskell/pull/1700)
+    * Now you can take advantage of the `-XDerivingVia` language extension to
+      customize derived `FromDhall`/`ToDhall` instances, like this:
+        * `deriving (FromDhall, ToDhall) via Codec (SetSingletonConstructors Bare) Name`
+* BREAKING CHANGE TO THE LANGUAGE: [Match standard with respect to `using toMap`](https://github.com/dhall-lang/dhall-haskell/pull/1673)
+    * `https://example.com using toMap customHeaders` is now a parse error
+      and needs to be explicitly parenthesized as
+      `https://example.com using (toMap customHeaders)`
+    * The language standard had always required the parentheses, but the Haskell
+      implementation was not correctly matching the standard
+* [Fix formatting of indented comments containing empty lines](https://github.com/dhall-lang/dhall-haskell/pull/1688)
+    * `dhall format` was previously not idempotent when formatting indented
+      comments with empty lines
+    * Specifically, the formatter kept indenting things further with each
+      format, which this change fixes
+* [Fix pretty-printer to preserve original numeric literals](https://github.com/dhall-lang/dhall-haskell/pull/1674)
+    * Now `dhall format` will preserve numeric literals exactly how you wrote
+      them
+    * For example, `0xFF` will no longer be reformatted as `255`
+* [Add `dhall to-directory-tree` support for `Map`s](https://github.com/dhall-lang/dhall-haskell/pull/1705)
+    * `Map`s are now converted to directories (just like records)
+* [Add manpage](https://github.com/dhall-lang/dhall-haskell/pull/1677)
+    * ... mainly for the benefit of people packaging Dhall for various
+      distributions
+* [Group commands in CLI](https://github.com/dhall-lang/dhall-haskell/pull/1692)
+    * The command-line `--help` output now groups commands into useful
+      sections
+* [Fix numeric parsing for GHCJS](https://github.com/dhall-lang/dhall-haskell/pull/1681)
+    * The GHCJS backend for Dhall was failing to parse numbers, which this
+      change fixes
+* Fixes and improvements to error messages:
+    * [#1656](https://github.com/dhall-lang/dhall-haskell/pull/1656)
+    * [#1698](https://github.com/dhall-lang/dhall-haskell/pull/1698)
+    * [#1702](https://github.com/dhall-lang/dhall-haskell/pull/1702)
+* Fixes and improvements to the haddocks:
+    * [#1708](https://github.com/dhall-lang/dhall-haskell/pull/1708)
+    * [#1712](https://github.com/dhall-lang/dhall-haskell/pull/1712)
+
+1.30.0
+
+* [Supports version 14.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0)
+* BREAKING CHANGE TO THE API: [Add `--check` flag to `dhall {lint,freeze}`](https://github.com/dhall-lang/dhall-haskell/pull/1636)
+    * You can now use the `--check` flag to verify that a file has already been
+      linted or frozen
+    * This is a breaking change to the types used by the `Dhall.Format` module
+* BREAKING CHANGE TO THE LANGUAGE: [Disallow `Natural` literals with leading zeros](https://github.com/dhall-lang/dhall-haskell/pull/1658)
+    * Now a literal like `042` is no longer valid
+    * See the [changelog for standard version 14.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0) for more details
+* BUG FIX: [Fix parsing of `Double` literal trailing whitespace](https://github.com/dhall-lang/dhall-haskell/pull/1647)
+    * Certain expressions using `Double` literals would fail to parse, which this
+      change fixes
+* BUG FIX: [Use `DeriveLift` instead of GHC Generics to derive `Lift` ](https://github.com/dhall-lang/dhall-haskell/pull/1640)
+    * This fixes a build failure on GHC 8.10
+* [Drop support for GHC 7.10.3](https://github.com/dhall-lang/dhall-haskell/pull/1649)
+    * GHC 8.0.2 is now the earliest supported version
+* [Add support for dotted field syntax](https://github.com/dhall-lang/dhall-haskell/pull/1651)
+    * `{ x.y.z = 1 }` now legal syntax for nested fields
+    * See the [changelog for standard version 14.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0) for more details
+* [Add support for duplicate record fields](https://github.com/dhall-lang/dhall-haskell/pull/1643)
+    * This combines with the previous feature to let you write
+      `{ x.y = 1, x.z = True }`, which is equivalent to
+      `{ x = { y = 1, z = True } }`
+    * See the [changelog for standard version 14.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v14.0.0) for more details
+* [Add `dhall lint` support for deprecating `Optional/{fold,build}`](https://github.com/dhall-lang/dhall-haskell/pull/1628)
+    * The `Optional/{fold,build}` built-ins are deprecated and can be implemented
+      in terms of other language features
+    * `Optional/fold` can be implemented in terms of `merge` (which now works on
+      `Optional` values)
+    * `Optional/build` could always be implemented using `Some`/`None`
+    * `dhall lint` now transforms the deprecated built-ins to use their
+      equivalent built-in-free versions
+* [Support Template Haskell for multiple datatypes](https://github.com/dhall-lang/dhall-haskell/pull/1664)
+    * This extends the Template Haskell support added in the previous release to
+      work for datatypes that refer to one another
+* [Add support for custom substitutions](https://github.com/dhall-lang/dhall-haskell/pull/1650)
+    * You can now add custom substitutions, which are like `let` bindings that
+      propagate to transitive imports
+* [Small formatting fixes](https://github.com/dhall-lang/dhall-haskell/pull/1652)
+
 1.29.0
 
 * [Supports version 13.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v13.0.0)

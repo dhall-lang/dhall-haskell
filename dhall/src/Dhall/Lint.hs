@@ -14,15 +14,14 @@ module Dhall.Lint
     , fixAssert
     , fixParentPath
     , removeLetInLet
-    , replaceOptionalBuildFold
-    , replaceSaturatedOptionalFold
+    , useToMap
     ) where
 
 import Control.Applicative ((<|>))
 
 import Dhall.Syntax
     ( Binding(..)
-    , Const(..)
+    , Chunks(..)
     , Directory(..)
     , Expr(..)
     , File(..)
@@ -34,8 +33,10 @@ import Dhall.Syntax
     , subExpressions
     )
 
+import qualified Data.Foldable      as Foldable
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Dhall.Core         as Core
+import qualified Dhall.Map          as Map
 import qualified Dhall.Optics
 import qualified Lens.Family
 
@@ -47,20 +48,15 @@ import qualified Lens.Family
     * fixes @let a = x ≡ y@ to be @let a = assert : x ≡ y@
     * consolidates nested @let@ bindings to use a multiple-@let@ binding with 'removeLetInLet'
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
-    * Replaces deprecated @Optional\/fold@ and @Optional\/build@ built-ins
 -}
 lint :: Expr s Import -> Expr s Import
-lint =  Dhall.Optics.rewriteOf subExpressions lowerPriorityRewrite
-    .   Dhall.Optics.rewriteOf subExpressions higherPriorityRewrite
+lint =  Dhall.Optics.rewriteOf subExpressions rewrite
   where
-    lowerPriorityRewrite e =
+    rewrite e =
             fixAssert                e
         <|> removeUnusedBindings     e
         <|> fixParentPath            e
         <|> removeLetInLet           e
-        <|> replaceOptionalBuildFold e
-
-    higherPriorityRewrite = replaceSaturatedOptionalFold
 
 -- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -128,64 +124,50 @@ removeLetInLet :: Expr s a -> Maybe (Expr s a)
 removeLetInLet (Let binding (Note _ l@Let{})) = Just (Let binding l)
 removeLetInLet _ = Nothing
 
--- | This replaces @Optional/fold@ and @Optional/build@, both of which can be
--- implemented within the language
-replaceOptionalBuildFold :: Expr s a -> Maybe (Expr s a)
-replaceOptionalBuildFold OptionalBuild =
-    Just
-        (Lam "a" (Const Type)
-            (Lam "build"
-                (Pi "optional" (Const Type)
-                    (Pi "some" (Pi "_" "a" "optional")
-                        (Pi "none" "optional" "optional")
-                    )
-                )
-                (App (App (App "build" (App Optional "a")) (Lam "x" "a" (Some "x"))) (App None "a"))
-            )
-        )
-replaceOptionalBuildFold OptionalFold =
-    Just
-        (Lam "a" (Const Type)
-            (Lam "o" (App Optional "a")
-                (Lam "optional" (Const Type)
-                    (Lam "some" (Pi "_" "a" "optional")
-                        (Lam "none" "optional"
-                            (Merge
-                                (RecordLit
-                                    [ ("Some", "some")
-                                    , ("None", "none")
-                                    ]
-                                )
-                                "o"
-                                Nothing
-                            )
-                        )
-                    )
-                )
-            )
-        )
-replaceOptionalBuildFold _ =
-    Nothing
-
--- | This replaces a saturated @Optional/fold@ with the equivalent @merge@
--- expression
-replaceSaturatedOptionalFold :: Expr s a -> Maybe (Expr s a)
-replaceSaturatedOptionalFold
-    (App
-        (Core.shallowDenote -> App
+-- | This replaces a record of key-value pairs with the equivalent use of
+--   @toMap@
+--
+-- This is currently not used by @dhall lint@ because this would sort @Map@
+-- keys, which is not necessarily a behavior-preserving change, but is still
+-- made available as a convenient rewrite rule.  For example,
+-- @{json,yaml}-to-dhall@ use this rewrite to simplify their output.
+useToMap :: Expr s a -> Maybe (Expr s a)
+useToMap
+    (ListLit
+        t@(Just
             (Core.shallowDenote -> App
-                (Core.shallowDenote -> App
-                    (Core.shallowDenote -> App
-                        (Core.shallowDenote -> OptionalFold)
-                        _
+                (Core.shallowDenote -> List)
+                (Core.shallowDenote -> Record
+                    (Map.sort ->
+                        [ ("mapKey", Core.shallowDenote -> Text)
+                        , ("mapValue", _)
+                        ]
                     )
-                    o
                 )
-                _
             )
-            some
         )
-        none
-    ) = Just (Merge (RecordLit [ ("Some", some), ("None", none) ]) o Nothing)
-replaceSaturatedOptionalFold _ =
+        []
+    ) =
+        Just (ToMap (RecordLit []) t)
+useToMap (ListLit _ keyValues)
+    | not (null keyValues)
+    , Just keyValues' <- traverse convert keyValues =
+        Just
+            (ToMap
+                (RecordLit (Map.fromList (Foldable.toList keyValues')))
+                Nothing
+            )
+  where
+    convert keyValue =
+        case Core.shallowDenote keyValue of
+            RecordLit
+                (Map.sort ->
+                    [ ("mapKey"  , (Core.shallowDenote -> TextLit (Chunks [] key)))
+                    , ("mapValue", value)
+                    ]
+                ) ->
+                    Just (key, value)
+            _ ->
+                Nothing
+useToMap _ =
     Nothing

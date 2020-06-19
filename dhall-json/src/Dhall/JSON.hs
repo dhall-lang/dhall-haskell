@@ -124,9 +124,9 @@
     the same record.  For example, this code:
 
 > let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
-> 
+>
 > let Nesting = < Inline | Nested : Text >
-> 
+>
 > in  { field    = "name"
 >     , nesting  = Nesting.Inline
 >     , contents = Example.Left { foo = 2 }
@@ -143,9 +143,9 @@
     underneath a field named @nestedField@.  For example, this code:
 
 > let Example = < Left : { foo : Natural } | Right : { bar : Bool } >
-> 
+>
 > let Nesting = < Inline | Nested : Text >
-> 
+>
 > in  { field    = "name"
 >     , nesting  = Nesting.Nested "value"
 >     , contents = Example.Left { foo = 2 }
@@ -165,7 +165,7 @@
 
 > $ cat ./example.dhall
 > let JSON = https://prelude.dhall-lang.org/JSON/package.dhall
-> 
+>
 > in  JSON.object
 >     [ { mapKey = "foo", mapValue = JSON.null }
 >     , { mapKey =
@@ -212,21 +212,21 @@ module Dhall.JSON (
     , CompileError(..)
     ) where
 
-import Control.Applicative (empty, (<|>))
-import Control.Monad (guard)
-import Control.Exception (Exception, throwIO)
-import Data.Aeson (Value(..), ToJSON(..))
-import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>), mempty)
-import Data.Text (Text)
+import Control.Applicative       (empty, (<|>))
+import Control.Exception         (Exception, throwIO)
+import Control.Monad             (guard)
+import Data.Aeson                (ToJSON (..), Value (..))
+import Data.Maybe                (fromMaybe)
+import Data.Monoid               (mempty, (<>))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
-import Data.Void (Void)
-import Dhall.Core (Binding(..), DhallDouble(..), Expr)
-import Dhall.Import (SemanticCacheMode(..))
-import Dhall.Map (Map)
-import Dhall.JSON.Util (pattern V)
-import Options.Applicative (Parser)
-import Prelude hiding (getContents)
+import Data.Void                 (Void)
+import Dhall.Core                (Binding (..), DhallDouble (..), Expr)
+import Dhall.Import              (SemanticCacheMode (..))
+import Dhall.JSON.Util           (pattern V)
+import Dhall.Map                 (Map)
+import Options.Applicative       (Parser)
+import Prelude                   hiding (getContents)
 
 import qualified Data.Aeson                            as Aeson
 import qualified Data.Foldable                         as Foldable
@@ -412,7 +412,7 @@ dhallToJSON
     -> Either CompileError Value
 dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
   where
-    loop e = case e of 
+    loop e = case e of
         Core.BoolLit a -> return (toJSON a)
         Core.NaturalLit a -> return (toJSON a)
         Core.IntegerLit a -> return (toJSON a)
@@ -459,7 +459,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                    , Just (alternativeName, mExpr) <- getContents contents -> do
                        contents' <- case mExpr of
                            Just expr -> loop expr
-                           Nothing -> return Aeson.Null
+                           Nothing   -> return Aeson.Null
 
                        let taggedValue =
                                Data.Map.fromList
@@ -637,7 +637,7 @@ omitNull (Bool bool) =
 omitNull Null =
     Null
 
-{-| Omit record fields that are @null@, arrays and records whose transitive 
+{-| Omit record fields that are @null@, arrays and records whose transitive
     fields are all null
 -}
 omitEmpty :: Value -> Value
@@ -963,12 +963,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.None ->
             Core.None
 
-        Core.OptionalFold ->
-            Core.OptionalFold
-
-        Core.OptionalBuild ->
-            Core.OptionalBuild
-
         Core.Record a ->
             Core.Record a'
           where
@@ -984,11 +978,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = fmap (fmap loop) a
 
-        Core.Combine a b ->
-            Core.Combine a' b'
+        Core.Combine a b c ->
+            Core.Combine a b' c'
           where
-            a' = loop a
             b' = loop b
+            c' = loop c
 
         Core.CombineTypes a b ->
             Core.CombineTypes a' b'
@@ -996,11 +990,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' = loop a
             b' = loop b
 
-        Core.Prefer a b ->
-            Core.Prefer a' b'
+        Core.Prefer a b c ->
+            Core.Prefer a b' c'
           where
-            a' = loop a
             b' = loop b
+            c' = loop c
 
         Core.RecordCompletion a b ->
             Core.RecordCompletion a' b'
@@ -1041,6 +1035,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = loop a
             b' = loop b
+
+        Core.With a b c ->
+            Core.With a' b c'
+          where
+            a' = loop a
+            c' = loop c
 
         Core.ImportAlt a b ->
             Core.ImportAlt a' b'
@@ -1141,7 +1141,7 @@ handleSpecialDoubles specialDoubleMode =
 
 >>> :set -XOverloadedStrings
 >>> import Core
->>> Dhall.JSON.codeToValue "(stdin)" "{ a = 1 }"
+>>> Dhall.JSON.codeToValue defaultConversion ForbidWithinJSON Nothing "{ a = 1 }"
 >>> Object (fromList [("a",Number 1.0)])
 -}
 codeToValue
@@ -1152,7 +1152,7 @@ codeToValue
   -> Text  -- ^ Input text.
   -> IO Value
 codeToValue conversion specialDoubleMode mFilePath code = do
-    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(stdin)" mFilePath) code)
+    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(input)" mFilePath) code)
 
     let rootDirectory = case mFilePath of
             Nothing -> "."

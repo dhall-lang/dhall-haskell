@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveFoldable      #-}
 {-# LANGUAGE DeriveFunctor       #-}
@@ -18,14 +19,18 @@ module Dhall.Test.Dhall where
 
 import Control.Exception (SomeException, try)
 import Data.Fix (Fix(..))
+import Data.Maybe (isJust)
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence (Seq)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Vector (Vector)
+import Data.Void (Void)
 import Dhall (ToDhall, FromDhall)
 import Dhall.Core (Expr(..))
-import GHC.Generics (Generic)
+import GHC.Generics (Generic, Rep)
 import Numeric.Natural (Natural)
+import System.Timeout (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -51,15 +56,16 @@ tests =
      , shouldHaveWorkingGenericAuto
      , shouldHandleUnionsCorrectly
      , shouldTreatAConstructorStoringUnitAsEmptyAlternative
-     , shouldConvertDhallToHaskellCorrectly 
+     , shouldConvertDhallToHaskellCorrectly
      , shouldConvertHaskellToDhallCorrectly
+     , shouldShowCorrectErrorForInvalidDecoderInUnion
      ]
 
 data MyType = MyType { foo :: String , bar :: Natural }
 
 wrongDhallType :: Dhall.Decoder MyType
-wrongDhallType = Dhall.Decoder { .. }
-  where expected =
+wrongDhallType = Dhall.Decoder {..}
+  where expected = pure $
           Dhall.Core.Record
             ( Dhall.Map.fromList
               [ ( "bar", Dhall.Core.Natural)
@@ -116,6 +122,11 @@ shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit con
 
     Dhall.embed exampleEncoder () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) "A"
 
+data RecursiveType a = RecursiveType (RecursiveType a)
+    deriving Generic
+
+instance FromDhall (RecursiveType a)
+
 shouldHaveWorkingRecursiveFromDhall :: TestTree
 shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
     [ testCase "works for a recursive expression" $ do
@@ -126,6 +137,16 @@ shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
         actual <- Dhall.input Dhall.auto "./tests/recursive/expr1.dhall"
 
         expected @=? actual
+    , testCase "terminate if type is recursive (monomorphic)" $ do
+        actual <- timeout (1 * 1000000) $ do
+            !typ <- return $ Dhall.expected (Dhall.auto :: Dhall.Decoder (RecursiveType Void))
+            return typ
+        assertBool "Does not terminate!" $ isJust actual
+    , testCase "terminate if type is recursive (polymorphic)" $ do
+        actual <- timeout (1 * 1000000) $ do
+            !typ <- return $ Dhall.expected (Dhall.auto :: Dhall.Decoder (RecursiveType a))
+            return typ
+        assertBool "Does not terminate!" $ isJust actual
     ]
   where
     expected =
@@ -311,23 +332,33 @@ shouldHandleUnionsCorrectly =
         Dhall.defaultInterpretOptions
             { Dhall.singletonConstructors = Dhall.Wrapped }
 
+    functionWithOptions
+      :: ( Generic a
+         , Dhall.GenericToDhall (Rep a)
+         , Generic b
+         , Dhall.GenericFromDhall b (Rep b)
+         )
+      => Dhall.InterpretOptions -> Dhall.Decoder (a -> b)
+    functionWithOptions options =
+      Dhall.function (Dhall.genericToDhallWith options) (Dhall.genericAutoWith options)
+
     code `shouldPassThroughWrapped` values = testCase "Pass through" $ do
-        f <- Dhall.input (Dhall.autoWith wrappedOptions) code
+        f <- Dhall.input (functionWithOptions wrappedOptions) code
 
         values @=? map f values
 
     code `shouldPassThroughSmart` values = testCase "Pass through" $ do
-        f <- Dhall.input (Dhall.autoWith smartOptions) code
+        f <- Dhall.input (functionWithOptions smartOptions) code
 
         values @=? map f values
 
     code `shouldMarshalIntoWrapped` expectedValue = testCase "Marshal" $ do
-        actualValue <- Dhall.input (Dhall.autoWith wrappedOptions) code
+        actualValue <- Dhall.input (Dhall.genericAutoWith wrappedOptions) code
 
         expectedValue @=? actualValue
 
     code `shouldMarshalIntoSmart` expectedValue = testCase "Marshal" $ do
-        actualValue <- Dhall.input (Dhall.autoWith smartOptions) code
+        actualValue <- Dhall.input (Dhall.genericAutoWith smartOptions) code
 
         expectedValue @=? actualValue
 
@@ -336,14 +367,14 @@ shouldHandleUnionsCorrectly =
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
-        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.injectWith wrappedOptions) value
+        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.genericToDhallWith wrappedOptions) value
 
     value `shouldEmbedAsSmart` expectedCode = testCase "ToDhall" $ do
         parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" expectedCode)
 
         resolvedExpression <- Dhall.Import.assertNoImports parsedExpression
 
-        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.injectWith smartOptions) value
+        Dhall.Core.denote resolvedExpression @=? Dhall.embed (Dhall.genericToDhallWith smartOptions) value
 
 shouldConvertDhallToHaskellCorrectly :: TestTree
 shouldConvertDhallToHaskellCorrectly =
@@ -405,3 +436,46 @@ shouldConvertHaskellToDhallCorrectly =
                     Dhall.Core.pretty (Dhall.embed Dhall.inject haskellValue)
 
             expectedDhallCode @=? actualDhallCode
+
+-- https://github.com/dhall-lang/dhall-haskell/issues/1711
+data Issue1711
+  = A Bad
+  | B
+  | C
+  | D
+  deriving (Generic, Show, FromDhall)
+
+newtype Bad = Bad Text
+  deriving (Show)
+
+issue1711Msg :: Text
+issue1711Msg = "Issue 1711"
+
+instance FromDhall Bad where
+  autoWith _ =
+    Dhall.Decoder
+      (const (Dhall.extractError issue1711Msg))
+      (Dhall.expected Dhall.strictText)
+
+type DhallExtractErrors = Dhall.ExtractErrors Dhall.Parser.Src Void
+
+-- https://github.com/dhall-lang/dhall-haskell/issues/1711
+shouldShowCorrectErrorForInvalidDecoderInUnion :: TestTree
+shouldShowCorrectErrorForInvalidDecoderInUnion =
+  testCase "Correct error is thrown for invalid decoder in union" $ do
+    let value = "< B | D | C | A : Text >.A \"\""
+
+    inputEx :: Either DhallExtractErrors Issue1711 <- try (Dhall.input Dhall.auto value)
+
+    let expectedMsg = issue1711Msg
+
+    let assertMsg = "The exception message did not match the expected output"
+
+    case inputEx of
+      Left (Dhall.DhallErrors errs) -> case errs of
+        (err :| []) -> case err of
+          Dhall.TypeMismatch {} -> fail "The extraction using an invalid decoder failed with a type mismatch"
+          Dhall.ExpectedTypeError _ -> fail "An error occured while determining the expected Dhall type"
+          Dhall.ExtractError extractError -> assertEqual assertMsg expectedMsg extractError
+        _ -> fail "The extraction using an invalid decoder failed with multiple errors"
+      Right _ -> fail "The extraction using an invalid decoder succeeded"
