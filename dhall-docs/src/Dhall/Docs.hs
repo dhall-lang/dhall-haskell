@@ -203,10 +203,10 @@ saveHtml inputAbsDir outputAbsDir packageName absFile header = do
     stripCommentSyntax :: Header -> Text
     stripCommentSyntax (Header h)
         | Just s <- Data.Text.stripPrefix "--" strippedHeader
-            = s
+            = Data.Text.strip s
         | Just commentPrefixStripped <- Data.Text.stripPrefix "{-" strippedHeader
         , Just commentSuffixStripped <- Data.Text.stripSuffix "-}" commentPrefixStripped
-            = commentSuffixStripped
+            = Data.Text.strip commentSuffixStripped
         | otherwise = strippedHeader
       where
         strippedHeader = Data.Text.strip h
