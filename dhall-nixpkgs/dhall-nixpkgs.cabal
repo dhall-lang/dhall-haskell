@@ -19,9 +19,9 @@ Executable dhall-to-nixpkgs
   Build-Depends:       base                 >= 4.10     && < 5
                      , aeson                >= 1.0.0.0  && < 1.5
                      , data-fix
-                     , dhall                >= 1.32.0   && < 1.33
+                     , dhall                >= 1.32.0   && < 1.34
                      , foldl                               < 1.5
-                     , hnix                 >= 0.7      && < 0.8
+                     , hnix                 >= 0.7      && < 0.9
                      , lens-family-core     >= 1.0.0    && < 2.2
                      , megaparsec           >= 7.0.0    && < 8.1
                      , mmorph                              < 1.2
