@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 {-| Contains all utilities related to markdown processing
 -}
 module Dhall.Docs.Markdown
