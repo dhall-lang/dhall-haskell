@@ -11,7 +11,7 @@ stdenv.mkDerivation rec {
   buildInputs = [ dhall-docs unzip ];
 
   installPhase = ''
-    mkdir -p $out
+    mkdir -p $out/nix-support/hydra-build-products
     dhall-docs --input ./Prelude --output $out/nix-support/hydra-build-products/Prelude > $out/nix-support/hydra-build-products/dhall-docs.log
   '';
 }
