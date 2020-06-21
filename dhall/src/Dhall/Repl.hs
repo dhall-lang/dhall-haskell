@@ -2,9 +2,11 @@
 
 {-# language CPP               #-}
 {-# language FlexibleContexts  #-}
+{-# language LambdaCase        #-}
 {-# language NamedFieldPuns    #-}
 {-# language OverloadedStrings #-}
 {-# language RecordWildCards   #-}
+{-# language ViewPatterns      #-}
 
 module Dhall.Repl
     ( -- * Repl
@@ -19,7 +21,8 @@ import Control.Monad.State.Class ( MonadState, get, modify )
 import Control.Monad.State.Strict ( evalStateT )
 -- For the MonadFail instance for StateT.
 import Control.Monad.Trans.Instances ()
-import Data.List ( isPrefixOf, nub )
+import Data.Char ( isSpace )
+import Data.List ( dropWhileEnd, groupBy, isPrefixOf, nub )
 import Data.Maybe ( mapMaybe )
 import Data.Semigroup ((<>))
 import Data.Text ( Text )
@@ -76,14 +79,20 @@ repl characterSet explain =
     io =
       evalStateT
         ( Repline.evalRepl
-            ( pure $ turnstile ++ " " )
+            banner
             ( dontCrash . eval )
             options
             ( Just optionsPrefix )
+            ( Just "paste" )
             completer
             greeter
+            finaliser
         )
         (emptyEnv { characterSet, explain })
+
+    banner = pure . \case
+      Repline.SingleLine -> turnstile <> " "
+      Repline.MultiLine  -> "| "
 
     turnstile =
       case characterSet of
@@ -159,12 +168,10 @@ eval src = do
 
 
 
-typeOf :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
-typeOf [] = Fail.fail ":type requires an argument to check the type of"
-
-typeOf srcs = do
+typeOf :: ( MonadFail m, MonadIO m, MonadState Env m ) => String -> m ()
+typeOf src = do
   loaded <-
-    parseAndLoad ( unwords srcs )
+    parseAndLoad src
 
   exprType <-
     typeCheck loaded
@@ -207,26 +214,21 @@ typeCheck expression = do
     Left  e -> liftIO ( wrap (throwIO e) )
     Right a -> return a
 
--- Separate the equal sign to be its own word in order to simplify parsing
--- This is intended to be used with the options that require assignment
-separateEqual :: [String] -> [String]
-separateEqual [] =
-    []
-separateEqual (str₀ : ('=' : str₁) : strs) =
-    str₀ : "=" : str₁ : strs
-separateEqual (str : strs)
-    | (str₀, '=' : str₁) <- break (== '=') str =
-        str₀ : "=" : str₁ : strs
-    | otherwise =
-        str : strs
+-- Split on the first '=' if there is any
+parseAssignment :: String -> Either String (String, String)
+parseAssignment str
+  | (var, '=' : expr) <- break (== '=') str
+  = Right (trim var, expr)
+  | otherwise
+  = Left (trim str)
 
-addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
-addBinding (k : "=" : srcs) = do
+addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => Either String (String, String) -> m ()
+addBinding (Right (k, src)) = do
   varName <- case Megaparsec.parse (unParser Parser.Token.label) "(input)" (Text.pack k) of
       Left   _      -> Fail.fail "Invalid variable name"
       Right varName -> return varName
 
-  loaded <- parseAndLoad ( unwords srcs )
+  loaded <- parseAndLoad src
 
   t <- typeCheck loaded
 
@@ -246,17 +248,14 @@ addBinding (k : "=" : srcs) = do
 
 addBinding _ = Fail.fail ":let should be of the form `:let x = y`"
 
-clearBindings :: (MonadFail m, MonadState Env m) => [String] -> m ()
-clearBindings [] = modify adapt
+clearBindings :: (MonadFail m, MonadState Env m) => String -> m ()
+clearBindings _ = modify adapt
   where
     adapt (Env {..}) = Env { envBindings = Dhall.Context.empty, ..}
 
-clearBindings _ = Fail.fail ":clear takes no arguments"
-
-hashBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
-hashBinding [] = Fail.fail ":hash should be of the form `:hash expr"
-hashBinding tokens = do
-  loadedExpression <- parseAndLoad (unwords tokens)
+hashBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => String -> m ()
+hashBinding src = do
+  loadedExpression <- parseAndLoad src
 
   _ <- typeCheck loadedExpression
 
@@ -299,25 +298,33 @@ nextSaveFile = do
 
   pure $ saveFilePrefix <> "-" <> show nextIndex
 
-loadBinding :: [String] -> Repl ()
-loadBinding [] = do
+loadBinding :: String -> Repl ()
+loadBinding "" = do
   mFile <- currentSaveFile
 
   case mFile of
-    Just file -> loadBinding [file]
+    Just file -> loadBinding file
     Nothing   ->
       Fail.fail $ ":load couldn't find any `" <> saveFilePrefix <> "-*` files"
 
-loadBinding [file] = do
+loadBinding file = do
   -- Read commands from the save file
-  replLines <- map words . lines <$> liftIO (readFile file)
+  -- Some commands can span multiple lines, only the first line will start with
+  -- the optionsPrefix
+  loadedLines <- lines <$> liftIO (readFile file)
 
-  let runCommand ((c:cmd):opts)
+  let -- Group lines that belong to the same command
+      commands = flip groupBy loadedLines $ \_prev next ->
+        not $ [optionsPrefix] `isPrefixOf` next
+
+      runCommand line@(words -> (c:cmd):_)
         | c == optionsPrefix
-        , Just action <- lookup cmd options
-        = action opts
+        = case lookup cmd options of
+            Just action -> action (drop (1 + length cmd + 1) line)
+            Nothing -> Fail.fail $
+              ":load unexpected command `" <> cmd <> "` in file `" <> file <> "`"
       runCommand _ = Fail.fail $
-        ":load expects `" <> file <> "` to contain one command per line"
+        ":load expects `" <> file <> "` to contain a command"
 
   -- Keep current handle in scope
   Env { outputHandle } <- get
@@ -326,24 +333,22 @@ loadBinding [file] = do
   modify (\e -> e { outputHandle = Nothing })
 
   -- Run all the commands
-  forM_ replLines runCommand
+  forM_ commands (runCommand . unlines)
 
   -- Restore the previous handle
   modify (\e -> e { outputHandle = outputHandle })
 
   writeOutputHandle $ "Loaded `" <> Text.pack file <> "`\n"
 
-loadBinding _ = Fail.fail ":load should be of the form `:load` or `:load file`"
-
-saveBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => [String] -> m ()
+saveBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => Either String (String, String) -> m ()
 -- Save all the bindings into a context save file
-saveBinding [] = do
+saveBinding (Left "") = do
   file <- nextSaveFile
 
-  saveBinding [file]
+  saveBinding (Left file)
 
 -- Save all the bindings into `file`
-saveBinding [file] = do
+saveBinding (Left file) = do
   env <- get
 
   let bindings
@@ -368,8 +373,8 @@ saveBinding [file] = do
   writeOutputHandle $ "Context saved to `" <> Text.pack file <> "`\n"
 
 -- Save a single expression to `file`
-saveBinding (file : "=" : tokens) = do
-  loadedExpression <- parseAndLoad (unwords tokens)
+saveBinding (Right (file, src)) = do
+  loadedExpression <- parseAndLoad src
 
   _ <- typeCheck loadedExpression
 
@@ -386,28 +391,29 @@ saveBinding (file : "=" : tokens) = do
 
   writeOutputHandle $ "Expression saved to `" <> Text.pack file <> "`\n"
 
-saveBinding _ = Fail.fail ":save should be of the form `:save`, `:save file`, or `:save file = expr`"
-
-setOption :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
-setOption [ "--explain" ] = do
+setOption :: ( MonadIO m, MonadState Env m ) => String -> m ()
+setOption "--explain" = do
   modify (\e -> e { explain = True })
 setOption _ = do
   writeOutputHandle ":set should be of the form `:set <command line option>`"
 
-unsetOption :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
-unsetOption [ "--explain" ] = do
+unsetOption :: ( MonadIO m, MonadState Env m ) => String -> m ()
+unsetOption "--explain" = do
   modify (\e -> e { explain = False })
 unsetOption _ = do
   writeOutputHandle ":unset should be of the form `:unset <command line option>`"
 
-cmdQuit :: ( MonadIO m, MonadState Env m ) => [String] -> m ()
+quitMessage :: String
+quitMessage = "Goodbye."
+
+cmdQuit :: ( MonadIO m, MonadState Env m ) => String -> m ()
 cmdQuit _ = do
-  liftIO (putStrLn "Goodbye.")
+  liftIO (putStrLn quitMessage)
   liftIO (throwIO Interrupt)
 
 help
   :: ( MonadFail m, MonadIO m, MonadState Env m )
-  => HelpOptions m -> [String] -> m ()
+  => HelpOptions m -> String -> m ()
 help hs _ = do
   liftIO (putStrLn "Type any expression to normalize it or use one of the following commands:")
   forM_ hs $ \h -> do
@@ -419,6 +425,9 @@ help hs _ = do
 
 optionsPrefix :: Char
 optionsPrefix = ':'
+
+trim :: String -> String
+trim = dropWhile isSpace . dropWhileEnd isSpace
 
 data HelpOption m = HelpOption
   { helpOptionName :: String
@@ -437,6 +446,11 @@ helpOptions =
       "Print help text and describe options"
       (dontCrash . help helpOptions)
   , HelpOption
+      "paste"
+      ""
+      "Start a multi-line input. Submit with <Ctrl-D>"
+      (error "Dhall.Repl.helpOptions: Unreachable")
+  , HelpOption
       "type"
       "EXPRESSION"
       "Infer the type of an expression"
@@ -450,7 +464,7 @@ helpOptions =
       "let"
       "IDENTIFIER = EXPRESSION"
       "Assign an expression to a variable"
-      (dontCrash . addBinding . separateEqual)
+      (dontCrash . addBinding . parseAssignment)
   , HelpOption
       "clear"
       ""
@@ -460,22 +474,22 @@ helpOptions =
       "load"
       "[FILENAME]"
       "Load bound variables from a file"
-      (dontCrash . loadBinding)
+      (dontCrash . loadBinding . trim)
   , HelpOption
       "save"
       "[FILENAME | FILENAME = EXPRESSION]"
       "Save bound variables or a given expression to a file"
-      (dontCrash . saveBinding . separateEqual)
+      (dontCrash . saveBinding . parseAssignment)
   , HelpOption
       "set"
       "OPTION"
       "Set an option. Currently supported: --explain"
-      (dontCrash . setOption)
+      (dontCrash . setOption . trim)
   , HelpOption
       "unset"
       "OPTION"
       "Unset an option"
-      (dontCrash . unsetOption)
+      (dontCrash . unsetOption . trim)
   , HelpOption
       "quit"
       ""
@@ -578,6 +592,10 @@ greeter =
       message = "Welcome to the Dhall v" <> version <> " REPL! Type :help for more information."
   in liftIO (putStrLn message)
 
+finaliser :: MonadIO m => m Repline.ExitDecision
+finaliser = do
+  liftIO (putStrLn quitMessage)
+  pure Repline.Exit
 
 dontCrash :: Repl () -> Repl ()
 dontCrash m =

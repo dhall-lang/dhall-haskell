@@ -1,13 +1,15 @@
-{ mkDerivation, base, containers, fail, haskeline, mtl, process
-, stdenv
+{ mkDerivation, base, containers, exceptions, haskeline, mtl
+, process, stdenv
 }:
 mkDerivation {
   pname = "repline";
-  version = "0.2.1.0";
-  sha256 = "45c3186ff35ed650ee9c641f545a30860eedc44107fefb21da36df47aeb1ae7b";
+  version = "0.4.0.0";
+  sha256 = "43c28c49c8e16276d32d0889f37f750d7c7a8d2758f1d35a9f36e68944e457b7";
   libraryHaskellDepends = [
-    base containers fail haskeline mtl process
+    base containers exceptions haskeline mtl process
   ];
+  testHaskellDepends = [ base containers mtl process ];
+  doHaddock = false;
   homepage = "https://github.com/sdiehl/repline";
   description = "Haskeline wrapper for GHCi-like REPL interfaces";
   license = stdenv.lib.licenses.mit;
