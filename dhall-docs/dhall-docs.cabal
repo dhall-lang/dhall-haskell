@@ -59,6 +59,7 @@ Library
         Dhall.Docs.Markdown
     Other-Modules:
         Dhall.Docs.Embedded
+        Paths_dhall_docs
     GHC-Options: -Wall
     Default-Language: Haskell2010
     if flag(ghci-data-files)
