@@ -42,11 +42,13 @@ import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
 import qualified Data.Text
 import qualified Data.Text.IO        as Text.IO
+import qualified GHC.IO.Encoding
 import qualified Lucid
 import qualified Options.Applicative
 import qualified Path
 import qualified Path.IO
 import qualified Paths_dhall_docs    as Meta
+import qualified System.IO
 import qualified Text.Megaparsec
 
 -- $setup
@@ -286,6 +288,7 @@ createIndexes outputPath htmlFiles packageName = do
 defaultMain :: Options -> IO ()
 defaultMain = \case
     Options{..} -> do
+        GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
         resolvedPackageDir <- Path.IO.resolveDir' packageDir
         resolvedOutDir <- Path.IO.resolveDir' outDir
 
