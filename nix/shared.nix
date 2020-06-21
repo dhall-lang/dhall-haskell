@@ -522,6 +522,10 @@ in
     image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
+    generate-dhall-docs    = pkgs.callPackage ./dhall-docs-gen.nix {
+      inherit dhall-docs;
+    };
+
     test-dhall =
       pkgs.mkShell
         { buildInputs =
