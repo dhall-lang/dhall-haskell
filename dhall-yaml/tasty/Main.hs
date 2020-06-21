@@ -54,13 +54,17 @@ testTree =
             "./tasty/data/emptyMap"
             TestBoth
         , testDhallToYaml
-            (Dhall.JSON.Yaml.defaultOptions { quoted = True })
+            Dhall.JSON.Yaml.defaultOptions{ quoted = True }
             "./tasty/data/quoted"
             TestBoth
         , testDhallToYaml
             Dhall.JSON.Yaml.defaultOptions
             "./tasty/data/boolean-quotes" $
             SkipAesonYaml "this test is just for HsYAML integration"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions{ documents = True }
+            "./tasty/data/single-document"
+            TestBoth
         , testYamlToDhall
             "./tasty/data/mergify"
         ]
