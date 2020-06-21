@@ -12,7 +12,7 @@ stdenv.mkDerivation rec {
 
   installPhase = ''
     mkdir -p $out
-    dhall-docs --input ./Prelude --output $out/nix-support/hydra-build-products/Prelude > $out/dhall-docs.log
+    dhall-docs --input ./Prelude --output $out/nix-support/hydra-build-products/Prelude > $out/nix-support/hydra-build-products/dhall-docs.log
   '';
 }
 
