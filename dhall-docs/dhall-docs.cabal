@@ -24,6 +24,8 @@ Extra-Source-Files:
     CHANGELOG.md
 Data-Files:
     *.css
+    *.js
+    *.svg
     *.ttf
 Data-Dir:
     src/Dhall/data
@@ -59,6 +61,7 @@ Library
         Dhall.Docs.Markdown
     Other-Modules:
         Dhall.Docs.Embedded
+        Paths_dhall_docs
     GHC-Options: -Wall
     Default-Language: Haskell2010
     if flag(ghci-data-files)

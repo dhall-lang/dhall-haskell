@@ -1,6 +1,7 @@
 {-| This module contains the top level and options parsing of the @dhall-docs@
     executable
 -}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -22,8 +23,10 @@ module Dhall.Docs
     , resolveRelativePath
     ) where
 
+import Control.Applicative ((<|>))
 import Data.Monoid         ((<>))
 import Data.Text           (Text)
+import Data.Version        (showVersion)
 import Data.Void           (Void)
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
@@ -39,10 +42,13 @@ import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
 import qualified Data.Text
 import qualified Data.Text.IO        as Text.IO
+import qualified GHC.IO.Encoding
 import qualified Lucid
 import qualified Options.Applicative
 import qualified Path
 import qualified Path.IO
+import qualified Paths_dhall_docs    as Meta
+import qualified System.IO
 import qualified Text.Megaparsec
 
 -- $setup
@@ -50,17 +56,19 @@ import qualified Text.Megaparsec
 -- >>> import Path (absdir, absfile)
 
 -- | Command line options
-data Options = Options
-    { packageDir :: FilePath         -- ^ Directory where your package resides
-    , outDir :: FilePath             -- ^ Directory where your documentation
-                                      --   will be placed
-    , packageNameResolver :: Path Abs Dir -> String
-    }
+data Options
+    = Options
+        { packageDir :: FilePath         -- ^ Directory where your package resides
+        , outDir :: FilePath             -- ^ Directory where your documentation
+                                         --   will be placed
+        , packageNameResolver :: Path Abs Dir -> String
+        }
+    | Version
 
 -- | `Parser` for the `Options` type
 parseOptions :: Parser Options
 parseOptions =
-        Options
+    (   Options
     <$> Options.Applicative.strOption
         ( Options.Applicative.long "input"
        <> Options.Applicative.metavar "INPUT"
@@ -71,8 +79,15 @@ parseOptions =
        <> Options.Applicative.help "Directory where your docs will be generated"
        <> Options.Applicative.value "docs" )
     <*> parsePackageNameResolver
-
+    ) <|> parseVersion
   where
+    parseVersion =
+        Options.Applicative.flag'
+            Version
+            (   Options.Applicative.long "version"
+            <>  Options.Applicative.help "Display version"
+            )
+
     parsePackageNameResolver :: Parser (Path Abs Dir -> String)
     parsePackageNameResolver = fmap f (Options.Applicative.optional p)
       where
@@ -271,28 +286,33 @@ createIndexes outputPath htmlFiles packageName = do
 
 -- | Default execution of @dhall-docs@ command
 defaultMain :: Options -> IO ()
-defaultMain Options{..} = do
-    resolvedPackageDir <- Path.IO.resolveDir' packageDir
-    resolvedOutDir <- Path.IO.resolveDir' outDir
+defaultMain = \case
+    Options{..} -> do
+        GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
+        resolvedPackageDir <- Path.IO.resolveDir' packageDir
+        resolvedOutDir <- Path.IO.resolveDir' outDir
 
-    let packageName = packageNameResolver resolvedPackageDir
+        let packageName = packageNameResolver resolvedPackageDir
 
-    dhallFilesAndHeaders <- getAllDhallFilesAndHeaders resolvedPackageDir
-    if null dhallFilesAndHeaders then
-        putStrLn $
-            "No documentation was generated because no file with .dhall " <>
-            "extension was found"
-    else do
-        generatedHtmlFiles <-
-            mapM (uncurry $ saveHtml resolvedPackageDir resolvedOutDir packageName)
-                dhallFilesAndHeaders
-        createIndexes resolvedOutDir generatedHtmlFiles packageName
+        dhallFilesAndHeaders <- getAllDhallFilesAndHeaders resolvedPackageDir
+        if null dhallFilesAndHeaders then
+            putStrLn $
+                "No documentation was generated because no file with .dhall " <>
+                "extension was found"
+        else do
+            generatedHtmlFiles <-
+                mapM (uncurry $ saveHtml resolvedPackageDir resolvedOutDir packageName)
+                    dhallFilesAndHeaders
+            createIndexes resolvedOutDir generatedHtmlFiles packageName
 
-        dataDir <- getDataDir
-        Path.IO.ensureDir resolvedOutDir
-        Control.Monad.forM_ dataDir $ \(filename, contents) -> do
-            let finalPath = Path.fromAbsFile $ resolvedOutDir </> filename
-            Data.ByteString.writeFile finalPath contents
+            dataDir <- getDataDir
+            Path.IO.ensureDir resolvedOutDir
+            Control.Monad.forM_ dataDir $ \(filename, contents) -> do
+                let finalPath = Path.fromAbsFile $ resolvedOutDir </> filename
+                Data.ByteString.writeFile finalPath contents
+    Version ->
+        putStrLn (showVersion Meta.version)
+
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
