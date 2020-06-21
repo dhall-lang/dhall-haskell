@@ -13,9 +13,7 @@ stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/nix-support
     dhall-docs --input ./Prelude --output $out/docs > $out/dhall-docs.log
-    for i in $(find $out/docs -name "*.html"); do
-      echo "report html $i" >> $out/nix-support/hydra-build-products
-    done;
+    echo "report html $out/docs" >> $out/nix-support/hydra-build-products
     echo "report log $out/dhall-docs.log" >> $out/nix-support/hydra-build-products
   '';
 }
