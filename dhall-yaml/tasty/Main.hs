@@ -65,6 +65,10 @@ testTree =
             Dhall.JSON.Yaml.defaultOptions{ documents = True }
             "./tasty/data/single-document"
             TestBoth
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions{ documents = True }
+            "./tasty/data/single-document-bare"
+            TestBoth
         , testYamlToDhall
             "./tasty/data/mergify"
         ]
