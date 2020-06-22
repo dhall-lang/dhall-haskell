@@ -2,7 +2,7 @@
 
 module Main where
 
-import Gauge (defaultMain, bgroup, bench, nf)
+import Gauge (defaultMain, bgroup, bench, nf, env)
 
 import Control.Exception (throw)
 import qualified Gauge
@@ -17,6 +17,8 @@ benchExprFromText name expr =
 
 main :: IO ()
 main = do
-    cpkgExample <- TIO.readFile "benchmark/normalize/cpkg.dhall"
     defaultMain
-        [ benchExprFromText "CPkg/Text" cpkgExample ]
+        [ env cpkgExample $ \e ->
+            benchExprFromText "CPkg/Text" e
+        ]
+    where cpkgExample = TIO.readFile "benchmark/normalize/cpkg.dhall"
