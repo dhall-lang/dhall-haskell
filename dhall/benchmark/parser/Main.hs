@@ -3,11 +3,12 @@
 
 module Main where
 
+import Control.Exception (throw)
 import Control.Monad (forM)
 import Data.Map (Map, foldrWithKey, singleton, unions)
 import Data.Monoid ((<>))
 import Data.Void (Void)
-import Gauge (defaultMain, bgroup, bench, nf, whnf, nfIO)
+import Gauge (defaultMain, bgroup, bench, env, nf, whnf, nfIO)
 
 import System.Directory
 
@@ -75,6 +76,10 @@ benchExprFromBytes name bytes = bench name (nf f bytes)
             Left  exception  -> error (show exception)
             Right expression -> expression :: Dhall.Expr Void Dhall.Import
 
+benchNfExprFromText :: String -> T.Text -> Gauge.Benchmark
+benchNfExprFromText name expr =
+    bench name $ nf (either throw id . Dhall.exprFromText "(input)") expr
+
 main :: IO ()
 main = do
     prelude <- loadPreludeFiles
@@ -96,4 +101,7 @@ main = do
         , benchExprFromText "Block comment" ("x {- " <> T.replicate 1000000 " " <> "-}")
         , benchExprFromText "Deeply nested parentheses" "((((((((((((((((x))))))))))))))))"
         , benchParser prelude
+        , env cpkgExample $ \e ->
+            benchNfExprFromText "CPkg/Text" e
         ]
+    where cpkgExample = TIO.readFile "benchmark/examples/cpkg.dhall"
