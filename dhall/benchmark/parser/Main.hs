@@ -104,4 +104,4 @@ main = do
         , env cpkgExample $ \e ->
             benchNfExprFromText "CPkg/Text" e
         ]
-    where cpkgExample = TIO.readFile "benchmark/normalize/cpkg.dhall"
+    where cpkgExample = TIO.readFile "benchmark/examples/cpkg.dhall"

@@ -26,7 +26,6 @@ Extra-Source-Files:
     benchmark/deep-nested-large-record/*.dhall
     benchmark/examples/*.dhall
     benchmark/examples/normalize/*.dhall
-    benchmark/normalize/*.dhall
     man/dhall.1
     CHANGELOG.md
     dhall-lang/Prelude/Bool/and
