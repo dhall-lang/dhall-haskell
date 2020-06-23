@@ -83,15 +83,14 @@ benchNfExprFromText name expr =
 main :: IO ()
 main = do
     prelude <- loadPreludeFiles
-    issue108Text  <- TIO.readFile "benchmark/examples/issue108.dhall"
-    issue108Bytes <- Data.ByteString.Lazy.readFile "benchmark/examples/issue108.dhall.bin"
-    kubernetesExample <- Data.ByteString.Lazy.readFile "benchmark/examples/kubernetes.dhall.bin"
     defaultMain
-        [ bgroup "Issue #108"
-            [ benchExprFromText  "Text"   issue108Text
-            , benchExprFromBytes "Binary" issue108Bytes
-            ]
-        , benchExprFromBytes "Kubernetes/Binary" kubernetesExample
+        [ env issues $ \ ~(it, ib) ->
+            bgroup "Issue #108"
+                [ benchExprFromText  "Text"   it
+                , benchExprFromBytes "Binary" ib
+                ]
+        , env kubernetesExample $
+            benchExprFromBytes "Kubernetes/Binary"
         , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
         , benchExprFromText "Large number of function arguments" (T.replicate 10000 "x ")
         , benchExprFromText "Long double-quoted strings" ("\"" <> T.replicate 1000000 "x" <> "\"")
@@ -101,7 +100,11 @@ main = do
         , benchExprFromText "Block comment" ("x {- " <> T.replicate 1000000 " " <> "-}")
         , benchExprFromText "Deeply nested parentheses" "((((((((((((((((x))))))))))))))))"
         , benchParser prelude
-        , env cpkgExample $ \e ->
-            benchNfExprFromText "CPkg/Text" e
+        , env cpkgExample $
+            benchNfExprFromText "CPkg/Text"
         ]
     where cpkgExample = TIO.readFile "benchmark/examples/cpkg.dhall"
+          issue108Text = TIO.readFile "benchmark/examples/issue108.dhall"
+          issue108Bytes = Data.ByteString.Lazy.readFile "benchmark/examples/issue108.dhall.bin"
+          issues = (,) <$> issue108Text <*> issue108Bytes
+          kubernetesExample = Data.ByteString.Lazy.readFile "benchmark/examples/kubernetes.dhall.bin"
