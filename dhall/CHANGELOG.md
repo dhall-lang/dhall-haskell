@@ -1,3 +1,9 @@
+1.33.1
+
+* [Multi-line REPL / support `repline-0.4.0.0`](https://github.com/dhall-lang/dhall-haskell/pull/1867)
+    * `dhall repl` supports a new `:paste` command that lets you input a command
+       by pasting one or more lines
+
 1.33.0
 
 * [Supports version 17.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v17.0.0)
