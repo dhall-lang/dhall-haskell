@@ -637,23 +637,24 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
 
             case Core.shallowDenote parsedImport of
                 -- If this import trivially wraps another import, we can skip
-                -- the type-checking step as the transitive import was already
-                -- type-checked
+                -- the type-checking and normalization step as the transitive
+                -- import was already type-checked and normalized
                 Embed _ -> do
-                    return ()
+                    return (Core.denote substitutedExpr)
 
                 _ -> do
                     case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
                         Left  err -> throwMissingImport (Imported _stack err)
                         Right _   -> return ()
 
-            let betaNormal = Core.normalizeWith _normalizer resolvedExpr
+                    let betaNormal =
+                            Core.normalizeWith _normalizer substitutedExpr
 
-            let bytes = encodeExpression NoVersion betaNormal
+                    let bytes = encodeExpression NoVersion betaNormal
 
-            lift (writeToSemisemanticCache semisemanticHash bytes)
+                    lift (writeToSemisemanticCache semisemanticHash bytes)
 
-            return betaNormal
+                    return betaNormal
 
     return (ImportSemantics {..})
 
