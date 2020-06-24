@@ -10,7 +10,7 @@ module Dhall.Format
     , format
     ) where
 
-import Data.Foldable (for_, toList)
+import Data.Foldable (for_)
 import Data.Monoid ((<>))
 import Dhall.Pretty (CharacterSet(..), annToAnsiStyle)
 
@@ -78,7 +78,7 @@ format (Format { input = input0, ..}) = go input0
 
         case transitivity of
             Transitive -> do
-                for_ (toList parsedExpression) $ \import_ -> do
+                for_ parsedExpression $ \import_ -> do
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                     for_ maybeFilepath $ \filepath -> do

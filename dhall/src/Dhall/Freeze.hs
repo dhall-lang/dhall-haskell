@@ -17,7 +17,7 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
-import Data.Foldable (toList, for_)
+import Data.Foldable (for_)
 import Data.Monoid ((<>))
 import Dhall.Pretty (CharacterSet)
 import System.Console.ANSI (hSupportsANSI)
@@ -147,7 +147,7 @@ freeze outputMode input0 scope intent characterSet censor = go input0
 
         case transitivity of
             Transitive -> do
-                for_ (toList parsedExpression) $ \import_ -> do
+                for_ parsedExpression $ \import_ -> do
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                     for_ maybeFilepath $ \filepath -> do

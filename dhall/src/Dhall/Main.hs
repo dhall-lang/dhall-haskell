@@ -23,7 +23,7 @@ module Dhall.Main
 import Control.Applicative       (optional, (<|>))
 import Control.Exception         (Handler (..), SomeException)
 import Control.Monad             (when)
-import Data.Foldable             (for_, toList)
+import Data.Foldable             (for_)
 import Data.List.NonEmpty        (NonEmpty (..))
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
@@ -784,7 +784,7 @@ command (Options {..}) = do
 
                 case transitivity of
                     Transitive -> do
-                        for_ (toList parsedExpression) $ \import_ -> do
+                        for_ parsedExpression $ \import_ -> do
                             maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                             for_ maybeFilepath $ \filepath -> do
