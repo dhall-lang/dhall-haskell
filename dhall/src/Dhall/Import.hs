@@ -126,6 +126,7 @@ module Dhall.Import (
     , normalizer
     , startingContext
     , chainImport
+    , dependencyToFile
     , ImportSemantics
     , Cycle(..)
     , ReferentiallyOpaque(..)
@@ -148,6 +149,7 @@ import Control.Exception
 import Control.Monad                    (when)
 import Control.Monad.Catch              (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class           (MonadIO (..))
+import Control.Monad.Morph              (hoist)
 import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
@@ -1119,3 +1121,52 @@ instance Show ImportResolutionDisabled where
 assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src Void)
 assertNoImports expression =
     Dhall.Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
+
+{-| This function is used by the @--transitive@ flag of the
+    @dhall {freeze,format,lint}@ subcommands to determine which dependencies
+    to descend into
+-}
+dependencyToFile :: Status -> Import -> IO (Maybe FilePath)
+dependencyToFile status import_ = flip State.evalStateT status $ do
+    parent :| _ <- zoom stack State.get
+
+    child <- fmap chainedImport (hoist liftIO (chainImport parent import_))
+
+    let Import{ importHashed, importMode } = child
+
+    let ImportHashed{ importType } = importHashed
+
+    let ignore = return Nothing
+
+    -- Only descend into "normal" imports
+    case importMode of
+        RawText ->
+            ignore
+
+        Location ->
+            ignore
+
+        Code ->
+            case importType of
+                Local filePrefix file -> do
+                    let descend = liftIO $ do
+                            path <- localToPath filePrefix file
+
+                            return (Just path)
+
+                    -- Only follow relative imports when modifying dependencies
+                    case filePrefix of
+                        Here     -> ignore
+                        Parent   -> ignore
+                        Absolute -> descend
+                        Home     -> descend
+
+                -- Don't transitively modify any other type of import
+                Remote{} ->
+                    ignore
+
+                Missing ->
+                    ignore
+
+                Env{} ->
+                    ignore
