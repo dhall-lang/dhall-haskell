@@ -1132,14 +1132,10 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
 
     child <- fmap chainedImport (hoist liftIO (chainImport parent import_))
 
-    let Import{ importHashed, importMode } = child
-
-    let ImportHashed{ importType } = importHashed
-
     let ignore = return Nothing
 
     -- Only descend into "normal" imports
-    case importMode of
+    case importMode child of
         RawText ->
             ignore
 
@@ -1147,19 +1143,21 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
             ignore
 
         Code ->
-            case importType of
+            case importType (importHashed child) of
                 Local filePrefix file -> do
                     let descend = liftIO $ do
                             path <- localToPath filePrefix file
 
                             return (Just path)
 
-                    -- Only follow relative imports when modifying dependencies
-                    case filePrefix of
-                        Here     -> ignore
-                        Parent   -> ignore
-                        Absolute -> descend
-                        Home     -> descend
+                    -- Only follow relative imports when modifying dependencies.
+                    -- Carefully note that we check the file prefix of the
+                    -- original import (before chaining), since the chained
+                    -- import will inherit the file prefix of the parent import.
+                    case importType (importHashed import_) of
+                        Local Here   _ -> descend
+                        Local Parent _ -> descend
+                        _              -> ignore
 
                 -- Don't transitively modify any other type of import
                 Remote{} ->
