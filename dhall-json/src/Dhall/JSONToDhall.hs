@@ -1180,15 +1180,29 @@ tryCompleteRecord (D.RecordLit schema) completables = go completables
     mkRecordCompletion name = D.RecordCompletion (D.Field (D.Var (D.V "schemas" 0)) name)
 tryCompleteRecord _ _ = Nothing
 
-dhallFromJSONSchemas :: FilePath -> ExprX -> ExprX -> Either CompileError (Expr Src D.Import)
-dhallFromJSONSchemas filePath schemas schema@(D.RecordLit _) =
+dhallFromJSONSchemas
+    :: Expr Src D.Import -> Expr Src Void -> IO (Expr Src D.Import)
+dhallFromJSONSchemas parsedSchemas expression = do
+    resolvedSchemas <- Dhall.Import.load parsedSchemas
+
+    typeSchemas <- D.throws (D.typeOf resolvedSchemas)
+
+    case typeSchemas of
+        D.Record _ -> return ()
+        _          -> throwIO NoInputSchemas
+
+    let normalizedSchemas = D.normalize resolvedSchemas
+
+    let completableRecords = getCompletableRecords normalizedSchemas
+
     if null completableRecords
-    then Left NoSchemas
-    else case tryCompleteRecord schema completableRecords of
-           Just completedRecord -> Right $ mkExpression completedRecord
-           Nothing              -> Left NoMatchingSchema
+        then throwIO NoSchemas
+        else return ()
+
+    case tryCompleteRecord expression completableRecords of
+        Just completedRecord -> return (mkExpression completedRecord)
+        Nothing              -> throwIO NoMatchingSchema
   where
-    completableRecords = getCompletableRecords schemas
     mkExpression :: ExprX -> Expr Src D.Import
     mkExpression completedRecord = D.Let
       (D.Binding {
@@ -1197,19 +1211,9 @@ dhallFromJSONSchemas filePath schemas schema@(D.RecordLit _) =
           bindingSrc1 = Nothing,
           annotation = Nothing,
           bindingSrc2 = Nothing,
-          value = D.Embed mkImport
+          value = parsedSchemas
           })
       (fmap absurd completedRecord)
-    mkImport = D.Import {
-      importMode = D.Code,
-      -- TODO: support non local schemas file
-      importHashed = D.ImportHashed {
-          hash = Nothing,
-          importType = D.Local D.Here (D.File {directory = D.Directory {components = []},
-                                               file = Text.pack (drop 2 filePath) })
-          }
-      }
-dhallFromJSONSchemas _ _ _ = Left NoInputSchemas
 
 -- ----------
 -- EXCEPTIONS
