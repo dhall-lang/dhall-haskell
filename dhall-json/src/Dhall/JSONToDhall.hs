@@ -1109,10 +1109,6 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop jsonPath expr value
         = Left (Mismatch expr value jsonPath)
 
-{-| Another conversion function that generates a record schemas
-
-TODO: add >>> doctest
--}
 -- A completable records contains the Type and default RecordLit values
 decodeSchema
     :: Expr Src Void
