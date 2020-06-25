@@ -221,6 +221,11 @@ import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 
+{- $setup
+
+    >>> import Dhall.Syntax
+-}
+
 -- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
     { cyclicImport :: Import  -- ^ The offending cyclic import
@@ -1122,9 +1127,22 @@ assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src Void)
 assertNoImports expression =
     Dhall.Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
 
-{-| This function is used by the @--transitive@ flag of the
+{-| This function is used by the @--transitive@ option of the
     @dhall {freeze,format,lint}@ subcommands to determine which dependencies
     to descend into
+
+    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "foo") }, importMode = Code }
+    Just "./foo"
+
+    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "bar") }, importMode = Code }
+    Just "./foo/bar"
+
+
+    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Remote (URL HTTPS "example.com" (File (Directory []) "") Nothing Nothing) }, importMode = Code }
+    Nothing
+
+    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Env "foo" }, importMode = Code }
+    Nothing
 -}
 dependencyToFile :: Status -> Import -> IO (Maybe FilePath)
 dependencyToFile status import_ = flip State.evalStateT status $ do
