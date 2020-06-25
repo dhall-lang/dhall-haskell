@@ -1,9 +1,13 @@
 {-| Utilities to interact with the dhall-docs home directory
 -}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# LANGUAGE QuasiQuotes #-}
+
+
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
 
 import Dhall.Crypto (SHA256Digest (..), sha256Hash)
-import Path         (Abs, Dir, Path)
+import Path         (Abs, Dir, Path, Rel)
 import Path.IO      (XdgDirectory (..))
 
 import qualified Codec.Archive.Tar       as Tar
@@ -19,7 +23,7 @@ import qualified Path.IO
 -}
 getDocsHomeDirectory :: IO (Path Abs Dir)
 getDocsHomeDirectory = do
-    dir <- Path.IO.getXdgDir Path.IO.XdgData $ Path.parseRelDir "dhall-docs"
+    dir <- Path.IO.getXdgDir Path.IO.XdgData $ Just $ [Path.reldir|dhall-docs|]
     Path.IO.ensureDir dir
     return dir
 
