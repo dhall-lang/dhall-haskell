@@ -13,8 +13,8 @@ stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/nix-support
     export XDG_DATA_HOME=$out/
-    dhall-docs --input ./Prelude > $out/dhall-docs.log
-    htmlDir=$(readlink -f ./docs)
+    dhall-docs --input ./Prelude --output-link ./dhall-docs > $out/dhall-docs.log
+    htmlDir=$(readlink -f ./dhall-docs)
     tree $XDG_DATA_HOME/dhall-docs > $out/dhall-docs.log
     echo "report html $htmlDir" >> $out/nix-support/hydra-build-products
     echo "report log $out/dhall-docs.log" >> $out/nix-support/hydra-build-products
