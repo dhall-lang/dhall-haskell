@@ -1,16 +1,11 @@
-{ mkDerivation, aeson, base, bytestring, fetchgit, stdenv
-, string-qq, tasty, tasty-discover, tasty-hunit, text
-, unordered-containers, vector, yaml
+{ mkDerivation, aeson, base, bytestring, stdenv, string-qq, tasty
+, tasty-discover, tasty-hunit, text, unordered-containers, vector
+, yaml
 }:
 mkDerivation {
   pname = "aeson-yaml";
-  version = "1.0.6.0";
-  src = fetchgit {
-    url = "https://github.com/clovyr/aeson-yaml.git";
-    sha256 = "1bp4biap1rwak2fc7xb7qmh77hp1i3g0mlg66gw96ljkpi16vqk8";
-    rev = "3e697cfc99bedfc7e1d1f3d4b738d6d774a804b2";
-    fetchSubmodules = true;
-  };
+  version = "1.1.0.0";
+  sha256 = "deece91c2c0ad1d9782a2e70c976f8184f21e2cf339375e7a9fc5f3cb880d9cf";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
