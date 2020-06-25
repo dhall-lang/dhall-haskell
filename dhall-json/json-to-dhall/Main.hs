@@ -221,13 +221,6 @@ main = do
                       Just filePath -> do
                           inputSchemas <- loadSchemas filePath
 
-{- TODO: remove debug...
-                          putStrLn $ "value        => " <> show value
-                          putStrLn $ "finalSchema  => " <> show finalSchema
-                          putStrLn $ "inputSchemas => " <> show inputSchemas
-                          putStrLn $ "expr         => " <> show expression
--}
-
                           Dhall.Core.throws (dhallFromJSONSchemas filePath inputSchemas expression)
 
                       Nothing -> return $ fmap absurd $ expression
