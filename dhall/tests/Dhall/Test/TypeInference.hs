@@ -35,7 +35,7 @@ getTests = do
             let skip =
                     -- This test intermittently fails with:
                     -- "Error: Remote host not found"
-                    [ typeInferenceDirectory </> "success/CacheImportsCanonicalize"
+                    [ typeInferenceDirectory </> "success/CacheImportsCanonicalizeA.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)
