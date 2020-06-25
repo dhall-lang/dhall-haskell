@@ -24,12 +24,15 @@ import Options.Applicative (Parser, ParserInfo)
 import Path                (Abs, Dir, Path)
 
 import qualified Control.Monad
+import qualified Data.Text
+import qualified Data.Text.IO        as Text.IO
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Path
 import qualified Path.IO
 import qualified Paths_dhall_docs    as Meta
 import qualified System.Directory
+import qualified System.Exit
 import qualified System.IO
 
 -- | Command line options
@@ -54,9 +57,8 @@ parseOptions =
        <> Options.Applicative.metavar "OUTPUT-LINK"
        <> Options.Applicative.help
             ( "Path to the link targeting the directory with the generated "
-           <> "documentation. If the path exists, is a directory or a symlink "
-           <> "to a directory, its overwritten with the target to the actual "
-           <> "documentation"
+           <> "documentation. The path needs to not exist or to be a symlink, "
+           <> "otherwise the tool won't generate any docs at all"
             )
        <> Options.Applicative.value "./docs" )
     <*> parsePackageNameResolver
@@ -105,16 +107,25 @@ defaultMain = \case
         GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
         resolvedPackageDir <- Path.IO.resolveDir' packageDir
 
-        outLinkExists <- System.Directory.doesDirectoryExist docLink
-        Control.Monad.when outLinkExists $ System.Directory.removeFile docLink
+        outDirExists <- System.Directory.doesPathExist docLink
+        Control.Monad.when outDirExists $ do
+            isLink <- System.Directory.pathIsSymbolicLink docLink
+            if isLink then System.Directory.removeFile docLink
+            else die $ "The specified --output-link (" <> docLink <> ") already "
+                    <> "exists and its not a symlink. The --output-link flag "
+                    <> "needs to either not exist or to be a symlink"
 
         resolvedDocLink <- Path.IO.resolveDir' docLink
-
         let packageName = resolvePackageName resolvedPackageDir
         generateDocs resolvedPackageDir resolvedDocLink packageName
     Version ->
         putStrLn (showVersion Meta.version)
 
+die :: String -> IO a
+die e = do
+    Text.IO.hPutStrLn System.IO.stderr $ Data.Text.pack e
+
+    System.Exit.exitFailure
 
 -- | Entry point for the @dhall-docs@ executable
 main :: IO ()
