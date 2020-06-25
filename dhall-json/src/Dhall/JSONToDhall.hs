@@ -1109,7 +1109,6 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop jsonPath expr value
         = Left (Mismatch expr value jsonPath)
 
--- A completable records contains the Type and default RecordLit values
 decodeSchema
     :: Expr Src Void
     -> Maybe (Map Text (Expr Src Void), Map Text (Expr Src Void))
