@@ -1152,7 +1152,8 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
 
     let ignore = return Nothing
 
-    -- Only descend into "normal" imports
+    -- We only need to transitively modify code imports since other import
+    -- types are not interpreted and therefore don't need to be modified
     case importMode child of
         RawText ->
             ignore
