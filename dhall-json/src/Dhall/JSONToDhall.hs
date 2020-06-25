@@ -378,6 +378,7 @@ import Dhall.JSON.Util          (pattern V)
 import Dhall.Parser             (Src)
 import Options.Applicative      (Parser)
 
+import qualified Control.Monad              as Monad
 import qualified Data.Aeson                 as Aeson
 import qualified Data.Aeson.Types           as Aeson.Types
 import qualified Data.ByteString.Lazy.Char8 as BSL8
@@ -1117,13 +1118,13 @@ type CompletableRecord = ([(Text, ExprX)], [(Text, ExprX)])
 getCompletableRecords :: ExprX -> [(Text, CompletableRecord)]
 getCompletableRecords (D.RecordLit schemas) = go (Map.toList schemas)
   where
-    go :: [(Text, ExprX)] -> [(Text, CompletableRecord)]
-    go [] = []
-    go ((name, D.RecordLit schema):xs) =
-      if isSchema schema
-      then getCompletableRecord name schema : go xs
-      else go xs
-    go (_:xs) = go xs
+    go keyValues = do
+        (key, D.RecordLit schema) <- keyValues
+
+        Monad.guard (isSchema schema)
+
+        return (getCompletableRecord key schema)
+
     isSchema recordItems
       -- TODO: check that `Type` is a Record Type and `default` is a Record literal
       | Map.keysSet recordItems == Set.fromList [Text.pack "Type", Text.pack "default"] = True
