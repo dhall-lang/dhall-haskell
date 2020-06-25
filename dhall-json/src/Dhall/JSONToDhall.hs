@@ -1178,13 +1178,13 @@ dhallFromJSONSchemas parsedSchemas expression = do
 
     case typeSchemas of
         D.Record _ -> return ()
-        _          -> throwIO NoInputSchemas
+        _          -> throwIO NoSchemasRecord
 
     let normalizedSchemas = D.normalize resolvedSchemas
 
     decodedSchemas <- case decodeSchemas normalizedSchemas of
         Just decodedSchemas -> return decodedSchemas
-        Nothing             -> fail "Urk!"
+        Nothing             -> throwIO NoSchemasRecord
 
     let rewrittenExpression =
             Optics.transformOf D.subExpressions (useSchemas decodedSchemas) expression
@@ -1239,9 +1239,7 @@ data CompileError
   | ContainsUnion        ExprX
   | UndecidableUnion     ExprX Value [ExprX]
   -- schemas specific
-  | NoSchemas
-  | NoInputSchemas
-  | NoMatchingSchema
+  | NoSchemasRecord
 
 instance Show CompileError where
     show = showCompileError "JSON" showJSON
@@ -1307,11 +1305,7 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
 
-    NoSchemas -> prefix <> "No schemas record found"
-
-    NoInputSchemas -> prefix <> "Input is not a schema"
-
-    NoMatchingSchema -> prefix <> "Input does not match any schema"
+    NoSchemasRecord -> prefix <> "The --schemas argument is not a record"
 
 showJsonPath :: Aeson.Types.JSONPath -> String
 showJsonPath = Aeson.Types.formatPath . reverse
