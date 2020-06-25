@@ -1,11 +1,11 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE PatternGuards       #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedLists     #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternGuards       #-}
 {-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-| Convert JSON data to Dhall in one of two ways:
@@ -360,7 +360,7 @@ module Dhall.JSONToDhall (
     , showCompileError
     ) where
 
-import Control.Applicative      ((<|>))
+import Control.Applicative      (Alternative(..))
 import Control.Exception        (Exception, throwIO)
 import Control.Monad.Catch      (MonadCatch, throwM)
 import Data.Aeson               (Value)
@@ -378,7 +378,6 @@ import Dhall.JSON.Util          (pattern V)
 import Dhall.Parser             (Src)
 import Options.Applicative      (Parser)
 
-import qualified Control.Monad              as Monad
 import qualified Data.Aeson                 as Aeson
 import qualified Data.Aeson.Types           as Aeson.Types
 import qualified Data.ByteString.Lazy.Char8 as BSL8
@@ -389,7 +388,6 @@ import qualified Data.Map
 import qualified Data.Map.Merge.Lazy        as Data.Map.Merge
 import qualified Data.Ord                   as Ord
 import qualified Data.Sequence              as Seq
-import qualified Data.Set                   as Set
 import qualified Data.String
 import qualified Data.Text                  as Text
 import qualified Data.Vector                as Vector
@@ -1121,15 +1119,16 @@ getCompletableRecords (D.RecordLit schemas) = go (Map.toList schemas)
     go keyValues = do
         (key, D.RecordLit schema) <- keyValues
 
-        Monad.guard (isSchema schema)
+        case schema of
+            [   ("Type", D.Record _)
+              , ("default", D.RecordLit _)
+              ] -> return ()
+            _ -> empty
 
         return (getCompletableRecord key schema)
 
-    isSchema recordItems
-      -- TODO: check that `Type` is a Record Type and `default` is a Record literal
-      | Map.keysSet recordItems == Set.fromList [Text.pack "Type", Text.pack "default"] = True
-      | otherwise = False
-    getCompletableRecord :: Text -> Map.Map Text ExprX -> (Text, CompletableRecord)
+    getCompletableRecord
+        :: Text -> Map.Map Text ExprX -> (Text, CompletableRecord)
     getCompletableRecord name fields = (name, (go' "Type", go' "default"))
       where
         go' attr = case Map.lookup attr fields of
