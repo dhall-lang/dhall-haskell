@@ -377,6 +377,7 @@ import Dhall.Core               (Chunks (..), DhallDouble (..), Expr (App))
 import Dhall.JSON.Util          (pattern V)
 import Dhall.Map                (Map)
 import Dhall.Parser             (Src)
+import Lens.Family              (FoldLike', views)
 import Options.Applicative      (Parser)
 
 import qualified Data.Aeson                 as Aeson
@@ -1187,21 +1188,36 @@ dhallFromJSONSchemas parsedSchemas expression = do
         Nothing             -> throwIO NoSchemasRecord
 
     let rewrittenExpression =
-            Optics.transformOf D.subExpressions (useSchemas decodedSchemas) expression
+            fmap absurd (Optics.transformOf D.subExpressions (useSchemas decodedSchemas) expression)
 
-    return
-        (D.Let
-            (D.Binding
-                { bindingSrc0 = Nothing
-                , variable = "schemas"
-                , bindingSrc1 = Nothing
-                , annotation = Nothing
-                , bindingSrc2 = Nothing
-                , value = parsedSchemas
-                }
-            )
-            (fmap absurd rewrittenExpression)
-        )
+    let usesSchema = (not . null) $ do
+            D.Var (D.V "schemas" 0) <- universeOf D.subExpressions rewrittenExpression
+            return ()
+
+    if usesSchema
+        then
+            return
+                (D.Let
+                    (D.Binding
+                        { bindingSrc0 = Nothing
+                        , variable = "schemas"
+                        , bindingSrc1 = Nothing
+                        , annotation = Nothing
+                        , bindingSrc2 = Nothing
+                        , value = parsedSchemas
+                        }
+                    )
+                    rewrittenExpression
+                )
+        else return rewrittenExpression
+
+{-| Inline implemention of @"Control.Lens".`Control.Lens.universeOf`@, in order
+    to avoid a @lens@ dependency
+-}
+universeOf :: FoldLike' [a] a a -> a -> [a]
+universeOf l = go
+  where
+    go a = a : views l go a
 
 -- ----------
 -- EXCEPTIONS
