@@ -113,7 +113,7 @@ defaultMain = \case
             isLink <- System.Directory.pathIsSymbolicLink docLink
             if isLink then System.Directory.removeFile docLink
             else die $ "The specified --output-link (" <> Data.Text.pack docLink
-                    <> ") already exists and its not a symlink."
+                    <> ") already exists and it's not a symlink."
 
         resolvedDocLink <- Path.IO.resolveDir' docLink
         let packageName = resolvePackageName resolvedPackageDir
