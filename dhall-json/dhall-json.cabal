@@ -1,5 +1,5 @@
 Name: dhall-json
-Version: 1.6.4
+Version: 1.7.0
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.1
@@ -44,7 +44,7 @@ Library
         aeson-yaml                >= 1.1.0    && < 1.2 ,
         bytestring                               < 0.11,
         containers                >= 0.5.9    && < 0.7 ,
-        dhall                     >= 1.32.0   && < 1.33,
+        dhall                     >= 1.33.0   && < 1.34,
         exceptions                >= 0.8.3    && < 0.11,
         filepath                                 < 1.5 ,
         optparse-applicative      >= 0.14.0.0 && < 0.16,

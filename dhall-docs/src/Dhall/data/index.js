@@ -1,16 +1,8 @@
-function ready(fn) {
-  if (document.readyState != 'loading'){
-    fn();
-  } else {
-    document.addEventListener('DOMContentLoaded', fn);
-  }
-}
-
 const DARK_MODE_OPT = 'dark-mode'
 const DARK_MODE_ACTIVE = 'dark-mode-active'
 const DARK_MODE_INACTIVE = 'dark-mode-inactive'
 
-ready(function() {
+function onReady() {
   if (localStorage.getItem(DARK_MODE_OPT) == DARK_MODE_ACTIVE) {
     document.body.classList.add('dark-mode')
   } else {
@@ -25,4 +17,10 @@ ready(function() {
         localStorage.setItem(DARK_MODE_OPT, DARK_MODE_INACTIVE)
       }
     })
-})
+}
+
+if (document.readyState != 'loading'){
+  onReady();
+} else {
+  document.addEventListener('DOMContentLoaded', onReady);
+}

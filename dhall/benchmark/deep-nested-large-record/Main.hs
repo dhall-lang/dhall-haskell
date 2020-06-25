@@ -57,8 +57,11 @@ unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
 
 main :: IO ()
 main = do
-  prelude <- Import.load (Core.Embed dhallPreludeImport)
   defaultMain
-    [ Gauge.bench "issue 412" (issue412 prelude)
-    , Gauge.bench "union performance" (unionPerformance prelude)
+    [ Gauge.env prelude $ \p ->
+      Gauge.bgroup "Prelude"
+        [ Gauge.bench "issue 412" (issue412 p)
+        , Gauge.bench "union performance" (unionPerformance p)
+        ]
     ]
+  where prelude = Import.load (Core.Embed dhallPreludeImport)
