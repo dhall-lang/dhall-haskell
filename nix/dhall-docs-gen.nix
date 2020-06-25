@@ -14,7 +14,7 @@ stdenv.mkDerivation rec {
     mkdir -p $out/nix-support
     export XDG_DATA_HOME=$out/
     dhall-docs --input ./Prelude > $out/dhall-docs.log
-    htmlDir=$(dirname $(readlink -f ./docs/index.html))
+    htmlDir=$(readlink -f ./docs)
     tree $XDG_DATA_HOME/dhall-docs > $out/dhall-docs.log
     echo "report html $htmlDir" >> $out/nix-support/hydra-build-products
     echo "report log $out/dhall-docs.log" >> $out/nix-support/hydra-build-products

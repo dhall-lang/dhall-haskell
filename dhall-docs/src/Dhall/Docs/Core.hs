@@ -2,10 +2,7 @@
 
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# OPTIONS_GHC -Wno-unused-imports   #-}
 
 module Dhall.Docs.Core (generateDocs) where
 
@@ -17,7 +14,7 @@ import Dhall.Docs.Html
 import Dhall.Docs.Markdown
 import Dhall.Docs.Store
 import Dhall.Parser        (Header (..), ParseError (..), exprAndHeaderFromText)
-import Path                (Abs, Dir, File, Path, Rel, (</>))
+import Path                (Abs, Dir, File, Path, (</>))
 import Text.Megaparsec     (ParseErrorBundle (..))
 
 import qualified Control.Applicative as Applicative
@@ -206,9 +203,9 @@ createIndexes outputPath htmlFiles packageName = do
 
 -- | Generate all of the docs for a package
 generateDocs
-    :: Path Abs Dir  -- ^ Input directory
-    -> Path Abs File -- ^ Link to be created to the generated documentation
-    -> String        -- ^ Package name, used in some HTML titles
+    :: Path Abs Dir -- ^ Input directory
+    -> Path Abs Dir -- ^ Link to be created to the generated documentation
+    -> String       -- ^ Package name, used in some HTML titles
     -> IO ()
 generateDocs inputDir outLink packageName = do
 
@@ -236,4 +233,4 @@ generateDocs inputDir outLink packageName = do
                     getDocsHomeDirectory (Path.parseRelDir $ show outputHash <> "-" <> packageName)
 
         Path.IO.copyDirRecur tempDir outDir
-        Path.IO.createFileLink (outDir </> $(Path.mkRelFile "index.html")) outLink
+        Path.IO.createDirLink outDir outLink

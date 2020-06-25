@@ -52,8 +52,13 @@ parseOptions =
     <*> Options.Applicative.strOption
         ( Options.Applicative.long "output-link"
        <> Options.Applicative.metavar "OUTPUT-LINK"
-       <> Options.Applicative.help "Path for the link to the generated documentation"
-       <> Options.Applicative.value "./docs/index.html" )
+       <> Options.Applicative.help
+            ( "Path to the link targeting the directory with the generated "
+           <> "documentation. If the path exists, is a directory or a symlink "
+           <> "to a directory, its overwritten with the target to the actual "
+           <> "documentation"
+            )
+       <> Options.Applicative.value "./docs" )
     <*> parsePackageNameResolver
     ) <|> parseVersion
   where
@@ -100,10 +105,10 @@ defaultMain = \case
         GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
         resolvedPackageDir <- Path.IO.resolveDir' packageDir
 
-        outLinkExists <- System.Directory.doesFileExist docLink
+        outLinkExists <- System.Directory.doesDirectoryExist docLink
         Control.Monad.when outLinkExists $ System.Directory.removeFile docLink
 
-        resolvedDocLink <- Path.IO.resolveFile' docLink
+        resolvedDocLink <- Path.IO.resolveDir' docLink
 
         let packageName = resolvePackageName resolvedPackageDir
         generateDocs resolvedPackageDir resolvedDocLink packageName
