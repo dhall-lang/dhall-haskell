@@ -1321,7 +1321,7 @@ showCompileError format showValue = let prefix = red "\nError: "
       <> "\n\n" <> format <> ":\n"  <> showValue v
       <> "\n"
 
-    NoSchemasRecord -> prefix <> "The --schemas argument is not a record"
+    NoSchemasRecord -> prefix <> "The --schemas argument is not a record of schemas"
 
 showJsonPath :: Aeson.Types.JSONPath -> String
 showJsonPath = Aeson.Types.formatPath . reverse
