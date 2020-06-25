@@ -375,6 +375,7 @@ import Data.Text                (Text)
 import Data.Void                (Void, absurd)
 import Dhall.Core               (Chunks (..), DhallDouble (..), Expr (App))
 import Dhall.JSON.Util          (pattern V)
+import Dhall.Map                (Map)
 import Dhall.Parser             (Src)
 import Options.Applicative      (Parser)
 
@@ -1110,7 +1111,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 TODO: add >>> doctest
 -}
 -- A completable records contains the Type and default RecordLit values
-type CompletableRecord = ([(Text, ExprX)], [(Text, ExprX)])
+type CompletableRecord = (Map Text ExprX, Map Text ExprX)
 
 -- Utility function to get the list of completable record from the input schemas
 getCompletableRecords :: ExprX -> [(Text, CompletableRecord)]
@@ -1124,7 +1125,7 @@ getCompletableRecords expression = do
     case schema of
         [   ("Type", D.Record _Type)
           , ("default", D.RecordLit _default)
-          ] -> return (name, (Map.toList _Type, Map.toList _default))
+          ] -> return (name, (_Type, _default))
         _ -> empty
 
 tryCompleteRecord :: ExprX -> [(Text, CompletableRecord)] -> Maybe ExprX
@@ -1132,39 +1133,54 @@ tryCompleteRecord (D.RecordLit schema) completables = go completables
   where
     go :: [(Text, CompletableRecord)] -> Maybe ExprX
     go [] = Nothing
-    go ((name, (rtype, rdefault)):xs) = case completeRecord rtype (mergeDefaults rdefault) [] of
-        Just recordAttrs -> Just $ mkRecordCompletion name
-                                 $ D.RecordLit (Map.fromList $ filter (`notElem` rdefault) recordAttrs)
-        Nothing          -> go xs
+    go ((name, (rtype, rdefault)):xs) =
+        case completeRecord rtype (mergeDefaults rdefault) [] of
+            Just recordAttrs ->
+                Just
+                    (mkRecordCompletion name
+                         (D.RecordLit (recordAttrs \\\ rdefault))
+                    )
+            Nothing ->
+                go xs
 
-    -- Prepent the defaults to fill missing values
-    mergeDefaults :: [(Text, ExprX)] -> [(Text, ExprX)]
-    mergeDefaults rdefault = Map.toList $ Map.fromList $ rdefault <> Map.toList schema
+    l \\\ r = Map.fromList (Map.toList l List.\\ Map.toList r)
+
+    -- Prepend the defaults to fill missing values
+    mergeDefaults :: Map Text ExprX -> Map Text ExprX
+    mergeDefaults rdefault = Map.union schema rdefault
 
     -- Try to complete a single record type
-    completeRecord :: [(Text, ExprX)] -> [(Text, ExprX)] -> [(Text, ExprX)] -> Maybe [(Text, ExprX)]
-    completeRecord rtype [] acc
-      | length rtype == length acc = Just acc
-      | otherwise                  = Nothing
-    completeRecord rtype ((attrName, attrValue):xs) acc = case findAttribute rtype of
-        Just attr -> completeRecord rtype xs (attr:acc)
-        Nothing   -> case attrValue of
-          v@(D.RecordLit _)
-            -> case tryCompleteRecord v completables of
-              Just expr -> completeRecord rtype xs ((attrName, expr):acc)
-              Nothing   -> Nothing
-          _ -> Nothing
-      where
-        -- Try to find a single attribute value in a record type attr
-        findAttribute :: [(Text, ExprX)] -> Maybe (Text, ExprX)
-        findAttribute [] = Nothing
-        findAttribute ((typeName, typeValue):ts)
-          | typeName == attrName && sameType typeValue = Just (attrName, attrValue)
-          | otherwise                                  = findAttribute ts
+    completeRecord
+        :: Map Text ExprX
+        -> Map Text ExprX
+        -> Map Text ExprX
+        -> Maybe (Map Text ExprX)
+    completeRecord rtype m acc =
+        case Map.uncons m of
+            Nothing
+                | Map.size rtype == Map.size acc -> Just acc
+                | otherwise                      -> Nothing
+            Just (attrName, attrValue, xs) ->
+                case List.find predicate (Map.toList rtype) of
+                    Just _ ->
+                        completeRecord rtype xs (Map.insert attrName attrValue acc)
+                    Nothing   -> case attrValue of
+                        v@(D.RecordLit _) ->
+                            case tryCompleteRecord v completables of
+                                Just expr ->
+                                    completeRecord rtype xs (Map.insert attrName expr acc)
+                                Nothing ->
+                                    Nothing
+                        _ -> Nothing
+                  where
+                    predicate (typeName, typeValue) = namesMatch && typesMatch
+                      where
+                        namesMatch = typeName == attrName
 
-        sameType typeValue = case D.typeOf attrValue of
-          Right attrType -> typeValue == attrType
-          Left _ -> False
+                        typesMatch =
+                            case D.typeOf attrValue of
+                                Right attrType -> typeValue == attrType
+                                Left  _        -> False
 
     mkRecordCompletion :: Text -> ExprX -> ExprX
     mkRecordCompletion name = D.RecordCompletion (D.Field (D.Var (D.V "schemas" 0)) name)
