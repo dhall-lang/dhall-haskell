@@ -346,7 +346,7 @@ module Dhall.JSONToDhall (
     , resolveSchemaExpr
     , typeCheckSchemaExpr
     , dhallFromJSON
-    , dhallFromJSONSchemas
+    , useSchemas
 
     -- * Schema inference
     , Schema(..)
@@ -1136,11 +1136,11 @@ encodeSchemas
     -> Expr Src Void
 encodeSchemas schemas = D.RecordLit (fmap encodeSchema schemas)
 
-useSchemas
+useSchemasRewrite
     :: Map Text (Map Text (Expr Src Void), Map Text (Expr Src Void))
     -> Expr Src Void
     -> Expr Src Void
-useSchemas namedSchemas expression = (Maybe.fromMaybe expression . Maybe.listToMaybe) $ do
+useSchemasRewrite namedSchemas expression = (Maybe.fromMaybe expression . Maybe.listToMaybe) $ do
     (name, (_Type, _default)) <- Map.toList namedSchemas
 
     defaultedRecord <- case expression of
@@ -1166,9 +1166,14 @@ useSchemas namedSchemas expression = (Maybe.fromMaybe expression . Maybe.listToM
     substitutions =
         Map.singleton "schemas" (encodeSchemas namedSchemas)
 
-dhallFromJSONSchemas
-    :: Expr Src D.Import -> Expr Src Void -> IO (Expr Src D.Import)
-dhallFromJSONSchemas parsedSchemas expression = do
+-- | Simplify a Dhall expression using a record of schemas
+useSchemas
+    :: Expr Src D.Import
+    -- ^ Record of schemas
+    -> Expr Src Void
+    -- ^ Expression to simplify using the schemas
+    -> IO (Expr Src D.Import)
+useSchemas parsedSchemas expression = do
     resolvedSchemas <- Dhall.Import.load parsedSchemas
 
     typeSchemas <- D.throws (D.typeOf resolvedSchemas)
@@ -1184,7 +1189,7 @@ dhallFromJSONSchemas parsedSchemas expression = do
         Nothing             -> throwIO NoSchemasRecord
 
     let rewrittenExpression =
-            fmap absurd (Optics.transformOf D.subExpressions (useSchemas decodedSchemas) expression)
+            fmap absurd (Optics.transformOf D.subExpressions (useSchemasRewrite decodedSchemas) expression)
 
     let usesSchema = (not . null) $ do
             D.Var (D.V "schemas" 0) <- universeOf D.subExpressions rewrittenExpression
