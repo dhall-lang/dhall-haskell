@@ -18,6 +18,7 @@ module Dhall.Docs
 
 import Control.Applicative ((<|>))
 import Data.Monoid         ((<>))
+import Data.Text           (Text)
 import Data.Version        (showVersion)
 import Dhall.Docs.Core
 import Options.Applicative (Parser, ParserInfo)
@@ -111,9 +112,8 @@ defaultMain = \case
         Control.Monad.when outDirExists $ do
             isLink <- System.Directory.pathIsSymbolicLink docLink
             if isLink then System.Directory.removeFile docLink
-            else die $ "The specified --output-link (" <> docLink <> ") already "
-                    <> "exists and its not a symlink. The --output-link flag "
-                    <> "needs to either not exist or to be a symlink"
+            else die $ "The specified --output-link (" <> Data.Text.pack docLink
+                    <> ") already exists and its not a symlink."
 
         resolvedDocLink <- Path.IO.resolveDir' docLink
         let packageName = resolvePackageName resolvedPackageDir
@@ -121,9 +121,9 @@ defaultMain = \case
     Version ->
         putStrLn (showVersion Meta.version)
 
-die :: String -> IO a
+die :: Text -> IO a
 die e = do
-    Text.IO.hPutStrLn System.IO.stderr $ Data.Text.pack e
+    Text.IO.hPutStrLn System.IO.stderr e
 
     System.Exit.exitFailure
 
