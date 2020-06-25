@@ -2,13 +2,14 @@
 -}
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
 
-import Data.Map.Strict (Map)
-import Dhall.Crypto    (SHA256Digest (..), sha256Hash)
-import Path            (Abs, Dir, File, Path)
-import Path.IO         (XdgDirectory (..))
+import Dhall.Crypto (SHA256Digest (..), sha256Hash)
+import Path         (Abs, Dir, Path)
+import Path.IO      (XdgDirectory (..))
 
-import qualified Data.ByteString
-import qualified Data.Map.Strict as Map
+import qualified Codec.Archive.Tar       as Tar
+import qualified Codec.Archive.Tar.Entry as Tar.Entry
+import qualified Data.ByteString.Lazy
+import qualified Data.List
 import qualified Path
 import qualified Path.IO
 
@@ -33,10 +34,11 @@ getDocsHomeDirectory = do
 makeHashForDirectory :: Path Abs Dir -> IO SHA256Digest
 makeHashForDirectory dir = do
     -- Builds a map so key order is preserved between several calls
-    hashes <- Map.elems <$> Path.IO.walkDirAccum Nothing go dir
-    return $ sha256Hash $ Data.ByteString.concat $ Prelude.map unSHA256Digest hashes
-  where
-    go :: (Path Abs Dir -> [Path Abs Dir] -> [Path Abs File] -> IO (Map (Path Abs File) SHA256Digest))
-    go _ _ files =
-        (Map.fromList . zip files) <$>
-            mapM (fmap sha256Hash . Data.ByteString.readFile . Path.fromAbsFile) files
+    files <- Data.List.sort . map Path.fromRelFile . snd
+            <$> Path.IO.listDirRecurRel dir
+
+    let setTimeToZero entry = entry{Tar.Entry.entryTime = 0}
+    inMemoryTarBytes <- Data.ByteString.Lazy.toStrict . Tar.write . map setTimeToZero
+                <$> Tar.pack (Path.fromAbsDir dir) files
+
+    return $ sha256Hash inMemoryTarBytes
