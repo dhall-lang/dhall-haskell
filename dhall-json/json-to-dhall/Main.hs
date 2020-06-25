@@ -216,7 +216,7 @@ main = do
                       Just schemasText -> do
                           parsedSchemas <- Dhall.Core.throws (Dhall.Parser.exprFromText "(input)" schemasText)
 
-                          dhallFromJSONSchemas parsedSchemas expression
+                          useSchemas parsedSchemas expression
 
                       Nothing ->
                           return (fmap absurd expression)
