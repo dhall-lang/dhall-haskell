@@ -1114,28 +1114,18 @@ type CompletableRecord = ([(Text, ExprX)], [(Text, ExprX)])
 
 -- Utility function to get the list of completable record from the input schemas
 getCompletableRecords :: ExprX -> [(Text, CompletableRecord)]
-getCompletableRecords (D.RecordLit schemas) = go (Map.toList schemas)
-  where
-    go keyValues = do
-        (key, D.RecordLit schema) <- keyValues
+getCompletableRecords expression = do
+    schemas <- case expression of
+        D.RecordLit schemas -> return schemas
+        _                   -> empty
 
-        case schema of
-            [   ("Type", D.Record _)
-              , ("default", D.RecordLit _)
-              ] -> return ()
-            _ -> empty
+    (name, D.RecordLit schema) <- Map.toList schemas
 
-        return (getCompletableRecord key schema)
-
-    getCompletableRecord
-        :: Text -> Map.Map Text ExprX -> (Text, CompletableRecord)
-    getCompletableRecord name fields = (name, (go' "Type", go' "default"))
-      where
-        go' attr = case Map.lookup attr fields of
-          Just (D.RecordLit schema) -> Map.toList schema
-          Just (D.Record schema) -> Map.toList schema
-          _ -> []
-getCompletableRecords _ = []
+    case schema of
+        [   ("Type", D.Record _Type)
+          , ("default", D.RecordLit _default)
+          ] -> return (name, (Map.toList _Type, Map.toList _default))
+        _ -> empty
 
 tryCompleteRecord :: ExprX -> [(Text, CompletableRecord)] -> Maybe ExprX
 tryCompleteRecord (D.RecordLit schema) completables = go completables
