@@ -387,6 +387,7 @@ import qualified Data.HashMap.Strict        as HM
 import qualified Data.List                  as List
 import qualified Data.Map
 import qualified Data.Map.Merge.Lazy        as Data.Map.Merge
+import qualified Data.Maybe                 as Maybe
 import qualified Data.Ord                   as Ord
 import qualified Data.Sequence              as Seq
 import qualified Data.String
@@ -398,6 +399,7 @@ import qualified Dhall.Lint                 as Lint
 import qualified Dhall.Map                  as Map
 import qualified Dhall.Optics               as Optics
 import qualified Dhall.Parser
+import qualified Dhall.Substitution         as Substitution
 import qualified Dhall.TypeCheck            as D
 import qualified Options.Applicative        as O
 
@@ -1111,80 +1113,61 @@ dhallFromJSON (Conversion {..}) expressionType =
 TODO: add >>> doctest
 -}
 -- A completable records contains the Type and default RecordLit values
-type CompletableRecord = (Map Text ExprX, Map Text ExprX)
+decodeSchema
+    :: Expr Src Void
+    -> Maybe (Map Text (Expr Src Void), Map Text (Expr Src Void))
+decodeSchema
+    (D.RecordLit [ ("Type", D.Record _Type), ("default", D.RecordLit _default) ]) =
+    Just (_Type, _default)
+decodeSchema _ =
+    Nothing
 
--- Utility function to get the list of completable record from the input schemas
-getCompletableRecords :: ExprX -> [(Text, CompletableRecord)]
-getCompletableRecords expression = do
-    schemas <- case expression of
-        D.RecordLit schemas -> return schemas
-        _                   -> empty
+encodeSchema
+    :: (Map Text (Expr Src Void), Map Text (Expr Src Void))
+    -> Expr Src Void
+encodeSchema (_Type, _default) =
+    (D.RecordLit [ ("Type", D.Record _Type), ("default", D.RecordLit _default) ])
 
-    (name, D.RecordLit schema) <- Map.toList schemas
+decodeSchemas
+    :: Expr Src Void
+    -> Maybe (Map Text (Map Text (Expr Src Void), Map Text (Expr Src Void)))
+decodeSchemas (D.RecordLit keyValues) = traverse decodeSchema keyValues
+decodeSchemas  _                      = Nothing
 
-    case schema of
-        [   ("Type", D.Record _Type)
-          , ("default", D.RecordLit _default)
-          ] -> return (name, (_Type, _default))
+encodeSchemas
+    :: Map Text (Map Text (Expr Src Void), Map Text (Expr Src Void))
+    -> Expr Src Void
+encodeSchemas schemas = D.RecordLit (fmap encodeSchema schemas)
+
+useSchemas
+    :: Map Text (Map Text (Expr Src Void), Map Text (Expr Src Void))
+    -> Expr Src Void
+    -> Expr Src Void
+useSchemas namedSchemas expression = (Maybe.fromMaybe expression . Maybe.listToMaybe) $ do
+    (name, (_Type, _default)) <- Map.toList namedSchemas
+
+    defaultedRecord <- case expression of
+        D.RecordLit keyValues -> do
+            let defaultedKeyValues =
+                    Map.fromList (Map.toList keyValues \\ Map.toList _default)
+
+            return (D.RecordLit defaultedKeyValues)
         _ -> empty
 
-tryCompleteRecord :: ExprX -> [(Text, CompletableRecord)] -> Maybe ExprX
-tryCompleteRecord (D.RecordLit schema) completables = go completables
+    -- The simplest way to check if we can rewrite the expression using a schema
+    -- is to use it and verify that the result type-checks
+    let completedExpression =
+            D.RecordCompletion (D.Field "schemas" name) defaultedRecord
+
+    let substitutedExpression =
+            Substitution.substitute completedExpression substitutions
+
+    case D.typeOf substitutedExpression of
+        Left  _ -> empty
+        Right _ -> return completedExpression
   where
-    go :: [(Text, CompletableRecord)] -> Maybe ExprX
-    go [] = Nothing
-    go ((name, (rtype, rdefault)):xs) =
-        case completeRecord rtype (mergeDefaults rdefault) [] of
-            Just recordAttrs ->
-                Just
-                    (mkRecordCompletion name
-                         (D.RecordLit (recordAttrs \\\ rdefault))
-                    )
-            Nothing ->
-                go xs
-
-    l \\\ r = Map.fromList (Map.toList l List.\\ Map.toList r)
-
-    -- Prepend the defaults to fill missing values
-    mergeDefaults :: Map Text ExprX -> Map Text ExprX
-    mergeDefaults rdefault = Map.union schema rdefault
-
-    -- Try to complete a single record type
-    completeRecord
-        :: Map Text ExprX
-        -> Map Text ExprX
-        -> Map Text ExprX
-        -> Maybe (Map Text ExprX)
-    completeRecord rtype m acc =
-        case Map.uncons m of
-            Nothing
-                | Map.size rtype == Map.size acc -> Just acc
-                | otherwise                      -> Nothing
-            Just (attrName, attrValue, xs) ->
-                case List.find predicate (Map.toList rtype) of
-                    Just _ ->
-                        completeRecord rtype xs (Map.insert attrName attrValue acc)
-                    Nothing   -> case attrValue of
-                        v@(D.RecordLit _) ->
-                            case tryCompleteRecord v completables of
-                                Just expr ->
-                                    completeRecord rtype xs (Map.insert attrName expr acc)
-                                Nothing ->
-                                    Nothing
-                        _ -> Nothing
-                  where
-                    predicate (typeName, typeValue) = namesMatch && typesMatch
-                      where
-                        namesMatch = typeName == attrName
-
-                        typesMatch =
-                            case D.typeOf attrValue of
-                                Right attrType -> typeValue == attrType
-                                Left  _        -> False
-
-    mkRecordCompletion :: Text -> ExprX -> ExprX
-    mkRecordCompletion name = D.RecordCompletion (D.Field (D.Var (D.V "schemas" 0)) name)
-tryCompleteRecord _ _ = Nothing
+    substitutions =
+        Map.singleton "schemas" (encodeSchemas namedSchemas)
 
 dhallFromJSONSchemas
     :: Expr Src D.Import -> Expr Src Void -> IO (Expr Src D.Import)
@@ -1199,27 +1182,26 @@ dhallFromJSONSchemas parsedSchemas expression = do
 
     let normalizedSchemas = D.normalize resolvedSchemas
 
-    let completableRecords = getCompletableRecords normalizedSchemas
+    decodedSchemas <- case decodeSchemas normalizedSchemas of
+        Just decodedSchemas -> return decodedSchemas
+        Nothing             -> fail "Urk!"
 
-    if null completableRecords
-        then throwIO NoSchemas
-        else return ()
+    let rewrittenExpression =
+            Optics.transformOf D.subExpressions (useSchemas decodedSchemas) expression
 
-    case tryCompleteRecord expression completableRecords of
-        Just completedRecord -> return (mkExpression completedRecord)
-        Nothing              -> throwIO NoMatchingSchema
-  where
-    mkExpression :: ExprX -> Expr Src D.Import
-    mkExpression completedRecord = D.Let
-      (D.Binding {
-          bindingSrc0 = Nothing,
-          variable = "schemas",
-          bindingSrc1 = Nothing,
-          annotation = Nothing,
-          bindingSrc2 = Nothing,
-          value = parsedSchemas
-          })
-      (fmap absurd completedRecord)
+    return
+        (D.Let
+            (D.Binding
+                { bindingSrc0 = Nothing
+                , variable = "schemas"
+                , bindingSrc1 = Nothing
+                , annotation = Nothing
+                , bindingSrc2 = Nothing
+                , value = parsedSchemas
+                }
+            )
+            (fmap absurd rewrittenExpression)
+        )
 
 -- ----------
 -- EXCEPTIONS
