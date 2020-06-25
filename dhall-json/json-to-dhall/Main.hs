@@ -30,8 +30,8 @@ import qualified Options.Applicative                       as Options
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.Exit
 import qualified System.IO                                 as IO
-import qualified Dhall
 import qualified Dhall.Core
+import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Paths_dhall_json                          as Meta
 
@@ -51,7 +51,7 @@ parserInfo = Options.info
 data Options
     = Default
         { schema     :: Maybe Text
-        , schemas    :: Maybe FilePath
+        , schemas    :: Maybe Text
         , conversion :: Conversion
         , file       :: Maybe FilePath
         , output     :: Maybe FilePath
@@ -105,8 +105,8 @@ parseOptions =
     parseSchemas =
         Options.strOption
             (   Options.long "schemas"
-            <>  Options.help "List of schemas to look for record completion output"
-            <>  Options.metavar "FILE"
+            <>  Options.help "Record of schemas to use in generated output"
+            <>  Options.metavar "RECORD"
             )
 
     parseVersion =
@@ -173,11 +173,6 @@ main = do
 
             typeCheckSchemaExpr id finalSchema
 
-    let loadSchemas filePath = do
-          -- TODO: support for non local schemas file
-          fileContent <- Text.IO.readFile filePath
-          Dhall.inputExpr fileContent
-
     let renderExpression characterSet plain output expression = do
             let document =
                     Dhall.Pretty.prettyCharacterSet characterSet expression
@@ -218,12 +213,13 @@ main = do
                 expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
 
                 finalExpression <- case schemas of
-                      Just filePath -> do
-                          inputSchemas <- loadSchemas filePath
+                      Just schemasText -> do
+                          parsedSchemas <- Dhall.Core.throws (Dhall.Parser.exprFromText "(input)" schemasText)
 
-                          Dhall.Core.throws (dhallFromJSONSchemas filePath inputSchemas expression)
+                          dhallFromJSONSchemas parsedSchemas expression
 
-                      Nothing -> return $ fmap absurd expression
+                      Nothing ->
+                          return (fmap absurd expression)
 
                 renderExpression characterSet plain output finalExpression
 
