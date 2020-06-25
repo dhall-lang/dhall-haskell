@@ -223,7 +223,7 @@ main = do
 
                           Dhall.Core.throws (dhallFromJSONSchemas filePath inputSchemas expression)
 
-                      Nothing -> return $ fmap absurd $ expression
+                      Nothing -> return $ fmap absurd expression
 
                 renderExpression characterSet plain output finalExpression
 
