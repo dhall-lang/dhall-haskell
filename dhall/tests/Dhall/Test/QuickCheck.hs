@@ -8,6 +8,9 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+-- Build without optimizations to prevent out-of-memory situations in Hydra CI
+{-# OPTIONS_GHC -O0 #-}
+
 module Dhall.Test.QuickCheck where
 
 import Data.Either (isRight)
