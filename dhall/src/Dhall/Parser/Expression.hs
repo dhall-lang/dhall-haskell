@@ -443,10 +443,10 @@ parsers embedded = Parsers {..}
                     [ alternative00
                     , alternative01
                     , alternative02
-                    , alternative03
+                    , textLiteral
                     , alternative04
-                    , alternative05
-                    , alternative06
+                    , unionType
+                    , listLiteral
                     , alternative07
                     , alternative37
                     , alternative09
@@ -471,8 +471,6 @@ parsers embedded = Parsers {..}
                 a <- try integerLiteral
                 return (IntegerLit a)
 
-            alternative03 = textLiteral
-
             alternative04 = (do
                 _openBrace
 
@@ -487,10 +485,6 @@ parsers embedded = Parsers {..}
                 _closeBrace
 
                 return a ) <?> "literal"
-
-            alternative05 = unionType
-
-            alternative06 = listLiteral
 
             alternative07 = do
                 try (_merge *> nonemptyWhitespace)
@@ -759,18 +753,19 @@ parsers embedded = Parsers {..}
 
     recordTypeOrLiteral =
             choice
-                [ alternative0
-                , alternative1
-                , alternative2
+                [ emptyRecordLiteral
+                , nonEmptyRecordTypeOrLiteral
+                , emptyRecordType
                 ]
-          where
-            alternative0 = do
-                _equal
-                return (RecordLit mempty)
 
-            alternative1 = nonEmptyRecordTypeOrLiteral
+    emptyRecordLiteral = do
+        _equal
 
-            alternative2 = return (Record mempty)
+        _ <- optional (try (whitespace *> _comma))
+
+        return (RecordLit mempty)
+
+    emptyRecordType = return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral = do
             let nonEmptyRecordType = do
@@ -783,11 +778,7 @@ parsers embedded = Parsers {..}
                     whitespace
 
                     e <- Text.Megaparsec.many (do
-                        _comma
-
-                        whitespace
-
-                        c <- anyLabelOrSome
+                        c <- try (_comma *> whitespace *> anyLabelOrSome)
 
                         whitespace
 
@@ -797,9 +788,9 @@ parsers embedded = Parsers {..}
 
                         d <- expression
 
-                        whitespace
-
                         return (c, d) )
+
+                    _ <- optional (whitespace *> _comma)
 
                     m <- toMap ((a, b) : e)
 
@@ -830,7 +821,11 @@ parsers embedded = Parsers {..}
                     (normalRecordEntry <|> punnedEntry) <* whitespace
 
             let nonEmptyRecordLiteral = do
-                    as <- Text.Megaparsec.sepBy1 keysValue (_comma *> whitespace)
+                    a <- keysValue
+
+                    as <- many (try (_comma *> whitespace *> keysValue))
+
+                    _ <- optional (whitespace *> _comma)
 
                     {- The `flip` is necessary because `toMapWith` is internally
                        based on `Data.Map.fromListWithKey` which combines keys
@@ -838,7 +833,7 @@ parsers embedded = Parsers {..}
                     -}
                     let combine k = liftA2 (flip (Combine (Just k)))
 
-                    m <- toMapWith combine as
+                    m <- toMapWith combine (a : as)
 
                     return (RecordLit m)
 
@@ -849,34 +844,61 @@ parsers embedded = Parsers {..}
 
             whitespace
 
-            _ <- optional (_bar *> whitespace)
-
             let unionTypeEntry = do
                     a <- anyLabelOrSome
+
                     whitespace
+
                     b <- optional (_colon *> nonemptyWhitespace *> expression <* whitespace)
+
                     return (a, b)
 
-            kvs <- Text.Megaparsec.sepBy unionTypeEntry (_bar *> whitespace)
+            let nonEmptyUnionType = do
+                    kv <- try (optional (_bar *> whitespace) *> unionTypeEntry)
 
-            m <- toMap kvs
+                    kvs <- many (try (_bar *> whitespace *> unionTypeEntry))
 
-            _closeAngle
+                    m <- toMap (kv : kvs)
 
-            return (Union m) ) <?> "literal"
+                    _ <- optional (_bar *> whitespace)
+
+                    _closeAngle
+
+                    return (Union m)
+
+            let emptyUnionType = do
+                    try (optional (_bar *> whitespace) *> _closeAngle)
+
+                    _ <- optional (_bar *> whitespace)
+
+                    return (Union mempty)
+
+            nonEmptyUnionType <|> emptyUnionType ) <?> "literal"
 
     listLiteral = (do
             _openBracket
 
             whitespace
 
-            _ <- optional (_comma *> whitespace)
+            let nonEmptyListLiteral = do
+                    a <- try (optional (_comma *> whitespace) *> expression)
 
-            a <- Text.Megaparsec.sepBy (expression <* whitespace) (_comma *> whitespace)
+                    whitespace
 
-            _closeBracket
+                    as <- many (try (_comma *> whitespace *> expression) <* whitespace)
 
-            return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "literal"
+                    _ <- optional (_comma *> whitespace)
+
+                    _closeBracket
+
+                    return (ListLit Nothing (Data.Sequence.fromList (a : as)))
+
+            let emptyListLiteral = do
+                    try (optional (_comma *> whitespace) *> _closeBracket)
+
+                    return (ListLit Nothing mempty)
+
+            nonEmptyListLiteral <|> emptyListLiteral) <?> "literal"
 
 {-| Parse an environment variable import
 

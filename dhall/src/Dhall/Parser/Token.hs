@@ -440,17 +440,31 @@ backtickLabel = do
 labels :: Parser (Set Text)
 labels = do
     _openBrace
+
     whitespace
+
     xs <- nonEmptyLabels <|> emptyLabels
-    _closeBrace
+
+    _ <- optional (_comma *> whitespace)
+
     return xs
   where
-    emptyLabels = pure Dhall.Set.empty
+    emptyLabels = do
+        try (optional (_comma *> whitespace) *> _closeBrace)
+
+        pure Dhall.Set.empty
 
     nonEmptyLabels = do
-        x  <- anyLabelOrSome
+        x  <- try (optional (_comma *> whitespace) *> anyLabelOrSome)
+
         whitespace
-        xs <- many (do _comma; whitespace; l <- anyLabelOrSome; whitespace; return l)
+
+        xs <- many (try (_comma *> whitespace *> anyLabelOrSome) <* whitespace)
+
+        _ <- optional (_comma *> whitespace)
+
+        _closeBrace
+
         noDuplicates (x : xs)
 
 {-| Parse a label (e.g. a variable\/field\/alternative name)
