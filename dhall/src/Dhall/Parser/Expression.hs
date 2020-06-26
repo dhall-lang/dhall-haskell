@@ -118,7 +118,7 @@ data Parsers a = Parsers
     }
 
 -- | Given a parser for imports, 
-parsers :: Parser a -> Parsers a
+parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
     completeExpression_ = whitespace *> expression <* whitespace
@@ -241,54 +241,17 @@ parsers embedded = Parsers {..}
             return (Assert a)
 
         alternative5 = do
-            a0 <- applicationExpression
+            (a0Info, a0) <- applicationExpressionWithInfo
 
             let (parseFirstOperatorExpression, parseOperatorExpression) =
                     operatorExpression (pure a0)
 
-            a <- parseFirstOperatorExpression
+            let alternative5A = do
+                    case a0Info of
+                        ApplicationExpr -> empty
+                        ImportExpr      -> return ()
 
-            whitespace
-
-            let alternative4A = do
-                    _arrow
-                    whitespace
-                    b <- expression
-                    whitespace
-                    return (Pi "_" a b)
-
-            let alternative4B = do
-                    _colon
-                    nonemptyWhitespace
-                    b <- expression
-                    case shallowDenote a of
-                        ListLit Nothing [] ->
-                            return (ListLit (Just b) [])
-                        Merge c d Nothing ->
-                            return (Merge c d (Just b))
-                        ToMap c Nothing ->
-                            return (ToMap c (Just b))
-                        _ -> return (Annot a b)
-
-            let alternative4C = do
-                    case shallowDenote a of
-                        Equivalent{}   -> empty
-                        ImportAlt{}    -> empty
-                        BoolOr{}       -> empty
-                        NaturalPlus{}  -> empty
-                        TextAppend{}   -> empty
-                        ListAppend{}   -> empty
-                        BoolAnd{}      -> empty
-                        Combine{}      -> empty
-                        Prefer{}       -> empty
-                        CombineTypes{} -> empty
-                        NaturalTimes{} -> empty
-                        BoolEQ{}       -> empty
-                        BoolNE{}       -> empty
-                        App{}          -> empty
-                        _              -> return ()
-
-                    bs <- many (do
+                    bs <- some (do
                         try (whitespace *> _with *> nonemptyWhitespace)
 
                         keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
@@ -305,7 +268,34 @@ parsers embedded = Parsers {..}
 
                     return (foldl (\e f -> f e) a0 bs)
 
-            alternative4A <|> alternative4B <|> alternative4C <|> pure a
+            let alternative5B = do
+                    a <- parseFirstOperatorExpression
+
+                    whitespace
+
+                    let alternative5B0 = do
+                            _arrow
+                            whitespace
+                            b <- expression
+                            whitespace
+                            return (Pi "_" a b)
+
+                    let alternative5B1 = do
+                            _colon
+                            nonemptyWhitespace
+                            b <- expression
+                            case shallowDenote a of
+                                ListLit Nothing [] ->
+                                    return (ListLit (Just b) [])
+                                Merge c d Nothing ->
+                                    return (Merge c d (Just b))
+                                ToMap c Nothing ->
+                                    return (ToMap c (Just b))
+                                _ -> return (Annot a b)
+
+                    alternative5B0 <|> alternative5B1 <|> pure a
+
+            alternative5A <|> alternative5B
 
     -- The firstApplicationExpression argument is necessary in order to
     -- left-factor the parsers for function types and @with@ expressions to
@@ -361,7 +351,10 @@ parsers embedded = Parsers {..}
         , BoolNE                  <$ _notEqual     <* whitespace
         ]
 
-    applicationExpression = do
+    applicationExpression = snd <$> applicationExpressionWithInfo
+
+    applicationExpressionWithInfo :: Parser (ApplicationExprInfo, Expr Src a)
+    applicationExpressionWithInfo = do
             let alternative0 = do
                     _ <- try (_Some <* nonemptyWhitespace)
 
@@ -389,7 +382,14 @@ parsers embedded = Parsers {..}
                 b <- importExpression_
                 return (sep, b)
 
-            return (foldl' app (f a) bs)
+            let c = foldl' app (f a) bs
+
+            let info =
+                    case (maybeMessage, bs) of
+                        (Nothing, []) -> ImportExpr
+                        _             -> ApplicationExpr
+
+            return (info, c)
           where
             app a (sep, b)
                 | Note (Src left _ bytesL) _ <- a
@@ -1034,3 +1034,11 @@ import_ = (do
       try (whitespace *> _as *> nonemptyWhitespace)
 
       (_Text >> pure RawText) <|> (_Location >> pure Location)
+
+-- | 'ApplicationExprInfo' distinguishes import expressions from /proper/
+-- application expressions that aren't import expressions.
+data ApplicationExprInfo
+    = ImportExpr
+    -- ^ An import expression.
+    | ApplicationExpr
+    -- ^ A proper application expression.

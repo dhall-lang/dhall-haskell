@@ -49,7 +49,7 @@ instance Show e => Show (SourcedException e) where
 
 -- | Doesn't force the 'Text' part
 laxSrcEq :: Src -> Src -> Bool
-laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
+laxSrcEq (Src p q _) (Src p' q' _) = eq p p' && eq q q'
   where
     -- Don't compare filename (which is FilePath = String)
     eq  :: Text.Megaparsec.SourcePos -> Text.Megaparsec.SourcePos -> Bool
