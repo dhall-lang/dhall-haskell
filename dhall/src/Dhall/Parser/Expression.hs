@@ -241,10 +241,10 @@ parsers embedded = Parsers {..}
             return (Assert a)
 
         alternative5 = do
-            a0 <- applicationExpression
+            a0' <- applicationExpression'
 
             let (parseFirstOperatorExpression, parseOperatorExpression) =
-                    operatorExpression (pure a0)
+                    operatorExpression (pure (unApplicationExpression a0'))
 
             a <- parseFirstOperatorExpression
 
@@ -271,22 +271,9 @@ parsers embedded = Parsers {..}
                         _ -> return (Annot a b)
 
             let alternative4C = do
-                    case shallowDenote a of
-                        Equivalent{}   -> empty
-                        ImportAlt{}    -> empty
-                        BoolOr{}       -> empty
-                        NaturalPlus{}  -> empty
-                        TextAppend{}   -> empty
-                        ListAppend{}   -> empty
-                        BoolAnd{}      -> empty
-                        Combine{}      -> empty
-                        Prefer{}       -> empty
-                        CombineTypes{} -> empty
-                        NaturalTimes{} -> empty
-                        BoolEQ{}       -> empty
-                        BoolNE{}       -> empty
-                        App{}          -> empty
-                        _              -> return ()
+                    a0 <- case a0' of
+                        ImportExpr x -> return x
+                        ApplicationExpr{} -> empty
 
                     bs <- many (do
                         try (whitespace *> _with *> nonemptyWhitespace)
@@ -361,7 +348,9 @@ parsers embedded = Parsers {..}
         , BoolNE                  <$ _notEqual     <* whitespace
         ]
 
-    applicationExpression = do
+    applicationExpression = unApplicationExpression <$> applicationExpression'
+
+    applicationExpression' = do
             let alternative0 = do
                     _ <- try (_Some <* nonemptyWhitespace)
 
@@ -389,7 +378,12 @@ parsers embedded = Parsers {..}
                 b <- importExpression_
                 return (sep, b)
 
-            return (foldl' app (f a) bs)
+            let c = foldl' app (f a) bs
+
+            case (a, c) of
+                (Note (Src lA rA _) _, Note (Src lC rC _) _)
+                     | lA == lC && rA == rC -> return (ImportExpr c)
+                _                           -> return (ApplicationExpr c)
           where
             app a (sep, b)
                 | Note (Src left _ bytesL) _ <- a
@@ -1012,3 +1006,11 @@ import_ = (do
       try (whitespace *> _as *> nonemptyWhitespace)
 
       (_Text >> pure RawText) <|> (_Location >> pure Location)
+
+data ApplicationExpression s a
+    = ImportExpr (Expr s a)
+    | ApplicationExpr (Expr s a)
+
+unApplicationExpression :: ApplicationExpression s a -> Expr s a
+unApplicationExpression (ImportExpr a) = a
+unApplicationExpression (ApplicationExpr a) = a
