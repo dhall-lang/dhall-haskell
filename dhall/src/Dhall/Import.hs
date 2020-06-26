@@ -1143,19 +1143,6 @@ assertNoImports expression =
 {-| This function is used by the @--transitive@ option of the
     @dhall {freeze,format,lint}@ subcommands to determine which dependencies
     to descend into
-
-    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "foo") }, importMode = Code }
-    Just "./foo"
-
-    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "bar") }, importMode = Code }
-    Just "./foo/bar"
-
-
-    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Remote (URL HTTPS "example.com" (File (Directory []) "") Nothing Nothing) }, importMode = Code }
-    Nothing
-
-    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Env "foo" }, importMode = Code }
-    Nothing
 -}
 dependencyToFile :: Status -> Import -> IO (Maybe FilePath)
 dependencyToFile status import_ = flip State.evalStateT status $ do
