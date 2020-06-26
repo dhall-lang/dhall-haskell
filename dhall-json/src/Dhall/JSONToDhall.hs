@@ -1175,11 +1175,7 @@ useSchemas
 useSchemas parsedSchemas expression = do
     resolvedSchemas <- Dhall.Import.load parsedSchemas
 
-    typeSchemas <- D.throws (D.typeOf resolvedSchemas)
-
-    case typeSchemas of
-        D.Record _ -> return ()
-        _          -> throwIO NoSchemasRecord
+    _ <- D.throws (D.typeOf resolvedSchemas)
 
     let normalizedSchemas = D.normalize resolvedSchemas
 
