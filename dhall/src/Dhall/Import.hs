@@ -203,7 +203,7 @@ import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Binary
-import qualified Dhall.Core
+import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Parser
@@ -554,14 +554,14 @@ loadImportWithSemanticCache
         fetch = do
             ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
 
-            let variants = map (\version -> encodeExpression version (Dhall.Core.alphaNormalize importSemantics))
+            let variants = map (\version -> encodeExpression version (Core.alphaNormalize importSemantics))
                                 [ minBound .. maxBound ]
             case Data.Foldable.find ((== semanticHash). Dhall.Crypto.sha256Hash) variants of
                 Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
                 Nothing -> do
                     let expectedHash = semanticHash
                     Status { _stack } <- State.get
-                    let actualHash = hashExpression (Dhall.Core.alphaNormalize importSemantics)
+                    let actualHash = hashExpression (Core.alphaNormalize importSemantics)
                     throwMissingImport (Imported _stack (HashMismatch {..}))
 
             return (ImportSemantics {..})
@@ -604,7 +604,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             absolutePath <- Directory.makeAbsolute path
             return absolutePath
         Remote url -> do
-            let urlText = Dhall.Core.pretty (url { headers = Nothing })
+            let urlText = Core.pretty (url { headers = Nothing })
             return (Text.unpack urlText)
         Env env -> return $ Text.unpack env
         Missing -> throwM (MissingImports [])
@@ -625,7 +625,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
     -- Check the semi-semantic cache. See
     -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
     -- behind semi-semantic caching.
-    let semisemanticHash = computeSemisemanticHash (Dhall.Core.denote resolvedExpr)
+    let semisemanticHash = computeSemisemanticHash (Core.denote resolvedExpr)
     mCached <- lift $ fetchFromSemisemanticCache semisemanticHash
 
     importSemantics <- case mCached of
@@ -639,16 +639,29 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             return importSemantics
 
         Nothing -> do
-            betaNormal <- do
-                let substitutedExpr = Dhall.Substitution.substitute resolvedExpr _substitutions
-                case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
-                    Left  err -> throwMissingImport (Imported _stack err)
-                    Right _ -> return (Dhall.Core.normalizeWith _normalizer resolvedExpr)
+            let substitutedExpr =
+                  Dhall.Substitution.substitute resolvedExpr _substitutions
 
-            let bytes = encodeExpression NoVersion betaNormal
-            lift $ writeToSemisemanticCache semisemanticHash bytes
+            case Core.shallowDenote parsedImport of
+                -- If this import trivially wraps another import, we can skip
+                -- the type-checking and normalization step as the transitive
+                -- import was already type-checked and normalized
+                Embed _ -> do
+                    return (Core.denote substitutedExpr)
 
-            return betaNormal
+                _ -> do
+                    case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+                        Left  err -> throwMissingImport (Imported _stack err)
+                        Right _   -> return ()
+
+                    let betaNormal =
+                            Core.normalizeWith _normalizer substitutedExpr
+
+                    let bytes = encodeExpression NoVersion betaNormal
+
+                    lift (writeToSemisemanticCache semisemanticHash bytes)
+
+                    return betaNormal
 
     return (ImportSemantics {..})
 
@@ -676,13 +689,13 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
             Missing -> Field locationType "Missing"
             local@(Local _ _) ->
                 App (Field locationType "Local")
-                  (TextLit (Chunks [] (Dhall.Core.pretty local)))
+                  (TextLit (Chunks [] (Core.pretty local)))
             remote_@(Remote _) ->
                 App (Field locationType "Remote")
-                  (TextLit (Chunks [] (Dhall.Core.pretty remote_)))
+                  (TextLit (Chunks [] (Core.pretty remote_)))
             Env env ->
                 App (Field locationType "Environment")
-                  (TextLit (Chunks [] (Dhall.Core.pretty env)))
+                  (TextLit (Chunks [] (Core.pretty env)))
 
     return (ImportSemantics {..})
 
@@ -737,7 +750,7 @@ fetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
-    let urlString = Text.unpack (Dhall.Core.pretty url)
+    let urlString = Text.unpack (Core.pretty url)
     Status { _stack } <- State.get
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
@@ -974,7 +987,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
                 Left err -> throwMissingImport (Imported _stack err)
                 Right _  -> return ()
 
-            return (Dhall.Core.normalize loadedExpr)
+            return (Core.normalize loadedExpr)
 
     let handler₀ (e :: SomeException) = do
             {- Try to typecheck using the preferred @mapKey@/@mapValue@ fields
@@ -1038,7 +1051,7 @@ loadWith expr₀ = case expr₀ of
     ImportSemantics {..} <- loadImport child
     zoom stack (State.put _stack)
 
-    return (Dhall.Core.renote importSemantics)
+    return (Core.renote importSemantics)
 
   ImportAlt a b -> loadWith a `catch` handler₀
     where
@@ -1125,7 +1138,7 @@ instance Show ImportResolutionDisabled where
 -- | Assert than an expression is import-free
 assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src Void)
 assertNoImports expression =
-    Dhall.Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
+    Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
 
 {-| This function is used by the @--transitive@ option of the
     @dhall {freeze,format,lint}@ subcommands to determine which dependencies

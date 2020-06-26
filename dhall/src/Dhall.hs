@@ -2471,6 +2471,12 @@ constructor :: Text -> Decoder a -> UnionDecoder a
 constructor key valueDecoder = UnionDecoder
     ( Data.Functor.Compose.Compose (Dhall.Map.singleton key valueDecoder) )
 
+-- | Infix 'divided'
+(>*<) :: Divisible f => f a -> f b -> f (a, b)
+(>*<) = divided
+
+infixr 5 >*<
+
 {-| The 'RecordEncoder' divisible (contravariant) functor allows you to build
     an 'Encoder' for a Dhall record.
 
@@ -2527,13 +2533,6 @@ injectProject =
 
 -}
 
--- | Infix 'divided'
-(>*<) :: Divisible f => f a -> f b -> f (a, b)
-(>*<) = divided
-
-infixr 5 >*<
-
--- | Intermediate type used for building a `ToDhall` instance for a record
 newtype RecordEncoder a
   = RecordEncoder (Dhall.Map.Map Text (Encoder a))
 

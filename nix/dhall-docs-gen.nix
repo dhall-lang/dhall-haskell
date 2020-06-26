@@ -1,4 +1,4 @@
-{ stdenv, dhall-docs, unzip, fetchurl }:
+{ stdenv, dhall-docs, unzip, fetchurl, tree }:
 
 stdenv.mkDerivation rec {
   name = "dhall-docs-artifacts";
@@ -8,12 +8,15 @@ stdenv.mkDerivation rec {
     sha256 = "8c46f81d6131bf5dac715a3f107d0a43f4e8decaadd7ed36fbc4375b5b32eeaf";
   };
 
-  buildInputs = [ dhall-docs unzip ];
+  buildInputs = [ dhall-docs unzip tree ];
 
   installPhase = ''
     mkdir -p $out/nix-support
-    dhall-docs --input ./Prelude --output $out/docs > $out/dhall-docs.log
-    echo "report html $out/docs" >> $out/nix-support/hydra-build-products
+    export XDG_DATA_HOME=$out/
+    dhall-docs --input ./Prelude --output-link ./dhall-docs > $out/dhall-docs.log
+    htmlDir=$(readlink -f ./dhall-docs)
+    tree $XDG_DATA_HOME/dhall-docs > $out/dhall-docs.log
+    echo "report html $htmlDir" >> $out/nix-support/hydra-build-products
     echo "report log $out/dhall-docs.log" >> $out/nix-support/hydra-build-products
   '';
 }
