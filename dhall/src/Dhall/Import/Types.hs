@@ -20,6 +20,7 @@ import Dhall.Core
   , Expr
   , File (..)
   , FilePrefix (..)
+  , Hash (..)
   , Import (..)
   , ImportHashed (..)
   , ImportMode (..)
@@ -132,7 +133,7 @@ emptyStatusWith _remote rootDirectory = Status {..}
     -- Fake import to set the directory we're relative to.
     rootImport = Import
       { importHashed = ImportHashed
-        { hash = Nothing
+        { hash = NoHash
         , importType = Local prefix dirAsFile
         }
       , importMode = Code

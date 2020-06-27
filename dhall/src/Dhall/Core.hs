@@ -13,6 +13,7 @@ module Dhall.Core (
     , Directory(..)
     , File(..)
     , FilePrefix(..)
+    , Hash(..)
     , Import(..)
     , ImportHashed(..)
     , ImportMode(..)

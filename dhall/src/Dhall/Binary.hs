@@ -39,6 +39,7 @@ import Dhall.Syntax
     , Expr(..)
     , File(..)
     , FilePrefix(..)
+    , Hash(..)
     , Import(..)
     , ImportHashed(..)
     , ImportMode(..)
@@ -992,7 +993,7 @@ decodeImport len = do
         TypeNull -> do
             Decoding.decodeNull
 
-            return Nothing
+            return NoHash
 
         TypeBytes -> do
             bytes <- Decoding.decodeBytes
@@ -1004,7 +1005,7 @@ decodeImport len = do
                 _          -> die ("Unrecognized multihash prefix: " <> show prefix)
             case Dhall.Crypto.sha256DigestFromByteString suffix of
                 Nothing     -> die ("Invalid sha256 digest: " <> show bytes)
-                Just digest -> return (Just digest)
+                Just digest -> return (Secure digest)
 
         _ -> do
             die ("Unexpected hash token: " <> show tokenType₀)
@@ -1147,11 +1148,16 @@ encodeImport import_ =
     prefix = [ Encoding.encodeInt 24, h, m ]
       where
         h = case hash of
-            Nothing ->
+            NoHash ->
                 Encoding.encodeNull
 
-            Just digest ->
+            Secure digest ->
                 Encoding.encodeBytes ("\x12\x20" <> Data.ByteArray.convert digest)
+
+            Cache digest ->
+                Encoding.encodeBytes ("\x12\x20" <> Data.ByteArray.convert digest)
+
+            -- TODO: Encoding/decoding cache digests correctly
 
         m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
 

@@ -998,8 +998,8 @@ importType_ = do
 
     This corresponds to the @hash@ rule from the official grammar
 -}
-importHash_ :: Parser Dhall.Crypto.SHA256Digest
-importHash_ = do
+secureHash_ :: Parser Hash
+secureHash_ = do
     _ <- text "sha256:"
     t <- count 64 (satisfy hexdig <?> "hex digit")
     let strictBytes16 = Data.Text.Encoding.encodeUtf8 t
@@ -1008,7 +1008,19 @@ importHash_ = do
         Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
     case Dhall.Crypto.sha256DigestFromByteString strictBytes of
       Nothing -> fail "Invalid sha256 hash"
-      Just h  -> pure h
+      Just h  -> pure (Secure h)
+
+cacheHash_ :: Parser Hash
+cacheHash_ = do
+    _ <- text "cache:sha256:"
+    t <- count 64 (satisfy hexdig <?> "hex digit")
+    let strictBytes16 = Data.Text.Encoding.encodeUtf8 t
+    strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
+        Left  string      -> fail string
+        Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
+    case Dhall.Crypto.sha256DigestFromByteString strictBytes of
+      Nothing -> fail "Invalid sha256 hash"
+      Just h  -> pure (Cache h)
 
 {-| Parse an `ImportHashed`
 
@@ -1017,7 +1029,7 @@ importHash_ = do
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
     importType <- importType_
-    hash       <- optional (try (nonemptyWhitespace *> importHash_))
+    hash       <- try (nonemptyWhitespace *> (secureHash_ <|> cacheHash_)) <|> pure NoHash
     return (ImportHashed {..})
 
 {-| Parse an `Import`

@@ -165,6 +165,7 @@ import Dhall.Syntax
     , Expr (..)
     , File (..)
     , FilePrefix (..)
+    , Hash(..)
     , Import (..)
     , ImportHashed (..)
     , ImportMode (..)
@@ -469,7 +470,7 @@ localToPath prefix file_ = liftIO $ do
 --   import (interpreting relative path as relative to the current directory).
 chainedFromLocalHere :: FilePrefix -> File -> ImportMode -> Chained
 chainedFromLocalHere prefix file mode = Chained $
-     Import (ImportHashed Nothing (Local prefix (canonicalize file))) mode
+     Import (ImportHashed NoHash (Local prefix (canonicalize file))) mode
 
 -- | Adjust the import mode of a chained import
 chainedChangeMode :: ImportMode -> Chained -> Chained
@@ -506,15 +507,15 @@ loadImport import_ = do
 --   therefore not cached semantically), as well as those that aren't cached yet.
 loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemanticCache
-  import_@(Chained (Import (ImportHashed Nothing _) _)) =
-    loadImportWithSemisemanticCache import_
+  import_@(Chained (Import (ImportHashed NoHash _) _)) =
+    loadImportWithSemisemanticCache False import_
 
 loadImportWithSemanticCache
   import_@(Chained (Import _ Location)) = do
-    loadImportWithSemisemanticCache import_
+    loadImportWithSemisemanticCache False import_
 
 loadImportWithSemanticCache
-  import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
+  import_@(Chained (Import (ImportHashed (Secure semanticHash) _) _)) = do
     Status { .. } <- State.get
     mCached <-
         case _semanticCacheMode of
@@ -545,7 +546,7 @@ loadImportWithSemanticCache
         Nothing -> fetch
     where
         fetch = do
-            ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
+            ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache False import_
 
             let variants = map (\version -> encodeExpression version (Core.alphaNormalize importSemantics))
                                 [ minBound .. maxBound ]
@@ -558,8 +559,52 @@ loadImportWithSemanticCache
                     throwMissingImport (Imported _stack (HashMismatch {..}))
 
             return (ImportSemantics {..})
+loadImportWithSemanticCache
+  import_@(Chained (Import (ImportHashed (Cache semanticHash) _) _)) = do
+    Status { .. } <- State.get
+    mCached <-
+        case _semanticCacheMode of
+            UseSemanticCache -> liftIO $ fetchFromSemanticCache semanticHash
+            IgnoreSemanticCache -> pure Nothing
+
+    case mCached of
+        Just bytesStrict -> do
+            let actualHash = Dhall.Crypto.sha256Hash bytesStrict
+
+            if semanticHash == actualHash
+                then do
+                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+
+                    importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
+                        Left  err -> throwMissingImport (Imported _stack err)
+                        Right e   -> return e
+
+                    return (ImportSemantics {..})
+                else do
+                    printWarning $
+                        makeHashMismatchMessage semanticHash actualHash
+                        <> "\n"
+                        <> "The interpreter will attempt to fix the cached import\n"
+                    fetch
 
 
+        Nothing -> fetch
+    where
+        fetch = do
+            ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache True import_
+
+            let variants = map (\version -> encodeExpression version (Core.alphaNormalize importSemantics))
+                                [ minBound .. maxBound ]
+            case Data.Foldable.find ((== semanticHash). Dhall.Crypto.sha256Hash) variants of
+                Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
+                Nothing -> do
+                    let actualHash = hashExpression importSemantics
+                    printWarning $
+                        makeHashMismatchMessage semanticHash actualHash
+                        <> "\n"
+                        <> "The hash for the cached import changed\n"
+
+            return (ImportSemantics {..})
 
 -- Fetch encoded normal form from "semantic cache"
 fetchFromSemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
@@ -586,8 +631,8 @@ writeToSemanticCache hash bytes = do
 -- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
 -- scratch.
 loadImportWithSemisemanticCache
-  :: Chained -> StateT Status IO ImportSemantics
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
+  :: Bool -> Chained -> StateT Status IO ImportSemantics
+loadImportWithSemisemanticCache cached (Chained (Import (ImportHashed _ importType) Code)) = do
     text <- fetchFresh importType
     Status {..} <- State.get
 
@@ -647,20 +692,22 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                         Left  err -> throwMissingImport (Imported _stack err)
                         Right _   -> return ()
 
-                    let betaNormal =
-                            Core.normalizeWith _normalizer substitutedExpr
+                    let modifiedExpression
+                            | cached = Core.denote substitutedExpr
+                            | otherwise =
+                                Core.normalizeWith _normalizer substitutedExpr
 
-                    let bytes = encodeExpression NoVersion betaNormal
+                    let bytes = encodeExpression NoVersion modifiedExpression
 
                     lift (writeToSemisemanticCache semisemanticHash bytes)
 
-                    return betaNormal
+                    return modifiedExpression
 
     return (ImportSemantics {..})
 
 -- `as Text` imports aren't cached since they are well-typed and normal by
 -- construction
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawText)) = do
+loadImportWithSemisemanticCache _cache (Chained (Import (ImportHashed _ importType) RawText)) = do
     text <- fetchFresh importType
 
     -- importSemantics is alpha-beta-normal by construction!
@@ -669,7 +716,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Raw
 
 -- `as Location` imports aren't cached since they are well-typed and normal by
 -- construction
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Location)) = do
+loadImportWithSemisemanticCache _cache (Chained (Import (ImportHashed _ importType) Location)) = do
     let locationType = Union $ Dhall.Map.fromList
             [ ("Environment", Just Text)
             , ("Remote", Just Text)

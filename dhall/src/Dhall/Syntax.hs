@@ -52,6 +52,7 @@ module Dhall.Syntax (
     , FilePrefix(..)
     , Import(..)
     , ImportHashed(..)
+    , Hash(..)
     , ImportMode(..)
     , ImportType(..)
     , URL(..)
@@ -847,7 +848,7 @@ instance Semigroup ImportType where
     import₀ <> Remote (URL { headers = headers₀, .. }) =
         Remote (URL { headers = headers₁, .. })
       where
-        importHashed₀ = Import (ImportHashed Nothing import₀) Code
+        importHashed₀ = Import (ImportHashed NoHash import₀) Code
 
         headers₁ = fmap (fmap (importHashed₀ <>)) headers₀
 
@@ -870,19 +871,27 @@ data ImportMode = Code | RawText | Location
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
-    { hash       :: Maybe Dhall.Crypto.SHA256Digest
+    { hash       :: Hash
     , importType :: ImportType
     } deriving (Eq, Generic, Ord, Show, NFData)
+
+data Hash
+    = NoHash
+    | Secure Dhall.Crypto.SHA256Digest
+    | Cache Dhall.Crypto.SHA256Digest
+    deriving (Eq, Generic, Ord, Show, NFData)
 
 instance Semigroup ImportHashed where
     ImportHashed _ importType₀ <> ImportHashed hash importType₁ =
         ImportHashed hash (importType₀ <> importType₁)
 
 instance Pretty ImportHashed where
-    pretty (ImportHashed  Nothing p) =
+    pretty (ImportHashed  NoHash p) =
       Pretty.pretty p
-    pretty (ImportHashed (Just h) p) =
+    pretty (ImportHashed (Secure h) p) =
       Pretty.pretty p <> " sha256:" <> Pretty.pretty (show h)
+    pretty (ImportHashed (Cache h) p) =
+      Pretty.pretty p <> " cache:sha256:" <> Pretty.pretty (show h)
 
 -- | Reference to an external resource
 data Import = Import
