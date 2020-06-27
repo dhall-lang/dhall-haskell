@@ -17,6 +17,7 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
+import Data.Foldable (for_)
 import Data.Monoid ((<>))
 import Dhall.Pretty (CharacterSet)
 import Dhall.Syntax
@@ -25,8 +26,9 @@ import Dhall.Util
     ( Censor
     , CheckFailed(..)
     , Header(..)
-    , Input(..)
     , OutputMode(..)
+    , PossiblyTransitiveInput(..)
+    , Transitivity(..)
     )
 import System.Console.ANSI (hSupportsANSI)
 
@@ -126,65 +128,87 @@ data Intent
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
     :: OutputMode
-    -> Input
+    -> PossiblyTransitiveInput
     -> Scope
     -> Intent
     -> CharacterSet
     -> Censor
     -> IO ()
-freeze outputMode input scope intent characterSet censor = do
-    let directory = case input of
-            StandardInput  -> "."
-            InputFile file -> System.FilePath.takeDirectory file
+freeze outputMode input0 scope intent characterSet censor = go input0
+  where
+    go input = do
+        let directory = case input of
+                NonTransitiveStandardInput ->
+                    "."
+                PossiblyTransitiveInputFile file _ ->
+                    System.FilePath.takeDirectory file
 
-    let rewrite = freezeExpression directory scope intent
+        let status = Dhall.Import.emptyStatus directory
 
-    originalText <- case input of
-        InputFile file -> Text.IO.readFile file
-        StandardInput  -> Text.IO.getContents
+        (originalText, transitivity) <- case input of
+            PossiblyTransitiveInputFile file transitivity -> do
+                text <- Text.IO.readFile file
 
-    (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+                return (text, transitivity)
 
-    frozenExpression <- rewrite parsedExpression
+            NonTransitiveStandardInput -> do
+                text <- Text.IO.getContents
 
-    let doc =  Pretty.pretty header
-            <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
-            <> "\n"
+                return (text, NonTransitive)
 
-    let stream = Dhall.Pretty.layout doc
+        (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
 
-    let modifiedText = Pretty.Text.renderStrict stream
+        case transitivity of
+            Transitive -> do
+                for_ parsedExpression $ \import_ -> do
+                    maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
-    case outputMode of
-        Write -> do
-            let unAnnotated = Pretty.unAnnotateS stream
+                    for_ maybeFilepath $ \filepath -> do
+                        go (PossiblyTransitiveInputFile filepath Transitive)
 
-            case input of
-                InputFile file ->
-                    if originalText == modifiedText
-                        then return ()
-                        else
-                            AtomicWrite.LazyText.atomicWriteFile
-                                file
-                                (Pretty.Text.renderLazy unAnnotated)
+            NonTransitive ->
+                return ()
 
-                StandardInput -> do
-                    supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
-                    if supportsANSI
-                       then
-                         Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
-                       else
-                         Pretty.renderIO System.IO.stdout unAnnotated
+        frozenExpression <- freezeExpression directory scope intent parsedExpression
 
-        Check -> do
-            if originalText == modifiedText
-                then return ()
-                else do
-                    let command = "freeze"
+        let doc =  Pretty.pretty header
+                <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
+                <> "\n"
 
-                    let modified = "frozen"
+        let stream = Dhall.Pretty.layout doc
 
-                    Exception.throwIO CheckFailed{..}
+        let modifiedText = Pretty.Text.renderStrict stream
+
+        case outputMode of
+            Write -> do
+                let unAnnotated = Pretty.unAnnotateS stream
+
+                case input of
+                    PossiblyTransitiveInputFile file _ ->
+                        if originalText == modifiedText
+                            then return ()
+                            else
+                                AtomicWrite.LazyText.atomicWriteFile
+                                    file
+                                    (Pretty.Text.renderLazy unAnnotated)
+
+                    NonTransitiveStandardInput -> do
+                        supportsANSI <- hSupportsANSI System.IO.stdout
+                        if supportsANSI
+                           then
+                             Pretty.renderIO System.IO.stdout (Dhall.Pretty.annToAnsiStyle <$> stream)
+                           else
+                             Pretty.renderIO System.IO.stdout unAnnotated
+
+            Check -> do
+                if originalText == modifiedText
+                    then return ()
+                    else do
+                        let command = "freeze"
+
+                        let modified = "frozen"
+
+                        Exception.throwIO CheckFailed{..}
 
 {-| Slightly more pure version of the `freeze` function
 

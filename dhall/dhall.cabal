@@ -473,6 +473,7 @@ Library
         lens-family-core            >= 1.0.0    && < 2.2 ,
         megaparsec                  >= 7        && < 8.1 ,
         memory                      >= 0.14     && < 0.16,
+        mmorph                                     < 1.2 ,
         mtl                         >= 2.2.1    && < 2.3 ,
         network-uri                 >= 2.6      && < 2.7 ,
         optparse-applicative        >= 0.14.0.0 && < 0.16,
