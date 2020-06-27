@@ -204,6 +204,42 @@ blockquote {
     transition: 0.5s;
 }
 
+/******** Source code **********/
+
+.source-code {
+    padding: 0rem;
+}
+
+.source-code pre {
+    padding: 1rem;
+    font-family: 'Roboto Mono';
+    color: #333333;
+}
+
+.source-code span {
+    font-family: 'Roboto Mono';
+    color: #333333;
+}
+
+.source-code span.dhall-Keyword {
+    color: #0000FF;
+    font-weight: bold;
+}
+
+.source-code span.dhall-Syntax {
+    color: #AF00DB;
+}
+
+.source-code span.dhall-Literal {
+    color: #098658;
+    font-weight: bold;
+}
+
+.source-code span.dhall-Builtin {
+    color: #267F99;
+    font-weight: bold;
+}
+
 /******** Dark mode styling ********/
 
 .dark-mode .main-container {
@@ -228,4 +264,28 @@ body.dark-mode {
 
 .dark-mode a:active {
     color: #914669;
+}
+
+.dark-mode .source-code pre {
+    color: #D4D4D4;
+}
+
+.dark-mode .source-code span {
+    color: #D4D4D4;
+}
+
+.dark-mode .source-code span.dhall-Keyword {
+    color: #569CD6;
+}
+
+.dark-mode .source-code span.dhall-Syntax {
+    color: #C586C0;
+}
+
+.dark-mode .source-code span.dhall-Literal {
+    color: #B5CEA8;
+}
+
+.dark-mode .source-code span.dhall-Builtin {
+    color: #4EC9B0;
 }

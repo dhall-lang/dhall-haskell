@@ -4,8 +4,8 @@ stdenv.mkDerivation rec {
   name = "dhall-docs-artifacts";
 
   src = fetchurl {
-    url = "https://github.com/dhall-lang/dhall-lang/archive/v17.0.0.zip";
-    sha256 = "8c46f81d6131bf5dac715a3f107d0a43f4e8decaadd7ed36fbc4375b5b32eeaf";
+    url = "https://github.com/german1608/dhall-lang/archive/feat/add-dhall-extensions-to-prelude.zip";
+    sha256 = "8d179809150e545c5bd7192df37fc5a636c05e1f87f16350333c0d7efc70e238";
   };
 
   buildInputs = [ dhall-docs unzip tree ];

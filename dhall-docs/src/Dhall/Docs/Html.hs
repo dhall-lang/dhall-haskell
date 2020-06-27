@@ -12,19 +12,48 @@
 {-# LANGUAGE RecordWildCards      #-}
 
 module Dhall.Docs.Html
-    ( filePathHeaderToHtml
+    ( dhallFileToHtml
     , indexToHtml
     , DocParams(..)
     ) where
 
-import Data.Monoid ((<>))
-import Data.Text   (Text)
+import Data.Monoid  ((<>))
+import Data.Text    (Text)
+import Dhall.Core   (Expr, Import)
+import Dhall.Pretty (Ann (..))
+import Dhall.Src    (Src)
 import Lucid
-import Path        (Abs, Dir, File, Path, Rel)
+import Path         (Abs, Dir, File, Path, Rel)
 
 import qualified Control.Monad
 import qualified Data.Text
+import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
+import qualified Dhall.Pretty
 import qualified Path
+
+exprToHtml :: Expr Src Import -> Html ()
+exprToHtml expr = renderTree prettyTree
+  where
+    prettyTree = Pretty.treeForm
+        $ Dhall.Pretty.layout
+        $ Dhall.Pretty.prettyExpr expr
+
+    textSpaces :: Int -> Text
+    textSpaces n = Data.Text.replicate n (Data.Text.singleton ' ')
+
+    renderTree :: Pretty.SimpleDocTree Ann -> Html ()
+    renderTree sds = case sds of
+        Pretty.STEmpty -> return ()
+        Pretty.STChar c -> toHtml $ Data.Text.singleton c
+        Pretty.STText _ t -> toHtml t
+        Pretty.STLine i -> br_ [] >> toHtml (textSpaces i)
+        Pretty.STAnn ann content -> encloseInTagFor ann (renderTree content)
+        Pretty.STConcat contents -> foldMap renderTree contents
+
+    encloseInTagFor :: Ann -> Html () -> Html ()
+    encloseInTagFor ann = span_ [class_ classForAnn]
+      where
+        classForAnn = "dhall-" <> Data.Text.pack (show ann)
 
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams
@@ -34,19 +63,23 @@ data DocParams = DocParams
     }
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
-filePathHeaderToHtml
-    :: Path Abs File -- ^ Source file name, used to extract the title
-    -> Html ()       -- ^ Header document as HTML
-    -> DocParams     -- ^ Parameters for the documentation
+dhallFileToHtml
+    :: Path Abs File   -- ^ Source file name, used to extract the title
+    -> Expr Src Import -- ^ Contents of the file
+    -> Html ()         -- ^ Header document as HTML
+    -> DocParams       -- ^ Parameters for the documentation
     -> Html ()
-filePathHeaderToHtml filePath header params@DocParams{..} =
+dhallFileToHtml filePath expr header params@DocParams{..} =
     doctypehtml_ $ do
         headContents title params
         body_ $ do
             navBar params
             mainContainer $ do
                 h1_ $ toHtml title
+                h2_ "Documentation"
                 div_ [class_ "doc-contents"] header
+                h2_ "Source"
+                div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
   where
     title = Path.fromRelFile $ Path.filename filePath
 
