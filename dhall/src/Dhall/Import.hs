@@ -515,11 +515,11 @@ loadImport import_ = do
 loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed NoHash _) _)) =
-    loadImportWithSemisemanticCache False import_
+    loadImportWithSemisemanticCache True import_
 
 loadImportWithSemanticCache
   import_@(Chained (Import _ Location)) = do
-    loadImportWithSemisemanticCache False import_
+    loadImportWithSemisemanticCache True import_
 
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Secure semanticHash) _) _)) = do
