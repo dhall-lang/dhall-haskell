@@ -23,6 +23,7 @@ module Dhall.Main
 import Control.Applicative       (optional, (<|>))
 import Control.Exception         (Handler (..), SomeException)
 import Control.Monad             (when)
+import Data.Foldable             (for_)
 import Data.List.NonEmpty        (NonEmpty (..))
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
@@ -61,8 +62,10 @@ import Dhall.Util
     , CheckFailed (..)
     , Header (..)
     , Input (..)
+    , PossiblyTransitiveInput (..)
     , Output (..)
     , OutputMode (..)
+    , Transitivity(..)
     )
 
 import qualified Codec.CBOR.JSON
@@ -144,11 +147,11 @@ data Mode
           }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
-    | Format { input :: Input, outputMode :: OutputMode }
-    | Freeze { input :: Input, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
+    | Format { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
+    | Freeze { possiblyTransitiveInput :: PossiblyTransitiveInput, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
     | Hash { file :: Input }
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { input :: Input, outputMode :: OutputMode }
+    | Lint { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
     | Tags
           { input :: Input
           , output :: Output
@@ -390,14 +393,20 @@ parseMode =
             <>  Options.Applicative.help "Don't print the result"
             )
 
-    parseInplace = fmap f (optional p)
+    parseInplace =
+            fmap (\f -> PossiblyTransitiveInputFile f NonTransitive) p0
+        <|> fmap (\f -> PossiblyTransitiveInputFile f    Transitive) p1
+        <|> pure NonTransitiveStandardInput
       where
-        f  Nothing    = StandardInput
-        f (Just file) = InputFile file
-
-        p = Options.Applicative.strOption
+        p0 = Options.Applicative.strOption
             (   Options.Applicative.long "inplace"
             <>  Options.Applicative.help "Modify the specified file in-place"
+            <>  Options.Applicative.metavar "FILE"
+            )
+
+        p1 = Options.Applicative.strOption
+            (   Options.Applicative.long "transitive"
+            <>  Options.Applicative.help "Modify the specified file and its transitive relative imports in-place"
             <>  Options.Applicative.metavar "FILE"
             )
 
@@ -728,14 +737,15 @@ command (Options {..}) = do
                 else Exit.exitFailure
 
         Format {..} -> do
-            Dhall.Format.format (Dhall.Format.Format {..})
+            Dhall.Format.format
+                Dhall.Format.Format{ input = possiblyTransitiveInput, ..}
 
         Freeze {..} -> do
             let scope = if all_ then AllImports else OnlyRemoteImports
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode input scope intent characterSet censor
+            Dhall.Freeze.freeze outputMode possiblyTransitiveInput scope intent characterSet censor
 
         Hash {..} -> do
             expression <- getExpression file
@@ -750,41 +760,66 @@ command (Options {..}) = do
 
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
-        Lint {..} -> do
-            originalText <- case input of
-                InputFile file -> Data.Text.IO.readFile file
-                StandardInput  -> Data.Text.IO.getContents
+        Lint { possiblyTransitiveInput = input0, ..} -> go input0
+          where
+            go input = do
+                let directory = case input of
+                        NonTransitiveStandardInput         -> "."
+                        PossiblyTransitiveInputFile file _ -> System.FilePath.takeDirectory file
 
-            (Header header, expression) <- do
-                Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+                let status = Dhall.Import.emptyStatus directory
 
-            let lintedExpression = Dhall.Lint.lint expression
+                (originalText, transitivity) <- case input of
+                    PossiblyTransitiveInputFile file transitivity -> do
+                        text <- Data.Text.IO.readFile file
 
-            let doc =   Pretty.pretty header
-                    <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
+                        return (text, transitivity)
+                    NonTransitiveStandardInput -> do
+                        text <- Data.Text.IO.getContents
 
-            let stream = Dhall.Pretty.layout doc
+                        return (text, NonTransitive)
 
-            let modifiedText = Pretty.Text.renderStrict stream <> "\n"
+                (Header header, parsedExpression) <- do
+                    Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
 
-            case outputMode of
-                Write -> do
-                    case input of
-                        InputFile file ->
-                            if originalText == modifiedText
-                                then return ()
-                                else writeDocToFile file doc
+                case transitivity of
+                    Transitive -> do
+                        for_ parsedExpression $ \import_ -> do
+                            maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
-                        StandardInput ->
-                            renderDoc System.IO.stdout doc
+                            for_ maybeFilepath $ \filepath -> do
+                                go (PossiblyTransitiveInputFile filepath Transitive)
 
-                Check -> do
-                    if originalText == modifiedText
-                        then return ()
-                        else do
-                            let modified = "linted"
+                    NonTransitive ->
+                        return ()
 
-                            Control.Exception.throwIO CheckFailed{ command = "lint", ..}
+                let lintedExpression = Dhall.Lint.lint parsedExpression
+
+                let doc =   Pretty.pretty header
+                        <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
+
+                let stream = Dhall.Pretty.layout doc
+
+                let modifiedText = Pretty.Text.renderStrict stream <> "\n"
+
+                case outputMode of
+                    Write -> do
+                        case input of
+                            PossiblyTransitiveInputFile file _ ->
+                                if originalText == modifiedText
+                                    then return ()
+                                    else writeDocToFile file doc
+
+                            NonTransitiveStandardInput ->
+                                renderDoc System.IO.stdout doc
+
+                    Check -> do
+                        if originalText == modifiedText
+                            then return ()
+                            else do
+                                let modified = "linted"
+
+                                Control.Exception.throwIO CheckFailed{ command = "lint", ..}
 
         Encode {..} -> do
             expression <- getExpression file

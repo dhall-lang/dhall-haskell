@@ -126,6 +126,7 @@ module Dhall.Import (
     , normalizer
     , startingContext
     , chainImport
+    , dependencyToFile
     , ImportSemantics
     , Cycle(..)
     , ReferentiallyOpaque(..)
@@ -148,6 +149,7 @@ import Control.Exception
 import Control.Monad                    (when)
 import Control.Monad.Catch              (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class           (MonadIO (..))
+import Control.Monad.Morph              (hoist)
 import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
@@ -218,6 +220,11 @@ import qualified System.IO
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
+
+{- $setup
+
+    >>> import Dhall.Syntax
+-}
 
 -- | An import failed because of a cycle in the import graph
 newtype Cycle = Cycle
@@ -1132,3 +1139,66 @@ instance Show ImportResolutionDisabled where
 assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src Void)
 assertNoImports expression =
     Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
+
+{-| This function is used by the @--transitive@ option of the
+    @dhall {freeze,format,lint}@ subcommands to determine which dependencies
+    to descend into
+
+#ifndef mingw32_HOST_OS
+    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "foo") }, importMode = Code }
+    Just "./foo"
+
+    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "bar") }, importMode = Code }
+    Just "./foo/bar"
+
+
+    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Remote (URL HTTPS "example.com" (File (Directory []) "") Nothing Nothing) }, importMode = Code }
+    Nothing
+
+    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Env "foo" }, importMode = Code }
+    Nothing
+#endif
+-}
+dependencyToFile :: Status -> Import -> IO (Maybe FilePath)
+dependencyToFile status import_ = flip State.evalStateT status $ do
+    parent :| _ <- zoom stack State.get
+
+    child <- fmap chainedImport (hoist liftIO (chainImport parent import_))
+
+    let ignore = return Nothing
+
+    -- We only need to transitively modify code imports since other import
+    -- types are not interpreted and therefore don't need to be modified
+    case importMode child of
+        RawText ->
+            ignore
+
+        Location ->
+            ignore
+
+        Code ->
+            case importType (importHashed child) of
+                Local filePrefix file -> do
+                    let descend = liftIO $ do
+                            path <- localToPath filePrefix file
+
+                            return (Just path)
+
+                    -- Only follow relative imports when modifying dependencies.
+                    -- Carefully note that we check the file prefix of the
+                    -- original import (before chaining), since the chained
+                    -- import will inherit the file prefix of the parent import.
+                    case importType (importHashed import_) of
+                        Local Here   _ -> descend
+                        Local Parent _ -> descend
+                        _              -> ignore
+
+                -- Don't transitively modify any other type of import
+                Remote{} ->
+                    ignore
+
+                Missing ->
+                    ignore
+
+                Env{} ->
+                    ignore
