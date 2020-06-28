@@ -25,3 +25,4 @@ cabal.project.local~
 stack*.yaml.lock
 .vscode
 docs
+result

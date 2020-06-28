@@ -1,6 +1,7 @@
 -- | Contains all the functions that generate documentation
 
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -9,11 +10,13 @@ module Dhall.Docs.Core (generateDocs) where
 import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Data.Void           (Void)
+import Dhall.Core          (Expr, Import)
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
 import Dhall.Docs.Store
 import Dhall.Parser        (Header (..), ParseError (..), exprAndHeaderFromText)
+import Dhall.Src           (Src)
 import Path                (Abs, Dir, File, Path, (</>))
 import Text.Megaparsec     (ParseErrorBundle (..))
 
@@ -33,6 +36,12 @@ import qualified Text.Megaparsec
 -- >>> :set -XQuasiQuotes
 -- >>> import Path (absdir, absfile)
 
+-- | Represents a file that can be rendered as documentation
+data DhallFile = DhallFile
+    { path :: Path Abs File   -- ^ Path of the file
+    , expr :: Expr Src Import -- ^ File contents
+    , header :: Header        -- ^ Parsed `Header` of the file
+    }
 
 {-| Fetches a list of all dhall files in a directory along with its `Header`.
     This is not the same as finding all files that ends in @.dhall@,
@@ -42,10 +51,10 @@ import qualified Text.Megaparsec
     dhall <https://prelude.dhall-lang.org Prelude>.
     That package doesn't ends any of their files in @.dhall@.
 -}
-getAllDhallFilesAndHeaders
+getAllDhallFiles
     :: Path Abs Dir -- ^ Base directory to do the search
-    -> IO [(Path Abs File, Header)]
-getAllDhallFilesAndHeaders baseDir = do
+    -> IO [DhallFile]
+getAllDhallFiles baseDir = do
     files <- filter hasDhallExtension . snd <$> Path.IO.listDirRecur baseDir
     Data.Maybe.catMaybes <$> mapM readDhall files
   where
@@ -54,12 +63,16 @@ getAllDhallFilesAndHeaders baseDir = do
         Nothing -> False
         Just (_, ext) -> ext == ".dhall"
 
-    readDhall :: Path Abs File -> IO (Maybe (Path Abs File, Header))
+    readDhall :: Path Abs File -> IO (Maybe DhallFile)
     readDhall absFile = do
         let filePath = Path.fromAbsFile absFile
         contents <- Text.IO.readFile filePath
         case exprAndHeaderFromText filePath contents of
-            Right (header, _) -> return $ Just (absFile, header)
+            Right (header, expr) ->
+                return $ Just DhallFile
+                                { path = absFile
+                                , expr, header
+                                }
             Left ParseError{..} -> do
                 putStrLn $ showDhallParseError unwrap
                 return Nothing
@@ -96,10 +109,9 @@ saveHtml
                             --   files in the package
     -> Path Abs Dir         -- ^ Output directory
     -> String               -- ^ Package name
-    -> Path Abs File        -- ^ Input file
-    -> Header               -- ^ Parsed header
+    -> DhallFile            -- ^ Parsed header
     -> IO (Path Abs File)   -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName absFile header = do
+saveHtml inputAbsDir outputAbsDir packageName DhallFile {path = absFile, ..} = do
     htmlOutputFile <- do
         strippedPath <- Path.stripProperPrefix inputAbsDir absFile
         strippedPathWithExt <- addHtmlExt strippedPath
@@ -119,7 +131,11 @@ saveHtml inputAbsDir outputAbsDir packageName absFile header = do
         Right html -> return html
 
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
-        $ filePathHeaderToHtml absFile headerAsHtml DocParams {..}
+        $ dhallFileToHtml
+            absFile
+            expr
+            headerAsHtml
+            DocParams { relativeResourcesPath, packageName }
 
     return htmlOutputFile
   where
@@ -209,7 +225,7 @@ generateDocs
     -> IO ()
 generateDocs inputDir outLink packageName = do
 
-    dhallFilesAndHeaders <- getAllDhallFilesAndHeaders inputDir
+    dhallFilesAndHeaders <- getAllDhallFiles inputDir
     if null dhallFilesAndHeaders then
         putStrLn $
             "No documentation was generated because no file with .dhall " <>
@@ -217,7 +233,7 @@ generateDocs inputDir outLink packageName = do
     else Path.IO.withSystemTempDir "dhall-docs" $ \tempDir -> do
         Path.IO.ensureDir tempDir
         generatedHtmlFiles <-
-            mapM (uncurry $ saveHtml inputDir tempDir packageName)
+            mapM (saveHtml inputDir tempDir packageName)
                 dhallFilesAndHeaders
         createIndexes tempDir generatedHtmlFiles packageName
 
