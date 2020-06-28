@@ -53,7 +53,13 @@ exprToHtml expr = renderTree prettyTree
     encloseInTagFor :: Ann -> Html () -> Html ()
     encloseInTagFor ann = span_ [class_ classForAnn]
       where
-        classForAnn = "dhall-" <> Data.Text.pack (show ann)
+        classForAnn = "dhall-" <> case ann of
+            Keyword -> "keyword"
+            Syntax -> "syntax"
+            Label -> "label"
+            Literal -> "literal"
+            Builtin -> "builtin"
+            Operator -> "operator"
 
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams

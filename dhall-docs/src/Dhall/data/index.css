@@ -221,21 +221,21 @@ blockquote {
     color: #333333;
 }
 
-.source-code span.dhall-Keyword {
+.source-code span.dhall-keyword {
     color: #0000FF;
     font-weight: bold;
 }
 
-.source-code span.dhall-Syntax {
+.source-code span.dhall-syntax {
     color: #AF00DB;
 }
 
-.source-code span.dhall-Literal {
+.source-code span.dhall-literal {
     color: #098658;
     font-weight: bold;
 }
 
-.source-code span.dhall-Builtin {
+.source-code span.dhall-builtin {
     color: #267F99;
     font-weight: bold;
 }
@@ -274,18 +274,18 @@ body.dark-mode {
     color: #D4D4D4;
 }
 
-.dark-mode .source-code span.dhall-Keyword {
+.dark-mode .source-code span.dhall-keyword {
     color: #569CD6;
 }
 
-.dark-mode .source-code span.dhall-Syntax {
+.dark-mode .source-code span.dhall-syntax {
     color: #C586C0;
 }
 
-.dark-mode .source-code span.dhall-Literal {
+.dark-mode .source-code span.dhall-literal {
     color: #B5CEA8;
 }
 
-.dark-mode .source-code span.dhall-Builtin {
+.dark-mode .source-code span.dhall-builtin {
     color: #4EC9B0;
 }
