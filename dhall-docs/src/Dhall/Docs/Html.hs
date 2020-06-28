@@ -158,6 +158,7 @@ headContents title DocParams{..} =
         title_ $ toHtml title
         stylesheet relativeResourcesPath
         script relativeResourcesPath
+        meta_ [charset_ "UTF-8"]
 
 -- | main-container component builder of the HTML documentation
 mainContainer :: Html() -> Html ()
