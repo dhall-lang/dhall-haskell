@@ -5,7 +5,7 @@ stdenv.mkDerivation rec {
 
   src = fetchurl {
     url = "https://github.com/german1608/dhall-lang/archive/feat/add-dhall-extensions-to-prelude.zip";
-    sha256 = "8d179809150e545c5bd7192df37fc5a636c05e1f87f16350333c0d7efc70e238";
+    sha256 = "ade9544719a26b7f3bf008572a794cb3878f284429d425a6c6a2e31c61189619";
   };
 
   buildInputs = [ dhall-docs unzip tree ];
