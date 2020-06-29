@@ -34,7 +34,7 @@ import qualified System.FilePath                                     as FilePath
 
 -- $setup
 -- >>> :set -XQuasiQuotes
--- >>> import Path (reldir)
+-- >>> import Path (reldir, relfile)
 
 exprToHtml :: Expr Src Import -> Html ()
 exprToHtml expr = renderTree prettyTree
@@ -145,6 +145,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 data Breadcrumb
     = Crumb Breadcrumb String
     | EmptyCrumb
+    deriving Show
 
 data HtmlFileType = NotIndex | Index
 
@@ -152,9 +153,9 @@ data HtmlFileType = NotIndex | Index
 
 >>> relPathToBreadcrumb [reldir|a/b/c|]
 Crumb (Crumb (Crumb EmptyCrumb "a") "b") "c"
->>> relPathToBreadcrumb [reldir|.]
+>>> relPathToBreadcrumb [reldir|.|]
 Crumb EmptyCrumb ""
->>> relPathToBreadcrumb [relfile|c/foo.baz]
+>>> relPathToBreadcrumb [relfile|c/foo.baz|]
 Crumb (Crumb EmptyCrumb "c") "foo.baz"
 -}
 relPathToBreadcrumb :: Path Rel a -> Breadcrumb
