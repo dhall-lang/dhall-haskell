@@ -141,7 +141,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     pageTitle = breadCrumbsToHtml Index breadcrumbs
 
 -- | ADT for handling bread crumbs. This is essentially a backwards list
---   See `relPathToBread` for more information.
+--   See `relPathToBreadcrumb` for more information.
 data Breadcrumb
     = Crumb Breadcrumb String
     | EmptyCrumb
