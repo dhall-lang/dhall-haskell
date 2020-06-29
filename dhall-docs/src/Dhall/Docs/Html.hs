@@ -171,8 +171,13 @@ breadCrumbsToHtml :: Breadcrumb -> Html ()
 breadCrumbsToHtml EmptyCrumb = return ()
 breadCrumbsToHtml (Crumb c bc) = do
     span_ [class_ "crumb-divider"] $ toHtml ("/" :: Text)
-    a_ [class_ "title-crumb", href_ "#"] $ toHtml c
+    elem_ [class_ "title-crumb", href_ "#"] $ toHtml c
     breadCrumbsToHtml bc
+  where
+    elem_ = case bc of
+        -- last element is not a link
+        EmptyCrumb -> span_
+        Crumb _ _ -> a_
 
 
 -- | Render breadcrumbs as plain text
