@@ -118,7 +118,7 @@ data Parsers a = Parsers
     }
 
 -- | Given a parser for imports, 
-parsers :: Parser a -> Parsers a
+parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
     completeExpression_ = whitespace *> expression <* whitespace
@@ -352,6 +352,7 @@ parsers embedded = Parsers {..}
 
     applicationExpression = snd <$> applicationExpression'
 
+    applicationExpression' :: Parser (ApplicationExprType, Expr Src a)
     applicationExpression' = do
             let alternative0 = do
                     _ <- try (_Some <* nonemptyWhitespace)
