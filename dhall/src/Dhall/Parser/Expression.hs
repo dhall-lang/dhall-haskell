@@ -271,13 +271,11 @@ parsers embedded = Parsers {..}
                         _ -> return (Annot a b)
 
             let alternative4C = do
-                    -- Ensure that what we've parsed so far is just an import
-                    -- expression.
+                    -- Ensure that what we've parsed so far is an import expression.
                     case a0Type of
-                        ApplicationExpr -> empty
-                        ImportExpr      -> if sameNotedExpr a0 a
-                            then return ()
-                            else empty
+                        ApplicationExpr               -> empty
+                        ImportExpr | eqExprBySrc a0 a -> return ()
+                                   | otherwise        -> empty
 
                     bs <- many (do
                         try (whitespace *> _with *> nonemptyWhitespace)
@@ -384,7 +382,7 @@ parsers embedded = Parsers {..}
 
             let c = foldl' app (f a) bs
 
-            let type_ = if sameNotedExpr a c then ImportExpr else ApplicationExpr
+            let type_ = if eqExprBySrc a c then ImportExpr else ApplicationExpr
 
             return (type_, c)
           where

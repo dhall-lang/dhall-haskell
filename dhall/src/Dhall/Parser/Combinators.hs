@@ -58,9 +58,10 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p p' && eq q q'
         a == a' && b == b'
 {-# INLINE laxSrcEq #-}
 
-sameNotedExpr :: Expr Src a -> Expr Src a -> Bool
-sameNotedExpr (Note src0 _) (Note src1 _) = laxSrcEq src0 src1
-sameNotedExpr _ _ = False
+-- | Compare two 'Expr's by the source positions of their 'Note' wrappers.
+eqExprBySrc :: Expr Src a -> Expr Src a -> Bool
+eqExprBySrc (Note src0 _) (Note src1 _) = laxSrcEq src0 src1
+eqExprBySrc _ _ = False
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
