@@ -241,10 +241,10 @@ parsers embedded = Parsers {..}
             return (Assert a)
 
         alternative5 = do
-            a0' <- applicationExpression'
+            (a0Type, a0) <- applicationExpression'
 
             let (parseFirstOperatorExpression, parseOperatorExpression) =
-                    operatorExpression (pure (unApplicationExpression a0'))
+                    operatorExpression (pure a0)
 
             a <- parseFirstOperatorExpression
 
@@ -271,13 +271,13 @@ parsers embedded = Parsers {..}
                         _ -> return (Annot a b)
 
             let alternative4C = do
-                    a0 <- case a0' of
-                        ImportExpr x      -> return x
-                        ApplicationExpr{} -> empty
-
-                    if sameNotedExpr a0 a
-                        then return ()
-                        else empty
+                    -- Ensure that what we've parsed so far is just an import
+                    -- expression.
+                    case a0Type of
+                        ApplicationExpr -> empty
+                        ImportExpr      -> if sameNotedExpr a0 a
+                            then return ()
+                            else empty
 
                     bs <- many (do
                         try (whitespace *> _with *> nonemptyWhitespace)
@@ -352,7 +352,7 @@ parsers embedded = Parsers {..}
         , BoolNE                  <$ _notEqual     <* whitespace
         ]
 
-    applicationExpression = unApplicationExpression <$> applicationExpression'
+    applicationExpression = snd <$> applicationExpression'
 
     applicationExpression' = do
             let alternative0 = do
@@ -384,9 +384,9 @@ parsers embedded = Parsers {..}
 
             let c = foldl' app (f a) bs
 
-            if sameNotedExpr a c
-                then return (ImportExpr c)
-                else return (ApplicationExpr c)
+            let type_ = if sameNotedExpr a c then ImportExpr else ApplicationExpr
+
+            return (type_, c)
           where
             app a (sep, b)
                 | Note (Src left _ bytesL) _ <- a
@@ -1010,10 +1010,10 @@ import_ = (do
 
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
-data ApplicationExpression s a
-    = ImportExpr (Expr s a)
-    | ApplicationExpr (Expr s a)
-
-unApplicationExpression :: ApplicationExpression s a -> Expr s a
-unApplicationExpression (ImportExpr a) = a
-unApplicationExpression (ApplicationExpr a) = a
+-- | 'ApplicationExprType' distinguishes import expressions from /proper/
+-- application expressions.
+data ApplicationExprType
+    = ImportExpr
+    -- ^ An import expression.
+    | ApplicationExpr
+    -- ^ A proper application expression.
