@@ -171,7 +171,7 @@ breadCrumbsToHtml :: Breadcrumb -> Html ()
 breadCrumbsToHtml EmptyCrumb = return ()
 breadCrumbsToHtml (Crumb c bc) = do
     span_ [class_ "crumb-divider"] $ toHtml ("/" :: Text)
-    span_ [class_ "title-crumb"] $ toHtml c
+    a_ [class_ "title-crumb", href_ "#"] $ toHtml c
     breadCrumbsToHtml bc
 
 

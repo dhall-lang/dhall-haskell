@@ -204,7 +204,7 @@ blockquote {
     transition: 0.5s;
 }
 
-h2.doc-title span {
+h2.doc-title span, h2.doc-title a {
     font-family: 'Roboto Mono';
 }
 
@@ -214,6 +214,14 @@ span.crumb-divider:first-child {
 
 span.crumb-divider {
     margin: 0 0.5rem;
+}
+
+a.title-crumb {
+    text-decoration: none;
+}
+
+a.title-crumb:hover {
+    text-decoration: underline;
 }
 
 /******** Source code **********/
