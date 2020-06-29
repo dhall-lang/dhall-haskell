@@ -68,9 +68,9 @@ exprToHtml expr = renderTree prettyTree
 
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams
-    { relativeResourcesPath :: !FilePath -- ^ Relative resource path to the
+    { relativeResourcesPath :: FilePath -- ^ Relative resource path to the
                                         --   front-end files
-    , packageName :: !String               -- ^ Name of the package
+    , packageName :: Text               -- ^ Name of the package
     }
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
@@ -86,7 +86,7 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
         body_ $ do
             navBar params
             mainContainer $ do
-                h2_ [class_ "doc-title"] pageTitle
+                setPageTitle params NotIndex breadcrumb
                 copyToClipboardButton htmlTitle
                 br_ []
                 div_ [class_ "doc-contents"] header
@@ -95,7 +95,6 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
-    pageTitle = breadCrumbsToHtml NotIndex breadcrumb
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
@@ -109,7 +108,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     body_ $ do
         navBar params
         mainContainer $ do
-            h2_ [class_ "doc-title"] pageTitle
+            setPageTitle params Index breadcrumbs
             copyToClipboardButton htmlTitle
             br_ []
             Control.Monad.unless (null files) $ do
@@ -140,12 +139,21 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     breadcrumbs = relPathToBreadcrumb indexDir
     htmlTitle = breadCrumbsToText breadcrumbs
-    pageTitle = breadCrumbsToHtml Index breadcrumbs
 
 copyToClipboardButton :: Text -> Html ()
 copyToClipboardButton filePath =
     a_ [class_ "copy-to-clipboard", data_ "path" filePath]
         $ i_ $ small_ "Copy to clipboard"
+
+
+setPageTitle :: DocParams -> HtmlFileType -> Breadcrumb -> Html ()
+setPageTitle DocParams{..} htmlFileType breadcrumb =
+    h2_ [class_ "doc-title"] $ do
+        span_ [class_ "crumb-divider"] "/"
+        a_ [href_ $ Data.Text.pack $ relativeResourcesPath <> "index.html"]
+            $ toHtml packageName
+        breadCrumbsToHtml htmlFileType breadcrumb
+
 
 -- | ADT for handling bread crumbs. This is essentially a backwards list
 --   See `relPathToBreadcrumb` for more information.
@@ -224,10 +232,6 @@ navBar DocParams{..} = div_ [class_ "nav-bar"] $ do
     -- Right side of the nav-bar
     -- with makeOption [id_ "go-to-source-code"] "Source code"
     with makeOption [id_ "switch-light-dark-mode"] "Switch Light/Dark Mode"
-    with makeOption
-        [ id_ "go-to-index"
-        , href_ $ Data.Text.pack $ relativeResourcesPath <> "index.html"
-        ] "Go to package index"
   where
     makeOption = with a_ [class_ "nav-option"]
 
