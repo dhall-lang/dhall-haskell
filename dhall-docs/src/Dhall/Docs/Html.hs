@@ -23,13 +23,18 @@ import Dhall.Core   (Expr, Import)
 import Dhall.Pretty (Ann (..))
 import Dhall.Src    (Src)
 import Lucid
-import Path         (Abs, Dir, File, Path, Rel)
+import Path         (Dir, File, Path, Rel)
 
 import qualified Control.Monad
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
 import qualified Dhall.Pretty
 import qualified Path
+import qualified System.FilePath                                     as FilePath
+
+-- $setup
+-- >>> :set -XQuasiQuotes
+-- >>> import Path (reldir, relfile)
 
 exprToHtml :: Expr Src Import -> Html ()
 exprToHtml expr = renderTree prettyTree
@@ -63,53 +68,55 @@ exprToHtml expr = renderTree prettyTree
 
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams
-    { relativeResourcesPath :: !FilePath -- ^ Relative resource path to the
+    { relativeResourcesPath :: FilePath -- ^ Relative resource path to the
                                         --   front-end files
-    , packageName :: !String               -- ^ Name of the package
+    , packageName :: Text               -- ^ Name of the package
     }
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 dhallFileToHtml
-    :: Path Abs File   -- ^ Source file name, used to extract the title
+    :: Path Rel File   -- ^ Source file name, used to extract the title
     -> Expr Src Import -- ^ Contents of the file
     -> Html ()         -- ^ Header document as HTML
     -> DocParams       -- ^ Parameters for the documentation
     -> Html ()
 dhallFileToHtml filePath expr header params@DocParams{..} =
     doctypehtml_ $ do
-        headContents title params
+        headContents htmlTitle params
         body_ $ do
             navBar params
             mainContainer $ do
-                h1_ $ toHtml title
-                h2_ "Documentation"
+                setPageTitle params NotIndex breadcrumb
+                copyToClipboardButton htmlTitle
+                br_ []
                 div_ [class_ "doc-contents"] header
-                h2_ "Source"
+                h3_ "Source"
                 div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
   where
-    title = Path.fromRelFile $ Path.filename filePath
-
+    breadcrumb = relPathToBreadcrumb filePath
+    htmlTitle = breadCrumbsToText breadcrumb
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
-    :: FilePath        -- ^ Index directory
+    :: Path Rel Dir    -- ^ Index directory
     -> [Path Rel File] -- ^ Generated files in that directory
     -> [Path Rel Dir]  -- ^ Generated directories in that directory
     -> DocParams       -- ^ Parameters for the documentation
     -> Html ()
 indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
-    headContents title params
+    headContents htmlTitle params
     body_ $ do
         navBar params
         mainContainer $ do
-            h1_ $ toHtml title
-
+            setPageTitle params Index breadcrumbs
+            copyToClipboardButton htmlTitle
+            br_ []
             Control.Monad.unless (null files) $ do
-                h2_ "Exported files: "
+                h3_ "Exported files: "
                 ul_ $ mconcat $ map listFile files
 
             Control.Monad.unless (null dirs) $ do
-                h2_ "Exported packages: "
+                h3_ "Exported packages: "
                 ul_ $ mconcat $ map listDir dirs
 
   where
@@ -121,8 +128,8 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     listDir :: Path Rel Dir -> Html ()
     listDir dir =
-        let filePath = Data.Text.pack $ Path.fromRelDir dir in
-        li_ $ a_ [href_ (filePath <> "index.html")] $ toHtml filePath
+        let dirPath = Data.Text.pack $ Path.fromRelDir dir in
+        li_ $ a_ [href_ (dirPath <> "index.html")] $ toHtml dirPath
 
     tryToTakeExt :: Path Rel File -> FilePath
 
@@ -130,8 +137,83 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         Nothing -> file
         Just (f, _) -> f
 
-    title :: String
-    title = indexDir <> " index"
+    breadcrumbs = relPathToBreadcrumb indexDir
+    htmlTitle = breadCrumbsToText breadcrumbs
+
+copyToClipboardButton :: Text -> Html ()
+copyToClipboardButton filePath =
+    a_ [class_ "copy-to-clipboard", data_ "path" filePath]
+        $ i_ $ small_ "Copy to clipboard"
+
+
+setPageTitle :: DocParams -> HtmlFileType -> Breadcrumb -> Html ()
+setPageTitle DocParams{..} htmlFileType breadcrumb =
+    h2_ [class_ "doc-title"] $ do
+        span_ [class_ "crumb-divider"] "/"
+        a_ [href_ $ Data.Text.pack $ relativeResourcesPath <> "index.html"]
+            $ toHtml packageName
+        breadCrumbsToHtml htmlFileType breadcrumb
+
+
+-- | ADT for handling bread crumbs. This is essentially a backwards list
+--   See `relPathToBreadcrumb` for more information.
+data Breadcrumb
+    = Crumb Breadcrumb String
+    | EmptyCrumb
+    deriving Show
+
+data HtmlFileType = NotIndex | Index
+
+{-| Convert a relative path to a `Breadcrumb`.
+
+>>> relPathToBreadcrumb [reldir|a/b/c|]
+Crumb (Crumb (Crumb EmptyCrumb "a") "b") "c"
+>>> relPathToBreadcrumb [reldir|.|]
+Crumb EmptyCrumb ""
+>>> relPathToBreadcrumb [relfile|c/foo.baz|]
+Crumb (Crumb EmptyCrumb "c") "foo.baz"
+-}
+relPathToBreadcrumb :: Path Rel a -> Breadcrumb
+relPathToBreadcrumb relPath = foldl Crumb EmptyCrumb splittedRelPath
+  where
+    filePath = Path.toFilePath relPath
+
+    splittedRelPath :: [String]
+    splittedRelPath = case FilePath.dropTrailingPathSeparator filePath of
+        "." -> [""]
+        _ -> FilePath.splitDirectories filePath
+
+-- | Render breadcrumbs as `Html ()`
+breadCrumbsToHtml :: HtmlFileType -> Breadcrumb -> Html ()
+breadCrumbsToHtml htmlFileType = go startLevel
+  where
+    startLevel = case htmlFileType of
+        NotIndex -> -1
+        Index -> 0
+
+    -- copyBreadcrumbButton :: Html ()
+    -- copyBreadcrumbButton =
+    --     button_
+    --         [ class_ "btn copy-breadcrumb"
+    --         , data_ "breadcrumb" $ breadCrumbsToText breadcrumb
+    --         ] ""
+
+    go :: Int -> Breadcrumb -> Html ()
+    go _ EmptyCrumb = return ()
+    go level (Crumb bc name) = do
+        go (level + 1) bc
+        span_ [class_ "crumb-divider"] $ toHtml ("/" :: Text)
+        elem_ [class_ "title-crumb", href_ hrefTarget] $ toHtml name
+      where
+        hrefTarget = Data.Text.replicate level "../" <> "index.html"
+        elem_ = if level == startLevel then span_ else a_
+
+
+-- | Render breadcrumbs as plain text
+breadCrumbsToText :: Breadcrumb -> Text
+breadCrumbsToText EmptyCrumb = ""
+breadCrumbsToText (Crumb bc c) = breadCrumbsToText bc <> "/" <> Data.Text.pack c
+
 
 -- | nav-bar component of the HTML documentation
 navBar
@@ -150,15 +232,11 @@ navBar DocParams{..} = div_ [class_ "nav-bar"] $ do
     -- Right side of the nav-bar
     -- with makeOption [id_ "go-to-source-code"] "Source code"
     with makeOption [id_ "switch-light-dark-mode"] "Switch Light/Dark Mode"
-    with makeOption
-        [ id_ "go-to-index"
-        , href_ $ Data.Text.pack $ relativeResourcesPath <> "index.html"
-        ] "Go to package index"
   where
     makeOption = with a_ [class_ "nav-option"]
 
 
-headContents :: String -> DocParams -> Html ()
+headContents :: Text -> DocParams -> Html ()
 headContents title DocParams{..} =
     head_ $ do
         title_ $ toHtml title

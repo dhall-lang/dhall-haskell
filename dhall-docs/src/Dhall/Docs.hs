@@ -41,7 +41,7 @@ data Options
     = Options
         { packageDir :: FilePath         -- ^ Directory where your package resides
         , docLink :: FilePath            -- ^ Link to the generated documentation
-        , resolvePackageName :: Path Abs Dir -> String
+        , resolvePackageName :: Path Abs Dir -> Text
         }
     | Version
 
@@ -72,13 +72,13 @@ parseOptions =
             <>  Options.Applicative.help "Display version"
             )
 
-    parsePackageNameResolver :: Parser (Path Abs Dir -> String)
+    parsePackageNameResolver :: Parser (Path Abs Dir -> Text)
     parsePackageNameResolver = fmap f (Options.Applicative.optional p)
       where
         -- Directories on the `path` modules always ends in "/", so we have
         -- to remove last one with `init`
-        f  Nothing = init . Path.fromRelDir . Path.dirname
-        f (Just packageName) = const packageName
+        f  Nothing = Data.Text.pack . init . Path.fromRelDir . Path.dirname
+        f (Just packageName) = const $ Data.Text.pack packageName
 
         p = Options.Applicative.strOption
                 (   Options.Applicative.long "package-name"
