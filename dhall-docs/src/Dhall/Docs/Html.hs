@@ -30,7 +30,11 @@ import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
 import qualified Dhall.Pretty
 import qualified Path
-import qualified System.FilePath
+import qualified System.FilePath                                     as FilePath
+
+-- $setup
+-- >>> :set -XQuasiQuotes
+-- >>> import Path (absdir, absfile)
 
 exprToHtml :: Expr Src Import -> Html ()
 exprToHtml expr = renderTree prettyTree
@@ -82,13 +86,14 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
         body_ $ do
             navBar params
             mainContainer $ do
-                h2_ [class_ "doc-title"] $ breadcrumbs splittedPath
+                h2_ [class_ "doc-title"] pageTitle
                 div_ [class_ "doc-contents"] header
                 h3_ "Source"
                 div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
   where
-    htmlTitle = Path.fromRelFile $ Path.filename filePath
-    splittedPath = System.FilePath.splitDirectories $ Path.fromRelFile filePath
+    breadcrumb = relPathToBreadcrumb filePath
+    htmlTitle = breadCrumbsToText breadcrumb
+    pageTitle = breadCrumbsToHtml breadcrumb
 
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
@@ -103,7 +108,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     body_ $ do
         navBar params
         mainContainer $ do
-            h2_ [class_ "doc-title"] $ breadcrumbs splittedPath
+            h2_ [class_ "doc-title"] pageTitle
 
             Control.Monad.unless (null files) $ do
                 h3_ "Exported files: "
@@ -131,19 +136,50 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         Nothing -> file
         Just (f, _) -> f
 
-    filePath = Path.fromRelDir indexDir
+    breadcrumbs = relPathToBreadcrumb indexDir
+    htmlTitle = breadCrumbsToText breadcrumbs
+    pageTitle = breadCrumbsToHtml breadcrumbs
 
-    htmlTitle = case System.FilePath.dropTrailingPathSeparator filePath of
-        "." -> "/"
-        _ -> "/" <> filePath
-    splittedPath = case System.FilePath.dropTrailingPathSeparator filePath of
+-- | ADT for handling bread crumbs. This is essentially a list.
+--   See `relPathToBread` for more information.
+data Breadcrumb
+    = Crumb String Breadcrumb
+    | EmptyCrumb
+
+{-| Convert a relative path to a `Breadcrumb`.
+
+>>> relPathToBreadcrumb [reldir|a/b/c|]
+Crumb "a" (Crumb "b" (Crumb "c" EmptyCrumb))
+>>> relPathToBreadcrumb [reldir|.]
+EmptyCrumb
+>>> relPathToBreadcrumb [relfile|c/foo.baz]
+Crumb "foo.baz" EmptyCrumb
+
+-}
+relPathToBreadcrumb :: Path Rel a -> Breadcrumb
+relPathToBreadcrumb relPath = foldr Crumb EmptyCrumb splittedRelPath
+  where
+    filePath = Path.toFilePath relPath
+
+    splittedRelPath :: [String]
+    splittedRelPath = case FilePath.dropTrailingPathSeparator filePath of
         "." -> [""]
-        _ -> System.FilePath.splitDirectories filePath
+        _ -> FilePath.splitDirectories filePath
 
--- | Make breadcrumbs from a list of path components
-breadcrumbs :: [String] -> Html ()
-breadcrumbs = Control.Monad.mapM_ $ \crumb ->
-    toHtml ("/" :: Text) >> span_ [class_ "title-crumb"] (toHtml crumb)
+-- | Render breadcrumbs as `Html ()`
+breadCrumbsToHtml :: Breadcrumb -> Html ()
+breadCrumbsToHtml EmptyCrumb = return ()
+breadCrumbsToHtml (Crumb c bc) = do
+    toHtml ("/" :: Text)
+    span_ [class_ "title-crumb"] $ toHtml c
+    breadCrumbsToHtml bc
+
+
+-- | Render breadcrumbs as plain text
+breadCrumbsToText :: Breadcrumb -> Text
+breadCrumbsToText EmptyCrumb = ""
+breadCrumbsToText (Crumb c bc) = "/" <> Data.Text.pack c <> breadCrumbsToText bc
+
 
 -- | nav-bar component of the HTML documentation
 navBar
@@ -170,7 +206,7 @@ navBar DocParams{..} = div_ [class_ "nav-bar"] $ do
     makeOption = with a_ [class_ "nav-option"]
 
 
-headContents :: String -> DocParams -> Html ()
+headContents :: Text -> DocParams -> Html ()
 headContents title DocParams{..} =
     head_ $ do
         title_ $ toHtml title
