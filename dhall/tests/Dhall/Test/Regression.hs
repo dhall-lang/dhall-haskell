@@ -205,6 +205,13 @@ issue1732 = Test.Tasty.HUnit.testCase "Issue #1732" (do
     _ <- Util.code "./tests/regression/issue1732.dhall"
     return () )
 
+issue1884 :: TestTree
+issue1884 = Test.Tasty.HUnit.testCase "Issue #1884" (do
+    -- This test ensures that the parser allows a parenthesized application
+    -- expression as the first arguments to a with expression
+    _ <- Util.code "./tests/regression/issue1884.dhall"
+    return () )
+
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
     -- Verify that parsing should not fail
