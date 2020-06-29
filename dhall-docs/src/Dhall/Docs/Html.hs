@@ -34,7 +34,7 @@ import qualified System.FilePath                                     as FilePath
 
 -- $setup
 -- >>> :set -XQuasiQuotes
--- >>> import Path (absdir, absfile)
+-- >>> import Path (reldir)
 
 exprToHtml :: Expr Src Import -> Html ()
 exprToHtml expr = renderTree prettyTree
@@ -91,9 +91,9 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
                 h3_ "Source"
                 div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
   where
-    breadcrumb = relPathToBreadcrumb NotIndex filePath
+    breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
-    pageTitle = breadCrumbsToHtml breadcrumb
+    pageTitle = breadCrumbsToHtml NotIndex breadcrumb
 
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
@@ -136,19 +136,14 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         Nothing -> file
         Just (f, _) -> f
 
-    breadcrumbs = relPathToBreadcrumb Index indexDir
+    breadcrumbs = relPathToBreadcrumb indexDir
     htmlTitle = breadCrumbsToText breadcrumbs
-    pageTitle = breadCrumbsToHtml breadcrumbs
+    pageTitle = breadCrumbsToHtml Index breadcrumbs
 
--- | ADT for handling bread crumbs. This is essentially a list.
+-- | ADT for handling bread crumbs. This is essentially a backwards list
 --   See `relPathToBread` for more information.
 data Breadcrumb
-
-    -- | If the BreadCrumb is for a .dhall.html file,
-    -- > Crumb level crumb bc ~ <a href="${concat $ replicate level "../"}index.html">crumb</a>
-    -- otherwise (an index.html file)
-    -- > Crumb level crumb bc ~ <a href="${concat $ replicate (level - 1) "../"}index.html">crumb</a>@
-    = Crumb Int String Breadcrumb
+    = Crumb Breadcrumb String
     | EmptyCrumb
 
 data HtmlFileType = NotIndex | Index
@@ -156,20 +151,15 @@ data HtmlFileType = NotIndex | Index
 {-| Convert a relative path to a `Breadcrumb`.
 
 >>> relPathToBreadcrumb [reldir|a/b/c|]
-Crumb "a" (Crumb "b" (Crumb "c" EmptyCrumb))
+Crumb (Crumb (Crumb EmptyCrumb "a") "b") "c"
 >>> relPathToBreadcrumb [reldir|.]
-EmptyCrumb
+Crumb EmptyCrumb ""
 >>> relPathToBreadcrumb [relfile|c/foo.baz]
-Crumb "foo.baz" EmptyCrumb
-
+Crumb (Crumb EmptyCrumb "c") "foo.baz"
 -}
-relPathToBreadcrumb :: HtmlFileType -> Path Rel a -> Breadcrumb
-relPathToBreadcrumb htmlFileType relPath = go startCount splittedRelPath
+relPathToBreadcrumb :: Path Rel a -> Breadcrumb
+relPathToBreadcrumb relPath = foldl Crumb EmptyCrumb splittedRelPath
   where
-    startCount = case htmlFileType of
-        NotIndex -> length splittedRelPath - 2
-        Index -> length splittedRelPath - 1
-
     filePath = Path.toFilePath relPath
 
     splittedRelPath :: [String]
@@ -177,29 +167,29 @@ relPathToBreadcrumb htmlFileType relPath = go startCount splittedRelPath
         "." -> [""]
         _ -> FilePath.splitDirectories filePath
 
-    go :: Int -> [FilePath] -> Breadcrumb
-    go _ [] = EmptyCrumb
-    go i (c : cs) = Crumb i c $ go (i - 1) cs
-
 -- | Render breadcrumbs as `Html ()`
-breadCrumbsToHtml :: Breadcrumb -> Html ()
-breadCrumbsToHtml EmptyCrumb = return ()
-breadCrumbsToHtml (Crumb i c bc) = do
-    span_ [class_ "crumb-divider"] $ toHtml ("/" :: Text)
-    elem_ [class_ "title-crumb", href_ hrefTarget] $ toHtml c
-    breadCrumbsToHtml bc
+breadCrumbsToHtml :: HtmlFileType -> Breadcrumb -> Html ()
+breadCrumbsToHtml htmlFileType = go startLevel
   where
-    hrefTarget = Data.Text.replicate i "../" <> "index.html"
-    elem_ = case bc of
-        -- last element is not a link
-        EmptyCrumb -> span_
-        Crumb{} -> a_
+    startLevel = case htmlFileType of
+        NotIndex -> -1
+        Index -> 0
+
+    go :: Int -> Breadcrumb -> Html ()
+    go _ EmptyCrumb = return ()
+    go level (Crumb bc name) = do
+        go (level + 1) bc
+        span_ [class_ "crumb-divider"] $ toHtml ("/" :: Text)
+        elem_ [class_ "title-crumb", href_ hrefTarget] $ toHtml name
+      where
+        hrefTarget = Data.Text.replicate level "../" <> "index.html"
+        elem_ = if level == startLevel then span_ else a_
 
 
 -- | Render breadcrumbs as plain text
 breadCrumbsToText :: Breadcrumb -> Text
 breadCrumbsToText EmptyCrumb = ""
-breadCrumbsToText (Crumb _ c bc) = "/" <> Data.Text.pack c <> breadCrumbsToText bc
+breadCrumbsToText (Crumb bc c) = breadCrumbsToText bc <> "/" <> Data.Text.pack c
 
 
 -- | nav-bar component of the HTML documentation
