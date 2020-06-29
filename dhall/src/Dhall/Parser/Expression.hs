@@ -275,9 +275,9 @@ parsers embedded = Parsers {..}
                         ImportExpr x      -> return x
                         ApplicationExpr{} -> empty
 
-                    case (a0, a) of
-                        (Note srcA0 _, Note srcA _) | laxSrcEq srcA0 srcA -> return ()
-                        _                                                 -> empty
+                    if sameNotedExpr a0 a
+                        then return ()
+                        else empty
 
                     bs <- many (do
                         try (whitespace *> _with *> nonemptyWhitespace)
@@ -384,10 +384,9 @@ parsers embedded = Parsers {..}
 
             let c = foldl' app (f a) bs
 
-            case (a, c) of
-                (Note srcA _, Note srcC _)
-                     | laxSrcEq srcA srcC -> return (ImportExpr c)
-                _                         -> return (ApplicationExpr c)
+            if sameNotedExpr a c
+                then return (ImportExpr c)
+                else return (ApplicationExpr c)
           where
             app a (sep, b)
                 | Note (Src left _ bytesL) _ <- a

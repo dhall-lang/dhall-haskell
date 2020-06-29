@@ -16,6 +16,7 @@ import           Data.Void                  (Void)
 import           Dhall.Map                  (Map)
 import           Dhall.Set                  (Set)
 import           Dhall.Src                  (Src(..))
+import           Dhall.Syntax               (Expr(..))
 import           Prelude                    hiding (const, pi)
 import           Text.Parser.Combinators    (try, (<?>))
 import           Text.Parser.Token          (TokenParsing (..))
@@ -49,13 +50,17 @@ instance Show e => Show (SourcedException e) where
 
 -- | Doesn't force the 'Text' part
 laxSrcEq :: Src -> Src -> Bool
-laxSrcEq (Src p q _) (Src p' q' _) = eq p  p' && eq q q'
+laxSrcEq (Src p q _) (Src p' q' _) = eq p p' && eq q q'
   where
     -- Don't compare filename (which is FilePath = String)
     eq  :: Text.Megaparsec.SourcePos -> Text.Megaparsec.SourcePos -> Bool
     eq (Text.Megaparsec.SourcePos _ a b) (Text.Megaparsec.SourcePos _ a' b') =
         a == a' && b == b'
 {-# INLINE laxSrcEq #-}
+
+sameNotedExpr :: Expr Src a -> Expr Src a -> Bool
+sameNotedExpr (Note src0 _) (Note src1 _) = laxSrcEq src0 src1
+sameNotedExpr _ _ = False
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
