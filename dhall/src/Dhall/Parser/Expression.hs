@@ -272,8 +272,12 @@ parsers embedded = Parsers {..}
 
             let alternative4C = do
                     a0 <- case a0' of
-                        ImportExpr x -> return x
+                        ImportExpr x      -> return x
                         ApplicationExpr{} -> empty
+
+                    case (a0, a) of
+                        (Note srcA0 _, Note srcA _) | laxSrcEq srcA0 srcA -> return ()
+                        _                                                 -> empty
 
                     bs <- many (do
                         try (whitespace *> _with *> nonemptyWhitespace)
@@ -381,9 +385,9 @@ parsers embedded = Parsers {..}
             let c = foldl' app (f a) bs
 
             case (a, c) of
-                (Note (Src lA rA _) _, Note (Src lC rC _) _)
-                     | lA == lC && rA == rC -> return (ImportExpr c)
-                _                           -> return (ApplicationExpr c)
+                (Note srcA _, Note srcC _)
+                     | laxSrcEq srcA srcC -> return (ImportExpr c)
+                _                         -> return (ApplicationExpr c)
           where
             app a (sep, b)
                 | Note (Src left _ bytesL) _ <- a
