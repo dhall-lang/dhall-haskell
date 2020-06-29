@@ -272,6 +272,12 @@ parsers embedded = Parsers {..}
 
             let alternative4C = do
                     -- Ensure that what we've parsed so far is an import expression.
+                    -- We check
+                    --
+                    -- 1. that `a0` is an import expression;
+                    --
+                    -- 2. that we haven't parsed a larger operator expression with `a`
+                    --    by comparing its source location with `a0`'s.
                     case a0Info of
                         ApplicationExpr               -> empty
                         ImportExpr | eqExprBySrc a0 a -> return ()
