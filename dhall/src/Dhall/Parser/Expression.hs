@@ -241,7 +241,7 @@ parsers embedded = Parsers {..}
             return (Assert a)
 
         alternative5 = do
-            (a0Type, a0) <- applicationExpression'
+            (a0Type, a0) <- applicationExpressionWithInfo
 
             let (parseFirstOperatorExpression, parseOperatorExpression) =
                     operatorExpression (pure a0)
@@ -350,10 +350,10 @@ parsers embedded = Parsers {..}
         , BoolNE                  <$ _notEqual     <* whitespace
         ]
 
-    applicationExpression = snd <$> applicationExpression'
+    applicationExpression = snd <$> applicationExpressionWithInfo
 
-    applicationExpression' :: Parser (ApplicationExprType, Expr Src a)
-    applicationExpression' = do
+    applicationExpressionWithInfo :: Parser (ApplicationExprInfo, Expr Src a)
+    applicationExpressionWithInfo = do
             let alternative0 = do
                     _ <- try (_Some <* nonemptyWhitespace)
 
@@ -1012,9 +1012,9 @@ import_ = (do
 
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
--- | 'ApplicationExprType' distinguishes import expressions from /proper/
--- application expressions.
-data ApplicationExprType
+-- | 'ApplicationExprInfo' distinguishes import expressions from /proper/
+-- application expressions that aren't import expressions.
+data ApplicationExprInfo
     = ImportExpr
     -- ^ An import expression.
     | ApplicationExpr
