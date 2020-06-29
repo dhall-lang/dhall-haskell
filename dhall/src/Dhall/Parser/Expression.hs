@@ -276,7 +276,7 @@ parsers embedded = Parsers {..}
                     --
                     -- 1. that `a0` is an import expression;
                     --
-                    -- 2. that we haven't parsed a larger operator expression with `a`
+                    -- 2. that we haven't parsed an operator expression with `a`,
                     --    by comparing its source location with `a0`'s.
                     case a0Info of
                         ApplicationExpr               -> empty
