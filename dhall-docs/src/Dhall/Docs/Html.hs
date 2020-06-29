@@ -170,7 +170,7 @@ relPathToBreadcrumb relPath = foldr Crumb EmptyCrumb splittedRelPath
 breadCrumbsToHtml :: Breadcrumb -> Html ()
 breadCrumbsToHtml EmptyCrumb = return ()
 breadCrumbsToHtml (Crumb c bc) = do
-    toHtml ("/" :: Text)
+    span_ [class_ "crumb-divider"] $ toHtml ("/" :: Text)
     span_ [class_ "title-crumb"] $ toHtml c
     breadCrumbsToHtml bc
 
