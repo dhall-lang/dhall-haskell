@@ -82,7 +82,7 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
         body_ $ do
             navBar params
             mainContainer $ do
-                h2_ [class_ "doc-title"] breadcrumbs
+                h2_ [class_ "doc-title"] $ breadcrumbs splittedPath
                 div_ [class_ "doc-contents"] header
                 h3_ "Source"
                 div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
@@ -90,23 +90,20 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
     htmlTitle = Path.fromRelFile $ Path.filename filePath
     splittedPath = System.FilePath.splitDirectories $ Path.fromRelFile filePath
 
-    breadcrumbs :: Html ()
-    breadcrumbs = Control.Monad.forM_ splittedPath $ \crumb ->
-        toHtml ("/" :: Text) >> span_ [class_ "title-crumb"] (toHtml crumb)
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
-    :: FilePath        -- ^ Index directory
+    :: Path Rel Dir    -- ^ Index directory
     -> [Path Rel File] -- ^ Generated files in that directory
     -> [Path Rel Dir]  -- ^ Generated directories in that directory
     -> DocParams       -- ^ Parameters for the documentation
     -> Html ()
 indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
-    headContents title params
+    headContents htmlTitle params
     body_ $ do
         navBar params
         mainContainer $ do
-            h2_ [class_ "doc-title"] $ toHtml title
+            h2_ [class_ "doc-title"] $ breadcrumbs splittedPath
 
             Control.Monad.unless (null files) $ do
                 h3_ "Exported files: "
@@ -125,8 +122,8 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     listDir :: Path Rel Dir -> Html ()
     listDir dir =
-        let filePath = Data.Text.pack $ Path.fromRelDir dir in
-        li_ $ a_ [href_ (filePath <> "index.html")] $ toHtml filePath
+        let dirPath = Data.Text.pack $ Path.fromRelDir dir in
+        li_ $ a_ [href_ (dirPath <> "index.html")] $ toHtml dirPath
 
     tryToTakeExt :: Path Rel File -> FilePath
 
@@ -134,8 +131,19 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         Nothing -> file
         Just (f, _) -> f
 
-    title :: String
-    title = indexDir
+    filePath = Path.fromRelDir indexDir
+
+    htmlTitle = case System.FilePath.dropTrailingPathSeparator filePath of
+        "." -> "/"
+        _ -> "/" <> filePath
+    splittedPath = case System.FilePath.dropTrailingPathSeparator filePath of
+        "." -> [""]
+        _ -> System.FilePath.splitDirectories filePath
+
+-- | Make breadcrumbs from a list of path components
+breadcrumbs :: [String] -> Html ()
+breadcrumbs = Control.Monad.mapM_ $ \crumb ->
+    toHtml ("/" :: Text) >> span_ [class_ "title-crumb"] (toHtml crumb)
 
 -- | nav-bar component of the HTML documentation
 navBar

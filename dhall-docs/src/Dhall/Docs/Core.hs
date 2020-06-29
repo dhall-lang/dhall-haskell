@@ -4,6 +4,8 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Dhall.Docs.Core (generateDocs) where
 
@@ -17,7 +19,7 @@ import Dhall.Docs.Markdown
 import Dhall.Docs.Store
 import Dhall.Parser        (Header (..), ParseError (..), exprAndHeaderFromText)
 import Dhall.Src           (Src)
-import Path                (Abs, Dir, File, Path, (</>))
+import Path                (Abs, Dir, File, Path, Rel, (</>))
 import Text.Megaparsec     (ParseErrorBundle (..))
 
 import qualified Control.Applicative as Applicative
@@ -195,11 +197,12 @@ createIndexes outputPath htmlFiles packageName = do
             dirs <- fst <$> Path.IO.listDir dir
             mapM (Path.stripProperPrefix dir) dirs
 
-    let createIndex index files = do
+    let createIndex :: Path Abs Dir -> [Path Abs File] -> IO ()
+        createIndex index files = do
             indexFile <- Path.fromAbsFile . (index </>) <$> Path.parseRelFile "index.html"
             indexTitle <-
-                if outputPath == index then return "/"
-                else (("/" <>) . Path.fromRelDir) <$> Path.stripProperPrefix outputPath index
+                if outputPath == index then return $(Path.mkRelDir ".")
+                else Path.stripProperPrefix outputPath index
             indexList <- Control.Monad.forM files $
                 fmap Path.filename . Path.stripProperPrefix outputPath
             dirList <- listDirRel index
