@@ -226,7 +226,7 @@ a.title-crumb:hover {
 
 a.copy-to-clipboard {
     margin-top: 0;
-    color: #bdbdbd !important;
+    color: #888 !important;
     user-select: none;
     cursor: pointer;
     text-decoration: none;
@@ -324,4 +324,8 @@ body.dark-mode {
 
 .dark-mode .source-code span.dhall-builtin {
     color: #4EC9B0;
+}
+
+.dark-mode a.copy-to-clipboard {
+    color: #bdbdbd !important;
 }
