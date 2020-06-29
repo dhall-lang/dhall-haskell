@@ -17,6 +17,16 @@ function onReady() {
         localStorage.setItem(DARK_MODE_OPT, DARK_MODE_INACTIVE)
       }
     })
+
+  document.querySelectorAll('a.copy-to-clipboard').forEach(node =>
+    node.addEventListener('click', () => {
+      const temp = document.createElement('input')
+      document.body.append(temp)
+      temp.value = node.dataset.path
+      temp.select()
+      document.execCommand("copy");
+      temp.remove()
+    }))
 }
 
 if (document.readyState != 'loading'){

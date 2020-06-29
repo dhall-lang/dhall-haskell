@@ -87,6 +87,8 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
             navBar params
             mainContainer $ do
                 h2_ [class_ "doc-title"] pageTitle
+                copyToClipboardButton htmlTitle
+                br_ []
                 div_ [class_ "doc-contents"] header
                 h3_ "Source"
                 div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
@@ -94,7 +96,6 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
     pageTitle = breadCrumbsToHtml NotIndex breadcrumb
-
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
@@ -109,7 +110,8 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         navBar params
         mainContainer $ do
             h2_ [class_ "doc-title"] pageTitle
-
+            copyToClipboardButton htmlTitle
+            br_ []
             Control.Monad.unless (null files) $ do
                 h3_ "Exported files: "
                 ul_ $ mconcat $ map listFile files
@@ -139,6 +141,11 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     breadcrumbs = relPathToBreadcrumb indexDir
     htmlTitle = breadCrumbsToText breadcrumbs
     pageTitle = breadCrumbsToHtml Index breadcrumbs
+
+copyToClipboardButton :: Text -> Html ()
+copyToClipboardButton filePath =
+    a_ [class_ "copy-to-clipboard", data_ "path" filePath]
+        $ i_ $ small_ "Copy to clipboard"
 
 -- | ADT for handling bread crumbs. This is essentially a backwards list
 --   See `relPathToBreadcrumb` for more information.
@@ -175,6 +182,13 @@ breadCrumbsToHtml htmlFileType = go startLevel
     startLevel = case htmlFileType of
         NotIndex -> -1
         Index -> 0
+
+    -- copyBreadcrumbButton :: Html ()
+    -- copyBreadcrumbButton =
+    --     button_
+    --         [ class_ "btn copy-breadcrumb"
+    --         , data_ "breadcrumb" $ breadCrumbsToText breadcrumb
+    --         ] ""
 
     go :: Int -> Breadcrumb -> Html ()
     go _ EmptyCrumb = return ()

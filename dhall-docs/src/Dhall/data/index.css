@@ -224,6 +224,22 @@ a.title-crumb:hover {
     text-decoration: underline;
 }
 
+a.copy-to-clipboard {
+    margin-top: 0;
+    color: #bdbdbd !important;
+    user-select: none;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+a.copy-to-clipboard:hover {
+    text-decoration: underline;
+}
+
+h2.doc-title {
+    margin-bottom: 0;
+}
+
 /******** Source code **********/
 
 .source-code {
