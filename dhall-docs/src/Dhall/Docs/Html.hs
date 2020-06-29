@@ -23,13 +23,14 @@ import Dhall.Core   (Expr, Import)
 import Dhall.Pretty (Ann (..))
 import Dhall.Src    (Src)
 import Lucid
-import Path         (Abs, Dir, File, Path, Rel)
+import Path         (Dir, File, Path, Rel)
 
 import qualified Control.Monad
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
 import qualified Dhall.Pretty
 import qualified Path
+import qualified System.FilePath
 
 exprToHtml :: Expr Src Import -> Html ()
 exprToHtml expr = renderTree prettyTree
@@ -70,25 +71,28 @@ data DocParams = DocParams
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 dhallFileToHtml
-    :: Path Abs File   -- ^ Source file name, used to extract the title
+    :: Path Rel File   -- ^ Source file name, used to extract the title
     -> Expr Src Import -- ^ Contents of the file
     -> Html ()         -- ^ Header document as HTML
     -> DocParams       -- ^ Parameters for the documentation
     -> Html ()
 dhallFileToHtml filePath expr header params@DocParams{..} =
     doctypehtml_ $ do
-        headContents title params
+        headContents htmlTitle params
         body_ $ do
             navBar params
             mainContainer $ do
-                h1_ $ toHtml title
-                h2_ "Documentation"
+                h2_ [class_ "doc-title"] breadcrumbs
                 div_ [class_ "doc-contents"] header
-                h2_ "Source"
+                h3_ "Source"
                 div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
   where
-    title = Path.fromRelFile $ Path.filename filePath
+    htmlTitle = Path.fromRelFile $ Path.filename filePath
+    splittedPath = System.FilePath.splitDirectories $ Path.fromRelFile filePath
 
+    breadcrumbs :: Html ()
+    breadcrumbs = Control.Monad.forM_ splittedPath $ \crumb ->
+        toHtml ("/" :: Text) >> span_ [class_ "title-crumb"] (toHtml crumb)
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
@@ -102,14 +106,14 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     body_ $ do
         navBar params
         mainContainer $ do
-            h1_ $ toHtml title
+            h2_ [class_ "doc-title"] $ toHtml title
 
             Control.Monad.unless (null files) $ do
-                h2_ "Exported files: "
+                h3_ "Exported files: "
                 ul_ $ mconcat $ map listFile files
 
             Control.Monad.unless (null dirs) $ do
-                h2_ "Exported packages: "
+                h3_ "Exported packages: "
                 ul_ $ mconcat $ map listDir dirs
 
   where
@@ -131,7 +135,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         Just (f, _) -> f
 
     title :: String
-    title = indexDir <> " index"
+    title = indexDir
 
 -- | nav-bar component of the HTML documentation
 navBar

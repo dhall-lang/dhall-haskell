@@ -112,9 +112,9 @@ saveHtml
     -> DhallFile            -- ^ Parsed header
     -> IO (Path Abs File)   -- ^ Output path file
 saveHtml inputAbsDir outputAbsDir packageName DhallFile {path = absFile, ..} = do
+    strippedFilePath <- Path.stripProperPrefix inputAbsDir absFile
     htmlOutputFile <- do
-        strippedPath <- Path.stripProperPrefix inputAbsDir absFile
-        strippedPathWithExt <- addHtmlExt strippedPath
+        strippedPathWithExt <- addHtmlExt strippedFilePath
         return (outputAbsDir </> strippedPathWithExt)
 
     let htmlOutputDir = Path.parent htmlOutputFile
@@ -132,7 +132,7 @@ saveHtml inputAbsDir outputAbsDir packageName DhallFile {path = absFile, ..} = d
 
     Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
         $ dhallFileToHtml
-            absFile
+            strippedFilePath
             expr
             headerAsHtml
             DocParams { relativeResourcesPath, packageName }
@@ -198,8 +198,8 @@ createIndexes outputPath htmlFiles packageName = do
     let createIndex index files = do
             indexFile <- Path.fromAbsFile . (index </>) <$> Path.parseRelFile "index.html"
             indexTitle <-
-                if outputPath == index then return "package"
-                else Path.fromRelDir <$> Path.stripProperPrefix outputPath index
+                if outputPath == index then return "/"
+                else (("/" <>) . Path.fromRelDir) <$> Path.stripProperPrefix outputPath index
             indexList <- Control.Monad.forM files $
                 fmap Path.filename . Path.stripProperPrefix outputPath
             dirList <- listDirRel index
