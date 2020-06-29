@@ -91,7 +91,7 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
                 h3_ "Source"
                 div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
   where
-    breadcrumb = relPathToBreadcrumb filePath
+    breadcrumb = relPathToBreadcrumb NotIndex filePath
     htmlTitle = breadCrumbsToText breadcrumb
     pageTitle = breadCrumbsToHtml breadcrumb
 
@@ -136,15 +136,22 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         Nothing -> file
         Just (f, _) -> f
 
-    breadcrumbs = relPathToBreadcrumb indexDir
+    breadcrumbs = relPathToBreadcrumb Index indexDir
     htmlTitle = breadCrumbsToText breadcrumbs
     pageTitle = breadCrumbsToHtml breadcrumbs
 
 -- | ADT for handling bread crumbs. This is essentially a list.
 --   See `relPathToBread` for more information.
 data Breadcrumb
-    = Crumb String Breadcrumb
+
+    -- | If the BreadCrumb is for a .dhall.html file,
+    -- > Crumb level crumb bc ~ <a href="${concat $ replicate level "../"}index.html">crumb</a>
+    -- otherwise (an index.html file)
+    -- > Crumb level crumb bc ~ <a href="${concat $ replicate (level - 1) "../"}index.html">crumb</a>@
+    = Crumb Int String Breadcrumb
     | EmptyCrumb
+
+data HtmlFileType = NotIndex | Index
 
 {-| Convert a relative path to a `Breadcrumb`.
 
@@ -156,9 +163,13 @@ EmptyCrumb
 Crumb "foo.baz" EmptyCrumb
 
 -}
-relPathToBreadcrumb :: Path Rel a -> Breadcrumb
-relPathToBreadcrumb relPath = foldr Crumb EmptyCrumb splittedRelPath
+relPathToBreadcrumb :: HtmlFileType -> Path Rel a -> Breadcrumb
+relPathToBreadcrumb htmlFileType relPath = go startCount splittedRelPath
   where
+    startCount = case htmlFileType of
+        NotIndex -> length splittedRelPath - 2
+        Index -> length splittedRelPath - 1
+
     filePath = Path.toFilePath relPath
 
     splittedRelPath :: [String]
@@ -166,24 +177,29 @@ relPathToBreadcrumb relPath = foldr Crumb EmptyCrumb splittedRelPath
         "." -> [""]
         _ -> FilePath.splitDirectories filePath
 
+    go :: Int -> [FilePath] -> Breadcrumb
+    go _ [] = EmptyCrumb
+    go i (c : cs) = Crumb i c $ go (i - 1) cs
+
 -- | Render breadcrumbs as `Html ()`
 breadCrumbsToHtml :: Breadcrumb -> Html ()
 breadCrumbsToHtml EmptyCrumb = return ()
-breadCrumbsToHtml (Crumb c bc) = do
+breadCrumbsToHtml (Crumb i c bc) = do
     span_ [class_ "crumb-divider"] $ toHtml ("/" :: Text)
-    elem_ [class_ "title-crumb", href_ "#"] $ toHtml c
+    elem_ [class_ "title-crumb", href_ hrefTarget] $ toHtml c
     breadCrumbsToHtml bc
   where
+    hrefTarget = Data.Text.replicate i "../" <> "index.html"
     elem_ = case bc of
         -- last element is not a link
         EmptyCrumb -> span_
-        Crumb _ _ -> a_
+        Crumb{} -> a_
 
 
 -- | Render breadcrumbs as plain text
 breadCrumbsToText :: Breadcrumb -> Text
 breadCrumbsToText EmptyCrumb = ""
-breadCrumbsToText (Crumb c bc) = "/" <> Data.Text.pack c <> breadCrumbsToText bc
+breadCrumbsToText (Crumb _ c bc) = "/" <> Data.Text.pack c <> breadCrumbsToText bc
 
 
 -- | nav-bar component of the HTML documentation
