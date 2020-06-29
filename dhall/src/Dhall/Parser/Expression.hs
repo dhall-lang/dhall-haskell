@@ -241,7 +241,7 @@ parsers embedded = Parsers {..}
             return (Assert a)
 
         alternative5 = do
-            (a0Type, a0) <- applicationExpressionWithInfo
+            (a0Info, a0) <- applicationExpressionWithInfo
 
             let (parseFirstOperatorExpression, parseOperatorExpression) =
                     operatorExpression (pure a0)
@@ -272,7 +272,7 @@ parsers embedded = Parsers {..}
 
             let alternative4C = do
                     -- Ensure that what we've parsed so far is an import expression.
-                    case a0Type of
+                    case a0Info of
                         ApplicationExpr               -> empty
                         ImportExpr | eqExprBySrc a0 a -> return ()
                                    | otherwise        -> empty
