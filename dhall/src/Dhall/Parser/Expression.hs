@@ -383,12 +383,12 @@ parsers embedded = Parsers {..}
 
             let c = foldl' app (f a) bs
 
-            let type_ =
+            let info =
                     case (maybeMessage, bs) of
                         (Nothing, []) -> ImportExpr
                         _             -> ApplicationExpr
 
-            return (type_, c)
+            return (info, c)
           where
             app a (sep, b)
                 | Note (Src left _ bytesL) _ <- a
