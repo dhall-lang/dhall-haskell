@@ -383,7 +383,10 @@ parsers embedded = Parsers {..}
 
             let c = foldl' app (f a) bs
 
-            let type_ = if eqExprBySrc a c then ImportExpr else ApplicationExpr
+            let type_ =
+                    case (maybeMessage, bs) of
+                        (Nothing, []) -> ImportExpr
+                        _             -> ApplicationExpr
 
             return (type_, c)
           where
