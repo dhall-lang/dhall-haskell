@@ -11,6 +11,7 @@ import Data.Text (Text, pack)
 import Data.Void (Void)
 import Data.Yaml
 import Dhall.Core (Expr(..))
+import Dhall.Format (Format(..))
 import Dhall.Kubernetes.Data (patchCyclicImports)
 import Numeric.Natural (Natural)
 import Text.Megaparsec (Parsec, some, parse, (<|>), errorBundlePretty)
@@ -57,8 +58,9 @@ writeDhall path expr = do
 
   let censor = Dhall.Util.NoCensor
 
-  let formatMode =
-          Dhall.Format.Modify (Dhall.Util.InputFile (Turtle.encodeString path))
+  let outputMode = Dhall.Util.Write
+
+  let input = Dhall.Util.InputFile (Turtle.encodeString path)
 
   let formatOptions = Dhall.Format.Format{..}
 
@@ -278,6 +280,7 @@ main = do
 
   let package =
         Combine
+          Nothing
           (Embed (Convert.mkImport prefixMap [ ] "schemas.dhall"))
           (RecordLit
               [ ( "IntOrString"

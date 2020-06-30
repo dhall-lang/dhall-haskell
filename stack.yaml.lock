@@ -5,50 +5,22 @@
 
 packages:
 - completed:
-    hackage: dhall-1.27.0@sha256:b522d6b534949e65771ed0179afc1488e4de2b185af5ed38e4806a6720db51bf,30519
+    hackage: dhall-1.33.0@sha256:a291ed94aedcbbac3d3bc381b6597d25441cac4974d263c0173e829f37e63ce5,33324
     pantry-tree:
-      size: 232998
-      sha256: 3f79ba6a3eeb0f59c1cf41663d65eebe71f5780f5765169e3d52406789a6f286
+      size: 281838
+      sha256: 07168d492e30a7c964a9fda4108d6f2c3f95f2680cc3499783ca701a42f50926
   original:
-    hackage: dhall-1.27.0
+    hackage: dhall-1.33.0
 - completed:
-    hackage: dhall-json-1.5.0@sha256:cf5ba9c349539715ba3a9642fbd56e905b1a7675ac82ea48ee4a67bc34446872,5644
+    hackage: dhall-json-1.7.0@sha256:1512b0783407796f610ad4954fa13abe0e484b7f4f6f5488cb0e25062f2379f5,4597
     pantry-tree:
-      size: 3601
-      sha256: 109a2d85c440e3e0371da886ab1ddf004d51b0c20a1e61a8195e74bc0459802f
+      size: 5299
+      sha256: 135873df71073467f68c07ef30c2284bb00ee479d96a29a11afef3cc551e1538
   original:
-    hackage: dhall-json-1.5.0
-- completed:
-    hackage: th-lift-0.8.0.1@sha256:cceb81b12c0580e02a7a3898b6d60cca5e1be080741f69ddde4f12210d8ba7ca,1960
-    pantry-tree:
-      size: 461
-      sha256: 7ed900048c8722069edb6063023d89343f056ca305be598f51f166bd389621df
-  original:
-    hackage: th-lift-0.8.0.1
-- completed:
-    hackage: th-lift-instances-0.1.14@sha256:351314ffad77a5ba49439accb50d3baf9de0186ab1d8d207e88ed698f1becc5e,2625
-    pantry-tree:
-      size: 526
-      sha256: ef2728ea6af150cf4514254b3ef74f16d8bf6f3c52f4c26a4f2625fceee6fd76
-  original:
-    hackage: th-lift-instances-0.1.14
-- completed:
-    hackage: kubernetes-client-core-0.1.0.1@sha256:8751cc7ba60a9a3adc6b88da67539cd7a5ff42fc3128cb98f3a76033f03ff063,6467
-    pantry-tree:
-      size: 6855
-      sha256: 75a3056503249f8dfcbb0067264c46d1da4126b02cfb406d4dab13f72c71e41d
-  original:
-    hackage: kubernetes-client-core-0.1.0.1@sha256:8751cc7ba60a9a3adc6b88da67539cd7a5ff42fc3128cb98f3a76033f03ff063,6467
-- completed:
-    hackage: katip-0.8.3.0@sha256:8a67c0aec3ba1f0eabcfae443cb909e4cf9405e29bac99ccf1420f1f1bbda9c4,4097
-    pantry-tree:
-      size: 1140
-      sha256: cad8c67256ec85819309d77bdcbc15b67885940ef76f2b850c8be20c2efd0149
-  original:
-    hackage: katip-0.8.3.0@sha256:8a67c0aec3ba1f0eabcfae443cb909e4cf9405e29bac99ccf1420f1f1bbda9c4,4097
+    hackage: dhall-json-1.7.0
 snapshots:
 - completed:
-    size: 500539
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/13/27.yaml
-    sha256: 690db832392afe55733b4c7023fd29b1b1c660ee42f1fb505b86b07394ca994e
-  original: lts-13.27
+    size: 491373
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/15/3.yaml
+    sha256: 29e9ff61b8bf4b4fcff55cde3ac106ebb971f0d21331dccac9eee63374fa6ca8
+  original: lts-15.3
