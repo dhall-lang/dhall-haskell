@@ -135,8 +135,8 @@ getAllDhallFiles baseDir = do
             bindings :: [Binding Void Import]
             bindings = case expr of
                 Let b@Binding{} e ->
-                    let MultiLet bindings _ = Dhall.Core.multiLet b e
-                    in NonEmpty.toList bindings
+                    let MultiLet bs _ = Dhall.Core.multiLet b e
+                    in NonEmpty.toList bs
                 _ -> []
             bindName (Binding _ x _ _ _ _) = x == name
 
