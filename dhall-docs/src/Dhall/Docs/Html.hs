@@ -19,6 +19,7 @@ module Dhall.Docs.Html
 
 import Data.Monoid  ((<>))
 import Data.Text    (Text)
+import Data.Void    (Void)
 import Dhall.Core   (Expr, Import)
 import Dhall.Pretty (Ann (..))
 import Dhall.Src    (Src)
@@ -26,7 +27,9 @@ import Lucid
 import Path         (Dir, File, Path, Rel)
 
 import qualified Control.Monad
+import qualified Data.Foldable
 import qualified Data.Text
+import qualified Data.Text.Prettyprint.Doc                           as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
 import qualified Dhall.Pretty
 import qualified Path
@@ -36,11 +39,20 @@ import qualified System.FilePath                                     as FilePath
 -- >>> :set -XQuasiQuotes
 -- >>> import Path (reldir, relfile)
 
-exprToHtml :: Expr Src Import -> Html ()
-exprToHtml expr = renderTree prettyTree
+-- | Internal utility to differentiate if a Dhall expr is a type annotation
+--   or the whole file
+data ExprType = TypeAnnotation | FileContentsExpr
+
+
+exprToHtml :: ExprType -> Expr a Import -> Html ()
+exprToHtml exprType expr = pre_ $ renderTree prettyTree
   where
+    layout = case exprType of
+        FileContentsExpr -> Dhall.Pretty.layout
+        TypeAnnotation -> typeLayout
+
     prettyTree = Pretty.treeForm
-        $ Dhall.Pretty.layout
+        $ layout
         $ Dhall.Pretty.prettyExpr expr
 
     textSpaces :: Int -> Text
@@ -66,6 +78,18 @@ exprToHtml expr = renderTree prettyTree
             Builtin -> "builtin"
             Operator -> "operator"
 
+    typeLayout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
+    typeLayout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart opts
+      where
+        -- this is done so the type of a dhall file fits in a single line
+        -- its a safe value, since types in source codes are not that large
+        opts :: Pretty.LayoutOptions
+        opts = Pretty.defaultLayoutOptions
+                { Pretty.layoutPageWidth =
+                    Pretty.Unbounded
+                }
+
+
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams
     { relativeResourcesPath :: FilePath -- ^ Relative resource path to the
@@ -75,10 +99,10 @@ data DocParams = DocParams
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 dhallFileToHtml
-    :: Path Rel File   -- ^ Source file name, used to extract the title
-    -> Expr Src Import -- ^ Contents of the file
-    -> Html ()         -- ^ Header document as HTML
-    -> DocParams       -- ^ Parameters for the documentation
+    :: Path Rel File            -- ^ Source file name, used to extract the title
+    -> Expr Src Import          -- ^ Contents of the file
+    -> Html ()                  -- ^ Header document as HTML
+    -> DocParams                -- ^ Parameters for the documentation
     -> Html ()
 dhallFileToHtml filePath expr header params@DocParams{..} =
     doctypehtml_ $ do
@@ -91,17 +115,17 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
                 br_ []
                 div_ [class_ "doc-contents"] header
                 h3_ "Source"
-                div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
+                div_ [class_ "source-code"] $ exprToHtml FileContentsExpr expr
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
-    :: Path Rel Dir    -- ^ Index directory
-    -> [Path Rel File] -- ^ Generated files in that directory
-    -> [Path Rel Dir]  -- ^ Generated directories in that directory
-    -> DocParams       -- ^ Parameters for the documentation
+    :: Path Rel Dir                                -- ^ Index directory
+    -> [(Path Rel File, Maybe (Expr Void Import))] -- ^ Generated files in that directory
+    -> [Path Rel Dir]                              -- ^ Generated directories in that directory
+    -> DocParams                                   -- ^ Parameters for the documentation
     -> Html ()
 indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     headContents htmlTitle params
@@ -120,11 +144,16 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
                 ul_ $ mconcat $ map listDir dirs
 
   where
-    listFile :: Path Rel File -> Html ()
-    listFile file =
+    listFile :: (Path Rel File, Maybe (Expr Void Import)) -> Html ()
+    listFile (file, maybeType) =
         let fileRef = Data.Text.pack $ Path.fromRelFile file
             itemText = Data.Text.pack $ tryToTakeExt file
-        in li_ $ a_ [href_ fileRef] $ toHtml itemText
+        in li_ $ do
+            a_ [href_ fileRef] $ toHtml itemText
+            Data.Foldable.forM_ maybeType $ \typeExpr -> do
+                span_ [class_ "of-type-token"] ":"
+                span_ [class_ "dhall-type source-code"] $ exprToHtml TypeAnnotation typeExpr
+
 
     listDir :: Path Rel Dir -> Html ()
     listDir dir =
@@ -143,7 +172,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 copyToClipboardButton :: Text -> Html ()
 copyToClipboardButton filePath =
     a_ [class_ "copy-to-clipboard", data_ "path" filePath]
-        $ i_ $ small_ "Copy to clipboard"
+        $ i_ $ small_ "Copy path to clipboard"
 
 
 setPageTitle :: DocParams -> HtmlFileType -> Breadcrumb -> Html ()
@@ -240,7 +269,8 @@ headContents :: Text -> DocParams -> Html ()
 headContents title DocParams{..} =
     head_ $ do
         title_ $ toHtml title
-        stylesheet relativeResourcesPath
+        stylesheet $ relativeResourcesPath <> "index.css"
+        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato&display=swap"
         script relativeResourcesPath
         meta_ [charset_ "UTF-8"]
 
@@ -249,11 +279,11 @@ mainContainer :: Html() -> Html ()
 mainContainer = div_ [class_ "main-container"]
 
 stylesheet :: FilePath -> Html ()
-stylesheet relativeResourcesPath =
+stylesheet path =
     link_
         [ rel_ "stylesheet"
         , type_ "text/css"
-        , href_ $ Data.Text.pack $ relativeResourcesPath <> "index.css"]
+        , href_ $ Data.Text.pack path]
 
 script :: FilePath -> Html ()
 script relativeResourcesPath =
