@@ -12,7 +12,7 @@ module Dhall.Docs.Core (generateDocs) where
 import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Data.Void           (Void)
-import Dhall.Core          (Expr, Import)
+import Dhall.Core          (Binding (..), Expr (..), Import, Var (..), denote)
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
@@ -40,9 +40,11 @@ import qualified Text.Megaparsec
 
 -- | Represents a file that can be rendered as documentation
 data DhallFile = DhallFile
-    { path :: Path Abs File   -- ^ Path of the file
-    , expr :: Expr Src Import -- ^ File contents
-    , header :: Header        -- ^ Parsed `Header` of the file
+    { path :: Path Abs File             -- ^ Path of the file
+    , expr :: Expr Src Import           -- ^ File contents
+    , header :: Header                  -- ^ Parsed `Header` of the file
+    , mType :: Maybe (Expr Void Import) -- ^ Type of the parsed expression,
+                                        --   extracted from the source code
     }
 
 {-| Fetches a list of all dhall files in a directory along with its `Header`.
@@ -74,6 +76,7 @@ getAllDhallFiles baseDir = do
                 return $ Just DhallFile
                                 { path = absFile
                                 , expr, header
+                                , mType = extractTypeIfInSource (denote expr :: Expr Void Import)
                                 }
             Left ParseError{..} -> do
                 putStrLn $ showDhallParseError unwrap
@@ -84,6 +87,31 @@ getAllDhallFiles baseDir = do
         "\n\ESC[1;33mWarning\ESC[0m: Invalid Input\n\n" <>
         Text.Megaparsec.errorBundlePretty err <>
         "... documentation won't be generated for this file"
+
+    extractTypeIfInSource :: Expr Void Import -> Maybe (Expr Void Import)
+    extractTypeIfInSource expr = do
+        name <- maybeNameInLet expr
+        typeOfName name
+      where
+        -- | Returns the last @e@ in `let x = r in e` let binding returning
+        --   `Nothing` if it isn't a `Var`
+        maybeNameInLet :: Expr Void Import -> Maybe Text
+        maybeNameInLet (Var (V name _)) = Just name
+        maybeNameInLet (Let _ e) = maybeNameInLet e
+        maybeNameInLet _ = Nothing
+
+        -- | Searches for a binding name type, evaluating to `Nothing` if it
+        --   doesn't exist (although that case is imposible)
+        --   or the binding doesn't have a type
+        typeOfName :: Text -> Maybe (Expr Void Import)
+        typeOfName name = go expr
+          where
+            go :: Expr Void Import -> Maybe (Expr Void Import)
+            go (Let (Binding _ x _ maybeType _ _) e) =
+                case maybeType of
+                    Just (_, t) | x == name -> Just t
+                    _ -> go e
+            go _ = Nothing
 
 {-| Calculate the relative path needed to access files on the first argument
     relative from the second argument.
