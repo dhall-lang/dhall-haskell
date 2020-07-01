@@ -276,6 +276,16 @@ h2.doc-title {
     font-weight: bold;
 }
 
+.dhall-type {
+    opacity: 0.9;
+    font-style: italic;
+}
+
+span.of-type-token {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+}
+
 /******** Dark mode styling ********/
 
 .dark-mode .main-container {

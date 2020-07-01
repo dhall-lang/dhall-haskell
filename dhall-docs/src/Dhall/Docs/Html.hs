@@ -19,6 +19,7 @@ module Dhall.Docs.Html
 
 import Data.Monoid  ((<>))
 import Data.Text    (Text)
+import Data.Void    (Void)
 import Dhall.Core   (Expr, Import)
 import Dhall.Pretty (Ann (..))
 import Dhall.Src    (Src)
@@ -26,6 +27,7 @@ import Lucid
 import Path         (Dir, File, Path, Rel)
 
 import qualified Control.Monad
+import qualified Data.Foldable
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
 import qualified Dhall.Pretty
@@ -36,7 +38,7 @@ import qualified System.FilePath                                     as FilePath
 -- >>> :set -XQuasiQuotes
 -- >>> import Path (reldir, relfile)
 
-exprToHtml :: Expr Src Import -> Html ()
+exprToHtml :: Expr a Import -> Html ()
 exprToHtml expr = renderTree prettyTree
   where
     prettyTree = Pretty.treeForm
@@ -75,18 +77,19 @@ data DocParams = DocParams
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 dhallFileToHtml
-    :: Path Rel File   -- ^ Source file name, used to extract the title
-    -> Expr Src Import -- ^ Contents of the file
-    -> Html ()         -- ^ Header document as HTML
-    -> DocParams       -- ^ Parameters for the documentation
+    :: Path Rel File            -- ^ Source file name, used to extract the title
+    -> Expr Src Import          -- ^ Contents of the file
+    -> Maybe (Expr Void Import) -- ^ Type of the file, if extractable
+    -> Html ()                  -- ^ Header document as HTML
+    -> DocParams                -- ^ Parameters for the documentation
     -> Html ()
-dhallFileToHtml filePath expr header params@DocParams{..} =
+dhallFileToHtml filePath expr maybeType header params@DocParams{..} =
     doctypehtml_ $ do
         headContents htmlTitle params
         body_ $ do
             navBar params
             mainContainer $ do
-                setPageTitle params NotIndex breadcrumb
+                setPageTitle params NotIndex breadcrumb typeAsHtml
                 copyToClipboardButton htmlTitle
                 br_ []
                 div_ [class_ "doc-contents"] header
@@ -95,6 +98,12 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
+
+    typeAsHtml :: Html ()
+    typeAsHtml = Data.Foldable.forM_ maybeType $ \typeExpr ->
+        do
+            span_ [class_ "of-type-token"] ":"
+            span_ [class_ "dhall-type source-code"] $ exprToHtml typeExpr
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
@@ -108,7 +117,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     body_ $ do
         navBar params
         mainContainer $ do
-            setPageTitle params Index breadcrumbs
+            setPageTitle params Index breadcrumbs $ return ()
             copyToClipboardButton htmlTitle
             br_ []
             Control.Monad.unless (null files) $ do
@@ -143,16 +152,17 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 copyToClipboardButton :: Text -> Html ()
 copyToClipboardButton filePath =
     a_ [class_ "copy-to-clipboard", data_ "path" filePath]
-        $ i_ $ small_ "Copy to clipboard"
+        $ i_ $ small_ "Copy path to clipboard"
 
 
-setPageTitle :: DocParams -> HtmlFileType -> Breadcrumb -> Html ()
-setPageTitle DocParams{..} htmlFileType breadcrumb =
+setPageTitle :: DocParams -> HtmlFileType -> Breadcrumb -> Html () -> Html ()
+setPageTitle DocParams{..} htmlFileType breadcrumb dhallType =
     h2_ [class_ "doc-title"] $ do
         span_ [class_ "crumb-divider"] "/"
         a_ [href_ $ Data.Text.pack $ relativeResourcesPath <> "index.html"]
             $ toHtml packageName
         breadCrumbsToHtml htmlFileType breadcrumb
+        dhallType
 
 
 -- | ADT for handling bread crumbs. This is essentially a backwards list

@@ -164,6 +164,7 @@ saveHtml inputAbsDir outputAbsDir packageName DhallFile {path = absFile, ..} = d
         $ dhallFileToHtml
             strippedFilePath
             expr
+            mType
             headerAsHtml
             DocParams { relativeResourcesPath, packageName }
 
