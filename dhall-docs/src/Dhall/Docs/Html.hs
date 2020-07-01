@@ -29,6 +29,7 @@ import Path         (Dir, File, Path, Rel)
 import qualified Control.Monad
 import qualified Data.Foldable
 import qualified Data.Text
+import qualified Data.Text.Prettyprint.Doc                           as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
 import qualified Dhall.Pretty
 import qualified Path
@@ -38,11 +39,20 @@ import qualified System.FilePath                                     as FilePath
 -- >>> :set -XQuasiQuotes
 -- >>> import Path (reldir, relfile)
 
-exprToHtml :: Expr a Import -> Html ()
-exprToHtml expr = pre_ $ renderTree prettyTree
+-- | Internal utility to differentiate if a Dhall expr is a type annotation
+--   or the whole file
+data ExprType = TypeAnnotation | FileContentsExpr
+
+
+exprToHtml :: ExprType -> Expr a Import -> Html ()
+exprToHtml exprType expr = pre_ $ renderTree prettyTree
   where
+    layout = case exprType of
+        FileContentsExpr -> Dhall.Pretty.layout
+        TypeAnnotation -> typeLayout
+
     prettyTree = Pretty.treeForm
-        $ Dhall.Pretty.layout
+        $ layout
         $ Dhall.Pretty.prettyExpr expr
 
     textSpaces :: Int -> Text
@@ -67,6 +77,19 @@ exprToHtml expr = pre_ $ renderTree prettyTree
             Literal -> "literal"
             Builtin -> "builtin"
             Operator -> "operator"
+
+    typeLayout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
+    typeLayout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart opts
+      where
+        -- this is done so the type of a dhall file fits in a single line
+        -- its a safe value, since types in source codes are not that large
+        maxLinesForType = 10000
+        opts :: Pretty.LayoutOptions
+        opts = Pretty.defaultLayoutOptions
+                { Pretty.layoutPageWidth =
+                    Pretty.AvailablePerLine maxLinesForType 1.0
+                }
+
 
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams
@@ -93,7 +116,7 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
                 br_ []
                 div_ [class_ "doc-contents"] header
                 h3_ "Source"
-                div_ [class_ "source-code"] $ exprToHtml expr
+                div_ [class_ "source-code"] $ exprToHtml FileContentsExpr expr
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
@@ -130,7 +153,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
             a_ [href_ fileRef] $ toHtml itemText
             Data.Foldable.forM_ maybeType $ \typeExpr -> do
                 span_ [class_ "of-type-token"] ":"
-                span_ [class_ "dhall-type source-code"] $ exprToHtml typeExpr
+                span_ [class_ "dhall-type source-code"] $ exprToHtml TypeAnnotation typeExpr
 
 
     listDir :: Path Rel Dir -> Html ()
