@@ -120,10 +120,12 @@ getAllDhallFiles baseDir = do
         -}
 
         getLetBindingsWithName :: Text -> [Binding Void Import]
-        getLetBindingsWithName name = reverse $ go expr
+        getLetBindingsWithName name = filter bindName $ reverse $ go expr
           where
+            bindName (Binding _ x _ _ _ _) = x == name
+
             go :: Expr Void Import -> [Binding Void Import]
-            go (Let b@(Binding _ x _ _ _ _) e) | x == name = b : go e
+            go (Let b@Binding{} e) = b : go e
             go _ = []
 
         getLetBindingWithIndex :: Int -> [Binding Void Import] -> Maybe (Binding Void Import)
