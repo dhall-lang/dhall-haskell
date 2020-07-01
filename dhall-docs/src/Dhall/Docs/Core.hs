@@ -9,10 +9,18 @@
 
 module Dhall.Docs.Core (generateDocs) where
 
+import Data.List.NonEmpty  (NonEmpty (..))
 import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Data.Void           (Void)
-import Dhall.Core          (Binding (..), Expr (..), Import, Var (..), denote)
+import Dhall.Core
+    ( Binding (..)
+    , Expr (..)
+    , Import
+    , MultiLet (..)
+    , Var (..)
+    , denote
+    )
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
@@ -25,10 +33,12 @@ import Text.Megaparsec     (ParseErrorBundle (..))
 import qualified Control.Applicative as Applicative
 import qualified Control.Monad
 import qualified Data.ByteString
+import qualified Data.List.NonEmpty  as NonEmpty
 import qualified Data.Map.Strict     as Map
 import qualified Data.Maybe
 import qualified Data.Text
 import qualified Data.Text.IO        as Text.IO
+import qualified Dhall.Core
 import qualified Lucid
 import qualified Path
 import qualified Path.IO
@@ -120,13 +130,16 @@ getAllDhallFiles baseDir = do
         -}
 
         getLetBindingsWithName :: Text -> [Binding Void Import]
-        getLetBindingsWithName name = filter bindName $ reverse $ go expr
+        getLetBindingsWithName name = filter bindName $ reverse bindings
           where
+            bindings :: [Binding Void Import]
+            bindings = case expr of
+                Let b@Binding{} e ->
+                    let MultiLet bindings _ = Dhall.Core.multiLet b e
+                    in NonEmpty.toList bindings
+                _ -> []
             bindName (Binding _ x _ _ _ _) = x == name
 
-            go :: Expr Void Import -> [Binding Void Import]
-            go (Let b@Binding{} e) = b : go e
-            go _ = []
 
         getLetBindingWithIndex :: Int -> [Binding Void Import] -> Maybe (Binding Void Import)
         getLetBindingWithIndex i bindings =
