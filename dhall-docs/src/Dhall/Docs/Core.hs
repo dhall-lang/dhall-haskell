@@ -95,7 +95,7 @@ getAllDhallFiles baseDir = do
             getLetBindingWithIndex index $ getLetBindingsWithName name
         return exprType
       where
-        -- | For an expression of the form @let x0 = y0 x1 = y1 ... in e@
+        -- | For an expression of the form @let x0 = y0 let x1 = y1 ... in e@
         --   where @e@ is a variable, maybeNameInLet returns the variable name.
         maybeNameInLet :: Expr Void Import -> Maybe Var
         maybeNameInLet (Var v@(V _ _)) = Just v

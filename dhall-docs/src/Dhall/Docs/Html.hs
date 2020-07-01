@@ -83,11 +83,10 @@ exprToHtml exprType expr = pre_ $ renderTree prettyTree
       where
         -- this is done so the type of a dhall file fits in a single line
         -- its a safe value, since types in source codes are not that large
-        maxLinesForType = 10000
         opts :: Pretty.LayoutOptions
         opts = Pretty.defaultLayoutOptions
                 { Pretty.layoutPageWidth =
-                    Pretty.AvailablePerLine maxLinesForType 1.0
+                    Pretty.Unbounded
                 }
 
 
