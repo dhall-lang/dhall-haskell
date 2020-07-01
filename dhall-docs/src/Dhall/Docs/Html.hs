@@ -39,7 +39,7 @@ import qualified System.FilePath                                     as FilePath
 -- >>> import Path (reldir, relfile)
 
 exprToHtml :: Expr a Import -> Html ()
-exprToHtml expr = renderTree prettyTree
+exprToHtml expr = pre_ $ renderTree prettyTree
   where
     prettyTree = Pretty.treeForm
         $ Dhall.Pretty.layout
@@ -93,7 +93,7 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
                 br_ []
                 div_ [class_ "doc-contents"] header
                 h3_ "Source"
-                div_ [class_ "source-code"] $ pre_ $ exprToHtml expr
+                div_ [class_ "source-code"] $ exprToHtml expr
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
@@ -247,7 +247,8 @@ headContents :: Text -> DocParams -> Html ()
 headContents title DocParams{..} =
     head_ $ do
         title_ $ toHtml title
-        stylesheet relativeResourcesPath
+        stylesheet $ relativeResourcesPath <> "index.css"
+        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato&display=swap"
         script relativeResourcesPath
         meta_ [charset_ "UTF-8"]
 
@@ -256,11 +257,11 @@ mainContainer :: Html() -> Html ()
 mainContainer = div_ [class_ "main-container"]
 
 stylesheet :: FilePath -> Html ()
-stylesheet relativeResourcesPath =
+stylesheet path =
     link_
         [ rel_ "stylesheet"
         , type_ "text/css"
-        , href_ $ Data.Text.pack $ relativeResourcesPath <> "index.css"]
+        , href_ $ Data.Text.pack path]
 
 script :: FilePath -> Html ()
 script relativeResourcesPath =
