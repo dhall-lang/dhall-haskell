@@ -90,28 +90,47 @@ getAllDhallFiles baseDir = do
 
     extractTypeIfInSource :: Expr Void Import -> Maybe (Expr Void Import)
     extractTypeIfInSource expr = do
-        name <- maybeNameInLet expr
-        typeOfName name
+        V name index <- maybeNameInLet expr
+        (Binding _ _ _ (Just (_, exprType)) _ _) <-
+            getLetBindingWithIndex index $ getLetBindingsWithName name
+        return exprType
       where
-        -- | Returns the last @e@ in `let x = r in e` let binding returning
-        --   `Nothing` if it isn't a `Var`
-        maybeNameInLet :: Expr Void Import -> Maybe Text
-        maybeNameInLet (Var (V name _)) = Just name
+        -- | For an expression of the form @let x0 = y0 x1 = y1 ... in e@
+        --   where @e@ is a variable, maybeNameInLet returns the variable name.
+        maybeNameInLet :: Expr Void Import -> Maybe Var
+        maybeNameInLet (Var v@(V _ _)) = Just v
         maybeNameInLet (Let _ e) = maybeNameInLet e
         maybeNameInLet _ = Nothing
 
-        -- | Searches for a binding name type, evaluating to `Nothing` if it
-        --   doesn't exist (although that case is imposible)
-        --   or the binding doesn't have a type
-        typeOfName :: Text -> Maybe (Expr Void Import)
-        typeOfName name = go expr
+
+        {-| For an expression of the form @let x0 = y0 x1 = y1 ... in e@
+            and a variable name @v@, this returns every @xi@ that is equal to
+            v in the reverse order of the source code.
+
+            For example, take a file like this:
+
+        >   let x = 1
+        >   let y = 2
+        >   let z = 3
+        >   in x + y + z
+
+            ... this will return the bindings in this order: [z, y, x]
+
+            Only the "global" level of the file is analyzed
+        -}
+
+        getLetBindingsWithName :: Text -> [Binding Void Import]
+        getLetBindingsWithName name = reverse $ go expr
           where
-            go :: Expr Void Import -> Maybe (Expr Void Import)
-            go (Let (Binding _ x _ maybeType _ _) e) =
-                case maybeType of
-                    Just (_, t) | x == name -> Just t
-                    _ -> go e
-            go _ = Nothing
+            go :: Expr Void Import -> [Binding Void Import]
+            go (Let b@(Binding _ x _ _ _ _) e) | x == name = b : go e
+            go _ = []
+
+        getLetBindingWithIndex :: Int -> [Binding Void Import] -> Maybe (Binding Void Import)
+        getLetBindingWithIndex i bindings =
+            case drop i bindings of
+                [] -> Nothing
+                binding : _ -> Just binding
 
 {-| Calculate the relative path needed to access files on the first argument
     relative from the second argument.
