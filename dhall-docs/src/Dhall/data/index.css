@@ -135,6 +135,12 @@ h2.doc-title {
 
 /******** Source code **********/
 
+
+.code-examples > pre {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
 .source-code {
     padding: 0rem;
 }

@@ -22,6 +22,17 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
+    tasty/data/package/*.dhall
+    tasty/data/package/a/*.dhall
+    tasty/data/package/a/b/*.dhall
+    tasty/data/package/a/b/c/*.dhall
+    tasty/data/package/deep/nested/folder/*.dhall
+
+    tasty/data/golden/*.html
+    tasty/data/golden/a/*.html
+    tasty/data/golden/a/b/*.html
+    tasty/data/golden/a/b/c/*.html
+    tasty/data/golden/deep/nested/folder/*.html
 Data-Files:
     *.css
     *.js
@@ -56,15 +67,16 @@ Library
         prettyprinter        >= 1.5.1    && < 1.7 ,
         tar                  >= 0.5.1.0  && < 0.6 ,
         text                 >= 0.11.1.0 && < 1.3 ,
+        transformers         >= 0.2.0.0  && < 0.6 ,
         optparse-applicative >= 0.14.0.0 && < 0.16
     Exposed-Modules:
         Dhall.Docs
         Dhall.Docs.Core
+    Other-Modules:
+        Dhall.Docs.Embedded
         Dhall.Docs.Html
         Dhall.Docs.Markdown
         Dhall.Docs.Store
-    Other-Modules:
-        Dhall.Docs.Embedded
         Paths_dhall_docs
     GHC-Options: -Wall
     Default-Language: Haskell2010
@@ -96,4 +108,20 @@ Test-Suite doctest
         filepath                 < 1.5 ,
         doctest    >= 0.7.0   && < 0.18
     Other-Extensions: OverloadedStrings RecordWildCards
+    Default-Language: Haskell2010
+
+Test-Suite tasty
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: tasty
+    Main-Is: Main.hs
+    Build-Depends:
+        base               ,
+        containers         ,
+        dhall-docs         ,
+        path               ,
+        path-io            ,
+        tasty        <  1.4,
+        tasty-silver >= 3.0,
+        text
+    GHC-Options: -Wall
     Default-Language: Haskell2010
