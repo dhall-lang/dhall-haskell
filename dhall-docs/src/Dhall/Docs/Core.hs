@@ -1,6 +1,6 @@
 {-| Contains all the functions that generate documentation
 
-    We should always try to do the less work as possible in an `IO` context.
+    We should always try to do as little work as possible in an `IO` context.
     To do so, just wrap your function in `IO` if you need to do I/O operations,
     and make pure functions receive that IO result as an input
 -}
@@ -418,6 +418,5 @@ generateDocsPure packageName inputFiles =
         dhallFiles <- getAllDhallFiles inputFiles
         htmls <- mapM (makeHtml packageName) dhallFiles
         let indexes = createIndexes packageName dhallFiles
-        -- let dirs = map (Path.parent . path) dhallFiles
         return (zip (map (addHtmlExt . path) dhallFiles) htmls <> indexes)
 
