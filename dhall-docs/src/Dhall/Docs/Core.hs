@@ -98,7 +98,7 @@ instance Show DocsGenWarning where
         "... documentation won't be generated for this file"
 
     show (InvalidMarkdown MarkdownParseError{..}) =
-        "\n\ESC[1;33mWarning\ESC[0m\n\n" <>
+        "\n\ESC[1;33mWarning\ESC[0m: Header comment is not markdown\n\n" <>
         Text.Megaparsec.errorBundlePretty unwrap <>
         "The original non-markdown text will be pasted in the documentation"
 
