@@ -119,13 +119,15 @@ Test-Suite tasty
     Hs-Source-Dirs: tasty
     Main-Is: Main.hs
     Build-Depends:
-        base               ,
-        containers         ,
-        dhall-docs         ,
-        path               ,
-        path-io            ,
-        tasty        <  1.4,
-        tasty-silver >= 3.0,
+        base                   ,
+        containers             ,
+        dhall-docs             ,
+        HaXml        >= 1.25.4 ,
+        path                   ,
+        path-io                ,
+        pretty       >= 1.1.1.1,
+        tasty        <  1.4    ,
+        tasty-silver >= 3.0    ,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010

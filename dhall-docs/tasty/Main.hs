@@ -11,13 +11,17 @@ import Path            (Dir, File, Path, Rel, (</>))
 import Test.Tasty      (TestTree)
 
 import qualified Control.Monad
-import qualified Data.Map.Strict   as Map
-import qualified Data.Text.IO      as Text.IO
+import qualified Data.Map.Strict           as Map
+import qualified Data.Text
+import qualified Data.Text.IO              as Text.IO
 import qualified GHC.IO.Encoding
 import qualified Path
 import qualified Path.IO
 import qualified Test.Tasty
-import qualified Test.Tasty.Silver as Silver
+import qualified Test.Tasty.Silver         as Silver
+import qualified Text.PrettyPrint          as Pretty
+import qualified Text.XML.HaXml.Html.Parse as HaXml
+import qualified Text.XML.HaXml.Pretty     as HaXml
 
 main :: IO ()
 main = do
@@ -52,5 +56,9 @@ testTree docsMap =
       where
         goldenFilePath = Path.fromRelFile $ goldenDir </> testFile
         testName = Path.fromRelFile testFile
-        action = return text
-        converter = id
+        action = return prettyHtmlDoc
+        converter = Data.Text.pack
+
+        prettyHtmlDoc = Pretty.render
+            $ HaXml.document
+            $ HaXml.htmlParse testName (Data.Text.unpack text)
