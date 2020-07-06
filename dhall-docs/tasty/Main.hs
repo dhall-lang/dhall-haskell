@@ -24,7 +24,7 @@ main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
     input <- getPackageContents
-    let GeneratedDocs docs _ = generateDocsPure "test-package" input
+    let GeneratedDocs _ docs = generateDocsPure "test-package" input
     let docsMap = Map.fromList docs
     Test.Tasty.defaultMain $ testTree docsMap
 
