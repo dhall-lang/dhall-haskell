@@ -4,17 +4,19 @@
     To do so, just wrap your function in `IO` if you need to do I/O operations,
     and make pure functions receive that IO result as an input
 -}
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE TupleSections     #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TupleSections         #-}
+-- {-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
 
-import Control.Monad.Trans.Writer (Writer)
+import Control.Monad.Writer.Class (MonadWriter)
 import Data.Map.Strict            (Map)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text)
@@ -42,7 +44,7 @@ import Text.Megaparsec            (ParseErrorBundle (..))
 
 import qualified Control.Applicative        as Applicative
 import qualified Control.Monad
-import qualified Control.Monad.Trans.Writer as Writer
+import qualified Control.Monad.Writer.Class as Writer
 import qualified Data.ByteString
 import qualified Data.Either
 import qualified Data.List.NonEmpty         as NonEmpty
@@ -63,11 +65,27 @@ import qualified Text.Megaparsec
 -- >>> :set -XQuasiQuotes
 -- >>> import Path (reldir)
 
--- | Handling @DocsGenWarning@s on every function is a mess, `Writer` is our way to log
-type DocGenerator = Writer [DocsGenWarning]
-
 -- | The result of the doc-generator pure component
-data GeneratedDocs = GeneratedDocs [(Path Rel File, Text)] [DocsGenWarning]
+data GeneratedDocs a = GeneratedDocs [DocsGenWarning] a
+
+instance Functor GeneratedDocs where
+    fmap f (GeneratedDocs w a) = GeneratedDocs w (f a)
+
+instance Applicative GeneratedDocs where
+    pure = GeneratedDocs []
+
+    GeneratedDocs w f <*> GeneratedDocs w' a = GeneratedDocs (w <> w') (f a)
+
+instance Monad GeneratedDocs where
+    GeneratedDocs w a >>= f =
+        let GeneratedDocs w' b = f a
+            in GeneratedDocs (w <> w') b
+
+instance MonadWriter [DocsGenWarning] GeneratedDocs where
+    tell w = GeneratedDocs w ()
+
+    listen (GeneratedDocs w a) = GeneratedDocs w (a, w)
+    pass (GeneratedDocs w (a, f)) = GeneratedDocs (f w) a
 
 data DocsGenWarning
     = InvalidDhall (Text.Megaparsec.ParseErrorBundle Text Void)
@@ -103,7 +121,7 @@ data DhallFile = DhallFile
     Returned files contains all the information to be used on `Html ()`
     generation
 -}
-getAllDhallFiles :: [(Path Rel File, Text)] -> DocGenerator [DhallFile]
+getAllDhallFiles :: [(Path Rel File, Text)] -> GeneratedDocs [DhallFile]
 getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
   where
     hasDhallExtension :: (Path Rel File, Text) -> Bool
@@ -125,7 +143,7 @@ getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
             Left ParseError{..} ->
                 Left $ InvalidDhall unwrap
 
-    emitErrors :: [Either DocsGenWarning DhallFile] -> DocGenerator [DhallFile]
+    emitErrors :: [Either DocsGenWarning DhallFile] -> GeneratedDocs [DhallFile]
     emitErrors errorsOrDhallFiles = do
         Writer.tell (Data.Either.lefts errorsOrDhallFiles)
         return (Data.Either.rights errorsOrDhallFiles)
@@ -211,7 +229,7 @@ resolveRelativePath currentDir =
 makeHtml
     :: Text                 -- ^ Package name
     -> DhallFile            -- ^ Parsed header
-    -> DocGenerator Text
+    -> GeneratedDocs Text
 makeHtml packageName DhallFile {..} = do
     let relativeResourcesPath = resolveRelativePath $ Path.parent path
     let strippedHeader = stripCommentSyntax header
@@ -369,7 +387,7 @@ generateDocs inputDir outLink packageName = do
     (_, absFiles) <- Path.IO.listDirRecur inputDir
     contents <- mapM (Text.IO.readFile . Path.fromAbsFile) absFiles
     strippedFiles <- mapM (Path.stripProperPrefix inputDir) absFiles
-    let GeneratedDocs docs warnings = generateDocsPure packageName $ zip strippedFiles contents
+    let GeneratedDocs warnings docs = generateDocsPure packageName $ zip strippedFiles contents
     mapM_ print warnings
     if null docs then
         putStrLn $
@@ -409,11 +427,10 @@ generateDocs inputDir outLink packageName = do
 generateDocsPure
     :: Text                    -- ^ Package name
     -> [(Path Rel File, Text)] -- ^ (Input file, contents)
-    -> GeneratedDocs
-generateDocsPure packageName inputFiles =
-    uncurry GeneratedDocs $ Writer.runWriter go
+    -> GeneratedDocs [(Path Rel File, Text)]
+generateDocsPure packageName inputFiles = go
   where
-    go :: DocGenerator [(Path Rel File, Text)]
+    go :: GeneratedDocs [(Path Rel File, Text)]
     go = do
         dhallFiles <- getAllDhallFiles inputFiles
         htmls <- mapM (makeHtml packageName) dhallFiles
