@@ -343,7 +343,7 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
       where
         f :: Path Rel Dir -> [DhallFile] -> ([DhallFile], [Path Rel Dir])
         f dir dhallFiles = case dirToDirsMap Map.!? dir of
-            Nothing -> fileAnIssue "Bug+with+indexes+creation"
+            Nothing -> fileAnIssue "dirToDirsAndFilesMapAssocs"
             Just dirs -> (dhallFiles, dirs)
 
     toIndex :: (Path Rel Dir, ([DhallFile], [Path Rel Dir])) -> (Path Rel File, Text)
@@ -364,16 +364,27 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
 
 addHtmlExt :: Path Rel File -> Path Rel File
 addHtmlExt relFile =
-    Data.Maybe.fromMaybe (fileAnIssue "Bug+with+addHtmlExt") $ Path.addExtension ".html" relFile
+    Data.Maybe.fromMaybe (fileAnIssue "addHtmlExt") $ Path.addExtension ".html" relFile
 
 -- | If you're wondering the GitHub query params for issue creation:
 -- https://docs.github.com/en/github/managing-your-work-on-github/about-automation-for-issues-and-pull-requests-with-query-parameters
 fileAnIssue :: Text -> a
 fileAnIssue titleName =
-    error $ "\ESC[1;31mInternal Error\ESC[0mOops!\n\nThis should not happen.\n" <>
-            "Please, file an issue at https://github.com/dhall-lang/dhall-haskell/" <>
-            "issues/new?labels=dhall-docs,bug&title=" <> Data.Text.unpack titleName <>
-            " with a zip of your package so we can debug it"
+    error $ "\ESC[1;31mError\ESC[0mDocumentation generator bug\n\n" <>
+
+            "Explanation: This error message means that there is a bug in the " <>
+            "Dhall Documentation generator. You didn't did anything wrong, but " <>
+            "if you would like to see this problem fixed then you should report " <>
+            "the bug at:\n\n" <>
+
+            "https://github.com/dhall-lang/dhall-haskell/issues/new?labels=dhall-docs,bug\n\n" <>
+
+            "explaining your issue and add \"" <> Data.Text.unpack titleName <> "\" as error code " <>
+            "so we can find the proper location in the source code where the error happened\n\n" <>
+
+            "Please, also include your package in the issue. It can be in:\n\n" <>
+            "* A compressed archive (zip, tar, etc)\n" <>
+            "* A git repository, preferably with a commit reference"
 
 {-| Generate all of the docs for a package. This function does all the `IO ()`
     related tasks to call `generateDocsPure`
