@@ -27,16 +27,16 @@ Extra-Source-Files:
     tasty/data/package/a/b/*.dhall
     tasty/data/package/a/b/c/*.dhall
     tasty/data/package/deep/nested/folder/*.dhall
-    tasty/data/golden/*.html
-    tasty/data/golden/a/*.html
-    tasty/data/golden/a/b/*.html
-    tasty/data/golden/a/b/c/*.html
-    tasty/data/golden/deep/nested/folder/*.html
     tasty/data/golden/*.dhall.html
     tasty/data/golden/a/*.dhall.html
     tasty/data/golden/a/b/*.dhall.html
     tasty/data/golden/a/b/c/*.dhall.html
     tasty/data/golden/deep/nested/folder/*.dhall.html
+    tasty/data/golden/*.html
+    tasty/data/golden/a/*.html
+    tasty/data/golden/a/b/*.html
+    tasty/data/golden/a/b/c/*.html
+    tasty/data/golden/deep/nested/folder/*.html
 Data-Files:
     *.css
     *.js
@@ -122,7 +122,7 @@ Test-Suite tasty
         base                   ,
         containers             ,
         dhall-docs             ,
-        HaXml        >= 1.25.4 ,
+        HaXml        >= 1.25.5 ,
         path                   ,
         path-io                ,
         pretty       >= 1.1.1.1,
