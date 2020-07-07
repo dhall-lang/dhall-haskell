@@ -11,17 +11,18 @@ import Path            (Dir, File, Path, Rel, (</>))
 import Test.Tasty      (TestTree)
 
 import qualified Control.Monad
-import qualified Data.Map.Strict           as Map
+import qualified Data.Map.Strict               as Map
 import qualified Data.Text
-import qualified Data.Text.IO              as Text.IO
+import qualified Data.Text.IO                  as Text.IO
 import qualified GHC.IO.Encoding
 import qualified Path
 import qualified Path.IO
 import qualified Test.Tasty
-import qualified Test.Tasty.Silver         as Silver
-import qualified Text.PrettyPrint          as Pretty
-import qualified Text.XML.HaXml.Html.Parse as HaXml
-import qualified Text.XML.HaXml.Pretty     as HaXml
+import qualified Test.Tasty.Silver             as Silver
+import qualified Test.Tasty.Silver.Interactive as Silver
+import qualified Text.PrettyPrint              as Pretty
+import qualified Text.XML.HaXml.Html.Parse     as HaXml
+import qualified Text.XML.HaXml.Pretty         as HaXml
 
 main :: IO ()
 main = do
@@ -30,7 +31,7 @@ main = do
     input <- getPackageContents
     let GeneratedDocs _ docs = generateDocsPure "test-package" input
     let docsMap = Map.fromList docs
-    Test.Tasty.defaultMain $ testTree docsMap
+    Silver.defaultMain $ testTree docsMap
 
 getDirContents :: Path Rel Dir -> IO [(Path Rel File, Text)]
 getDirContents dataDir = do
