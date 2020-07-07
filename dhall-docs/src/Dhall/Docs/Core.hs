@@ -70,22 +70,30 @@ data GeneratedDocs a = GeneratedDocs [DocsGenWarning] a
 
 instance Functor GeneratedDocs where
     fmap f (GeneratedDocs w a) = GeneratedDocs w (f a)
+    {-# INLINE fmap #-}
 
 instance Applicative GeneratedDocs where
     pure = GeneratedDocs []
+    {-# INLINE pure #-}
 
     GeneratedDocs w f <*> GeneratedDocs w' a = GeneratedDocs (w <> w') (f a)
+    {-# INLINE (<*>) #-}
 
 instance Monad GeneratedDocs where
     GeneratedDocs w a >>= f =
         let GeneratedDocs w' b = f a
             in GeneratedDocs (w <> w') b
+    {-# INLINE (>>=) #-}
 
 instance MonadWriter [DocsGenWarning] GeneratedDocs where
     tell w = GeneratedDocs w ()
+    {-# INLINE tell #-}
 
     listen (GeneratedDocs w a) = GeneratedDocs w (a, w)
+    {-# INLINE listen #-}
+
     pass (GeneratedDocs w (a, f)) = GeneratedDocs (f w) a
+    {-# INLINE pass #-}
 
 data DocsGenWarning
     = InvalidDhall (Text.Megaparsec.ParseErrorBundle Text Void)
