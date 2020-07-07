@@ -292,7 +292,7 @@ makeHtml packageName DhallFile {..} = do
 createIndexes :: Text -> [DhallFile] -> [(Path Rel File, Text)]
 createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
   where
-    -- | Files grouped by their directory
+    -- Files grouped by their directory
     dirToFilesMap :: Map (Path Rel Dir) [DhallFile]
     dirToFilesMap = Map.unionsWith (<>) $ map toMap files
       where
@@ -300,7 +300,7 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
         toMap dhallFile =
             Map.singleton (Path.parent $ path dhallFile) [dhallFile]
 
-    {-| This is used to compute the list of exported packages on each folder.
+    {-  This is used to compute the list of exported packages on each folder.
         We try to compress the folders as much as we can.
 
         Take the following directory-tree structure:
@@ -337,15 +337,6 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
           where
             key :: Path Rel Dir -> Path Rel Dir
             key dir = if dir `Map.member` dirMap then dir else key $ Path.parent dir
-
-        -- toMap :: Path Rel Dir -> Map (Path Rel Dir) [Path Rel Dir]
-        -- toMap dir = Map.singleton dir $ Data.Set.filter f dirs
-        --   where
-        --     f :: Path Rel Dir -> Bool
-        --     f dir' = (dir == dir') ||
-        --         case FilePath.dropTrailingPathSeparator $ Path.fromRelDir currentDir of
-        --             "." -> False
-        --             _ -> f (Path.parent dir')
 
     dirToDirsAndFilesMapAssocs :: [(Path Rel Dir, ([DhallFile], [Path Rel Dir]))]
     dirToDirsAndFilesMapAssocs = Map.assocs $ Map.mapWithKey f dirToFilesMap
