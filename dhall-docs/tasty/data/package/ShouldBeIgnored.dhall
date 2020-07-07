@@ -1,4 +1,4 @@
 {-
-Should be ignored since it's syntatically invalid
+Should be ignored since it's syntactically invalid
 -}
 {
