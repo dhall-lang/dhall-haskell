@@ -17,6 +17,7 @@
 module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
 
 import Control.Monad.Writer.Class (MonadWriter)
+import Data.Function              (on)
 import Data.Map.Strict            (Map)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text)
@@ -47,6 +48,7 @@ import qualified Control.Monad
 import qualified Control.Monad.Writer.Class as Writer
 import qualified Data.ByteString
 import qualified Data.Either
+import qualified Data.List
 import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Map.Strict            as Map
 import qualified Data.Maybe
@@ -119,7 +121,9 @@ data DhallFile = DhallFile
     valid `DhallFile`s.
 
     Returned files contains all the information to be used on `Html ()`
-    generation
+    generation.
+
+    The result is sorted by `path`
 -}
 getAllDhallFiles :: [(Path Rel File, Text)] -> GeneratedDocs [DhallFile]
 getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
@@ -147,7 +151,8 @@ getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
     emitErrors errorsOrDhallFiles = do
         let (errors, dhallFiles) = Data.Either.partitionEithers errorsOrDhallFiles
         Writer.tell errors
-        return dhallFiles
+        let sortedDhallFiles = Data.List.sortBy (compare `on` path) dhallFiles
+        return sortedDhallFiles
 
     bindings :: Expr Void Import -> [Binding Void Import]
     bindings expr = case expr of
@@ -261,24 +266,7 @@ makeHtml packageName DhallFile {..} = do
       where
         strippedHeader = Data.Text.strip h
 
-{-| Create an index.html file on each folder available in the second argument
-    that lists all the contents on that folder.
-
-    For example,
-
-    @
-    createIndexes [absdir|/|]
-        [ [absfile|\/a\/b.txt|]
-        , [absfile|\/a\/c/b.txt|]
-        , [absfile|\/a\/c.txt"|]
-        ]
-    @
-
-    ... will create two index.html files:
-
-    1. @\/a\/index.html@, that will list the @\/a\/b.txt@ and
-    @\/a\/c.txt@ files
-    2. @\/a\/c\/index.html@ that will list the @\/a\/c\/b.txt@ file
+{-| Create an index.html file on each available folder
 
 -}
 createIndexes :: Text -> [DhallFile] -> [(Path Rel File, Text)]
