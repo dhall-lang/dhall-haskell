@@ -153,8 +153,9 @@ getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
 
     emitErrors :: [Either DocsGenWarning DhallFile] -> GeneratedDocs [DhallFile]
     emitErrors errorsOrDhallFiles = do
-        Writer.tell (Data.Either.lefts errorsOrDhallFiles)
-        return (Data.Either.rights errorsOrDhallFiles)
+        let (errors, dhallFiles) = Data.Either.partitionEithers errorsOrDhallFiles
+        Writer.tell errors
+        return dhallFiles
 
     bindings :: Expr Void Import -> [Binding Void Import]
     bindings expr = case expr of
