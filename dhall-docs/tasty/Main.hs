@@ -55,12 +55,7 @@ testTree docsMap =
     makeTest (testFile, text) =
         Silver.goldenVsAction testName goldenFilePath action converter
       where
-
-        -- For some reason, cabal doesn't pack `index.html` files from extra-source-filess
-        -- so we rename `index.html` generated files from dhall-docs to `index-gen.html`
-        goldenFilePath = case Path.fromRelFile $ Path.filename testFile of
-            "index.html" -> Path.fromRelFile $ goldenDir </> Path.parent testFile </> $(Path.mkRelFile "index-gen.html")
-            _ -> Path.fromRelFile $ goldenDir </> testFile
+        goldenFilePath = Path.fromRelFile $ goldenDir </> testFile
         testName = Path.fromRelFile testFile
         action = return prettyHtmlDoc
         converter = Data.Text.pack
