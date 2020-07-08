@@ -266,8 +266,23 @@ makeHtml packageName DhallFile {..} = do
       where
         strippedHeader = Data.Text.strip h
 
-{-| Create an index.html file on each available folder
+{-| Create an @index.html@ file on each available folder in the input.
 
+    Each @index.html@ lists the files and directories of its directory. Listed
+    directories will be compacted as much as it cans to improve readability.
+
+    For example, take the following directory-tree structure
+
+    > .
+    > ├── a
+    > │   └── b
+    > │       └── c
+    > │           └── b.dhall
+    > └── a.dhall
+
+    To improve navigation, the index at @./index.html@ should list
+    @a/b/c@ and no @index.html@ should be generated inside of `a/` or
+    `a/b/`, but yes on `a/b/c/` in the last one there is the @b.dhall@ file
 -}
 createIndexes :: Text -> [DhallFile] -> [(Path Rel File, Text)]
 createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
@@ -281,24 +296,14 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
             Map.singleton (Path.parent $ path dhallFile) [dhallFile]
 
     {-  This is used to compute the list of exported packages on each folder.
-        We try to compress the folders as much as we can.
-
-        Take the following directory-tree structure:
-
-      > .
-      > ├── a
-      > │   └── b
-      > │       └── c
-      > │           └── b.dhall
-      > └── a.dhall
-
-        To improve navigation, the index at @./index.html@ should list
-        @a/b/c@ and no @index.html@ should be generated inside of `a/` or
-        `a/b/`, but yes on `a/b/c/` in the last one there is the @b.dhall@ file
+        We try to compress the folders as much as we can. See `createIndexes`
+        documentation to get more information.
     -}
     dirToDirsMap :: Map (Path Rel Dir) [Path Rel Dir]
     dirToDirsMap = Map.map removeHereDir $ go dirs initialMap
       where
+        -- > removeHeredir [$(mkRelDir "a"), $(mkRelDir ".")]
+        --   [$(mkRelDir "a")]
         removeHereDir :: [Path Rel Dir] -> [Path Rel Dir]
         removeHereDir = filter f
           where
@@ -342,6 +347,7 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
             else Data.Maybe.fromMaybe (fileAnIssue "Bug+with+stripPrefix")
                 $ Path.stripProperPrefix indexDir relpath
 
+-- | Takes a file and adds an @.html@ file extension to it
 addHtmlExt :: Path Rel File -> Path Rel File
 addHtmlExt relFile =
     Data.Maybe.fromMaybe (fileAnIssue "addHtmlExt") $ Path.addExtension ".html" relFile
