@@ -16,6 +16,7 @@ module Dhall.Schemas
 import Control.Applicative (empty)
 import Control.Exception (Exception)
 import Data.List ((\\))
+import Data.Monoid
 import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Map (Map)
