@@ -565,6 +565,7 @@ Library
         Dhall.Parser.Token
         Dhall.Pretty
         Dhall.Repl
+        Dhall.Schemas
         Dhall.Set
         Dhall.Src
         Dhall.Substitution
@@ -622,6 +623,7 @@ Test-Suite tasty
         Dhall.Test.Parser
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
+        Dhall.Test.Schemas
         Dhall.Test.SemanticHash
         Dhall.Test.Substitution
         Dhall.Test.TH

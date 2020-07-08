@@ -15,6 +15,7 @@ import qualified Dhall.Test.Normalization
 import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
+import qualified Dhall.Test.Schemas
 import qualified Dhall.Test.TH
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeInference
@@ -46,6 +47,8 @@ getAllTests = do
 
     freezeTests <- Dhall.Test.Freeze.getTests
 
+    schemaTests <- Dhall.Test.Schemas.getTests
+
     let testTree =
             Test.Tasty.testGroup "Dhall Tests"
                 [ normalizationTests
@@ -58,6 +61,7 @@ getAllTests = do
                 , semanticHashTests
                 , tagsTests
                 , freezeTests
+                , schemaTests
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
