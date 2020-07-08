@@ -300,7 +300,7 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
         documentation to get more information.
     -}
     dirToDirsMap :: Map (Path Rel Dir) [Path Rel Dir]
-    dirToDirsMap = Map.map removeHereDir $ go dirs initialMap
+    dirToDirsMap = Map.map removeHereDir $ foldl go initialMap dirs
       where
         -- > removeHeredir [$(mkRelDir "a"), $(mkRelDir ".")]
         --   [$(mkRelDir "a")]
@@ -316,9 +316,8 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
         initialMap :: Map (Path Rel Dir) [Path Rel Dir]
         initialMap = Map.fromList $ map (,[]) dirs
 
-        go :: [Path Rel Dir] -> Map (Path Rel Dir) [Path Rel Dir] -> Map (Path Rel Dir) [Path Rel Dir]
-        go [] m = m
-        go (d : ds) dirMap = go ds $ Map.adjust ([d] <>) (key $ Path.parent d) dirMap
+        go :: Map (Path Rel Dir) [Path Rel Dir] -> Path Rel Dir -> Map (Path Rel Dir) [Path Rel Dir]
+        go dirMap d = Map.adjust ([d] <>) (key $ Path.parent d) dirMap
           where
             key :: Path Rel Dir -> Path Rel Dir
             key dir = if dir `Map.member` dirMap then dir else key $ Path.parent dir
