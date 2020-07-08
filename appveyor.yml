@@ -46,6 +46,7 @@ build_script:
   - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-lsp-server-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-lsp-server.exe")
   - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-yaml-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-to-yaml-ng.exe")
   - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-yaml-%DEPLOY_TAG%" "%DEPLOY_DIR%\yaml-to-dhall.exe")
+  - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-docs-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-docs.exe")
 
 test_script:
   # chcp 65001 (utf-8) needed to make doctest work
@@ -54,8 +55,9 @@ test_script:
   - stack test dhall-yaml
   - stack test dhall-bash
   - stack test dhall-lsp-server
+  - stack test dhall-docs
   - stack bench dhall --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
-    
+
 artifacts:
   - path: bin\dhall-%DEPLOY_TAG%
     name: dhall
@@ -67,12 +69,14 @@ artifacts:
     name: dhall-bash
   - path: bin\dhall-lsp-server-%DEPLOY_TAG%
     name: dhall-lsp-server
+  - path: bin\dhall-docs-%DEPLOY_TAG%
+    name: dhall-docs
 
 deploy:
   - provider: GitHub
     auth_token:
       secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
-    artifact: dhall, dhall-json, dhall-yaml, dhall-bash, dhall-lsp-server
+    artifact: dhall, dhall-json, dhall-yaml, dhall-bash, dhall-lsp-server, dhall-docs
     on:
       APPVEYOR_REPO_TAG: true
       STACK_YAML: stack.yaml

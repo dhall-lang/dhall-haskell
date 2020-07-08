@@ -55,6 +55,7 @@ script:
   - tar -jcvf $(mk_release_name dhall-lsp-server) bin/dhall-lsp-server
   - tar -jcvf $(mk_release_name dhall-nix) bin/dhall-to-nix
   - tar -jcvf $(mk_release_name dhall-yaml) bin/dhall-to-yaml-ng bin/yaml-to-dhall
+  - tar -jcvf $(mk_release_name dhall-docs) bin/dhall-to-docs bin/dhall-docs
   - mkdir -p uploads
   - mv *.tar.bz2 uploads/
 
