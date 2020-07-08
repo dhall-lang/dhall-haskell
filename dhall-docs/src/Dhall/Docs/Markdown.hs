@@ -7,7 +7,7 @@ module Dhall.Docs.Markdown
 
 import Data.Text       (Text)
 import Lucid
-import Path            (Abs, File, Path)
+import Path            (File, Path, Rel)
 import Text.Megaparsec (ParseErrorBundle (..))
 import Text.MMark      (MMarkErr)
 
@@ -23,10 +23,10 @@ newtype MarkdownParseError = MarkdownParseError
     If an error occurs while parsing, it also returns the error information.
 -}
 markdownToHtml
-    :: Path Abs File -- ^ Used by `Mmark.parse` for error messages
+    :: Path Rel File -- ^ Used by `Mmark.parse` for error messages
     -> Text          -- ^ Text to parse
     -> Either MarkdownParseError (Html ())
-markdownToHtml absFile contents =
-    case MMark.parse (Path.fromAbsFile absFile) contents of
+markdownToHtml relFile contents =
+    case MMark.parse (Path.fromRelFile relFile) contents of
         Left err -> Left MarkdownParseError { unwrap = err }
         Right mmark -> Right $ MMark.render mmark
