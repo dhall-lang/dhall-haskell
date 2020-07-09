@@ -23,7 +23,7 @@ import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Map (Map)
 import Dhall.Src (Src)
-import Dhall.Syntax (Binding(..), Expr(..), Import, Var(..))
+import Dhall.Syntax (Expr(..), Import, Var(..))
 import Dhall.Pretty (CharacterSet(..))
 import Dhall.Util
     (Censor(..), CheckFailed(..), Header(..), Input(..), OutputMode(..))
@@ -145,15 +145,6 @@ simplifyUsingSchemas _schemas expression = do
         Just decodedSchemas -> return decodedSchemas
         Nothing             -> Exception.throwIO NotASchemaRecord
 
-    let schemasBinding value = Binding{..}
-          where
-            variable   = "schemas"
-            annotation = Nothing
-
-            bindingSrc0 = Nothing
-            bindingSrc1 = Nothing
-            bindingSrc2 = Nothing
-
     let schemasRewrite subExpression =
             (Maybe.fromMaybe subExpression . Maybe.listToMaybe) $ do
                 (name, (_Type, _default)) <- Map.toList decodedSchemas
@@ -167,7 +158,7 @@ simplifyUsingSchemas _schemas expression = do
 
                     _ -> empty
 
-                case TypeCheck.typeOf (Annot (Let (schemasBinding resolvedSchemas) subExpression) (Record _Type)) of
+                case TypeCheck.typeOf (Annot (Let (Syntax.makeBinding "schemas" resolvedSchemas) subExpression) (Record _Type)) of
                     Left  _ -> empty
                     Right _ -> return ()
 
@@ -181,7 +172,7 @@ simplifyUsingSchemas _schemas expression = do
             return ()
 
     if usesSchema
-        then return (Let (schemasBinding _schemas) rewrittenExpression)
+        then return (Let (Syntax.makeBinding "schemas" _schemas) rewrittenExpression)
         else return rewrittenExpression
 
 data SchemasError = NotASchemaRecord
