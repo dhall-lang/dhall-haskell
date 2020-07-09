@@ -52,7 +52,7 @@ import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.IO                                 as IO
 
--- | Arguments to the @schemas@ subcommand
+-- | Arguments to the @rewrite-with-schemas@ subcommand
 data Schemas = Schemas
     { characterSet :: CharacterSet
     , censor       :: Censor
@@ -61,7 +61,7 @@ data Schemas = Schemas
     , schemas      :: Text
     }
 
--- | Implementation of the @dhall schemas@ subcommand
+-- | Implementation of the @dhall rewrite-with-schemas@ subcommand
 schemasCommand :: Schemas -> IO ()
 schemasCommand Schemas{..} = do
     originalText <- case input of
