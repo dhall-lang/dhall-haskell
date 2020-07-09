@@ -495,7 +495,7 @@ parseMode =
 
     parseSchemasRecord =
         Options.Applicative.strOption
-            (   Options.Applicative.long "record"
+            (   Options.Applicative.long "schemas"
             <>  Options.Applicative.help "A record of schemas"
             <>  Options.Applicative.metavar "EXPR"
             )
