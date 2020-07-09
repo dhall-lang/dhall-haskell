@@ -11,11 +11,12 @@ module Dhall.Optics
     , transformMOf
     , mapMOf
     , universeOf
+    , cosmosOf
     ) where
 
 import Control.Applicative (WrappedMonad(..))
 import Data.Profunctor.Unsafe ((#.))
-import Lens.Family (ASetter, FoldLike', LensLike, over, views)
+import Lens.Family (ASetter, FoldLike', LensLike, LensLike', over, views)
 
 -- | Identical to @"Control.Lens".`Control.Lens.rewriteOf`@
 rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b
@@ -58,3 +59,7 @@ universeOf :: FoldLike' [a] a a -> a -> [a]
 universeOf l = go
   where
     go a = a : views l go a
+
+-- | Identical to @"Control.Lens".`Control.Lens.cosmosOf`@
+cosmosOf :: Applicative f => LensLike' f a a -> LensLike' f a a
+cosmosOf d f s = f s *> d (cosmosOf d f) s

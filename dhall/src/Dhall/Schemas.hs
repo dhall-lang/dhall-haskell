@@ -47,6 +47,7 @@ import qualified Dhall.Substitution                        as Substitution
 import qualified Dhall.Syntax                              as Syntax
 import qualified Dhall.TypeCheck                           as TypeCheck
 import qualified Dhall.Util                                as Util
+import qualified Lens.Family                               as Lens
 import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.IO                                 as IO
@@ -184,9 +185,14 @@ simplifyUsingSchemas _schemas expression = do
     let rewrittenExpression =
             fmap Void.absurd (Optics.transformOf Syntax.subExpressions schemasRewrite normalizedExpression)
 
-    let usesSchema = (not . null) $ do
-            Var (V "schemas" 0) <- Optics.universeOf Syntax.subExpressions rewrittenExpression
-            return ()
+    let hasSchemas (Var (V "schemas" 0)) = True
+        hasSchemas _                     = False
+
+    let usesSchema =
+            Lens.anyOf
+                (Optics.cosmosOf Syntax.subExpressions)
+                hasSchemas
+                rewrittenExpression
 
     if usesSchema
         then return (Let (Syntax.makeBinding "schemas" _schemas) rewrittenExpression)
