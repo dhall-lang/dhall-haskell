@@ -145,26 +145,25 @@ simplifyUsingSchemas _schemas expression = do
         Just decodedSchemas -> return decodedSchemas
         Nothing             -> Exception.throwIO NotASchemaRecord
 
-    let schemasRewrite subExpression =
+    let schemasRewrite subExpression@(RecordLit keyValues) =
             (Maybe.fromMaybe subExpression . Maybe.listToMaybe) $ do
                 (name, (_Type, _default)) <- Map.toList decodedSchemas
 
-                defaultedRecord <- case subExpression of
-                    RecordLit keyValues -> do
-                        let diff a b | a == b    = Nothing
-                                     | otherwise = Just a
-                        let defaultedKeyValues =
-                                Map.fromMap (Data.Map.differenceWith diff (Map.toMap keyValues) (Map.toMap _default))
+                let diff a b | a == b    = Nothing
+                             | otherwise = Just a
 
-                        return (RecordLit defaultedKeyValues)
+                let defaultedKeyValues =
+                        Map.fromMap (Data.Map.differenceWith diff (Map.toMap keyValues) (Map.toMap _default))
 
-                    _ -> empty
+                let defaultedRecord = RecordLit defaultedKeyValues
 
                 case TypeCheck.typeOf (Annot (Let (Syntax.makeBinding "schemas" resolvedSchemas) subExpression) (Record _Type)) of
                     Left  _ -> empty
                     Right _ -> return ()
 
                 return (RecordCompletion (Field "schemas" name) defaultedRecord)
+        schemasRewrite subExpression =
+            subExpression
 
     let rewrittenExpression =
             fmap Void.absurd (Optics.transformOf Syntax.subExpressions schemasRewrite normalizedExpression)
