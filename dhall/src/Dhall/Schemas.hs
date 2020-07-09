@@ -11,7 +11,7 @@ module Dhall.Schemas
     ( -- | Schemas
       schemasCommand
     , Schemas(..)
-    , simplifyUsingSchemas
+    , rewriteWithSchemas
     , SchemasError(..)
     ) where
 
@@ -72,7 +72,7 @@ schemasCommand Schemas{..} = do
 
     schemasRecord <- Core.throws (Parser.exprFromText "(schemas)" schemas)
 
-    schemasExpression <- simplifyUsingSchemas schemasRecord expression
+    schemasExpression <- rewriteWithSchemas schemasRecord expression
 
     let docStream =
             Dhall.Pretty.layout
@@ -135,13 +135,13 @@ decodeSchemas  _ = do
     empty
 
 -- | Simplify a Dhall expression using a record of schemas
-simplifyUsingSchemas
+rewriteWithSchemas
     :: Expr Src Import
     -- ^ Record of schemas
     -> Expr Src Import
     -- ^ Expression to simplify using the supplied schemas
     -> IO (Expr Src Import)
-simplifyUsingSchemas _schemas expression = do
+rewriteWithSchemas _schemas expression = do
     resolvedSchemas    <- Import.load _schemas
     resolvedExpression <- Import.load expression
 
