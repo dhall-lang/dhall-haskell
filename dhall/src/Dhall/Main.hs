@@ -245,7 +245,7 @@ parseMode =
             (Lint <$> parseInplaceTransitive <*> parseCheck "linted")
     <|> subcommand
             Manipulate
-            "schemas"
+            "rewrite-with-schemas"
             "Simplify Dhall code using a schemas record"
             (Dhall.Main.Schemas <$> parseInplaceNonTransitive <*> parseCheck "rewritten" <*> parseSchemasRecord)
     <|> subcommand

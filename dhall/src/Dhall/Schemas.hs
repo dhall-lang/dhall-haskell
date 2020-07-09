@@ -3,7 +3,9 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | This module contains the implementation of the @dhall schemas@ subcommand
+{-| This module contains the implementation of the @dhall rewrite-with-schemas@
+    subcommand
+-}
 
 module Dhall.Schemas
     ( -- | Schemas
@@ -100,7 +102,7 @@ schemasCommand Schemas{..} = do
             if originalText == schemasText
                 then return ()
                 else do
-                    let command = "schemas"
+                    let command = "rewrite-with-schemas"
 
                     let modified = "rewritten"
 
