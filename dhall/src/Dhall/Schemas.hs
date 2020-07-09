@@ -111,9 +111,10 @@ schemasCommand Schemas{..} = do
 decodeSchema
     :: Expr Src Void
     -> Maybe (Map Text (Expr Src Void), Map Text (Expr Src Void))
-decodeSchema
-    (RecordLit [ ("Type", Record _Type), ("default", RecordLit _default) ]) =
-    Just (_Type, _default)
+decodeSchema (RecordLit m)
+        | Just (Record    _Type   ) <- Map.lookup "Type" m
+        , Just (RecordLit _default) <- Map.lookup "default" m =
+            Just (_Type, _default)
 decodeSchema _ =
     Nothing
 
