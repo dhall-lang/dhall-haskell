@@ -196,7 +196,7 @@ simplifyUsingSchemas _schemas expression = do
 
     if usesSchema
         then return (Let (Syntax.makeBinding "schemas" _schemas) rewrittenExpression)
-        else return rewrittenExpression
+        else return expression
 
 data SchemasError = NotASchemaRecord
     deriving (Exception)
