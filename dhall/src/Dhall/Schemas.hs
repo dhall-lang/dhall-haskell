@@ -121,11 +121,11 @@ decodeSchema _ =
 
 decodeSchemas
     :: Expr Src Void
-    -> Maybe (Map SHA256Digest (Text, Map Text (Expr Src Void)))
+    -> Maybe (Data.Map.Map SHA256Digest (Text, Map Text (Expr Src Void)))
 decodeSchemas (RecordLit keyValues) = do
     m <- traverse decodeSchema keyValues
 
-    let typeMetadata = Map.fromList $ do
+    let typeMetadata = Data.Map.fromList $ do
             (name, (_Type, _default)) <- Map.toList m
 
             return (Import.hashExpression (Syntax.denote _Type), (name, _default))
@@ -168,7 +168,7 @@ simplifyUsingSchemas _schemas expression = do
                     Right subExpressionType ->
                         return (Import.hashExpression subExpressionType)
 
-                (name, _default) <- Map.lookup hash typeMetadata
+                (name, _default) <- Data.Map.lookup hash typeMetadata
 
                 let diff a b | a == b    = Nothing
                              | otherwise = Just a
