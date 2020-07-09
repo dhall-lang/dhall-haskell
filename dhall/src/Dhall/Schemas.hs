@@ -20,6 +20,7 @@ import Control.Exception (Exception)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void)
+import Dhall.Crypto (SHA256Digest)
 import Dhall.Map (Map)
 import Dhall.Src (Src)
 import Dhall.Syntax (Expr(..), Import, Var(..))
@@ -42,6 +43,7 @@ import qualified Dhall.Normalize                           as Normalize
 import qualified Dhall.Optics                              as Optics
 import qualified Dhall.Parser                              as Parser
 import qualified Dhall.Pretty
+import qualified Dhall.Substitution                        as Substitution
 import qualified Dhall.Syntax                              as Syntax
 import qualified Dhall.TypeCheck                           as TypeCheck
 import qualified Dhall.Util                                as Util
@@ -108,11 +110,9 @@ schemasCommand Schemas{..} = do
 
                     Exception.throwIO CheckFailed{..}
 
-decodeSchema
-    :: Expr Src Void
-    -> Maybe (Map Text (Expr Src Void), Map Text (Expr Src Void))
+decodeSchema :: Expr Src Void -> Maybe (Expr Src Void, Map Text (Expr Src Void))
 decodeSchema (RecordLit m)
-        | Just (Record    _Type   ) <- Map.lookup "Type" m
+        | Just  _Type               <- Map.lookup "Type" m
         , Just (RecordLit _default) <- Map.lookup "default" m =
             Just (_Type, _default)
 decodeSchema _ =
@@ -120,9 +120,18 @@ decodeSchema _ =
 
 decodeSchemas
     :: Expr Src Void
-    -> Maybe (Map Text (Map Text (Expr Src Void), Map Text (Expr Src Void)))
-decodeSchemas (RecordLit keyValues) = traverse decodeSchema keyValues
-decodeSchemas  _                    = Nothing
+    -> Maybe (Map SHA256Digest (Text, Map Text (Expr Src Void)))
+decodeSchemas (RecordLit keyValues) = do
+    m <- traverse decodeSchema keyValues
+
+    let typeMetadata = Map.fromList $ do
+            (name, (_Type, _default)) <- Map.toList m
+
+            return (Import.hashExpression (Syntax.denote _Type), (name, _default))
+
+    return typeMetadata
+decodeSchemas  _ = do
+    empty
 
 -- | Simplify a Dhall expression using a record of schemas
 simplifyUsingSchemas
@@ -141,13 +150,24 @@ simplifyUsingSchemas _schemas expression = do
     let normalizedSchemas    = Normalize.normalize resolvedSchemas
     let normalizedExpression = Normalize.normalize resolvedExpression
 
-    decodedSchemas <- case decodeSchemas normalizedSchemas of
-        Just decodedSchemas -> return decodedSchemas
-        Nothing             -> Exception.throwIO NotASchemaRecord
+    typeMetadata <- case decodeSchemas normalizedSchemas of
+        Just typeMetadata -> return typeMetadata
+        Nothing           -> Exception.throwIO NotASchemaRecord
 
     let schemasRewrite subExpression@(RecordLit keyValues) =
-            (Maybe.fromMaybe subExpression . Maybe.listToMaybe) $ do
-                (name, (_Type, _default)) <- Map.toList decodedSchemas
+            Maybe.fromMaybe subExpression $ do
+                let substitutions = Map.singleton "schemas" normalizedSchemas
+
+                let substitutedExpression =
+                        Substitution.substitute (Syntax.denote subExpression) substitutions
+
+                hash <- case TypeCheck.typeOf substitutedExpression of
+                    Left _ ->
+                        empty
+                    Right subExpressionType ->
+                        return (Import.hashExpression subExpressionType)
+
+                (name, _default) <- Map.lookup hash typeMetadata
 
                 let diff a b | a == b    = Nothing
                              | otherwise = Just a
@@ -156,10 +176,6 @@ simplifyUsingSchemas _schemas expression = do
                         Map.fromMap (Data.Map.differenceWith diff (Map.toMap keyValues) (Map.toMap _default))
 
                 let defaultedRecord = RecordLit defaultedKeyValues
-
-                case TypeCheck.typeOf (Annot (Let (Syntax.makeBinding "schemas" resolvedSchemas) subExpression) (Record _Type)) of
-                    Left  _ -> empty
-                    Right _ -> return ()
 
                 return (RecordCompletion (Field "schemas" name) defaultedRecord)
         schemasRewrite subExpression =

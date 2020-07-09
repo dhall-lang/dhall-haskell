@@ -1,1 +1,1 @@
-let schemas = ./tests/schemas/multipleSchema.dhall in schemas.A::{=}
+let schemas = ./tests/schemas/multipleSchema.dhall in schemas.B::{=}
