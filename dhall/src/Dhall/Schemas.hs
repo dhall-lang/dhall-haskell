@@ -203,4 +203,4 @@ data SchemasError = NotASchemaRecord
 
 instance Show SchemasError where
     show NotASchemaRecord =
-        Util._ERROR <> ": The --record argument is not a record of schemas"
+        Util._ERROR <> ": The --schemas argument is not a record of schemas"
