@@ -17,7 +17,6 @@ module Dhall.Schemas
 
 import Control.Applicative (empty)
 import Control.Exception (Exception)
-import Data.List ((\\))
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Void (Void)
@@ -30,6 +29,7 @@ import Dhall.Util
 
 import qualified Control.Exception                         as Exception
 import qualified Data.Maybe                                as Maybe
+import qualified Data.Map
 import qualified Data.Text.IO                              as Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
@@ -151,8 +151,10 @@ simplifyUsingSchemas _schemas expression = do
 
                 defaultedRecord <- case subExpression of
                     RecordLit keyValues -> do
+                        let diff a b | a == b    = Nothing
+                                     | otherwise = Just a
                         let defaultedKeyValues =
-                                Map.fromList (Map.toList keyValues \\ Map.toList _default)
+                                Map.fromMap (Data.Map.differenceWith diff (Map.toMap keyValues) (Map.toMap _default))
 
                         return (RecordLit defaultedKeyValues)
 
