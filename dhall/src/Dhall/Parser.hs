@@ -21,13 +21,13 @@ module Dhall.Parser (
     ) where
 
 import Control.Exception (Exception)
-import Data.Semigroup (Semigroup(..))
-import Data.Text (Text)
-import Data.Void (Void)
+import Data.Semigroup    (Semigroup (..))
+import Data.Text         (Text)
+import Data.Void         (Void)
+import Dhall.Src         (Src (..))
 import Dhall.Syntax
-import Dhall.Src (Src(..))
-import Prelude hiding (const, pi)
-import Text.Megaparsec (ParseErrorBundle(..), PosState(..))
+import Prelude           hiding (const, pi)
+import Text.Megaparsec   (ParseErrorBundle (..), PosState (..))
 
 import qualified Data.Char
 import qualified Data.Text
@@ -35,8 +35,8 @@ import qualified Dhall.Core      as Core
 import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators
-import Dhall.Parser.Token hiding (text)
 import Dhall.Parser.Expression
+import Dhall.Parser.Token       hiding (text)
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)

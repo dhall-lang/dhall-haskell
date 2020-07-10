@@ -171,8 +171,10 @@ import Dhall.Syntax
     , ImportHashed (..)
     , ImportMode (..)
     , ImportType (..)
+    , RecordField (..)
     , URL (..)
     , bindingExprs
+    , recordFieldExprs
     )
 
 import System.FilePath ((</>))
@@ -776,7 +778,8 @@ toHeaders _ = []
 
 toHeader :: Expr s a -> Maybe HTTPHeader
 toHeader (RecordLit m) = do
-    (TextLit (Chunks [] keyText), TextLit (Chunks [] valueText)) <- lookupHeader <|> lookupMapKey
+    (RecordField _ (TextLit (Chunks [] keyText)), RecordField _ (TextLit (Chunks [] valueText)))
+        <- lookupHeader <|> lookupMapKey
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
@@ -968,10 +971,11 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
             let expected :: Expr Src Void
                 expected =
                     App List
-                        ( Record
-                            ( Dhall.Map.fromList
-                                [ (key₀, Text), (key₁, Text) ]
-                            )
+                        ( Record $ Core.makeRecordField <$>
+                            Dhall.Map.fromList
+                                [ (key₀, Text)
+                                , (key₁, Text)
+                                ]
                         )
 
             let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
@@ -983,7 +987,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
                     _ ->
                         Annot loadedExpr expected
 
-            _ <- case (Dhall.TypeCheck.typeOf annot) of
+            _ <- case Dhall.TypeCheck.typeOf annot of
                 Left err -> throwMissingImport (Imported _stack err)
                 Right _  -> return ()
 
@@ -1068,6 +1072,8 @@ loadWith expr₀ = case expr₀ of
 
       (Note <$> pure a <*> loadWith b) `catch` handler
   Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
+  Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
+  RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
   expression           -> Syntax.unsafeSubExpressions loadWith expression
 
 -- | Resolve all imports within an expression

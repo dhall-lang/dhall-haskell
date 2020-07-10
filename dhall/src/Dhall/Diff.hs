@@ -16,20 +16,28 @@ module Dhall.Diff (
     , diff
     ) where
 
-import Data.Foldable (fold, toList)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid (Any(..))
-import Data.Semigroup hiding (diff)
-import Data.Sequence (Seq)
-import Data.String (IsString(..))
-import Data.Text (Text)
+import Data.Foldable             (fold, toList)
+import Data.List.NonEmpty        (NonEmpty (..))
+import Data.Monoid               (Any (..))
+import Data.Semigroup            hiding (diff)
+import Data.Sequence             (Seq)
+import Data.String               (IsString (..))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Void (Void)
-import Dhall.Syntax (Binding(..), Chunks (..), Const(..), DhallDouble(..), Expr(..), Var(..))
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import Dhall.Pretty.Internal (Ann)
-import Numeric.Natural (Natural)
+import Data.Void                 (Void)
+import Dhall.Map                 (Map)
+import Dhall.Pretty.Internal     (Ann)
+import Dhall.Set                 (Set)
+import Dhall.Syntax
+    ( Binding (..)
+    , Chunks (..)
+    , Const (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , RecordField (..)
+    , Var (..)
+    )
+import Numeric.Natural           (Natural)
 
 import qualified Data.Algorithm.Diff       as Algo.Diff
 import qualified Data.List.NonEmpty
@@ -54,7 +62,7 @@ data Diff =
 instance Data.Semigroup.Semigroup Diff where
     Diff sameL docL <> Diff sameR docR = Diff (sameL && sameR) (docL <> docR)
 
-instance Monoid (Diff) where
+instance Monoid Diff where
     mempty = Diff {..}
       where
         same = True
@@ -65,7 +73,7 @@ instance Monoid (Diff) where
     mappend = (<>)
 #endif
 
-instance IsString (Diff) where
+instance IsString Diff where
     fromString string = Diff {..}
       where
         same = True
@@ -253,10 +261,12 @@ enclosed' l m docs =
 diffKeyVals
     :: (Eq a, Pretty a)
     => Diff
-    -> Map Text (Expr Void a)
-    -> Map Text (Expr Void a)
+    -> Map Text (RecordField Void a)
+    -> Map Text (RecordField Void a)
     -> [Diff]
-diffKeyVals assign = diffKeysWith assign diff
+diffKeyVals assign kvsL kvsR = diffKeysWith assign diff
+    (recordFieldValue <$> kvsL)
+    (recordFieldValue <$> kvsR)
 
 diffKeysWith
     :: Diff
@@ -395,12 +405,12 @@ diffList l r = bracketed (loop parts₀)
 
 diffRecord
     :: (Eq a, Pretty a)
-    => Map Text (Expr Void a) -> Map Text (Expr Void a) -> Diff
+    => Map Text (RecordField Void a) -> Map Text (RecordField Void a) -> Diff
 diffRecord kvsL kvsR = braced (diffKeyVals colon kvsL kvsR)
 
 diffRecordLit
     :: (Eq a, Pretty a)
-    => Map Text (Expr Void a) -> Map Text (Expr Void a) -> Diff
+    => Map Text (RecordField Void a) -> Map Text (RecordField Void a) -> Diff
 diffRecordLit kvsL kvsR = braced (diffKeyVals equals kvsL kvsR)
 
 diffUnion

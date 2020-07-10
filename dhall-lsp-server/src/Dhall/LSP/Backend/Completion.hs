@@ -1,32 +1,33 @@
 module Dhall.LSP.Backend.Completion where
 
-import Data.List (foldl')
-import Data.Text (Text)
-import Data.Void (Void, absurd)
-import Dhall.Context (Context, insert)
-import Dhall.Context (empty, toList)
+import Data.List                     (foldl')
+import Data.Text                     (Text)
+import Data.Void                     (Void, absurd)
+import Dhall.Context                 (Context, insert)
+import Dhall.Context                 (empty, toList)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
-import Dhall.LSP.Backend.Parsing (holeExpr)
-import Dhall.Parser (Src, exprFromText)
-import Dhall.TypeCheck (typeWithA, typeOf)
-import System.Directory (doesDirectoryExist, listDirectory)
-import System.Environment (getEnvironment)
-import System.FilePath (takeDirectory, (</>))
-import System.Timeout (timeout)
+import Dhall.LSP.Backend.Parsing     (holeExpr)
+import Dhall.Parser                  (Src, exprFromText)
+import Dhall.TypeCheck               (typeOf, typeWithA)
+import System.Directory              (doesDirectoryExist, listDirectory)
+import System.Environment            (getEnvironment)
+import System.FilePath               (takeDirectory, (</>))
+import System.Timeout                (timeout)
 
 import Dhall.Core
-    ( Binding(..)
-    , Expr(..)
-    , Var(..)
+    ( Binding (..)
+    , Expr (..)
+    , RecordField (..)
+    , Var (..)
     , normalize
-    , shift
-    , subst
     , pretty
     , reservedIdentifiers
+    , shift
+    , subst
     )
 
 import qualified Data.HashSet as HashSet
-import qualified Data.Text as Text
+import qualified Data.Text    as Text
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 
@@ -193,7 +194,7 @@ completeProjections (CompletionContext context values) expr =
 
 
   -- complete a record projection by inspecting the record type
-  completeRecord (Record m) = map toCompletion (Dhall.Map.toList m)
+  completeRecord (Record m) = map toCompletion (Dhall.Map.toList $ recordFieldValue <$> m)
     where
       toCompletion (name, typ) =
           Completion (Dhall.Pretty.escapeLabel True name) (Just typ)

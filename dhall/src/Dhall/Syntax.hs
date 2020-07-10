@@ -29,6 +29,8 @@ module Dhall.Syntax (
     , DhallDouble(..)
     , PreferAnnotation(..)
     , Expr(..)
+    , RecordField(..)
+    , makeRecordField
 
     -- ** 'Let'-blocks
     , MultiLet(..)
@@ -40,6 +42,7 @@ module Dhall.Syntax (
     , unsafeSubExpressions
     , chunkExprs
     , bindingExprs
+    , recordFieldExprs
 
     -- ** Handling 'Note's
     , denote
@@ -284,6 +287,41 @@ instance Bifunctor PreferAnnotation where
 
     second = fmap
 
+{-| Record the field of a record-type and record-literal expression.
+    The reason why we use the same ADT for both of them is because they store
+    the same information.
+
+For example,
+
+> { {- A -} x : T }
+
+... or
+
+> { {- A -} x = T }
+
+will be instantiated as follows:
+
+* @recordFieldSrc0@ corresponds to the @A@ comment.
+* @field@ is @"T"@
+
+Although the @A@ comment isn't annotating the @"T"@ Record Field,
+this is the best place to keep these comments
+-}
+data RecordField s a = RecordField
+    { recordFieldSrc0  :: Maybe s
+    , recordFieldValue :: Expr s a
+    } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
+
+-- | Construct a 'RecordField' with no src information
+makeRecordField :: Expr s a -> RecordField s a
+makeRecordField = RecordField Nothing
+
+
+instance Bifunctor RecordField where
+    first k (RecordField s0 value) =
+        RecordField (k <$> s0) (first k value)
+    second = fmap
+
 {-| Syntax tree for expressions
 
     The @s@ type parameter is used to track the presence or absence of `Src`
@@ -433,10 +471,14 @@ data Expr s a
     | Some (Expr s a)
     -- | > None                                     ~  None
     | None
-    -- | > Record       [(k1, t1), (k2, t2)]        ~  { k1 : t1, k2 : t1 }
-    | Record    (Map Text (Expr s a))
-    -- | > RecordLit    [(k1, v1), (k2, v2)]        ~  { k1 = v1, k2 = v2 }
-    | RecordLit (Map Text (Expr s a))
+    -- | > Record [ (k1, RecordField _ t1 _)        ~  { k1 : t1, k2 : t1 }
+    --   >        , (k2, RecordField _ t2 _)
+    --   >        ]
+    | Record    (Map Text (RecordField s a))
+    -- | > RecordLit [ (k1, RecordField _ v1 _)      ~  { k1 = v1, k2 = v2 }
+    --   >           , (k2, RecordField _ v2 _)
+    --   >           ]
+    | RecordLit (Map Text (RecordField s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
     | Union     (Map Text (Maybe (Expr s a)))
     -- | > Combine Nothing x y                      ~  x ∧ y
@@ -444,7 +486,12 @@ data Expr s a
     -- The first field is a `Just` when the `Combine` operator is introduced
     -- as a result of desugaring duplicate record fields:
     --
-    --   > RecordLit [ (k, Combine (Just k) x y) ]  ~ { k = x, k = y }
+    --   > RecordLit [ ( k                          ~ { k = x, k = y }
+    --   >           , RecordField
+    --   >              _
+    --   >              (Combine (Just k) x y)
+    --   >              _
+    --   >            )]
     | Combine (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
     | CombineTypes (Expr s a) (Expr s a)
@@ -470,7 +517,7 @@ data Expr s a
     | Assert (Expr s a)
     -- | > Equivalent x y                           ~  x ≡ y
     | Equivalent (Expr s a) (Expr s a)
-    -- | > With x y                                 ~  x with y
+    -- | > With x y e                               ~  x with y = e
     | With (Expr s a) (NonEmpty Text) (Expr s a)
     -- | > Note s x                                 ~  e
     | Note s (Expr s a)
@@ -503,6 +550,8 @@ instance Functor (Expr s) where
   fmap f (Embed a) = Embed (f a)
   fmap f (Let b e2) = Let (fmap f b) (fmap f e2)
   fmap f (Note s e1) = Note s (fmap f e1)
+  fmap f (Record a) = Record $ fmap f <$> a
+  fmap f (RecordLit a) = RecordLit $ fmap f <$> a
   fmap f expression = Lens.over unsafeSubExpressions (fmap f) expression
   {-# INLINABLE fmap #-}
 
@@ -514,20 +563,27 @@ instance Applicative (Expr s) where
 instance Monad (Expr s) where
     return = pure
 
-    Embed a    >>= k = k a
-    Let a b    >>= k = Let (adapt0 a) (b >>= k)
+    Embed a     >>= k = k a
+    Let a b     >>= k = Let (adapt0 a) (b >>= k)
       where
         adapt0 (Binding src0 c src1 d src2 e) =
             Binding src0 c src1 (fmap adapt1 d) src2 (e >>= k)
 
         adapt1 (src3, f) = (src3, f >>= k)
-    Note a b   >>= k = Note a (b >>= k)
-    expression >>= k = Lens.over unsafeSubExpressions (>>= k) expression
+    Note a b    >>= k = Note a (b >>= k)
+    expression  >>= k = case expression of
+        Record a -> Record $ f <$> a
+        RecordLit a -> RecordLit $ f <$> a
+        _ -> Lens.over unsafeSubExpressions (>>= k) expression
+      where
+        f (RecordField s0 e) = RecordField s0 (e >>= k)
 
 instance Bifunctor Expr where
-    first k (Note a b  ) = Note (k a) (first k b)
-    first _ (Embed a   ) = Embed a
-    first k (Let a b   ) = Let (first k a) (first k b)
+    first k (Note a b   ) = Note (k a) (first k b)
+    first _ (Embed a    ) = Embed a
+    first k (Let a b    ) = Let (first k a) (first k b)
+    first k (Record a   ) = Record $ first k <$> a
+    first k (RecordLit a) = RecordLit $ first k <$> a
     first k  expression  = Lens.over unsafeSubExpressions (first k) expression
 
     second = fmap
@@ -595,6 +651,8 @@ subExpressions
 subExpressions _ (Embed a) = pure (Embed a)
 subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
+subExpressions f (Record a) = Record <$> traverse (recordFieldExprs f) a
+subExpressions f (RecordLit a) = RecordLit <$> traverse (recordFieldExprs f) a
 subExpressions f expression = unsafeSubExpressions f expression
 {-# INLINABLE subExpressions #-}
 
@@ -659,8 +717,6 @@ unsafeSubExpressions _ ListReverse = pure ListReverse
 unsafeSubExpressions _ Optional = pure Optional
 unsafeSubExpressions f (Some a) = Some <$> f a
 unsafeSubExpressions _ None = pure None
-unsafeSubExpressions f (Record a) = Record <$> traverse f a
-unsafeSubExpressions f ( RecordLit a ) = RecordLit <$> traverse f a
 unsafeSubExpressions f (Union a) = Union <$> traverse (traverse f) a
 unsafeSubExpressions f (Combine a b c) = Combine a <$> f b <*> f c
 unsafeSubExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
@@ -682,6 +738,8 @@ unsafeSubExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 unsafeSubExpressions _ (Let {}) = unhandledConstructor "Let"
 unsafeSubExpressions _ (Note {}) = unhandledConstructor "Note"
 unsafeSubExpressions _ (Embed {}) = unhandledConstructor "Embed"
+unsafeSubExpressions _ (Record {}) = unhandledConstructor "Record"
+unsafeSubExpressions _ (RecordLit {}) = unhandledConstructor "RecordLit"
 {-# INLINABLE unsafeSubExpressions #-}
 
 unhandledConstructor :: Text -> a
@@ -707,6 +765,17 @@ bindingExprs f (Binding s0 n s1 t s2 v) =
     <*> pure s2
     <*> f v
 {-# INLINABLE bindingExprs #-}
+
+{-| Traverse over the immediate 'Expr' children in a 'RecordField'.
+-}
+recordFieldExprs
+    :: Applicative f
+    => (Expr s a -> f (Expr s b))
+    -> RecordField s a -> f (RecordField s b)
+recordFieldExprs f (RecordField s0 e) =
+    RecordField
+        <$> pure s0
+        <*> f e
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
@@ -932,7 +1001,12 @@ denote (Let a b      ) = Let (adapt0 a) (denote b)
     adapt1 (_, f) = (Nothing, denote f)
 denote (Embed a      ) = Embed a
 denote (Combine _ b c) = Combine Nothing (denote b) (denote c)
-denote  expression     = Lens.over unsafeSubExpressions denote expression
+denote expression = case expression of
+    Record a -> Record $ denoteRecordField <$> a
+    RecordLit a -> RecordLit $ denoteRecordField <$> a
+    _ -> Lens.over unsafeSubExpressions denote expression
+  where
+      denoteRecordField (RecordField _ e) = RecordField Nothing (denote e)
 
 -- | The \"opposite\" of `denote`, like @first absurd@ but faster
 renote :: Expr Void a -> Expr s a
@@ -1111,12 +1185,12 @@ desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
     rewrite e@(With record (key :| []) value) =
-        Just (Prefer (PreferFromWith e) record (RecordLit [ (key, value) ]))
+        Just (Prefer (PreferFromWith e) record (RecordLit [ (key, makeRecordField value) ]))
     rewrite e@(With record (key0 :| key1 : keys) value) =
         Just
             (Prefer (PreferFromWith e) record
                 (RecordLit
-                    [ (key0, With (Field record key0) (key1 :| keys) value) ]
+                    [ (key0, makeRecordField $ With (Field record key0) (key1 :| keys) value) ]
                 )
             )
     rewrite _ = Nothing

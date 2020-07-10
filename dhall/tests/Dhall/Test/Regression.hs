@@ -16,19 +16,19 @@ import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.Test.Util as Util
+import qualified Dhall.Test.Util                       as Util
 import qualified Dhall.TypeCheck
 import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-import Data.Either.Validation (Validation(..))
-import Data.Void (Void)
-import Dhall.Import (Imported, MissingImports(..))
-import Dhall.Parser (Src, SourcedException(..))
-import Dhall.TypeCheck (TypeError)
-import Test.Tasty (TestTree)
-import Test.Tasty.HUnit ((@?=))
+import Data.Either.Validation (Validation (..))
+import Data.Void              (Void)
+import Dhall.Import           (Imported, MissingImports (..))
+import Dhall.Parser           (SourcedException (..), Src)
+import Dhall.TypeCheck        (TypeError)
+import Test.Tasty             (TestTree)
+import Test.Tasty.HUnit       ((@?=))
 
 tests :: TestTree
 tests =
@@ -63,12 +63,19 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
     Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
         (Success (Dhall.Core.Union
             (Dhall.Map.fromList
-                [   ("Foo",Just (Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)])))
-                ,   ("Bar",Just (Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)])))
-                ,   ("Baz",Just (Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)])))
+                [   ("Foo",Just (Dhall.Core.Record (Dhall.Map.fromList
+                        [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                        , ("_2", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        ])))
+                ,   ("Bar",Just (Dhall.Core.Record (Dhall.Map.fromList
+                        [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        , ("_2", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        , ("_3", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        ])))
+                ,   ("Baz",Just (Dhall.Core.Record (Dhall.Map.fromList
+                        [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                        , ("_2", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                        ])))
                 ]
             )
         ))
@@ -78,7 +85,10 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
 
     let tu_ty = Dhall.auto :: Dhall.Decoder (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Success $ Dhall.Core.Record (
-            Dhall.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
+            Dhall.Map.fromList
+                [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                , ("_2", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                ]))
 
     let tu_in = Dhall.inject :: Dhall.Encoder (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Success $ Dhall.declared tu_in) (Dhall.expected tu_ty)
@@ -213,7 +223,7 @@ issue1884 = Test.Tasty.HUnit.testCase "Issue #1884" (do
     return () )
 
 parsing0 :: TestTree
-parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
+parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (
     -- Verify that parsing should not fail
     --
     -- In 267093f8cddf1c2f909f2d997c31fd0a7cb2440a I broke the parser when left

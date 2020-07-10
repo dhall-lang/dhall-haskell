@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE OverloadedLists    #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
 {-| This library only exports a single `dhallToNix` function for translating a
@@ -92,35 +92,35 @@ module Dhall.Nix (
     ) where
 
 import Control.Exception (Exception)
-import Data.Foldable (toList)
-import Data.Fix (Fix(..))
-import Data.Text (Text)
-import Data.Traversable (for)
-import Data.Typeable (Typeable)
-import Data.Void (Void, absurd)
+import Data.Fix          (Fix (..))
+import Data.Foldable     (toList)
+import Data.Text         (Text)
+import Data.Traversable  (for)
+import Data.Typeable     (Typeable)
+import Data.Void         (Void, absurd)
 import Dhall.Core
-    ( Binding(..)
-    , Chunks(..)
-    , DhallDouble(..)
-    , Expr(..)
-    , MultiLet(..)
-    , PreferAnnotation(..)
-    , Var(..)
+    ( Binding (..)
+    , Chunks (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , MultiLet (..)
+    , PreferAnnotation (..)
+    , Var (..)
     )
-import Lens.Family (toListOf)
-import Nix.Atoms (NAtom(..))
+import Lens.Family       (toListOf)
+import Nix.Atoms         (NAtom (..))
 import Nix.Expr
-    ( Antiquoted(..)
-    , Binding(..)
-    , NBinaryOp(..)
-    , NExprF(..)
-    , NKeyName(..)
-    , NRecordType(..)
-    , NString(..)
-    , Params(..)
-    , (@@)
-    , (==>)
+    ( Antiquoted (..)
+    , Binding (..)
+    , NBinaryOp (..)
+    , NExprF (..)
+    , NKeyName (..)
+    , NRecordType (..)
+    , NString (..)
+    , Params (..)
     , ($+)
+    , (==>)
+    , (@@)
     )
 
 import qualified Data.Text
@@ -525,7 +525,7 @@ dhallToNix e =
     loop None = return (Fix (NConstant NNull))
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
-        a' <- traverse loop a
+        a' <- traverse (loop . Dhall.Core.recordFieldValue) a
         let a'' = do
                 (k, v) <- Dhall.Map.toList a'
                 return (NamedVar [StaticKey k] v Nix.nullPos)
