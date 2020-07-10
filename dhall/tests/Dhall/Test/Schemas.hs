@@ -53,7 +53,7 @@ schemaTest prefix =
 
         parsedSchema <- Core.throws (Parser.exprFromText mempty (prefix <> "Schema.dhall"))
 
-        actualExpression <- Schemas.simplifyUsingSchemas parsedSchema parsedInput
+        actualExpression <- Schemas.rewriteWithSchemas parsedSchema parsedInput
 
         let actualText = format header actualExpression
 
