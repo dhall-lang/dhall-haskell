@@ -426,6 +426,7 @@ Extra-Source-Files:
     tests/lint/success/*.dhall
     tests/recursive/*.dhall
     tests/regression/*.dhall
+    tests/schemas/*.dhall
     tests/tags/*.dhall
     tests/tags/*.tags
     tests/th/*.dhall
