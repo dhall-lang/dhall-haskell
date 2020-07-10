@@ -110,7 +110,7 @@ schemasCommand Schemas{..} = do
 
                     Exception.throwIO CheckFailed{..}
 
-decodeSchema :: Expr Src Void -> Maybe (Expr Src Void, Map Text (Expr Src Void))
+decodeSchema :: Expr s Void -> Maybe (Expr s Void, Map Text (Expr s Void))
 decodeSchema (RecordLit m)
         | Just  _Type               <- Map.lookup "Type" m
         , Just (RecordLit _default) <- Map.lookup "default" m =
@@ -119,8 +119,8 @@ decodeSchema _ =
     Nothing
 
 decodeSchemas
-    :: Expr Src Void
-    -> Maybe (Data.Map.Map SHA256Digest (Text, Map Text (Expr Src Void)))
+    :: Expr s Void
+    -> Maybe (Data.Map.Map SHA256Digest (Text, Map Text (Expr s Void)))
 decodeSchemas (RecordLit keyValues) = do
     m <- traverse decodeSchema keyValues
 
@@ -159,13 +159,13 @@ rewriteWithSchemas _schemas expression = do
                 let substitutions = Map.singleton "schemas" normalizedSchemas
 
                 let substitutedExpression =
-                        Substitution.substitute (Syntax.denote subExpression) substitutions
+                        Substitution.substitute subExpression substitutions
 
                 hash <- case TypeCheck.typeOf substitutedExpression of
                     Left _ ->
                         empty
                     Right subExpressionType ->
-                        return (Import.hashExpression subExpressionType)
+                        return (Import.hashExpression (Syntax.denote subExpressionType))
 
                 (name, _default) <- Data.Map.lookup hash typeMetadata
 
