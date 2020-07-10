@@ -28,31 +28,37 @@ module Dhall.TypeCheck (
     , ErrorMessages(..)
     ) where
 
-import Control.Exception (Exception)
-import Control.Monad.Trans.Class (lift)
+import Control.Exception                 (Exception)
+import Control.Monad.Trans.Class         (lift)
 import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
-import Data.Monoid (Endo(..))
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup (Max(..), Semigroup(..))
-import Data.Sequence (Seq, ViewL(..))
-import Data.Set (Set)
-import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty(..))
-import Data.Typeable (Typeable)
-import Data.Void (Void, absurd)
-import Dhall.Context (Context)
-import Dhall.Eval (Environment(..), Names(..), Val(..), (~>))
-import Dhall.Pretty (Ann)
-import Dhall.Src (Src)
-import Lens.Family (over)
+import Data.List.NonEmpty                (NonEmpty (..))
+import Data.Monoid                       (Endo (..))
+import Data.Semigroup                    (Max (..), Semigroup (..))
+import Data.Sequence                     (Seq, ViewL (..))
+import Data.Set                          (Set)
+import Data.Text                         (Text)
+import Data.Text.Prettyprint.Doc         (Doc, Pretty (..))
+import Data.Typeable                     (Typeable)
+import Data.Void                         (Void, absurd)
+import Dhall.Context                     (Context)
+import Dhall.Eval
+    ( Environment (..)
+    , Names (..)
+    , Val (..)
+    , (~>)
+    )
+import Dhall.Pretty                      (Ann)
+import Dhall.Src                         (Src)
+import Lens.Family                       (over)
 
 import Dhall.Syntax
-    ( Binding(..)
-    , Const(..)
-    , Chunks(..)
-    , Expr(..)
-    , PreferAnnotation(..)
-    , Var(..)
+    ( Binding (..)
+    , Chunks (..)
+    , Const (..)
+    , Expr (..)
+    , PreferAnnotation (..)
+    , RecordField (..)
+    , Var (..)
     )
 
 import qualified Data.Foldable                           as Foldable
@@ -437,13 +443,13 @@ infer typer = loop
 
             return _L'
 
-        Natural -> do
+        Natural ->
             return (VConst Type)
 
-        NaturalLit _ -> do
+        NaturalLit _ ->
             return VNatural
 
-        NaturalFold -> do
+        NaturalFold ->
             return
                 (   VNatural
                 ~>  VHPi "natural" (VConst Type) (\natural ->
@@ -455,7 +461,7 @@ infer typer = loop
                     )
                 )
 
-        NaturalBuild -> do
+        NaturalBuild ->
             return
                 (   VHPi "natural" (VConst Type) (\natural ->
                         VHPi "succ" (natural ~> natural) (\_succ ->
@@ -467,22 +473,22 @@ infer typer = loop
                 ~>  VNatural
                 )
 
-        NaturalIsZero -> do
+        NaturalIsZero ->
             return (VNatural ~> VBool)
 
-        NaturalEven -> do
+        NaturalEven ->
             return (VNatural ~> VBool)
 
-        NaturalOdd -> do
+        NaturalOdd ->
             return (VNatural ~> VBool)
 
-        NaturalToInteger -> do
+        NaturalToInteger ->
             return (VNatural ~> VInteger)
 
-        NaturalShow -> do
+        NaturalShow ->
             return (VNatural ~> VText)
 
-        NaturalSubtract -> do
+        NaturalSubtract ->
             return (VNatural ~> VNatural ~> VNatural)
 
         NaturalPlus l r -> do
@@ -515,34 +521,34 @@ infer typer = loop
 
             return VNatural
 
-        Integer -> do
+        Integer ->
             return (VConst Type)
 
-        IntegerLit _ -> do
+        IntegerLit _ ->
             return VInteger
 
-        IntegerClamp -> do
+        IntegerClamp ->
             return (VInteger ~> VNatural)
 
-        IntegerNegate -> do
+        IntegerNegate ->
             return (VInteger ~> VInteger)
 
-        IntegerShow -> do
+        IntegerShow ->
             return (VInteger ~> VText)
 
-        IntegerToDouble -> do
+        IntegerToDouble ->
             return (VInteger ~> VDouble)
 
-        Double -> do
+        Double ->
             return (VConst Type)
 
-        DoubleLit _ -> do
+        DoubleLit _ ->
             return VDouble
 
-        DoubleShow -> do
+        DoubleShow ->
             return (VDouble ~> VText)
 
-        Text -> do
+        Text ->
             return (VConst Type)
 
         TextLit (Chunks xys _) -> do
@@ -572,13 +578,13 @@ infer typer = loop
 
             return VText
 
-        TextShow -> do
+        TextShow ->
             return (VText ~> VText)
 
-        List -> do
+        List ->
             return (VConst Type ~> VConst Type)
 
-        ListLit Nothing ts₀ -> do
+        ListLit Nothing ts₀ ->
             case Data.Sequence.viewl ts₀ of
                 t₀ :< ts₁ -> do
                     _T₀' <- loop ctx t₀
@@ -613,10 +619,10 @@ infer typer = loop
 
                     return (VList _T₀')
 
-                _ -> do
+                _ ->
                     die MissingListType
 
-        ListLit (Just _T₀) ts -> do
+        ListLit (Just _T₀) ts ->
             if Data.Sequence.null ts
                 then do
                     _ <- loop ctx _T₀
@@ -654,7 +660,7 @@ infer typer = loop
 
             return (VList _A₀')
 
-        ListBuild -> do
+        ListBuild ->
             return
                 (   VHPi "a" (VConst Type) (\a ->
                             VHPi "list" (VConst Type) (\list ->
@@ -666,7 +672,7 @@ infer typer = loop
                     )
                 )
 
-        ListFold -> do
+        ListFold ->
             return
                 (   VHPi "a" (VConst Type) (\a ->
                             VList a
@@ -678,16 +684,16 @@ infer typer = loop
                     )
                 )
 
-        ListLength -> do
+        ListLength ->
             return (VHPi "a" (VConst Type) (\a -> VList a ~> VNatural))
 
-        ListHead -> do
+        ListHead ->
             return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
 
-        ListLast -> do
+        ListLast ->
             return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
 
-        ListIndexed -> do
+        ListIndexed ->
             return
                 (   VHPi "a" (VConst Type) (\a ->
                             VList a
@@ -701,13 +707,13 @@ infer typer = loop
                                 )
                     )
                 )
-        ListReverse -> do
+        ListReverse ->
             return (VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
 
-        Optional -> do
+        Optional ->
             return (VConst Type ~> VConst Type)
 
-        None -> do
+        None ->
             return (VHPi "A" (VConst Type) (\_A -> VOptional _A))
 
         Some a -> do
@@ -726,7 +732,7 @@ infer typer = loop
             return (VOptional _A')
 
         Record xTs -> do
-            let process x _T = do
+            let process x (RecordField _ _T) = do
                     tT' <- lift (loop ctx _T)
 
                     case tT' of
@@ -747,7 +753,7 @@ infer typer = loop
 
                     return _T'
 
-            xTs <- traverse process (Dhall.Map.sort xts)
+            xTs <- traverse process (Dhall.Map.sort $ recordFieldValue <$> xts)
 
             return (VRecord xTs)
 
@@ -774,7 +780,7 @@ infer typer = loop
             let r'' = quote names (eval values l)
 
             xLs' <- case _L' of
-                VRecord xLs' -> do
+                VRecord xLs' ->
                     return xLs'
 
                 _ -> do
@@ -785,7 +791,7 @@ infer typer = loop
                         Just t  -> die (InvalidDuplicateField t l _L'')
 
             xRs' <- case _R' of
-                VRecord xRs' -> do
+                VRecord xRs' ->
                     return xRs'
 
                 _ -> do
@@ -799,7 +805,7 @@ infer typer = loop
                     let combine x (VRecord xLs₁') (VRecord xRs₁') =
                             combineTypes (x : xs) xLs₁' xRs₁'
 
-                        combine x _ _ = do
+                        combine x _ _ =
                             case mk of
                                 Nothing -> die (FieldCollision (NonEmpty.reverse (x :| xs)))
                                 Just t  -> die (DuplicateFieldCannotBeMerged (t :| reverse (x : xs)))
@@ -908,7 +914,7 @@ infer typer = loop
             _T' <- loop ctx t
 
             yTs' <- case _T' of
-                VRecord yTs' -> do
+                VRecord yTs' ->
                     return yTs'
 
                 _ -> do
@@ -919,7 +925,7 @@ infer typer = loop
             _U' <- loop ctx u
 
             yUs' <- case _U' of
-                VUnion yUs' -> do
+                VUnion yUs' ->
                     return yUs'
 
                 VOptional _O' ->
@@ -952,7 +958,7 @@ infer typer = loop
 
                 match y handler' (Just _A₁') =
                     case Eval.toVHPi handler' of
-                        Just (x, _A₀', _T₀') -> do
+                        Just (x, _A₀', _T₀') ->
                             if Eval.conv values _A₀' _A₁'
                                 then do
                                     let _T₁' = _T₀' (fresh ctx x)
@@ -1029,7 +1035,7 @@ infer typer = loop
                     return _T₁'
                 (Just _T₀', Nothing) ->
                     return _T₀'
-                (Just _T₀', Just _T₁') -> do
+                (Just _T₀', Just _T₁') ->
                     if Eval.conv values _T₀' _T₁'
                         then return _T₀'
 
@@ -1084,15 +1090,15 @@ infer typer = loop
                         )
 
             case (r, mT₁') of
-                (Nothing, Nothing) -> do
+                (Nothing, Nothing) ->
                     die MissingToMapType
-                (Just err@(Left _), _) -> do
+                (Just err@(Left _), _) ->
                     err
-                (Just (Right _T'), Nothing) -> do
+                (Just (Right _T'), Nothing) ->
                     pure (mapType _T')
                 (Nothing, Just _T₁'@(VList (VRecord itemTypes)))
                    | Just _T' <- Dhall.Map.lookup "mapValue" itemTypes
-                   , Eval.conv values (mapType _T') _T₁' -> do
+                   , Eval.conv values (mapType _T') _T₁' ->
                        pure _T₁'
                 (Nothing, Just _T₁') -> do
                     let _T₁'' = quote names _T₁'
@@ -1112,7 +1118,7 @@ infer typer = loop
             let _E'' = quote names _E'
 
             case _E' of
-                VRecord xTs' -> do
+                VRecord xTs' ->
                     case Dhall.Map.lookup x xTs' of
                         Just _T' -> return _T'
                         Nothing  -> die (MissingField x _E'')
@@ -1122,7 +1128,7 @@ infer typer = loop
                     let e'' = quote names e'
 
                     case e' of
-                        VUnion xTs' -> do
+                        VUnion xTs' ->
                             case Dhall.Map.lookup x xTs' of
                                 Just (Just _T') -> return (VHPi x _T' (\_ -> e'))
                                 Just  Nothing   -> return e'

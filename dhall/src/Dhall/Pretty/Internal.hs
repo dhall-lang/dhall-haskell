@@ -73,7 +73,6 @@ import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Syntax
 import Numeric.Natural           (Natural)
-import Prelude                   hiding (succ)
 
 import qualified Data.Char
 import qualified Data.HashSet
@@ -372,7 +371,6 @@ enclose
     -> Doc ann
 enclose beginShort _         _        _       endShort _       []   =
     beginShort <> endShort
-  where
 enclose beginShort beginLong sepShort sepLong endShort endLong docs =
     Pretty.group
         (Pretty.flatAlt
@@ -706,7 +704,7 @@ prettyCharacterSet characterSet expression =
             <>  Pretty.align (keyword "with" <> " " <> update)
 
         (update, _) =
-            prettyKeyValue prettyAnyLabels prettyOperatorExpression equals (b, c)
+            prettyKeyValue prettyAnyLabels prettyOperatorExpression equals (b, makeRecordField c)
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -782,7 +780,7 @@ prettyCharacterSet characterSet expression =
                 [ prettyExpression a ]
     prettyAnnotatedExpression (ListLit (Just a) b) =
             list (map prettyExpression (Data.Foldable.toList b))
-        <>  " : "
+        <> " " <> colon <> " "
         <>  prettyApplicationExpression a
     prettyAnnotatedExpression a
         | Just doc <- preserveSource a =
@@ -1245,9 +1243,9 @@ prettyCharacterSet characterSet expression =
         => (k -> Doc Ann)
         -> (Expr Src a -> Doc Ann)
         -> Doc Ann
-        -> (k, Expr Src a)
+        -> (k, RecordField Src a)
         -> (Doc Ann, Doc Ann)
-    prettyKeyValue prettyKey prettyValue separator (key, val) =
+    prettyKeyValue prettyKey prettyValue separator (key, RecordField keyPrefixSrc val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
         completion _T r =
@@ -1260,19 +1258,22 @@ prettyCharacterSet characterSet expression =
                     _ ->
                         prettySelectorExpression r
 
-        short = prettyKey key
-            <>  " "
+        stripSpaces = Text.dropAround (\c -> c == ' ' || c == '\t')
+
+        short = renderSrc stripSpaces keyPrefixSrc
+            <>  prettyKey key
+            <>  space
             <>  separator
-            <>  " "
+            <>  space
             <>  prettyValue val
 
-        long =
-                prettyKey key
-            <>  " "
+        long =  renderSrc stripSpaces keyPrefixSrc
+            <>  prettyKey key
+            <>  space
             <>  separator
             <>  case shallowDenote val of
                     Some val' ->
-                            " " <> builtin "Some"
+                            space <> builtin "Some"
                         <>  case shallowDenote val' of
                                 RecordCompletion _T r ->
                                     completion _T r
@@ -1315,21 +1316,73 @@ prettyCharacterSet characterSet expression =
                             <>  "  "
                             <>  prettyValue val
 
-                    _ -> 
-                            Pretty.hardline
-                        <>  "    "
-                        <>  prettyValue val
 
-    prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
+                    e ->
+                        if fitsSingleLine e
+                        then space <> prettyValue val
+                        else    Pretty.hardline
+                            <>  "    "
+                            <>  prettyValue val
+
+        -- This is done to avoid adding a newline after separator
+        -- when it's not necessary i.e. there is enough space on
+        -- the line
+        --
+        -- Each listed constructor is known that /could/ fit in
+        -- single line alongside its corresponding keyword
+        fitsSingleLine e = case e of
+            Var{} -> True
+
+            BoolLit{} -> True
+            Bool -> True
+
+            Natural -> True
+            NaturalLit{} -> True
+            NaturalFold -> True
+            NaturalBuild -> True
+            NaturalIsZero -> True
+            NaturalEven -> True
+            NaturalOdd -> True
+            NaturalToInteger -> True
+            NaturalShow -> True
+            NaturalSubtract -> True
+
+            Integer -> True
+            IntegerLit _ -> True
+            IntegerClamp -> True
+            IntegerNegate -> True
+            IntegerShow -> True
+            IntegerToDouble -> True
+
+            Double -> True
+            DoubleLit _ -> True
+            DoubleShow -> True
+
+            Text -> True
+            TextShow -> True
+
+            List -> True
+            ListBuild -> True
+            ListFold -> True
+            ListLength -> True
+            ListHead -> True
+            ListLast -> True
+            ListIndexed -> True
+            ListReverse -> True
+            Optional -> True
+            None -> True
+            _ -> False
+
+    prettyRecord :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecord =
           braces
         . map (prettyKeyValue prettyAnyLabel prettyExpression colon)
         . Map.toList
 
-    prettyRecordLit :: Pretty a => Map Text (Expr Src a) -> Doc Ann
+    prettyRecordLit :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecordLit = prettyRecordLike braces
 
-    prettyCompletionLit :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
+    prettyCompletionLit :: Pretty a => Int -> Map Text (RecordField Src a) -> Doc Ann
     prettyCompletionLit = prettyRecordLike . hangingBraces
 
     prettyRecordLike braceStyle a
@@ -1340,17 +1393,17 @@ prettyCharacterSet characterSet expression =
       where
         consolidated = consolidateRecordLiteral a
 
-        prettyRecordEntry (keys, value) =
+        prettyRecordEntry (keys, rf@(RecordField _ value)) =
             case keys of
                 key :| []
                     | Var (V key' 0) <- Dhall.Syntax.shallowDenote value
                     , key == key' ->
                         duplicate (prettyAnyLabel key)
                 _ ->
-                    prettyKeyValue prettyAnyLabels prettyExpression equals (keys, value)
+                    prettyKeyValue prettyAnyLabels prettyExpression equals (keys, rf)
 
     prettyAlternative (key, Just val) =
-        prettyKeyValue prettyAnyLabel prettyExpression colon (key, val)
+        prettyKeyValue prettyAnyLabel prettyExpression colon (key, makeRecordField val)
     prettyAlternative (key, Nothing) =
         duplicate (prettyAnyLabel key)
 
@@ -1517,21 +1570,21 @@ pretty_ :: Pretty a => a -> Text
 pretty_ = prettyToStrictText
 
 {- This utility function converts
-   `{ x = { y = { z = 1 } } }` to `{ x.y.z. = 1 }`
+   `{ x = { y = { z = 1 } } }` to `{ x.y.z = 1 }`
 -}
 consolidateRecordLiteral
-    :: Map Text (Expr s a) -> Map (NonEmpty Text) (Expr s a)
+    :: Map Text (RecordField s a) -> Map (NonEmpty Text) (RecordField s a)
 consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
   where
-    adapt :: (Text, Expr s a) -> (NonEmpty Text, Expr s a)
+    adapt :: (Text, RecordField s a) -> (NonEmpty Text, RecordField s a)
     adapt (key, expression) =
-        case shallowDenote expression of
+        case shallowDenote (recordFieldValue expression) of
             RecordLit m ->
                 case fmap adapt (Map.toList m) of
                     [ (keys, expression') ] ->
                         (NonEmpty.cons key keys, expression')
                     _ ->
-                        (pure key, RecordLit m)
+                        (pure key, makeRecordField $ RecordLit m)
             _ ->
                 (pure key, expression)
 

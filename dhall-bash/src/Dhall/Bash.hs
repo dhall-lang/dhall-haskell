@@ -101,12 +101,12 @@ module Dhall.Bash (
     ) where
 
 import Control.Exception (Exception)
-import Data.Bifunctor (first)
+import Data.Bifunctor    (first)
 import Data.ByteString
-import Data.Monoid ((<>))
-import Data.Typeable (Typeable)
-import Data.Void (Void, absurd)
-import Dhall.Core (Expr(..), Chunks(..))
+import Data.Monoid       ((<>))
+import Data.Typeable     (Typeable)
+import Data.Void         (Void, absurd)
+import Dhall.Core        (Chunks (..), Expr (..))
 
 import qualified Data.Foldable
 import qualified Data.Text
@@ -256,7 +256,7 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
                 let bytes = Data.Text.Encoding.encodeUtf8 k
                 let k'    = Text.ShellEscape.bytes (Text.ShellEscape.bash bytes)
                 return ("[" <> k' <> "]=" <> v')
-        kvs' <- first adapt (traverse process (Dhall.Map.toList a))
+        kvs' <- first adapt (traverse process (Dhall.Map.toList $ Dhall.Core.recordFieldValue <$> a))
         let bytes
                 =   "declare -r -A "
                 <>  var

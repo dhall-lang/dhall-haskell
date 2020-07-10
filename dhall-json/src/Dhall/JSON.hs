@@ -3,6 +3,7 @@
 {-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| This library only exports a single `dhallToJSON` function for translating a
     Dhall syntax tree to a JSON syntax tree (i.e. a `Value`) for the @aeson@
@@ -417,32 +418,29 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
         Core.NaturalLit a -> return (toJSON a)
         Core.IntegerLit a -> return (toJSON a)
         Core.DoubleLit (DhallDouble a) -> return (toJSON a)
-        Core.TextLit (Core.Chunks [] a) -> do
-            return (toJSON a)
+        Core.TextLit (Core.Chunks [] a) -> return (toJSON a)
         Core.ListLit _ a -> do
             a' <- traverse loop a
             return (toJSON a')
         Core.Some a -> do
             a' <- loop a
             return (toJSON a')
-        Core.App Core.None _ -> do
-            return Aeson.Null
+        Core.App Core.None _ -> return Aeson.Null
         -- Provide a nicer error message for a common user mistake.
         --
         -- See: https://github.com/dhall-lang/dhall-lang/issues/492
-        Core.None -> do
-            Left BareNone
+        Core.None -> Left BareNone
         Core.RecordLit a ->
             case toOrderedList a of
                 [   (   "contents"
-                    ,   contents
+                    ,   Core.recordFieldValue -> contents
                     )
                  ,  (   "field"
-                    ,   Core.TextLit
+                    ,   Core.recordFieldValue -> Core.TextLit
                             (Core.Chunks [] field)
                     )
                  ,  (   "nesting"
-                    ,   Core.App
+                    ,   Core.recordFieldValue -> Core.App
                             (Core.Field
                                 (Core.Union
                                     [ ("Inline", mInlineType)
@@ -474,14 +472,14 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                        return (Aeson.toJSON taggedValue)
 
                 [   (   "contents"
-                    ,   contents
+                    ,   Core.recordFieldValue -> contents
                     )
                  ,  (   "field"
-                    ,   Core.TextLit
+                    ,   Core.recordFieldValue -> Core.TextLit
                             (Core.Chunks [] field)
                     )
                  ,  (   "nesting"
-                    ,   nesting
+                    ,   Core.recordFieldValue -> nesting
                     )
                  ] | isInlineNesting nesting
                    , Just (alternativeName, mExpr) <- getContents contents -> do
@@ -491,40 +489,44 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                                Left (InvalidInlineContents e alternativeContents)
                            Nothing -> return mempty
 
-                       let name = Core.TextLit (Core.Chunks [] alternativeName)
+                       let name = Core.makeRecordField $ Core.TextLit (Core.Chunks [] alternativeName)
 
                        let kvs1 = Dhall.Map.insert field name kvs0
 
                        loop (Core.RecordLit kvs1)
 
                 _ -> do
-                    a' <- traverse loop a
+                    a' <- traverse (loop . Core.recordFieldValue) a
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
         Core.App (Core.Field (Core.Union _) _) b -> loop b
         Core.Field (Core.Union _) k -> return (Aeson.toJSON k)
         Core.Lam _ (Core.Const Core.Type)
             (Core.Lam _
                 (Core.Record
-                    [ ("array" , Core.Pi _ (Core.App Core.List (V 0)) (V 1))
-                    , ("bool"  , Core.Pi _ Core.Bool (V 1))
-                    , ("null"  , V 0)
-                    , ("number", Core.Pi _ Core.Double (V 1))
-                    , ("object", Core.Pi _ (Core.App Core.List (Core.Record [ ("mapKey", Core.Text), ("mapValue", V 0)])) (V 1))
-                    , ("string", Core.Pi _ Core.Text (V 1))
+                    [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
+                    , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))
+                    , ("null"  , Core.recordFieldValue -> V 0)
+                    , ("number", Core.recordFieldValue -> Core.Pi _ Core.Double (V 1))
+                    , ("object", Core.recordFieldValue ->
+                        Core.Pi _ (Core.App Core.List (Core.Record
+                        [ ("mapKey", Core.recordFieldValue -> Core.Text)
+                        , ("mapValue", Core.recordFieldValue -> V 0)])) (V 1))
+                    , ("string", Core.recordFieldValue -> Core.Pi _ Core.Text (V 1))
                     ]
                 )
                 value
             ) -> do
-                let outer (Core.Field (V 0) "null") = do
-                        return Aeson.Null
-                    outer (Core.App (Core.Field (V 0) "bool") (Core.BoolLit b)) = do
+                let outer (Core.Field (V 0) "null") = return Aeson.Null
+                    outer (Core.App (Core.Field (V 0) "bool") (Core.BoolLit b)) =
                         return (Aeson.Bool b)
                     outer (Core.App (Core.Field (V 0) "array") (Core.ListLit _ xs)) = do
                         ys <- traverse outer (Foldable.toList xs)
 
                         return (Aeson.Array (Vector.fromList ys))
                     outer (Core.App (Core.Field (V 0) "object") (Core.ListLit _ xs)) = do
-                        let inner (Core.RecordLit [("mapKey", Core.TextLit (Core.Chunks [] mapKey)), ("mapValue", mapExpression)]) = do
+                        let inner (Core.RecordLit
+                                [ ("mapKey", Core.recordFieldValue -> Core.TextLit (Core.Chunks [] mapKey))
+                                , ("mapValue", Core.recordFieldValue -> mapExpression)]) = do
                                 mapValue <- outer mapExpression
 
                                 return (mapKey, mapValue)
@@ -533,9 +535,9 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                         ys <- traverse inner (Foldable.toList xs)
 
                         return (Aeson.Object (HashMap.fromList ys))
-                    outer (Core.App (Core.Field (V 0) "number") (Core.DoubleLit (DhallDouble n))) = do
+                    outer (Core.App (Core.Field (V 0) "number") (Core.DoubleLit (DhallDouble n))) =
                         return (Aeson.toJSON n)
-                    outer (Core.App (Core.Field (V 0) "string") (Core.TextLit (Core.Chunks [] text))) = do
+                    outer (Core.App (Core.Field (V 0) "string") (Core.TextLit (Core.Chunks [] text))) =
                         return (toJSON text)
                     outer _ = Left (Unsupported e)
 
@@ -543,27 +545,33 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
         Core.Lam _ (Core.Const Core.Type)
             (Core.Lam _
                 (Core.Record
-                    [ ("array" , Core.Pi _ (Core.App Core.List (V 0)) (V 1))
-                    , ("bool"  , Core.Pi _ Core.Bool (V 1))
-                    , ("double", Core.Pi _ Core.Double (V 1))
-                    , ("integer", Core.Pi _ Core.Integer (V 1))
-                    , ("null"  , V 0)
-                    , ("object", Core.Pi _ (Core.App Core.List (Core.Record [ ("mapKey", Core.Text), ("mapValue", V 0)])) (V 1))
-                    , ("string", Core.Pi _ Core.Text (V 1))
+                    [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
+                    , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))
+                    , ("double", Core.recordFieldValue -> Core.Pi _ Core.Double (V 1))
+                    , ("integer", Core.recordFieldValue -> Core.Pi _ Core.Integer (V 1))
+                    , ("null"  , Core.recordFieldValue -> V 0)
+                    , ("object", Core.recordFieldValue ->
+                        Core.Pi _ (Core.App Core.List (Core.Record
+                        [ ("mapKey", Core.recordFieldValue -> Core.Text)
+                        , ("mapValue", Core.recordFieldValue -> V 0)
+                        ])) (V 1))
+                    , ("string", Core.recordFieldValue -> Core.Pi _ Core.Text (V 1))
                     ]
                 )
                 value
             ) -> do
-                let outer (Core.Field (V 0) "null") = do
+                let outer (Core.Field (V 0) "null") =
                         return Aeson.Null
-                    outer (Core.App (Core.Field (V 0) "bool") (Core.BoolLit b)) = do
+                    outer (Core.App (Core.Field (V 0) "bool") (Core.BoolLit b)) =
                         return (Aeson.Bool b)
                     outer (Core.App (Core.Field (V 0) "array") (Core.ListLit _ xs)) = do
                         ys <- traverse outer (Foldable.toList xs)
 
                         return (Aeson.Array (Vector.fromList ys))
                     outer (Core.App (Core.Field (V 0) "object") (Core.ListLit _ xs)) = do
-                        let inner (Core.RecordLit [("mapKey", Core.TextLit (Core.Chunks [] mapKey)), ("mapValue", mapExpression)]) = do
+                        let inner (Core.RecordLit
+                                    [ ("mapKey", Core.recordFieldValue -> Core.TextLit (Core.Chunks [] mapKey))
+                                    , ("mapValue", Core.recordFieldValue -> mapExpression)]) = do
                                 mapValue <- outer mapExpression
 
                                 return (mapKey, mapValue)
@@ -572,11 +580,11 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                         ys <- traverse inner (Foldable.toList xs)
 
                         return (Aeson.Object (HashMap.fromList ys))
-                    outer (Core.App (Core.Field (V 0) "double") (Core.DoubleLit (DhallDouble n))) = do
+                    outer (Core.App (Core.Field (V 0) "double") (Core.DoubleLit (DhallDouble n))) =
                         return (Aeson.toJSON n)
-                    outer (Core.App (Core.Field (V 0) "integer") (Core.IntegerLit n)) = do
+                    outer (Core.App (Core.Field (V 0) "integer") (Core.IntegerLit n)) =
                         return (Aeson.toJSON n)
-                    outer (Core.App (Core.Field (V 0) "string") (Core.TextLit (Core.Chunks [] text))) = do
+                    outer (Core.App (Core.Field (V 0) "string") (Core.TextLit (Core.Chunks [] text))) =
                         return (toJSON text)
                     outer _ = Left (Unsupported e)
 
@@ -885,8 +893,8 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             toKeyValue (Core.RecordLit m) = do
                 guard (Foldable.length m == 2)
 
-                key   <- Dhall.Map.lookup mapKey   m
-                value <- Dhall.Map.lookup mapValue m
+                key   <- Core.recordFieldValue <$> Dhall.Map.lookup mapKey   m
+                value <- Core.recordFieldValue <$> Dhall.Map.lookup mapValue m
 
                 keyText <- case key of
                     Core.TextLit (Core.Chunks [] keyText) ->
@@ -899,7 +907,7 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
                         empty
 
                 return (keyText, value)
-            toKeyValue _ = do
+            toKeyValue _ =
                 empty
 
             transform =
@@ -911,13 +919,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
                                 guard (Dhall.Map.member mapKey   m)
                                 guard (Dhall.Map.member mapValue m)
                                 return (Core.RecordLit mempty)
-                            _ -> do
-                                empty
+                            _ -> empty
 
                     _  -> do
                         keyValues <- traverse toKeyValue elements
 
-                        let recordLiteral =
+                        let recordLiteral = Core.makeRecordField <$>
                                 Dhall.Map.fromList keyValues
 
                         return (Core.RecordLit recordLiteral)
@@ -966,12 +973,14 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.Record a ->
             Core.Record a'
           where
-            a' = fmap loop a
+            f (Core.RecordField s0 re) = Core.RecordField s0 (loop re)
+            a' = fmap f a
 
         Core.RecordLit a ->
             Core.RecordLit a'
           where
-            a' = fmap loop a
+            f (Core.RecordField s0 re) = Core.RecordField s0 (loop re)
+            a' = f <$> a
 
         Core.Union a ->
             Core.Union a'

@@ -3,8 +3,8 @@
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE MultiWayIf                 #-}
@@ -14,9 +14,9 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
@@ -132,38 +132,48 @@ module Dhall
     , Generic
     ) where
 
-import Control.Applicative (empty, liftA2, Alternative)
-import Control.Exception (Exception)
+import Control.Applicative                  (Alternative, empty, liftA2)
+import Control.Exception                    (Exception)
+import Control.Monad                        (guard)
 import Control.Monad.Trans.State.Strict
-import Control.Monad (guard)
-import Data.Coerce (coerce)
-import Data.Either.Validation (Validation(..), eitherToValidation, validationToEither)
-import Data.Fix (Fix(..))
-import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
-import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
-import Data.Hashable (Hashable)
-import Data.List.NonEmpty (NonEmpty (..))
-import Data.HashMap.Strict (HashMap)
-import Data.Map (Map)
-import Data.Monoid ((<>))
-import Data.Scientific (Scientific)
-import Data.Semigroup (Semigroup)
-import Data.Sequence (Seq)
-import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Pretty)
-import Data.Typeable (Typeable, Proxy(..))
-import Data.Vector (Vector)
-import Data.Void (Void)
-import Data.Word (Word8, Word16, Word32, Word64)
-import Dhall.Syntax (Expr(..), Chunks(..), DhallDouble(..), Var(..))
-import Dhall.Import (Imported(..))
-import Dhall.Parser (Src(..))
-import Dhall.TypeCheck (DetailedTypeError(..), TypeError)
+import Data.Coerce                          (coerce)
+import Data.Either.Validation
+    ( Validation (..)
+    , eitherToValidation
+    , validationToEither
+    )
+import Data.Fix                             (Fix (..))
+import Data.Functor.Contravariant           (Contravariant (..), Op (..), (>$<))
+import Data.Functor.Contravariant.Divisible (Divisible (..), divided)
+import Data.Hashable                        (Hashable)
+import Data.HashMap.Strict                  (HashMap)
+import Data.List.NonEmpty                   (NonEmpty (..))
+import Data.Map                             (Map)
+import Data.Monoid                          ((<>))
+import Data.Scientific                      (Scientific)
+import Data.Semigroup                       (Semigroup)
+import Data.Sequence                        (Seq)
+import Data.Text                            (Text)
+import Data.Text.Prettyprint.Doc            (Pretty)
+import Data.Typeable                        (Proxy (..), Typeable)
+import Data.Vector                          (Vector)
+import Data.Void                            (Void)
+import Data.Word                            (Word16, Word32, Word64, Word8)
+import Dhall.Import                         (Imported (..))
+import Dhall.Parser                         (Src (..))
+import Dhall.Syntax
+    ( Chunks (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , RecordField (..)
+    , Var (..)
+    )
+import Dhall.TypeCheck                      (DetailedTypeError (..), TypeError)
 import GHC.Generics
-import Lens.Family (LensLike', view)
-import Numeric.Natural (Natural)
-import Prelude hiding (maybe, sequence)
-import System.FilePath (takeDirectory)
+import Lens.Family                          (LensLike', view)
+import Numeric.Natural                      (Natural)
+import Prelude                              hiding (maybe, sequence)
+import System.FilePath                      (takeDirectory)
 
 import qualified Control.Applicative
 import qualified Control.Exception
@@ -171,16 +181,16 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Map
-import qualified Data.Maybe
+import qualified Data.HashMap.Strict              as HashMap
+import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.List.NonEmpty
-import qualified Data.Semigroup
+import qualified Data.Map
+import qualified Data.Maybe
 import qualified Data.Scientific
+import qualified Data.Semigroup
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.HashSet
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy
@@ -1091,15 +1101,17 @@ pairFromMapEntry :: Decoder k -> Decoder v -> Decoder (k, v)
 pairFromMapEntry k v = Decoder extractOut expectedOut
   where
     extractOut (RecordLit kvs)
-        | Just key <- Dhall.Map.lookup "mapKey" kvs
-        , Just value <- Dhall.Map.lookup "mapValue" kvs
+        | Just key <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "mapKey" kvs
+        , Just value <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "mapValue" kvs
             = liftA2 (,) (extract k key) (extract v value)
     extractOut expr = typeError expectedOut expr
 
     expectedOut = do
         k' <- expected k
         v' <- expected v
-        pure $ Record $ Dhall.Map.fromList [("mapKey", k'), ("mapValue", v')]
+        pure $ Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+            [ ("mapKey", k')
+            , ("mapValue", v')]
 
 {-| Decode @()@ from an empty record.
 
@@ -1140,14 +1152,18 @@ pair :: Decoder a -> Decoder b -> Decoder (a, b)
 pair l r = Decoder extractOut expectedOut
   where
     extractOut expr@(RecordLit fields) =
-      (,) <$> Data.Maybe.maybe (typeError expectedOut expr) (extract l) (Dhall.Map.lookup "_1" fields)
-          <*> Data.Maybe.maybe (typeError expectedOut expr) (extract r) (Dhall.Map.lookup "_2" fields)
+      (,) <$> Data.Maybe.maybe (typeError expectedOut expr) (extract l)
+                (Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "_1" fields)
+          <*> Data.Maybe.maybe (typeError expectedOut expr) (extract r)
+                (Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "_2" fields)
     extractOut expr = typeError expectedOut expr
 
     expectedOut = do
         l' <- expected l
         r' <- expected r
-        pure $ Record $ Dhall.Map.fromList [("_1", l'), ("_2", r')]
+        pure $ Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+            [ ("_1", l')
+            , ("_2", r')]
 
 {-| Any value that implements `FromDhall` can be automatically decoded based on
     the inferred return type of `input`
@@ -1474,7 +1490,7 @@ unsafeExpectUnion name expression =
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 unsafeExpectRecord
-    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Expr Src Void)
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (RecordField Src Void)
 unsafeExpectRecord _ (Record kts) =
     kts
 unsafeExpectRecord name expression =
@@ -1494,7 +1510,7 @@ unsafeExpectUnionLit name expression =
         (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
 
 unsafeExpectRecordLit
-    :: Text -> Expr Src Void -> Dhall.Map.Map Text (Expr Src Void)
+    :: Text -> Expr Src Void -> Dhall.Map.Map Text (RecordField Src Void)
 unsafeExpectRecordLit _ (RecordLit kvs) =
     kvs
 unsafeExpectRecordLit name expression =
@@ -1590,14 +1606,14 @@ instance (GenericFromDhall t (f :*: g), Selector s, FromDhall a) => GenericFromD
 
         let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedL
 
-        let expected = Record <$> (Dhall.Map.insert nameR <$> expectedR <*> ktsL)
+        let expected = Record <$> (Dhall.Map.insert nameR . Dhall.Core.makeRecordField <$> expectedR <*> ktsL)
 
         let extract expression = do
                 let die = typeError expected expression
 
                 case expression of
                     RecordLit kvs ->
-                        case Dhall.Map.lookup nameR kvs of
+                        case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup nameR kvs of
                             Just expressionR ->
                                 liftA2 (:*:)
                                     (extractL expression)
@@ -1620,14 +1636,14 @@ instance (Selector s, FromDhall a, GenericFromDhall t (f :*: g)) => GenericFromD
 
         let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedR
 
-        let expected = Record <$> (Dhall.Map.insert nameL <$> expectedL <*> ktsR)
+        let expected = Record <$> (Dhall.Map.insert nameL . Dhall.Core.makeRecordField <$> expectedL <*> ktsR)
 
         let extract expression = do
                 let die = typeError expected expression
 
                 case expression of
                     RecordLit kvs ->
-                        case Dhall.Map.lookup nameL kvs of
+                        case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup nameL kvs of
                             Just expressionL ->
                                 liftA2 (:*:)
                                     (fmap (M1 . K1) (extractL expressionL))
@@ -1664,8 +1680,8 @@ instance {-# OVERLAPPABLE #-} (Selector s1, Selector s2, FromDhall a1, FromDhall
         let Decoder extractR expectedR = autoWith inputNormalizer
 
         let expected = do
-                l <- expectedL
-                r <- expectedR
+                l <- Dhall.Core.makeRecordField <$> expectedL
+                r <- Dhall.Core.makeRecordField <$> expectedR
                 pure $ Record
                     (Dhall.Map.fromList
                         [ (nameL, l)
@@ -1677,12 +1693,12 @@ instance {-# OVERLAPPABLE #-} (Selector s1, Selector s2, FromDhall a1, FromDhall
                 let die = typeError expected expression
 
                 case expression of
-                    RecordLit kvs -> do
+                    RecordLit kvs ->
                         case liftA2 (,) (Dhall.Map.lookup nameL kvs) (Dhall.Map.lookup nameR kvs) of
                             Just (expressionL, expressionR) ->
                                 liftA2 (:*:)
-                                    (fmap (M1 . K1) (extractL expressionL))
-                                    (fmap (M1 . K1) (extractR expressionR))
+                                    (fmap (M1 . K1) (extractL $ Dhall.Core.recordFieldValue expressionL))
+                                    (fmap (M1 . K1) (extractR $ Dhall.Core.recordFieldValue expressionR))
                             Nothing -> die
                     _ -> die
 
@@ -1710,7 +1726,7 @@ instance {-# OVERLAPPABLE #-} (Selector s, FromDhall a) => GenericFromDhall t (M
                     Smart | selName n == "" ->
                         expected'
                     _ ->
-                        Record . Dhall.Map.singleton name <$> expected'
+                        Record . Dhall.Map.singleton name . Dhall.Core.makeRecordField <$> expected'
 
         let extract0 expression = fmap (M1 . K1) (extract' expression)
 
@@ -1718,14 +1734,13 @@ instance {-# OVERLAPPABLE #-} (Selector s, FromDhall a) => GenericFromDhall t (M
                 let die = typeError expected expression
 
                 case expression of
-                    RecordLit kvs -> do
-                        case Dhall.Map.lookup name kvs of
+                    RecordLit kvs ->
+                        case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup name kvs of
                             Just subExpression ->
                                 fmap (M1 . K1) (extract' subExpression)
                             Nothing ->
                                 die
-                    _ -> do
-                        die
+                    _ -> die
 
         let extract =
                 case singletonConstructors of
@@ -2020,12 +2035,12 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
                 | Data.Map.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List (Record (Dhall.Map.fromList
-                          [("mapKey", declaredK), ("mapValue", declaredV)]))
+        declaredOut = App List (Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)])
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
-        recordPair (k, v) = RecordLit (Dhall.Map.fromList
-                                [("mapKey", embedK k), ("mapValue", embedV v)])
+        recordPair (k, v) = RecordLit $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)]
 
         Encoder embedK declaredK = injectWith inputNormalizer
         Encoder embedV declaredV = injectWith inputNormalizer
@@ -2048,12 +2063,12 @@ instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
                 | HashMap.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List (Record (Dhall.Map.fromList
-                          [("mapKey", declaredK), ("mapValue", declaredV)]))
+        declaredOut = App List (Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+                          [("mapKey", declaredK), ("mapValue", declaredV)])
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . HashMap.toList
-        recordPair (k, v) = RecordLit (Dhall.Map.fromList
-                                [("mapKey", embedK k), ("mapValue", embedV v)])
+        recordPair (k, v) = RecordLit $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+                                [("mapKey", embedK k), ("mapValue", embedV v)]
 
         Encoder embedK declaredK = injectWith inputNormalizer
         Encoder embedV declaredV = injectWith inputNormalizer
@@ -2087,7 +2102,7 @@ instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
         let embed0 (M1 (K1 x)) = embed' x
 
         let embed1 (M1 (K1 x)) =
-                RecordLit (Dhall.Map.singleton name (embed' x))
+                RecordLit (Dhall.Map.singleton name (Dhall.Core.makeRecordField $ embed' x))
 
         let embed =
                 case singletonConstructors of
@@ -2102,7 +2117,7 @@ instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
                     Smart | selName n == "" ->
                         declared'
                     _ ->
-                        Record (Dhall.Map.singleton name declared')
+                        Record (Dhall.Map.singleton name $ Dhall.Core.makeRecordField declared')
 
         return (Encoder {..})
 
@@ -2256,12 +2271,12 @@ instance (GenericToDhall (f :*: g), Selector s, ToDhall a) => GenericToDhall ((f
         let Encoder embedR declaredR = injectWith inputNormalizer
 
         let embed (l :*: M1 (K1 r)) =
-                RecordLit (Dhall.Map.insert nameR (embedR r) mapL)
+                RecordLit (Dhall.Map.insert nameR (Dhall.Core.makeRecordField $ embedR r) mapL)
               where
                 mapL =
                     unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedL l)
 
-        let declared = Record (Dhall.Map.insert nameR declaredR mapL)
+        let declared = Record (Dhall.Map.insert nameR (Dhall.Core.makeRecordField declaredR) mapL)
               where
                 mapL = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredL
 
@@ -2279,12 +2294,12 @@ instance (Selector s, ToDhall a, GenericToDhall (f :*: g)) => GenericToDhall (M1
         Encoder embedR declaredR <- genericToDhallWithNormalizer inputNormalizer options
 
         let embed (M1 (K1 l) :*: r) =
-                RecordLit (Dhall.Map.insert nameL (embedL l) mapR)
+                RecordLit (Dhall.Map.insert nameL (Dhall.Core.makeRecordField $ embedL l) mapR)
               where
                 mapR =
                     unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedR r)
 
-        let declared = Record (Dhall.Map.insert nameL declaredL mapR)
+        let declared = Record (Dhall.Map.insert nameL (Dhall.Core.makeRecordField declaredL) mapR)
               where
                 mapR = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredR
 
@@ -2305,16 +2320,17 @@ instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M
         let Encoder embedR declaredR = injectWith inputNormalizer
 
         let embed (M1 (K1 l) :*: M1 (K1 r)) =
-                RecordLit
-                    (Dhall.Map.fromList
+                RecordLit $ Dhall.Core.makeRecordField <$>
+                    Dhall.Map.fromList
                         [ (nameL, embedL l), (nameR, embedR r) ]
-                    )
+
 
         let declared =
-                Record
-                    (Dhall.Map.fromList
-                        [ (nameL, declaredL), (nameR, declaredR) ]
-                    )
+                Record $ Dhall.Core.makeRecordField <$>
+                    Dhall.Map.fromList
+                        [ (nameL, declaredL)
+                        , (nameR, declaredR) ]
+
 
         return (Encoder {..})
 
@@ -2379,9 +2395,15 @@ newtype RecordDecoder a =
 
 -- | Run a 'RecordDecoder' to build a 'Decoder'.
 record :: RecordDecoder a -> Dhall.Decoder a
-record ( RecordDecoder ( Data.Functor.Product.Pair ( Control.Applicative.Const fields ) ( Data.Functor.Compose.Compose extract ) ) ) = Decoder {..}
+record
+    (RecordDecoder
+        (Data.Functor.Product.Pair
+            (Control.Applicative.Const fields)
+            (Data.Functor.Compose.Compose extract)
+        )
+    ) = Decoder {..}
   where
-    expected = Record <$> traverse id fields
+    expected = Record <$> traverse (fmap Dhall.Core.makeRecordField) fields
 
 
 -- | Parse a single field of a record.
@@ -2395,7 +2417,7 @@ field key (Decoder {..}) =
         ( Data.Functor.Compose.Compose extractBody )
     )
   where
-    extractBody expr@(RecordLit fields) = case Dhall.Map.lookup key fields of
+    extractBody expr@(RecordLit fields) = case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup key fields of
       Just v -> extract v
       _      -> typeError expected expr
     extractBody expr = typeError expected expr
@@ -2563,8 +2585,8 @@ encodeField name = encodeFieldWith name inject
 recordEncoder :: RecordEncoder a -> Encoder a
 recordEncoder (RecordEncoder encodeTypeRecord) = Encoder makeRecordLit recordType
   where
-    recordType = Record $ declared <$> encodeTypeRecord
-    makeRecordLit x = RecordLit $ (($ x) . embed) <$> encodeTypeRecord
+    recordType = Record $ (Dhall.Core.makeRecordField . declared) <$> encodeTypeRecord
+    makeRecordLit x = RecordLit $ (Dhall.Core.makeRecordField . ($ x) . embed) <$> encodeTypeRecord
 
 {-| 'UnionEncoder' allows you to build an 'Encoder' for a Dhall record.
 

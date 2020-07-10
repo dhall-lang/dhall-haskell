@@ -1,5 +1,5 @@
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {-| This module contains the core calculus for the Dhall language.
 
@@ -25,6 +25,8 @@ module Dhall.Core (
     , makeBinding
     , Chunks(..)
     , PreferAnnotation(..)
+    , RecordField(..)
+    , makeRecordField
     , Expr(..)
 
     -- * Normalization
@@ -70,17 +72,17 @@ module Dhall.Core (
     , Syntax.desugarWith
     ) where
 
-import Control.Exception (Exception)
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Text (Text)
+import Control.Exception         (Exception)
+import Control.Monad.IO.Class    (MonadIO (..))
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall.Normalize
-import Dhall.Src (Src(..))
-import Dhall.Syntax
 import Dhall.Pretty.Internal
-import Instances.TH.Lift ()
-import Lens.Family (over)
-import Prelude hiding (succ)
+import Dhall.Src                 (Src (..))
+import Dhall.Syntax
+import Instances.TH.Lift         ()
+import Lens.Family               (over)
+import Prelude                   hiding (succ)
 
 import qualified Control.Exception
 import qualified Data.Text

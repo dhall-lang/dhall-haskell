@@ -1,16 +1,16 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE LambdaCase           #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PatternSynonyms      #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns         #-}
 
 {-# OPTIONS_GHC -O #-}
 
@@ -52,33 +52,34 @@ module Dhall.Eval (
   , textShow
   ) where
 
-import Data.Foldable (foldr', toList)
-import Data.Semigroup (Semigroup(..))
-import Data.Sequence (Seq, ViewL(..), ViewR(..))
-import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import GHC.Natural (Natural)
-import Prelude hiding (succ)
+import Data.Foldable  (foldr', toList)
+import Data.Semigroup (Semigroup (..))
+import Data.Sequence  (Seq, ViewL (..), ViewR (..))
+import Data.Text      (Text)
+import Data.Void      (Void)
+import Dhall.Map      (Map)
+import Dhall.Set      (Set)
+import GHC.Natural    (Natural)
+import Prelude        hiding (succ)
 
 import Dhall.Syntax
-  ( Binding(..)
-  , Expr(..)
-  , Chunks(..)
-  , Const(..)
-  , DhallDouble(..)
-  , PreferAnnotation(..)
-  , Var(..)
-  )
+    ( Binding (..)
+    , Chunks (..)
+    , Const (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , PreferAnnotation (..)
+    , RecordField (..)
+    , Var (..)
+    )
 
 import qualified Data.Char
-import qualified Data.Sequence   as Sequence
+import qualified Data.Sequence as Sequence
 import qualified Data.Set
-import qualified Data.Text       as Text
-import qualified Dhall.Syntax    as Syntax
-import qualified Dhall.Map       as Map
+import qualified Data.Text     as Text
+import qualified Dhall.Map     as Map
 import qualified Dhall.Set
+import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf
 
 data Environment a
@@ -670,9 +671,9 @@ eval !env t0 =
         None ->
             VPrim $ \ ~a -> VNone a
         Record kts ->
-            VRecord (Map.sort (fmap (eval env) kts))
+            VRecord (Map.sort (eval env . recordFieldValue <$> kts))
         RecordLit kts ->
-            VRecordLit (Map.sort (fmap (eval env) kts))
+            VRecordLit (Map.sort (eval env . recordFieldValue <$> kts))
         Union kts ->
             VUnion (Map.sort (fmap (fmap (eval env)) kts))
         Combine mk t u ->
@@ -1092,9 +1093,9 @@ quote !env !t0 =
         VNone t ->
             None `qApp` t
         VRecord m ->
-            Record (fmap (quote env) m)
+            Record (fmap quoteRecordField m)
         VRecordLit m ->
-            RecordLit (fmap (quote env) m)
+            RecordLit (fmap quoteRecordField m)
         VUnion m ->
             Union (fmap (fmap (quote env)) m)
         VCombine mk t u ->
@@ -1140,6 +1141,10 @@ quote !env !t0 =
     qApp t VPrimVar = t
     qApp t u        = App t (quote env u)
     {-# INLINE qApp #-}
+
+    quoteRecordField :: Val a -> RecordField Void a
+    quoteRecordField = Syntax.makeRecordField . quote env
+    {-# INLINE quoteRecordField #-}
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
@@ -1268,9 +1273,9 @@ alphaNormalize = goEnv EmptyNames
             None ->
                 None
             Record kts ->
-                Record (fmap go kts)
+                Record (goRecordField <$> kts)
             RecordLit kts ->
-                RecordLit (fmap go kts)
+                RecordLit (goRecordField <$> kts)
             Union kts ->
                 Union (fmap (fmap go) kts)
             Combine m t u ->
@@ -1305,3 +1310,4 @@ alphaNormalize = goEnv EmptyNames
         go                     = goEnv e0
         goBind x               = goEnv (Bind e0 x)
         goChunks (Chunks ts x) = Chunks (fmap (fmap go) ts) x
+        goRecordField (RecordField s0 e) = RecordField s0 (go e)

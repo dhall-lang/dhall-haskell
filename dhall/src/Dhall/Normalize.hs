@@ -1,6 +1,6 @@
-{-# LANGUAGE BangPatterns       #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Dhall.Normalize (
       alphaNormalize
@@ -18,22 +18,24 @@ module Dhall.Normalize (
     , freeIn
     ) where
 
-import Control.Applicative (empty)
+import Control.Applicative   (empty)
 import Data.Foldable
-import Data.Functor.Identity (Identity(..))
-import Data.Semigroup (Semigroup(..))
-import Data.Sequence (ViewL(..), ViewR(..))
+import Data.Functor.Identity (Identity (..))
+import Data.Semigroup        (Semigroup (..))
+import Data.Sequence         (ViewL (..), ViewR (..))
 import Data.Traversable
-import Instances.TH.Lift ()
-import Prelude hiding (succ)
+import Instances.TH.Lift     ()
+import Prelude               hiding (succ)
 
 import Dhall.Syntax
-    ( Expr(..)
-    , Var(..)
-    , Binding(Binding)
-    , Chunks(..)
-    , DhallDouble(..)
-    , PreferAnnotation(..)
+    ( Binding (Binding)
+    , Chunks (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , PreferAnnotation (..)
+    , RecordField (..)
+    , Var (..)
+    , makeRecordField
     )
 
 import qualified Data.Sequence
@@ -189,7 +191,7 @@ boundedType Double           = True
 boundedType Text             = True
 boundedType (App List _)     = False
 boundedType (App Optional t) = boundedType t
-boundedType (Record kvs)     = all boundedType kvs
+boundedType (Record kvs)     = all (boundedType . recordFieldValue) kvs
 boundedType (Union kvs)      = all (all boundedType) kvs
 boundedType _                = False
 
@@ -279,7 +281,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     let b₂ = shift (-1) (V x 0) b₁
 
                     loop b₂
-                _ -> do
+                _ ->
                   case App f' a' of
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
@@ -379,8 +381,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
 
                         _A₂ = Record (Dhall.Map.fromList kts)
                           where
-                            kts = [ ("index", Natural)
-                                  , ("value", _A₀)
+                            kts = [ ("index", makeRecordField Natural)
+                                  , ("value", makeRecordField _A₀)
                                   ]
 
                         t | null as₀  = Just (App List _A₂)
@@ -389,8 +391,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         adapt n a_ =
                             RecordLit (Dhall.Map.fromList kvs)
                           where
-                            kvs = [ ("index", NaturalLit (fromIntegral n))
-                                  , ("value", a_)
+                            kvs = [ ("index", makeRecordField $ NaturalLit (fromIntegral n))
+                                  , ("value", makeRecordField a_)
                                   ]
                     App (App ListReverse _) (ListLit t xs) ->
                         loop (ListLit t (Data.Sequence.reverse xs))
@@ -528,10 +530,12 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     None -> pure None
     Record kts -> Record . Dhall.Map.sort <$> kts'
       where
-        kts' = traverse loop kts
+        f (RecordField s0 expr) = RecordField s0 <$> loop expr
+        kts' = traverse f kts
     RecordLit kvs -> RecordLit . Dhall.Map.sort <$> kvs'
       where
-        kvs' = traverse loop kvs
+        f (RecordField s0 expr) = RecordField s0 <$> loop expr
+        kvs' = traverse f kvs
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
         kts' = traverse (traverse loop) kts
@@ -542,7 +546,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l (RecordLit n) | Data.Foldable.null n =
             l
         decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.unionWith decide m n)
+            RecordLit (Dhall.Map.unionWith f m n)
+          where
+            f (RecordField _ expr) (RecordField _ expr') =
+              makeRecordField $ decide expr expr'
         decide l r =
             Combine mk l r
     CombineTypes x y -> decide <$> loop x <*> loop y
@@ -552,7 +559,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l (Record n) | Data.Foldable.null n =
             l
         decide (Record m) (Record n) =
-            Record (Dhall.Map.unionWith decide m n)
+            Record (Dhall.Map.unionWith f m n)
+          where
+            f (RecordField _ expr) (RecordField _ expr') =
+              makeRecordField $ decide expr expr'
         decide l r =
             CombineTypes l r
     Prefer _ x y -> decide <$> loop x <*> loop y
@@ -578,7 +588,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     Field (Union ktsY) kY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just Nothing ->
-                                case Dhall.Map.lookup kY kvsX of
+                                case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
                                     Just vX -> return vX
                                     Nothing -> Merge x' y' <$> t'
                             _ ->
@@ -586,17 +596,17 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App (Field (Union ktsY) kY) vY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just (Just _) ->
-                                case Dhall.Map.lookup kY kvsX of
+                                case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
                                     Just vX -> loop (App vX vY)
                                     Nothing -> Merge x' y' <$> t'
                             _ ->
                                 Merge x' y' <$> t'
                     Some a ->
-                        case Dhall.Map.lookup "Some" kvsX of
+                        case recordFieldValue <$> Dhall.Map.lookup "Some" kvsX of
                             Just vX -> loop (App vX a)
                             Nothing -> Merge x' y' <$> t'
                     App None _ ->
-                        case Dhall.Map.lookup "None" kvsX of
+                        case recordFieldValue <$> Dhall.Map.lookup "None" kvsX of
                             Just vX -> return vX
                             Nothing -> Merge x' y' <$> t'
                     _ -> Merge x' y' <$> t'
@@ -611,12 +621,12 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 let entry (key, value) =
                         RecordLit
                             (Dhall.Map.fromList
-                                [ ("mapKey"  , TextLit (Chunks [] key))
-                                , ("mapValue", value                  )
+                                [ ("mapKey"  , makeRecordField $ TextLit (Chunks [] key))
+                                , ("mapValue", makeRecordField value                  )
                                 ]
                             )
 
-                let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList kvsX))
+                let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList $ recordFieldValue <$> kvsX))
 
                 let listType = case t' of
                         Just _ | null keyValues ->
@@ -625,23 +635,25 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             Nothing
 
                 return (ListLit listType keyValues)
-            _ -> do
+            _ ->
                 return (ToMap x' t')
     Field r x        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
+
+        let loopRecordField (RecordField s0 expr) = RecordField <$> pure s0 <*> loop expr
 
         r' <- loop r
         case r' of
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
-                    Just v  -> pure v
-                    Nothing -> Field <$> (RecordLit <$> traverse loop kvs) <*> pure x
+                    Just v  -> pure $ recordFieldValue v
+                    Nothing -> Field <$> (RecordLit <$> traverse loopRecordField kvs) <*> pure x
             Project r_ _ -> loop (Field r_ x)
             Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
                 Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
                 Nothing -> loop (Field r_ x)
             Prefer _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure v
+                Just v -> pure $ recordFieldValue v
                 Nothing -> loop (Field l x)
             Combine m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
                 Just v -> pure (Field (Combine m (singletonRecordLit v) r_) x)
@@ -844,8 +856,8 @@ isNormalized e0 = loop (Syntax.denote e0)
       Optional -> True
       Some a -> loop a
       None -> True
-      Record kts -> Dhall.Map.isSorted kts && all loop kts
-      RecordLit kvs -> Dhall.Map.isSorted kvs && all loop kvs
+      Record kts -> Dhall.Map.isSorted kts && all (loop . recordFieldValue) kts
+      RecordLit kvs -> Dhall.Map.isSorted kvs && all (loop . recordFieldValue) kvs
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
       Combine _ x y -> loop x && loop y && decide x y
         where
