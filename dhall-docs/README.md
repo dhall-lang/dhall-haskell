@@ -14,21 +14,23 @@ file and outputs a HTML documentation of it.
 ## Features
 
 `dhall-docs` can analyze your Dhall package (essentially a folder with several
-`.dhall` files) to generate documentation. Specifically, it:
+`.dhall` files) to generate documentation. Specifically:
 
-* Extracts files documentation from "Header" comments (see [Comments format](#comments-format))
-* Wires up navigatable breadcrumbs.
-* Create an `index` for each folder in your package listing the `.dhall` files
-  on that folder alongside the "exported packages" (the contained folders).
+* Extracts documentation from each file's header comments (see [Comment format](#comment-format)).
+* The generated documentation includes breadcrumbs to aid navigation.
+* Create an index for each folder in your package listing the `.dhall` files
+  in that folder alongside the "exported packages" (the contained folders).
 * Extracts examples from assertions.
 * Extracts the type of each Dhall file from the source code and renders it
-  on the `index`es.
+  in the indexes.
 * Renders the original source code in each Dhall file's documentation.
 
 To see a demo, visit the documentation for the [`Dhall Prelude`](https://hydra.dhall-lang.org/job/dhall-haskell/master/generate-dhall-docs/latest/download/1/docs).
 
 
-## Comments format
+## Comment format
+
+The markup format for documentation is a strict Markdown flavor: [CommonMark].
 
 Currently, there is no defined format for the documentation comments - we only
 extract it from the "Header" of the files.
@@ -56,7 +58,7 @@ bar
 -}
 ```
 
-`dhall-docs` currently doesn't supports well single line comments: it just strips
+`dhall-docs` currently doesn't support multi-line line comments well: it just strips
 the first `--`, not the other ones.
 
 This will be improved soon and the standard documentation format will be published
@@ -120,3 +122,5 @@ https://hydra.dhall-lang.org/job/dhall-haskell/${PR_NUMBER}/generate-dhall-docs/
 If you want to see the latest generated docs on master, visit:
 
 https://hydra.dhall-lang.org/job/dhall-haskell/master/generate-dhall-docs/latest/download/1/docs
+
+[CommonMark]: https://commonmark.org/
