@@ -120,6 +120,7 @@ Test-Suite tasty
     Main-Is: Main.hs
     Build-Depends:
         base                   ,
+        bytestring             ,
         containers             ,
         dhall-docs             ,
         HaXml        >= 1.25.5 ,
