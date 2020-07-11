@@ -16,7 +16,7 @@ file and outputs a HTML documentation of it.
 `dhall-docs` can analyze your Dhall package (essentially a folder with several
 `.dhall` files) to generate documentation. Specifically, it:
 
-* Extracts files documentation from "Header" comments (see examples).
+* Extracts files documentation from "Header" comments (see [Comments format](#comments-format))
 * Wires up navigatable breadcrumbs.
 * Create an `index` for each folder in your package listing the `.dhall` files
   on that folder alongside the "exported packages" (the contained folders).
