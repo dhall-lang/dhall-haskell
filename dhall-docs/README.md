@@ -11,6 +11,57 @@ For installation or development instructions, see:
 This `dhall-docs` package provides a cli utility that takes a dhall package or
 file and outputs a HTML documentation of it.
 
+## Features
+
+`dhall-docs` can analyze your Dhall package (essentially a folder with several
+`.dhall` files) to generate documentation. Specifically, it:
+
+* Extracts files documentation from "Header" comments (see examples).
+* Wires up navigatable breadcrumbs.
+* Create an `index` for each folder in your package listing the `.dhall` files
+  on that folder alongside the "exported packages" (the contained folders).
+* Extracts examples from assertions.
+* Extracts the type of each Dhall file from the source code and renders it
+  on the `index`es.
+* Renders the original source code in each Dhall file's documentation.
+
+To see a demo, visit the documentation for the [`Dhall Prelude`](https://hydra.dhall-lang.org/job/dhall-haskell/master/generate-dhall-docs/latest/download/1/docs).
+
+
+## Comments format
+
+Currently, there is no defined format for the documentation comments - we only
+extract it from the "Header" of the files.
+
+Also, the comment pre-processing is not done right now, so the best way to
+write the documentation right now is starting from column 1.
+
+For example. If you write the following:
+
+```dhall
+{-  foo
+    bar
+-}
+```
+
+... the markdown preprocessor will parse the second line as a indented codeblock,
+which isn't what you'd expect from the tool.
+
+At this moment, we recommend writing it this way:
+
+```dhall
+{-
+foo
+bar
+-}
+```
+
+`dhall-docs` currently doesn't supports well single line comments: it just strips
+the first `--`, not the other ones.
+
+This will be improved soon and the standard documentation format will be published
+alongside this package.
+
 ## Usage
 
 The easiest usage is the following:
