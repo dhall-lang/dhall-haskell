@@ -275,7 +275,7 @@ headContents title DocParams{..} =
     head_ $ do
         title_ $ toHtml title
         stylesheet $ relativeResourcesPath <> "index.css"
-        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato&display=swap"
+        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato:ital,wght@0,400;0,700;1,400&display=swap"
         script relativeResourcesPath
         meta_ [charset_ "UTF-8"]
 
