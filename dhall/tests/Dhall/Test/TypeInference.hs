@@ -33,9 +33,10 @@ getTests = do
             path <- Turtle.lstree (typeInferenceDirectory </> "success")
 
             let skip =
-                    -- This test intermittently fails with:
+                    -- These tests intermittently fails with:
                     -- "Error: Remote host not found"
-                    [ typeInferenceDirectory </> "success/CacheImportsCanonicalizeA.dhall"
+                    [ typeInferenceDirectory </> "success/CacheImportsA.dhall"
+                    , typeInferenceDirectory </> "success/CacheImportsCanonicalizeA.dhall"
                     ]
 
             Monad.guard (path `notElem` skip)
