@@ -29,6 +29,7 @@ extra-deps:
   - semialign-1.1@sha256:5ff1788b6bcec97084ca60f736c126334e4ba4a450517e7ca4f69dd1156d38a0,2471
   - semialign-indexed-1.1@sha256:bc375898351fea11ab3f4279844fcfc00aa42c90182eedfc28c4754098da3e0e,2026
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
+  - tasty-silver-3.1.15@sha256:f40b3f59dfabe14f185b5d27fdb8aa8b7c75458aa7999f8aa244b9dcbaf8dc31,2328
 nix:
   packages:
     - ncurses

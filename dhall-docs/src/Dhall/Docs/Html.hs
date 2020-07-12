@@ -101,10 +101,11 @@ data DocParams = DocParams
 dhallFileToHtml
     :: Path Rel File            -- ^ Source file name, used to extract the title
     -> Expr Src Import          -- ^ Contents of the file
+    -> [Expr Void Import]       -- ^ Examples extracted from the assertions of the file
     -> Html ()                  -- ^ Header document as HTML
     -> DocParams                -- ^ Parameters for the documentation
     -> Html ()
-dhallFileToHtml filePath expr header params@DocParams{..} =
+dhallFileToHtml filePath expr examples header params@DocParams{..} =
     doctypehtml_ $ do
         headContents htmlTitle params
         body_ $ do
@@ -114,6 +115,10 @@ dhallFileToHtml filePath expr header params@DocParams{..} =
                 copyToClipboardButton htmlTitle
                 br_ []
                 div_ [class_ "doc-contents"] header
+                Control.Monad.unless (null examples) $ do
+                    h3_ "Examples"
+                    div_ [class_ "source-code code-examples"] $
+                        mapM_ (exprToHtml FileContentsExpr) examples
                 h3_ "Source"
                 div_ [class_ "source-code"] $ exprToHtml FileContentsExpr expr
   where
@@ -270,7 +275,7 @@ headContents title DocParams{..} =
     head_ $ do
         title_ $ toHtml title
         stylesheet $ relativeResourcesPath <> "index.css"
-        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato&display=swap"
+        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato:ital,wght@0,400;0,700;1,400&display=swap"
         script relativeResourcesPath
         meta_ [charset_ "UTF-8"]
 
@@ -290,4 +295,4 @@ script relativeResourcesPath =
     script_
         [ type_ "text/javascript"
         , src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
-        ("empty" :: Text)
+        ("" :: Text)
