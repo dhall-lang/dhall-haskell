@@ -51,7 +51,7 @@ schemaTest prefix =
 
         (header, parsedInput) <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
 
-        parsedSchema <- Core.throws (Parser.exprFromText mempty (prefix <> "Schema.dhall"))
+        parsedSchema <- Core.throws (Parser.exprFromText mempty (Test.Util.toDhallPath (prefix <> "Schema.dhall")))
 
         actualExpression <- Schemas.rewriteWithSchemas parsedSchema parsedInput
 
