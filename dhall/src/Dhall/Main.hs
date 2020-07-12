@@ -2,6 +2,7 @@
     @dhall@ executable
 -}
 
+{-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
@@ -38,6 +39,7 @@ import Dhall.Import
     )
 import Dhall.Parser              (Src)
 import Dhall.Pretty              (Ann, CharacterSet (..), annToAnsiStyle)
+import Dhall.Schemas             (Schemas(..))
 import Dhall.TypeCheck
     ( Censored (..)
     , DetailedTypeError (..)
@@ -96,6 +98,7 @@ import qualified Dhall.Lint
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
+import qualified Dhall.Schemas
 import qualified Dhall.Tags
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
@@ -162,6 +165,7 @@ data Mode
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
     | Text { file :: Input }
     | DirectoryTree { file :: Input, path :: FilePath }
+    | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
 
 data ResolveMode
@@ -228,17 +232,22 @@ parseMode =
             Manipulate
             "format"
             "Standard code formatter for the Dhall language"
-            (Format <$> parseInplace <*> parseCheck "formatted")
+            (Format <$> parseInplaceTransitive <*> parseCheck "formatted")
     <|> subcommand
             Manipulate
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseInplace <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen")
+            (Freeze <$> parseInplaceTransitive <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen")
     <|> subcommand
             Manipulate
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseInplace <*> parseCheck "linted")
+            (Lint <$> parseInplaceTransitive <*> parseCheck "linted")
+    <|> subcommand
+            Manipulate
+            "rewrite-with-schemas"
+            "Simplify Dhall code using a schemas record"
+            (Dhall.Main.Schemas <$> parseInplaceNonTransitive <*> parseCheck "rewritten" <*> parseSchemasRecord)
     <|> subcommand
             Generate
             "text"
@@ -394,17 +403,22 @@ parseMode =
             )
 
     parseInplace =
-            fmap (\f -> PossiblyTransitiveInputFile f NonTransitive) p0
-        <|> fmap (\f -> PossiblyTransitiveInputFile f    Transitive) p1
-        <|> pure NonTransitiveStandardInput
-      where
-        p0 = Options.Applicative.strOption
+        Options.Applicative.strOption
             (   Options.Applicative.long "inplace"
             <>  Options.Applicative.help "Modify the specified file in-place"
             <>  Options.Applicative.metavar "FILE"
             )
 
-        p1 = Options.Applicative.strOption
+    parseInplaceNonTransitive =
+            fmap InputFile parseInplace
+        <|> pure StandardInput
+
+    parseInplaceTransitive =
+            fmap (\f -> PossiblyTransitiveInputFile f NonTransitive) parseInplace
+        <|> fmap (\f -> PossiblyTransitiveInputFile f    Transitive) parseTransitive
+        <|> pure NonTransitiveStandardInput
+      where
+        parseTransitive = Options.Applicative.strOption
             (   Options.Applicative.long "transitive"
             <>  Options.Applicative.help "Modify the specified file and its transitive relative imports in-place"
             <>  Options.Applicative.metavar "FILE"
@@ -477,6 +491,13 @@ parseMode =
             Options.Applicative.switch
             (   Options.Applicative.long "check"
             <>  Options.Applicative.help ("Only check if the input is " <> processed)
+            )
+
+    parseSchemasRecord =
+        Options.Applicative.strOption
+            (   Options.Applicative.long "schemas"
+            <>  Options.Applicative.help "A record of schemas"
+            <>  Options.Applicative.metavar "EXPR"
             )
 
     parseDirectoryTreeOutput =
@@ -913,6 +934,9 @@ command (Options {..}) = do
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
             DirectoryTree.toDirectoryTree path normalizedExpression
+
+        Dhall.Main.Schemas{..} -> do
+            Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}
 
         SyntaxTree {..} -> do
             expression <- getExpression file
