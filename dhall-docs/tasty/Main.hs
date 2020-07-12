@@ -4,6 +4,7 @@
 
 module Main (main) where
 
+import Data.ByteString (ByteString)
 import Data.Map.Strict (Map)
 import Data.Text       (Text)
 import Dhall.Docs.Core
@@ -11,6 +12,7 @@ import Path            (Dir, File, Path, Rel, (</>))
 import Test.Tasty      (TestTree)
 
 import qualified Control.Monad
+import qualified Data.ByteString
 import qualified Data.Map.Strict               as Map
 import qualified Data.Text
 import qualified Data.Text.IO                  as Text.IO
@@ -33,17 +35,17 @@ main = do
     let docsMap = Map.fromList docs
     Silver.defaultMain $ testTree docsMap
 
-getDirContents :: Path Rel Dir -> IO [(Path Rel File, Text)]
+getDirContents :: Path Rel Dir -> IO [(Path Rel File, ByteString)]
 getDirContents dataDir = do
     files <- snd <$> Path.IO.listDirRecurRel dataDir
     Control.Monad.forM files $ \file -> do
-        contents <- Text.IO.readFile $ Path.fromRelFile $ dataDir </> file
+        contents <- Data.ByteString.readFile $ Path.fromRelFile $ dataDir </> file
         return (file, contents)
 
 goldenDir :: Path Rel Dir
 goldenDir = $(Path.mkRelDir "./tasty/data/golden")
 
-getPackageContents :: IO [(Path Rel File, Text)]
+getPackageContents :: IO [(Path Rel File, ByteString)]
 getPackageContents = getDirContents $(Path.mkRelDir "./tasty/data/package")
 
 testTree :: Map (Path Rel File) Text -> TestTree
