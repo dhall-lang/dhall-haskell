@@ -189,6 +189,7 @@ rewriteWithSchemas _schemas expression = do
         then return (Let (Syntax.makeBinding "schemas" _schemas) rewrittenExpression)
         else return expression
 
+-- | Errors that can be thrown by `rewriteWithSchemas`
 data SchemasError = NotASchemaRecord
     deriving (Exception)
 
