@@ -17,6 +17,7 @@
 module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
 
 import Control.Monad.Writer.Class (MonadWriter)
+import Data.ByteString            (ByteString)
 import Data.Function              (on)
 import Data.Map.Strict            (Map)
 import Data.Monoid                ((<>))
@@ -54,6 +55,7 @@ import qualified Data.Map.Strict            as Map
 import qualified Data.Maybe
 import qualified Data.Maybe                 as Maybe
 import qualified Data.Text
+import qualified Data.Text.Encoding
 import qualified Data.Text.IO               as Text.IO
 import qualified Data.Text.Lazy             as Text.Lazy
 import qualified Dhall.Core
@@ -125,13 +127,18 @@ data DhallFile = DhallFile
 
     The result is sorted by `path`
 -}
-getAllDhallFiles :: [(Path Rel File, Text)] -> GeneratedDocs [DhallFile]
-getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
+getAllDhallFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [DhallFile]
+getAllDhallFiles = emitErrors . map toDhallFile . foldr validFiles [] . filter hasDhallExtension
   where
-    hasDhallExtension :: (Path Rel File, Text) -> Bool
+    hasDhallExtension :: (Path Rel File, a) -> Bool
     hasDhallExtension (absFile, _) = case Path.splitExtension absFile of
         Nothing -> False
         Just (_, ext) -> ext == ".dhall"
+
+    validFiles :: (Path Rel File, ByteString) -> [(Path Rel File, Text)] -> [(Path Rel File, Text)]
+    validFiles (relFile, content) xs = case Data.Text.Encoding.decodeUtf8' content of
+        Left _ -> xs
+        Right textContent -> (relFile, textContent) : xs
 
     toDhallFile :: (Path Rel File, Text) -> Either DocsGenWarning DhallFile
     toDhallFile (relFile, contents) =
@@ -381,7 +388,7 @@ generateDocs
     -> IO ()
 generateDocs inputDir outLink packageName = do
     (_, absFiles) <- Path.IO.listDirRecur inputDir
-    contents <- mapM (Text.IO.readFile . Path.fromAbsFile) absFiles
+    contents <- mapM (Data.ByteString.readFile . Path.fromAbsFile) absFiles
     strippedFiles <- mapM (Path.stripProperPrefix inputDir) absFiles
     let GeneratedDocs warnings docs = generateDocsPure packageName $ zip strippedFiles contents
     mapM_ print warnings
@@ -422,7 +429,7 @@ generateDocs inputDir outLink packageName = do
 -}
 generateDocsPure
     :: Text                    -- ^ Package name
-    -> [(Path Rel File, Text)] -- ^ (Input file, contents)
+    -> [(Path Rel File, ByteString)] -- ^ (Input file, contents)
     -> GeneratedDocs [(Path Rel File, Text)]
 generateDocsPure packageName inputFiles = go
   where
