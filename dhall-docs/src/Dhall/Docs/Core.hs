@@ -1,18 +1,28 @@
--- | Contains all the functions that generate documentation
+{-| Contains all the functions that generate documentation
 
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
+    We should always try to do as little work as possible in an `IO` context.
+    To do so, just wrap your function in `IO` if you need to do I/O operations,
+    and make pure functions receive that IO result as an input
+-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TupleSections         #-}
+-- {-# OPTIONS_GHC -Wno-unused-imports #-}
 
-module Dhall.Docs.Core (generateDocs) where
+module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
 
-import Data.List.NonEmpty  (NonEmpty (..))
-import Data.Monoid         ((<>))
-import Data.Text           (Text)
-import Data.Void           (Void)
+import Control.Monad.Writer.Class (MonadWriter)
+import Data.ByteString            (ByteString)
+import Data.Function              (on)
+import Data.Map.Strict            (Map)
+import Data.Monoid                ((<>))
+import Data.Text                  (Text)
+import Data.Void                  (Void)
 import Dhall.Core
     ( Binding (..)
     , Expr (..)
@@ -25,78 +35,139 @@ import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
 import Dhall.Docs.Store
-import Dhall.Parser        (Header (..), ParseError (..), exprAndHeaderFromText)
-import Dhall.Src           (Src)
-import Path                (Abs, Dir, File, Path, Rel, (</>))
-import Text.Megaparsec     (ParseErrorBundle (..))
+import Dhall.Parser
+    ( Header (..)
+    , ParseError (..)
+    , exprAndHeaderFromText
+    )
+import Dhall.Src                  (Src)
+import Path                       (Abs, Dir, File, Path, Rel, (</>))
+import Text.Megaparsec            (ParseErrorBundle (..))
 
-import qualified Control.Applicative as Applicative
+import qualified Control.Applicative        as Applicative
 import qualified Control.Monad
+import qualified Control.Monad.Writer.Class as Writer
 import qualified Data.ByteString
-import qualified Data.List.NonEmpty  as NonEmpty
-import qualified Data.Map.Strict     as Map
+import qualified Data.Either
+import qualified Data.List
+import qualified Data.List.NonEmpty         as NonEmpty
+import qualified Data.Map.Strict            as Map
 import qualified Data.Maybe
+import qualified Data.Maybe                 as Maybe
 import qualified Data.Text
-import qualified Data.Text.IO        as Text.IO
+import qualified Data.Text.Encoding
+import qualified Data.Text.IO               as Text.IO
+import qualified Data.Text.Lazy             as Text.Lazy
 import qualified Dhall.Core
 import qualified Lucid
 import qualified Path
 import qualified Path.IO
+import qualified System.FilePath            as FilePath
 import qualified Text.Megaparsec
 
 -- $setup
 -- >>> :set -XQuasiQuotes
--- >>> import Path (absdir, absfile)
+-- >>> import Path (reldir)
 
--- | Represents a file that can be rendered as documentation
+-- | The result of the doc-generator pure component
+data GeneratedDocs a = GeneratedDocs [DocsGenWarning] a
+
+instance Functor GeneratedDocs where
+    fmap f (GeneratedDocs w a) = GeneratedDocs w (f a)
+
+instance Applicative GeneratedDocs where
+    pure = GeneratedDocs []
+
+    GeneratedDocs w f <*> GeneratedDocs w' a = GeneratedDocs (w <> w') (f a)
+
+instance Monad GeneratedDocs where
+    GeneratedDocs w a >>= f =
+        let GeneratedDocs w' b = f a
+            in GeneratedDocs (w <> w') b
+
+instance MonadWriter [DocsGenWarning] GeneratedDocs where
+    tell w = GeneratedDocs w ()
+
+    listen (GeneratedDocs w a) = GeneratedDocs w (a, w)
+    pass (GeneratedDocs w (a, f)) = GeneratedDocs (f w) a
+
+data DocsGenWarning
+    = InvalidDhall (Text.Megaparsec.ParseErrorBundle Text Void)
+    | InvalidMarkdown MarkdownParseError
+
+instance Show DocsGenWarning where
+    show (InvalidDhall err) =
+        "\n\ESC[1;33mWarning\ESC[0m: Invalid Input\n\n" <>
+        Text.Megaparsec.errorBundlePretty err <>
+        "... documentation won't be generated for this file"
+
+    show (InvalidMarkdown MarkdownParseError{..}) =
+        "\n\ESC[1;33mWarning\ESC[0m: Header comment is not markdown\n\n" <>
+        Text.Megaparsec.errorBundlePretty unwrap <>
+        "The original non-markdown text will be pasted in the documentation"
+
+-- | Represents a Dhall file that can be rendered as documentation.
+--   If you'd like to improve or add features to a .dhall documentation page,
+--   add that extra information here.
 data DhallFile = DhallFile
-    { path :: Path Abs File             -- ^ Path of the file
+    { path :: Path Rel File             -- ^ Path of the file
     , expr :: Expr Src Import           -- ^ File contents
     , header :: Header                  -- ^ Parsed `Header` of the file
     , mType :: Maybe (Expr Void Import) -- ^ Type of the parsed expression,
                                         --   extracted from the source code
+    , examples :: [Expr Void Import]    -- ^ Examples extracted from assertions
+                                        --   in the file
     }
 
-{-| Fetches a list of all dhall files in a directory along with its `Header`.
-    This is not the same as finding all files that ends in @.dhall@,
-    but finds all files that successfully parses as a valid dhall file.
+{-| Takes a list of files paths with their contents and returns the list of
+    valid `DhallFile`s.
 
-    The reason it doesn't guide the search by its extension is because of the
-    dhall <https://prelude.dhall-lang.org Prelude>.
-    That package doesn't ends any of their files in @.dhall@.
+    Returned files contains all the information to be used on `Html ()`
+    generation.
+
+    The result is sorted by `path`
 -}
-getAllDhallFiles
-    :: Path Abs Dir -- ^ Base directory to do the search
-    -> IO [DhallFile]
-getAllDhallFiles baseDir = do
-    files <- filter hasDhallExtension . snd <$> Path.IO.listDirRecur baseDir
-    Data.Maybe.catMaybes <$> mapM readDhall files
+getAllDhallFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [DhallFile]
+getAllDhallFiles = emitErrors . map toDhallFile . foldr validFiles [] . filter hasDhallExtension
   where
-    hasDhallExtension :: Path Abs File -> Bool
-    hasDhallExtension absFile = case Path.splitExtension absFile of
+    hasDhallExtension :: (Path Rel File, a) -> Bool
+    hasDhallExtension (absFile, _) = case Path.splitExtension absFile of
         Nothing -> False
         Just (_, ext) -> ext == ".dhall"
 
-    readDhall :: Path Abs File -> IO (Maybe DhallFile)
-    readDhall absFile = do
-        let filePath = Path.fromAbsFile absFile
-        contents <- Text.IO.readFile filePath
-        case exprAndHeaderFromText filePath contents of
-            Right (header, expr) ->
-                return $ Just DhallFile
-                                { path = absFile
-                                , expr, header
-                                , mType = extractTypeIfInSource (denote expr :: Expr Void Import)
-                                }
-            Left ParseError{..} -> do
-                putStrLn $ showDhallParseError unwrap
-                return Nothing
+    validFiles :: (Path Rel File, ByteString) -> [(Path Rel File, Text)] -> [(Path Rel File, Text)]
+    validFiles (relFile, content) xs = case Data.Text.Encoding.decodeUtf8' content of
+        Left _ -> xs
+        Right textContent -> (relFile, textContent) : xs
 
-    showDhallParseError :: Text.Megaparsec.ParseErrorBundle Text Void -> String
-    showDhallParseError err =
-        "\n\ESC[1;33mWarning\ESC[0m: Invalid Input\n\n" <>
-        Text.Megaparsec.errorBundlePretty err <>
-        "... documentation won't be generated for this file"
+    toDhallFile :: (Path Rel File, Text) -> Either DocsGenWarning DhallFile
+    toDhallFile (relFile, contents) =
+        case exprAndHeaderFromText (Path.fromRelFile relFile) contents of
+            Right (header, expr) ->
+                let denoted = denote expr :: Expr Void Import in
+                Right DhallFile
+                    { path = relFile
+                    , expr, header
+                    , mType = extractTypeIfInSource denoted
+                    , examples = examplesFromAssertions denoted
+                    }
+            Left ParseError{..} ->
+                Left $ InvalidDhall unwrap
+
+    emitErrors :: [Either DocsGenWarning DhallFile] -> GeneratedDocs [DhallFile]
+    emitErrors errorsOrDhallFiles = do
+        let (errors, dhallFiles) = Data.Either.partitionEithers errorsOrDhallFiles
+        Writer.tell errors
+        let sortedDhallFiles = Data.List.sortBy (compare `on` path) dhallFiles
+        return sortedDhallFiles
+
+    bindings :: Expr Void Import -> [Binding Void Import]
+    bindings expr = case expr of
+        Let b@Binding{} e ->
+            let MultiLet bs _ = Dhall.Core.multiLet b e
+            in NonEmpty.toList bs
+        _ -> []
+
 
     extractTypeIfInSource :: Expr Void Import -> Maybe (Expr Void Import)
     extractTypeIfInSource expr = do
@@ -128,90 +199,69 @@ getAllDhallFiles baseDir = do
 
             Only the "global" level of the file is analyzed
         -}
-
         getLetBindingsWithName :: Text -> [Binding Void Import]
-        getLetBindingsWithName name = filter bindName $ reverse bindings
+        getLetBindingsWithName name = filter bindName $ reverse $ bindings expr
           where
-            bindings :: [Binding Void Import]
-            bindings = case expr of
-                Let b@Binding{} e ->
-                    let MultiLet bs _ = Dhall.Core.multiLet b e
-                    in NonEmpty.toList bs
-                _ -> []
             bindName (Binding _ x _ _ _ _) = x == name
 
 
         getLetBindingWithIndex :: Int -> [Binding Void Import] -> Maybe (Binding Void Import)
-        getLetBindingWithIndex i bindings =
-            case drop i bindings of
+        getLetBindingWithIndex i bs =
+            case drop i bs of
                 [] -> Nothing
                 binding : _ -> Just binding
 
-{-| Calculate the relative path needed to access files on the first argument
-    relative from the second argument.
+    examplesFromAssertions :: Expr Void Import -> [Expr Void Import]
+    examplesFromAssertions expr = Maybe.mapMaybe fromAssertion values
+      where
+        values :: [Expr Void Import]
+        values = map value $ bindings expr
 
-    The second argument needs to be a child of the first, otherwise it will
-    loop forever
+        fromAssertion :: Expr Void Import -> Maybe (Expr Void Import)
+        fromAssertion (Assert e) =  Just e
+        fromAssertion _ = Nothing
 
-    Examples:
+{-| Given a relative path, returns as much @..\/@ misdirections as needed
+    to go to @.@
 
->>> resolveRelativePath [absdir|/a/b/c/|] [absdir|/a/b/c/d/e|]
-"../../"
->>> resolveRelativePath [absdir|/a/|] [absdir|/a/|]
+>>> resolveRelativePath [reldir|.|]
 ""
+>>> resolveRelativePath [reldir|a|]
+"../"
+>>> resolveRelativePath [reldir|a/b/c|]
+"../../../"
 -}
-resolveRelativePath :: Path Abs Dir -> Path Abs Dir -> FilePath
-resolveRelativePath outDir currentDir =
-    if outDir == currentDir then ""
-    else "../" <> resolveRelativePath outDir (Path.parent currentDir)
+resolveRelativePath :: Path Rel Dir -> FilePath
+resolveRelativePath currentDir =
+    case FilePath.dropTrailingPathSeparator $ Path.fromRelDir currentDir of
+        "." -> ""
+        _ -> "../" <> resolveRelativePath (Path.parent currentDir)
 
-{-| Saves the HTML file from the input package to the output destination
+{-| Generates `Text` from the html representation of a `DhallFile`
 -}
-saveHtml
-    :: Path Abs Dir         -- ^ Input package directory.
-                            --   Used to remove the prefix from all other dhall
-                            --   files in the package
-    -> Path Abs Dir         -- ^ Output directory
-    -> Text                 -- ^ Package name
+makeHtml
+    :: Text                 -- ^ Package name
     -> DhallFile            -- ^ Parsed header
-    -> IO (Path Abs File)   -- ^ Output path file
-saveHtml inputAbsDir outputAbsDir packageName DhallFile {path = absFile, ..} = do
-    strippedFilePath <- Path.stripProperPrefix inputAbsDir absFile
-    htmlOutputFile <- do
-        strippedPathWithExt <- addHtmlExt strippedFilePath
-        return (outputAbsDir </> strippedPathWithExt)
-
-    let htmlOutputDir = Path.parent htmlOutputFile
-
-    Path.IO.ensureDir htmlOutputDir
-
-    let relativeResourcesPath = resolveRelativePath outputAbsDir htmlOutputDir
-
+    -> GeneratedDocs Text
+makeHtml packageName DhallFile {..} = do
+    let relativeResourcesPath = resolveRelativePath $ Path.parent path
     let strippedHeader = stripCommentSyntax header
-    headerAsHtml <- case markdownToHtml absFile strippedHeader of
-        Left err -> do
-            putStrLn $ markdownParseErrorAsWarning err
-            return $ Lucid.toHtml strippedHeader
-        Right html -> return html
+    headerAsHtml <-
+        case markdownToHtml path strippedHeader of
+            Left err -> do
+                Writer.tell [InvalidMarkdown err]
+                return $ Lucid.toHtml strippedHeader
+            Right html -> return html
 
-    Lucid.renderToFile (Path.fromAbsFile htmlOutputFile)
-        $ dhallFileToHtml
-            strippedFilePath
+    let htmlAsText = Text.Lazy.toStrict $ Lucid.renderText $ dhallFileToHtml
+            path
             expr
+            examples
             headerAsHtml
             DocParams { relativeResourcesPath, packageName }
 
-    return htmlOutputFile
+    return htmlAsText
   where
-    addHtmlExt :: Path b File -> IO (Path b File)
-    addHtmlExt = Path.addExtension ".html"
-
-    markdownParseErrorAsWarning :: MarkdownParseError -> String
-    markdownParseErrorAsWarning MarkdownParseError{..} =
-        "\n\ESC[1;33mWarning\ESC[0m\n\n" <>
-        Text.Megaparsec.errorBundlePretty unwrap <>
-        "The original non-markdown text will be pasted in the documentation"
-
     stripCommentSyntax :: Header -> Text
     stripCommentSyntax (Header h)
         | Just s <- Data.Text.stripPrefix "--" strippedHeader
@@ -223,90 +273,132 @@ saveHtml inputAbsDir outputAbsDir packageName DhallFile {path = absFile, ..} = d
       where
         strippedHeader = Data.Text.strip h
 
+{-| Create an @index.html@ file on each available folder in the input.
 
-{-| Create an index.html file on each folder available in the second argument
-    that lists all the contents on that folder.
+    Each @index.html@ lists the files and directories of its directory. Listed
+    directories will be compacted as much as it cans to improve readability.
 
-    For example,
+    For example, take the following directory-tree structure
 
-    @
-    createIndexes [absdir|/|]
-        [ [absfile|\/a\/b.txt|]
-        , [absfile|\/a\/c/b.txt|]
-        , [absfile|\/a\/c.txt"|]
-        ]
-    @
+    > .
+    > ├── a
+    > │   └── b
+    > │       └── c
+    > │           └── b.dhall
+    > └── a.dhall
 
-    ... will create two index.html files:
-
-    1. @\/a\/index.html@, that will list the @\/a\/b.txt@ and
-    @\/a\/c.txt@ files
-    2. @\/a\/c\/index.html@ that will list the @\/a\/c\/b.txt@ file
-
+    To improve navigation, the index at @./index.html@ should list
+    @a/b/c@ and no @index.html@ should be generated inside of `a/` or
+    `a/b/`, but yes on `a/b/c/` in the last one there is the @b.dhall@ file
 -}
-createIndexes
-    :: Path Abs Dir                 -- ^ Directory where index.html file will be saved. Used
-                                    --   to link the css resources. It should be a prefix for
-                                    --   each @Path Abs File@ on the second argument
-    -> [(Path Abs File, DhallFile)] -- ^ Html files generated by the tool
-    -> Text                         -- ^ Package name
-    -> IO ()
-createIndexes outputPath htmlFiles packageName = do
-    let toMap file = Map.singleton (Path.parent $ fst file) [file]
-    let filesGroupedByDir = Map.unionsWith (<>) $ map toMap htmlFiles
+createIndexes :: Text -> [DhallFile] -> [(Path Rel File, Text)]
+createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
+  where
+    -- Files grouped by their directory
+    dirToFilesMap :: Map (Path Rel Dir) [DhallFile]
+    dirToFilesMap = Map.unionsWith (<>) $ map toMap files
+      where
+        toMap :: DhallFile -> Map (Path Rel Dir) [DhallFile]
+        toMap dhallFile =
+            Map.singleton (Path.parent $ path dhallFile) [dhallFile]
 
-    let listDirRel dir = do
-            dirs <- fst <$> Path.IO.listDir dir
-            mapM (Path.stripProperPrefix dir) dirs
+    {-  This is used to compute the list of exported packages on each folder.
+        We try to compress the folders as much as we can. See `createIndexes`
+        documentation to get more information.
+    -}
+    dirToDirsMap :: Map (Path Rel Dir) [Path Rel Dir]
+    dirToDirsMap = Map.map removeHereDir $ foldl go initialMap dirs
+      where
+        -- > removeHeredir [$(mkRelDir "a"), $(mkRelDir ".")]
+        --   [$(mkRelDir "a")]
+        removeHereDir :: [Path Rel Dir] -> [Path Rel Dir]
+        removeHereDir = filter f
+          where
+            f :: Path Rel Dir -> Bool
+            f reldir = Path.parent reldir /= reldir
 
-    let createIndex :: Path Abs Dir -> [(Path Abs File, DhallFile)] -> IO ()
-        createIndex index files = do
-            indexFile <- Path.fromAbsFile . (index </>) <$> Path.parseRelFile "index.html"
-            indexTitle <-
-                if outputPath == index then return $(Path.mkRelDir ".")
-                else Path.stripProperPrefix outputPath index
-            indexList <- Control.Monad.forM files $ \(fileOutputPath, dhallFile) -> do
-                path <- Path.filename <$> Path.stripProperPrefix outputPath fileOutputPath
-                return (path, mType dhallFile)
-            dirList <- listDirRel index
+        dirs :: [Path Rel Dir]
+        dirs = Map.keys dirToFilesMap
 
-            let relativeResourcesPath = resolveRelativePath outputPath index
-            Lucid.renderToFile indexFile $
-                indexToHtml
-                    indexTitle
-                    indexList
-                    dirList
-                    DocParams { relativeResourcesPath, packageName }
+        initialMap :: Map (Path Rel Dir) [Path Rel Dir]
+        initialMap = Map.fromList $ map (,[]) dirs
 
-    _ <- Map.traverseWithKey createIndex filesGroupedByDir
-    return ()
+        go :: Map (Path Rel Dir) [Path Rel Dir] -> Path Rel Dir -> Map (Path Rel Dir) [Path Rel Dir]
+        go dirMap d = Map.adjust ([d] <>) (key $ Path.parent d) dirMap
+          where
+            key :: Path Rel Dir -> Path Rel Dir
+            key dir = if dir `Map.member` dirMap then dir else key $ Path.parent dir
 
--- | Generate all of the docs for a package
+    dirToDirsAndFilesMapAssocs :: [(Path Rel Dir, ([DhallFile], [Path Rel Dir]))]
+    dirToDirsAndFilesMapAssocs = Map.assocs $ Map.mapWithKey f dirToFilesMap
+      where
+        f :: Path Rel Dir -> [DhallFile] -> ([DhallFile], [Path Rel Dir])
+        f dir dhallFiles = case dirToDirsMap Map.!? dir of
+            Nothing -> fileAnIssue "dirToDirsAndFilesMapAssocs"
+            Just dirs -> (dhallFiles, dirs)
+
+    toIndex :: (Path Rel Dir, ([DhallFile], [Path Rel Dir])) -> (Path Rel File, Text)
+    toIndex (indexDir, (dhallFiles, dirs)) =
+        (indexDir </> $(Path.mkRelFile "index.html"), Text.Lazy.toStrict $ Lucid.renderText html)
+      where
+        html = indexToHtml
+            indexDir
+            (map (\DhallFile{..} -> (stripPrefix $ addHtmlExt path, mType)) dhallFiles)
+            (map stripPrefix dirs)
+            DocParams { relativeResourcesPath = resolveRelativePath indexDir, packageName }
+
+        stripPrefix :: Path Rel a -> Path Rel a
+        stripPrefix relpath =
+            if Path.toFilePath relpath == Path.toFilePath indexDir then relpath
+            else Data.Maybe.fromMaybe (fileAnIssue "Bug+with+stripPrefix")
+                $ Path.stripProperPrefix indexDir relpath
+
+-- | Takes a file and adds an @.html@ file extension to it
+addHtmlExt :: Path Rel File -> Path Rel File
+addHtmlExt relFile =
+    Data.Maybe.fromMaybe (fileAnIssue "addHtmlExt") $ Path.addExtension ".html" relFile
+
+-- | If you're wondering the GitHub query params for issue creation:
+-- https://docs.github.com/en/github/managing-your-work-on-github/about-automation-for-issues-and-pull-requests-with-query-parameters
+fileAnIssue :: Text -> a
+fileAnIssue titleName =
+    error $ "\ESC[1;31mError\ESC[0mDocumentation generator bug\n\n" <>
+
+            "Explanation: This error message means that there is a bug in the " <>
+            "Dhall Documentation generator. You didn't did anything wrong, but " <>
+            "if you would like to see this problem fixed then you should report " <>
+            "the bug at:\n\n" <>
+
+            "https://github.com/dhall-lang/dhall-haskell/issues/new?labels=dhall-docs,bug\n\n" <>
+
+            "explaining your issue and add \"" <> Data.Text.unpack titleName <> "\" as error code " <>
+            "so we can find the proper location in the source code where the error happened\n\n" <>
+
+            "Please, also include your package in the issue. It can be in:\n\n" <>
+            "* A compressed archive (zip, tar, etc)\n" <>
+            "* A git repository, preferably with a commit reference"
+
+{-| Generate all of the docs for a package. This function does all the `IO ()`
+    related tasks to call `generateDocsPure`
+-}
 generateDocs
     :: Path Abs Dir -- ^ Input directory
     -> Path Abs Dir -- ^ Link to be created to the generated documentation
     -> Text         -- ^ Package name, used in some HTML titles
     -> IO ()
 generateDocs inputDir outLink packageName = do
-
-    dhallFilesAndHeaders <- getAllDhallFiles inputDir
-    if null dhallFilesAndHeaders then
+    (_, absFiles) <- Path.IO.listDirRecur inputDir
+    contents <- mapM (Data.ByteString.readFile . Path.fromAbsFile) absFiles
+    strippedFiles <- mapM (Path.stripProperPrefix inputDir) absFiles
+    let GeneratedDocs warnings docs = generateDocsPure packageName $ zip strippedFiles contents
+    mapM_ print warnings
+    if null docs then
         putStrLn $
             "No documentation was generated because no file with .dhall " <>
             "extension was found"
     else Path.IO.withSystemTempDir "dhall-docs" $ \tempDir -> do
-        Path.IO.ensureDir tempDir
-        generatedHtmlFiles <-
-            flip zip dhallFilesAndHeaders <$>
-                mapM (saveHtml inputDir tempDir packageName) dhallFilesAndHeaders
-        createIndexes tempDir generatedHtmlFiles packageName
-
-        dataDir <- getDataDir
-        Control.Monad.forM_ dataDir $ \(filename, contents) -> do
-            let finalPath = Path.fromAbsFile $ tempDir </> filename
-            Data.ByteString.writeFile finalPath contents
-
-        Path.IO.ensureDir $ Path.parent outLink
+        copyDataDir tempDir
+        mapM_ (writeGenFile tempDir) docs
 
         outputHash <- makeHashForDirectory tempDir
         outDir <- Applicative.liftA2 (</>)
@@ -316,3 +408,35 @@ generateDocs inputDir outLink packageName = do
 
         Path.IO.copyDirRecur tempDir outDir
         Path.IO.createDirLink outDir outLink
+  where
+    writeGenFile :: Path Abs Dir -> (Path Rel File, Text) -> IO ()
+    writeGenFile outDir (relFile, contents) = do
+        Path.IO.ensureDir (outDir </> Path.parent relFile)
+        Text.IO.writeFile (Path.fromAbsFile $ outDir </> relFile) contents
+
+    copyDataDir :: Path Abs Dir -> IO ()
+    copyDataDir outDir = do
+        dataDir <- getDataDir
+        Control.Monad.forM_ dataDir $ \(filename, contents) -> do
+            let finalPath = Path.fromAbsFile $ outDir </> filename
+            Data.ByteString.writeFile finalPath contents
+
+{-| Generates all the documentation of dhall package in a pure way i.e.
+    without an `IO` context. This let you generate documentation from a list of
+    dhall-files without saving them to the filesystem.
+
+    If you want the `IO` version of this function, check `generateDocs`
+-}
+generateDocsPure
+    :: Text                    -- ^ Package name
+    -> [(Path Rel File, ByteString)] -- ^ (Input file, contents)
+    -> GeneratedDocs [(Path Rel File, Text)]
+generateDocsPure packageName inputFiles = go
+  where
+    go :: GeneratedDocs [(Path Rel File, Text)]
+    go = do
+        dhallFiles <- getAllDhallFiles inputFiles
+        htmls <- mapM (makeHtml packageName) dhallFiles
+        let indexes = createIndexes packageName dhallFiles
+        return (zip (map (addHtmlExt . path) dhallFiles) htmls <> indexes)
+

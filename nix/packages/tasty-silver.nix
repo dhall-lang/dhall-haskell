@@ -5,8 +5,8 @@
 }:
 mkDerivation {
   pname = "tasty-silver";
-  version = "3.1.13";
-  sha256 = "da5d755276652b75aa2f8876f2b62f81bfa368f12c17dbd018dcd2cde4eba9e9";
+  version = "3.1.15";
+  sha256 = "1ffd18e2002a3a3e79ff5c01102ed61d031ee9323a685f6a5f66c9820b57311e";
   libraryHaskellDepends = [
     ansi-terminal async base bytestring containers deepseq directory
     filepath mtl optparse-applicative process process-extras regex-tdfa

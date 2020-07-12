@@ -12,7 +12,6 @@ let
        || base == "dist"
        || base == "result"
        || base == ".git"
-       || base == "index.html"
        );
 
   filteredSource = builtins.filterSource predicate src;
