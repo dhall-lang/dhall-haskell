@@ -43,7 +43,7 @@ data Options
         { packageDir :: FilePath         -- ^ Directory where your package resides
         , docLink :: FilePath            -- ^ Link to the generated documentation
         , resolvePackageName :: Path Abs Dir -> Text
-        , ascii :: CharacterSet
+        , characterSet :: CharacterSet
         }
     | Version
 
@@ -131,7 +131,6 @@ defaultMain = \case
 
         resolvedDocLink <- Path.IO.resolveDir' docLink
         let packageName = resolvePackageName resolvedPackageDir
-        let characterSet = ascii
         generateDocs resolvedPackageDir resolvedDocLink packageName characterSet
     Version ->
         putStrLn (showVersion Meta.version)
