@@ -43,7 +43,7 @@ data Options
         { packageDir :: FilePath         -- ^ Directory where your package resides
         , docLink :: FilePath            -- ^ Link to the generated documentation
         , resolvePackageName :: Path Abs Dir -> Text
-        , ascii :: Bool
+        , ascii :: CharacterSet
         }
     | Version
 
@@ -65,7 +65,7 @@ parseOptions =
             )
        <> Options.Applicative.value "./docs" )
     <*> parsePackageNameResolver
-    <*> switch "ascii" "Format code using only ASCII syntax"
+    <*> parseAscii
     ) <|> parseVersion
   where
     switch name description =
@@ -73,6 +73,11 @@ parseOptions =
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
             )
+
+    parseAscii = fmap f (switch "ascii" "Format code using only ASCII syntax")
+      where
+        f True  = ASCII
+        f False = Unicode
 
     parseVersion =
         Options.Applicative.flag'
@@ -126,9 +131,7 @@ defaultMain = \case
 
         resolvedDocLink <- Path.IO.resolveDir' docLink
         let packageName = resolvePackageName resolvedPackageDir
-        let characterSet = case ascii of
-                True  -> ASCII
-                False -> Unicode
+        let characterSet = ascii
         generateDocs resolvedPackageDir resolvedDocLink packageName characterSet
     Version ->
         putStrLn (showVersion Meta.version)
