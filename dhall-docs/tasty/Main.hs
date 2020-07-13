@@ -7,6 +7,7 @@ module Main (main) where
 import Data.ByteString (ByteString)
 import Data.Map.Strict (Map)
 import Data.Text       (Text)
+import Dhall.Pretty    (CharacterSet(..))
 import Dhall.Docs.Core
 import Path            (Dir, File, Path, Rel, (</>))
 import Test.Tasty      (TestTree)
@@ -31,7 +32,7 @@ main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
     input <- getPackageContents
-    let GeneratedDocs _ docs = generateDocsPure "test-package" input
+    let GeneratedDocs _ docs = generateDocsPure "test-package" Unicode input
     let docsMap = Map.fromList docs
     Silver.defaultMain $ testTree docsMap
 
