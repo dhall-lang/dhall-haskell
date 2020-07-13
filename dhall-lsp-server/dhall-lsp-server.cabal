@@ -2,7 +2,7 @@ name:           dhall-lsp-server
 Version:        1.0.8
 cabal-version:  1.12
 synopsis:       Language Server Protocol (LSP) server for Dhall
-homepage:       https://github.com/dhall-lang/dhall-haskell/dhall-lsp-server#readme
+homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server#readme
 bug-reports:    https://github.com/dhall-lang/dhall-haskell/issues
 author:         panaeon
 maintainer:     Gabriel Gonzalez
