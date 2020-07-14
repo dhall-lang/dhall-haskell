@@ -579,7 +579,9 @@ idempotenceTest :: CharacterSet -> Header -> Expr Src Import -> Property
 idempotenceTest characterSet header expr =
     let once = format characterSet (header, expr)
     in case Parser.exprAndHeaderFromText mempty once of
-        Right (format characterSet -> twice) -> once === twice
+        Right (format characterSet -> twice) -> case Parser.exprAndHeaderFromText mempty twice of
+            Right (format characterSet -> thrice) -> twice === thrice
+            Left _ -> Test.QuickCheck.discard
         Left _ -> Test.QuickCheck.discard
 
 tests :: TestTree
