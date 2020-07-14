@@ -22,11 +22,12 @@ Description:
     .
     Read "Dhall.Tutorial" to learn how to use this library
 Category: Compiler
+Data-Files:
+    man/dhall.1
 Extra-Source-Files:
     benchmark/deep-nested-large-record/*.dhall
     benchmark/examples/*.dhall
     benchmark/examples/normalize/*.dhall
-    man/dhall.1
     CHANGELOG.md
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
