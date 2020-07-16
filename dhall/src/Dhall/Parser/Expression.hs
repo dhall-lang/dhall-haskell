@@ -474,6 +474,8 @@ parsers embedded = Parsers {..}
             alternative04 = (do
                 _openBrace
 
+                -- If it fails to parse the _comma we need to recover the
+                -- whitespace that could be prefix for a key
                 _ <- optional $ try (whitespace *> _comma)
 
                 a <- recordTypeOrLiteral
@@ -754,6 +756,8 @@ parsers embedded = Parsers {..}
                 , emptyRecordType
                 ]
 
+    -- if this alternative fails, we need to recover the consumed whitespace
+    -- that's the reason we use `try` here
     emptyRecordLiteral = try $ do
         whitespace
         _equal
@@ -763,10 +767,12 @@ parsers embedded = Parsers {..}
         whitespace
         return (RecordLit mempty)
 
+    -- Reason of using `try` here is analogue to `emptyRecordLiteral`
     emptyRecordType = try $ do
         whitespace
         return (Record mempty)
 
+    -- Reason of using `try` here is analogue to `emptyRecordLiteral`
     nonEmptyRecordTypeOrLiteral = try $ do
             let nonEmptyRecordType = do
                     (src0, a) <- try $ do
