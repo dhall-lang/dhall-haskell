@@ -187,7 +187,7 @@ import qualified Data.Text.Lazy
 import qualified Data.Vector
 import qualified Data.Void
 import qualified Dhall.Context
-import qualified Dhall.Core
+import qualified Dhall.Core as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
@@ -385,7 +385,7 @@ sourceName k s =
 data EvaluateSettings = EvaluateSettings
   { _substitutions   :: Dhall.Substitution.Substitutions Src Void
   , _startingContext :: Dhall.Context.Context (Expr Src Void)
-  , _normalizer      :: Maybe (Dhall.Core.ReifiedNormalizer Void)
+  , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -428,11 +428,11 @@ substitutions = evaluateSettings . l
 -- @since 1.16
 normalizer
   :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Maybe (Dhall.Core.ReifiedNormalizer Void))
+  => LensLike' f s (Maybe (Core.ReifiedNormalizer Void))
 normalizer = evaluateSettings . l
   where
     l :: (Functor f)
-      => LensLike' f EvaluateSettings (Maybe (Dhall.Core.ReifiedNormalizer Void))
+      => LensLike' f EvaluateSettings (Maybe (Core.ReifiedNormalizer Void))
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
 
 -- | @since 1.16
@@ -587,7 +587,7 @@ inputHelper
     -> IO (Expr Src Void)
     -- ^ The fully normalized AST
 inputHelper annotate settings txt = do
-    expr  <- Dhall.Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
+    expr  <- Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
 
     let InputSettings {..} = settings
 
@@ -604,12 +604,12 @@ inputHelper annotate settings txt = do
 
     let substituted = Dhall.Substitution.substitute expr' $ view substitutions settings
     let annot = annotate substituted
-    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    pure (Dhall.Core.normalizeWith (view normalizer settings) substituted)
+    _ <- Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
+    pure (Core.normalizeWith (view normalizer settings) substituted)
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for
---   making the function `Dhall.Core.normalizeWith` easier to use.
+--   making the function `Core.normalizeWith` easier to use.
 --
 --   For other use cases, use `input` from `Dhall` module. It will give you
 --   a much better user experience.
@@ -622,7 +622,7 @@ rawInput
     -> f a
     -- ^ The decoded value in Haskell
 rawInput (Decoder {..}) expr = do
-    case extract (Dhall.Core.normalize expr) of
+    case extract (Core.normalize expr) of
         Success x  -> pure x
         Failure _e -> empty
 
@@ -922,7 +922,7 @@ functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
   where
     normalizer_ = Just (getInputNormalizer inputNormalizer)
 
-    extractOut e = pure (\i -> case extractIn (Dhall.Core.normalizeWith normalizer_ (App e (embed i))) of
+    extractOut e = pure (\i -> case extractIn (Core.normalizeWith normalizer_ (App e (embed i))) of
         Success o  -> o
         Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
 
@@ -1091,15 +1091,15 @@ pairFromMapEntry :: Decoder k -> Decoder v -> Decoder (k, v)
 pairFromMapEntry k v = Decoder extractOut expectedOut
   where
     extractOut (RecordLit kvs)
-        | Just key <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "mapKey" kvs
-        , Just value <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "mapValue" kvs
+        | Just key <- Core.recordFieldValue <$> Dhall.Map.lookup "mapKey" kvs
+        , Just value <- Core.recordFieldValue <$> Dhall.Map.lookup "mapValue" kvs
             = liftA2 (,) (extract k key) (extract v value)
     extractOut expr = typeError expectedOut expr
 
     expectedOut = do
         k' <- expected k
         v' <- expected v
-        pure $ Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+        pure $ Record $ Core.makeRecordField <$> Dhall.Map.fromList
             [ ("mapKey", k')
             , ("mapValue", v')]
 
@@ -1143,15 +1143,15 @@ pair l r = Decoder extractOut expectedOut
   where
     extractOut expr@(RecordLit fields) =
       (,) <$> Data.Maybe.maybe (typeError expectedOut expr) (extract l)
-                (Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "_1" fields)
+                (Core.recordFieldValue <$> Dhall.Map.lookup "_1" fields)
           <*> Data.Maybe.maybe (typeError expectedOut expr) (extract r)
-                (Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "_2" fields)
+                (Core.recordFieldValue <$> Dhall.Map.lookup "_2" fields)
     extractOut expr = typeError expectedOut expr
 
     expectedOut = do
         l' <- expected l
         r' <- expected r
-        pure $ Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+        pure $ Record $ Core.makeRecordField <$> Dhall.Map.fromList
             [ ("_1", l')
             , ("_2", r')]
 
@@ -1365,10 +1365,10 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
             extract2 expr = fmap resultToFix (Dhall.extract (autoWith inputNormalizer) expr)
 
             rename a b expr
-                | a /= b    = Dhall.Core.subst (V a 0) (Var (V b 0)) (Dhall.Core.shift 1 (V b 0) expr)
+                | a /= b    = Core.subst (V a 0) (Var (V b 0)) (Core.shift 1 (V b 0) expr)
                 | otherwise = expr
 
-        expected = (\x -> Pi "result" (Const Dhall.Core.Type) (Pi "Make" (Pi "_" x "result") "result"))
+        expected = (\x -> Pi "result" (Const Core.Type) (Pi "Make" (Pi "_" x "result") "result"))
             <$> Dhall.expected (autoWith inputNormalizer :: Decoder (f (Result f)))
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
@@ -1407,12 +1407,12 @@ data InterpretOptions = InterpretOptions
 --   to normalize the function input before marshaling the input into a
 --   Dhall expression
 newtype InputNormalizer = InputNormalizer
-  { getInputNormalizer :: Dhall.Core.ReifiedNormalizer Void }
+  { getInputNormalizer :: Core.ReifiedNormalizer Void }
 
 -- | Default normalization-related settings (no custom normalization)
 defaultInputNormalizer :: InputNormalizer
 defaultInputNormalizer = InputNormalizer
- { getInputNormalizer = Dhall.Core.ReifiedNormalizer (const (pure Nothing)) }
+ { getInputNormalizer = Core.ReifiedNormalizer (const (pure Nothing)) }
 
 {-| This type specifies how to model a Haskell constructor with 1 field in
     Dhall
@@ -1476,16 +1476,16 @@ unsafeExpectUnion
 unsafeExpectUnion _ (Union kts) =
     kts
 unsafeExpectUnion name expression =
-    Dhall.Core.internalError
-        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+    Core.internalError
+        (name <> ": Unexpected constructor: " <> Core.pretty expression)
 
 unsafeExpectRecord
     :: Text -> Expr Src Void -> Dhall.Map.Map Text (RecordField Src Void)
 unsafeExpectRecord _ (Record kts) =
     kts
 unsafeExpectRecord name expression =
-    Dhall.Core.internalError
-        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+    Core.internalError
+        (name <> ": Unexpected constructor: " <> Core.pretty expression)
 
 unsafeExpectUnionLit
     :: Text
@@ -1496,16 +1496,16 @@ unsafeExpectUnionLit _ (Field (Union _) k) =
 unsafeExpectUnionLit _ (App (Field (Union _) k) v) =
     (k, Just v)
 unsafeExpectUnionLit name expression =
-    Dhall.Core.internalError
-        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+    Core.internalError
+        (name <> ": Unexpected constructor: " <> Core.pretty expression)
 
 unsafeExpectRecordLit
     :: Text -> Expr Src Void -> Dhall.Map.Map Text (RecordField Src Void)
 unsafeExpectRecordLit _ (RecordLit kvs) =
     kvs
 unsafeExpectRecordLit name expression =
-    Dhall.Core.internalError
-        (name <> ": Unexpected constructor: " <> Dhall.Core.pretty expression)
+    Core.internalError
+        (name <> ": Unexpected constructor: " <> Core.pretty expression)
 
 notEmptyRecordLit :: Expr s a -> Maybe (Expr s a)
 notEmptyRecordLit e = case e of
@@ -1596,14 +1596,14 @@ instance (GenericFromDhall t (f :*: g), Selector s, FromDhall a) => GenericFromD
 
         let ktsL = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedL
 
-        let expected = Record <$> (Dhall.Map.insert nameR . Dhall.Core.makeRecordField <$> expectedR <*> ktsL)
+        let expected = Record <$> (Dhall.Map.insert nameR . Core.makeRecordField <$> expectedR <*> ktsL)
 
         let extract expression = do
                 let die = typeError expected expression
 
                 case expression of
                     RecordLit kvs ->
-                        case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup nameR kvs of
+                        case Core.recordFieldValue <$> Dhall.Map.lookup nameR kvs of
                             Just expressionR ->
                                 liftA2 (:*:)
                                     (extractL expression)
@@ -1626,14 +1626,14 @@ instance (Selector s, FromDhall a, GenericFromDhall t (f :*: g)) => GenericFromD
 
         let ktsR = unsafeExpectRecord "genericAutoWithNormalizer (:*:)" <$> expectedR
 
-        let expected = Record <$> (Dhall.Map.insert nameL . Dhall.Core.makeRecordField <$> expectedL <*> ktsR)
+        let expected = Record <$> (Dhall.Map.insert nameL . Core.makeRecordField <$> expectedL <*> ktsR)
 
         let extract expression = do
                 let die = typeError expected expression
 
                 case expression of
                     RecordLit kvs ->
-                        case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup nameL kvs of
+                        case Core.recordFieldValue <$> Dhall.Map.lookup nameL kvs of
                             Just expressionL ->
                                 liftA2 (:*:)
                                     (fmap (M1 . K1) (extractL expressionL))
@@ -1670,8 +1670,8 @@ instance {-# OVERLAPPABLE #-} (Selector s1, Selector s2, FromDhall a1, FromDhall
         let Decoder extractR expectedR = autoWith inputNormalizer
 
         let expected = do
-                l <- Dhall.Core.makeRecordField <$> expectedL
-                r <- Dhall.Core.makeRecordField <$> expectedR
+                l <- Core.makeRecordField <$> expectedL
+                r <- Core.makeRecordField <$> expectedR
                 pure $ Record
                     (Dhall.Map.fromList
                         [ (nameL, l)
@@ -1687,8 +1687,8 @@ instance {-# OVERLAPPABLE #-} (Selector s1, Selector s2, FromDhall a1, FromDhall
                         case liftA2 (,) (Dhall.Map.lookup nameL kvs) (Dhall.Map.lookup nameR kvs) of
                             Just (expressionL, expressionR) ->
                                 liftA2 (:*:)
-                                    (fmap (M1 . K1) (extractL $ Dhall.Core.recordFieldValue expressionL))
-                                    (fmap (M1 . K1) (extractR $ Dhall.Core.recordFieldValue expressionR))
+                                    (fmap (M1 . K1) (extractL $ Core.recordFieldValue expressionL))
+                                    (fmap (M1 . K1) (extractR $ Core.recordFieldValue expressionR))
                             Nothing -> die
                     _ -> die
 
@@ -1716,7 +1716,7 @@ instance {-# OVERLAPPABLE #-} (Selector s, FromDhall a) => GenericFromDhall t (M
                     Smart | selName n == "" ->
                         expected'
                     _ ->
-                        Record . Dhall.Map.singleton name . Dhall.Core.makeRecordField <$> expected'
+                        Record . Dhall.Map.singleton name . Core.makeRecordField <$> expected'
 
         let extract0 expression = fmap (M1 . K1) (extract' expression)
 
@@ -1725,7 +1725,7 @@ instance {-# OVERLAPPABLE #-} (Selector s, FromDhall a) => GenericFromDhall t (M
 
                 case expression of
                     RecordLit kvs ->
-                        case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup name kvs of
+                        case Core.recordFieldValue <$> Dhall.Map.lookup name kvs of
                             Just subExpression ->
                                 fmap (M1 . K1) (extract' subExpression)
                             Nothing ->
@@ -2025,11 +2025,11 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
                 | Data.Map.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List (Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+        declaredOut = App List (Record $ Core.makeRecordField <$> Dhall.Map.fromList
                           [("mapKey", declaredK), ("mapValue", declaredV)])
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
-        recordPair (k, v) = RecordLit $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+        recordPair (k, v) = RecordLit $ Core.makeRecordField <$> Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)]
 
         Encoder embedK declaredK = injectWith inputNormalizer
@@ -2053,11 +2053,11 @@ instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
                 | HashMap.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List (Record $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+        declaredOut = App List (Record $ Core.makeRecordField <$> Dhall.Map.fromList
                           [("mapKey", declaredK), ("mapValue", declaredV)])
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . HashMap.toList
-        recordPair (k, v) = RecordLit $ Dhall.Core.makeRecordField <$> Dhall.Map.fromList
+        recordPair (k, v) = RecordLit $ Core.makeRecordField <$> Dhall.Map.fromList
                                 [("mapKey", embedK k), ("mapValue", embedV v)]
 
         Encoder embedK declaredK = injectWith inputNormalizer
@@ -2092,7 +2092,7 @@ instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
         let embed0 (M1 (K1 x)) = embed' x
 
         let embed1 (M1 (K1 x)) =
-                RecordLit (Dhall.Map.singleton name (Dhall.Core.makeRecordField $ embed' x))
+                RecordLit (Dhall.Map.singleton name (Core.makeRecordField $ embed' x))
 
         let embed =
                 case singletonConstructors of
@@ -2107,7 +2107,7 @@ instance (Selector s, ToDhall a) => GenericToDhall (M1 S s (K1 i a)) where
                     Smart | selName n == "" ->
                         declared'
                     _ ->
-                        Record (Dhall.Map.singleton name $ Dhall.Core.makeRecordField declared')
+                        Record (Dhall.Map.singleton name $ Core.makeRecordField declared')
 
         return (Encoder {..})
 
@@ -2261,12 +2261,12 @@ instance (GenericToDhall (f :*: g), Selector s, ToDhall a) => GenericToDhall ((f
         let Encoder embedR declaredR = injectWith inputNormalizer
 
         let embed (l :*: M1 (K1 r)) =
-                RecordLit (Dhall.Map.insert nameR (Dhall.Core.makeRecordField $ embedR r) mapL)
+                RecordLit (Dhall.Map.insert nameR (Core.makeRecordField $ embedR r) mapL)
               where
                 mapL =
                     unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedL l)
 
-        let declared = Record (Dhall.Map.insert nameR (Dhall.Core.makeRecordField declaredR) mapL)
+        let declared = Record (Dhall.Map.insert nameR (Core.makeRecordField declaredR) mapL)
               where
                 mapL = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredL
 
@@ -2284,12 +2284,12 @@ instance (Selector s, ToDhall a, GenericToDhall (f :*: g)) => GenericToDhall (M1
         Encoder embedR declaredR <- genericToDhallWithNormalizer inputNormalizer options
 
         let embed (M1 (K1 l) :*: r) =
-                RecordLit (Dhall.Map.insert nameL (Dhall.Core.makeRecordField $ embedL l) mapR)
+                RecordLit (Dhall.Map.insert nameL (Core.makeRecordField $ embedL l) mapR)
               where
                 mapR =
                     unsafeExpectRecordLit "genericToDhallWithNormalizer (:*:)" (embedR r)
 
-        let declared = Record (Dhall.Map.insert nameL (Dhall.Core.makeRecordField declaredL) mapR)
+        let declared = Record (Dhall.Map.insert nameL (Core.makeRecordField declaredL) mapR)
               where
                 mapR = unsafeExpectRecord "genericToDhallWithNormalizer (:*:)" declaredR
 
@@ -2310,13 +2310,13 @@ instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M
         let Encoder embedR declaredR = injectWith inputNormalizer
 
         let embed (M1 (K1 l) :*: M1 (K1 r)) =
-                RecordLit $ Dhall.Core.makeRecordField <$>
+                RecordLit $ Core.makeRecordField <$>
                     Dhall.Map.fromList
                         [ (nameL, embedL l), (nameR, embedR r) ]
 
 
         let declared =
-                Record $ Dhall.Core.makeRecordField <$>
+                Record $ Core.makeRecordField <$>
                     Dhall.Map.fromList
                         [ (nameL, declaredL)
                         , (nameR, declaredR) ]
@@ -2393,7 +2393,7 @@ record
         )
     ) = Decoder {..}
   where
-    expected = Record <$> traverse (fmap Dhall.Core.makeRecordField) fields
+    expected = Record <$> traverse (fmap Core.makeRecordField) fields
 
 
 -- | Parse a single field of a record.
@@ -2407,7 +2407,7 @@ field key (Decoder {..}) =
         ( Data.Functor.Compose.Compose extractBody )
     )
   where
-    extractBody expr@(RecordLit fields) = case Dhall.Core.recordFieldValue <$> Dhall.Map.lookup key fields of
+    extractBody expr@(RecordLit fields) = case Core.recordFieldValue <$> Dhall.Map.lookup key fields of
       Just v -> extract v
       _      -> typeError expected expr
     extractBody expr = typeError expected expr
@@ -2470,7 +2470,7 @@ union (UnionDecoder (Data.Functor.Compose.Compose mp)) = Decoder {..}
         t <- Dhall.Map.lookup fld mp
 
         guard $
-            Dhall.Core.Union rest `Dhall.Core.judgmentallyEqual` Dhall.Core.Union (Dhall.Map.delete fld mp')
+            Core.Union rest `Core.judgmentallyEqual` Core.Union (Dhall.Map.delete fld mp')
 
         pure (t, e1)
 
@@ -2575,8 +2575,8 @@ encodeField name = encodeFieldWith name inject
 recordEncoder :: RecordEncoder a -> Encoder a
 recordEncoder (RecordEncoder encodeTypeRecord) = Encoder makeRecordLit recordType
   where
-    recordType = Record $ (Dhall.Core.makeRecordField . declared) <$> encodeTypeRecord
-    makeRecordLit x = RecordLit $ (Dhall.Core.makeRecordField . ($ x) . embed) <$> encodeTypeRecord
+    recordType = Record $ (Core.makeRecordField . declared) <$> encodeTypeRecord
+    makeRecordLit x = RecordLit $ (Core.makeRecordField . ($ x) . embed) <$> encodeTypeRecord
 
 {-| 'UnionEncoder' allows you to build an 'Encoder' for a Dhall record.
 
