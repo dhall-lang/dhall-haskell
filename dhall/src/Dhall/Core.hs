@@ -54,6 +54,7 @@ module Dhall.Core (
     , subExpressions
     , chunkExprs
     , bindingExprs
+    , recordFieldExprs
 
     -- * Let-blocks
     , multiLet
