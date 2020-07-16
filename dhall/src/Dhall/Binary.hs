@@ -250,7 +250,7 @@ decodeExpressionInternal decodeEmbed = go
                                     then die "Non-standard encoding of a function with no arguments"
                                     else loop nArgs f
 
-                            1 ->
+                            1 -> do
                                 case len of
                                     3 -> do
                                         _A <- go
@@ -275,7 +275,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         die ("Incorrect number of tokens used to encode a λ expression: " <> show len)
 
-                            2 ->
+                            2 -> do
                                 case len of
                                     3 -> do
                                         _A <- go
@@ -326,7 +326,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (op l r)
 
-                            4 ->
+                            4 -> do
                                 case len of
                                     2 -> do
                                         _T <- go
