@@ -740,7 +740,7 @@ infer typer = loop
 
         RecordLit xts -> do
             let process t = do
-                    _T' <- loop ctx t
+                    _T' <- loop ctx $ recordFieldValue t
 
                     let _T'' = quote names _T'
 
@@ -748,7 +748,7 @@ infer typer = loop
 
                     return _T'
 
-            xTs <- traverse process (Dhall.Map.sort $ recordFieldValue <$> xts)
+            xTs <- traverse process (Dhall.Map.sort xts)
 
             return (VRecord xTs)
 
