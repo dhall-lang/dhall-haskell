@@ -74,7 +74,7 @@ parseOptions =
             <>  Options.Applicative.help description
             )
 
-    parseAscii = fmap f (switch "ascii" "Format code using only ASCII syntax")
+    parseAscii = fmap f (switch "ascii" "Format rendered source code using only ASCII syntax")
       where
         f True  = ASCII
         f False = Unicode
