@@ -81,6 +81,7 @@ import qualified Dhall.Syntax    as Syntax
 import qualified Dhall.Map       as Map
 import qualified Dhall.Set
 import qualified Text.Printf
+import qualified Lens.Family     as Lens
 
 data Environment a
     = Empty
@@ -1273,9 +1274,9 @@ alphaNormalize = goEnv EmptyNames
             None ->
                 None
             Record kts ->
-                Record (goRecordField <$> kts)
+                Record (Lens.over Syntax.recordFieldExprs go <$> kts)
             RecordLit kts ->
-                RecordLit (goRecordField <$> kts)
+                RecordLit (Lens.over Syntax.recordFieldExprs go <$> kts)
             Union kts ->
                 Union (fmap (fmap go) kts)
             Combine m t u ->
@@ -1310,4 +1311,3 @@ alphaNormalize = goEnv EmptyNames
         go                     = goEnv e0
         goBind x               = goEnv (Bind e0 x)
         goChunks (Chunks ts x) = Chunks (fmap (fmap go) ts) x
-        goRecordField (RecordField s0 e) = RecordField s0 (go e)
