@@ -5,6 +5,14 @@
 
 module Dhall.Test.Regression where
 
+import Data.Either.Validation (Validation (..))
+import Data.Void              (Void)
+import Dhall.Import           (Imported, MissingImports (..))
+import Dhall.Parser           (SourcedException (..), Src)
+import Dhall.TypeCheck        (TypeError)
+import Test.Tasty             (TestTree)
+import Test.Tasty.HUnit       ((@?=))
+
 import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy.IO
@@ -16,19 +24,11 @@ import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.Test.Util as Util
+import qualified Dhall.Test.Util                       as Util
 import qualified Dhall.TypeCheck
 import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
-
-import Data.Either.Validation (Validation(..))
-import Data.Void (Void)
-import Dhall.Import (Imported, MissingImports(..))
-import Dhall.Parser (Src, SourcedException(..))
-import Dhall.TypeCheck (TypeError)
-import Test.Tasty (TestTree)
-import Test.Tasty.HUnit ((@?=))
 
 tests :: TestTree
 tests =
@@ -114,7 +114,7 @@ issue151 = Test.Tasty.HUnit.testCase "Issue #151" (do
                     case Control.Exception.fromException e :: Maybe (Imported (TypeError Src Void)) of
                         Just _ -> return True
                         Nothing -> return False
-                handler _ = do
+                handler _ =
                     return True
 
             let typeCheck = do
@@ -223,7 +223,7 @@ issue1884 = Test.Tasty.HUnit.testCase "Issue #1884" (do
     return () )
 
 parsing0 :: TestTree
-parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (do
+parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (
     -- Verify that parsing should not fail
     --
     -- In 267093f8cddf1c2f909f2d997c31fd0a7cb2440a I broke the parser when left

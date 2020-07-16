@@ -1,17 +1,17 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Dhall.Test.Substitution where
 
 import Control.Exception (throwIO)
-import Data.Void (Void)
-import Dhall.Core (Expr(BoolLit, Var))
-import Dhall.Src (Src)
+import Data.Void         (Void)
+import Dhall.Core        (Expr (BoolLit, Var))
+import Dhall.Src         (Src)
 
 import qualified Data.Either.Validation
 import qualified Dhall
 import qualified Dhall.Map
-import qualified Lens.Family   as Lens
+import qualified Lens.Family            as Lens
 
 data Result = Failure Integer | Success String
     deriving (Eq, Dhall.Generic, Show)

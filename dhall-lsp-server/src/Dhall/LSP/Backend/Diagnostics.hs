@@ -16,22 +16,26 @@ module Dhall.LSP.Backend.Diagnostics
   )
 where
 
-import Dhall.Parser (SourcedException(..), Src(..), unwrap)
-import Dhall.TypeCheck (DetailedTypeError(..), ErrorMessages(..), TypeError(..))
-import Dhall.Core (Expr(Note, Embed), subExpressions)
+import Dhall.Core      (Expr (Embed, Note), subExpressions)
+import Dhall.Parser    (SourcedException (..), Src (..), unwrap)
+import Dhall.TypeCheck
+    ( DetailedTypeError (..)
+    , ErrorMessages (..)
+    , TypeError (..)
+    )
 
-import Dhall.LSP.Util
 import Dhall.LSP.Backend.Dhall
 import Dhall.LSP.Backend.Parsing (getImportLink)
+import Dhall.LSP.Util
 
-import Control.Lens (toListOf)
+import Control.Lens               (toListOf)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
-import Data.Monoid ((<>))
-import Data.Text (Text)
+import Data.Monoid                ((<>))
+import Data.Text                  (Text)
 
+import qualified Data.List.NonEmpty                    as NonEmpty
 import qualified Data.Text                             as Text
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
-import qualified Data.List.NonEmpty                    as NonEmpty
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck                       as TypeCheck
 import qualified Text.Megaparsec                       as Megaparsec

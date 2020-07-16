@@ -1,13 +1,12 @@
 module Dhall.LSP.Backend.ToJSON (CompileError, toJSON) where
 
-import Dhall.JSON as Dhall
-import qualified Data.Aeson.Encode.Pretty as Aeson
-
+import Data.ByteString.Lazy    (toStrict)
+import Data.Text               (Text)
+import Data.Text.Encoding      (decodeUtf8)
+import Dhall.JSON              as Dhall
 import Dhall.LSP.Backend.Dhall
 
-import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8)
-import Data.ByteString.Lazy (toStrict)
+import qualified Data.Aeson.Encode.Pretty as Aeson
 
 -- | Try to convert a given Dhall expression to JSON.
 toJSON :: WellTyped -> Either CompileError Text

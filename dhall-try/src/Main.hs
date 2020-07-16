@@ -21,9 +21,9 @@ import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified GHCJS.Foreign.Callback
 
-import Control.Exception (Exception, SomeException)
-import Data.JSString (JSString)
-import Data.Text (Text)
+import Control.Exception      (Exception, SomeException)
+import Data.JSString          (JSString)
+import Data.Text              (Text)
 import GHCJS.Foreign.Callback (Callback)
 
 foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
@@ -93,16 +93,16 @@ main = do
             let inputText   = Data.Text.pack inputString
 
             case Dhall.Parser.exprFromText "(input)" inputText of
-                Left exception -> do
+                Left exception ->
                     errOutput exception
                 Right parsedExpression -> do
                   eitherResolvedExpression <- Control.Exception.try (Dhall.Import.load parsedExpression)
                   case eitherResolvedExpression of
-                      Left exception -> do
+                      Left exception ->
                           errOutput (exception :: SomeException)
-                      Right resolvedExpression -> do
+                      Right resolvedExpression ->
                           case Dhall.TypeCheck.typeOf resolvedExpression of
-                              Left exception -> do
+                              Left exception ->
                                   errOutput exception
                               Right inferredType -> do
                                   mode <- Data.IORef.readIORef modeRef
@@ -120,30 +120,30 @@ main = do
 
                                           setOutput typeText
 
-                                      JSON -> do
+                                      JSON ->
                                           case Dhall.JSON.dhallToJSON resolvedExpression of
-                                              Left exception -> do
+                                              Left exception ->
                                                   errOutput exception
                                               Right value -> do
                                                   let jsonBytes = Data.Aeson.Encode.Pretty.encodePretty' jsonConfig value
                                                   case Data.Text.Lazy.Encoding.decodeUtf8' jsonBytes of
-                                                      Left exception -> do
+                                                      Left exception ->
                                                           errOutput exception
-                                                      Right jsonText -> do
+                                                      Right jsonText ->
                                                           setOutput (Data.Text.Lazy.toStrict jsonText)
-                                      YAML -> do
+                                      YAML ->
                                           case Dhall.JSON.dhallToJSON resolvedExpression of
-                                              Left exception -> do
+                                              Left exception ->
                                                   errOutput exception
                                               Right value -> do
                                                   let yamlBytes = Dhall.JSON.Yaml.jsonToYaml value False False
                                                   case Data.Text.Encoding.decodeUtf8' yamlBytes of
-                                                      Left exception -> do
+                                                      Left exception ->
                                                           errOutput exception
-                                                      Right yamlText -> do
+                                                      Right yamlText ->
                                                           setOutput yamlText
 
-                                      Hash -> do
+                                      Hash ->
                                           setOutput (Dhall.Import.hashExpressionToCode (Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)))
 
     interpret

@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE OverloadedLists    #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
 {-| This library only exports a single `dhallToNix` function for translating a
@@ -92,35 +92,35 @@ module Dhall.Nix (
     ) where
 
 import Control.Exception (Exception)
-import Data.Foldable (toList)
-import Data.Fix (Fix(..))
-import Data.Text (Text)
-import Data.Traversable (for)
-import Data.Typeable (Typeable)
-import Data.Void (Void, absurd)
+import Data.Fix          (Fix (..))
+import Data.Foldable     (toList)
+import Data.Text         (Text)
+import Data.Traversable  (for)
+import Data.Typeable     (Typeable)
+import Data.Void         (Void, absurd)
 import Dhall.Core
-    ( Binding(..)
-    , Chunks(..)
-    , DhallDouble(..)
-    , Expr(..)
-    , MultiLet(..)
-    , PreferAnnotation(..)
-    , Var(..)
+    ( Binding (..)
+    , Chunks (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , MultiLet (..)
+    , PreferAnnotation (..)
+    , Var (..)
     )
-import Lens.Family (toListOf)
-import Nix.Atoms (NAtom(..))
+import Lens.Family       (toListOf)
+import Nix.Atoms         (NAtom (..))
 import Nix.Expr
-    ( Antiquoted(..)
-    , Binding(..)
-    , NBinaryOp(..)
-    , NExprF(..)
-    , NKeyName(..)
-    , NRecordType(..)
-    , NString(..)
-    , Params(..)
-    , (@@)
-    , (==>)
+    ( Antiquoted (..)
+    , Binding (..)
+    , NBinaryOp (..)
+    , NExprF (..)
+    , NKeyName (..)
+    , NRecordType (..)
+    , NString (..)
+    , Params (..)
     , ($+)
+    , (==>)
+    , (@@)
     )
 
 import qualified Data.Text
@@ -283,7 +283,7 @@ dhallToNix e =
         (x' , a') <- rename (x, a)
 
         return (Let Binding{ variable = x', .. } a')
-    renameShadowed _ = do
+    renameShadowed _ =
         Nothing
 
     -- Even higher-level utility that renames all shadowed references
@@ -298,7 +298,7 @@ dhallToNix e =
         return (Fix (NAbs (Param a) c'))
     loop (Pi _ _ _) = return untranslatable
     -- None needs a type to convert to an Optional
-    loop (App None _) = do
+    loop (App None _) =
       return (Fix (NConstant NNull))
     loop (App (Field (Union kts) k) v) = do
         v' <- loop v
@@ -381,7 +381,7 @@ dhallToNix e =
         let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
         let e8 = Fix (NAbs "n" (Fix (NBinary NApp "naturalOdd" (Fix (NIf e7 e6 "n")))))
         return (Fix (NLet [e5] e8))
-    loop NaturalShow = do
+    loop NaturalShow =
         return "toString"
     loop NaturalSubtract = do
         let e0 = NamedVar ["z"] (Fix (NBinary NMinus "y" "x")) Nix.nullPos
@@ -391,7 +391,7 @@ dhallToNix e =
         let e4 = Fix (NIf e1 e2 e3)
         let e5 = Fix (NLet [e0] e4)
         return (Fix (NAbs "x" (Fix (NAbs "y" e5))))
-    loop NaturalToInteger = do
+    loop NaturalToInteger =
         return (Fix (NAbs "n" "n"))
     loop (NaturalPlus a b) = do
         a' <- loop a
@@ -418,11 +418,11 @@ dhallToNix e =
         let e2 = Fix (NBinary NLte (Fix (NConstant (NInt 0))) "x")
         let e3 = Fix (NAbs "x" (Fix (NIf e2 e1 e0)))
         return e3
-    loop IntegerToDouble = do
+    loop IntegerToDouble =
         return (Fix (NAbs "x" "x"))
     loop Double = return untranslatable
     loop (DoubleLit (DhallDouble n)) = return (Fix (NConstant (NFloat (realToFrac n))))
-    loop DoubleShow = do
+    loop DoubleShow =
         return "toString"
     loop Text = return untranslatable
     loop (TextLit (Chunks abs_ c)) = do
@@ -592,7 +592,7 @@ dhallToNix e =
         b' <- loop b
         c' <- loop c
         return (Fix (NBinary NUpdate b' c'))
-    loop (RecordCompletion a b) = do
+    loop (RecordCompletion a b) =
         loop (Annot (Prefer PreferFromCompletion (Field a "default") b) (Field a "Type"))
     loop (Field (Union kts) k) =
         case Dhall.Map.lookup k kts of
@@ -621,13 +621,13 @@ dhallToNix e =
         a' <- loop a
         let b' = fmap StaticKey (toList b)
         return (Fix (NSet NNonRecursive [Inherit (Just a') b' Nix.nullPos]))
-    loop (Project _ (Right _)) = do
+    loop (Project _ (Right _)) =
         Left CannotProjectByType
-    loop (Assert _) = do
+    loop (Assert _) =
         return untranslatable
-    loop (Equivalent _ _) = do
+    loop (Equivalent _ _) =
         return untranslatable
-    loop a@With{} = do
+    loop a@With{} =
         loop (Dhall.Core.desugarWith a)
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b

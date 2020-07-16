@@ -1,23 +1,24 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
-import Control.Monad.IO.Class (liftIO)
-import Data.Maybe (fromJust)
-import qualified Data.Text as T
-import qualified GHC.IO.Encoding
+import Control.Monad.IO.Class     (liftIO)
+import Data.Maybe                 (fromJust)
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
-  ( CompletionItem(..)
-  , Diagnostic(..)
-  , DiagnosticSeverity(..)
-  , Hover(..)
-  , HoverContents(..)
-  , MarkupContent(..)
-  , Position(..)
-  , Range(..)
-  )
+    ( CompletionItem (..)
+    , Diagnostic (..)
+    , DiagnosticSeverity (..)
+    , Hover (..)
+    , HoverContents (..)
+    , MarkupContent (..)
+    , Position (..)
+    , Range (..)
+    )
 import Test.Tasty
 import Test.Tasty.Hspec
+
+import qualified Data.Text       as T
+import qualified GHC.IO.Encoding
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d

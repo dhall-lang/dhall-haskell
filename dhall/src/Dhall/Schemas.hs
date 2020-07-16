@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedLists   #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-| This module contains the implementation of the @dhall rewrite-with-schemas@
     subcommand
@@ -16,25 +16,30 @@ module Dhall.Schemas
     ) where
 
 import Control.Applicative (empty)
-import Control.Exception (Exception)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Crypto (SHA256Digest)
-import Dhall.Map (Map)
-import Dhall.Src (Src)
-import Dhall.Syntax (Expr(..), Import, Var(..))
-import Dhall.Pretty (CharacterSet(..))
+import Control.Exception   (Exception)
+import Data.Monoid         ((<>))
+import Data.Text           (Text)
+import Data.Void           (Void)
+import Dhall.Crypto        (SHA256Digest)
+import Dhall.Map           (Map)
+import Dhall.Pretty        (CharacterSet (..))
+import Dhall.Src           (Src)
+import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
-    (Censor(..), CheckFailed(..), Header(..), Input(..), OutputMode(..))
+    ( Censor (..)
+    , CheckFailed (..)
+    , Header (..)
+    , Input (..)
+    , OutputMode (..)
+    )
 
 import qualified Control.Exception                         as Exception
-import qualified Data.Maybe                                as Maybe
 import qualified Data.Map
+import qualified Data.Maybe                                as Maybe
 import qualified Data.Text.IO                              as Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Data.Void                                 as Void
 import qualified Dhall.Core                                as Core
 import qualified Dhall.Import                              as Import
@@ -83,9 +88,9 @@ schemasCommand Schemas{..} = do
     let schemasText = Pretty.Text.renderStrict docStream
 
     case outputMode of
-        Write -> do
+        Write ->
             case input of
-                InputFile file -> do
+                InputFile file ->
                     if originalText == schemasText
                         then return ()
                         else AtomicWrite.atomicWriteFile
@@ -100,7 +105,7 @@ schemasCommand Schemas{..} = do
                             then fmap Dhall.Pretty.annToAnsiStyle docStream
                             else Pretty.unAnnotateS docStream)
 
-        Check -> do
+        Check ->
             if originalText == schemasText
                 then return ()
                 else do
@@ -130,7 +135,7 @@ decodeSchemas (RecordLit keyValues) = do
             return (Import.hashExpression (Syntax.denote _Type), (name, _default))
 
     return typeMetadata
-decodeSchemas  _ = do
+decodeSchemas  _ =
     empty
 
 -- | Simplify a Dhall expression using a record of schemas

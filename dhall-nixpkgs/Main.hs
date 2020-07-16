@@ -4,9 +4,9 @@
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE OverloadedStrings     #-}
 
 {-| @dhall-to-nixpkgs@ is essentially the Dhall analog of @cabal2nix@.
 
@@ -69,37 +69,37 @@
 
 module Main where
 
-import Control.Applicative (empty, optional, (<|>))
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Morph (hoist)
-import Control.Monad.Trans.Class (lift)
+import Control.Applicative              (empty, optional, (<|>))
+import Control.Monad.IO.Class           (MonadIO (..))
+import Control.Monad.Morph              (hoist)
+import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
-import Data.Aeson (FromJSON)
-import Data.Fix (Fix)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Import (Status(..), stack)
-import Dhall.Parser (Src)
-import GHC.Generics (Generic)
-import Lens.Family.State.Strict (zoom)
-import Network.URI (URI(..), URIAuth(..))
-import Nix.Expr.Shorthands ((@@), (@.))
-import Nix.Expr.Types (NExpr)
-import Options.Applicative (Parser, ParserInfo)
-import Prelude hiding (FilePath)
-import System.Exit (ExitCode(..))
-import Text.Megaparsec (Parsec)
-import Turtle (FilePath, Shell, fp, (</>))
+import Data.Aeson                       (FromJSON)
+import Data.Fix                         (Fix)
+import Data.List.NonEmpty               (NonEmpty (..))
+import Data.Text                        (Text)
+import Data.Void                        (Void)
+import Dhall.Import                     (Status (..), stack)
+import Dhall.Parser                     (Src)
+import GHC.Generics                     (Generic)
+import Lens.Family.State.Strict         (zoom)
+import Network.URI                      (URI (..), URIAuth (..))
+import Nix.Expr.Shorthands              ((@.), (@@))
+import Nix.Expr.Types                   (NExpr)
+import Options.Applicative              (Parser, ParserInfo)
+import Prelude                          hiding (FilePath)
+import System.Exit                      (ExitCode (..))
+import Text.Megaparsec                  (Parsec)
+import Turtle                           (FilePath, Shell, fp, (</>))
 
 import Dhall.Core
-    ( Expr(..)
-    , File(..)
-    , Import(..)
-    , ImportHashed(..)
-    , ImportMode(..)
-    , ImportType(..)
-    , URL(..)
+    ( Expr (..)
+    , File (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportMode (..)
+    , ImportType (..)
+    , URL (..)
     )
 
 import qualified Control.Foldl                         as Foldl

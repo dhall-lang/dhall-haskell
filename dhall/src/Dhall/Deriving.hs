@@ -77,12 +77,12 @@ module Dhall.Deriving
 
   ) where
 
-import Data.Proxy (Proxy (..))
+import Data.Proxy   (Proxy (..))
 import Dhall
 import GHC.Generics (Generic (Rep))
-import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 
-import qualified Data.Text as Text
+import qualified Data.Text            as Text
 import qualified Data.Text.Manipulate as Case
 
 -- | Intended for use on @deriving via@ clauses for types with a
@@ -219,8 +219,8 @@ instance ToSingletonConstructors Smart where
 --   matches @prefix@, or the entire @text@ otherwise
 dropPrefix :: Text -> (Text -> Text)
 dropPrefix prefix text = case Text.stripPrefix prefix text of
-  Just stripped -> stripped
-  Nothing       -> text
+  Nothing -> text
+  Just e -> e
 
 -- * InterpretOptions setters
 

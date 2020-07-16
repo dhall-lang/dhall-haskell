@@ -1,24 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
     , Manager
     ) where
 
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
-import Data.ByteString (ByteString)
-import Data.CaseInsensitive (CI)
-import Data.Semigroup ((<>))
+import Data.ByteString                  (ByteString)
+import Data.CaseInsensitive             (CI)
+import Data.Semigroup                   ((<>))
+import Data.Void                        (Void)
+import Dhall.Core                       (URL (..))
+import Dhall.Import.Types
+import Dhall.URL                        (renderURL)
 
-import qualified Data.Text as Text
+import qualified Data.Text      as Text
 import qualified JavaScript.XHR
 
-import Data.Void (Void)
-import Dhall.Core (URL(..))
-import Dhall.URL (renderURL)
-import Dhall.Import.Types
 
 {-| The GHCJS implementation does not require a `Manager`
 
@@ -46,5 +45,5 @@ fetchFromHttpUrl childURL Nothing = do
         _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
 
     return body
-fetchFromHttpUrl _ _ = do
+fetchFromHttpUrl _ _ =
     fail "Dhall does not yet support custom headers when built using GHCJS"

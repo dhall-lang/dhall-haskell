@@ -3,20 +3,20 @@
 module Dhall.Test.Parser where
 
 import Data.Monoid ((<>))
-import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
-import Prelude hiding (FilePath)
-import Test.Tasty (TestTree)
-import Turtle (FilePath, (</>))
+import Data.Text   (Text)
+import Data.Void   (Void)
+import Dhall.Core  (Binding (..), Expr (..), Import, Var (..))
+import Prelude     hiding (FilePath)
+import Test.Tasty  (TestTree)
+import Turtle      (FilePath, (</>))
 
 import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor
 import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
 import qualified Data.Text            as Text
-import qualified Data.Text.IO         as Text.IO
 import qualified Data.Text.Encoding   as Text.Encoding
+import qualified Data.Text.IO         as Text.IO
 import qualified Dhall.Binary         as Binary
 import qualified Dhall.Core           as Core
 import qualified Dhall.Parser         as Parser
@@ -36,23 +36,23 @@ getTests :: IO TestTree
 getTests = do
     let successFiles = Turtle.lstree (parseDirectory </> "success")
 
-    successTests <- do
+    successTests <-
         Test.Util.discover (Turtle.chars <* "A.dhall") shouldParse successFiles
 
     let failureFiles = Turtle.lstree (parseDirectory </> "failure")
 
-    failureTests <- do
+    failureTests <-
         Test.Util.discover (Turtle.chars <> ".dhall") shouldNotParse failureFiles
 
     let binaryDecodeSuccessFiles =
             Turtle.lstree (binaryDecodeDirectory </> "success")
 
-    binaryDecodeSuccessTests <- do
+    binaryDecodeSuccessTests <-
         Test.Util.discover (Turtle.chars <* "A.dhallb") shouldDecode binaryDecodeSuccessFiles
 
     let binaryDecodeFailureFiles = Turtle.lstree (binaryDecodeDirectory </> "failure")
 
-    binaryDecodeFailureTests <- do
+    binaryDecodeFailureTests <-
         Test.Util.discover (Turtle.chars <* ".dhallb") shouldNotDecode binaryDecodeFailureFiles
 
     let testTree =
@@ -72,7 +72,7 @@ internalTests =
         [ notesInLetInLet ]
 
 notesInLetInLet :: TestTree
-notesInLetInLet = do
+notesInLetInLet =
     Tasty.HUnit.testCase "Notes in let-in-let" $ do
         let code = "let x = 0 let y = 1 in let z = 2 in x"
 
@@ -177,7 +177,7 @@ shouldNotParse path = do
 
         case Text.Encoding.decodeUtf8' bytes of
             Left _ -> return ()
-            Right text -> do
+            Right text ->
                 case Parser.exprFromText mempty text of
                     Left  _ -> return ()
                     Right _ -> Tasty.HUnit.assertFailure "Unexpected successful parse" )

@@ -3,8 +3,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveLift         #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE ExplicitForAll     #-}
 {-# LANGUAGE TypeFamilies       #-}
 
 -- | `Map` type used to represent records and unions
@@ -69,14 +68,14 @@ module Dhall.Map
     , elems
     ) where
 
-import Control.Applicative ((<|>))
-import Control.DeepSeq (NFData)
-import Data.Data (Data)
+import Control.Applicative        ((<|>))
+import Control.DeepSeq            (NFData)
+import Data.Data                  (Data)
 import Data.Semigroup
-import GHC.Generics (Generic)
-import Instances.TH.Lift ()
+import GHC.Generics               (Generic)
+import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
-import Prelude hiding (filter, lookup)
+import Prelude                    hiding (filter, lookup)
 
 import qualified Data.List
 import qualified Data.Map

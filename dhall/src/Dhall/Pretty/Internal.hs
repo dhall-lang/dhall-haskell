@@ -73,7 +73,6 @@ import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Syntax
 import Numeric.Natural           (Natural)
-import Prelude                   hiding (succ)
 
 import qualified Data.Char
 import qualified Data.HashSet
@@ -166,9 +165,9 @@ renderSrc strip (Just (Src {..}))
     strippedText = strip srcText
 
     suffix =
-        if Text.null strippedText
+        if Text.null strippedText || Text.last strippedText == '\n'
         then mempty
-        else if Text.last strippedText == '\n' then mempty else " "
+        else " "
 
     oldLines = Text.splitOn "\n" strippedText
 
@@ -290,7 +289,7 @@ hangingBraces n docs =
             (  lbrace
             <> Pretty.hardline
             <> Pretty.indent n
-               ( mconcat (zipWith combineLong (repeat separator) docsLong)
+               ( mconcat (map (combineLong separator) docsLong)
                <> rbrace
                )
             )
@@ -372,7 +371,6 @@ enclose
     -> Doc ann
 enclose beginShort _         _        _       endShort _       []   =
     beginShort <> endShort
-  where
 enclose beginShort beginLong sepShort sepLong endShort endLong docs =
     Pretty.group
         (Pretty.flatAlt
@@ -623,7 +621,7 @@ prettyCharacterSet characterSet expression =
                 [ prettyExpression c ]
     prettyExpression (Let a0 b0) =
         enclose' "" "" space Pretty.hardline
-            (fmap duplicate (fmap docA (toList as)) ++ [ docB ])
+            (fmap (duplicate . docA) (toList as) ++ [ docB ])
       where
         MultiLet as b = multiLet a0 b0
 

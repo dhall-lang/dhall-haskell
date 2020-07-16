@@ -101,12 +101,12 @@ module Dhall.Bash (
     ) where
 
 import Control.Exception (Exception)
-import Data.Bifunctor (first)
+import Data.Bifunctor    (first)
 import Data.ByteString
-import Data.Monoid ((<>))
-import Data.Typeable (Typeable)
-import Data.Void (Void, absurd)
-import Dhall.Core (Expr(..), Chunks(..))
+import Data.Monoid       ((<>))
+import Data.Typeable     (Typeable)
+import Data.Void         (Void, absurd)
+import Dhall.Core        (Chunks (..), Expr (..))
 
 import qualified Data.Foldable
 import qualified Data.Text
@@ -227,9 +227,9 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
 
     adapt (UnsupportedExpression e) = UnsupportedSubexpression e
 
-    go (BoolLit a) = do
+    go (BoolLit a) =
         go (TextLit (if a then "true" else "false"))
-    go (NaturalLit a) = do
+    go (NaturalLit a) =
         go (IntegerLit (fromIntegral a))
     go (IntegerLit a) = do
         e <- first adapt (dhallToExpression (IntegerLit a))
@@ -268,9 +268,9 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
         e <- first adapt (dhallToExpression (Field (Union m) k))
         let bytes = "declare -r " <> var <> "=" <> e
         return bytes
-    go (Embed   x) = do
+    go (Embed   x) =
         absurd x
-    go (Note  _ e) = do
+    go (Note  _ e) =
         go e
 
     -- Use an exhaustive pattern match here so that we don't forget to handle
@@ -352,11 +352,11 @@ dhallToExpression
     -- ^ Bash expression or compile failure
 dhallToExpression expr0 = go (Dhall.Core.normalize expr0)
   where
-    go (BoolLit a) = do
+    go (BoolLit a) =
         go (TextLit (if a then "true" else "false"))
-    go (NaturalLit a) = do
+    go (NaturalLit a) =
         go (IntegerLit (fromIntegral a))
-    go (IntegerLit a) = do
+    go (IntegerLit a) =
         go (TextLit (Chunks [] (Data.Text.pack (show a))))
     go (TextLit (Chunks [] a)) = do
         let bytes = Data.Text.Encoding.encodeUtf8 a
