@@ -371,10 +371,9 @@ decodeExpressionInternal decodeEmbed = go
 
                                     _T <- go
 
-                                    return (x, _T)
+                                    return (x, Syntax.makeRecordField _T)
 
-                                let toRecordField (t, e) = (t, Syntax.makeRecordField e)
-                                return (Record (Dhall.Map.fromList $ map toRecordField xTs))
+                                return (Record (Dhall.Map.fromList xTs))
 
                             8 -> do
                                 mapLength <- Decoding.decodeMapLen
