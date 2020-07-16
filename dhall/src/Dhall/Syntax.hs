@@ -471,12 +471,12 @@ data Expr s a
     | Some (Expr s a)
     -- | > None                                     ~  None
     | None
-    -- | > Record [ (k1, RecordField _ t1 _)        ~  { k1 : t1, k2 : t1 }
-    --   >        , (k2, RecordField _ t2 _)
+    -- | > Record [ (k1, RecordField _ t1)          ~  { k1 : t1, k2 : t1 }
+    --   >        , (k2, RecordField _ t2)
     --   >        ]
     | Record    (Map Text (RecordField s a))
-    -- | > RecordLit [ (k1, RecordField _ v1 _)      ~  { k1 = v1, k2 = v2 }
-    --   >           , (k2, RecordField _ v2 _)
+    -- | > RecordLit [ (k1, RecordField _ v1)       ~  { k1 = v1, k2 = v2 }
+    --   >           , (k2, RecordField _ v2)
     --   >           ]
     | RecordLit (Map Text (RecordField s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
@@ -490,7 +490,6 @@ data Expr s a
     --   >           , RecordField
     --   >              _
     --   >              (Combine (Just k) x y)
-    --   >              _
     --   >            )]
     | Combine (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
@@ -992,21 +991,20 @@ pathCharacter c =
 
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
 denote :: Expr s a -> Expr t a
-denote (Note _ b     ) = denote b
-denote (Let a b      ) = Let (adapt0 a) (denote b)
-  where
-    adapt0 (Binding _ c _ d _ e) =
-        Binding Nothing c Nothing (fmap adapt1 d) Nothing (denote e)
-
-    adapt1 (_, f) = (Nothing, denote f)
-denote (Embed a      ) = Embed a
-denote (Combine _ b c) = Combine Nothing (denote b) (denote c)
-denote expression = case expression of
+denote = \case
+    Note _ b      -> denote b
+    Let a b       -> Let (denoteBinding a) (denote b)
+    Embed a       -> Embed a
+    Combine _ b c -> Combine Nothing (denote b) (denote c)
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
-    _ -> Lens.over unsafeSubExpressions denote expression
+    expression -> Lens.over unsafeSubExpressions denote expression
   where
-      denoteRecordField (RecordField _ e) = RecordField Nothing (denote e)
+    denoteRecordField (RecordField _ e) = RecordField Nothing (denote e)
+    denoteBinding (Binding _ c _ d _ e) =
+        Binding Nothing c Nothing (fmap denoteBindingAnnotation d) Nothing (denote e)
+
+    denoteBindingAnnotation (_, f) = (Nothing, denote f)
 
 -- | The \"opposite\" of `denote`, like @first absurd@ but faster
 renote :: Expr Void a -> Expr s a
