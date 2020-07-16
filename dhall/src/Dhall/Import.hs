@@ -987,7 +987,7 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
                     _ ->
                         Annot loadedExpr expected
 
-            _ <- case Dhall.TypeCheck.typeOf annot of
+            _ <- case (Dhall.TypeCheck.typeOf annot) of
                 Left err -> throwMissingImport (Imported _stack err)
                 Right _  -> return ()
 

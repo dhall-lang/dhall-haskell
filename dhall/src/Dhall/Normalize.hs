@@ -1,6 +1,6 @@
-{-# LANGUAGE BangPatterns      #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
 
 module Dhall.Normalize (
       alphaNormalize
@@ -18,24 +18,23 @@ module Dhall.Normalize (
     , freeIn
     ) where
 
-import Control.Applicative   (empty)
+import Control.Applicative (empty)
 import Data.Foldable
-import Data.Functor.Identity (Identity (..))
-import Data.Semigroup        (Semigroup (..))
-import Data.Sequence         (ViewL (..), ViewR (..))
+import Data.Functor.Identity (Identity(..))
+import Data.Semigroup (Semigroup(..))
+import Data.Sequence (ViewL(..), ViewR(..))
 import Data.Traversable
-import Instances.TH.Lift     ()
-import Prelude               hiding (succ)
+import Instances.TH.Lift ()
+import Prelude hiding (succ)
 
 import Dhall.Syntax
-    ( Binding (Binding)
-    , Chunks (..)
-    , DhallDouble (..)
-    , Expr (..)
-    , PreferAnnotation (..)
-    , RecordField (..)
-    , Var (..)
-    , makeRecordField
+    ( Expr(..)
+    , Var(..)
+    , Binding(Binding)
+    , Chunks(..)
+    , DhallDouble(..)
+    , PreferAnnotation(..)
+    , RecordField(..)
     )
 
 import qualified Data.Sequence
@@ -281,7 +280,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     let b₂ = shift (-1) (V x 0) b₁
 
                     loop b₂
-                _ ->
+                _ -> do
                   case App f' a' of
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
@@ -381,8 +380,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
 
                         _A₂ = Record (Dhall.Map.fromList kts)
                           where
-                            kts = [ ("index", makeRecordField Natural)
-                                  , ("value", makeRecordField _A₀)
+                            kts = [ ("index", Syntax.makeRecordField Natural)
+                                  , ("value", Syntax.makeRecordField _A₀)
                                   ]
 
                         t | null as₀  = Just (App List _A₂)
@@ -391,8 +390,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         adapt n a_ =
                             RecordLit (Dhall.Map.fromList kvs)
                           where
-                            kvs = [ ("index", makeRecordField $ NaturalLit (fromIntegral n))
-                                  , ("value", makeRecordField a_)
+                            kvs = [ ("index", Syntax.makeRecordField $ NaturalLit (fromIntegral n))
+                                  , ("value", Syntax.makeRecordField a_)
                                   ]
                     App (App ListReverse _) (ListLit t xs) ->
                         loop (ListLit t (Data.Sequence.reverse xs))
@@ -549,7 +548,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             RecordLit (Dhall.Map.unionWith f m n)
           where
             f (RecordField _ expr) (RecordField _ expr') =
-              makeRecordField $ decide expr expr'
+              Syntax.makeRecordField $ decide expr expr'
         decide l r =
             Combine mk l r
     CombineTypes x y -> decide <$> loop x <*> loop y
@@ -562,7 +561,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             Record (Dhall.Map.unionWith f m n)
           where
             f (RecordField _ expr) (RecordField _ expr') =
-              makeRecordField $ decide expr expr'
+              Syntax.makeRecordField $ decide expr expr'
         decide l r =
             CombineTypes l r
     Prefer _ x y -> decide <$> loop x <*> loop y
@@ -621,8 +620,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 let entry (key, value) =
                         RecordLit
                             (Dhall.Map.fromList
-                                [ ("mapKey"  , makeRecordField $ TextLit (Chunks [] key))
-                                , ("mapValue", makeRecordField value                  )
+                                [ ("mapKey"  , Syntax.makeRecordField $ TextLit (Chunks [] key))
+                                , ("mapValue", Syntax.makeRecordField value                  )
                                 ]
                             )
 
@@ -635,7 +634,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             Nothing
 
                 return (ListLit listType keyValues)
-            _ ->
+            _ -> do
                 return (ToMap x' t')
     Field r x        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)

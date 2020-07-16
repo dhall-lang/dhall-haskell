@@ -17,20 +17,20 @@
 
 module Dhall.Test.Dhall where
 
-import Control.Exception  (SomeException, try)
-import Data.Fix           (Fix (..))
+import Control.Exception (SomeException, try)
+import Data.Fix (Fix(..))
+import Data.Maybe (isJust)
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.Maybe         (isJust)
-import Data.Scientific    (Scientific)
-import Data.Sequence      (Seq)
-import Data.Text          (Text)
-import Data.Vector        (Vector)
-import Data.Void          (Void)
-import Dhall              (FromDhall, ToDhall)
-import Dhall.Core         (Expr (..))
-import GHC.Generics       (Generic, Rep)
-import Numeric.Natural    (Natural)
-import System.Timeout     (timeout)
+import Data.Sequence (Seq)
+import Data.Scientific (Scientific)
+import Data.Text (Text)
+import Data.Vector (Vector)
+import Data.Void (Void)
+import Dhall (ToDhall, FromDhall)
+import Dhall.Core (Expr(..))
+import GHC.Generics (Generic, Rep)
+import Numeric.Natural (Natural)
+import System.Timeout (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit
 

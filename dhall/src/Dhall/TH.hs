@@ -14,31 +14,30 @@ module Dhall.TH
     , HaskellType(..)
     ) where
 
-import Data.Monoid               ((<>))
-import Data.Text                 (Text)
+import Data.Monoid ((<>))
+import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
-import Dhall                     (FromDhall, ToDhall)
-import Dhall.Syntax              (Expr (..), RecordField (..))
-import GHC.Generics              (Generic)
-import Language.Haskell.TH.Quote (dataToExpQ)
+import Dhall.Syntax (Expr(..))
+import Dhall (FromDhall, ToDhall)
+import GHC.Generics (Generic)
+import Language.Haskell.TH.Quote (dataToExpQ) -- 7.10 compatibility.
 
 import Language.Haskell.TH.Syntax
-    ( Bang (..)
-    , Con (..)
-    , Dec (..)
-    , DerivStrategy (..)
-    , Exp (..)
+    ( Con(..)
+    , Dec(..)
+    , Exp(..)
     , Q
-    , SourceStrictness (..)
-    , SourceUnpackedness (..)
-    , Type (..)
-    )
-
+    , Type(..)
+    , DerivStrategy (..)
+    , Bang(..)
+    , SourceStrictness(..)
+    , SourceUnpackedness(..)
 #if MIN_VERSION_template_haskell(2,12,0)
-import Language.Haskell.TH.Syntax (DerivClause (..))
+    , DerivClause(..)
 #else
-import Language.Haskell.TH.Syntax (Pred)
+    , Pred
 #endif
+    )
 
 import qualified Data.List                               as List
 import qualified Data.Text                               as Text
@@ -50,9 +49,9 @@ import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
-import qualified Language.Haskell.TH.Syntax              as Syntax
 import qualified Numeric.Natural
 import qualified System.IO
+import qualified Language.Haskell.TH.Syntax              as Syntax
 
 {-| This fully resolves, type checks, and normalizes the expression, so the
     resulting AST is self-contained.
@@ -107,19 +106,19 @@ toNestedHaskellType
 toNestedHaskellType haskellTypes = loop
   where
     loop dhallType = case dhallType of
-        Bool ->
+        Bool -> do
             return (ConT ''Bool)
 
-        Double ->
+        Double -> do
             return (ConT ''Double)
 
-        Integer ->
+        Integer -> do
             return (ConT ''Integer)
 
-        Natural ->
+        Natural -> do
             return (ConT ''Numeric.Natural.Natural)
 
-        Text ->
+        Text -> do
             return (ConT ''Text)
 
         App List dhallElementType -> do
@@ -185,7 +184,7 @@ toDeclaration
     => [HaskellType (Expr s a)]
     -> HaskellType (Expr s a)
     -> Q Dec
-toDeclaration haskellTypes MultipleConstructors{..} =
+toDeclaration haskellTypes MultipleConstructors{..} = do
     case code of
         Union kts -> do
             let name = Syntax.mkName (Text.unpack typeName)
@@ -262,7 +261,7 @@ toConstructor haskellTypes (constructorName, maybeAlternativeType) = do
 
                     return (Syntax.mkName (Text.unpack key), bang, haskellFieldType)
 
-            varBangTypes <- traverse process (Dhall.Map.toList $ recordFieldValue <$> kts)
+            varBangTypes <- traverse process (Dhall.Map.toList $ Core.recordFieldValue <$> kts)
 
             return (RecC name varBangTypes)
 

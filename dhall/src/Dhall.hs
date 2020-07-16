@@ -3,8 +3,8 @@
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE MultiWayIf                 #-}
@@ -14,9 +14,9 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
@@ -132,48 +132,38 @@ module Dhall
     , Generic
     ) where
 
-import Control.Applicative                  (Alternative, empty, liftA2)
-import Control.Exception                    (Exception)
-import Control.Monad                        (guard)
+import Control.Applicative (empty, liftA2, Alternative)
+import Control.Exception (Exception)
 import Control.Monad.Trans.State.Strict
-import Data.Coerce                          (coerce)
-import Data.Either.Validation
-    ( Validation (..)
-    , eitherToValidation
-    , validationToEither
-    )
-import Data.Fix                             (Fix (..))
-import Data.Functor.Contravariant           (Contravariant (..), Op (..), (>$<))
-import Data.Functor.Contravariant.Divisible (Divisible (..), divided)
-import Data.Hashable                        (Hashable)
-import Data.HashMap.Strict                  (HashMap)
-import Data.List.NonEmpty                   (NonEmpty (..))
-import Data.Map                             (Map)
-import Data.Monoid                          ((<>))
-import Data.Scientific                      (Scientific)
-import Data.Semigroup                       (Semigroup)
-import Data.Sequence                        (Seq)
-import Data.Text                            (Text)
-import Data.Text.Prettyprint.Doc            (Pretty)
-import Data.Typeable                        (Proxy (..), Typeable)
-import Data.Vector                          (Vector)
-import Data.Void                            (Void)
-import Data.Word                            (Word16, Word32, Word64, Word8)
-import Dhall.Import                         (Imported (..))
-import Dhall.Parser                         (Src (..))
-import Dhall.Syntax
-    ( Chunks (..)
-    , DhallDouble (..)
-    , Expr (..)
-    , RecordField (..)
-    , Var (..)
-    )
-import Dhall.TypeCheck                      (DetailedTypeError (..), TypeError)
+import Control.Monad (guard)
+import Data.Coerce (coerce)
+import Data.Either.Validation (Validation(..), eitherToValidation, validationToEither)
+import Data.Fix (Fix(..))
+import Data.Functor.Contravariant (Contravariant(..), (>$<), Op(..))
+import Data.Functor.Contravariant.Divisible (Divisible(..), divided)
+import Data.Hashable (Hashable)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.HashMap.Strict (HashMap)
+import Data.Map (Map)
+import Data.Monoid ((<>))
+import Data.Scientific (Scientific)
+import Data.Semigroup (Semigroup)
+import Data.Sequence (Seq)
+import Data.Text (Text)
+import Data.Text.Prettyprint.Doc (Pretty)
+import Data.Typeable (Typeable, Proxy(..))
+import Data.Vector (Vector)
+import Data.Void (Void)
+import Data.Word (Word8, Word16, Word32, Word64)
+import Dhall.Syntax (Expr(..), Chunks(..), DhallDouble(..), RecordField(..), Var(..))
+import Dhall.Import (Imported(..))
+import Dhall.Parser (Src(..))
+import Dhall.TypeCheck (DetailedTypeError(..), TypeError)
 import GHC.Generics
-import Lens.Family                          (LensLike', view)
-import Numeric.Natural                      (Natural)
-import Prelude                              hiding (maybe, sequence)
-import System.FilePath                      (takeDirectory)
+import Lens.Family (LensLike', view)
+import Numeric.Natural (Natural)
+import Prelude hiding (maybe, sequence)
+import System.FilePath (takeDirectory)
 
 import qualified Control.Applicative
 import qualified Control.Exception
@@ -181,16 +171,16 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
-import qualified Data.HashMap.Strict              as HashMap
-import qualified Data.HashSet
-import qualified Data.List
-import qualified Data.List.NonEmpty
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map
 import qualified Data.Maybe
-import qualified Data.Scientific
+import qualified Data.List
+import qualified Data.List.NonEmpty
 import qualified Data.Semigroup
+import qualified Data.Scientific
 import qualified Data.Sequence
 import qualified Data.Set
+import qualified Data.HashSet
 import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy

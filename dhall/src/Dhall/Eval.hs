@@ -1,16 +1,16 @@
-{-# LANGUAGE AllowAmbiguousTypes  #-}
-{-# LANGUAGE BangPatterns         #-}
-{-# LANGUAGE CPP                  #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE LambdaCase           #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE PatternSynonyms      #-}
-{-# LANGUAGE RankNTypes           #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE StandaloneDeriving   #-}
-{-# LANGUAGE TupleSections        #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns         #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 {-# OPTIONS_GHC -O #-}
 
@@ -52,34 +52,34 @@ module Dhall.Eval (
   , textShow
   ) where
 
-import Data.Foldable  (foldr', toList)
-import Data.Semigroup (Semigroup (..))
-import Data.Sequence  (Seq, ViewL (..), ViewR (..))
-import Data.Text      (Text)
-import Data.Void      (Void)
-import Dhall.Map      (Map)
-import Dhall.Set      (Set)
-import GHC.Natural    (Natural)
-import Prelude        hiding (succ)
+import Data.Foldable (foldr', toList)
+import Data.Semigroup (Semigroup(..))
+import Data.Sequence (Seq, ViewL(..), ViewR(..))
+import Data.Text (Text)
+import Data.Void (Void)
+import Dhall.Map (Map)
+import Dhall.Set (Set)
+import GHC.Natural (Natural)
+import Prelude hiding (succ)
 
 import Dhall.Syntax
-    ( Binding (..)
-    , Chunks (..)
-    , Const (..)
-    , DhallDouble (..)
-    , Expr (..)
-    , PreferAnnotation (..)
+  ( Binding(..)
+  , Expr(..)
+  , Chunks(..)
+  , Const(..)
+  , DhallDouble(..)
+  , PreferAnnotation(..)
     , RecordField (..)
-    , Var (..)
+  , Var(..)
     )
 
 import qualified Data.Char
-import qualified Data.Sequence as Sequence
+import qualified Data.Sequence   as Sequence
 import qualified Data.Set
-import qualified Data.Text     as Text
-import qualified Dhall.Map     as Map
+import qualified Data.Text       as Text
+import qualified Dhall.Syntax    as Syntax
+import qualified Dhall.Map       as Map
 import qualified Dhall.Set
-import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf
 
 data Environment a

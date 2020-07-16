@@ -1,80 +1,67 @@
 -- | This module contains the implementation of the @dhall repl@ subcommand
 
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# language CPP               #-}
+{-# language FlexibleContexts  #-}
+{-# language LambdaCase        #-}
+{-# language NamedFieldPuns    #-}
+{-# language OverloadedStrings #-}
+{-# language RecordWildCards   #-}
+{-# language ViewPatterns      #-}
 
 module Dhall.Repl
     ( -- * Repl
       repl
     ) where
 
-import Control.Exception
-    ( SomeException (SomeException)
-    , displayException
-    , throwIO
-    )
-import Control.Monad              (forM_)
-import Control.Monad.Fail         (MonadFail)
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Control.Monad.State.Class  (MonadState, get, modify)
-import Control.Monad.State.Strict (evalStateT)
+import Control.Exception ( SomeException(SomeException), displayException, throwIO )
+import Control.Monad ( forM_ )
+import Control.Monad.Fail ( MonadFail )
+import Control.Monad.IO.Class ( MonadIO, liftIO )
+import Control.Monad.State.Class ( MonadState, get, modify )
+import Control.Monad.State.Strict ( evalStateT )
 -- For the MonadFail instance for StateT.
-import Control.Monad.Trans.Instances       ()
-import Data.Char                           (isSpace)
-import Data.List
-    ( dropWhileEnd
-    , groupBy
-    , isPrefixOf
-    , nub
-    )
-import Data.Maybe                          (mapMaybe)
-import Data.Semigroup                      ((<>))
-import Data.Text                           (Text)
-import Data.Void                           (Void)
-import Dhall.Context                       (Context)
-import Dhall.Import                        (hashExpressionToCode)
-import Dhall.Parser                        (Parser (..))
-import Dhall.Pretty                        (CharacterSet (..))
-import Dhall.Src                           (Src)
-import System.Console.Haskeline            (Interrupt (..))
-import System.Console.Haskeline.Completion (Completion, simpleCompletion)
-import System.Directory                    (getDirectoryContents)
-import System.Environment                  (getEnvironment)
+import Control.Monad.Trans.Instances ()
+import Data.Char ( isSpace )
+import Data.List ( dropWhileEnd, groupBy, isPrefixOf, nub )
+import Data.Maybe ( mapMaybe )
+import Data.Semigroup ((<>))
+import Data.Text ( Text )
+import Data.Void (Void)
+import Dhall.Context (Context)
+import Dhall.Import (hashExpressionToCode)
+import Dhall.Parser (Parser(..))
+import Dhall.Src (Src)
+import Dhall.Pretty (CharacterSet(..))
+import System.Console.Haskeline (Interrupt(..))
+import System.Console.Haskeline.Completion ( Completion, simpleCompletion )
+import System.Directory ( getDirectoryContents )
+import System.Environment ( getEnvironment )
 
-import qualified Control.Monad.Fail                        as Fail
-import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Control.Monad.Fail as Fail
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.HashSet
-import qualified Data.Text                                 as Text
-import qualified Data.Text.IO                              as Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty (renderIO)
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text.IO
+import qualified Data.Text.Prettyprint.Doc as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty ( renderIO )
 import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core
-import qualified Dhall.Core                                as Dhall
-    ( Expr
-    , Var (V)
-    , normalize
-    )
-import qualified Dhall.Core                                as Expr (Expr (..))
-import qualified Dhall.Import                              as Dhall
-import qualified Dhall.Map                                 as Map
-import qualified Dhall.Parser                              as Dhall
-import qualified Dhall.Parser.Token                        as Parser.Token
+import qualified Dhall.Core as Dhall ( Var(V), Expr, normalize )
+import qualified Dhall.Parser.Token                      as Parser.Token
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
-import qualified Dhall.TypeCheck                           as Dhall
-import qualified Dhall.Version                             as Meta
+import qualified Dhall.Core as Expr ( Expr(..) )
+import qualified Dhall.Import                            as Dhall
+import qualified Dhall.Map                               as Map
+import qualified Dhall.Parser                            as Dhall
+import qualified Dhall.TypeCheck                         as Dhall
+import qualified Dhall.Version                           as Meta
 import qualified System.Console.ANSI
-import qualified System.Console.Haskeline.Completion       as Haskeline
-import qualified System.Console.Repline                    as Repline
+import qualified System.Console.Haskeline.Completion     as Haskeline
+import qualified System.Console.Repline                  as Repline
 import qualified System.IO
-import qualified Text.Megaparsec                           as Megaparsec
+import qualified Text.Megaparsec                         as Megaparsec
 
 #if MIN_VERSION_haskeline(0,8,0)
 import qualified Control.Monad.Catch

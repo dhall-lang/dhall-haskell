@@ -1,8 +1,8 @@
-{-# LANGUAGE BangPatterns      #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -24,46 +24,45 @@ module Dhall.Binary
     , DecodingFailure(..)
     ) where
 
-import Codec.CBOR.Decoding  (Decoder, TokenType (..))
-import Codec.CBOR.Encoding  (Encoding)
-import Codec.Serialise      (Serialise (decode, encode))
-import Control.Applicative  (empty, (<|>))
-import Control.Exception    (Exception)
+import Codec.CBOR.Decoding (Decoder, TokenType(..))
+import Codec.CBOR.Encoding (Encoding)
+import Codec.Serialise (Serialise(encode, decode))
+import Control.Applicative (empty, (<|>))
+import Control.Exception (Exception)
 import Data.ByteString.Lazy (ByteString)
 import Dhall.Syntax
-    ( Binding (..)
-    , Chunks (..)
-    , Const (..)
-    , DhallDouble (..)
-    , Directory (..)
-    , Expr (..)
-    , File (..)
-    , FilePrefix (..)
-    , Import (..)
-    , ImportHashed (..)
-    , ImportMode (..)
-    , ImportType (..)
-    , MultiLet (..)
-    , PreferAnnotation (..)
+    ( Binding(..)
+    , Chunks(..)
+    , Const(..)
+    , Directory(..)
+    , DhallDouble(..)
+    , Expr(..)
+    , File(..)
+    , FilePrefix(..)
+    , Import(..)
+    , ImportHashed(..)
+    , ImportMode(..)
+    , ImportType(..)
+    , MultiLet(..)
+    , PreferAnnotation(..)
     , RecordField (..)
-    , Scheme (..)
-    , URL (..)
-    , Var (..)
-    , makeRecordField
+    , Scheme(..)
+    , URL(..)
+    , Var(..)
     )
 
 import Data.Foldable (toList)
-import Data.Monoid   ((<>))
-import Data.Text     (Text)
-import Data.Void     (Void, absurd)
-import GHC.Float     (double2Float, float2Double)
-import Numeric.Half  (fromHalf, toHalf)
+import Data.Monoid ((<>))
+import Data.Text (Text)
+import Data.Void (Void, absurd)
+import GHC.Float (double2Float, float2Double)
+import Numeric.Half (fromHalf, toHalf)
 
 import qualified Codec.CBOR.ByteArray
-import qualified Codec.CBOR.Decoding   as Decoding
-import qualified Codec.CBOR.Encoding   as Encoding
-import qualified Codec.CBOR.Read       as Read
-import qualified Codec.Serialise       as Serialise
+import qualified Codec.CBOR.Decoding  as Decoding
+import qualified Codec.CBOR.Encoding  as Encoding
+import qualified Codec.CBOR.Read      as Read
+import qualified Codec.Serialise      as Serialise
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
@@ -72,8 +71,8 @@ import qualified Data.Sequence
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
-import qualified Dhall.Syntax          as Syntax
-import qualified Text.Printf           as Printf
+import qualified Dhall.Syntax         as Syntax
+import qualified Text.Printf          as Printf
 
 {-| Supported version strings
 
@@ -374,7 +373,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                     return (x, _T)
 
-                                let toRecordField (t, e) = (t, makeRecordField e)
+                                let toRecordField (t, e) = (t, Syntax.makeRecordField e)
                                 return (Record (Dhall.Map.fromList $ map toRecordField xTs))
 
                             8 -> do
@@ -385,7 +384,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                     t <- go
 
-                                    return (x, makeRecordField t)
+                                    return (x, Syntax.makeRecordField t)
 
                                 return (RecordLit (Dhall.Map.fromList xts))
 

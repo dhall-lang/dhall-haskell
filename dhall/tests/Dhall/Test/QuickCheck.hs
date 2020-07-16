@@ -4,7 +4,7 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -13,87 +13,71 @@
 
 module Dhall.Test.QuickCheck where
 
-import Data.Either            (isRight)
-import Data.Either.Validation (Validation (..))
-import Data.Monoid            ((<>))
-import Data.Void              (Void)
-import Dhall
-    ( FromDhall (..)
-    , ToDhall (..)
-    , Vector
-    , auto
-    , embed
-    , extract
-    , inject
-    )
+import Data.Either (isRight)
+import Data.Either.Validation (Validation(..))
+import Data.Monoid ((<>))
+import Data.Void (Void)
+import Dhall (ToDhall(..), FromDhall(..), auto, extract, inject, embed, Vector)
+import Dhall.Map (Map)
 import Dhall.Core
-    ( Binding (..)
-    , Chunks (..)
-    , Const (..)
-    , DhallDouble (..)
-    , Directory (..)
-    , Expr (..)
-    , File (..)
-    , FilePrefix (..)
-    , Import (..)
-    , ImportHashed (..)
-    , ImportMode (..)
-    , ImportType (..)
-    , PreferAnnotation (..)
+    ( Binding(..)
+    , Chunks(..)
+    , Const(..)
+    , Directory(..)
+    , DhallDouble(..)
+    , Expr(..)
+    , File(..)
+    , FilePrefix(..)
+    , Import(..)
+    , ImportHashed(..)
+    , ImportMode(..)
+    , ImportType(..)
+    , PreferAnnotation(..)
     , RecordField (..)
-    , Scheme (..)
-    , URL (..)
-    , Var (..)
+    , Scheme(..)
+    , URL(..)
+    , Var(..)
     )
-import Dhall.Map              (Map)
 
-import Data.Functor.Identity     (Identity (..))
-import Data.Proxy                (Proxy (..))
-import Data.Typeable             (Typeable, typeRep)
-import Dhall.Parser              (Header (..), createHeader)
-import Dhall.Pretty              (CharacterSet (..))
-import Dhall.Set                 (Set)
-import Dhall.Src                 (Src (..))
-import Dhall.Test.Format         (format)
-import Dhall.TypeCheck           (TypeError, Typer)
-import Generic.Random            ((:+) (..), W, Weights, (%))
+import Data.Functor.Identity (Identity(..))
+import Data.Typeable (Typeable, typeRep)
+import Data.Proxy (Proxy(..))
+import Dhall.Set (Set)
+import Dhall.Parser (Header(..), createHeader)
+import Dhall.Pretty (CharacterSet(..))
+import Dhall.Src (Src(..))
+import Dhall.Test.Format (format)
+import Dhall.TypeCheck (Typer, TypeError)
+import Generic.Random (Weights, W, (%), (:+)(..))
 import Test.QuickCheck
-    ( Arbitrary (..)
-    , Gen
-    , NonNegative (..)
-    , Positive (..)
-    , Property
-    , genericShrink
-    , suchThat
-    , (===)
-    , (==>)
-    )
+    ( Arbitrary(..), Gen, Positive(..), Property, NonNegative(..)
+    , genericShrink, suchThat, (===), (==>))
 import Test.QuickCheck.Instances ()
-import Test.Tasty                (TestTree)
-import Test.Tasty.QuickCheck     (QuickCheckTests (..))
-import Text.Megaparsec           (Pos, SourcePos (..))
+import Test.Tasty (TestTree)
+import Test.Tasty.QuickCheck (QuickCheckTests(..))
+import Text.Megaparsec (SourcePos(..), Pos)
 
 import qualified Control.Spoon
-import qualified Data.Foldable         as Foldable
-import qualified Data.HashMap.Strict   as HashMap
-import qualified Data.HashSet
+import qualified Data.Foldable as Foldable
 import qualified Data.List
-import qualified Data.Map
 import qualified Data.Sequence
-import qualified Data.Set
 import qualified Data.SpecialValues
-import qualified Data.Text             as Text
+import qualified Data.HashSet
+import qualified Data.Set
+import qualified Data.Text as Text
+import qualified Data.Map
+import qualified Data.HashMap.Strict as HashMap
 import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
 import qualified Dhall.Map
-import qualified Dhall.Parser          as Parser
+import qualified Dhall.Parser as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
-import qualified Lens.Family           as Lens
-import qualified Numeric.Natural       as Nat
+import qualified Lens.Family as Lens
+import qualified Numeric.Natural as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
 import qualified Test.Tasty.QuickCheck

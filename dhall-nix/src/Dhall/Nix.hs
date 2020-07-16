@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE QuasiQuotes        #-}
+{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE TypeFamilies       #-}
 
 {-| This library only exports a single `dhallToNix` function for translating a
@@ -92,35 +92,35 @@ module Dhall.Nix (
     ) where
 
 import Control.Exception (Exception)
-import Data.Fix          (Fix (..))
-import Data.Foldable     (toList)
-import Data.Text         (Text)
-import Data.Traversable  (for)
-import Data.Typeable     (Typeable)
-import Data.Void         (Void, absurd)
+import Data.Foldable (toList)
+import Data.Fix (Fix(..))
+import Data.Text (Text)
+import Data.Traversable (for)
+import Data.Typeable (Typeable)
+import Data.Void (Void, absurd)
 import Dhall.Core
-    ( Binding (..)
-    , Chunks (..)
-    , DhallDouble (..)
-    , Expr (..)
-    , MultiLet (..)
-    , PreferAnnotation (..)
-    , Var (..)
+    ( Binding(..)
+    , Chunks(..)
+    , DhallDouble(..)
+    , Expr(..)
+    , MultiLet(..)
+    , PreferAnnotation(..)
+    , Var(..)
     )
-import Lens.Family       (toListOf)
-import Nix.Atoms         (NAtom (..))
+import Lens.Family (toListOf)
+import Nix.Atoms (NAtom(..))
 import Nix.Expr
-    ( Antiquoted (..)
-    , Binding (..)
-    , NBinaryOp (..)
-    , NExprF (..)
-    , NKeyName (..)
-    , NRecordType (..)
-    , NString (..)
-    , Params (..)
-    , ($+)
-    , (==>)
+    ( Antiquoted(..)
+    , Binding(..)
+    , NBinaryOp(..)
+    , NExprF(..)
+    , NKeyName(..)
+    , NRecordType(..)
+    , NString(..)
+    , Params(..)
     , (@@)
+    , (==>)
+    , ($+)
     )
 
 import qualified Data.Text
