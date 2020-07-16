@@ -69,9 +69,9 @@ import Dhall.Syntax
   , Const(..)
   , DhallDouble(..)
   , PreferAnnotation(..)
-    , RecordField (..)
+  , RecordField (..)
   , Var(..)
-    )
+  )
 
 import qualified Data.Char
 import qualified Data.Sequence   as Sequence
