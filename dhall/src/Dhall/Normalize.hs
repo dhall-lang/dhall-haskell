@@ -639,14 +639,12 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     Field r x        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
 
-        let loopRecordField (RecordField s0 expr) = RecordField <$> pure s0 <*> loop expr
-
         r' <- loop r
         case r' of
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
                     Just v  -> pure $ recordFieldValue v
-                    Nothing -> Field <$> (RecordLit <$> traverse loopRecordField kvs) <*> pure x
+                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure x
             Project r_ _ -> loop (Field r_ x)
             Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
                 Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
