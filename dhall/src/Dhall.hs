@@ -1097,9 +1097,9 @@ pairFromMapEntry k v = Decoder extractOut expectedOut
     extractOut expr = typeError expectedOut expr
 
     expectedOut = do
-        k' <- expected k
-        v' <- expected v
-        pure $ Record $ Core.makeRecordField <$> Dhall.Map.fromList
+        k' <- Core.makeRecordField <$> expected k
+        v' <- Core.makeRecordField <$> expected v
+        pure $ Record $ Dhall.Map.fromList
             [ ("mapKey", k')
             , ("mapValue", v')]
 
@@ -1149,9 +1149,9 @@ pair l r = Decoder extractOut expectedOut
     extractOut expr = typeError expectedOut expr
 
     expectedOut = do
-        l' <- expected l
-        r' <- expected r
-        pure $ Record $ Core.makeRecordField <$> Dhall.Map.fromList
+        l' <- Core.makeRecordField <$> expected l
+        r' <- Core.makeRecordField <$> expected r
+        pure $ Record $ Dhall.Map.fromList
             [ ("_1", l')
             , ("_2", r')]
 
@@ -2025,12 +2025,16 @@ instance (ToDhall k, ToDhall v) => ToDhall (Data.Map.Map k v) where
                 | Data.Map.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List (Record $ Core.makeRecordField <$> Dhall.Map.fromList
-                          [("mapKey", declaredK), ("mapValue", declaredV)])
+        declaredOut = App List (Record $ Dhall.Map.fromList
+                          [ ("mapKey", Core.makeRecordField declaredK)
+                          , ("mapValue", Core.makeRecordField declaredV)
+                          ])
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . Data.Map.toList
-        recordPair (k, v) = RecordLit $ Core.makeRecordField <$> Dhall.Map.fromList
-                                [("mapKey", embedK k), ("mapValue", embedV v)]
+        recordPair (k, v) = RecordLit $ Dhall.Map.fromList
+                                [ ("mapKey", Core.makeRecordField $ embedK k)
+                                , ("mapValue", Core.makeRecordField $ embedV v)
+                                ]
 
         Encoder embedK declaredK = injectWith inputNormalizer
         Encoder embedV declaredV = injectWith inputNormalizer
@@ -2053,12 +2057,16 @@ instance (ToDhall k, ToDhall v) => ToDhall (HashMap k v) where
                 | HashMap.null m = Just declaredOut
                 | otherwise       = Nothing
 
-        declaredOut = App List (Record $ Core.makeRecordField <$> Dhall.Map.fromList
-                          [("mapKey", declaredK), ("mapValue", declaredV)])
+        declaredOut = App List (Record $ Dhall.Map.fromList
+                          [ ("mapKey", Core.makeRecordField declaredK)
+                          , ("mapValue", Core.makeRecordField declaredV)
+                          ])
 
         mapEntries = Data.Sequence.fromList . fmap recordPair . HashMap.toList
-        recordPair (k, v) = RecordLit $ Core.makeRecordField <$> Dhall.Map.fromList
-                                [("mapKey", embedK k), ("mapValue", embedV v)]
+        recordPair (k, v) = RecordLit $ Dhall.Map.fromList
+                                [ ("mapKey", Core.makeRecordField $ embedK k)
+                                , ("mapValue", Core.makeRecordField $ embedV v)
+                                ]
 
         Encoder embedK declaredK = injectWith inputNormalizer
         Encoder embedV declaredV = injectWith inputNormalizer
@@ -2310,16 +2318,16 @@ instance (Selector s1, Selector s2, ToDhall a1, ToDhall a2) => GenericToDhall (M
         let Encoder embedR declaredR = injectWith inputNormalizer
 
         let embed (M1 (K1 l) :*: M1 (K1 r)) =
-                RecordLit $ Core.makeRecordField <$>
+                RecordLit $
                     Dhall.Map.fromList
-                        [ (nameL, embedL l), (nameR, embedR r) ]
+                        [ (nameL, Core.makeRecordField $ embedL l)
+                        , (nameR, Core.makeRecordField $ embedR r) ]
 
 
         let declared =
-                Record $ Core.makeRecordField <$>
-                    Dhall.Map.fromList
-                        [ (nameL, declaredL)
-                        , (nameR, declaredR) ]
+                Record $ Dhall.Map.fromList
+                    [ (nameL, Core.makeRecordField declaredL)
+                    , (nameR, Core.makeRecordField declaredR) ]
 
 
         return (Encoder {..})
