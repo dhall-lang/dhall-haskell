@@ -301,14 +301,14 @@ For example,
 
 will be instantiated as follows:
 
-* @recordFieldSrc0@ corresponds to the @A@ comment.
+* @recordFieldSrc@ corresponds to the @A@ comment.
 * @field@ is @"T"@
 
 Although the @A@ comment isn't annotating the @"T"@ Record Field,
 this is the best place to keep these comments
 -}
 data RecordField s a = RecordField
-    { recordFieldSrc0  :: Maybe s
+    { recordFieldSrc  :: Maybe s
     , recordFieldValue :: Expr s a
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
