@@ -562,20 +562,20 @@ instance Applicative (Expr s) where
 instance Monad (Expr s) where
     return = pure
 
-    Embed a     >>= k = k a
-    Let a b     >>= k = Let (adapt0 a) (b >>= k)
-      where
-        adapt0 (Binding src0 c src1 d src2 e) =
-            Binding src0 c src1 (fmap adapt1 d) src2 (e >>= k)
-
-        adapt1 (src3, f) = (src3, f >>= k)
-    Note a b    >>= k = Note a (b >>= k)
-    expression  >>= k = case expression of
-        Record a -> Record $ f <$> a
-        RecordLit a -> RecordLit $ f <$> a
+    expression >>= k = case expression of
+        Embed a    -> k a
+        Let a b    -> Let (adaptBinding a) (b >>= k)
+        Note a b   -> Note a (b >>= k)
+        Record a -> Record $ bindRecordKeyValues <$> a
+        RecordLit a -> RecordLit $ bindRecordKeyValues <$> a
         _ -> Lens.over unsafeSubExpressions (>>= k) expression
       where
-        f (RecordField s0 e) = RecordField s0 (e >>= k)
+        bindRecordKeyValues (RecordField s0 e) = RecordField s0 (e >>= k)
+
+        adaptBinding (Binding src0 c src1 d src2 e) =
+            Binding src0 c src1 (fmap adaptBindingAnnotation d) src2 (e >>= k)
+
+        adaptBindingAnnotation (src3, f) = (src3, f >>= k)
 
 instance Bifunctor Expr where
     first k (Note a b   ) = Note (k a) (first k b)
