@@ -112,9 +112,9 @@ schemasCommand Schemas{..} = do
 
 decodeSchema :: Expr s Void -> Maybe (Expr s Void, Map Text (Expr s Void))
 decodeSchema (RecordLit m)
-        | Just  _Type               <- Map.lookup "Type" m
-        , Just (RecordLit _default) <- Map.lookup "default" m =
-            Just (_Type, _default)
+        | Just  _Type               <- Core.recordFieldValue <$> Map.lookup "Type" m
+        , Just (RecordLit _default) <- Core.recordFieldValue <$> Map.lookup "default" m =
+            Just (_Type, Core.recordFieldValue <$> _default)
 decodeSchema _ =
     Nothing
 
@@ -122,7 +122,7 @@ decodeSchemas
     :: Expr s Void
     -> Maybe (Data.Map.Map SHA256Digest (Text, Map Text (Expr s Void)))
 decodeSchemas (RecordLit keyValues) = do
-    m <- traverse decodeSchema keyValues
+    m <- traverse (decodeSchema . Core.recordFieldValue) keyValues
 
     let typeMetadata = Data.Map.fromList $ do
             (name, (_Type, _default)) <- Map.toList m
@@ -173,7 +173,11 @@ rewriteWithSchemas _schemas expression = do
                              | otherwise = Just a
 
                 let defaultedKeyValues =
-                        Map.fromMap (Data.Map.differenceWith diff (Map.toMap keyValues) (Map.toMap _default))
+                        Core.makeRecordField <$>
+                        Map.fromMap (
+                            Data.Map.differenceWith diff
+                                (Map.toMap $ Core.recordFieldValue <$> keyValues)
+                                (Map.toMap _default))
 
                 let defaultedRecord = RecordLit defaultedKeyValues
 

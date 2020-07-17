@@ -15,7 +15,7 @@ import Dhall.Map (foldMapWithKey)
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Dhall.Util (Input(..))
-import Dhall.Syntax (Expr(..), Binding(..))
+import Dhall.Syntax (Expr(..), Binding(..), RecordField (..))
 import Dhall.Src (Src(srcStart))
 import Dhall.Parser (exprFromText)
 import System.FilePath ((</>), takeFileName)
@@ -191,8 +191,8 @@ getTagsFromExpr = go (LC 0 0) []
     where go lpos mts = \case
               (Let b e) -> go lpos (mts <> parseBinding lpos b) e
               (Annot e1 e2) -> go lpos (go lpos mts e1) e2
-              (Record mr) -> mts <> tagsFromDhallMap lpos mr
-              (RecordLit mr) -> mts <> tagsFromDhallMap lpos mr
+              (Record mr) -> mts <> tagsFromDhallMap lpos (recordFieldValue <$> mr)
+              (RecordLit mr) -> mts <> tagsFromDhallMap lpos (recordFieldValue <$> mr)
               (Union mmr) -> mts <> tagsFromDhallMapMaybe lpos mmr
               (Note s e) -> go (srcToLineColumn s) mts e
               _ -> mts

@@ -525,7 +525,7 @@ dhallToNix e =
     loop None = return (Fix (NConstant NNull))
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
-        a' <- traverse loop a
+        a' <- traverse (loop . Dhall.Core.recordFieldValue) a
         let a'' = do
                 (k, v) <- Dhall.Map.toList a'
                 return (NamedVar [StaticKey k] v Nix.nullPos)

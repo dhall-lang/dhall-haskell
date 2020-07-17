@@ -33,6 +33,7 @@ import Dhall.Core
     , ImportMode(..)
     , ImportType(..)
     , PreferAnnotation(..)
+    , RecordField (..)
     , Scheme(..)
     , URL(..)
     , Var(..)
@@ -232,6 +233,12 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (PreferAnnotation s a) where
             , PreferFromWith <$> arbitrary
             , pure PreferFromCompletion
             ]
+
+instance (Arbitrary s, Arbitrary a) => Arbitrary (RecordField s a) where
+    arbitrary =
+        lift1 Dhall.Core.makeRecordField
+
+    shrink = genericShrink
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =

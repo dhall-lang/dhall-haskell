@@ -45,6 +45,7 @@ import Dhall.Syntax
     , ImportType(..)
     , MultiLet(..)
     , PreferAnnotation(..)
+    , RecordField (..)
     , Scheme(..)
     , URL(..)
     , Var(..)
@@ -370,7 +371,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                     _T <- go
 
-                                    return (x, _T)
+                                    return (x, Syntax.makeRecordField _T)
 
                                 return (Record (Dhall.Map.fromList xTs))
 
@@ -382,7 +383,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                     t <- go
 
-                                    return (x, t)
+                                    return (x, Syntax.makeRecordField t)
 
                                 return (RecordLit (Dhall.Map.fromList xts))
 
@@ -812,12 +813,12 @@ encodeExpressionInternal encodeEmbed = go
         Record xTs ->
             encodeList2
                 (Encoding.encodeInt 7)
-                (encodeMapWith go xTs)
+                (encodeMapWith (go . recordFieldValue) xTs)
 
         RecordLit xts ->
             encodeList2
                 (Encoding.encodeInt 8)
-                (encodeMapWith go xts)
+                (encodeMapWith (go. recordFieldValue) xts)
 
         Field t x ->
             encodeList3

@@ -63,12 +63,19 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
     Test.Tasty.HUnit.assertEqual "Good type" (Dhall.expected ty)
         (Success (Dhall.Core.Union
             (Dhall.Map.fromList
-                [   ("Foo",Just (Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool)])))
-                ,   ("Bar",Just (Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Bool),("_2",Dhall.Core.Bool),("_3",Dhall.Core.Bool)])))
-                ,   ("Baz",Just (Dhall.Core.Record (Dhall.Map.fromList [
-                        ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Integer)])))
+                [   ("Foo",Just (Dhall.Core.Record (Dhall.Map.fromList
+                        [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                        , ("_2", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        ])))
+                ,   ("Bar",Just (Dhall.Core.Record (Dhall.Map.fromList
+                        [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        , ("_2", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        , ("_3", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                        ])))
+                ,   ("Baz",Just (Dhall.Core.Record (Dhall.Map.fromList
+                        [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                        , ("_2", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                        ])))
                 ]
             )
         ))
@@ -78,7 +85,10 @@ unnamedFields = Test.Tasty.HUnit.testCase "Unnamed Fields" (do
 
     let tu_ty = Dhall.auto :: Dhall.Decoder (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Auto Tuple" (Dhall.expected tu_ty) (Success $ Dhall.Core.Record (
-            Dhall.Map.fromList [ ("_1",Dhall.Core.Integer),("_2",Dhall.Core.Bool) ]))
+            Dhall.Map.fromList
+                [ ("_1", Dhall.Core.makeRecordField Dhall.Core.Integer)
+                , ("_2", Dhall.Core.makeRecordField Dhall.Core.Bool)
+                ]))
 
     let tu_in = Dhall.inject :: Dhall.Encoder (Integer, Bool)
     Test.Tasty.HUnit.assertEqual "Inj. Tuple" (Success $ Dhall.declared tu_in) (Dhall.expected tu_ty)

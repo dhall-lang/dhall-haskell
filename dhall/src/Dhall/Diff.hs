@@ -25,7 +25,7 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void (Void)
-import Dhall.Syntax (Binding(..), Chunks (..), Const(..), DhallDouble(..), Expr(..), Var(..))
+import Dhall.Syntax (Binding(..), Chunks (..), Const(..), DhallDouble(..), Expr(..), RecordField(..), Var(..))
 import Dhall.Map (Map)
 import Dhall.Set (Set)
 import Dhall.Pretty.Internal (Ann)
@@ -253,10 +253,12 @@ enclosed' l m docs =
 diffKeyVals
     :: (Eq a, Pretty a)
     => Diff
-    -> Map Text (Expr Void a)
-    -> Map Text (Expr Void a)
+    -> Map Text (RecordField Void a)
+    -> Map Text (RecordField Void a)
     -> [Diff]
-diffKeyVals assign = diffKeysWith assign diff
+diffKeyVals assign kvsL kvsR = diffKeysWith assign diff
+    (recordFieldValue <$> kvsL)
+    (recordFieldValue <$> kvsR)
 
 diffKeysWith
     :: Diff
@@ -395,12 +397,12 @@ diffList l r = bracketed (loop parts₀)
 
 diffRecord
     :: (Eq a, Pretty a)
-    => Map Text (Expr Void a) -> Map Text (Expr Void a) -> Diff
+    => Map Text (RecordField Void a) -> Map Text (RecordField Void a) -> Diff
 diffRecord kvsL kvsR = braced (diffKeyVals colon kvsL kvsR)
 
 diffRecordLit
     :: (Eq a, Pretty a)
-    => Map Text (Expr Void a) -> Map Text (Expr Void a) -> Diff
+    => Map Text (RecordField Void a) -> Map Text (RecordField Void a) -> Diff
 diffRecordLit kvsL kvsR = braced (diffKeyVals equals kvsL kvsR)
 
 diffUnion

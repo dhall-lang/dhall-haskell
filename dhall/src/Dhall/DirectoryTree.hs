@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 -- | Implementation of the @dhall to-directory-tree@ subcommand
 module Dhall.DirectoryTree
@@ -13,7 +14,7 @@ import Control.Applicative (empty)
 import Control.Exception   (Exception)
 import Data.Monoid         ((<>))
 import Data.Void           (Void)
-import Dhall.Syntax        (Chunks (..), Expr (..))
+import Dhall.Syntax        (Chunks (..), Expr (..), RecordField(..))
 import System.FilePath     ((</>))
 
 import qualified Control.Exception                       as Exception
@@ -87,39 +88,40 @@ import qualified System.FilePath                         as FilePath
 -}
 toDirectoryTree :: FilePath -> Expr Void Void -> IO ()
 toDirectoryTree path expression = case expression of
-    RecordLit keyValues -> do
-        Map.unorderedTraverseWithKey_ process keyValues
+    RecordLit keyValues ->
+        Map.unorderedTraverseWithKey_ process $ recordFieldValue <$> keyValues
 
-    ListLit (Just (Record [ ("mapKey", Text), ("mapValue", _) ])) [] -> do
+    ListLit (Just (Record [ ("mapKey", recordFieldValue -> Text), ("mapValue", _) ])) [] ->
         return ()
 
     ListLit _ records
         | not (null records)
-        , Just keyValues <- extract (Foldable.toList records) -> do
+        , Just keyValues <- extract (Foldable.toList records) ->
             Foldable.traverse_ (uncurry process) keyValues
 
-    TextLit (Chunks [] text) -> do
+    TextLit (Chunks [] text) ->
         Text.IO.writeFile path text
 
-    Some value -> do
+    Some value ->
         toDirectoryTree path value
 
-    App (Field (Union _) _) value -> do
+    App (Field (Union _) _) value ->
         toDirectoryTree path value
 
-    App None _ -> do
+    App None _ ->
         return ()
 
-    _ -> do
+    _ ->
         die
   where
-    extract [] = do
+    extract [] =
         return []
 
-    extract (RecordLit [("mapKey", TextLit (Chunks [] key)), ("mapValue", value)]:records) = do
+    extract (RecordLit [ ("mapKey", recordFieldValue -> TextLit (Chunks [] key))
+                       , ("mapValue", recordFieldValue -> value)] : records) =
         fmap ((key, value) :) (extract records)
 
-    extract _ = do
+    extract _ =
         empty
 
     process key value = do

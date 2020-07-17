@@ -1110,7 +1110,7 @@ prettyCharacterSet characterSet expression =
                 Pretty.align
                     (   prettySelectorExpression a
                     <>  doubleColon
-                    <>  prettyCompletionLit 0 kvs
+                    <>  prettyCompletionLit 0 (recordFieldValue <$> kvs)
                     )
             _ ->    prettySelectorExpression a
                 <>  doubleColon
@@ -1219,9 +1219,9 @@ prettyCharacterSet characterSet expression =
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a
     prettyPrimitiveExpression (Record a) =
-        prettyRecord a
+        prettyRecord $ recordFieldValue <$> a
     prettyPrimitiveExpression (RecordLit a) =
-        prettyRecordLit a
+        prettyRecordLit $ recordFieldValue <$> a
     prettyPrimitiveExpression (Union a) =
         prettyUnion a
     prettyPrimitiveExpression (ListLit Nothing b) =
@@ -1256,7 +1256,7 @@ prettyCharacterSet characterSet expression =
             <>  doubleColon
             <>  case shallowDenote r of
                     RecordLit kvs ->
-                        prettyCompletionLit 2 kvs
+                        prettyCompletionLit 2 $ recordFieldValue <$> kvs
                     _ ->
                         prettySelectorExpression r
 
@@ -1527,7 +1527,7 @@ consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
     adapt (key, expression) =
         case shallowDenote expression of
             RecordLit m ->
-                case fmap adapt (Map.toList m) of
+                case fmap adapt (Map.toList $ recordFieldValue <$> m) of
                     [ (keys, expression') ] ->
                         (NonEmpty.cons key keys, expression')
                     _ ->

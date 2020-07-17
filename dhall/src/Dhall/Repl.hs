@@ -581,7 +581,7 @@ completeFunc reversedPrev word
                               fmap (("." <> f) <>) (algebraicComplete fs e)
 
       in  case expr of
-            Dhall.Core.RecordLit    m -> withMap (fmap Just m)
+            Dhall.Core.RecordLit    m -> withMap (fmap (Just . Dhall.Core.recordFieldValue) m)
             Dhall.Core.Union        m -> withMap m
             _                         -> []
 

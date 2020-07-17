@@ -28,12 +28,12 @@ import Language.Haskell.TH.Syntax
     , Exp(..)
     , Q
     , Type(..)
+    , DerivStrategy (..)
     , Bang(..)
     , SourceStrictness(..)
     , SourceUnpackedness(..)
 #if MIN_VERSION_template_haskell(2,12,0)
     , DerivClause(..)
-    , DerivStrategy(..)
 #else
     , Pred
 #endif
@@ -261,7 +261,7 @@ toConstructor haskellTypes (constructorName, maybeAlternativeType) = do
 
                     return (Syntax.mkName (Text.unpack key), bang, haskellFieldType)
 
-            varBangTypes <- traverse process (Dhall.Map.toList kts)
+            varBangTypes <- traverse process (Dhall.Map.toList $ Core.recordFieldValue <$> kts)
 
             return (RecC name varBangTypes)
 

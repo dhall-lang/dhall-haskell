@@ -68,8 +68,8 @@ wrongDhallType = Dhall.Decoder {..}
   where expected = pure $
           Dhall.Core.Record
             ( Dhall.Map.fromList
-              [ ( "bar", Dhall.Core.Natural)
-              , ( "foo", Dhall.Core.Text )
+              [ ( "bar", Dhall.Core.makeRecordField Dhall.Core.Natural)
+              , ( "foo", Dhall.Core.makeRecordField Dhall.Core.Text )
               ]
             )
         extract expr = Dhall.typeError expected expr

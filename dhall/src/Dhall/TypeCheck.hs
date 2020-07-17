@@ -52,6 +52,7 @@ import Dhall.Syntax
     , Chunks(..)
     , Expr(..)
     , PreferAnnotation(..)
+    , RecordField (..)
     , Var(..)
     )
 
@@ -726,7 +727,7 @@ infer typer = loop
             return (VOptional _A')
 
         Record xTs -> do
-            let process x _T = do
+            let process x (RecordField _ _T) = do
                     tT' <- lift (loop ctx _T)
 
                     case tT' of
@@ -739,7 +740,7 @@ infer typer = loop
 
         RecordLit xts -> do
             let process t = do
-                    _T' <- loop ctx t
+                    _T' <- loop ctx $ recordFieldValue t
 
                     let _T'' = quote names _T'
 
