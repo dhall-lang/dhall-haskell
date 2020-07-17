@@ -16,6 +16,7 @@
 
 module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
 
+import Control.Applicative        (Alternative(..))
 import Control.Monad.Writer.Class (MonadWriter)
 import Data.Function              (on)
 import Data.Map.Strict            (Map)
@@ -161,14 +162,21 @@ getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
             in NonEmpty.toList bs
         _ -> []
 
-
     extractTypeIfInSource :: Expr Void Import -> Maybe (Expr Void Import)
-    extractTypeIfInSource expr = do
-        V name index <- maybeNameInLet expr
-        (Binding _ _ _ (Just (_, exprType)) _ _) <-
-            getLetBindingWithIndex index $ getLetBindingsWithName name
-        return exprType
+    extractTypeIfInSource expr=
+            fromOrdinaryAnnotation expr
+        <|> fromLetBindingAnnotation
       where
+        fromOrdinaryAnnotation (Let _ e)    = fromOrdinaryAnnotation e
+        fromOrdinaryAnnotation (Annot _ _T) = pure _T
+        fromOrdinaryAnnotation  _           = empty
+
+        fromLetBindingAnnotation = do
+            V name index <- maybeNameInLet expr
+            (Binding _ _ _ (Just (_, exprType)) _ _) <-
+                getLetBindingWithIndex index $ getLetBindingsWithName name
+            return exprType
+
         -- | For an expression of the form @let x0 = y0 let x1 = y1 ... in e@
         --   where @e@ is a variable, maybeNameInLet returns the variable name.
         maybeNameInLet :: Expr Void Import -> Maybe Var
@@ -177,7 +185,7 @@ getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
         maybeNameInLet _ = Nothing
 
 
-        {-| For an expression of the form @let x0 = y0 x1 = y1 ... in e@
+        {-| For an expression of the form @let x0 = y0 let x1 = y1 ... in e@
             and a variable name @v@, this returns every @xi@ that is equal to
             v in the reverse order of the source code.
 
