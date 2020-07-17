@@ -11,7 +11,7 @@
 
 module Dhall.Test.TH where
 
-import Dhall.TH (HaskellType(..))
+import Dhall.TH   (HaskellType (..))
 import Test.Tasty (TestTree)
 
 import qualified Dhall

@@ -1,50 +1,85 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Dhall.LSP.Handlers where
 
-import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.Messages as LSP
-import qualified Language.Haskell.LSP.Types as J
-import qualified Language.Haskell.LSP.Types.Lens as J
-import qualified Language.Haskell.LSP.VFS as LSP
-import qualified Data.Aeson as J
-import qualified Data.Rope.UTF16 as Rope
-
-import Data.Void (Void)
-import Dhall.Core (Expr(Note, Embed), pretty, Import(..), ImportHashed(..), ImportType(..), headers)
+import Data.Void    (Void)
+import Dhall.Core
+    ( Expr (Embed, Note)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    , headers
+    , pretty
+    )
 import Dhall.Import (localToPath)
-import Dhall.Parser (Src(..))
-import Dhall.Pretty (CharacterSet(..))
+import Dhall.Parser (Src (..))
+import Dhall.Pretty (CharacterSet (..))
 
-import Dhall.LSP.Backend.Completion (Completion(..), completionQueryAt,
-  completeEnvironmentImport, completeLocalImport, buildCompletionContext, completeProjections, completeFromContext)
-import Dhall.LSP.Backend.Dhall (FileIdentifier, parse, load, typecheck,
-  fileIdentifierFromFilePath, fileIdentifierFromURI, invalidate, parseWithHeader)
-import Dhall.LSP.Backend.Diagnostics (Range(..), Diagnosis(..), explain,
-  rangeFromDhall, diagnose, embedsWithRanges)
-import Dhall.LSP.Backend.Formatting (formatExpr, formatExprWithHeader)
-import Dhall.LSP.Backend.Freezing (computeSemanticHash, getImportHashPosition,
-  stripHash, getAllImportsWithHashPositions)
-import Dhall.LSP.Backend.Linting (Suggestion(..), suggest, lint)
-import Dhall.LSP.Backend.Parsing (binderExprFromText)
-import Dhall.LSP.Backend.Typing (typeAt, annotateLet, exprAt)
+import Dhall.LSP.Backend.Completion
+    ( Completion (..)
+    , buildCompletionContext
+    , completeEnvironmentImport
+    , completeFromContext
+    , completeLocalImport
+    , completeProjections
+    , completionQueryAt
+    )
+import Dhall.LSP.Backend.Dhall
+    ( FileIdentifier
+    , fileIdentifierFromFilePath
+    , fileIdentifierFromURI
+    , invalidate
+    , load
+    , parse
+    , parseWithHeader
+    , typecheck
+    )
+import Dhall.LSP.Backend.Diagnostics
+    ( Diagnosis (..)
+    , Range (..)
+    , diagnose
+    , embedsWithRanges
+    , explain
+    , rangeFromDhall
+    )
+import Dhall.LSP.Backend.Formatting  (formatExpr, formatExprWithHeader)
+import Dhall.LSP.Backend.Freezing
+    ( computeSemanticHash
+    , getAllImportsWithHashPositions
+    , getImportHashPosition
+    , stripHash
+    )
+import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
+import Dhall.LSP.Backend.Parsing     (binderExprFromText)
+import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
 import Dhall.LSP.State
 
-import Control.Applicative ((<|>))
+import Control.Applicative              ((<|>))
 import Control.Concurrent.MVar
-import Control.Lens ((^.), use, uses, assign, modifying)
-import Control.Monad (guard, forM)
-import Control.Monad.Trans (liftIO)
-import Control.Monad.Trans.Except (throwE, catchE, runExceptT)
+import Control.Lens                     (assign, modifying, use, uses, (^.))
+import Control.Monad                    (forM, guard)
+import Control.Monad.Trans              (liftIO)
+import Control.Monad.Trans.Except       (catchE, runExceptT, throwE)
 import Control.Monad.Trans.State.Strict (execStateT)
-import Data.Default (def)
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Map.Strict as Map
-import Data.Maybe (maybeToList)
-import Data.Text (Text, isPrefixOf)
-import qualified Data.Text as Text
-import qualified Network.URI as URI
-import qualified Network.URI.Encode as URI
-import Text.Megaparsec (SourcePos(..), unPos)
+import Data.Default                     (def)
+import Data.Maybe                       (maybeToList)
+import Data.Text                        (Text, isPrefixOf)
 import System.FilePath
+import Text.Megaparsec                  (SourcePos (..), unPos)
+
+import qualified Data.Aeson                      as J
+import qualified Data.HashMap.Strict             as HashMap
+import qualified Data.Map.Strict                 as Map
+import qualified Data.Rope.UTF16                 as Rope
+import qualified Data.Text                       as Text
+import qualified Language.Haskell.LSP.Core       as LSP
+import qualified Language.Haskell.LSP.Messages   as LSP
+import qualified Language.Haskell.LSP.Types      as J
+import qualified Language.Haskell.LSP.Types.Lens as J
+import qualified Language.Haskell.LSP.VFS        as LSP
+import qualified Network.URI                     as URI
+import qualified Network.URI.Encode              as URI
+
 
 -- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
 -- expects a multi-threaded implementation. Reports errors to the user via the
@@ -488,7 +523,7 @@ completionHandler request = do
 
           (cache', bindersExpr') <-
             case loadedBinders of
-              Right (cache', binders) -> do
+              Right (cache', binders) ->
                 return (cache', binders)
               Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
 

@@ -12,9 +12,9 @@ module Dhall.Optics
     , mapMOf
     ) where
 
-import Control.Applicative (WrappedMonad(..))
-import Data.Profunctor.Unsafe ((#.))
-import Lens.Family (ASetter, LensLike, over)
+import Control.Applicative    (WrappedMonad (..))
+import Data.Profunctor.Unsafe (( #. ))
+import Lens.Family            (ASetter, LensLike, over)
 
 -- | Identical to @"Control.Lens".`Control.Lens.rewriteOf`@
 rewriteOf :: ASetter a b a b -> (b -> Maybe a) -> a -> b

@@ -246,9 +246,9 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
+import qualified Lens.Family                           as Lens
 import qualified Options.Applicative
 import qualified System.FilePath
-import qualified Lens.Family as Lens
 
 {-| This is the exception type for errors that might arise when translating
     Dhall to JSON

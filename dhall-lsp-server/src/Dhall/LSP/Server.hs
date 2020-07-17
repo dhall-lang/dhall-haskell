@@ -1,24 +1,31 @@
+{-# LANGUAGE RecordWildCards #-}
+
 {-| This is the entry point for the LSP server. -}
 module Dhall.LSP.Server(run) where
 
-import           Control.Concurrent.MVar
-import           Control.Lens ((^.))
-import           Data.Aeson (fromJSON, Result(Success))
-import           Data.Default
-import qualified Language.Haskell.LSP.Control as LSP.Control
-import qualified Language.Haskell.LSP.Core as LSP.Core
-
-import qualified Language.Haskell.LSP.Types as J
-import qualified Language.Haskell.LSP.Types.Lens as J
-
-import Data.Text (Text)
-import qualified System.Log.Logger
-
+import Control.Concurrent.MVar
+import Control.Lens            ((^.))
+import Data.Aeson              (Result (Success), fromJSON)
+import Data.Default
+import Data.Text               (Text)
+import Dhall.LSP.Handlers
+    ( completionHandler
+    , didOpenTextDocumentNotificationHandler
+    , didSaveTextDocumentNotificationHandler
+    , documentFormattingHandler
+    , documentLinkHandler
+    , executeCommandHandler
+    , hoverHandler
+    , nullHandler
+    , wrapHandler
+    )
 import Dhall.LSP.State
-import Dhall.LSP.Handlers (nullHandler, wrapHandler, hoverHandler,
-  didOpenTextDocumentNotificationHandler, didSaveTextDocumentNotificationHandler,
-  executeCommandHandler, documentFormattingHandler, documentLinkHandler,
-  completionHandler)
+
+import qualified Language.Haskell.LSP.Control    as LSP.Control
+import qualified Language.Haskell.LSP.Core       as LSP.Core
+import qualified Language.Haskell.LSP.Types      as J
+import qualified Language.Haskell.LSP.Types.Lens as J
+import qualified System.Log.Logger
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()

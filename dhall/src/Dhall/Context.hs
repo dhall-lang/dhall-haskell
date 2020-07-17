@@ -13,7 +13,7 @@ module Dhall.Context (
     ) where
 
 import Data.Text (Text)
-import Prelude hiding (lookup)
+import Prelude   hiding (lookup)
 
 {-| A @(Context a)@ associates `Text` labels with values of type @a@.  Each
     `Text` label can correspond to multiple values of type @a@

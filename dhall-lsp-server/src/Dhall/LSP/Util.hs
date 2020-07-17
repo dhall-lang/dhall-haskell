@@ -7,8 +7,8 @@ module Dhall.LSP.Util (
   unlines'
 ) where
 
-import Data.Text
 import Data.List.NonEmpty
+import Data.Text
 
 -- | Shorthand for @pack . show@. Useful since we are mostly working with Text
 --   rather than String.

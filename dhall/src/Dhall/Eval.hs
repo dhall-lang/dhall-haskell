@@ -1,16 +1,15 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE LambdaCase           #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PatternSynonyms      #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE StandaloneDeriving   #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE ViewPatterns         #-}
 
 {-# OPTIONS_GHC -O #-}
 
@@ -52,34 +51,34 @@ module Dhall.Eval (
   , textShow
   ) where
 
-import Data.Foldable (foldr', toList)
-import Data.Semigroup (Semigroup(..))
-import Data.Sequence (Seq, ViewL(..), ViewR(..))
-import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Map (Map)
-import Dhall.Set (Set)
-import GHC.Natural (Natural)
-import Prelude hiding (succ)
+import Data.Foldable  (foldr', toList)
+import Data.Semigroup (Semigroup (..))
+import Data.Sequence  (Seq, ViewL (..), ViewR (..))
+import Data.Text      (Text)
+import Data.Void      (Void)
+import Dhall.Map      (Map)
+import Dhall.Set      (Set)
+import GHC.Natural    (Natural)
+import Prelude        hiding (succ)
 
 import Dhall.Syntax
-  ( Binding(..)
-  , Expr(..)
-  , Chunks(..)
-  , Const(..)
-  , DhallDouble(..)
-  , PreferAnnotation(..)
-  , RecordField (..)
-  , Var(..)
-  )
+    ( Binding (..)
+    , Chunks (..)
+    , Const (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , PreferAnnotation (..)
+    , RecordField (..)
+    , Var (..)
+    )
 
 import qualified Data.Char
-import qualified Data.Sequence   as Sequence
+import qualified Data.Sequence as Sequence
 import qualified Data.Set
-import qualified Data.Text       as Text
-import qualified Dhall.Syntax    as Syntax
-import qualified Dhall.Map       as Map
+import qualified Data.Text     as Text
+import qualified Dhall.Map     as Map
 import qualified Dhall.Set
+import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf
 
 data Environment a
@@ -262,7 +261,7 @@ vVar env0 (V x i0) = go env0 i0
         | otherwise =
             go env i
     go Empty i =
-        VVar x (0 - i - 1)
+        VVar x (negate i - 1)
 
 vApp :: Eq a => Val a -> Val a -> Val a
 vApp !t !u =

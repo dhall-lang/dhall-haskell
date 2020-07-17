@@ -20,16 +20,16 @@ module Dhall.Lint
 import Control.Applicative ((<|>))
 
 import Dhall.Syntax
-    ( Binding(..)
-    , Chunks(..)
-    , Directory(..)
-    , Expr(..)
-    , File(..)
-    , FilePrefix(..)
-    , Import(..)
-    , ImportHashed(..)
-    , ImportType(..)
-    , Var(..)
+    ( Binding (..)
+    , Chunks (..)
+    , Directory (..)
+    , Expr (..)
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    , Var (..)
     , subExpressions
     )
 

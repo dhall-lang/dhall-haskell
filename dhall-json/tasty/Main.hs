@@ -1,6 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLists   #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
@@ -77,7 +76,7 @@ testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
 
     text <- Data.Text.IO.readFile inputFile
 
-    parsedExpression <- do
+    parsedExpression <-
         Core.throws (Dhall.Parser.exprFromText inputFile text)
 
     resolvedExpression <- Dhall.Import.load parsedExpression
@@ -87,7 +86,7 @@ testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
     let convertedExpression =
             Dhall.JSON.convertToHomogeneousMaps Dhall.JSON.defaultConversion resolvedExpression
 
-    actualValue <- do
+    actualValue <-
         Core.throws (Dhall.JSON.dhallToJSON convertedExpression)
 
     bytes <- Data.ByteString.Lazy.readFile outputFile
@@ -121,12 +120,12 @@ testCustomConversionJSONToDhall infer conv prefix =
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf schema)
 
-    actualExpression <- do
+    actualExpression <-
         Core.throws (JSONToDhall.dhallFromJSON conv schema value)
 
     outputText <- Data.Text.IO.readFile outputFile
 
-    parsedExpression <- do
+    parsedExpression <-
         Core.throws (Dhall.Parser.exprFromText outputFile outputText)
 
     resolvedExpression <- Dhall.Import.load parsedExpression

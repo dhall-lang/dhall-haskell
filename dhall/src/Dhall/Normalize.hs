@@ -1,6 +1,6 @@
-{-# LANGUAGE BangPatterns       #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Dhall.Normalize (
       alphaNormalize
@@ -18,23 +18,23 @@ module Dhall.Normalize (
     , freeIn
     ) where
 
-import Control.Applicative (empty)
+import Control.Applicative   (empty)
 import Data.Foldable
-import Data.Functor.Identity (Identity(..))
-import Data.Semigroup (Semigroup(..))
-import Data.Sequence (ViewL(..), ViewR(..))
+import Data.Functor.Identity (Identity (..))
+import Data.Semigroup        (Semigroup (..))
+import Data.Sequence         (ViewL (..), ViewR (..))
 import Data.Traversable
-import Instances.TH.Lift ()
-import Prelude hiding (succ)
+import Instances.TH.Lift     ()
+import Prelude               hiding (succ)
 
 import Dhall.Syntax
-    ( Expr(..)
-    , Var(..)
-    , Binding(Binding)
-    , Chunks(..)
-    , DhallDouble(..)
-    , PreferAnnotation(..)
-    , RecordField(..)
+    ( Binding (Binding)
+    , Chunks (..)
+    , DhallDouble (..)
+    , Expr (..)
+    , PreferAnnotation (..)
+    , RecordField (..)
+    , Var (..)
     )
 
 import qualified Data.Sequence
@@ -280,7 +280,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     let b₂ = shift (-1) (V x 0) b₁
 
                     loop b₂
-                _ -> do
+                _ ->
                   case App f' a' of
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
@@ -293,10 +293,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         strict =       strictLoop (fromIntegral n0 :: Integer)
                         lazy   = loop (  lazyLoop (fromIntegral n0 :: Integer))
 
-                        strictLoop !0 = loop zero
+                        strictLoop 0 = loop zero
                         strictLoop !n = App succ' <$> strictLoop (n - 1) >>= loop
 
-                        lazyLoop !0 = zero
+                        lazyLoop 0 = zero
                         lazyLoop !n = App succ' (lazyLoop (n - 1))
                     App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
                       where
@@ -359,7 +359,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         strictNil = loop nil
                         lazyNil   =      nil
 
-                        strictCons y ys = do
+                        strictCons y ys =
                           App (App cons y) <$> ys >>= loop
                         lazyCons   y ys =       App (App cons y) ys
                     App (App ListLength _) (ListLit _ ys) ->
@@ -576,7 +576,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             l
         decide l r =
             Prefer PreferFromSource l r
-    RecordCompletion x y -> do
+    RecordCompletion x y ->
         loop (Annot (Prefer PreferFromCompletion (Field x "default") y) (Field x "Type"))
     Merge x y t      -> do
         x' <- loop x
@@ -634,7 +634,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             Nothing
 
                 return (ListLit listType keyValues)
-            _ -> do
+            _ ->
                 return (ToMap x' t')
     Field r x        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
@@ -678,7 +678,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         e2 <- loop e1
 
         case e2 of
-            Record kts -> do
+            Record kts ->
                 loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
             _ -> do
                 r' <- loop r
@@ -692,7 +692,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         r' <- loop r
 
         pure (Equivalent l' r')
-    With e' k v -> do
+    With e' k v ->
         loop (Syntax.desugarWith (With e' k v))
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l

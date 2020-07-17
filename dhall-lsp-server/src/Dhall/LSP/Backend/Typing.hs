@@ -1,19 +1,32 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
-import Dhall.Context (Context, insert, empty)
-import Dhall.Core (Binding(..), Expr(..), subExpressions, normalize, shift, subst, Var(..))
-import Dhall.TypeCheck (typeWithA, TypeError(..))
-import Dhall.Parser (Src(..))
+import Dhall.Context   (Context, empty, insert)
+import Dhall.Core
+    ( Binding (..)
+    , Expr (..)
+    , Var (..)
+    , normalize
+    , shift
+    , subExpressions
+    , subst
+    )
+import Dhall.Parser    (Src (..))
+import Dhall.TypeCheck (TypeError (..), typeWithA)
 
-import Control.Lens (toListOf)
 import Control.Applicative ((<|>))
-import Data.Bifunctor (first)
-import Data.Void (absurd, Void)
+import Control.Lens        (toListOf)
+import Data.Bifunctor      (first)
+import Data.Void           (Void, absurd)
 
-import Dhall.LSP.Backend.Parsing (getLetInner, getLetAnnot, getLetIdentifier,
-  getLamIdentifier, getForallIdentifier)
-import Dhall.LSP.Backend.Diagnostics (Position, Range(..), rangeFromDhall)
-import Dhall.LSP.Backend.Dhall (WellTyped, fromWellTyped)
+import Dhall.LSP.Backend.Dhall       (WellTyped, fromWellTyped)
+import Dhall.LSP.Backend.Diagnostics (Position, Range (..), rangeFromDhall)
+import Dhall.LSP.Backend.Parsing
+    ( getForallIdentifier
+    , getLamIdentifier
+    , getLetAnnot
+    , getLetIdentifier
+    , getLetInner
+    )
 
 -- | Find the type of the subexpression at the given position. Assumes that the
 --   input expression is well-typed. Also returns the Src descriptor containing
@@ -134,14 +147,14 @@ annotateLet' pos ctx (Pi x _A _B@(Note src _)) | pos `inside` src = do
   annotateLet' pos ctx' _B
 
 -- we need to unfold Notes to make progress
-annotateLet' pos ctx (Note _ expr) = do
+annotateLet' pos ctx (Note _ expr) =
   annotateLet' pos ctx expr
 
 -- catch-all
 annotateLet' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
   case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
-    (e:[]) -> annotateLet' pos ctx e
+    [e] -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
 
 -- Make sure all lets in a multilet are annotated with their source information

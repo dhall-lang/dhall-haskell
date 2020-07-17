@@ -11,18 +11,30 @@ module Dhall.LSP.Backend.Parsing
   )
 where
 
-import Data.Text (Text)
-import Dhall.Core (Binding(..), Expr(..), Import, Var(..))
-import Dhall.Src (Src(..))
+import Control.Applicative     (optional, (<|>))
+import Data.Text               (Text)
+import Dhall.Core              (Binding (..), Expr (..), Import, Var (..))
 import Dhall.Parser
-import Dhall.Parser.Token hiding (text)
-import Dhall.Parser.Expression (getSourcePos, importType_, importHash_, localOnly)
-import Text.Megaparsec (try, skipManyTill, lookAhead, anySingle,
-  notFollowedBy, eof, takeRest)
+import Dhall.Parser.Expression
+    ( getSourcePos
+    , importHash_
+    , importType_
+    , localOnly
+    )
+import Dhall.Parser.Token      hiding (text)
+import Dhall.Src               (Src (..))
+import Text.Megaparsec
+    ( anySingle
+    , eof
+    , lookAhead
+    , notFollowedBy
+    , skipManyTill
+    , takeRest
+    , try
+    )
+import Text.Megaparsec         (SourcePos (..))
 
-import Control.Applicative (optional, (<|>))
 import qualified Text.Megaparsec as Megaparsec
-import Text.Megaparsec (SourcePos(..))
 
 -- | Parse the outermost binding in a Src descriptor of a let-block and return
 --   the rest. Ex. on input `let a = 0 let b = a in b` parses `let a = 0 ` and
@@ -78,8 +90,8 @@ getLetAnnot (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetAnnot) t
 getLetIdentifier :: Src -> Src
 getLetIdentifier src@(Src left _ text) =
   case Megaparsec.parseMaybe (unParser parseLetIdentifier) text of
-    Just src' -> src'
     Nothing -> src
+    Just e -> e
   where parseLetIdentifier = do
           setSourcePos left
           _let
@@ -147,7 +159,7 @@ setSourcePos src =
 getImportLink :: Src -> Src
 getImportLink src@(Src left _ text) =
   case Megaparsec.parseMaybe (unParser parseImportLink) text of
-    Just src' -> src'
+    Just v -> v
     Nothing -> src
  where
   parseImportLink = do
@@ -171,8 +183,8 @@ holeExpr = Var (V "" 0)
 binderExprFromText :: Text -> Expr Src Import
 binderExprFromText txt =
   case Megaparsec.parseMaybe (unParser parseBinderExpr) (txt <> " ") of
-    Just e -> e
     Nothing -> holeExpr
+    Just s -> s
   where
     -- marks the beginning of the next binder
     boundary = _let <|> _forall <|> _lambda
@@ -239,7 +251,7 @@ binderExprFromText txt =
 
     -- Try to parse as many binders as possible. Skip malformed input and
     -- 'closed' binders that are already out of scope at the end of the input.
-    parseBinderExpr = do
+    parseBinderExpr =
       try (do
           skipManyTill anySingle (lookAhead boundary)
           try (do

@@ -6,44 +6,44 @@ module Dhall.Import.HTTP
     ( fetchFromHttpUrl
     ) where
 
-import Control.Exception (Exception)
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Exception                (Exception)
+import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
-import Data.ByteString (ByteString)
-import Data.CaseInsensitive (CI)
-import Data.Dynamic (toDyn)
-import Data.Semigroup ((<>))
-
+import Data.ByteString                  (ByteString)
+import Data.CaseInsensitive             (CI)
+import Data.Dynamic                     (toDyn)
+import Data.Semigroup                   ((<>))
 import Dhall.Core
-    ( Import(..)
-    , ImportHashed(..)
-    , ImportType(..)
-    , Scheme(..)
-    , URL(..)
+    ( Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    , Scheme (..)
+    , URL (..)
     )
-import Dhall.URL (renderURL)
-
-import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.Text                        as Text
-import qualified Data.Text.Encoding
-import qualified Dhall.Util
-
 import Dhall.Import.Types
+import Dhall.URL                        (renderURL)
 
-import qualified Control.Exception
-import qualified Data.List.NonEmpty               as NonEmpty
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Encoding
 
 #if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
-    (HttpException(..), HttpExceptionContent(..), Manager)
+    ( HttpException (..)
+    , HttpExceptionContent (..)
+    , Manager
+    )
 #else
-import Network.HTTP.Client (HttpException(..), Manager)
+import Network.HTTP.Client (HttpException (..), Manager)
 #endif
 
-import qualified Network.HTTP.Client                     as HTTP
-import qualified Network.HTTP.Client.TLS                 as HTTP
+import qualified Control.Exception
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.List.NonEmpty               as NonEmpty
+import qualified Data.Text                        as Text
+import qualified Data.Text.Encoding
+import qualified Data.Text.Lazy
+import qualified Data.Text.Lazy.Encoding
+import qualified Dhall.Util
+import qualified Network.HTTP.Client              as HTTP
+import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Network.HTTP.Types
 
 mkPrettyHttpException :: String -> HttpException -> PrettyHttpException
@@ -190,7 +190,7 @@ newManager = do
 
             return manager
 
-        Just manager -> do
+        Just manager ->
             return manager
 
 data NotCORSCompliant = NotCORSCompliant

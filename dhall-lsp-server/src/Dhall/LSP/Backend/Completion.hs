@@ -1,33 +1,32 @@
 module Dhall.LSP.Backend.Completion where
 
-import Data.List (foldl')
-import Data.Text (Text)
-import Data.Void (Void, absurd)
-import Dhall.Context (Context, insert)
-import Dhall.Context (empty, toList)
+import Data.List                     (foldl')
+import Data.Text                     (Text)
+import Data.Void                     (Void, absurd)
+import Dhall.Context                 (Context, empty, insert, toList)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
-import Dhall.LSP.Backend.Parsing (holeExpr)
-import Dhall.Parser (Src, exprFromText)
-import Dhall.TypeCheck (typeWithA, typeOf)
-import System.Directory (doesDirectoryExist, listDirectory)
-import System.Environment (getEnvironment)
-import System.FilePath (takeDirectory, (</>))
-import System.Timeout (timeout)
+import Dhall.LSP.Backend.Parsing     (holeExpr)
+import Dhall.Parser                  (Src, exprFromText)
+import Dhall.TypeCheck               (typeOf, typeWithA)
+import System.Directory              (doesDirectoryExist, listDirectory)
+import System.Environment            (getEnvironment)
+import System.FilePath               (takeDirectory, (</>))
+import System.Timeout                (timeout)
 
 import Dhall.Core
-    ( Binding(..)
-    , Expr(..)
-    , RecordField(..)
-    , Var(..)
+    ( Binding (..)
+    , Expr (..)
+    , RecordField (..)
+    , Var (..)
     , normalize
-    , shift
-    , subst
     , pretty
     , reservedIdentifiers
+    , shift
+    , subst
     )
 
 import qualified Data.HashSet as HashSet
-import qualified Data.Text as Text
+import qualified Data.Text    as Text
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 
@@ -43,7 +42,7 @@ completionQueryAt text pos = (completionLeadup, completionPrefix)
   breakEnd p =
     (\(l,r) -> (Text.reverse l, Text.reverse r)) . Text.break p . Text.reverse
   (completionPrefix, completionLeadup) =
-    breakEnd (`elem` (" \t\n[(,=+*&|}#?>" :: [Char])) text'
+    breakEnd (`elem` (" \t\n[(,=+*&|}#?>" :: String)) text'
 
 -- | A completion result, optionally annotated with type information.
 data Completion =
@@ -102,8 +101,8 @@ buildCompletionContext' context values (Let (Binding { variable = x, annotation 
         a' = normalize a
         e' = subst (V x 0) a' e
 
-        context' = fmap (shift 1 (V x 0)) $ insert x _A' context
-        values' = fmap (shift 1 (V x 0)) $ insert x a' values
+        context' = shift 1 (V x 0) <$> insert x _A' context
+        values' = shift 1 (V x 0) <$> insert x a' values
 
     in buildCompletionContext' context' values' e'
 
@@ -112,15 +111,15 @@ buildCompletionContext' context values (Let (Binding { variable = x, annotation 
   , Right _ <- typeWithA absurd context _A =
     let _A' = normalize _A
 
-        context' = fmap (shift 1 (V x 0)) $ insert x _A' context
-        values' = fmap (shift 1 (V x 0)) $ insert x holeExpr values
+        context' = shift 1 (V x 0) <$> insert x _A' context
+        values' = shift 1 (V x 0) <$> insert x holeExpr values
 
     in buildCompletionContext' context' values' e
 
   -- if nothing works, only remember the name (but bind to `holeExpr`)
   | otherwise =
-    let context' = fmap (shift 1 (V x 0)) $ insert x holeExpr context
-        values' = fmap (shift 1 (V x 0)) $ insert x holeExpr values
+    let context' = shift 1 (V x 0) <$> insert x holeExpr context
+        values' = shift 1 (V x 0) <$> insert x holeExpr values
 
     in buildCompletionContext' context' values' e
 
@@ -128,8 +127,8 @@ buildCompletionContext' context values (Lam x _A b) =
   let _A' | Right _ <- typeWithA absurd context _A = normalize _A
           | otherwise = holeExpr
 
-      context' = fmap (shift 1 (V x 0)) $ insert x _A' context
-      values' = fmap (shift 1 (V x 0)) $ insert x holeExpr values
+      context' = shift 1 (V x 0) <$> insert x _A' context
+      values' = shift 1 (V x 0) <$> insert x holeExpr values
 
     in buildCompletionContext' context' values' b
 
@@ -137,8 +136,8 @@ buildCompletionContext' context values (Pi x _A b) =
   let _A' | Right _ <- typeWithA absurd context _A = normalize _A
           | otherwise = holeExpr
 
-      context' = fmap (shift 1 (V x 0)) $ insert x _A' context
-      values' = fmap (shift 1 (V x 0)) $ insert x holeExpr values
+      context' = shift 1 (V x 0) <$> insert x _A' context
+      values' = shift 1 (V x 0) <$> insert x holeExpr values
 
     in buildCompletionContext' context' values' b
 

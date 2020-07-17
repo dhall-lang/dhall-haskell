@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE OverloadedLists     #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Parsing Dhall expressions.
@@ -16,7 +16,6 @@ import Data.Semigroup          (Semigroup (..))
 import Data.Text               (Text)
 import Dhall.Src               (Src (..))
 import Dhall.Syntax
-import Prelude                 hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
@@ -365,7 +364,7 @@ parsers embedded = Parsers {..}
 
                     return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
 
-            let alternative2 = do
+            let alternative2 =
                     return (id, Nothing)
 
             (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2

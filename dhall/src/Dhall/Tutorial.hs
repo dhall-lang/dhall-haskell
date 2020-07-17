@@ -102,37 +102,37 @@ import Dhall
 -- The simplest way to use Dhall is to ignore the programming language features
 -- and use it as a strongly typed configuration format.  For example, suppose
 -- that you create the following configuration file:
--- 
+--
 -- > -- ./config.dhall
 -- > { foo = 1
 -- > , bar = [3.0, 4.0, 5.0]
 -- > }
--- 
+--
 -- You can read the above configuration file into Haskell using the following
 -- code:
--- 
+--
 -- > -- example.hs
--- > 
+-- >
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > import Dhall
--- > 
+-- >
 -- > data Example = Example { foo :: Natural, bar :: Vector Double }
 -- >     deriving (Generic, Show)
--- > 
+-- >
 -- > instance FromDhall Example
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- input auto "./config.dhall"
 -- >     print (x :: Example)
--- 
+--
 -- __WARNING__: You must not instantiate FromDhall with a recursive type. See [Limitations](#limitations).
 --
 -- If you compile and run the above example, the program prints the corresponding
 -- Haskell record:
--- 
+--
 -- > $ ./example
 -- > Example {foo = 1, bar = [3.0,4.0,5.0]}
 --
@@ -155,7 +155,7 @@ import Dhall
 -- ... and we can either specify an explicit type like `bool`:
 --
 -- > bool :: Type Bool
--- > 
+-- >
 -- > input bool :: Text -> IO Bool
 -- >
 -- > input bool "True" :: IO Bool
@@ -206,12 +206,12 @@ import Dhall
 -- > {-# LANGUAGE DeriveAnyClass    #-}
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > import Dhall
--- > 
+-- >
 -- > data Person = Person { age :: Natural, name :: Text }
 -- >     deriving (Generic, FromDhall, Show)
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- input auto "./config.dhall"
@@ -221,12 +221,12 @@ import Dhall
 -- decode:
 --
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > import Data.Functor.Identity
 -- > import Dhall
--- > 
+-- >
 -- > instance FromDhall a => FromDhall (Identity a)
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     x <- input auto "./config.dhall"
@@ -312,13 +312,13 @@ import Dhall
 -- expressions by their file path.
 --
 -- To illustrate this, let's create three files:
--- 
+--
 -- > $ echo "True"  > bool1
 -- > $ echo "False" > bool2
 -- > $ echo "./bool1 && ./bool2" > both
 --
 -- ... and read in all three files in a single expression:
--- 
+--
 -- >>> input auto "[ ./bool1 , ./bool2 , ./both ]" :: IO (Vector Bool)
 -- [True,False,False]
 --
@@ -354,7 +354,7 @@ import Dhall
 -- ... then the interpreter will reject the import:
 --
 -- >>> input auto "./file1" :: IO Natural
--- *** Exception: 
+-- *** Exception:
 -- ↳ ./file1
 --   ↳ ./file2
 -- ...
@@ -373,7 +373,7 @@ import Dhall
 --
 -- >>> input auto "https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
 -- True
--- 
+--
 -- ... or inside of a larger expression:
 --
 -- >>> input auto "False == https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
@@ -409,8 +409,8 @@ import Dhall
 --
 -- >>> writeFile "baz" "2.0"
 -- >>> input auto "./baz: Double" :: IO Double
--- *** Exception: 
--- ↳ ./baz: 
+-- *** Exception:
+-- ↳ ./baz:
 -- ...
 -- ...Error...: Missing file ...baz:
 -- ...
@@ -650,14 +650,14 @@ import Dhall
 -- > {-# LANGUAGE DeriveAnyClass    #-}
 -- > {-# LANGUAGE DeriveGeneric     #-}
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > module Main where
--- > 
+-- >
 -- > import Dhall
--- > 
+-- >
 -- > data Example0 = Example0 { foo :: Bool, bar :: Bool }
 -- >     deriving (Generic, ToDhall)
--- > 
+-- >
 -- > main = do
 -- >     f <- input auto "λ(r : { foo : Bool, bar : Bool }) → r.foo && r.bar"
 -- >     print (f (Example0 { foo = True, bar = False }) :: Bool)
@@ -687,14 +687,14 @@ import Dhall
 -- keyword:
 --
 -- > ∀(x : a) → b        -- This type ...
--- > 
+-- >
 -- > forall (x : a) → b  -- ... is the same as this type
 --
 -- ... and Dhall's @forall@ keyword behaves the same way as Haskell's @forall@
 -- keyword for input values that are @Type@s:
 --
 -- > forall (x : Type) → b  -- This Dhall type ...
--- 
+--
 -- > forall x . b           -- ... is the same as this Haskell type
 --
 -- The part where Dhall differs from Haskell is that you can also use
@@ -726,7 +726,7 @@ import Dhall
 --
 -- Remember that file paths are synonymous with their contents, so the above
 -- code is exactly equivalent to:
--- 
+--
 -- > $ dhall <<< '(λ(n : Bool) → [n && True, n && False, n || True, n || False]) True'
 -- > [True, False, True, True]
 --
@@ -784,7 +784,7 @@ import Dhall
 -- > $ dhall
 -- > ''
 -- >     #!/bin/bash
--- >     
+-- >
 -- >     echo "Hi!"
 -- > ''
 -- > <Ctrl-D>
@@ -874,11 +874,11 @@ import Dhall
 -- > { foo = 1, bar = "ABC" } ∧ { foo = True }
 -- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
--- > 
+-- >
 -- > Error: Field collision
--- > 
+-- >
 -- > { foo = 1, bar = "ABC" } ∧ { foo = True }
--- > 
+-- >
 -- > (input):1:1
 --
 -- __Exercise__: Combine any record with the empty record.  What do you expect
@@ -945,7 +945,7 @@ import Dhall
 -- > let twice (x : Text) = x ++ x in twice "ha"
 -- > <Ctrl-D>
 -- > Error: Invalid input
--- > 
+-- >
 -- > (input):1:11:
 -- >   |
 -- > 1 | let twice (x : Text) = x ++ x in twice "ha"
@@ -969,7 +969,7 @@ import Dhall
 --
 -- > $ dhall <<< 'let Name : Type = Text in [ "John", "Mary" ] : List Name'
 -- > List Text
--- > 
+-- >
 -- > [ "John", "Mary" ]
 --
 -- __Exercise:__ What do you think the following code will normalize to?
@@ -999,12 +999,12 @@ import Dhall
 -- > let greet =
 -- >           \(args : { greeting : Text, name : Text })
 -- >       ->  "${args.greeting}, ${args.name}!"
--- > 
+-- >
 -- > let Greeting =
 -- >       { Type = { greeting : Text, name : Text }
 -- >       , default = { greeting = "Hello", name = "John" }
 -- >       }
--- > 
+-- >
 -- > in  ''
 -- >     ${greet Greeting::{=}}
 -- >     ${greet Greeting::{ greeting = "Hola" }}
@@ -1055,7 +1055,7 @@ import Dhall
 -- You can specify the value of a union constructor like this:
 --
 -- > let Union = < Left : Natural | Right : Bool>
--- > 
+-- >
 -- > in  [ Union.Left 0, Union.Right True ]
 --
 -- In other words, you can access a union constructor as a field of a union
@@ -1105,7 +1105,7 @@ import Dhall
 --
 -- > merge handlers union [ : type ]
 --
--- ... where: 
+-- ... where:
 --
 -- * @union@ is the union you want to consume
 -- * @handlers@ is a record with one function per alternative of the union
@@ -1149,7 +1149,7 @@ import Dhall
 -- Empty alternatives like @Empty@ require no argument:
 --
 -- > let Example = < Empty | Person : { name : Text, age : Natural } >
--- > 
+-- >
 -- > in  [ Example.Empty  -- Note the absence of any argument to `Empty`
 -- >     , Example.Person { name = "John", age = 23 }
 -- >     , Example.Person { name = "Amy" , age = 25 }
@@ -1207,7 +1207,7 @@ import Dhall
 --
 -- Let's ask the interpreter for the type of this function:
 -- the first line:
--- 
+--
 -- > $ dhall type <<< './id'
 -- > ∀(a : Type) → ∀(x : a) → a
 --
@@ -1343,11 +1343,11 @@ import Dhall
 -- > let not
 -- >     : Bool → Bool
 -- >     = λ(b : Bool) → b == False
--- > 
+-- >
 -- > let example0 = assert : not False === True
--- > 
+-- >
 -- > let example1 = assert : not True === False
--- > 
+-- >
 -- > in  not
 --
 -- The expression @assert : not False == True@ is a type-checking assertion
@@ -1370,22 +1370,22 @@ import Dhall
 --
 -- The type-checker then rejects the assertion with the following error message:
 --
--- > $ dhall <<< './test.dhall' 
--- > 
+-- > $ dhall <<< './test.dhall'
+-- >
 -- > ↳ ./test.dhall
--- > 
+-- >
 -- > Error: Assertion failed
--- > 
+-- >
 -- > - False
 -- > + True
--- > 
+-- >
 -- > 7│                assert : not True === True -- Oops!
--- > 8│ 
--- > 
+-- > 8│
+-- >
 -- > ./test.dhall:7:16
--- > 
+-- >
 -- > 1│ ./test.dhall
--- > 
+-- >
 -- > (input):1:1
 --
 -- You can compare expressions that contain variables, too, which is equivalent
@@ -1403,18 +1403,18 @@ import Dhall
 -- if they don't share the same normal form, such as these:
 --
 -- > $ dhall <<< '\(n : Natural) -> assert : Natural/even (n + n) === True'
--- > 
+-- >
 -- > Use "dhall --explain" for detailed errors
--- > 
+-- >
 -- > n : Natural
--- > 
+-- >
 -- > Error: Assertion failed
--- > 
+-- >
 -- > - … …
 -- > + True
--- > 
+-- >
 -- > 1│                   assert : Natural/even (n + n) === True
--- > 
+-- >
 -- > (input):1:19
 --
 -- Here the interpreter is not smart enough to simplify @Natural/even (n + n)@
@@ -1461,9 +1461,9 @@ import Dhall
 -- Dhall will forward imports if you import an expression from a URL that
 -- contains a relative import.  For example, if you import an expression like
 -- this:
--- 
+--
 -- > http://example.com/example.dhall using ./headers
--- 
+--
 -- ... and @http:\/\/example.com/example.dhall@ contains a relative import of @./foo@
 -- then Dhall will import @http:\/\/example.com/foo@ using the same @./headers@ file.
 
@@ -1497,7 +1497,7 @@ import Dhall
 --
 -- > $ dhall <<< './foo'
 -- > Natural
--- > 
+-- >
 -- > 1
 --
 -- Any import protected by a semantic integrity check is automatically cached
@@ -1526,7 +1526,7 @@ import Dhall
 --
 -- > $ XDG_CACHE_HOME=/var/empty dhall <<< './foo'
 -- > Natural
--- > 
+-- >
 -- > 1
 --
 -- We'll use this trick to test changes to the protected import in the following
@@ -1544,10 +1544,10 @@ import Dhall
 --
 -- > $ XDG_CACHE_HOME=/var/empty dhall <<< './foo'  # This still succeeds
 -- > Natural
--- > 
+-- >
 -- > 1
 --
--- You can compute the Hash for any import by using the hash subcommand 
+-- You can compute the Hash for any import by using the hash subcommand
 -- of this package.  For example:
 --
 -- > $ dhall hash <<< './bar'
@@ -1562,15 +1562,15 @@ import Dhall
 -- text of the @./bar@ file technically never changed:
 --
 -- > XDG_CACHE_HOME=/var/empty dhall <<< './foo'
--- > 
+-- >
 -- > Error: Import integrity check failed
--- > 
+-- >
 -- > Expected hash:
--- > 
+-- >
 -- > ↳ d60d8415e36e86dae7f42933d3b0c4fe3ca238f057fba206c7e9fbf5d784fe15
--- > 
+-- >
 -- > Actual hash:
--- > 
+-- >
 -- > ↳ 4caf97e8c445d4d4b5c5b992973e098ed4ae88a355915f5a59db640a589bc9cb
 --
 -- This is because the @./bar@ file now represents a new value (@2@ instead of
@@ -1607,7 +1607,7 @@ import Dhall
 -- > $ cat ./foo.dhall
 -- > let replicate =
 -- >       https://prelude.dhall-lang.org/List/replicate sha256:d4250b45278f2d692302489ac3e78280acb238d27541c837ce46911ff3baa347
--- > 
+-- >
 -- > in  replicate 5
 
 -- $rawText
@@ -1628,7 +1628,7 @@ import Dhall
 -- > ''
 -- > Copyright (c) 2017 Gabriel Gonzalez
 -- > All rights reserved.
--- > 
+-- >
 -- > ...
 -- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -1650,28 +1650,28 @@ import Dhall
 -- > $ cat LICENSE
 -- > Copyright (c) 2017 Gabriel Gonzalez
 -- > All rights reserved.
--- > 
+-- >
 -- > ...
 -- > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- > SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- $format
 --
--- A format subcommand is also available that you can use to 
+-- A format subcommand is also available that you can use to
 -- automatically format Dhall expressions.  For example, we can take the
 -- following unformatted Dhall expression:
 --
 -- > $ cat ./unformatted
--- > λ(a : Type) → λ(kvss : List (List { index : Natural, value : a })) → 
--- > List/build { index : Natural, value : a } (λ(list : Type) → λ(cons : { 
--- > index : Natural, value : a } → list → list) → λ(nil : list) → 
--- > (List/fold (List { index : Natural, value : a }) kvss { count : Natural, diff : 
--- > Natural → list } (λ(kvs : List { index : Natural, value : a }) → λ(y : { 
--- > count : Natural, diff : Natural → list }) → { count = y.count + List/length 
--- > { index : Natural, value : a } kvs, diff = λ(n : Natural) → List/fold { 
--- > index : Natural, value : a } kvs list (λ(kvOld : { index : Natural, value : a 
--- > }) → λ(z : list) → cons { index = kvOld.index + n, value = kvOld.value } 
--- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count = 
+-- > λ(a : Type) → λ(kvss : List (List { index : Natural, value : a })) →
+-- > List/build { index : Natural, value : a } (λ(list : Type) → λ(cons : {
+-- > index : Natural, value : a } → list → list) → λ(nil : list) →
+-- > (List/fold (List { index : Natural, value : a }) kvss { count : Natural, diff :
+-- > Natural → list } (λ(kvs : List { index : Natural, value : a }) → λ(y : {
+-- > count : Natural, diff : Natural → list }) → { count = y.count + List/length
+-- > { index : Natural, value : a } kvs, diff = λ(n : Natural) → List/fold {
+-- > index : Natural, value : a } kvs list (λ(kvOld : { index : Natural, value : a
+-- > }) → λ(z : list) → cons { index = kvOld.index + n, value = kvOld.value }
+-- > z) (y.diff (n + List/length { index : Natural, value : a } kvs)) }) { count =
 -- > 0, diff = λ(_ : Natural) → nil }).diff 0)
 --
 -- ... and run the expression through the formatter:
@@ -1718,11 +1718,11 @@ import Dhall
 -- normalizing them:
 --
 -- > $ dhall format
--- > let replicate = https://prelude.dhall-lang.org/List/replicate 
+-- > let replicate = https://prelude.dhall-lang.org/List/replicate
 -- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
 -- > let replicate = https://prelude.dhall-lang.org/List/replicate
--- > 
+-- >
 -- > in  replicate
 -- >       5
 -- >       (List (List Natural))
@@ -1757,7 +1757,7 @@ import Dhall
 -- >     x {- This comment will also be preserved-} =
 -- >     {- ... and this one will be preserved, too -}
 -- >       1
--- > 
+-- >
 -- > in  x
 --
 -- Note that you do not need to format the output of the
@@ -1765,7 +1765,7 @@ import Dhall
 -- multi-line expressions, too:
 --
 -- > $ dhall
--- > let replicate = https://prelude.dhall-lang.org/List/replicate 
+-- > let replicate = https://prelude.dhall-lang.org/List/replicate
 -- > in replicate 5 (List (List Natural)) (replicate 5 (List Natural) (replicate 5 Natural 1))
 -- > <Ctrl-D>
 -- > [ [ [ 1, 1, 1, 1, 1 ]
@@ -1849,11 +1849,11 @@ import Dhall
 -- > +2 + +2
 -- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
--- > 
+-- >
 -- > Error: ❰+❱ only works on ❰Natural❱s
--- > 
+-- >
 -- > +2 + +2
--- > 
+-- >
 -- > (input):1:1
 --
 -- In fact, there are no built-in functions for @Integer@s (or @Double@s) other
@@ -1876,49 +1876,49 @@ import Dhall
 -- > Natural/equal : Natural → Natural → Bool
 --
 -- To do so, we:
--- 
+--
 -- * extend the type-checking context to include the type of @Natural/equal@
 -- * extend the normalizer to evaluate all occurrences of @Natural/equal@
 --
 -- ... like this:
 --
 -- > -- example.hs
--- > 
+-- >
 -- > {-# LANGUAGE OverloadedStrings #-}
--- > 
+-- >
 -- > module Main where
--- > 
+-- >
 -- > import Dhall.Core (Expr(..), ReifiedNormalizer(..))
--- > 
+-- >
 -- > import qualified Data.Text.IO
 -- > import qualified Dhall
 -- > import qualified Dhall.Context
 -- > import qualified Lens.Family   as Lens
--- > 
+-- >
 -- > main :: IO ()
 -- > main = do
 -- >     text <- Data.Text.IO.getContents
--- > 
+-- >
 -- >     let startingContext = transform Dhall.Context.empty
 -- >           where
 -- >             transform = Dhall.Context.insert "Natural/equal" naturalEqualType
--- > 
+-- >
 -- >             naturalEqualType =
 -- >                 Pi "_" Natural (Pi "_" Natural Bool)
--- > 
+-- >
 -- >     let normalizer (App (App (Var "Natural/equal") (NaturalLit x)) (NaturalLit y)) =
 -- >             Just (BoolLit (x == y))
 -- >         normalizer _ =
 -- >             Nothing
--- > 
+-- >
 -- >     let inputSettings = transform Dhall.defaultInputSettings
 -- >           where
 -- >             transform =
 -- >                   Lens.set Dhall.normalizer      (Just (ReifiedNormalizer (pure . normalizer)))
 -- >                 . Lens.set Dhall.startingContext startingContext
--- > 
+-- >
 -- >     x <- Dhall.inputWithSettings inputSettings Dhall.auto text
--- > 
+-- >
 -- >     Data.Text.IO.putStrLn x
 --
 -- Here is an example use of the above program:
@@ -1930,22 +1930,22 @@ import Dhall
 -- expressions containing unexpected free variable such as @Natural/equal@:
 --
 -- > $ dhall <<< 'Natural/equal 2 (1 + 1)'
--- > 
+-- >
 -- > Use "dhall --explain" for detailed errors
--- > 
+-- >
 -- > Error: Unbound variable
--- > 
--- > Natural/equal 
--- > 
+-- >
+-- > Natural/equal
+-- >
 -- > (input):1:1
 --
 -- You will need to either:
--- 
+--
 -- * create your own parallel versions of these tools, or:
 -- * < https://github.com/dhall-lang/dhall-lang/blob/master/.github/CONTRIBUTING.md#how-do-i-change-the-language try to upstream your built-ins into the language>
--- 
+--
 -- The general guidelines for adding new built-ins to the language are:
--- 
+--
 -- * Keep built-ins easy to implement across language bindings
 -- * Prefer general purpose built-ins or built-ins appropriate for the task of program configuration
 -- * Design built-ins to catch errors as early as possible (i.e. when type-checking the configuration)
@@ -2029,11 +2029,11 @@ import Dhall
 -- > Flip the value of a `Bool`
 -- > -}
 -- > let not : Bool → Bool = λ(b : Bool) → b == False
--- > 
+-- >
 -- > let example0 = assert : not True ≡ False
--- > 
+-- >
 -- > let example1 = assert : not False ≡ True
--- > 
+-- >
 -- > in  not
 -- > ''
 --
@@ -2078,11 +2078,11 @@ import Dhall
 -- > Returns `True` if a number if even and returns `False` otherwise
 -- > -}
 -- > let even : Natural → Bool = Natural/even
--- > 
+-- >
 -- > let example0 = assert : even 3 ≡ False
--- > 
+-- >
 -- > let example1 = assert : even 0 ≡ True
--- > 
+-- >
 -- > in  even
 -- > ''
 --
@@ -2253,7 +2253,7 @@ import Dhall
 -- `FromDhall` has a limitiation: It won't work for recursive types.
 -- If you instantiate these using their Generic instance you end up with one of
 -- the following two cases:
--- 
+--
 -- If the type appears in it's own definition like
 --
 -- > data Foo = Foo Foo

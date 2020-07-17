@@ -7,18 +7,23 @@ module Dhall.LSP.Backend.Linting
   )
 where
 
-import Control.Lens (universeOf)
-import Data.Maybe (maybeToList)
-import Data.Monoid ((<>))
-import Data.Text (Text)
+import Control.Lens                  (universeOf)
+import Data.Maybe                    (maybeToList)
+import Data.Monoid                   ((<>))
+import Data.Text                     (Text)
+import Dhall.Core
+    ( Binding (..)
+    , Expr (..)
+    , Import
+    , MultiLet (..)
+    )
 import Dhall.LSP.Backend.Diagnostics
-import Dhall.Parser (Src)
-import Dhall.Core (Expr(..), Binding(..), MultiLet(..), Import)
+import Dhall.Parser                  (Src)
 
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Maybe         as Maybe
 import qualified Dhall.Core         as Core
 import qualified Dhall.Lint         as Lint
-import qualified Data.List.NonEmpty as NonEmpty
 
 data Suggestion = Suggestion {
     range :: Range,

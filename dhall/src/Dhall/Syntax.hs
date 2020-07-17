@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -90,7 +89,7 @@ import Data.Sequence              (Seq)
 import Data.String                (IsString (..))
 import Data.Text                  (Text)
 import Data.Text.Prettyprint.Doc  (Doc, Pretty)
-import Data.Traversable
+import Data.Traversable           ()
 import Data.Void                  (Void)
 import Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
@@ -100,7 +99,6 @@ import GHC.Generics               (Generic)
 import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
 import Numeric.Natural            (Natural)
-import Prelude                    hiding (succ)
 import Unsafe.Coerce              (unsafeCoerce)
 
 import qualified Control.Monad

@@ -17,20 +17,25 @@ module Dhall.Freeze
     , Intent(..)
     ) where
 
-import Data.Foldable (for_)
-import Data.Monoid ((<>))
-import Dhall.Pretty (CharacterSet)
-import System.Console.ANSI (hSupportsANSI)
-
-import Dhall.Syntax (Expr(..) , Import(..) , ImportHashed(..) , ImportType(..))
+import Data.Foldable       (for_)
+import Data.Monoid         ((<>))
+import Dhall.Pretty        (CharacterSet)
+import Dhall.Syntax
+    ( Expr (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    )
 import Dhall.Util
     ( Censor
-    , CheckFailed(..)
-    , Header(..)
-    , OutputMode(..)
-    , PossiblyTransitiveInput(..)
-    , Transitivity(..)
+    , CheckFailed (..)
+    , Header (..)
+    , OutputMode (..)
+    , PossiblyTransitiveInput (..)
+    , Transitivity (..)
     )
+import System.Console.ANSI (hSupportsANSI)
+
 import qualified Control.Exception                         as Exception
 import qualified Control.Monad.Trans.State.Strict          as State
 import qualified Data.Text.IO                              as Text.IO
@@ -89,7 +94,7 @@ freezeRemoteImport
     -- ^ Current working directory
     -> Import
     -> IO Import
-freezeRemoteImport directory import_ = do
+freezeRemoteImport directory import_ =
     case importType (importHashed import_) of
         Remote {} -> freezeImport directory import_
         _         -> return import_
@@ -146,11 +151,11 @@ freeze outputMode input0 scope intent characterSet censor = go input0
         (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
 
         case transitivity of
-            Transitive -> do
+            Transitive ->
                 for_ parsedExpression $ \import_ -> do
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
-                    for_ maybeFilepath $ \filepath -> do
+                    for_ maybeFilepath $ \filepath ->
                         go (PossiblyTransitiveInputFile filepath Transitive)
 
             NonTransitive ->
@@ -187,7 +192,7 @@ freeze outputMode input0 scope intent characterSet censor = go input0
                            else
                              Pretty.renderIO System.IO.stdout unAnnotated
 
-            Check -> do
+            Check ->
                 if originalText == modifiedText
                     then return ()
                     else do
@@ -249,7 +254,7 @@ freezeExpression directory scope intent expression = do
                         Import{ importHashed = ImportHashed{ hash = Nothing } }
                     )
                 )
-            ) = do
+            ) =
                 {- Here we could actually compare the `_expectedHash` and
                    `_actualHash` to see if they differ, but we choose not to do
                    so and instead automatically accept the `_actualHash`.  This
@@ -284,7 +289,7 @@ freezeExpression directory scope intent expression = do
                         }
 
                 return (ImportAlt (Embed frozenImport) (Embed thawedImport))
-        cache expression_ = do
+        cache expression_ =
             return expression_
 
     case intent of

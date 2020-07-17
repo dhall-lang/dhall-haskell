@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
-import Gauge(defaultMain)
+import Gauge (defaultMain)
 
-import qualified Data.Sequence as Seq
-import qualified Dhall.Core as Core
-import qualified Dhall.Import as Import
+import qualified Data.Sequence   as Seq
+import qualified Dhall.Core      as Core
+import qualified Dhall.Import    as Import
 import qualified Dhall.TypeCheck as TypeCheck
 import qualified Gauge
 
@@ -56,7 +56,7 @@ unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
             "x"
 
 main :: IO ()
-main = do
+main =
   defaultMain
     [ Gauge.env prelude $ \p ->
       Gauge.bgroup "Prelude"

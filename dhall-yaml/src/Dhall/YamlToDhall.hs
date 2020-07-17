@@ -9,25 +9,26 @@ module Dhall.YamlToDhall
   ) where
 
 import Control.Exception (Exception, throwIO)
-import Data.Aeson (Value)
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as BS8
-import Data.Text (Text)
-import Data.Void (Void)
-import qualified Data.YAML.Aeson
-import Dhall.Core (Expr)
+import Data.Aeson        (Value)
+import Data.ByteString   (ByteString)
+import Data.Text         (Text)
+import Data.Void         (Void)
+import Dhall.Core        (Expr)
 import Dhall.JSONToDhall
-  ( CompileError(..)
-  , Conversion(..)
-  , defaultConversion
-  , dhallFromJSON
-  , inferSchema
-  , resolveSchemaExpr
-  , schemaToDhallType
-  , showCompileError
-  , typeCheckSchemaExpr
-  )
-import Dhall.Src (Src)
+    ( CompileError (..)
+    , Conversion (..)
+    , defaultConversion
+    , dhallFromJSON
+    , inferSchema
+    , resolveSchemaExpr
+    , schemaToDhallType
+    , showCompileError
+    , typeCheckSchemaExpr
+    )
+import Dhall.Src         (Src)
+
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.YAML.Aeson
 
 -- | Options to parametrize conversion
 data Options = Options
@@ -52,7 +53,7 @@ dhallFromYaml :: Options -> ByteString -> IO (Expr Src Void)
 dhallFromYaml Options{..} yaml = do
   value <- either (throwIO . userError) pure (yamlToJson yaml)
 
-  finalSchema <- do
+  finalSchema <-
       case schema of
           Just text -> resolveSchemaExpr text
           Nothing   -> return (schemaToDhallType (inferSchema value))

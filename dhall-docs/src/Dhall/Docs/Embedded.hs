@@ -29,7 +29,7 @@ import qualified Path.IO
 
 getDataDir :: IO [(Path Rel File, ByteString)]
 #if defined(EMBED)
-getDataDir = return $(embedDir "src/Dhall/data") >>= mapM f
+getDataDir = mapM f $(embedDir "src/Dhall/data")
   where
     f :: (FilePath, ByteString) -> IO (Path Rel File, ByteString)
     f (filePath, contents) = (,contents) <$> Path.parseRelFile filePath

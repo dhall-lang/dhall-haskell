@@ -21,17 +21,17 @@ module Dhall.Util
     , CheckFailed(..)
     ) where
 
-import Control.Exception (Exception(..))
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Bifunctor (first)
-import Data.Monoid ((<>))
-import Data.String (IsString)
-import Data.Text (Text)
+import Control.Exception         (Exception (..))
+import Control.Monad.IO.Class    (MonadIO (..))
+import Data.Bifunctor            (first)
+import Data.Monoid               ((<>))
+import Data.String               (IsString)
+import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Parser (ParseError, Header(..))
-import Dhall.Pretty (Ann)
-import Dhall.Syntax (Expr, Import)
-import Dhall.Src (Src)
+import Dhall.Parser              (Header (..), ParseError)
+import Dhall.Pretty              (Ann)
+import Dhall.Src                 (Src)
+import Dhall.Syntax              (Expr, Import)
 
 import qualified Control.Exception
 import qualified Data.Text
@@ -109,7 +109,7 @@ get
     -> InputOrTextFromStdin
     -> IO a
 get parser censor input = do
-    inText <- do
+    inText <-
         case input of
             Input_ (InputFile file) -> Data.Text.IO.readFile file
             Input_ StandardInput    -> Data.Text.IO.getContents

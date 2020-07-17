@@ -4,14 +4,9 @@
 module Dhall.URL where
 
 import Data.Monoid ((<>))
-import Data.Text (Text)
+import Data.Text   (Text)
 
-import Dhall.Syntax
-    ( Scheme(..)
-    , URL(..)
-    , File(..)
-    , Directory(..)
-    )
+import Dhall.Syntax (Directory (..), File (..), Scheme (..), URL (..))
 
 import qualified Network.URI.Encode as URI.Encode
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {-| This module provides implementations of cryptographic utilities that only
@@ -11,12 +11,12 @@ module Dhall.Crypto (
     , sha256Hash
     ) where
 
-import Control.DeepSeq (NFData)
-import Crypto.Hash (SHA256)
-import Data.ByteArray (ByteArrayAccess, convert)
-import Data.ByteArray.Encoding (Base(Base16), convertToBase)
-import Data.ByteString (ByteString)
-import GHC.Generics (Generic)
+import Control.DeepSeq         (NFData)
+import Crypto.Hash             (SHA256)
+import Data.ByteArray          (ByteArrayAccess, convert)
+import Data.ByteArray.Encoding (Base (Base16), convertToBase)
+import Data.ByteString         (ByteString)
+import GHC.Generics            (Generic)
 
 import qualified Crypto.Hash
 import qualified Data.ByteString.Char8 as ByteString.Char8
