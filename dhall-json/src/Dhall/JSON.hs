@@ -248,6 +248,7 @@ import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified Options.Applicative
 import qualified System.FilePath
+import qualified Lens.Family as Lens
 
 {-| This is the exception type for errors that might arise when translating
     Dhall to JSON
@@ -973,14 +974,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.Record a ->
             Core.Record a'
           where
-            f (Core.RecordField s0 re) = Core.RecordField s0 (loop re)
-            a' = fmap f a
+            a' = Lens.over Core.recordFieldExprs loop <$> a
 
         Core.RecordLit a ->
             Core.RecordLit a'
           where
-            f (Core.RecordField s0 re) = Core.RecordField s0 (loop re)
-            a' = f <$> a
+            a' = Lens.over Core.recordFieldExprs loop <$> a
 
         Core.Union a ->
             Core.Union a'
