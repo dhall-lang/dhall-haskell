@@ -46,7 +46,7 @@ Data-Dir:
 
 Source-Repository head
     Type: git
-    Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-json
+    Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-docs
 
 
 Flag ghci-data-files
@@ -120,7 +120,9 @@ Test-Suite tasty
     Main-Is: Main.hs
     Build-Depends:
         base                   ,
+        bytestring             ,
         containers             ,
+        dhall                  ,
         dhall-docs             ,
         HaXml        >= 1.25.5 ,
         path                   ,

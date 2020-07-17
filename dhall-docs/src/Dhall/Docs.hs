@@ -20,6 +20,7 @@ import Control.Applicative ((<|>))
 import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Data.Version        (showVersion)
+import Dhall.Pretty        (CharacterSet(..))
 import Dhall.Docs.Core
 import Options.Applicative (Parser, ParserInfo)
 import Path                (Abs, Dir, Path)
@@ -42,6 +43,7 @@ data Options
         { packageDir :: FilePath         -- ^ Directory where your package resides
         , docLink :: FilePath            -- ^ Link to the generated documentation
         , resolvePackageName :: Path Abs Dir -> Text
+        , characterSet :: CharacterSet
         }
     | Version
 
@@ -63,8 +65,20 @@ parseOptions =
             )
        <> Options.Applicative.value "./docs" )
     <*> parsePackageNameResolver
+    <*> parseAscii
     ) <|> parseVersion
   where
+    switch name description =
+        Options.Applicative.switch
+            (   Options.Applicative.long name
+            <>  Options.Applicative.help description
+            )
+
+    parseAscii = fmap f (switch "ascii" "Format rendered source code using only ASCII syntax")
+      where
+        f True  = ASCII
+        f False = Unicode
+
     parseVersion =
         Options.Applicative.flag'
             Version
@@ -117,7 +131,7 @@ defaultMain = \case
 
         resolvedDocLink <- Path.IO.resolveDir' docLink
         let packageName = resolvePackageName resolvedPackageDir
-        generateDocs resolvedPackageDir resolvedDocLink packageName
+        generateDocs resolvedPackageDir resolvedDocLink packageName characterSet
     Version ->
         putStrLn (showVersion Meta.version)
 

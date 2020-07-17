@@ -18,6 +18,7 @@ module Dhall.Map
     , singleton
     , fromList
     , fromListWithKey
+    , fromMap
 
       -- * Constructing unordered 'Map's
     , unorderedSingleton
@@ -217,6 +218,10 @@ fromListWithKey f kvs = Map m ks
 
     ks = Original (nubOrd (map fst kvs))
 {-# INLINABLE fromListWithKey #-}
+
+-- | Create a `Map` from a @"Data.Map".`Data.Map.Map`@
+fromMap :: Data.Map.Map k v -> Map k v
+fromMap m = Map m Sorted
 
 {-| Remove duplicates from a  list
 

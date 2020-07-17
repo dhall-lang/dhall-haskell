@@ -18,6 +18,7 @@ module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
 
 import Control.Applicative        (Alternative(..))
 import Control.Monad.Writer.Class (MonadWriter)
+import Data.ByteString            (ByteString)
 import Data.Function              (on)
 import Data.Map.Strict            (Map)
 import Data.Monoid                ((<>))
@@ -40,6 +41,7 @@ import Dhall.Parser
     , ParseError (..)
     , exprAndHeaderFromText
     )
+import Dhall.Pretty               (CharacterSet)
 import Dhall.Src                  (Src)
 import Path                       (Abs, Dir, File, Path, Rel, (</>))
 import Text.Megaparsec            (ParseErrorBundle (..))
@@ -55,6 +57,7 @@ import qualified Data.Map.Strict            as Map
 import qualified Data.Maybe
 import qualified Data.Maybe                 as Maybe
 import qualified Data.Text
+import qualified Data.Text.Encoding
 import qualified Data.Text.IO               as Text.IO
 import qualified Data.Text.Lazy             as Text.Lazy
 import qualified Dhall.Core
@@ -126,13 +129,18 @@ data DhallFile = DhallFile
 
     The result is sorted by `path`
 -}
-getAllDhallFiles :: [(Path Rel File, Text)] -> GeneratedDocs [DhallFile]
-getAllDhallFiles = emitErrors . map toDhallFile . filter hasDhallExtension
+getAllDhallFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [DhallFile]
+getAllDhallFiles = emitErrors . map toDhallFile . foldr validFiles [] . filter hasDhallExtension
   where
-    hasDhallExtension :: (Path Rel File, Text) -> Bool
+    hasDhallExtension :: (Path Rel File, a) -> Bool
     hasDhallExtension (absFile, _) = case Path.splitExtension absFile of
         Nothing -> False
         Just (_, ext) -> ext == ".dhall"
+
+    validFiles :: (Path Rel File, ByteString) -> [(Path Rel File, Text)] -> [(Path Rel File, Text)]
+    validFiles (relFile, content) xs = case Data.Text.Encoding.decodeUtf8' content of
+        Left _ -> xs
+        Right textContent -> (relFile, textContent) : xs
 
     toDhallFile :: (Path Rel File, Text) -> Either DocsGenWarning DhallFile
     toDhallFile (relFile, contents) =
@@ -242,9 +250,10 @@ resolveRelativePath currentDir =
 -}
 makeHtml
     :: Text                 -- ^ Package name
+    -> CharacterSet         -- ^ Output encoding
     -> DhallFile            -- ^ Parsed header
     -> GeneratedDocs Text
-makeHtml packageName DhallFile {..} = do
+makeHtml packageName characterSet DhallFile {..} = do
     let relativeResourcesPath = resolveRelativePath $ Path.parent path
     let strippedHeader = stripCommentSyntax header
     headerAsHtml <-
@@ -259,7 +268,7 @@ makeHtml packageName DhallFile {..} = do
             expr
             examples
             headerAsHtml
-            DocParams { relativeResourcesPath, packageName }
+            DocParams { relativeResourcesPath, packageName, characterSet }
 
     return htmlAsText
   where
@@ -292,8 +301,8 @@ makeHtml packageName DhallFile {..} = do
     @a/b/c@ and no @index.html@ should be generated inside of `a/` or
     `a/b/`, but yes on `a/b/c/` in the last one there is the @b.dhall@ file
 -}
-createIndexes :: Text -> [DhallFile] -> [(Path Rel File, Text)]
-createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
+createIndexes :: Text -> CharacterSet -> [DhallFile] -> [(Path Rel File, Text)]
+createIndexes packageName characterSet files = map toIndex dirToDirsAndFilesMapAssocs
   where
     -- Files grouped by their directory
     dirToFilesMap :: Map (Path Rel Dir) [DhallFile]
@@ -308,7 +317,7 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
         documentation to get more information.
     -}
     dirToDirsMap :: Map (Path Rel Dir) [Path Rel Dir]
-    dirToDirsMap = Map.map removeHereDir $ foldl go initialMap dirs
+    dirToDirsMap = Map.map removeHereDir $ foldr go initialMap dirs
       where
         -- > removeHeredir [$(mkRelDir "a"), $(mkRelDir ".")]
         --   [$(mkRelDir "a")]
@@ -324,8 +333,8 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
         initialMap :: Map (Path Rel Dir) [Path Rel Dir]
         initialMap = Map.fromList $ map (,[]) dirs
 
-        go :: Map (Path Rel Dir) [Path Rel Dir] -> Path Rel Dir -> Map (Path Rel Dir) [Path Rel Dir]
-        go dirMap d = Map.adjust ([d] <>) (key $ Path.parent d) dirMap
+        go :: Path Rel Dir -> Map (Path Rel Dir) [Path Rel Dir] -> Map (Path Rel Dir) [Path Rel Dir]
+        go d dirMap = Map.adjust ([d] <>) (key $ Path.parent d) dirMap
           where
             key :: Path Rel Dir -> Path Rel Dir
             key dir = if dir `Map.member` dirMap then dir else key $ Path.parent dir
@@ -346,7 +355,7 @@ createIndexes packageName files = map toIndex dirToDirsAndFilesMapAssocs
             indexDir
             (map (\DhallFile{..} -> (stripPrefix $ addHtmlExt path, mType)) dhallFiles)
             (map stripPrefix dirs)
-            DocParams { relativeResourcesPath = resolveRelativePath indexDir, packageName }
+            DocParams { relativeResourcesPath = resolveRelativePath indexDir, packageName, characterSet }
 
         stripPrefix :: Path Rel a -> Path Rel a
         stripPrefix relpath =
@@ -386,12 +395,13 @@ generateDocs
     :: Path Abs Dir -- ^ Input directory
     -> Path Abs Dir -- ^ Link to be created to the generated documentation
     -> Text         -- ^ Package name, used in some HTML titles
+    -> CharacterSet -- ^ Output encoding
     -> IO ()
-generateDocs inputDir outLink packageName = do
+generateDocs inputDir outLink packageName characterSet = do
     (_, absFiles) <- Path.IO.listDirRecur inputDir
-    contents <- mapM (Text.IO.readFile . Path.fromAbsFile) absFiles
+    contents <- mapM (Data.ByteString.readFile . Path.fromAbsFile) absFiles
     strippedFiles <- mapM (Path.stripProperPrefix inputDir) absFiles
-    let GeneratedDocs warnings docs = generateDocsPure packageName $ zip strippedFiles contents
+    let GeneratedDocs warnings docs = generateDocsPure packageName characterSet $ zip strippedFiles contents
     mapM_ print warnings
     if null docs then
         putStrLn $
@@ -430,14 +440,14 @@ generateDocs inputDir outLink packageName = do
 -}
 generateDocsPure
     :: Text                    -- ^ Package name
-    -> [(Path Rel File, Text)] -- ^ (Input file, contents)
+    -> CharacterSet            -- ^ Output encoding
+    -> [(Path Rel File, ByteString)] -- ^ (Input file, contents)
     -> GeneratedDocs [(Path Rel File, Text)]
-generateDocsPure packageName inputFiles = go
+generateDocsPure packageName characterSet inputFiles = go
   where
     go :: GeneratedDocs [(Path Rel File, Text)]
     go = do
         dhallFiles <- getAllDhallFiles inputFiles
-        htmls <- mapM (makeHtml packageName) dhallFiles
-        let indexes = createIndexes packageName dhallFiles
+        htmls <- mapM (makeHtml packageName characterSet) dhallFiles
+        let indexes = createIndexes packageName characterSet dhallFiles
         return (zip (map (addHtmlExt . path) dhallFiles) htmls <> indexes)
-

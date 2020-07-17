@@ -20,8 +20,8 @@ module Dhall.Docs.Html
 import Data.Monoid  ((<>))
 import Data.Text    (Text)
 import Data.Void    (Void)
-import Dhall.Core   (Expr, Import)
-import Dhall.Pretty (Ann (..))
+import Dhall.Core   (Expr, Import, denote)
+import Dhall.Pretty (Ann (..), CharacterSet)
 import Dhall.Src    (Src)
 import Lucid
 import Path         (Dir, File, Path, Rel)
@@ -44,8 +44,8 @@ import qualified System.FilePath                                     as FilePath
 data ExprType = TypeAnnotation | FileContentsExpr
 
 
-exprToHtml :: ExprType -> Expr a Import -> Html ()
-exprToHtml exprType expr = pre_ $ renderTree prettyTree
+exprToHtml :: Dhall.Pretty.CharacterSet -> ExprType -> Expr a Import -> Html ()
+exprToHtml characterSet exprType expr = pre_ $ renderTree prettyTree
   where
     layout = case exprType of
         FileContentsExpr -> Dhall.Pretty.layout
@@ -53,7 +53,7 @@ exprToHtml exprType expr = pre_ $ renderTree prettyTree
 
     prettyTree = Pretty.treeForm
         $ layout
-        $ Dhall.Pretty.prettyExpr expr
+        $ Dhall.Pretty.prettyCharacterSet characterSet (denote expr)
 
     textSpaces :: Int -> Text
     textSpaces n = Data.Text.replicate n (Data.Text.singleton ' ')
@@ -95,6 +95,7 @@ data DocParams = DocParams
     { relativeResourcesPath :: FilePath -- ^ Relative resource path to the
                                         --   front-end files
     , packageName :: Text               -- ^ Name of the package
+    , characterSet :: CharacterSet      -- ^ Render code as `ASCII` or `Unicode`
     }
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
@@ -118,9 +119,9 @@ dhallFileToHtml filePath expr examples header params@DocParams{..} =
                 Control.Monad.unless (null examples) $ do
                     h3_ "Examples"
                     div_ [class_ "source-code code-examples"] $
-                        mapM_ (exprToHtml FileContentsExpr) examples
+                        mapM_ (exprToHtml characterSet FileContentsExpr) examples
                 h3_ "Source"
-                div_ [class_ "source-code"] $ exprToHtml FileContentsExpr expr
+                div_ [class_ "source-code"] $ exprToHtml characterSet FileContentsExpr expr
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
@@ -157,7 +158,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
             a_ [href_ fileRef] $ toHtml itemText
             Data.Foldable.forM_ maybeType $ \typeExpr -> do
                 span_ [class_ "of-type-token"] ":"
-                span_ [class_ "dhall-type source-code"] $ exprToHtml TypeAnnotation typeExpr
+                span_ [class_ "dhall-type source-code"] $ exprToHtml characterSet TypeAnnotation typeExpr
 
 
     listDir :: Path Rel Dir -> Html ()
@@ -275,7 +276,7 @@ headContents title DocParams{..} =
     head_ $ do
         title_ $ toHtml title
         stylesheet $ relativeResourcesPath <> "index.css"
-        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato&display=swap"
+        stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato:ital,wght@0,400;0,700;1,400&display=swap"
         script relativeResourcesPath
         meta_ [charset_ "UTF-8"]
 

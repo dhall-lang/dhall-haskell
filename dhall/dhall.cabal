@@ -22,11 +22,12 @@ Description:
     .
     Read "Dhall.Tutorial" to learn how to use this library
 Category: Compiler
+Data-Files:
+    man/dhall.1
 Extra-Source-Files:
     benchmark/deep-nested-large-record/*.dhall
     benchmark/examples/*.dhall
     benchmark/examples/normalize/*.dhall
-    man/dhall.1
     CHANGELOG.md
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
@@ -426,6 +427,7 @@ Extra-Source-Files:
     tests/lint/success/*.dhall
     tests/recursive/*.dhall
     tests/regression/*.dhall
+    tests/schemas/*.dhall
     tests/tags/*.dhall
     tests/tags/*.tags
     tests/th/*.dhall
@@ -565,6 +567,7 @@ Library
         Dhall.Parser.Token
         Dhall.Pretty
         Dhall.Repl
+        Dhall.Schemas
         Dhall.Set
         Dhall.Src
         Dhall.Substitution
@@ -622,6 +625,7 @@ Test-Suite tasty
         Dhall.Test.Parser
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
+        Dhall.Test.Schemas
         Dhall.Test.SemanticHash
         Dhall.Test.Substitution
         Dhall.Test.TH
