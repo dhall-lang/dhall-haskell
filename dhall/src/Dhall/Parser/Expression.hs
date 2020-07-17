@@ -474,12 +474,17 @@ parsers embedded = Parsers {..}
             alternative04 = (do
                 _openBrace
 
-                -- If it fails to parse the _comma we need to recover the
-                -- whitespace that could be prefix for a key
-                _ <- optional $ try (whitespace *> _comma)
-
                 src0 <- src whitespace
-                a <- recordTypeOrLiteral src0
+                mComma <- optional _comma
+
+                -- `src1` corresponds to the prefix whitespace of the first key-value
+                -- pair. This is done to avoid using `try` to recover the consumed
+                -- whitespace when the comma is not consumed
+                src1 <- case mComma of
+                    Nothing -> return src0
+                    Just _ -> src whitespace
+
+                a <- recordTypeOrLiteral src1
 
                 _closeBrace
 
