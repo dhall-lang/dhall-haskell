@@ -478,7 +478,8 @@ parsers embedded = Parsers {..}
                 -- whitespace that could be prefix for a key
                 _ <- optional $ try (whitespace *> _comma)
 
-                a <- recordTypeOrLiteral
+                src0 <- src whitespace
+                a <- recordTypeOrLiteral src0
 
                 _closeBrace
 
@@ -749,17 +750,14 @@ parsers embedded = Parsers {..}
             literal <- doubleQuotedLiteral <|> singleQuoteLiteral
             return (TextLit literal) ) <?> "literal"
 
-    recordTypeOrLiteral =
+    recordTypeOrLiteral firstSrc0 =
             choice
                 [ emptyRecordLiteral
-                , nonEmptyRecordTypeOrLiteral
+                , nonEmptyRecordTypeOrLiteral firstSrc0
                 , emptyRecordType
                 ]
 
-    -- if this alternative fails, we need to recover the consumed whitespace
-    -- that's the reason we use `try` here
-    emptyRecordLiteral = try $ do
-        whitespace
+    emptyRecordLiteral = do
         _equal
 
         _ <- optional (try (whitespace *> _comma))
@@ -767,21 +765,12 @@ parsers embedded = Parsers {..}
         whitespace
         return (RecordLit mempty)
 
-    -- Reason of using `try` here is analogue to `emptyRecordLiteral`
-    emptyRecordType = try $ do
-        whitespace
-        return (Record mempty)
+    emptyRecordType = return (Record mempty)
 
     -- Reason of using `try` here is analogue to `emptyRecordLiteral`
-    nonEmptyRecordTypeOrLiteral = try $ do
+    nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
-                    (src0, a) <- try $ do
-                        src0 <- src whitespace
-                        a <- anyLabelOrSome
-                        whitespace
-                        _colon
-                        return (src0, a)
-
+                    a <- try (anyLabelOrSome <* whitespace <* _colon)
                     nonemptyWhitespace
 
                     b <- expression
@@ -810,12 +799,14 @@ parsers embedded = Parsers {..}
                     _ <- optional (whitespace *> _comma)
                     whitespace
 
-                    m <- toMap ((a, RecordField (Just src0) b) : e)
+                    m <- toMap ((a, RecordField (Just firstSrc0) b) : e)
 
                     return (Record m)
 
-            let keysValue = do
-                    src0 <- src whitespace
+            let keysValue maybeSrc = do
+                    src0 <- case maybeSrc of
+                        Just src0 -> return src0
+                        Nothing -> src whitespace
                     keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
 
                     let normalRecordEntry = do
@@ -840,9 +831,9 @@ parsers embedded = Parsers {..}
                     (normalRecordEntry <|> punnedEntry) <* whitespace
 
             let nonEmptyRecordLiteral = do
-                    a <- keysValue
+                    a <- keysValue (Just firstSrc0)
 
-                    as <- many (try (_comma *> keysValue))
+                    as <- many (try (_comma *> keysValue Nothing))
 
                     _ <- optional (whitespace *> _comma)
 
