@@ -772,7 +772,6 @@ parsers embedded = Parsers {..}
 
     emptyRecordType = return (Record mempty)
 
-    -- Reason of using `try` here is analogue to `emptyRecordLiteral`
     nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
                     a <- try (anyLabelOrSome <* whitespace <* _colon)
