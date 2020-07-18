@@ -77,10 +77,12 @@ Library
         Dhall.Docs
         Dhall.Docs.Core
     Other-Modules:
+        Dhall.Docs.Comment
         Dhall.Docs.Embedded
         Dhall.Docs.Html
         Dhall.Docs.Markdown
         Dhall.Docs.Store
+        Dhall.Docs.Util
         Paths_dhall_docs
     GHC-Options: -Wall
     Default-Language: Haskell2010

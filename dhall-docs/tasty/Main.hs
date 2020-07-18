@@ -7,8 +7,8 @@ module Main (main) where
 import Data.ByteString (ByteString)
 import Data.Map.Strict (Map)
 import Data.Text       (Text)
-import Dhall.Pretty    (CharacterSet(..))
 import Dhall.Docs.Core
+import Dhall.Pretty    (CharacterSet (..))
 import Path            (Dir, File, Path, Rel, (</>))
 import Test.Tasty      (TestTree)
 

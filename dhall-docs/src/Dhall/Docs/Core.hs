@@ -12,14 +12,14 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE ViewPatterns          #-}
 -- {-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
 
-import Control.Applicative        (Alternative(..))
+import Control.Applicative        (Alternative (..))
 import Control.Monad.Writer.Class (MonadWriter)
 import Data.ByteString            (ByteString)
-import Data.Function              (on)
 import Data.Map.Strict            (Map)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text)
@@ -32,6 +32,7 @@ import Dhall.Core
     , Var (..)
     , denote
     )
+import Dhall.Docs.Comment
 import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
@@ -50,8 +51,6 @@ import qualified Control.Applicative        as Applicative
 import qualified Control.Monad
 import qualified Control.Monad.Writer.Class as Writer
 import qualified Data.ByteString
-import qualified Data.Either
-import qualified Data.List
 import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Map.Strict            as Map
 import qualified Data.Maybe
@@ -96,17 +95,44 @@ instance MonadWriter [DocsGenWarning] GeneratedDocs where
 data DocsGenWarning
     = InvalidDhall (Text.Megaparsec.ParseErrorBundle Text Void)
     | InvalidMarkdown MarkdownParseError
+    | DhallDocsCommentError (Path Rel File) CommentParseError
+
+warn :: String
+warn = "\n\ESC[1;33mWarning\ESC[0m: "
 
 instance Show DocsGenWarning where
     show (InvalidDhall err) =
-        "\n\ESC[1;33mWarning\ESC[0m: Invalid Input\n\n" <>
+        warn <> "Invalid Input\n\n" <>
         Text.Megaparsec.errorBundlePretty err <>
         "... documentation won't be generated for this file"
 
     show (InvalidMarkdown MarkdownParseError{..}) =
-        "\n\ESC[1;33mWarning\ESC[0m: Header comment is not markdown\n\n" <>
+        warn <>"Header comment is not markdown\n\n" <>
         Text.Megaparsec.errorBundlePretty unwrap <>
         "The original non-markdown text will be pasted in the documentation"
+
+    show (DhallDocsCommentError path err) =
+        warn <> Path.fromRelFile path <> specificError
+      where
+        specificError = case err of
+            MissingNewlineOnBlockComment -> ": After the `|` marker of a block comment " <>
+                "there must be a newline (either \\n or \\r\\n)"
+
+            SeveralSubseqDhallDocsComments -> ": Two dhall-docs comments in the same " <>
+                "comment section are forbidden"
+
+            BadSingleLineCommentsAlignment -> ": dhall-docs's single line comments " <>
+                "must be aligned"
+
+            BadPrefixesOnSingleLineComments -> ": dhall-docs's single line comments " <>
+                "must have specific prefixes:" <>
+                "* For the first line: \"--| \"\n" <>
+                "* For the rest of the linse: \"--  \""
+
+-- | Extracted text from from Dhall file's comments
+newtype FileComments = FileComments
+    { headerComment :: Maybe DhallDocsText -- ^ 'Nothing' if no comment or if invalid
+    }
 
 -- | Represents a Dhall file that can be rendered as documentation.
 --   If you'd like to improve or add features to a .dhall documentation page,
@@ -114,11 +140,11 @@ instance Show DocsGenWarning where
 data DhallFile = DhallFile
     { path :: Path Rel File             -- ^ Path of the file
     , expr :: Expr Src Import           -- ^ File contents
-    , header :: Header                  -- ^ Parsed `Header` of the file
     , mType :: Maybe (Expr Void Import) -- ^ Type of the parsed expression,
                                         --   extracted from the source code
     , examples :: [Expr Void Import]    -- ^ Examples extracted from assertions
                                         --   in the file
+    , fileComments :: FileComments
     }
 
 {-| Takes a list of files paths with their contents and returns the list of
@@ -130,7 +156,7 @@ data DhallFile = DhallFile
     The result is sorted by `path`
 -}
 getAllDhallFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [DhallFile]
-getAllDhallFiles = emitErrors . map toDhallFile . foldr validFiles [] . filter hasDhallExtension
+getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles [] . filter hasDhallExtension
   where
     hasDhallExtension :: (Path Rel File, a) -> Bool
     hasDhallExtension (absFile, _) = case Path.splitExtension absFile of
@@ -142,26 +168,30 @@ getAllDhallFiles = emitErrors . map toDhallFile . foldr validFiles [] . filter h
         Left _ -> xs
         Right textContent -> (relFile, textContent) : xs
 
-    toDhallFile :: (Path Rel File, Text) -> Either DocsGenWarning DhallFile
+    toDhallFile :: (Path Rel File, Text) -> GeneratedDocs (Maybe DhallFile)
     toDhallFile (relFile, contents) =
         case exprAndHeaderFromText (Path.fromRelFile relFile) contents of
-            Right (header, expr) ->
-                let denoted = denote expr :: Expr Void Import in
-                Right DhallFile
+            Right (Header header, expr) -> do
+                let denoted = denote expr :: Expr Void Import
+
+                headerContents <-
+                    case parseSingleDhallDocsComment (Path.fromRelFile relFile) header of
+                        Nothing -> return Nothing
+                        Just (Left errs) -> do
+                            Writer.tell $ map (DhallDocsCommentError relFile) errs
+                            return Nothing
+                        Just (Right c) -> return $ Just c
+
+                return $ Just $ DhallFile
                     { path = relFile
-                    , expr, header
+                    , expr
                     , mType = extractTypeIfInSource denoted
                     , examples = examplesFromAssertions denoted
+                    , fileComments = FileComments headerContents
                     }
-            Left ParseError{..} ->
-                Left $ InvalidDhall unwrap
-
-    emitErrors :: [Either DocsGenWarning DhallFile] -> GeneratedDocs [DhallFile]
-    emitErrors errorsOrDhallFiles = do
-        let (errors, dhallFiles) = Data.Either.partitionEithers errorsOrDhallFiles
-        Writer.tell errors
-        let sortedDhallFiles = Data.List.sortBy (compare `on` path) dhallFiles
-        return sortedDhallFiles
+            Left ParseError{..} -> do
+                Writer.tell [InvalidDhall unwrap]
+                return Nothing
 
     bindings :: Expr Void Import -> [Binding Void Import]
     bindings expr = case expr of
@@ -171,7 +201,7 @@ getAllDhallFiles = emitErrors . map toDhallFile . foldr validFiles [] . filter h
         _ -> []
 
     extractTypeIfInSource :: Expr Void Import -> Maybe (Expr Void Import)
-    extractTypeIfInSource expr=
+    extractTypeIfInSource expr =
             fromOrdinaryAnnotation expr
         <|> fromLetBindingAnnotation
       where
@@ -230,6 +260,7 @@ getAllDhallFiles = emitErrors . map toDhallFile . foldr validFiles [] . filter h
         fromAssertion (Assert e) =  Just e
         fromAssertion _ = Nothing
 
+
 {-| Given a relative path, returns as much @..\/@ misdirections as needed
     to go to @.@
 
@@ -246,7 +277,7 @@ resolveRelativePath currentDir =
         "." -> ""
         _ -> "../" <> resolveRelativePath (Path.parent currentDir)
 
-{-| Generates `Text` from the html representation of a `DhallFile`
+{-| Generates `Text` from the HTML representation of a `DhallFile`
 -}
 makeHtml
     :: Text                 -- ^ Package name
@@ -255,7 +286,7 @@ makeHtml
     -> GeneratedDocs Text
 makeHtml packageName characterSet DhallFile {..} = do
     let relativeResourcesPath = resolveRelativePath $ Path.parent path
-    let strippedHeader = stripCommentSyntax header
+    let strippedHeader = Maybe.maybe "" unDhallDocsText (headerComment fileComments)
     headerAsHtml <-
         case markdownToHtml path strippedHeader of
             Left err -> do
@@ -271,17 +302,6 @@ makeHtml packageName characterSet DhallFile {..} = do
             DocParams { relativeResourcesPath, packageName, characterSet }
 
     return htmlAsText
-  where
-    stripCommentSyntax :: Header -> Text
-    stripCommentSyntax (Header h)
-        | Just s <- Data.Text.stripPrefix "--" strippedHeader
-            = Data.Text.strip s
-        | Just commentPrefixStripped <- Data.Text.stripPrefix "{-" strippedHeader
-        , Just commentSuffixStripped <- Data.Text.stripSuffix "-}" commentPrefixStripped
-            = Data.Text.strip commentSuffixStripped
-        | otherwise = strippedHeader
-      where
-        strippedHeader = Data.Text.strip h
 
 {-| Create an @index.html@ file on each available folder in the input.
 
@@ -372,7 +392,7 @@ addHtmlExt relFile =
 -- https://docs.github.com/en/github/managing-your-work-on-github/about-automation-for-issues-and-pull-requests-with-query-parameters
 fileAnIssue :: Text -> a
 fileAnIssue titleName =
-    error $ "\ESC[1;31mError\ESC[0mDocumentation generator bug\n\n" <>
+    error $ "\ESC[1;31mError\ESC[0m Documentation generator bug\n\n" <>
 
             "Explanation: This error message means that there is a bug in the " <>
             "Dhall Documentation generator. You didn't did anything wrong, but " <>
