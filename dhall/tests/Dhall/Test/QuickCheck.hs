@@ -238,7 +238,10 @@ instance Arbitrary DhallDouble where
     shrink = genericShrink
 
 instance Arbitrary Directory where
-    arbitrary = lift1 Directory
+    arbitrary = do
+        components <- suchThat arbitrary (not . any Text.null)
+
+        return Directory{..}
 
     shrink = genericShrink
 
@@ -375,7 +378,12 @@ standardizedExpression _ =
     True
 
 instance Arbitrary File where
-    arbitrary = lift2 File
+    arbitrary = do
+        directory <- arbitrary
+
+        file <- suchThat arbitrary (not . Text.null)
+
+        return File{..}
 
     shrink = genericShrink
 
@@ -401,7 +409,7 @@ instance Arbitrary ImportType where
     arbitrary =
         Test.QuickCheck.oneof
             [ lift2 Local
-            , lift5 (\a b c d e -> Remote (URL a b c d e))
+            , lift1 Remote
             , lift1 Env
             , lift0 Missing
             ]
@@ -435,7 +443,27 @@ instance Arbitrary Scheme where
     shrink = genericShrink
 
 instance Arbitrary URL where
-    arbitrary = lift5 URL
+    arbitrary = do
+        scheme <- arbitrary
+
+        authority <- arbitrary
+
+        path <- arbitrary
+
+        let validQueryCharacter c =
+                   ('\x41' <= c && c <= '\x5A')
+                || ('\x61' <= c && c <= '\x7A')
+                || ('\x30' <= c && c <= '\x39')
+                || c `elem` ("-._~!$&'()*+,;=:@/?" :: String)
+
+        let validQuery  Nothing  = True
+            validQuery (Just q ) = Text.all validQueryCharacter q
+
+        query <- suchThat arbitrary validQuery
+
+        headers <- arbitrary
+
+        return URL{..}
 
     shrink = genericShrink
 
