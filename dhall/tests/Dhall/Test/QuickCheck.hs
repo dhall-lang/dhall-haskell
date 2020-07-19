@@ -371,6 +371,15 @@ standardizedExpression (Prefer PreferFromCompletion _ _) =
     False
 standardizedExpression (Prefer (PreferFromWith _) _ _) =
     False
+-- The following three expressions are valid ASTs, but they can never be parsed,
+-- because the annotation will associate with `Merge`/`ListLit`/`ToMap` with
+-- higher precedence
+standardizedExpression (Annot (Merge _ _ Nothing) _) =
+    False
+standardizedExpression (Annot (ListLit Nothing _) _) =
+    False
+standardizedExpression (Annot (ToMap _ Nothing) _) =
+    False
 standardizedExpression _ =
     True
 
