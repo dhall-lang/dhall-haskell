@@ -1,1 +1,1 @@
-(import ../nix/shared.nix { coverage = true; }).shell-dhall-docs
+(import ../nix/shared.nix { coverage = false; }).shell-dhall-docs
