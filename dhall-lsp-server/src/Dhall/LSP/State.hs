@@ -1,20 +1,29 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+
 module Dhall.LSP.State where
 
-import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.Messages as LSP
-import qualified Language.Haskell.LSP.Types as J
-
-import Control.Lens.TH (makeLenses)
-import Lens.Family (LensLike')
-import Data.Aeson (FromJSON(..), withObject, (.:), (.:?), (.!=))
-import Data.Map.Strict (Map, empty)
-import Data.Default (Default(def))
-import Data.Dynamic (Dynamic)
-import Dhall.LSP.Backend.Dhall (DhallError, Cache, emptyCache)
-import Data.Text (Text)
-import Control.Monad.Trans.Except (ExceptT)
+import Control.Lens.TH                  (makeLenses)
+import Control.Monad.Trans.Except       (ExceptT)
 import Control.Monad.Trans.State.Strict (StateT)
+import Data.Aeson
+    ( FromJSON (..)
+    , withObject
+    , (.!=)
+    , (.:)
+    , (.:?)
+    )
+import Data.Default                     (Default (def))
+import Data.Dynamic                     (Dynamic)
+import Data.Map.Strict                  (Map, empty)
+import Data.Text                        (Text)
+import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
+import Lens.Family                      (LensLike')
+
+import qualified Language.Haskell.LSP.Core     as LSP
+import qualified Language.Haskell.LSP.Messages as LSP
+import qualified Language.Haskell.LSP.Types    as J
+
 
 -- Inside a handler we have access to the ServerState. The exception layer
 -- allows us to fail gracefully, displaying a message to the user via the

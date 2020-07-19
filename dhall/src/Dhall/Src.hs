@@ -12,15 +12,15 @@ module Dhall.Src
       Src(..)
     ) where
 
-import Control.DeepSeq (NFData)
-import Data.Data (Data)
-import Data.Monoid ((<>))
-import Data.Text (Text)
+import Control.DeepSeq            (NFData)
+import Data.Data                  (Data)
+import Data.Monoid                ((<>))
+import Data.Text                  (Text)
 import Data.Text.Prettyprint.Doc  (Pretty (..))
-import GHC.Generics (Generic)
-import Instances.TH.Lift ()
-import Language.Haskell.TH.Syntax (Lift(..))
-import Text.Megaparsec (SourcePos (SourcePos), mkPos, unPos)
+import GHC.Generics               (Generic)
+import Instances.TH.Lift          ()
+import Language.Haskell.TH.Syntax (Lift (..))
+import Text.Megaparsec            (SourcePos (SourcePos), mkPos, unPos)
 
 import {-# SOURCE #-} qualified Dhall.Util
 

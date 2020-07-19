@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE OverloadedLists     #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Parsing Dhall expressions.
@@ -16,7 +16,6 @@ import Data.Semigroup          (Semigroup (..))
 import Data.Text               (Text)
 import Dhall.Src               (Src (..))
 import Dhall.Syntax
-import Prelude                 hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
@@ -365,7 +364,7 @@ parsers embedded = Parsers {..}
 
                     return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
 
-            let alternative2 = do
+            let alternative2 =
                     return (id, Nothing)
 
             (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2
@@ -474,13 +473,17 @@ parsers embedded = Parsers {..}
             alternative04 = (do
                 _openBrace
 
-                whitespace
+                src0 <- src whitespace
+                mComma <- optional _comma
 
-                _ <- optional (_comma *> whitespace)
+                -- `src1` corresponds to the prefix whitespace of the first key-value
+                -- pair. This is done to avoid using `try` to recover the consumed
+                -- whitespace when the comma is not consumed
+                src1 <- case mComma of
+                    Nothing -> return src0
+                    Just _ -> src whitespace
 
-                a <- recordTypeOrLiteral
-
-                whitespace
+                a <- recordTypeOrLiteral src1
 
                 _closeBrace
 
@@ -751,10 +754,10 @@ parsers embedded = Parsers {..}
             literal <- doubleQuotedLiteral <|> singleQuoteLiteral
             return (TextLit literal) ) <?> "literal"
 
-    recordTypeOrLiteral =
+    recordTypeOrLiteral firstSrc0 =
             choice
                 [ emptyRecordLiteral
-                , nonEmptyRecordTypeOrLiteral
+                , nonEmptyRecordTypeOrLiteral firstSrc0
                 , emptyRecordType
                 ]
 
@@ -763,22 +766,26 @@ parsers embedded = Parsers {..}
 
         _ <- optional (try (whitespace *> _comma))
 
+        whitespace
         return (RecordLit mempty)
 
     emptyRecordType = return (Record mempty)
 
-    nonEmptyRecordTypeOrLiteral = do
+    nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
                     a <- try (anyLabelOrSome <* whitespace <* _colon)
-
                     nonemptyWhitespace
 
                     b <- expression
 
                     whitespace
 
-                    e <- Text.Megaparsec.many (do
-                        c <- try (_comma *> whitespace *> anyLabelOrSome)
+                    e <- Text.Megaparsec.many $ do
+                        (src0', c) <- try $ do
+                            _comma
+                            src0' <- src whitespace
+                            c <- anyLabelOrSome
+                            return (src0', c)
 
                         whitespace
 
@@ -788,15 +795,21 @@ parsers embedded = Parsers {..}
 
                         d <- expression
 
-                        return (c, d) )
+                        whitespace
+
+                        return (c, RecordField (Just src0') d)
 
                     _ <- optional (whitespace *> _comma)
+                    whitespace
 
-                    m <- toMap ((a, b) : e)
+                    m <- toMap ((a, RecordField (Just firstSrc0) b) : e)
 
                     return (Record m)
 
-            let keysValue = do
+            let keysValue maybeSrc = do
+                    src0 <- case maybeSrc of
+                        Just src0 -> return src0
+                        Nothing -> src whitespace
                     keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
 
                     let normalRecordEntry = do
@@ -806,32 +819,35 @@ parsers embedded = Parsers {..}
 
                             value <- expression
 
-                            let cons key (key', values) =
-                                    (key, RecordLit [ (key', values) ])
+                            let cons key (key', values@(RecordField s0 _)) =
+                                    (key, RecordField s0 $ RecordLit [ (key', values) ])
 
-                            let nil = (NonEmpty.last keys, value)
+                            let nil = (NonEmpty.last keys, RecordField (Just src0) value)
 
                             return (foldr cons nil (NonEmpty.init keys))
 
                     let punnedEntry =
                             case keys of
-                                x :| [] -> return (x, Var (V x 0))
+                                x :| [] -> return (x, RecordField (Just src0) $ Var (V x 0))
                                 _       -> empty
 
                     (normalRecordEntry <|> punnedEntry) <* whitespace
 
             let nonEmptyRecordLiteral = do
-                    a <- keysValue
+                    a <- keysValue (Just firstSrc0)
 
-                    as <- many (try (_comma *> whitespace *> keysValue))
+                    as <- many (try (_comma *> keysValue Nothing))
 
                     _ <- optional (whitespace *> _comma)
 
+                    whitespace
                     {- The `flip` is necessary because `toMapWith` is internally
                        based on `Data.Map.fromListWithKey` which combines keys
                        in reverse order
                     -}
-                    let combine k = liftA2 (flip (Combine (Just k)))
+                    let combine k = liftA2 $ \rf rf' -> makeRecordField $ Combine (Just k)
+                                                            (recordFieldValue rf')
+                                                            (recordFieldValue rf)
 
                     m <- toMapWith combine (a : as)
 

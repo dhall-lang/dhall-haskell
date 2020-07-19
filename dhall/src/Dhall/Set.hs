@@ -1,7 +1,7 @@
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveLift         #-}
 
 -- | This module only exports ways of constructing a Set,
 -- retrieving List, Set, and Seq representations of the same data,
@@ -25,18 +25,18 @@ module Dhall.Set (
     , size
     ) where
 
-import Prelude hiding (null)
-import Control.DeepSeq (NFData)
-import Data.List (foldl')
-import Data.Sequence (Seq, (|>))
-import Data.Data (Data)
-import GHC.Generics (Generic)
-import Instances.TH.Lift ()
+import Control.DeepSeq            (NFData)
+import Data.Data                  (Data)
+import Data.List                  (foldl')
+import Data.Sequence              (Seq, (|>))
+import GHC.Generics               (Generic)
+import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
+import Prelude                    hiding (null)
 
-import qualified Data.Set
-import qualified Data.Sequence
 import qualified Data.Foldable
+import qualified Data.Sequence
+import qualified Data.Set
 
 {-| This is a variation on @"Data.Set".`Data.Set.Set`@ that remembers the
     original order of elements.  This ensures that ordering is not lost when

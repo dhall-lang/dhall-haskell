@@ -73,7 +73,6 @@ import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Syntax
 import Numeric.Natural           (Natural)
-import Prelude                   hiding (succ)
 
 import qualified Data.Char
 import qualified Data.HashSet
@@ -166,9 +165,9 @@ renderSrc strip (Just (Src {..}))
     strippedText = strip srcText
 
     suffix =
-        if Text.null strippedText
+        if Text.null strippedText || Text.last strippedText == '\n'
         then mempty
-        else if Text.last strippedText == '\n' then mempty else " "
+        else " "
 
     oldLines = Text.splitOn "\n" strippedText
 
@@ -290,7 +289,7 @@ hangingBraces n docs =
             (  lbrace
             <> Pretty.hardline
             <> Pretty.indent n
-               ( mconcat (zipWith combineLong (repeat separator) docsLong)
+               ( mconcat (map (combineLong separator) docsLong)
                <> rbrace
                )
             )
@@ -372,7 +371,6 @@ enclose
     -> Doc ann
 enclose beginShort _         _        _       endShort _       []   =
     beginShort <> endShort
-  where
 enclose beginShort beginLong sepShort sepLong endShort endLong docs =
     Pretty.group
         (Pretty.flatAlt
@@ -623,7 +621,7 @@ prettyCharacterSet characterSet expression =
                 [ prettyExpression c ]
     prettyExpression (Let a0 b0) =
         enclose' "" "" space Pretty.hardline
-            (fmap duplicate (fmap docA (toList as)) ++ [ docB ])
+            (fmap (duplicate . docA) (toList as) ++ [ docB ])
       where
         MultiLet as b = multiLet a0 b0
 
@@ -1110,7 +1108,7 @@ prettyCharacterSet characterSet expression =
                 Pretty.align
                     (   prettySelectorExpression a
                     <>  doubleColon
-                    <>  prettyCompletionLit 0 kvs
+                    <>  prettyCompletionLit 0 (recordFieldValue <$> kvs)
                     )
             _ ->    prettySelectorExpression a
                 <>  doubleColon
@@ -1219,9 +1217,9 @@ prettyCharacterSet characterSet expression =
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a
     prettyPrimitiveExpression (Record a) =
-        prettyRecord a
+        prettyRecord $ recordFieldValue <$> a
     prettyPrimitiveExpression (RecordLit a) =
-        prettyRecordLit a
+        prettyRecordLit $ recordFieldValue <$> a
     prettyPrimitiveExpression (Union a) =
         prettyUnion a
     prettyPrimitiveExpression (ListLit Nothing b) =
@@ -1256,7 +1254,7 @@ prettyCharacterSet characterSet expression =
             <>  doubleColon
             <>  case shallowDenote r of
                     RecordLit kvs ->
-                        prettyCompletionLit 2 kvs
+                        prettyCompletionLit 2 $ recordFieldValue <$> kvs
                     _ ->
                         prettySelectorExpression r
 
@@ -1527,7 +1525,7 @@ consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
     adapt (key, expression) =
         case shallowDenote expression of
             RecordLit m ->
-                case fmap adapt (Map.toList m) of
+                case fmap adapt (Map.toList $ recordFieldValue <$> m) of
                     [ (keys, expression') ] ->
                         (NonEmpty.cons key keys, expression')
                     _ ->

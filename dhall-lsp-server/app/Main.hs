@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-| This module contains the top-level entrypoint and options parsing for the
     @dhall-lsp-server@ executable
 -}
@@ -7,15 +8,15 @@ module Main
   )
 where
 
-import Options.Applicative (Parser, ParserInfo)
-import qualified Options.Applicative
 import Control.Applicative ((<|>))
-import Data.Monoid ((<>))
+import Data.Monoid         ((<>))
+import Options.Applicative (Parser, ParserInfo)
 
 import qualified Data.Version
 import qualified Dhall.LSP.Server
-import qualified Paths_dhall_lsp_server
 import qualified GHC.IO.Encoding
+import qualified Options.Applicative
+import qualified Paths_dhall_lsp_server
 
 -- | Top-level program options
 data Options = Options {
@@ -64,7 +65,7 @@ parserInfoOptions = Options.Applicative.info
   )
 
 runCommand :: Options -> IO ()
-runCommand Options {..} = do
+runCommand Options {..} =
   if version
     then printVersion
     else case command of

@@ -4,9 +4,9 @@
 
 module Dhall.Substitution where
 
-import Data.Text (Text)
+import Data.Text       (Text)
 import Dhall.Normalize (subst)
-import Dhall.Syntax (Expr, Var(..))
+import Dhall.Syntax    (Expr, Var (..))
 
 import qualified Dhall.Map
 

@@ -2,11 +2,11 @@
 
 module Dhall.Test.Format where
 
-import Data.Monoid (mempty, (<>))
-import Data.Text (Text)
-import Dhall.Parser (Header(..))
-import Dhall.Pretty (CharacterSet(..))
-import Test.Tasty (TestTree)
+import Data.Monoid  (mempty, (<>))
+import Data.Text    (Text)
+import Dhall.Parser (Header (..))
+import Dhall.Pretty (CharacterSet (..))
+import Test.Tasty   (TestTree)
 
 import qualified Control.Monad                         as Monad
 import qualified Data.Text                             as Text

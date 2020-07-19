@@ -1,14 +1,14 @@
-{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Main where
 
-import Control.Applicative ((<|>), optional)
-import Control.Exception (SomeException)
-import Data.Aeson (Value)
-import Data.Monoid ((<>))
-import Data.Version (showVersion)
-import Dhall.JSON (Conversion, SpecialDoubleMode(..))
+import Control.Applicative (optional, (<|>))
+import Control.Exception   (SomeException)
+import Data.Aeson          (Value)
+import Data.Monoid         ((<>))
+import Data.Version        (showVersion)
+import Dhall.JSON          (Conversion, SpecialDoubleMode (..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -117,10 +117,10 @@ main = do
     options <- Options.execParser parserInfo
 
     case options of
-        Version -> do
+        Version ->
             putStrLn (showVersion Meta.version)
 
-        Options {..} -> do
+        Options {..} ->
             handle $ do
                 let config = Data.Aeson.Encode.Pretty.Config
                                { Data.Aeson.Encode.Pretty.confIndent = Data.Aeson.Encode.Pretty.Spaces 2

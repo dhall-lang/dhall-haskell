@@ -1,5 +1,5 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
@@ -116,7 +116,6 @@ import Data.Semigroup          (Semigroup (..))
 import Data.Text               (Text)
 import Dhall.Set               (Set)
 import Dhall.Syntax
-import Prelude                 hiding (const, pi)
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
@@ -135,7 +134,6 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 
 import Numeric.Natural (Natural)
-import Prelude         hiding (const, pi)
 
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
@@ -559,9 +557,9 @@ pathComponent componentType = do
 
     let pathData =
             case componentType of
-                FileComponent -> do
+                FileComponent ->
                     Text.Megaparsec.takeWhile1P Nothing Dhall.Syntax.pathCharacter
-                URLComponent -> do
+                URLComponent ->
                     star pchar
 
     let quotedPathData = do

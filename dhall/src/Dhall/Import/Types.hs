@@ -6,38 +6,39 @@
 
 module Dhall.Import.Types where
 
-import Control.Exception (Exception)
+import Control.Exception                (Exception)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Dynamic
-import Data.List.NonEmpty (NonEmpty)
-import Dhall.Map (Map)
-import Data.Semigroup ((<>))
-import Data.Text.Prettyprint.Doc (Pretty(..))
-import Data.Void (Void)
-import Dhall.Context (Context)
+import Data.List.NonEmpty               (NonEmpty)
+import Data.Semigroup                   ((<>))
+import Data.Text.Prettyprint.Doc        (Pretty (..))
+import Data.Void                        (Void)
+import Dhall.Context                    (Context)
 import Dhall.Core
-  ( Directory (..)
-  , Expr
-  , File (..)
-  , FilePrefix (..)
-  , Import (..)
-  , ImportHashed (..)
-  , ImportMode (..)
-  , ImportType (..)
-  , ReifiedNormalizer(..)
-  , URL
-  )
+    ( Directory (..)
+    , Expr
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportMode (..)
+    , ImportType (..)
+    , ReifiedNormalizer (..)
+    , URL
+    )
+import Dhall.Map                        (Map)
+import Dhall.Parser                     (Src)
+import Lens.Family                      (LensLike')
+import System.FilePath                  (isRelative, splitDirectories)
+
 #ifdef WITH_HTTP
 import Dhall.Import.Manager (Manager)
 #endif
-import Dhall.Parser (Src)
-import Lens.Family (LensLike')
-import System.FilePath (isRelative, splitDirectories)
 
-import qualified Dhall.Context
-import qualified Dhall.Map     as Map
-import qualified Dhall.Substitution
 import qualified Data.Text
+import qualified Dhall.Context
+import qualified Dhall.Map          as Map
+import qualified Dhall.Substitution
 
 -- | A fully 'chained' import, i.e. if it contains a relative path that path is
 --   relative to the current directory. If it is a remote import with headers

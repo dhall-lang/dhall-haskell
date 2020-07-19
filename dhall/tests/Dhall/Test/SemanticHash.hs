@@ -2,20 +2,20 @@
 
 module Dhall.Test.SemanticHash where
 
-import Data.Monoid((<>))
-import Data.Text (Text)
-import Prelude hiding (FilePath)
-import Test.Tasty (TestTree)
-import Turtle (FilePath)
+import Data.Monoid ((<>))
+import Data.Text   (Text)
+import Prelude     hiding (FilePath)
+import Test.Tasty  (TestTree)
+import Turtle      (FilePath)
 
-import qualified Data.Text                             as Text
-import qualified Data.Text.IO                          as Text.IO
-import qualified Dhall.Core                            as Core
-import qualified Dhall.Import                          as Import
-import qualified Dhall.Parser                          as Parser
-import qualified Dhall.Test.Util                       as Test.Util
-import qualified Test.Tasty                            as Tasty
-import qualified Test.Tasty.HUnit                      as Tasty.HUnit
+import qualified Data.Text        as Text
+import qualified Data.Text.IO     as Text.IO
+import qualified Dhall.Core       as Core
+import qualified Dhall.Import     as Import
+import qualified Dhall.Parser     as Parser
+import qualified Dhall.Test.Util  as Test.Util
+import qualified Test.Tasty       as Tasty
+import qualified Test.Tasty.HUnit as Tasty.HUnit
 import qualified Turtle
 
 hashDirectory :: FilePath

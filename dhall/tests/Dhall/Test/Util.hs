@@ -1,6 +1,6 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Dhall.Test.Util
     ( code
@@ -22,21 +22,27 @@ module Dhall.Test.Util
     ) where
 
 import Control.Monad.Trans.State.Strict (StateT)
-import Data.Bifunctor (first)
-import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Context (Context)
-import Dhall.Core (Expr, Normalizer, ReifiedNormalizer(..), Import)
-import Dhall.Import (Status(..), SemanticCacheMode(..))
-import Data.Monoid((<>))
-import Dhall.Parser (Src)
-import Prelude hiding (FilePath)
+import Data.Bifunctor                   (first)
+import Data.Monoid                      ((<>))
+import Data.Text                        (Text)
+import Data.Void                        (Void)
+import Dhall.Context                    (Context)
+import Dhall.Core
+    ( Expr
+    , Import
+    , Normalizer
+    , ReifiedNormalizer (..)
+    )
+import Dhall.Import                     (SemanticCacheMode (..), Status (..))
+import Dhall.Parser                     (Src)
+import Prelude                          hiding (FilePath)
+import Test.Tasty                       (TestTree)
 import Test.Tasty.HUnit
-import Test.Tasty (TestTree)
-import Turtle (FilePath, Pattern, Shell, fp)
+import Turtle                           (FilePath, Pattern, Shell, fp)
 
 import qualified Control.Exception
 import qualified Control.Foldl                    as Foldl
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Functor
 import qualified Data.Text                        as Text
 import qualified Dhall.Context
@@ -44,15 +50,14 @@ import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
-import qualified Control.Monad.Trans.State.Strict as State
 import qualified System.FilePath                  as FilePath
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.ExpectedFailure       as Tasty.ExpectedFailure
 import qualified Turtle
 
 #ifndef WITH_HTTP
-import Control.Monad.IO.Class (MonadIO(..))
-import Dhall.Core (URL(..))
+import Control.Monad.IO.Class   (MonadIO (..))
+import Dhall.Core               (URL (..))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Data.Foldable

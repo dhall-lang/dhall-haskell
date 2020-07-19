@@ -2,11 +2,11 @@
 
 module Dhall.Test.Freeze where
 
-import Data.Text (Text)
-import Dhall.Freeze (Intent(..), Scope(..))
-import Prelude hiding (FilePath)
-import Test.Tasty (TestTree)
-import Turtle (FilePath)
+import Data.Text    (Text)
+import Dhall.Freeze (Intent (..), Scope (..))
+import Prelude      hiding (FilePath)
+import Test.Tasty   (TestTree)
+import Turtle       (FilePath)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
@@ -30,7 +30,7 @@ getTests = do
     return testTree
 
 freezeTest :: Text -> TestTree
-freezeTest prefix = do
+freezeTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
         let inputFile  = Text.unpack (prefix <> "A.dhall")
         let outputFile = Text.unpack (prefix <> "B.dhall")

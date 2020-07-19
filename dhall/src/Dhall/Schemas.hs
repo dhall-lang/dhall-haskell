@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedLists   #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-| This module contains the implementation of the @dhall rewrite-with-schemas@
     subcommand
@@ -16,25 +16,30 @@ module Dhall.Schemas
     ) where
 
 import Control.Applicative (empty)
-import Control.Exception (Exception)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Data.Void (Void)
-import Dhall.Crypto (SHA256Digest)
-import Dhall.Map (Map)
-import Dhall.Src (Src)
-import Dhall.Syntax (Expr(..), Import, Var(..))
-import Dhall.Pretty (CharacterSet(..))
+import Control.Exception   (Exception)
+import Data.Monoid         ((<>))
+import Data.Text           (Text)
+import Data.Void           (Void)
+import Dhall.Crypto        (SHA256Digest)
+import Dhall.Map           (Map)
+import Dhall.Pretty        (CharacterSet (..))
+import Dhall.Src           (Src)
+import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
-    (Censor(..), CheckFailed(..), Header(..), Input(..), OutputMode(..))
+    ( Censor (..)
+    , CheckFailed (..)
+    , Header (..)
+    , Input (..)
+    , OutputMode (..)
+    )
 
 import qualified Control.Exception                         as Exception
-import qualified Data.Maybe                                as Maybe
 import qualified Data.Map
+import qualified Data.Maybe                                as Maybe
 import qualified Data.Text.IO                              as Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
+import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Data.Void                                 as Void
 import qualified Dhall.Core                                as Core
 import qualified Dhall.Import                              as Import
@@ -83,9 +88,9 @@ schemasCommand Schemas{..} = do
     let schemasText = Pretty.Text.renderStrict docStream
 
     case outputMode of
-        Write -> do
+        Write ->
             case input of
-                InputFile file -> do
+                InputFile file ->
                     if originalText == schemasText
                         then return ()
                         else AtomicWrite.atomicWriteFile
@@ -100,7 +105,7 @@ schemasCommand Schemas{..} = do
                             then fmap Dhall.Pretty.annToAnsiStyle docStream
                             else Pretty.unAnnotateS docStream)
 
-        Check -> do
+        Check ->
             if originalText == schemasText
                 then return ()
                 else do
@@ -112,9 +117,9 @@ schemasCommand Schemas{..} = do
 
 decodeSchema :: Expr s Void -> Maybe (Expr s Void, Map Text (Expr s Void))
 decodeSchema (RecordLit m)
-        | Just  _Type               <- Map.lookup "Type" m
-        , Just (RecordLit _default) <- Map.lookup "default" m =
-            Just (_Type, _default)
+        | Just  _Type               <- Core.recordFieldValue <$> Map.lookup "Type" m
+        , Just (RecordLit _default) <- Core.recordFieldValue <$> Map.lookup "default" m =
+            Just (_Type, Core.recordFieldValue <$> _default)
 decodeSchema _ =
     Nothing
 
@@ -122,7 +127,7 @@ decodeSchemas
     :: Expr s Void
     -> Maybe (Data.Map.Map SHA256Digest (Text, Map Text (Expr s Void)))
 decodeSchemas (RecordLit keyValues) = do
-    m <- traverse decodeSchema keyValues
+    m <- traverse (decodeSchema . Core.recordFieldValue) keyValues
 
     let typeMetadata = Data.Map.fromList $ do
             (name, (_Type, _default)) <- Map.toList m
@@ -130,7 +135,7 @@ decodeSchemas (RecordLit keyValues) = do
             return (Import.hashExpression (Syntax.denote _Type), (name, _default))
 
     return typeMetadata
-decodeSchemas  _ = do
+decodeSchemas  _ =
     empty
 
 -- | Simplify a Dhall expression using a record of schemas
@@ -173,7 +178,11 @@ rewriteWithSchemas _schemas expression = do
                              | otherwise = Just a
 
                 let defaultedKeyValues =
-                        Map.fromMap (Data.Map.differenceWith diff (Map.toMap keyValues) (Map.toMap _default))
+                        Core.makeRecordField <$>
+                        Map.fromMap (
+                            Data.Map.differenceWith diff
+                                (Map.toMap $ Core.recordFieldValue <$> keyValues)
+                                (Map.toMap _default))
 
                 let defaultedRecord = RecordLit defaultedKeyValues
 

@@ -1,8 +1,8 @@
-{-# LANGUAGE BangPatterns       #-}
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -24,44 +24,45 @@ module Dhall.Binary
     , DecodingFailure(..)
     ) where
 
-import Codec.CBOR.Decoding (Decoder, TokenType(..))
-import Codec.CBOR.Encoding (Encoding)
-import Codec.Serialise (Serialise(encode, decode))
-import Control.Applicative (empty, (<|>))
-import Control.Exception (Exception)
+import Codec.CBOR.Decoding  (Decoder, TokenType (..))
+import Codec.CBOR.Encoding  (Encoding)
+import Codec.Serialise      (Serialise (decode, encode))
+import Control.Applicative  (empty, (<|>))
+import Control.Exception    (Exception)
 import Data.ByteString.Lazy (ByteString)
 import Dhall.Syntax
-    ( Binding(..)
-    , Chunks(..)
-    , Const(..)
-    , Directory(..)
-    , DhallDouble(..)
-    , Expr(..)
-    , File(..)
-    , FilePrefix(..)
-    , Import(..)
-    , ImportHashed(..)
-    , ImportMode(..)
-    , ImportType(..)
-    , MultiLet(..)
-    , PreferAnnotation(..)
-    , Scheme(..)
-    , URL(..)
-    , Var(..)
+    ( Binding (..)
+    , Chunks (..)
+    , Const (..)
+    , DhallDouble (..)
+    , Directory (..)
+    , Expr (..)
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportMode (..)
+    , ImportType (..)
+    , MultiLet (..)
+    , PreferAnnotation (..)
+    , RecordField (..)
+    , Scheme (..)
+    , URL (..)
+    , Var (..)
     )
 
 import Data.Foldable (toList)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Data.Void (Void, absurd)
-import GHC.Float (double2Float, float2Double)
-import Numeric.Half (fromHalf, toHalf)
+import Data.Monoid   ((<>))
+import Data.Text     (Text)
+import Data.Void     (Void, absurd)
+import GHC.Float     (double2Float, float2Double)
+import Numeric.Half  (fromHalf, toHalf)
 
 import qualified Codec.CBOR.ByteArray
-import qualified Codec.CBOR.Decoding  as Decoding
-import qualified Codec.CBOR.Encoding  as Encoding
-import qualified Codec.CBOR.Read      as Read
-import qualified Codec.Serialise      as Serialise
+import qualified Codec.CBOR.Decoding   as Decoding
+import qualified Codec.CBOR.Encoding   as Encoding
+import qualified Codec.CBOR.Read       as Read
+import qualified Codec.Serialise       as Serialise
 import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
@@ -70,8 +71,8 @@ import qualified Data.Sequence
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Set
-import qualified Dhall.Syntax         as Syntax
-import qualified Text.Printf          as Printf
+import qualified Dhall.Syntax          as Syntax
+import qualified Text.Printf           as Printf
 
 {-| Supported version strings
 
@@ -227,7 +228,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (Var (V x n))
 
-                            _ -> do
+                            _ ->
                                 die ("Unexpected token type for variable index: " <> show tokenType₂)
 
                     TypeUInt -> do
@@ -249,7 +250,7 @@ decodeExpressionInternal decodeEmbed = go
                                     then die "Non-standard encoding of a function with no arguments"
                                     else loop nArgs f
 
-                            1 -> do
+                            1 ->
                                 case len of
                                     3 -> do
                                         _A <- go
@@ -271,10 +272,10 @@ decodeExpressionInternal decodeEmbed = go
 
                                         return (Lam x _A b)
 
-                                    _ -> do
+                                    _ ->
                                         die ("Incorrect number of tokens used to encode a λ expression: " <> show len)
 
-                            2 -> do
+                            2 ->
                                 case len of
                                     3 -> do
                                         _A <- go
@@ -296,7 +297,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         return (Pi x _A _B)
 
-                                    _ -> do
+                                    _ ->
                                         die ("Incorrect number of tokens used to encode a ∀ expression: " <> show len)
 
                             3 -> do
@@ -325,7 +326,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (op l r)
 
-                            4 -> do
+                            4 ->
                                 case len of
                                     2 -> do
                                         _T <- go
@@ -351,7 +352,7 @@ decodeExpressionInternal decodeEmbed = go
                                 u <- go
 
                                 case len of
-                                    3 -> do
+                                    3 ->
                                         return (Merge t u Nothing)
 
                                     4 -> do
@@ -359,7 +360,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         return (Merge t u (Just _T))
 
-                                    _ -> do
+                                    _ ->
                                         die ("Incorrect number of tokens used to encode a `merge` expression: " <> show len)
 
                             7 -> do
@@ -370,7 +371,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                     _T <- go
 
-                                    return (x, _T)
+                                    return (x, Syntax.makeRecordField _T)
 
                                 return (Record (Dhall.Map.fromList xTs))
 
@@ -382,7 +383,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                     t <- go
 
-                                    return (x, t)
+                                    return (x, Syntax.makeRecordField t)
 
                                 return (RecordLit (Dhall.Map.fromList xts))
 
@@ -412,7 +413,7 @@ decodeExpressionInternal decodeEmbed = go
                                                 x <- Decoding.decodeString
                                                 return (Left (Dhall.Set.fromList [x]))
 
-                                            _ -> do
+                                            _ ->
                                                 die ("Unexpected token type for projection: " <> show tokenType₂)
 
                                     _ -> do
@@ -472,7 +473,7 @@ decodeExpressionInternal decodeEmbed = go
                                         !n <- fromIntegral <$> Decoding.decodeInteger
                                         return (NaturalLit n)
 
-                                    _ -> do
+                                    _ ->
                                         die ("Unexpected token type for Natural literal: " <> show tokenType₂)
 
                             16 -> do
@@ -502,7 +503,7 @@ decodeExpressionInternal decodeEmbed = go
                                         n <- Decoding.decodeInteger
                                         return (IntegerLit n)
 
-                                    _ -> do
+                                    _ ->
                                         die ("Unexpected token type for Integer literal: " <> show tokenType₂)
 
                             18 -> do
@@ -522,7 +523,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (Assert t)
 
-                            24 -> do
+                            24 ->
                                 fmap Embed (decodeEmbed len)
 
                             25 -> do
@@ -561,7 +562,7 @@ decodeExpressionInternal decodeEmbed = go
                                 t <- go
 
                                 mT <- case len of
-                                    2 -> do
+                                    2 ->
                                         return Nothing
 
                                     3 -> do
@@ -569,7 +570,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         return (Just _T)
 
-                                    _ -> do
+                                    _ ->
                                         die ("Incorrect number of tokens used to encode a type annotation: " <> show len)
 
                                 return (ToMap t mT)
@@ -579,13 +580,13 @@ decodeExpressionInternal decodeEmbed = go
 
                                 return (ListLit (Just _T) empty)
 
-                            _ -> do
+                            _ ->
                                 die ("Unexpected tag: " <> show tag)
 
-                    _ -> do
+                    _ ->
                         die ("Unexpected tag type: " <> show tokenType₁)
 
-            _ -> do
+            _ ->
                 die ("Unexpected initial token: " <> show tokenType₀)
 
 encodeExpressionInternal :: (a -> Encoding) -> Expr Void a -> Encoding
@@ -812,12 +813,12 @@ encodeExpressionInternal encodeEmbed = go
         Record xTs ->
             encodeList2
                 (Encoding.encodeInt 7)
-                (encodeMapWith go xTs)
+                (encodeMapWith (go . recordFieldValue) xTs)
 
         RecordLit xts ->
             encodeList2
                 (Encoding.encodeInt 8)
-                (encodeMapWith go xts)
+                (encodeMapWith (go. recordFieldValue) xts)
 
         Field t x ->
             encodeList3
@@ -1006,7 +1007,7 @@ decodeImport len = do
                 Nothing     -> die ("Invalid sha256 digest: " <> show bytes)
                 Just digest -> return (Just digest)
 
-        _ -> do
+        _ ->
             die ("Unexpected hash token: " <> show tokenType₀)
 
     m <- Decoding.decodeWord
@@ -1042,7 +1043,7 @@ decodeImport len = do
                 TypeNull -> do
                     Decoding.decodeNull
                     return Nothing
-                _ -> do
+                _ ->
                     fmap Just Decoding.decodeString
 
             let components = reverse paths
@@ -1226,7 +1227,7 @@ decodeWith55799Tag decoder = do
                 else return ()
 
             decoder
-        _ -> do
+        _ ->
             decoder
 
 {-| This indicates that a given CBOR-encoded `ByteString` did not correspond to

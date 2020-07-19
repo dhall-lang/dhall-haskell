@@ -4,22 +4,22 @@
 module Main where
 
 import Control.Exception (throw)
-import Control.Monad (forM)
-import Data.Map (Map, foldrWithKey, singleton, unions)
-import Data.Monoid ((<>))
-import Data.Void (Void)
-import Gauge (defaultMain, bgroup, bench, env, nf, whnf, nfIO)
+import Control.Monad     (forM)
+import Data.Map          (Map, foldrWithKey, singleton, unions)
+import Data.Monoid       ((<>))
+import Data.Void         (Void)
+import Gauge             (bench, bgroup, defaultMain, env, nf, nfIO, whnf)
 
 import System.Directory
 
 import qualified Codec.Serialise
-import qualified Gauge
 import qualified Data.ByteString.Lazy
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
+import qualified Data.Text            as T
+import qualified Data.Text.IO         as TIO
 import qualified Dhall.Binary
-import qualified Dhall.Core as Dhall
-import qualified Dhall.Parser as Dhall
+import qualified Dhall.Core           as Dhall
+import qualified Dhall.Parser         as Dhall
+import qualified Gauge
 
 #if MIN_VERSION_directory(1,2,3)
 #else
@@ -71,7 +71,7 @@ benchExprFromBytes
     :: String -> Data.ByteString.Lazy.ByteString -> Gauge.Benchmark
 benchExprFromBytes name bytes = bench name (nf f bytes)
   where
-    f bytes = do
+    f bytes =
         case Dhall.Binary.decodeExpression bytes of
             Left  exception  -> error (show exception)
             Right expression -> expression :: Dhall.Expr Void Dhall.Import

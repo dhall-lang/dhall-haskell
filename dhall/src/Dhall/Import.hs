@@ -171,11 +171,14 @@ import Dhall.Syntax
     , ImportHashed (..)
     , ImportMode (..)
     , ImportType (..)
+    , RecordField (..)
     , URL (..)
     , bindingExprs
+    , recordFieldExprs
     )
 
 import System.FilePath ((</>))
+
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
 #endif
@@ -517,7 +520,7 @@ loadImportWithSemanticCache
     loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
-  import_@(Chained (Import _ Location)) = do
+  import_@(Chained (Import _ Location)) =
     loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
@@ -616,7 +619,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             return r
 
     parsedImport <- case Text.Megaparsec.parse parser path text of
-        Left  errInfo -> do
+        Left  errInfo ->
             throwMissingImport (Imported _stack (ParseError errInfo text))
         Right expr    -> return expr
 
@@ -646,7 +649,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                 -- If this import trivially wraps another import, we can skip
                 -- the type-checking and normalization step as the transitive
                 -- import was already type-checked and normalized
-                Embed _ -> do
+                Embed _ ->
                     return (Core.denote substitutedExpr)
 
                 _ -> do
@@ -738,9 +741,9 @@ fetchFresh (Env env) = do
     Status { _stack } <- State.get
     x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
-        Just string -> do
+        Just string ->
             return (Text.pack string)
-        Nothing -> do
+        Nothing ->
                 throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
 
 fetchFresh Missing = throwM (MissingImports [])
@@ -776,14 +779,15 @@ toHeaders _ = []
 
 toHeader :: Expr s a -> Maybe HTTPHeader
 toHeader (RecordLit m) = do
-    (TextLit (Chunks [] keyText), TextLit (Chunks [] valueText)) <- lookupHeader <|> lookupMapKey
+    (RecordField _ (TextLit (Chunks [] keyText)), RecordField _ (TextLit (Chunks [] valueText)))
+        <- lookupHeader <|> lookupMapKey
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
     return (Data.CaseInsensitive.mk keyBytes, valueBytes)
       where
         lookupHeader = liftA2 (,) (Dhall.Map.lookup "header" m) (Dhall.Map.lookup "value" m)
         lookupMapKey = liftA2 (,) (Dhall.Map.lookup "mapKey" m) (Dhall.Map.lookup "mapValue" m)
-toHeader _ = do
+toHeader _ =
     empty
 
 getCacheFile
@@ -872,7 +876,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
             existsDir <- existsDirectory dir
 
             if existsDir
-                then do
+                then
                     assertPermissions dir
 
                 else do
@@ -918,7 +922,7 @@ getCacheBaseDirectory :: (Alternative m, MonadIO m) => Bool -> m FilePath
 getCacheBaseDirectory showWarning = alternative₀ <|> alternative₁ <|> alternative₂
   where
     alternative₀ = do
-        maybeXDGCacheHome <- do
+        maybeXDGCacheHome <-
           liftIO (System.Environment.lookupEnv "XDG_CACHE_HOME")
 
         case maybeXDGCacheHome of
@@ -968,10 +972,11 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
             let expected :: Expr Src Void
                 expected =
                     App List
-                        ( Record
-                            ( Dhall.Map.fromList
-                                [ (key₀, Text), (key₁, Text) ]
-                            )
+                        ( Record $ Core.makeRecordField <$>
+                            Dhall.Map.fromList
+                                [ (key₀, Text)
+                                , (key₁, Text)
+                                ]
                         )
 
             let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
@@ -1068,6 +1073,8 @@ loadWith expr₀ = case expr₀ of
 
       (Note <$> pure a <*> loadWith b) `catch` handler
   Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
+  Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
+  RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
   expression           -> Syntax.unsafeSubExpressions loadWith expression
 
 -- | Resolve all imports within an expression

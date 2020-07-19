@@ -1,5 +1,5 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE LambdaCase #-}
 
 -- | This module contains the implementation of the @dhall tags@ command
 
@@ -7,27 +7,27 @@ module Dhall.Tags
     ( generate
     ) where
 
-import Control.Exception (handle, SomeException(..))
-import Data.List (isSuffixOf, foldl')
-import Data.Maybe (fromMaybe)
-import Data.Semigroup (Semigroup(..))
-import Dhall.Map (foldMapWithKey)
-import Data.Text (Text)
+import Control.Exception  (SomeException (..), handle)
+import Data.List          (foldl', isSuffixOf)
+import Data.Maybe         (fromMaybe)
+import Data.Semigroup     (Semigroup (..))
+import Data.Text          (Text)
 import Data.Text.Encoding (encodeUtf8)
-import Dhall.Util (Input(..))
-import Dhall.Syntax (Expr(..), Binding(..))
-import Dhall.Src (Src(srcStart))
-import Dhall.Parser (exprFromText)
-import System.FilePath ((</>), takeFileName)
-import Text.Megaparsec (sourceLine, sourceColumn, unPos)
+import Dhall.Map          (foldMapWithKey)
+import Dhall.Parser       (exprFromText)
+import Dhall.Src          (Src (srcStart))
+import Dhall.Syntax       (Binding (..), Expr (..), RecordField (..))
+import Dhall.Util         (Input (..))
+import System.FilePath    (takeFileName, (</>))
+import Text.Megaparsec    (sourceColumn, sourceLine, unPos)
 
-import qualified Data.ByteString as BS (length)
-import qualified Data.Map      as M
-import qualified Data.Text     as T
-import qualified Data.Text.IO  as TIO
+import qualified Data.ByteString  as BS (length)
+import qualified Data.Map         as M
+import qualified Data.Text        as T
+import qualified Data.Text.IO     as TIO
 import qualified System.Directory as SD
 
-{- 
+{-
     Documentation for the etags format is not very informative and not very correct.
     You can find some documentation here:
     https://en.wikipedia.org/wiki/Ctags#Etags_2
@@ -35,14 +35,14 @@ import qualified System.Directory as SD
     http://cvs.savannah.gnu.org/viewvc/vtags/vtags/vtags.el?view=markup
 -}
 
-data LineColumn = LC 
+data LineColumn = LC
     { _lcLine :: Int
       -- ^ line number, starting from 1, where to find the tag
     , _lcColumn :: Int
       -- ^ column of line where tag is
     } deriving (Eq, Ord, Show)
 
-data LineOffset = LO 
+data LineOffset = LO
     { loLine :: Int
       -- ^ line number, starting from 1, where to find the tag
     , loOffset :: Int
@@ -138,7 +138,7 @@ fixPosAndDefinition t = foldMap (\(LC ln c, term) ->
              let (ln', offset, tPattern) = fromMaybe (fallbackInfoForText ln c)
                                                      (infoForText term ln)
              in [(LO ln' offset, Tag tPattern term)])
-    where mls :: M.Map Int (Text, Int) 
+    where mls :: M.Map Int (Text, Int)
           -- ^ mls is map that for each line has length of file before this map and line content.
           --   In example above, first line is 15 bytes long and '\n', mls contain:
           --   (1, (16, "let foo = "bar"")
@@ -166,7 +166,7 @@ fixPosAndDefinition t = foldMap (\(LC ln c, term) ->
               In most cases, `LineColumn` after `getTagsFromExpr` points to byte before term.
               It's better to have term in term pattern, so this function finds and updates
               line number and byte offset and generate pattern.
-          -} 
+          -}
           infoForText
               :: Text
               -- ^ term to find
@@ -191,8 +191,8 @@ getTagsFromExpr = go (LC 0 0) []
     where go lpos mts = \case
               (Let b e) -> go lpos (mts <> parseBinding lpos b) e
               (Annot e1 e2) -> go lpos (go lpos mts e1) e2
-              (Record mr) -> mts <> tagsFromDhallMap lpos mr
-              (RecordLit mr) -> mts <> tagsFromDhallMap lpos mr
+              (Record mr) -> mts <> tagsFromDhallMap lpos (recordFieldValue <$> mr)
+              (RecordLit mr) -> mts <> tagsFromDhallMap lpos (recordFieldValue <$> mr)
               (Union mmr) -> mts <> tagsFromDhallMapMaybe lpos mmr
               (Note s e) -> go (srcToLineColumn s) mts e
               _ -> mts

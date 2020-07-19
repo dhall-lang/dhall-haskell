@@ -5,18 +5,35 @@ module Dhall.LSP.Backend.Freezing (
   stripHash
 ) where
 
-import Dhall.Parser (Src(..))
-import Dhall.Core (Expr(..), Import(..), ImportHashed(..), subExpressions)
+import Control.Lens                  (universeOf)
+import Data.Text                     (Text)
+import Dhall.Core
+    ( Expr (..)
+    , Import (..)
+    , ImportHashed (..)
+    , subExpressions
+    )
+import Dhall.LSP.Backend.Dhall
+    ( Cache
+    , DhallError
+    , FileIdentifier
+    , hashNormalToCode
+    , load
+    , normalize
+    , typecheck
+    )
+import Dhall.LSP.Backend.Diagnostics
+    ( Range (..)
+    , positionFromMegaparsec
+    , positionToOffset
+    , rangeFromDhall
+    , subtractPosition
+    )
+import Dhall.LSP.Backend.Parsing     (getImportHash)
+import Dhall.Parser                  (Src (..))
 
-import Control.Lens (universeOf)
-import Data.Text (Text)
+
 import qualified Data.Text as Text
-
-import Dhall.LSP.Backend.Dhall (FileIdentifier, Cache, DhallError, typecheck,
-  normalize, hashNormalToCode, load)
-import Dhall.LSP.Backend.Diagnostics (Range(..), rangeFromDhall,
-  positionFromMegaparsec, positionToOffset, subtractPosition)
-import Dhall.LSP.Backend.Parsing (getImportHash)
 
 -- | Given an expression (potentially still containing imports) compute its
 -- 'semantic' hash in the textual representation used to freeze Dhall imports.
@@ -28,7 +45,7 @@ computeSemanticHash fileid expr cache = do
     Left err -> return (Left err)
     Right (cache', expr') -> case typecheck expr' of
       Left err -> return (Left err)
-      Right (wt,_) -> do
+      Right (wt,_) ->
         return (Right (cache', hashNormalToCode (normalize wt)))
 
 stripHash :: Import -> Import

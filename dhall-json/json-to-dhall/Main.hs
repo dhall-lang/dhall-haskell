@@ -1,20 +1,18 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE PatternGuards       #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception (SomeException, throwIO)
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Data.Version (showVersion)
+import Control.Exception   (SomeException, throwIO)
+import Data.Monoid         ((<>))
+import Data.Text           (Text)
+import Data.Version        (showVersion)
 import Dhall.JSONToDhall
-import Dhall.Pretty (CharacterSet(..))
+import Dhall.Pretty        (CharacterSet (..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -24,14 +22,14 @@ import qualified Data.Text.IO                              as Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
+import qualified Dhall.Core
+import qualified Dhall.Pretty
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
+import qualified Paths_dhall_json                          as Meta
 import qualified System.Console.ANSI                       as ANSI
 import qualified System.Exit
 import qualified System.IO                                 as IO
-import qualified Dhall.Core
-import qualified Dhall.Pretty
-import qualified Paths_dhall_json                          as Meta
 
 -- ---------------
 -- Command options
@@ -188,7 +186,7 @@ main = do
                         Text.IO.hPutStrLn h ""
 
     case options of
-        Version -> do
+        Version ->
             putStrLn (showVersion Meta.version)
 
         Default{..} -> do

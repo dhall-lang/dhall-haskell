@@ -1,6 +1,6 @@
 module Main where
 
-import Data.Monoid ((<>))
+import Data.Monoid     ((<>))
 import System.FilePath ((</>))
 
 import qualified GHC.IO.Encoding

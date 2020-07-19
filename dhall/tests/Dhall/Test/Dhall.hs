@@ -1,36 +1,32 @@
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DeriveFoldable      #-}
 {-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE DeriveTraversable   #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedLists     #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Dhall.Test.Dhall where
 
-import Control.Exception (SomeException, try)
-import Data.Fix (Fix(..))
-import Data.Maybe (isJust)
+import Control.Exception  (SomeException, try)
+import Data.Fix           (Fix (..))
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.Sequence (Seq)
-import Data.Scientific (Scientific)
-import Data.Text (Text)
-import Data.Vector (Vector)
-import Data.Void (Void)
-import Dhall (ToDhall, FromDhall)
-import Dhall.Core (Expr(..))
-import GHC.Generics (Generic, Rep)
-import Numeric.Natural (Natural)
-import System.Timeout (timeout)
+import Data.Maybe         (isJust)
+import Data.Scientific    (Scientific)
+import Data.Sequence      (Seq)
+import Data.Text          (Text)
+import Data.Vector        (Vector)
+import Data.Void          (Void)
+import Dhall              (FromDhall, ToDhall)
+import Dhall.Core         (Expr (..))
+import GHC.Generics       (Generic, Rep)
+import Numeric.Natural    (Natural)
+import System.Timeout     (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -68,8 +64,8 @@ wrongDhallType = Dhall.Decoder {..}
   where expected = pure $
           Dhall.Core.Record
             ( Dhall.Map.fromList
-              [ ( "bar", Dhall.Core.Natural)
-              , ( "foo", Dhall.Core.Text )
+              [ ( "bar", Dhall.Core.makeRecordField Dhall.Core.Natural)
+              , ( "foo", Dhall.Core.makeRecordField Dhall.Core.Text )
               ]
             )
         extract expr = Dhall.typeError expected expr

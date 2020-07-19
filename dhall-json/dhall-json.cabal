@@ -47,6 +47,7 @@ Library
         dhall                     >= 1.33.0   && < 1.34,
         exceptions                >= 0.8.3    && < 0.11,
         filepath                                 < 1.5 ,
+        lens-family-core          >= 1.0.0    && < 2.2 ,
         optparse-applicative      >= 0.14.0.0 && < 0.16,
         prettyprinter             >= 1.5.1    && < 1.7 ,
         scientific                >= 0.3.0.0  && < 0.4 ,

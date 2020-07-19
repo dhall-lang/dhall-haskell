@@ -3,7 +3,6 @@
 -}
 
 {-# LANGUAGE ApplicativeDo     #-}
-{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -39,7 +38,7 @@ import Dhall.Import
     )
 import Dhall.Parser              (Src)
 import Dhall.Pretty              (Ann, CharacterSet (..), annToAnsiStyle)
-import Dhall.Schemas             (Schemas(..))
+import Dhall.Schemas             (Schemas (..))
 import Dhall.TypeCheck
     ( Censored (..)
     , DetailedTypeError (..)
@@ -64,10 +63,10 @@ import Dhall.Util
     , CheckFailed (..)
     , Header (..)
     , Input (..)
-    , PossiblyTransitiveInput (..)
     , Output (..)
     , OutputMode (..)
-    , Transitivity(..)
+    , PossiblyTransitiveInput (..)
+    , Transitivity (..)
     )
 
 import qualified Codec.CBOR.JSON
@@ -586,7 +585,7 @@ command (Options {..}) = do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
 
-            handleExitCode e = do
+            handleExitCode e =
                 Control.Exception.throwIO (e :: ExitCode)
 
     let renderDoc :: Handle -> Doc Ann -> IO ()
@@ -617,7 +616,7 @@ command (Options {..}) = do
     when (not $ ignoreSemanticCache mode) Dhall.Import.warnAboutMissingCaches
 
     handle $ case mode of
-        Version -> do
+        Version ->
             putStrLn dhallVersionString
 
         Default {..} -> do
@@ -741,7 +740,7 @@ command (Options {..}) = do
                 then return ()
                 else render System.IO.stdout inferredType
 
-        Repl -> do
+        Repl ->
             Dhall.Repl.repl characterSet explain
 
         Diff {..} -> do
@@ -757,7 +756,7 @@ command (Options {..}) = do
                 then return ()
                 else Exit.exitFailure
 
-        Format {..} -> do
+        Format {..} ->
             Dhall.Format.format
                 Dhall.Format.Format{ input = possiblyTransitiveInput, ..}
 
@@ -800,15 +799,15 @@ command (Options {..}) = do
 
                         return (text, NonTransitive)
 
-                (Header header, parsedExpression) <- do
+                (Header header, parsedExpression) <-
                     Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
 
                 case transitivity of
-                    Transitive -> do
+                    Transitive ->
                         for_ parsedExpression $ \import_ -> do
                             maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
-                            for_ maybeFilepath $ \filepath -> do
+                            for_ maybeFilepath $ \filepath ->
                                 go (PossiblyTransitiveInputFile filepath Transitive)
 
                     NonTransitive ->
@@ -824,7 +823,7 @@ command (Options {..}) = do
                 let modifiedText = Pretty.Text.renderStrict stream <> "\n"
 
                 case outputMode of
-                    Write -> do
+                    Write ->
                         case input of
                             PossiblyTransitiveInputFile file _ ->
                                 if originalText == modifiedText
@@ -834,7 +833,7 @@ command (Options {..}) = do
                             NonTransitiveStandardInput ->
                                 renderDoc System.IO.stdout doc
 
-                    Check -> do
+                    Check ->
                         if originalText == modifiedText
                             then return ()
                             else do
@@ -857,16 +856,16 @@ command (Options {..}) = do
 
                     Data.ByteString.Lazy.Char8.putStrLn jsonBytes
 
-                else do
+                else
                     Data.ByteString.Lazy.putStr bytes
 
         Decode {..} -> do
-            bytes <- do
+            bytes <-
                 case file of
                     InputFile f   -> Data.ByteString.Lazy.readFile f
                     StandardInput -> Data.ByteString.Lazy.getContents
 
-            expression <- do
+            expression <-
                 if json
                     then do
                         value <- case Data.Aeson.eitherDecode' bytes of
@@ -878,7 +877,7 @@ command (Options {..}) = do
                         let cborgBytes = Codec.CBOR.Write.toLazyByteString encoding
 
                         Dhall.Core.throws (Dhall.Binary.decodeExpression cborgBytes)
-                    else do
+                    else
                         Dhall.Core.throws (Dhall.Binary.decodeExpression bytes)
 
 
@@ -903,7 +902,7 @@ command (Options {..}) = do
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
             case normalizedExpression of
-                Dhall.Core.TextLit (Dhall.Core.Chunks [] text) -> do
+                Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
                     Data.Text.IO.putStr text
                 _ -> do
                     let invalidDecoderExpected :: Expr Void Void
@@ -935,7 +934,7 @@ command (Options {..}) = do
 
             DirectoryTree.toDirectoryTree path normalizedExpression
 
-        Dhall.Main.Schemas{..} -> do
+        Dhall.Main.Schemas{..} ->
             Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}
 
         SyntaxTree {..} -> do

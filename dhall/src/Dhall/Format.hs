@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -11,29 +10,29 @@ module Dhall.Format
     ) where
 
 import Data.Foldable (for_)
-import Data.Monoid ((<>))
-import Dhall.Pretty (CharacterSet(..), annToAnsiStyle)
+import Data.Monoid   ((<>))
+import Dhall.Pretty  (CharacterSet (..), annToAnsiStyle)
 
 import Dhall.Util
     ( Censor
-    , CheckFailed(..)
-    , Header(..)
-    , OutputMode(..)
-    , PossiblyTransitiveInput(..)
-    , Transitivity(..)
+    , CheckFailed (..)
+    , Header (..)
+    , OutputMode (..)
+    , PossiblyTransitiveInput (..)
+    , Transitivity (..)
     )
 
+import qualified Control.Exception
+import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
-import qualified Control.Exception
-import qualified Data.Text.IO
 import qualified Dhall.Import
 import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
-import qualified System.FilePath
 import qualified System.Console.ANSI
+import qualified System.FilePath
 import qualified System.IO
 
 -- | Arguments to the `format` subcommand
@@ -77,11 +76,11 @@ format (Format { input = input0, ..}) = go input0
         headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
 
         case transitivity of
-            Transitive -> do
+            Transitive ->
                 for_ parsedExpression $ \import_ -> do
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
-                    for_ maybeFilepath $ \filepath -> do
+                    for_ maybeFilepath $ \filepath ->
                         go (PossiblyTransitiveInputFile filepath Transitive)
 
             NonTransitive ->
@@ -92,9 +91,9 @@ format (Format { input = input0, ..}) = go input0
         let formattedText = Pretty.Text.renderStrict docStream
 
         case outputMode of
-            Write -> do
+            Write ->
                 case input of
-                    PossiblyTransitiveInputFile file _ -> do
+                    PossiblyTransitiveInputFile file _ ->
                         if originalText == formattedText
                             then return ()
                             else AtomicWrite.LazyText.atomicWriteFile
@@ -110,7 +109,7 @@ format (Format { input = input0, ..}) = go input0
                                 then (fmap annToAnsiStyle docStream)
                                 else (Pretty.unAnnotateS docStream))
 
-            Check -> do
+            Check ->
                 if originalText == formattedText
                     then return ()
                     else do

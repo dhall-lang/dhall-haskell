@@ -11,12 +11,12 @@ import qualified Dhall.Test.Util         as Util
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import Dhall (ToDhall)
-import GHC.Generics (Generic)
-import Numeric.Natural (Natural)
-import Test.Tasty (TestTree)
+import Data.Monoid      ((<>))
+import Data.Text        (Text)
+import Dhall            (ToDhall)
+import GHC.Generics     (Generic)
+import Numeric.Natural  (Natural)
+import Test.Tasty       (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
 tests :: TestTree

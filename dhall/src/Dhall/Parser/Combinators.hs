@@ -1,24 +1,22 @@
 {-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 module Dhall.Parser.Combinators where
 
 
-import           Control.Applicative        (Alternative (..), liftA2)
-import           Control.Exception          (Exception)
-import           Control.Monad              (MonadPlus (..))
-import           Data.Semigroup             (Semigroup (..))
-import           Data.String                (IsString (..))
-import           Data.Text                  (Text)
-import           Data.Text.Prettyprint.Doc  (Pretty (..))
-import           Data.Void                  (Void)
-import           Dhall.Map                  (Map)
-import           Dhall.Set                  (Set)
-import           Dhall.Src                  (Src(..))
-import           Prelude                    hiding (const, pi)
-import           Text.Parser.Combinators    (try, (<?>))
-import           Text.Parser.Token          (TokenParsing (..))
+import Control.Applicative       (Alternative (..), liftA2)
+import Control.Exception         (Exception)
+import Control.Monad             (MonadPlus (..))
+import Data.Semigroup            (Semigroup (..))
+import Data.String               (IsString (..))
+import Data.Text                 (Text)
+import Data.Text.Prettyprint.Doc (Pretty (..))
+import Data.Void                 (Void)
+import Dhall.Map                 (Map)
+import Dhall.Set                 (Set)
+import Dhall.Src                 (Src (..))
+import Text.Parser.Combinators   (try, (<?>))
+import Text.Parser.Token         (TokenParsing (..))
 
 import qualified Control.Monad.Fail
 import qualified Data.Char

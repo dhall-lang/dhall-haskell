@@ -5,10 +5,8 @@ import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Diff
-import qualified Dhall.Test.Tags
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.Freeze
-import qualified Dhall.Test.SemanticHash
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
 import qualified Dhall.Test.Normalization
@@ -16,6 +14,8 @@ import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Schemas
+import qualified Dhall.Test.SemanticHash
+import qualified Dhall.Test.Tags
 import qualified Dhall.Test.TH
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeInference

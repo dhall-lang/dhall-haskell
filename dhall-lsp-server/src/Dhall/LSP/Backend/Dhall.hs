@@ -18,31 +18,35 @@ module Dhall.LSP.Backend.Dhall (
   normalize
  ) where
 
+import Dhall.Core   (Expr)
 import Dhall.Parser (Src)
-import Dhall.Core (Expr)
 
-import qualified Dhall.Core as Dhall
-import qualified Dhall.Import as Dhall
-import qualified Dhall.Parser as Dhall
-import qualified Dhall.TypeCheck as Dhall
-
-import qualified Data.Graph as Graph
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
-import qualified Dhall.Map
-import qualified Network.URI as URI
-import qualified Language.Haskell.LSP.Types as LSP.Types
-import qualified Data.Text as Text
-
-import Data.List.NonEmpty (NonEmpty((:|)))
-import Data.Text (Text)
-import Data.Void (Void)
-import System.FilePath (splitDirectories, takeFileName, takeDirectory)
-import Lens.Family (view, set)
-import Control.Exception (SomeException, catch)
+import Control.Exception                (SomeException, catch)
 import Control.Monad.Trans.State.Strict (runStateT)
-import Network.URI (URI)
-import Data.Bifunctor (first)
+import Data.Bifunctor                   (first)
+import Data.List.NonEmpty               (NonEmpty ((:|)))
+import Data.Text                        (Text)
+import Data.Void                        (Void)
+import Lens.Family                      (set, view)
+import Network.URI                      (URI)
+import System.FilePath
+    ( splitDirectories
+    , takeDirectory
+    , takeFileName
+    )
+
+import qualified Data.Graph                 as Graph
+import qualified Data.Map.Strict            as Map
+import qualified Data.Set                   as Set
+import qualified Data.Text                  as Text
+import qualified Dhall.Core                 as Dhall
+import qualified Dhall.Import               as Dhall
+import qualified Dhall.Map
+import qualified Dhall.Parser               as Dhall
+import qualified Dhall.TypeCheck            as Dhall
+import qualified Language.Haskell.LSP.Types as LSP.Types
+import qualified Network.URI                as URI
+
 
 -- | A @FileIdentifier@ represents either a local file or a remote url.
 newtype FileIdentifier = FileIdentifier Dhall.Chained
@@ -104,7 +108,7 @@ invalidate (FileIdentifier chained) (Cache dependencies cache) =
 
     -- compute the reverse dependencies, i.e. the imports reachable in the transposed graph
     reachableImports import_ =
-      map (\(i,_,_) -> i) . map importFromVertex . concat $
+      (map ((\ (i, _, _) -> i) . importFromVertex) . concat) $
         do vertex <- vertexFromImport import_
            return (Graph.reachable graph vertex)
 

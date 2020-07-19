@@ -2,24 +2,24 @@
 
 module Dhall.Test.Lint where
 
-import Data.Monoid (mempty, (<>))
-import Data.Text (Text)
-import Dhall.Parser (Header(..))
-import Prelude hiding (FilePath)
-import Test.Tasty (TestTree)
-import Turtle (FilePath)
+import Data.Monoid  (mempty, (<>))
+import Data.Text    (Text)
+import Dhall.Parser (Header (..))
+import Prelude      hiding (FilePath)
+import Test.Tasty   (TestTree)
+import Turtle       (FilePath)
 
-import qualified Data.Text        as Text
-import qualified Data.Text.IO     as Text.IO
-import qualified Data.Text.Prettyprint.Doc as Doc
+import qualified Data.Text                             as Text
+import qualified Data.Text.IO                          as Text.IO
+import qualified Data.Text.Prettyprint.Doc             as Doc
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Doc.Render.Text
-import qualified Dhall.Core       as Core
-import qualified Dhall.Lint       as Lint
-import qualified Dhall.Parser     as Parser
-import qualified Dhall.Pretty     as Pretty
-import qualified Dhall.Test.Util  as Test.Util
-import qualified Test.Tasty       as Tasty
-import qualified Test.Tasty.HUnit as Tasty.HUnit
+import qualified Dhall.Core                            as Core
+import qualified Dhall.Lint                            as Lint
+import qualified Dhall.Parser                          as Parser
+import qualified Dhall.Pretty                          as Pretty
+import qualified Dhall.Test.Util                       as Test.Util
+import qualified Test.Tasty                            as Tasty
+import qualified Test.Tasty.HUnit                      as Tasty.HUnit
 import qualified Turtle
 
 lintDirectory :: FilePath

@@ -1,12 +1,13 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE PatternGuards       #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedLists     #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternGuards       #-}
 {-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 {-| Convert JSON data to Dhall in one of two ways:
 
@@ -571,7 +572,7 @@ instance Semigroup RecordSchema where
 
 recordSchemaToDhallType :: RecordSchema -> Expr s a
 recordSchemaToDhallType (RecordSchema m) =
-    D.Record (Map.fromList (Data.Map.toList (fmap schemaToDhallType m)))
+    D.Record (Map.fromList (Data.Map.toList (fmap (D.makeRecordField . schemaToDhallType) m)))
 
 {-| `inferSchema` will never infer a union type with more than one numeric
     alternative
@@ -777,13 +778,17 @@ schemaToDhallType ArbitraryJSON =
     D.Pi "_" (D.Const D.Type)
         (D.Pi "_"
             (D.Record
-                [ ("array" , D.Pi "_" (D.App D.List (V 0)) (V 1))
-                , ("bool"  , D.Pi "_" D.Bool (V 1))
-                , ("double", D.Pi "_" D.Double (V 1))
-                , ("integer", D.Pi "_" D.Integer (V 1))
-                , ("null"  , V 0)
-                , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
-                , ("string", D.Pi "_" D.Text (V 1))
+                [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List (V 0)) (V 1))
+                , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool (V 1))
+                , ("double", D.makeRecordField $ D.Pi "_" D.Double (V 1))
+                , ("integer", D.makeRecordField $ D.Pi "_" D.Integer (V 1))
+                , ("null"  , D.makeRecordField $ V 0)
+                , ("object", D.makeRecordField $
+                    D.Pi "_" (D.App D.List (D.Record
+                        [ ("mapKey", D.makeRecordField D.Text)
+                        , ("mapValue", D.makeRecordField $ V 0)
+                        ])) (V 1))
+                , ("string", D.makeRecordField $ D.Pi "_" D.Text (V 1))
                 ]
             )
             (V 1)
@@ -848,7 +853,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                     = Right (D.ListLit (Just t) [])
                     | otherwise
                     = Left (MissingKey k t v jsonPath)
-           in D.RecordLit <$> Map.traverseWithKey f r
+           in D.RecordLit . fmap D.makeRecordField <$> Map.traverseWithKey f (D.recordFieldValue <$> r)
 
     -- key-value list ~> Record
     loop jsonPath t@(D.Record _) v@(Aeson.Array a)
@@ -865,8 +870,8 @@ dhallFromJSON (Conversion {..}) expressionType =
     loop jsonPath t@(App D.List (D.Record r)) v@(Aeson.Object o)
         | not noKeyValMap
         , ["mapKey", "mapValue"] == Map.keys r
-        , Just mapKey   <- Map.lookup "mapKey" r
-        , Just mapValue <- Map.lookup "mapValue" r
+        , Just mapKey   <- D.recordFieldValue <$> Map.lookup "mapKey" r
+        , Just mapValue <- D.recordFieldValue <$> Map.lookup "mapValue" r
         = do
           keyExprMap <- HM.traverseWithKey  (\k child -> loop (Aeson.Types.Key k : jsonPath) mapValue child) o
 
@@ -877,10 +882,10 @@ dhallFromJSON (Conversion {..}) expressionType =
                   _         -> Left (Mismatch t v jsonPath)
 
           let f :: (Text, ExprX) -> ExprX
-              f (key, val) = D.RecordLit ( Map.fromList
+              f (key, val) = D.RecordLit $ D.makeRecordField <$> Map.fromList
                   [ ("mapKey"  , toKey key)
                   , ("mapValue", val)
-                  ] )
+                  ]
 
           let records = (fmap f . Seq.fromList . HM.toList) keyExprMap
 
@@ -947,12 +952,16 @@ dhallFromJSON (Conversion {..}) expressionType =
       (D.Pi _ (D.Const D.Type)
           (D.Pi _
               (D.Record
-                  [ ("array" , D.Pi _ (D.App D.List (V 0)) (V 1))
-                  , ("bool"  , D.Pi _ D.Bool (V 1))
-                  , ("null"  , V 0)
-                  , ("number", D.Pi _ D.Double (V 1))
-                  , ("object", D.Pi _ (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
-                  , ("string", D.Pi _ D.Text (V 1))
+                  [ ("array" , D.recordFieldValue -> D.Pi _ (D.App D.List (V 0)) (V 1))
+                  , ("bool"  , D.recordFieldValue -> D.Pi _ D.Bool (V 1))
+                  , ("null"  , D.recordFieldValue -> V 0)
+                  , ("number", D.recordFieldValue -> D.Pi _ D.Double (V 1))
+                  , ("object", D.recordFieldValue ->
+                      D.Pi _ (D.App D.List (D.Record
+                      [ ("mapKey", D.recordFieldValue -> D.Text)
+                      , ("mapValue", D.recordFieldValue -> V 0)
+                      ])) (V 1))
+                  , ("string", D.recordFieldValue -> D.Pi _ D.Text (V 1))
                   ]
               )
               (V 1)
@@ -962,8 +971,8 @@ dhallFromJSON (Conversion {..}) expressionType =
           let outer (Aeson.Object o) =
                   let inner (key, val) =
                           D.RecordLit
-                              [ ("mapKey"  , D.TextLit (D.Chunks [] key))
-                              , ("mapValue", outer val                  )
+                              [ ("mapKey"  , D.makeRecordField $ D.TextLit (D.Chunks [] key))
+                              , ("mapValue", D.makeRecordField $ outer val                  )
                               ]
 
                       elements =
@@ -977,7 +986,10 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       elementType
                           | null elements =
-                              Just (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON") ]))
+                              Just (D.App D.List (D.Record
+                                [ ("mapKey", D.makeRecordField D.Text)
+                                , ("mapValue", D.makeRecordField "JSON")
+                                ]))
                           | otherwise =
                               Nothing
 
@@ -1005,12 +1017,16 @@ dhallFromJSON (Conversion {..}) expressionType =
                 D.Lam "JSON" (D.Const D.Type)
                     (D.Lam "json"
                         (D.Record
-                            [ ("array" , D.Pi "_" (D.App D.List "JSON") "JSON")
-                            , ("bool"  , D.Pi "_" D.Bool "JSON")
-                            , ("null"  , "JSON")
-                            , ("number", D.Pi "_" D.Double "JSON")
-                            , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON")])) "JSON")
-                            , ("string", D.Pi "_" D.Text "JSON")
+                            [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List "JSON") "JSON")
+                            , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool "JSON")
+                            , ("null"  , D.makeRecordField "JSON")
+                            , ("number", D.makeRecordField $ D.Pi "_" D.Double "JSON")
+                            , ("object", D.makeRecordField $
+                                D.Pi "_" (D.App D.List (D.Record
+                                    [ ("mapKey", D.makeRecordField D.Text)
+                                    , ("mapValue", D.makeRecordField "JSON")
+                                    ])) "JSON")
+                            , ("string", D.makeRecordField $ D.Pi "_" D.Text "JSON")
                             ]
                         )
                         (outer value)
@@ -1024,13 +1040,17 @@ dhallFromJSON (Conversion {..}) expressionType =
       (D.Pi _ (D.Const D.Type)
           (D.Pi _
               (D.Record
-                  [ ("array" , D.Pi _ (D.App D.List (V 0)) (V 1))
-                  , ("bool"  , D.Pi _ D.Bool (V 1))
-                  , ("double", D.Pi _ D.Double (V 1))
-                  , ("integer", D.Pi _ D.Integer (V 1))
-                  , ("null"  , V 0)
-                  , ("object", D.Pi _ (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", V 0)])) (V 1))
-                  , ("string", D.Pi _ D.Text (V 1))
+                  [ ("array" , D.recordFieldValue -> D.Pi _ (D.App D.List (V 0)) (V 1))
+                  , ("bool"  , D.recordFieldValue -> D.Pi _ D.Bool (V 1))
+                  , ("double", D.recordFieldValue -> D.Pi _ D.Double (V 1))
+                  , ("integer", D.recordFieldValue -> D.Pi _ D.Integer (V 1))
+                  , ("null"  , D.recordFieldValue -> V 0)
+                  , ("object", D.recordFieldValue ->
+                      D.Pi _ (D.App D.List (D.Record
+                        [ ("mapKey", D.recordFieldValue -> D.Text)
+                        , ("mapValue", D.recordFieldValue -> V 0)
+                        ])) (V 1))
+                  , ("string", D.recordFieldValue -> D.Pi _ D.Text (V 1))
                   ]
               )
               (V 1)
@@ -1040,8 +1060,8 @@ dhallFromJSON (Conversion {..}) expressionType =
           let outer (Aeson.Object o) =
                   let inner (key, val) =
                           D.RecordLit
-                              [ ("mapKey"  , D.TextLit (D.Chunks [] key))
-                              , ("mapValue", outer val                  )
+                              [ ("mapKey"  , D.makeRecordField $ D.TextLit (D.Chunks [] key))
+                              , ("mapValue", D.makeRecordField $ outer val                  )
                               ]
 
                       elements =
@@ -1055,7 +1075,9 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       elementType
                           | null elements =
-                              Just (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON") ]))
+                              Just (D.App D.List (D.Record
+                                [ ("mapKey", D.makeRecordField D.Text)
+                                , ("mapValue", D.makeRecordField "JSON") ]))
                           | otherwise =
                               Nothing
 
@@ -1085,13 +1107,16 @@ dhallFromJSON (Conversion {..}) expressionType =
                 D.Lam "JSON" (D.Const D.Type)
                     (D.Lam "json"
                         (D.Record
-                            [ ("array" , D.Pi "_" (D.App D.List "JSON") "JSON")
-                            , ("bool"  , D.Pi "_" D.Bool "JSON")
-                            , ("double", D.Pi "_" D.Double "JSON")
-                            , ("integer", D.Pi "_" D.Integer "JSON")
-                            , ("null"  , "JSON")
-                            , ("object", D.Pi "_" (D.App D.List (D.Record [ ("mapKey", D.Text), ("mapValue", "JSON")])) "JSON")
-                            , ("string", D.Pi "_" D.Text "JSON")
+                            [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List "JSON") "JSON")
+                            , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool "JSON")
+                            , ("double", D.makeRecordField $ D.Pi "_" D.Double "JSON")
+                            , ("integer", D.makeRecordField $ D.Pi "_" D.Integer "JSON")
+                            , ("null"  , D.makeRecordField "JSON")
+                            , ("object", D.makeRecordField $ D.Pi "_"
+                                (D.App D.List (D.Record
+                                    [ ("mapKey", D.makeRecordField D.Text)
+                                    , ("mapValue", D.makeRecordField "JSON")])) "JSON")
+                            , ("string", D.makeRecordField $ D.Pi "_" D.Text "JSON")
                             ]
                         )
                         (outer value)
