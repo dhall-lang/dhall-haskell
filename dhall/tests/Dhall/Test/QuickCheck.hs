@@ -238,10 +238,7 @@ instance Arbitrary DhallDouble where
     shrink = genericShrink
 
 instance Arbitrary Directory where
-    arbitrary = do
-        components <- suchThat arbitrary (not . any Text.null)
-
-        return Directory{..}
+    arbitrary = lift1 Directory
 
     shrink = genericShrink
 
@@ -387,12 +384,7 @@ standardizedExpression _ =
     True
 
 instance Arbitrary File where
-    arbitrary = do
-        directory <- arbitrary
-
-        file <- suchThat arbitrary (not . Text.null)
-
-        return File{..}
+    arbitrary = lift2 File
 
     shrink = genericShrink
 
