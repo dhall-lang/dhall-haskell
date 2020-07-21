@@ -171,7 +171,13 @@ instance Arbitrary Header where
                   , ( 1, arbitrary)
                   ]
 
-          commentText = Text.pack <$> Test.QuickCheck.listOf commentChar
+          noInteriorBlockComments text =
+              not (Text.isInfixOf "{-" text || Text.isInfixOf "-}" text)
+
+          commentText =
+              suchThat
+                  (Text.pack <$> Test.QuickCheck.listOf commentChar)
+                  noInteriorBlockComments
 
           multiline = do
               txt <- commentText
@@ -194,7 +200,7 @@ instance Arbitrary Header where
 
       pure . createHeader $ Text.unlines comments
 
-    shrink (Header txt) = createHeader . Text.pack <$> shrink (Text.unpack txt)
+    shrink _ = []
 
 instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
