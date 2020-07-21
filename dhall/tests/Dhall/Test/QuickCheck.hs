@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -238,10 +239,7 @@ instance Arbitrary DhallDouble where
     shrink = genericShrink
 
 instance Arbitrary Directory where
-    arbitrary = do
-        components <- suchThat arbitrary (not . any Text.null)
-
-        return Directory{..}
+    arbitrary = lift1 Directory
 
     shrink = genericShrink
 
@@ -387,12 +385,7 @@ standardizedExpression _ =
     True
 
 instance Arbitrary File where
-    arbitrary = do
-        directory <- arbitrary
-
-        file <- suchThat arbitrary (not . Text.null)
-
-        return File{..}
+    arbitrary = lift2 File
 
     shrink = genericShrink
 
@@ -417,7 +410,15 @@ instance Arbitrary Pos where
 instance Arbitrary ImportType where
     arbitrary =
         Test.QuickCheck.oneof
-            [ lift2 Local
+            [ do  prefix <- arbitrary
+
+                  let validPath File{ directory = Directory{ components }, file } =
+                        all (not . Text.null) (file : components)
+
+
+                  path <- suchThat arbitrary validPath
+
+                  return (Local prefix path)
             , lift1 Remote
             , lift1 Env
             , lift0 Missing
@@ -457,16 +458,20 @@ instance Arbitrary URL where
 
         authority <- arbitrary
 
-        path <- arbitrary
-
-        let validQueryCharacter c =
+        let validPChar c =
                    ('\x41' <= c && c <= '\x5A')
                 || ('\x61' <= c && c <= '\x7A')
                 || ('\x30' <= c && c <= '\x39')
-                || c `elem` ("-._~!$&'()*+,;=:@/?" :: String)
+                || c `elem` ("-._~!$&'()*+,;=:@" :: String)
 
-        let validQuery  Nothing  = True
-            validQuery (Just q ) = Text.all validQueryCharacter q
+        let validPath File{ directory = Directory{ components }, file } =
+                all (Text.all validPChar) (file : components)
+
+        path <- suchThat arbitrary validPath
+
+        let validQueryCharacter c = validPChar c || c `elem` ("/?" :: String)
+
+        let validQuery = all (Text.all validQueryCharacter)
 
         query <- suchThat arbitrary validQuery
 
