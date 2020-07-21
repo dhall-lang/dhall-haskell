@@ -412,11 +412,16 @@ instance Arbitrary ImportType where
         Test.QuickCheck.oneof
             [ do  prefix <- arbitrary
 
-                  let validPath File{ directory = Directory{ components }, file } =
-                        all (not . Text.null) (file : components)
+                  let nonEmptyText =
+                          fmap Text.pack (Test.QuickCheck.listOf1 arbitrary)
 
+                  components <- Test.QuickCheck.listOf nonEmptyText
 
-                  path <- suchThat arbitrary validPath
+                  file <- nonEmptyText
+
+                  let directory = Directory{ components }
+
+                  let path = File{ file, directory }
 
                   return (Local prefix path)
             , lift1 Remote
@@ -458,22 +463,34 @@ instance Arbitrary URL where
 
         authority <- arbitrary
 
-        let validPChar c =
-                   ('\x41' <= c && c <= '\x5A')
-                || ('\x61' <= c && c <= '\x7A')
-                || ('\x30' <= c && c <= '\x39')
-                || c `elem` ("-._~!$&'()*+,;=:@" :: String)
+        let validPChar =
+                Test.QuickCheck.frequency
+                    [ (26, Test.QuickCheck.chooseEnum ('\x41', '\x5A'))
+                    , (26, Test.QuickCheck.chooseEnum ('\x61', '\x7A'))
+                    , (10, Test.QuickCheck.chooseEnum ('\x30', '\x39'))
+                    , (17, Test.QuickCheck.elements "-._~!$&'()*+,;=:@")
+                    ]
 
-        let validPath File{ directory = Directory{ components }, file } =
-                all (Text.all validPChar) (file : components)
+        let component = fmap Text.pack (Test.QuickCheck.listOf validPChar)
 
-        path <- suchThat arbitrary validPath
+        components <- Test.QuickCheck.listOf component
 
-        let validQueryCharacter c = validPChar c || c `elem` ("/?" :: String)
+        file <- component
 
-        let validQuery = all (Text.all validQueryCharacter)
+        let directory = Directory{ components }
 
-        query <- suchThat arbitrary validQuery
+        let path = File{ file, directory }
+
+        let validQueryCharacters =
+                Test.QuickCheck.frequency
+                    [ (79, validPChar)
+                    , ( 2, Test.QuickCheck.elements "/?")
+                    ]
+
+        query <- Test.QuickCheck.oneof
+            [ pure Nothing
+            , fmap (Just . Text.pack) (Test.QuickCheck.listOf validQueryCharacters)
+            ]
 
         headers <- arbitrary
 
