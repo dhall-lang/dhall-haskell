@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -77,6 +78,7 @@ import Test.Tasty.QuickCheck     (QuickCheckTests (..))
 import Text.Megaparsec           (Pos, SourcePos (..))
 
 import qualified Control.Spoon
+import qualified Data.Char
 import qualified Data.Foldable         as Foldable
 import qualified Data.HashMap.Strict   as HashMap
 import qualified Data.HashSet
@@ -163,11 +165,8 @@ integer =
         , (1, fmap (\x -> x - (2 ^ (64 :: Int))) arbitrary)
         ]
 
-instance Arbitrary CharacterSet where
-    arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
-
-instance Arbitrary Header where
-    arbitrary = do
+whitespace :: Gen Text
+whitespace = do
       let commentChar =
               Test.QuickCheck.frequency
                   [ (20, Test.QuickCheck.elements [' ' .. '\DEL'])
@@ -201,10 +200,19 @@ instance Arbitrary Header where
               , newlines
               ]
 
-      pure . createHeader $ Text.unlines comments
+      pure $ Text.unlines comments
 
-    shrink (Header "") = []
-    shrink _           = [Header ""]
+shrinkWhitespace :: Text -> [Text]
+shrinkWhitespace "" = []
+shrinkWhitespace _  = [""]
+
+instance Arbitrary CharacterSet where
+    arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
+
+instance Arbitrary Header where
+    arbitrary = createHeader <$> whitespace
+
+    shrink (Header text) = Header <$> shrinkWhitespace text
 
 instance (Arbitrary v) => Arbitrary (Map Text v) where
     arbitrary = do
@@ -220,15 +228,15 @@ instance (Arbitrary v) => Arbitrary (Map Text v) where
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Binding s a) where
     arbitrary = do
-        let bindingSrc0 = Nothing
-        let bindingSrc1 = Nothing
-        let bindingSrc2 = Nothing
+        bindingSrc0 <- arbitrary
 
         variable <- Test.QuickCheck.oneof [ pure "_", label ]
 
-        a <- arbitrary
+        bindingSrc1 <- arbitrary
 
-        let annotation = fmap ((,) Nothing) a
+        annotation <- arbitrary
+
+        bindingSrc2 <- arbitrary
 
         value <- arbitrary
 
@@ -434,9 +442,10 @@ instance Arbitrary FilePrefix where
     shrink = genericShrink
 
 instance Arbitrary Src where
-    arbitrary = lift3 Src
+    arbitrary = do
+        lift2 Src <*> whitespace
 
-    shrink = genericShrink
+    shrink _ = []
 
 instance Arbitrary SourcePos where
     arbitrary = lift3 SourcePos
@@ -500,14 +509,20 @@ instance Arbitrary URL where
     arbitrary = do
         scheme <- arbitrary
 
-        authority <- arbitrary
+        -- TODO: the authority generator could be more precise, but it currently
+        -- seems good enough.
+        let validAuthorityChar =
+                arbitrary `suchThat` \ch ->
+                    not (Data.Char.isSpace ch) && not (Data.Char.isPunctuation ch)
+
+        authority <- Text.pack <$> Test.QuickCheck.listOf validAuthorityChar
 
         let validPChar =
                 Test.QuickCheck.frequency
                     [ (26, chooseCharacter ('\x41', '\x5A'))
                     , (26, chooseCharacter ('\x61', '\x7A'))
                     , (10, chooseCharacter ('\x30', '\x39'))
-                    , (17, Test.QuickCheck.elements "-._~!$&'()*+,;=:@")
+                    , (17, Test.QuickCheck.elements "-._~!$&'*+;=:@")
                     ]
 
         let component = fmap Text.pack (Test.QuickCheck.listOf validPChar)
@@ -535,7 +550,7 @@ instance Arbitrary URL where
 
         return URL{..}
 
-    shrink = genericShrink
+    shrink _ = []
 
 instance Arbitrary Var where
     arbitrary =
@@ -561,7 +576,18 @@ binaryRoundtrip expression =
     === Right denotedExpression
   where
     denotedExpression :: Expr Void Import
-    denotedExpression = Dhall.Core.denote expression
+    denotedExpression = denote' expression
+
+    denote' :: Expr a Import -> Expr b Import
+    denote' = Dhall.Core.denote . fmap denoteHttpHeaders
+
+    denoteHttpHeaders import_@(Import importHashed _)
+        | Remote url <- importType importHashed
+        = let headers' = denote' <$> headers url
+              importType' = Remote url { headers = headers' }
+              importHashed' = importHashed { importType = importType' }
+          in  import_ {importHashed = importHashed'}
+        | otherwise = import_
 
 everythingWellTypedNormalizes :: Expr () () -> Property
 everythingWellTypedNormalizes expression =
@@ -654,10 +680,16 @@ embedThenExtractIsIdentity p =
 
 idempotenceTest :: CharacterSet -> Header -> Expr Src Import -> Property
 idempotenceTest characterSet header expr =
-    let once = format characterSet (header, expr)
-    in case Parser.exprAndHeaderFromText mempty once of
-        Right (format characterSet -> twice) -> once === twice
-        Left _ -> Test.QuickCheck.discard
+        not (any hasHttpHeaders expr)
+    ==> let once = format characterSet (header, expr)
+        in case Parser.exprAndHeaderFromText mempty once of
+            Right (format characterSet -> twice) -> once === twice
+            Left _ -> Test.QuickCheck.discard
+  where
+    -- Workaround for https://github.com/dhall-lang/dhall-haskell/issues/1925.
+    hasHttpHeaders = \case
+        Import (ImportHashed _ (Remote (URL { headers = Just _ }))) _ -> True
+        _                                                             -> False
 
 tests :: TestTree
 tests =
@@ -707,12 +739,7 @@ tests =
         , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
         , ( "Formatting should be idempotent"
           , Test.QuickCheck.property idempotenceTest
-
-            -- FIXME: While this test is flaky, we set the number of test cases
-            -- to 0 by subtracting the default number of tests (100).
-            -- To run the test manually, use e.g.
-            --    --quickcheck-tests 1000
-          , Test.Tasty.adjustOption (subtract (QuickCheckTests 100))
+          , adjustQuickCheckTests 10000
           )
         ]
 
