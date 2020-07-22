@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -465,9 +466,15 @@ instance Arbitrary URL where
 
         let validPChar =
                 Test.QuickCheck.frequency
+#if MIN_VERSION_QuickCheck(0,5,8)
                     [ (26, Test.QuickCheck.chooseEnum ('\x41', '\x5A'))
                     , (26, Test.QuickCheck.chooseEnum ('\x61', '\x7A'))
                     , (10, Test.QuickCheck.chooseEnum ('\x30', '\x39'))
+#else
+                    [ (26, Test.QuickCheck.choose ('\x41', '\x5A'))
+                    , (26, Test.QuickCheck.choose ('\x61', '\x7A'))
+                    , (10, Test.QuickCheck.choose ('\x30', '\x39'))
+#endif
                     , (17, Test.QuickCheck.elements "-._~!$&'()*+,;=:@")
                     ]
 
