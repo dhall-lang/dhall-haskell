@@ -202,7 +202,8 @@ instance Arbitrary Header where
 
       pure . createHeader $ Text.unlines comments
 
-    shrink _ = []
+    shrink (Header "") = []
+    shrink _           = [Header ""]
 
 instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
     arbitrary = do
