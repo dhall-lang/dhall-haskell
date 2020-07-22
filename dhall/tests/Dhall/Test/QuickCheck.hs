@@ -466,7 +466,7 @@ instance Arbitrary URL where
 
         let validPChar =
                 Test.QuickCheck.frequency
-#if MIN_VERSION_QuickCheck(0,5,8)
+#if MIN_VERSION_QuickCheck(2,14,0)
                     [ (26, Test.QuickCheck.chooseEnum ('\x41', '\x5A'))
                     , (26, Test.QuickCheck.chooseEnum ('\x61', '\x7A'))
                     , (10, Test.QuickCheck.chooseEnum ('\x30', '\x39'))
