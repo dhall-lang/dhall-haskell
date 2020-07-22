@@ -1,4 +1,6 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -244,10 +246,7 @@ instance Arbitrary DhallDouble where
     shrink = genericShrink
 
 instance Arbitrary Directory where
-    arbitrary = do
-        components <- suchThat arbitrary (not . any Text.null)
-
-        return Directory{..}
+    arbitrary = lift1 Directory
 
     shrink = genericShrink
 
@@ -393,12 +392,7 @@ standardizedExpression _ =
     True
 
 instance Arbitrary File where
-    arbitrary = do
-        directory <- arbitrary
-
-        file <- suchThat arbitrary (not . Text.null)
-
-        return File{..}
+    arbitrary = lift2 File
 
     shrink = genericShrink
 
@@ -423,7 +417,20 @@ instance Arbitrary Pos where
 instance Arbitrary ImportType where
     arbitrary =
         Test.QuickCheck.oneof
-            [ lift2 Local
+            [ do  prefix <- arbitrary
+
+                  let nonEmptyText =
+                          fmap Text.pack (Test.QuickCheck.listOf1 arbitrary)
+
+                  components <- Test.QuickCheck.listOf nonEmptyText
+
+                  file <- nonEmptyText
+
+                  let directory = Directory{ components }
+
+                  let path = File{ file, directory }
+
+                  return (Local prefix path)
             , lift1 Remote
             , lift1 Env
             , lift0 Missing
@@ -463,18 +470,40 @@ instance Arbitrary URL where
 
         authority <- arbitrary
 
-        path <- arbitrary
+        let validPChar =
+                Test.QuickCheck.frequency
+#if MIN_VERSION_QuickCheck(2,14,0)
+                    [ (26, Test.QuickCheck.chooseEnum ('\x41', '\x5A'))
+                    , (26, Test.QuickCheck.chooseEnum ('\x61', '\x7A'))
+                    , (10, Test.QuickCheck.chooseEnum ('\x30', '\x39'))
+#else
+                    [ (26, Test.QuickCheck.choose ('\x41', '\x5A'))
+                    , (26, Test.QuickCheck.choose ('\x61', '\x7A'))
+                    , (10, Test.QuickCheck.choose ('\x30', '\x39'))
+#endif
+                    , (17, Test.QuickCheck.elements "-._~!$&'()*+,;=:@")
+                    ]
 
-        let validQueryCharacter c =
-                   ('\x41' <= c && c <= '\x5A')
-                || ('\x61' <= c && c <= '\x7A')
-                || ('\x30' <= c && c <= '\x39')
-                || c `elem` ("-._~!$&'()*+,;=:@/?" :: String)
+        let component = fmap Text.pack (Test.QuickCheck.listOf validPChar)
 
-        let validQuery  Nothing  = True
-            validQuery (Just q ) = Text.all validQueryCharacter q
+        components <- Test.QuickCheck.listOf component
 
-        query <- suchThat arbitrary validQuery
+        file <- component
+
+        let directory = Directory{ components }
+
+        let path = File{ file, directory }
+
+        let validQueryCharacters =
+                Test.QuickCheck.frequency
+                    [ (79, validPChar)
+                    , ( 2, Test.QuickCheck.elements "/?")
+                    ]
+
+        query <- Test.QuickCheck.oneof
+            [ pure Nothing
+            , fmap (Just . Text.pack) (Test.QuickCheck.listOf validQueryCharacters)
+            ]
 
         headers <- arbitrary
 
