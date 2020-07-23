@@ -1,6 +1,10 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+
+{-| This module contains Dhall's parser combinators
+-}
+
 module Dhall.Parser.Combinators where
 
 
