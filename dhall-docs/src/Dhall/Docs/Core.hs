@@ -15,7 +15,15 @@
 {-# LANGUAGE ViewPatterns          #-}
 -- {-# OPTIONS_GHC -Wno-unused-imports #-}
 
-module Dhall.Docs.Core (generateDocs, generateDocsPure, GeneratedDocs(..)) where
+module Dhall.Docs.Core
+    ( -- * Core functionality
+      generateDocs
+    , generateDocsPure
+    , GeneratedDocs(..)
+
+      -- * Comment parsing
+    , module Dhall.Docs.Comment
+    ) where
 
 import Control.Applicative        (Alternative (..))
 import Control.Monad.Writer.Class (MonadWriter)
