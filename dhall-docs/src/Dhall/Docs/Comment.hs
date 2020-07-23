@@ -65,6 +65,7 @@ data DhallComment a
 
 -- | Extracted text from a valid @dhall-docs@ comment
 newtype DhallDocsText = DhallDocsText Text
+    deriving Show
 
 unDhallDocsText :: DhallDocsText -> Text
 unDhallDocsText (DhallDocsText t) = t
@@ -185,6 +186,7 @@ data CommentParseError
     | BadSingleLineCommentsAlignment
     | BadPrefixesOnSingleLineComments
     | SeveralSubseqDhallDocsComments
+    deriving Show
 
 -- | Checks if a 'RawComment' has the @dhall-docs@ marker
 parseMarkedComment :: DhallComment RawComment -> Maybe (DhallComment MarkedComment)
@@ -231,9 +233,11 @@ parseDhallDocsComment (SingleLineComments lineComments) =
 
     checkPrefixes :: ListOfSingleLineComments -> Either CommentParseError ListOfSingleLineComments
     checkPrefixes ls@((_, first) :| rest)
-        | "--| " `Data.Text.isPrefixOf` first && all (("--  " `Data.Text.isPrefixOf`) . snd) rest
+        | "--| " `Data.Text.isPrefixOf` first && all (p . snd) rest
             = Right ls
         | otherwise = Left BadPrefixesOnSingleLineComments
+      where
+        p t = Data.Text.isPrefixOf "--  " t || (Data.Text.compareLength t 2 == EQ && "--" == t)
 
 parseDhallDocsText :: DhallComment DhallDocsComment -> DhallDocsText
 parseDhallDocsText (BlockComment blockComment) =
@@ -273,7 +277,7 @@ parseDhallDocsText (SingleLineComments (fmap snd -> (first :| rest))) =
 
         Just s -> s
 
-    cleanRest l = case Data.Text.stripPrefix "--  " l of
+    cleanRest l = case Data.Text.stripPrefix "--  " l <|> Data.Text.stripPrefix "--" l of
         Nothing -> fileAnIssue $
             "Error strippping \"--  \" prefix on parseDhallDocsText. " <>
             "All comment lines are here:\n" <> debugLines

@@ -44,7 +44,7 @@ main = do
                     [ docGenerationTests docsMap
                     , commentTests
                     ]
-    Test.Tasty.defaultMain testTree
+    Silver.defaultMain testTree
 
 getDirContents :: Path Rel Dir -> IO [(Path Rel File, ByteString)]
 getDirContents dataDir = do
@@ -90,26 +90,26 @@ getCommentTests = do
 
 getIgnoreTests :: IO TestTree
 getIgnoreTests = do
-    tests <- discover (Turtle.chars <* "A.txt") ignoreTest (Turtle.lstree ignoreTestsPath)
+    tests <- discover (Turtle.chars <* ".txt") makeText (Turtle.lstree testsPath)
     return $ Test.Tasty.testGroup "ignored comments" [ tests ]
   where
-    ignoreTestsPath = "./tasty/data/comments/empty/"
-    ignoreTest prefix = Tasty.HUnit.testCase (Data.Text.unpack prefix) $ do
+    testsPath = "./tasty/data/comments/empty/"
+    makeText prefix = Tasty.HUnit.testCase (Data.Text.unpack prefix) $ do
         let inputFile  = Data.Text.unpack (prefix <> ".txt")
 
         inputText <- Text.IO.readFile inputFile
 
         case parseSingleDhallDocsComment inputFile inputText of
             Nothing -> return ()
-            _ -> fail "Should not return a dhall-docs comment neither an error"
+            e -> fail ("Should not return a dhall-docs comment neither an error: " <> show e)
 
 
 getInvalidCommentsTests :: IO TestTree
 getInvalidCommentsTests  = do
-    tests <- discover (Turtle.chars <* "A.txt") makeTest (Turtle.lstree testPath)
+    tests <- discover (Turtle.chars <* ".txt") makeTest (Turtle.lstree testsPath)
     return $ Test.Tasty.testGroup "invalid comments" [ tests ]
   where
-    testPath = "./tasty/data/comments/invalid/"
+    testsPath = "./tasty/data/comments/invalid/"
     makeTest prefix = Tasty.HUnit.testCase (Data.Text.unpack prefix) $ do
         let inputFile  = Data.Text.unpack (prefix <> ".txt")
 
@@ -117,7 +117,7 @@ getInvalidCommentsTests  = do
 
         case parseSingleDhallDocsComment inputFile inputText of
             Just (Left _) -> return ()
-            _ -> fail "Should have returned an error"
+            e -> fail ("Should have returned an error: " <> show e)
 
 
 getValidCommentTests :: IO TestTree
@@ -136,7 +136,7 @@ getValidCommentTests = do
             contents <- Text.IO.readFile inputFile
             case parseSingleDhallDocsComment inputFile contents of
                 Just (Right t) -> return t
-                _ -> fail "It shouldn't have returned an error or no-text"
+                e -> fail ("It shouldn't have returned an error or no-text: " <> show e)
         converter = unDhallDocsText
 
 

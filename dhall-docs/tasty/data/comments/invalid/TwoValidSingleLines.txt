@@ -1,5 +1,5 @@
--- | bla
+--| bla
 --   qux
 
--- | error here
+--| error here
 --   foo
