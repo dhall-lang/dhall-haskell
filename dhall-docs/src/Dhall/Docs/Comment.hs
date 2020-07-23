@@ -38,14 +38,15 @@ data RawComment
 
 type ListOfSingleLineComments = NonEmpty (SourcePos, Text)
 
-{-| Internal representation of Dhall comments. Text is always stripped
+{-| Internal representation of Dhall comments. Text is always stripped from
+    whitespace from both the start and begin of the string
 
     * If @a = 'DhallDocsComment'@ then comment is valid to extract its contents
     and be rendered on documentation
     * If @a = 'MarkedComment'@ then comment has the @|@ marker that
     @dhall-docs@ will be aware of, but this comment may not be a @dhall-docs@
     comment
-    * If @a = `RawComment`@ then the comment is a raw generic comment
+    * If @a = `RawComment`@ then the comment is a raw comment
 -}
 data DhallComment a
     -- | A single block comment: starting from @{-@ and ending in @-}@
