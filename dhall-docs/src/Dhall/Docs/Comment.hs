@@ -12,7 +12,7 @@ module Dhall.Docs.Comment
     , unDhallDocsText
     ) where
 
-import Control.Applicative (some, (<|>))
+import Control.Applicative (many, some, (<|>))
 import Data.Functor        (void)
 import Data.List.NonEmpty  (NonEmpty (..), (<|))
 import Data.Text           (Text)
@@ -51,8 +51,8 @@ data DhallComment a
     -- | A single block comment: starting from @{-@ and ending in @-}@
     = BlockComment Text
     {-| A group of subsequent single line comment, each one starting from @--@
-        and ending in the last character. Each one keeps its 'SourcePos' to
-        aid indentation.
+        and ending in the last character to the end of the line. Each one keeps
+        its 'SourcePos' to validate indentation.
 
         A property of 'SingleLineComments' is that the 'sourceLine's in the
         'NonEmpty (SourcePos, Text)' are in strictly-increasing order /and/
@@ -72,8 +72,8 @@ unDhallDocsText (DhallDocsText t) = t
 
 -- | A mirror of "Dhall.Parser.Token".'Dhall.Parser.Token.lineComment' but
 --   returning a 'DhallComment'
-lineComment :: Parser (NonEmpty (DhallComment RawComment))
-lineComment = do
+lineCommentParser :: Parser (NonEmpty (DhallComment RawComment))
+lineCommentParser = do
     (l : ls) <- some singleLine
     pure $ NonEmpty.map SingleLineComments $ groupComments (l :| ls)
   where
@@ -173,9 +173,9 @@ parseComments delta text = case result of
     Right comments -> comments
   where
     parser = do
-        comments <- some $ do
+        comments <- many $ do
             whitespace
-            lineComment <|> ((:| []) <$> blockCommentParser)
+            lineCommentParser <|> ((:| []) <$> blockCommentParser)
         Text.Megaparsec.eof
         pure $ concatMap NonEmpty.toList comments
 
