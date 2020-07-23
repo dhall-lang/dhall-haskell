@@ -1,6 +1,8 @@
 {-| Provides utilities to parse Dhall comments
 -}
 
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE KindSignatures    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
 
@@ -31,10 +33,8 @@ import qualified Dhall.Parser.Token       as Token
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Pos      as Megaparsec.Pos
 
--- | For explanation of these data-types see 'DhallComment'
-data DhallDocsComment
-data MarkedComment
-data RawComment
+-- | For explanation of this data-type see 'DhallComment'
+data CommentType = DhallDocsComment | MarkedComment | RawComment
 
 type ListOfSingleLineComments = NonEmpty (SourcePos, Text)
 
@@ -48,7 +48,7 @@ type ListOfSingleLineComments = NonEmpty (SourcePos, Text)
     comment
     * If @a = `RawComment`@ then the comment is a raw comment
 -}
-data DhallComment a
+data DhallComment (a :: CommentType)
     -- | A single block comment: starting from @{-@ and ending in @-}@
     = BlockComment Text
     {-| A group of subsequent single line comment, each one starting from @--@
@@ -73,7 +73,7 @@ unDhallDocsText (DhallDocsText t) = t
 
 -- | A mirror of "Dhall.Parser.Token".'Dhall.Parser.Token.lineComment' but
 --   returning a 'DhallComment'
-lineCommentParser :: Parser (NonEmpty (DhallComment RawComment))
+lineCommentParser :: Parser (NonEmpty (DhallComment 'RawComment))
 lineCommentParser = do
     (l : ls) <- some singleLine
     pure $ NonEmpty.map SingleLineComments $ groupComments (l :| ls)
@@ -160,14 +160,14 @@ whitespace = Text.Megaparsec.skipMany (Text.Megaparsec.choice
   where
     predicate c = c == ' ' || c == '\t' || c == '\n'
 
-blockCommentParser :: Parser (DhallComment RawComment)
+blockCommentParser :: Parser (DhallComment 'RawComment)
 blockCommentParser = do
     c <- blockCommentParser'
     whitespace
     pure $ BlockComment ("{-" <> c <> "-}")
 
 -- | Parse all comments in a text fragment
-parseComments :: String -> Text -> [DhallComment RawComment]
+parseComments :: String -> Text -> [DhallComment 'RawComment]
 parseComments delta text = case result of
     Left err -> error ("An error has occurred while parsing comments:\n "
       <> Text.Megaparsec.errorBundlePretty err)
@@ -190,7 +190,7 @@ data CommentParseError
     deriving Show
 
 -- | Checks if a 'RawComment' has the @dhall-docs@ marker
-parseMarkedComment :: DhallComment RawComment -> Maybe (DhallComment MarkedComment)
+parseMarkedComment :: DhallComment 'RawComment -> Maybe (DhallComment 'MarkedComment)
 parseMarkedComment (BlockComment comment)
     | "{-|" `Data.Text.isPrefixOf` comment = Just $ BlockComment comment
     | otherwise = Nothing
@@ -202,7 +202,7 @@ parseMarkedComment (SingleLineComments ls)
 -- | Knowing that there is a @dhall-docs@ marker inside the comment, this
 --   checks if a 'MarkedComment' is a 'DhallDocsComment'. For 'SingleLineComments'
 --   this also removes the prefix lines before the first marked comment
-parseDhallDocsComment :: DhallComment MarkedComment -> Either CommentParseError (DhallComment DhallDocsComment)
+parseDhallDocsComment :: DhallComment 'MarkedComment -> Either CommentParseError (DhallComment 'DhallDocsComment)
 parseDhallDocsComment (BlockComment comment) =
     if any (`Data.Text.isPrefixOf` comment) ["{-|\n", "{-|\r\n"] then Right $ BlockComment comment
     else Left MissingNewlineOnBlockComment
@@ -236,7 +236,7 @@ parseDhallDocsComment (SingleLineComments lineComments) =
       where
         p t = Data.Text.isPrefixOf "--  " t || (Data.Text.compareLength t 2 == EQ && "--" == t)
 
-parseDhallDocsText :: DhallComment DhallDocsComment -> DhallDocsText
+parseDhallDocsText :: DhallComment 'DhallDocsComment -> DhallDocsText
 parseDhallDocsText (BlockComment blockComment) =
     case Data.Text.stripSuffix "-}" joinedText of
         Nothing -> fileAnIssue ("Obtained 'Nothing' on extractText.stripSuffix with text: \"" <> joinedText <> "\"")
