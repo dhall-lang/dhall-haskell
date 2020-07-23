@@ -215,9 +215,11 @@ instance TokenParsing Parser where
 
     semi = token (Text.Megaparsec.Char.char ';' <?> ";")
 
+-- | @count n p@ parses @n@ occurrences of @p@
 count :: (Semigroup a, Monoid a) => Int -> Parser a -> Parser a
 count n parser = mconcat (replicate n parser)
 
+-- | @range lo hi p@ parses @n@ ocurrences of @p@ where @lo <= n <= hi@
 range :: (Semigroup a, Monoid a) => Int -> Int -> Parser a -> Parser a
 range minimumBound maximumMatches parser =
     count minimumBound parser <> loop maximumMatches
@@ -225,24 +227,34 @@ range minimumBound maximumMatches parser =
     loop 0 = mempty
     loop n = (parser <> loop (n - 1)) <|> mempty
 
+-- | @option p@ tries to apply parser @p@ returning @mempty@ if parsing failed
 option :: (Alternative f, Monoid a) => f a -> f a
 option p = p <|> pure mempty
 
+-- | @star p@ tries to apply a parser @0@ or more times
 star :: (Alternative f, Monoid a) => f a -> f a
 star p = plus p <|> pure mempty
 
+-- | @plus p@ tries to apply a parser @1@ or more times
 plus :: (Alternative f, Monoid a) => f a -> f a
 plus p = mappend <$> p <*> star p
 
+-- | @satisfy p@ creates a parser that consumes and return the next character
+--   if it satisfies the predicate @p@
 satisfy :: (Char -> Bool) -> Parser Text
 satisfy = fmap Data.Text.singleton . Text.Parser.Char.satisfy
 
+-- | @takeWhile p@ creates a parser that accepts the longest sequence of characters
+--   that match the given predicate possibly returning an empty sequence
 takeWhile :: (Char -> Bool) -> Parser Text
 takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
 
+-- | @takeWhile1 p@ creates a parser that accepts the longest sequence of characters
+--   that match the given predicate. It fails when no character was consumed
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
 
+-- | Construct a 'Set a' from a '[a]', failing if there was a duplicate element
 noDuplicates :: Ord a => [a] -> Parser (Set a)
 noDuplicates = go Dhall.Set.empty
   where
@@ -252,6 +264,8 @@ noDuplicates = go Dhall.Set.empty
         then fail "Duplicate key"
         else go (Dhall.Set.append x found) xs
 
+-- | Creates a map with the given key-value pairs, failing if there was a
+--   duplicate key.
 toMap :: [(Text, a)] -> Parser (Map Text a)
 toMap kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
   where
@@ -260,6 +274,8 @@ toMap kvs = Dhall.Map.unorderedTraverseWithKey (\_k v -> v) m
     err k _v1 _v2 = Text.Parser.Combinators.unexpected
                         ("duplicate field: " ++ Data.Text.unpack k)
 
+-- | Creates a 'Map Text a' using the provided combining function and the
+--   key-value pairs
 toMapWith
     :: (Text -> Parser a -> Parser a -> Parser a)
     -> [(Text, a)]
