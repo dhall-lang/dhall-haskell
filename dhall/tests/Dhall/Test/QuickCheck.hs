@@ -392,6 +392,14 @@ standardizedExpression (Annot (ToMap _ Nothing) _) =
 standardizedExpression _ =
     True
 
+chooseCharacter :: (Char, Char) -> Gen Char
+chooseCharacter =
+#if MIN_VERSION_QuickCheck(2,14,0)
+    Test.QuickCheck.chooseEnum
+#else
+    Test.QuickCheck.choose
+#endif
+
 instance Arbitrary File where
     arbitrary = lift2 File
 
@@ -473,15 +481,9 @@ instance Arbitrary URL where
 
         let validPChar =
                 Test.QuickCheck.frequency
-#if MIN_VERSION_QuickCheck(2,14,0)
-                    [ (26, Test.QuickCheck.chooseEnum ('\x41', '\x5A'))
-                    , (26, Test.QuickCheck.chooseEnum ('\x61', '\x7A'))
-                    , (10, Test.QuickCheck.chooseEnum ('\x30', '\x39'))
-#else
-                    [ (26, Test.QuickCheck.choose ('\x41', '\x5A'))
-                    , (26, Test.QuickCheck.choose ('\x61', '\x7A'))
-                    , (10, Test.QuickCheck.choose ('\x30', '\x39'))
-#endif
+                    [ (26, chooseCharacter ('\x41', '\x5A'))
+                    , (26, chooseCharacter ('\x61', '\x7A'))
+                    , (10, chooseCharacter ('\x30', '\x39'))
                     , (17, Test.QuickCheck.elements "-._~!$&'()*+,;=:@")
                     ]
 
@@ -516,9 +518,17 @@ instance Arbitrary Var where
     arbitrary =
         Test.QuickCheck.oneof
             [ fmap (V "_") (getNonNegative <$> arbitrary)
-            , lift1 (\t -> V t 0)
-            , lift1 V <*> (getNonNegative <$> arbitrary)
+            , fmap (\t -> V t 0) label
+            , V <$> label <*> (getNonNegative <$> arbitrary)
             ]
+      where
+        labelCharacter =
+            Test.QuickCheck.frequency
+                [ (64, chooseCharacter ('\x20', '\x5F'))
+                , (30, chooseCharacter ('\x61', '\x7e'))
+                ]
+
+        label = fmap Text.pack (Test.QuickCheck.listOf labelCharacter)
 
     shrink = genericShrink
 
