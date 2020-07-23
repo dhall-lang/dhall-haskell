@@ -167,10 +167,10 @@ on the extracted text. On the following example:
 
 ```dhall
 {-|
-foo
+  foo
 
-bar
--}
+  bar
+  -}
 ```
 
 `dhall-docs` will extract the following text:
@@ -284,7 +284,7 @@ bar
 ```
 
 If you would like to force an empty line on the documentation output, place an
-empty single line comment in that place. On this example:
+empty single line comment. On this example:
 
 ```dhall
 --| foo
@@ -300,7 +300,7 @@ foo
 bar
 ```
 
-The empty `--` line doesn't need the two (2) whitespaces.
+The empty `--` line should not have the two (2) whitespaces.
 
 If between two single-line comments there is one (1) or more empty lines, the
 latter comments will be ignored. On this example:

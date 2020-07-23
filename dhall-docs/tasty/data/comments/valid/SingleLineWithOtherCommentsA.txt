@@ -1,0 +1,7 @@
+-- bla
+
+--| recovered
+--  text
+{-
+    foo-}
+{- bar -}
