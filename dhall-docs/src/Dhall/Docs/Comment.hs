@@ -199,7 +199,7 @@ parseMarkedComment (SingleLineComments ls)
     | any (("--|" `Data.Text.isPrefixOf`) . snd) ls = Just (SingleLineComments ls)
     | otherwise = Nothing
 
--- | Knowning that there is a @dhall-docs@ marker inside the comment, this
+-- | Knowing that there is a @dhall-docs@ marker inside the comment, this
 --   checks if a 'MarkedComment' is a 'DhallDocsComment'. For 'SingleLineComments'
 --   this also removes the prefix lines before the first marked comment
 parseDhallDocsComment :: DhallComment MarkedComment -> Either CommentParseError (DhallComment DhallDocsComment)
