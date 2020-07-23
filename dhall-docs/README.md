@@ -72,6 +72,8 @@ render your documentation in HTML.
 You can see examples of writing documentation on the [tests](./tasty/data/package)
 folder.
 
+In every example we used `␣` as an alias to a whitespace character
+
 ### Documentation markup language
 
 The markup language of the documentation is [CommonMark], which is a strict
@@ -186,10 +188,10 @@ account when calculating the common indentation. The line between `foo` and `bar
 on the following example has leading whitespace (two (2) whitespaces):
 
 ```dhall
-  {-|
-    foo
-  
-    bar -}
+␣␣{-|
+␣␣␣␣foo
+␣␣
+␣␣␣␣bar -}
 ```
 
 meaning that the extracted text will be:
@@ -262,16 +264,16 @@ A `dhall-docs` valid single-line comment starts with `--|` and a single whitespa
 character. For example:
 
 ```dhall
---| foo
+--|␣foo
 ```
 
 You can span your documentation in several single-line comments by writing `--` and two
 (2) whitespaces:
 
 ```dhall
---| foo
---  bar
---      baz
+--|␣foo
+--␣␣bar
+--␣␣␣␣␣␣baz
 ```
 
 The `--` prefix defines the base indentation for any line. That is, on the above
@@ -280,7 +282,7 @@ example `dhall-docs` will extract the following contents:
 ```
 foo
 bar
-    baz
+␣␣␣␣baz
 ```
 
 If you would like to force an empty line on the documentation output, place an
@@ -383,9 +385,9 @@ Here is an example of using this type of comments in a Dhall file:
 --  * 1
 --  * 2
 
-let a --| foo
-      --  bar
-        = True
+let --| foo
+    --  bar
+    a = True
 
 in { a }
 
