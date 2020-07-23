@@ -220,7 +220,7 @@ parseDhallDocsComment (SingleLineComments lineComments) =
     checkAmountOfMarkers ls =
         if numberOfMarkers > 1 then Left SeveralSubseqDhallDocsComments
         else case newLines of
-            [] -> fileAnIssue "checkAmmountOfMarkers failed with newLines = []"
+            [] -> fileAnIssue "checkAmountOfMarkers failed with newLines = []"
             l : remainder -> Right $ l :| remainder
       where
         commentLines = NonEmpty.toList ls
