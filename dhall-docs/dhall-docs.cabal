@@ -37,6 +37,9 @@ Extra-Source-Files:
     tasty/data/golden/a/b/*.html
     tasty/data/golden/a/b/c/*.html
     tasty/data/golden/deep/nested/folder/*.html
+    tasty/data/comments/empty/*.txt
+    tasty/data/comments/invalid/*.txt
+    tasty/data/comments/valid/*.txt
 Data-Files:
     *.css
     *.js
