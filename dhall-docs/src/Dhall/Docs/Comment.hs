@@ -204,12 +204,8 @@ parseMarkedComment (SingleLineComments ls)
 --   this also removes the prefix lines before the first marked comment
 parseDhallDocsComment :: DhallComment MarkedComment -> Either CommentParseError (DhallComment DhallDocsComment)
 parseDhallDocsComment (BlockComment comment) =
-    BlockComment <$> checkNewlineAfterMarker comment
-  where
-    checkNewlineAfterMarker :: Text -> Either CommentParseError Text
-    checkNewlineAfterMarker t =
-        if any (`Data.Text.isPrefixOf` t) ["{-|\n", "{-|\r\n"] then pure t
-        else Left MissingNewlineOnBlockComment
+    if any (`Data.Text.isPrefixOf` comment) ["{-|\n", "{-|\r\n"] then Right $ BlockComment comment
+    else Left MissingNewlineOnBlockComment
 
 parseDhallDocsComment (SingleLineComments lineComments) =
     fmap SingleLineComments $ checkAlignment lineComments >>= checkAmountOfMarkers >>= checkPrefixes
