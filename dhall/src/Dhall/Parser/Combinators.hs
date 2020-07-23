@@ -5,7 +5,22 @@
 {-| This module contains Dhall's parser combinators
 -}
 
-module Dhall.Parser.Combinators where
+module Dhall.Parser.Combinators
+    ( Parser(..)
+    , SourcedException(..)
+    , laxSrcEq
+    , count
+    , range
+    , option
+    , star
+    , plus
+    , satisfy
+    , Dhall.Parser.Combinators.takeWhile
+    , takeWhile1
+    , noDuplicates
+    , toMap
+    , toMapWith
+    ) where
 
 
 import Control.Applicative       (Alternative (..), liftA2)
