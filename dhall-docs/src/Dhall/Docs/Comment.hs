@@ -223,9 +223,9 @@ parseDhallDocsComment (SingleLineComments lineComments) =
             [] -> fileAnIssue "checkAmmountOfMarkers failed with newLines = []"
             l : remainder -> Right $ l :| remainder
       where
-        commentLInes = NonEmpty.toList ls
-        numberOfMarkers = length $ filter (Data.Text.isPrefixOf "--|" . snd) commentLInes
-        (_, newLines) = break (Data.Text.isPrefixOf "--|" . snd) commentLInes
+        commentLines = NonEmpty.toList ls
+        numberOfMarkers = length $ filter (Data.Text.isPrefixOf "--|" . snd) commentLines
+        (_, newLines) = break (Data.Text.isPrefixOf "--|" . snd) commentLines
 
     checkAlignment :: ListOfSingleLineComments -> Either CommentParseError ListOfSingleLineComments
     checkAlignment ls@((first, _) :| rest)
