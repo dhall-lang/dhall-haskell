@@ -1,4 +1,4 @@
-{-
+{-|
 This is your package entrypoint documentation
 -}
 { Message = ./Message.dhall

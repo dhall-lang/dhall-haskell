@@ -1350,7 +1350,7 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
 -- > |]
 -- >
 -- > convert :: Fix ExprF -> Expr
--- > convert = Fix.cata Foldable.embed
+-- > convert = Fix.foldFix Foldable.embed
 -- >
 -- > main :: IO ()
 -- > main = do

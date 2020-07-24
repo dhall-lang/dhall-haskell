@@ -22,7 +22,6 @@
 - ignore: {name: "Use unless"}
 - ignore: {name: "Use record patterns"}
 - ignore: {name: "Use &&&"}
-- ignore: {name: "Use newtype instead of data"}
 - ignore: {name: "Use second"}
 - ignore: {name: "Use $>"}
 - ignore: {name: "Use guards"}

@@ -1,2 +1,3 @@
-{- This file contains invalid unicode -}
-€
+{- This file contains invalid unicode, it shouldn't be present on the generated
+   documentation -}
+ï¿½ï¿½

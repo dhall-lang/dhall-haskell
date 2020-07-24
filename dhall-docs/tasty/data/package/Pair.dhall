@@ -1,5 +1,6 @@
 
-{-  Just a *Pair* right here
+{-|
+Just a *Pair* right here
 -}
 
 let Pair
