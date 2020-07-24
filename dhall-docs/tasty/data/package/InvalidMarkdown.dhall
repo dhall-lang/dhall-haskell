@@ -1,5 +1,5 @@
--- Represents an status in our messaging system `
--- look, another line
+--| This file contains a markdown error right here `
+--  did you notice it?
 
 let Pair = ./Pair.dhall
 

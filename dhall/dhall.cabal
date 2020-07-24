@@ -564,6 +564,7 @@ Library
         Dhall.Optics
         Dhall.Parser
         Dhall.Parser.Expression
+        Dhall.Parser.Combinators
         Dhall.Parser.Token
         Dhall.Pretty
         Dhall.Repl
@@ -586,7 +587,6 @@ Library
         Dhall.Eval
         Dhall.Import.Types
         Dhall.Normalize
-        Dhall.Parser.Combinators
         Dhall.Pretty.Internal
         Dhall.Syntax
         Dhall.URL
