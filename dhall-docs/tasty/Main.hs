@@ -44,7 +44,7 @@ main = do
                     [ docGenerationTests docsMap
                     , commentTests
                     ]
-    Silver.defaultMain testTree
+    Test.Tasty.defaultMain testTree
 
 getDirContents :: Path Rel Dir -> IO [(Path Rel File, ByteString)]
 getDirContents dataDir = do

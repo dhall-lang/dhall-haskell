@@ -28,6 +28,7 @@ module Dhall.Docs.Core
 import Control.Applicative        (Alternative (..))
 import Control.Monad.Writer.Class (MonadWriter)
 import Data.ByteString            (ByteString)
+import Data.Function              (on)
 import Data.Map.Strict            (Map)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text)
@@ -59,6 +60,7 @@ import qualified Control.Applicative        as Applicative
 import qualified Control.Monad
 import qualified Control.Monad.Writer.Class as Writer
 import qualified Data.ByteString
+import qualified Data.List
 import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Map.Strict            as Map
 import qualified Data.Maybe
@@ -334,11 +336,10 @@ createIndexes packageName characterSet files = map toIndex dirToDirsAndFilesMapA
   where
     -- Files grouped by their directory
     dirToFilesMap :: Map (Path Rel Dir) [DhallFile]
-    dirToFilesMap = Map.unionsWith (<>) $ map toMap files
+    dirToFilesMap = Map.unionsWith (<>) $ map toMap $ Data.List.sortBy (compare `on` path) files
       where
         toMap :: DhallFile -> Map (Path Rel Dir) [DhallFile]
-        toMap dhallFile =
-            Map.singleton (Path.parent $ path dhallFile) [dhallFile]
+        toMap dhallFile = Map.singleton (Path.parent $ path dhallFile) [dhallFile]
 
     {-  This is used to compute the list of exported packages on each folder.
         We try to compress the folders as much as we can. See `createIndexes`
