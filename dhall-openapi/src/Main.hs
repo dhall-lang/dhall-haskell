@@ -28,6 +28,7 @@ import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 import qualified Dhall.Core                            as Dhall
 import qualified Dhall.Format
+import qualified Dhall.Map
 import qualified Dhall.Kubernetes.Convert              as Convert
 import qualified Dhall.Kubernetes.Types                as Types
 import qualified Dhall.Parser
@@ -60,7 +61,10 @@ writeDhall path expr = do
 
   let outputMode = Dhall.Util.Write
 
-  let input = Dhall.Util.InputFile (Turtle.encodeString path)
+  let input =
+        Dhall.Util.PossiblyTransitiveInputFile
+            (Turtle.encodeString path)
+            Dhall.Util.NonTransitive
 
   let formatOptions = Dhall.Format.Format{..}
 
@@ -270,10 +274,12 @@ main = do
     let path = "./defaults" Turtle.</> Turtle.fromText (name <> ".dhall")
     writeDhall path expr
 
+  let mkEmbedField = Dhall.makeRecordField . Dhall.Embed
+
   let toSchema (ModelName key) _ _ =
         Dhall.RecordLit
-          [ ("Type", Dhall.Embed (Convert.mkImport prefixMap ["types", ".."] (key <> ".dhall")))
-          , ("default", Dhall.Embed (Convert.mkImport prefixMap ["defaults", ".."] (key <> ".dhall")))
+          [ ("Type", mkEmbedField (Convert.mkImport prefixMap ["types", ".."] (key <> ".dhall")))
+          , ("default", mkEmbedField (Convert.mkImport prefixMap ["defaults", ".."] (key <> ".dhall")))
           ]
 
   let schemas = Data.Map.intersectionWithKey toSchema types defaults
@@ -284,9 +290,9 @@ main = do
           (Embed (Convert.mkImport prefixMap [ ] "schemas.dhall"))
           (RecordLit
               [ ( "IntOrString"
-                , Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) "IntOrString"
+                , Dhall.makeRecordField $ Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) "IntOrString"
                 )
-              , ( "Resource", Embed (Convert.mkImport prefixMap [ ] "typesUnion.dhall"))
+              , ( "Resource", mkEmbedField (Convert.mkImport prefixMap [ ] "typesUnion.dhall"))
               ]
           )
 
@@ -298,6 +304,7 @@ main = do
 
   -- Output the types record, the defaults record, and the giant union type
   let getImportsMap = Convert.getImportsMap prefixMap duplicateHandler objectNames
+      makeRecordMap = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
       objectNames = Data.Map.keys types
       typesMap = getImportsMap "types" $ Data.Map.keys types
       defaultsMap = getImportsMap "defaults" $ Data.Map.keys defaults
@@ -310,7 +317,7 @@ main = do
       packageRecordPath = "./package.dhall"
 
   writeDhall typesUnionPath (Dhall.Union $ fmap Just typesMap)
-  writeDhall typesRecordPath (Dhall.RecordLit typesMap)
-  writeDhall defaultsRecordPath (Dhall.RecordLit defaultsMap)
-  writeDhall schemasRecordPath (Dhall.RecordLit schemasMap)
+  writeDhall typesRecordPath (Dhall.RecordLit $ makeRecordMap typesMap)
+  writeDhall defaultsRecordPath (Dhall.RecordLit $ makeRecordMap defaultsMap)
+  writeDhall schemasRecordPath (Dhall.RecordLit $ makeRecordMap schemasMap)
   writeDhall packageRecordPath package

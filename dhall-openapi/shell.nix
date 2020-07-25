@@ -1,5 +1,1 @@
-let
-  pkgs = import ../nix/nixpkgs.nix;
-
-in
-  pkgs.haskellPackages.dhall-kubernetes-generator.env
+(import ../nix/shared.nix { coverage = true; }).shell-dhall-openapi

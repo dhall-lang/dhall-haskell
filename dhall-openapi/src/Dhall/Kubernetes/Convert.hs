@@ -108,7 +108,7 @@ toTypes prefixMap definitions = memo
     memo = Data.Map.mapWithKey (\k -> convertToType (Just k)) definitions
 
     kvList = Dhall.App Dhall.List $ Dhall.Record $ Dhall.Map.fromList
-      [ ("mapKey", Dhall.Text), ("mapValue", Dhall.Text) ]
+      [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField Dhall.Text) ]
     intOrString = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
       [ ("Int", Dhall.Natural), ("String", Dhall.Text) ]
 
@@ -138,7 +138,9 @@ toTypes prefixMap definitions = memo
               = Data.Map.toList required'
               <> fmap (second $ Dhall.App Dhall.Optional) (Data.Map.toList optional')
 
-        in Dhall.Record $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields
+            adaptRecordList = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
+
+        in Dhall.Record $ adaptRecordList $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields
       -- Otherwise - if we have a 'type' - it's a basic type
       (_, Just basic, _) -> case basic of
         "object"  -> kvList
@@ -172,8 +174,6 @@ toDefault prefixMap definitions modelName = go
       Dhall.App Dhall.List _ -> Nothing
       -- Simple types should not have a default
       Dhall.Text -> Nothing
-      -- Set lists to empty
-      Dhall.App Dhall.List typ -> Just $ Dhall.ListLit (Just $ Dhall.App Dhall.List (adjustImport typ)) mempty
       -- But most of the times we are dealing with a record.
       -- Here we transform the record type in a value, transforming the keys in
       -- this way:
@@ -181,7 +181,7 @@ toDefault prefixMap definitions modelName = go
       -- * take the BaseData from definition and populate it
       -- * skip other required fields, except if they are records
       -- * set the optional fields to None and the lists to empty
-      Dhall.Record kvs ->
+      Dhall.Record kvsf ->
         let getBaseData :: Maybe Definition -> Dhall.Map.Map Text Expr
             getBaseData (Just Definition { baseData = Just BaseData{..} }) =
                 Dhall.Map.fromList
@@ -203,13 +203,17 @@ toDefault prefixMap definitions modelName = go
                             Dhall.Optics.transformOf
                               Dhall.subExpressions
                               adjustImport
-                              expression 
+                              expression
 
                     return adjustedExpression
                 _ -> do
                     empty
 
-        in  Just $ Dhall.RecordLit $ Dhall.Map.union baseData $ Dhall.Map.mapMaybe valueForField kvs
+            kvs = Dhall.Map.mapMaybe (Just . Dhall.recordFieldValue) kvsf
+
+            adaptRecordMap = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
+
+        in  Just $ Dhall.RecordLit $ adaptRecordMap $ Dhall.Map.union baseData $ Dhall.Map.mapMaybe valueForField kvs
 
       -- We error out here because wildcards are bad, and we should know if
       -- we get something unexpected
@@ -393,11 +397,11 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
       let baseData = BaseData {
             kind = v1CustomResourceDefinitionNamesKind,
 
-            apiVersion = v1CustomResourceDefinitionVersionName 
+            apiVersion = v1CustomResourceDefinitionVersionName
           }
 
-      let completeSchemaProperties = 
-            fmap 
+      let completeSchemaProperties =
+            fmap
             (Data.Map.union
               (
                 Data.Map.fromList [
@@ -426,5 +430,5 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
         }
 
     toProperties :: Data.Map.Map String V1JSONSchemaProps -> Data.Map.Map ModelName Definition
-    toProperties props = 
+    toProperties props =
       (Data.Map.fromList . fmap (\(k, p) -> ((ModelName . Text.pack) k, propsToDefinition p Nothing)) . Data.Map.toList) props
