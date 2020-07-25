@@ -4,6 +4,7 @@
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
+    getSourcePos,
     validCodepoint,
     whitespace,
     nonemptyWhitespace,
@@ -134,6 +135,13 @@ import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
 
 import Numeric.Natural (Natural)
+
+-- | Get the current source position
+getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
+                m Text.Megaparsec.SourcePos
+getSourcePos =
+    Text.Megaparsec.getSourcePos
+{-# INLINE getSourcePos #-}
 
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
@@ -321,8 +329,8 @@ whitespaceChunk =
     choice
         [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
         , void (Text.Parser.Char.text "\r\n" <?> "newline")
-        , lineComment
-        , blockComment
+        , void lineComment
+        , void blockComment
         ] <?> "whitespace"
   where
     predicate c = c == ' ' || c == '\t' || c == '\n'
@@ -349,29 +357,32 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
       where
         predicate c = 'a' <= c && c <= 'f'
 
-lineComment :: Parser ()
+lineComment :: Parser (Text.Megaparsec.SourcePos, Text)
 lineComment = do
+    sourcePos <- getSourcePos
     _ <- text "--"
 
     let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
-    _ <- Dhall.Parser.Combinators.takeWhile predicate
+    commentText <- Dhall.Parser.Combinators.takeWhile predicate
 
     endOfLine
 
-    return ()
+    return (sourcePos, commentText)
   where
     endOfLine =
         (   void (Text.Parser.Char.char '\n'  )
         <|> void (Text.Parser.Char.text "\r\n")
         ) <?> "newline"
 
-blockComment :: Parser ()
+-- | Parsed text doesn't include opening braces
+blockComment :: Parser Text
 blockComment = do
     _ <- text "{-"
-    blockCommentContinue
+    c <- blockCommentContinue
+    pure ("{-" <> c <> "-}")
 
-blockCommentChunk :: Parser ()
+blockCommentChunk :: Parser Text
 blockCommentChunk =
     choice
         [ blockComment  -- Nested block comment
@@ -380,27 +391,28 @@ blockCommentChunk =
         , endOfLine
         ]
   where
-    characters = void (Dhall.Parser.Combinators.takeWhile1 predicate)
+    characters = (Dhall.Parser.Combinators.takeWhile1 predicate)
       where
         predicate c =
                 '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
             ||  c == '\n'
             ||  c == '\t'
 
-    character = void (Text.Parser.Char.satisfy predicate)
+    character = (Dhall.Parser.Combinators.satisfy predicate)
       where
         predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
 
-    endOfLine = void (Text.Parser.Char.text "\r\n" <?> "newline")
+    endOfLine = (Text.Parser.Char.text "\r\n" <?> "newline")
 
-blockCommentContinue :: Parser ()
+blockCommentContinue :: Parser Text
 blockCommentContinue = endOfComment <|> continue
   where
-    endOfComment = void (text "-}")
+    endOfComment = void (text "-}") *> pure ""
 
     continue = do
-        blockCommentChunk
-        blockCommentContinue
+        c <- blockCommentChunk
+        c' <- blockCommentContinue
+        pure (c <> c')
 
 simpleLabel :: Bool -> Parser Text
 simpleLabel allowReserved = try $ do

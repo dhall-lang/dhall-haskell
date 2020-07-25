@@ -34,12 +34,6 @@ import qualified Text.Megaparsec
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 
--- | Get the current source position
-getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
-                m Text.Megaparsec.SourcePos
-getSourcePos =
-    Text.Megaparsec.getSourcePos
-{-# INLINE getSourcePos #-}
 
 -- | Get the current source offset (in tokens)
 getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
