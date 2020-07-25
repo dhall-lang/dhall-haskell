@@ -4,7 +4,6 @@
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
-    getSourcePos,
     validCodepoint,
     whitespace,
     nonemptyWhitespace,
@@ -136,12 +135,6 @@ import qualified Text.Parser.Token
 
 import Numeric.Natural (Natural)
 
--- | Get the current source position
-getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
-                m Text.Megaparsec.SourcePos
-getSourcePos =
-    Text.Megaparsec.getSourcePos
-{-# INLINE getSourcePos #-}
 
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
@@ -357,9 +350,8 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
       where
         predicate c = 'a' <= c && c <= 'f'
 
-lineComment :: Parser (Text.Megaparsec.SourcePos, Text)
+lineComment :: Parser Text
 lineComment = do
-    sourcePos <- getSourcePos
     _ <- text "--"
 
     let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
@@ -368,7 +360,7 @@ lineComment = do
 
     endOfLine
 
-    return (sourcePos, commentText)
+    return commentText
   where
     endOfLine =
         (   void (Text.Parser.Char.char '\n'  )
