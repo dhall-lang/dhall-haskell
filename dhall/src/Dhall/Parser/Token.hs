@@ -369,7 +369,6 @@ lineComment = do
     endOfLine =
         (   void (Text.Parser.Char.char '\n'  )
         <|> void (Text.Parser.Char.text "\r\n")
-        <|> Text.Megaparsec.eof
         ) <?> "newline"
 
 -- | Parsed text doesn't include opening braces
