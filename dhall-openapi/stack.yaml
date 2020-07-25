@@ -1,0 +1,7 @@
+resolver: lts-15.3
+allow-newer: true
+packages:
+- .
+extra-deps:
+- dhall-1.33.0
+- dhall-json-1.7.0
