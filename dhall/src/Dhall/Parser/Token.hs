@@ -6,6 +6,8 @@
 module Dhall.Parser.Token (
     validCodepoint,
     whitespace,
+    lineComment,
+    blockComment,
     nonemptyWhitespace,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
@@ -360,11 +362,12 @@ lineComment = do
 
     endOfLine
 
-    return commentText
+    return ("--" <> commentText)
   where
     endOfLine =
         (   void (Text.Parser.Char.char '\n'  )
         <|> void (Text.Parser.Char.text "\r\n")
+        <|> Text.Megaparsec.eof
         ) <?> "newline"
 
 -- | Parsed text doesn't include opening braces

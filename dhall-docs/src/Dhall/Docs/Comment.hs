@@ -95,61 +95,9 @@ lineCommentParser = do
 
     singleLine = do
       sourcePos <- Expression.getSourcePos
-      _ <- Token.text "--"
-
-      let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
-
-      commentText <- Combinators.takeWhile predicate
-
-      endOfLine
-
+      commentLine <- Token.lineComment
       whitespace
-
-      pure (sourcePos, ("--" <> commentText))
-
-    endOfLine =
-        (   void (Token.char '\n' <?> "newline1" )
-        <|> void (Token.text "\r\n" <?> "newline")
-        <|> Text.Megaparsec.eof
-        )
-
-blockCommentParser' :: Parser Text
-blockCommentParser' = do
-    _ <- Token.text "{-"
-    c <- blockCommentContinue
-    pure c
-
-blockCommentChunk :: Parser Text
-blockCommentChunk =
-    Text.Megaparsec.choice
-        [ blockCommentParser'  -- Nested block comment
-        , characters
-        , character
-        , endOfLine
-        ]
-  where
-    characters = (Combinators.takeWhile1 predicate)
-      where
-        predicate c =
-                '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
-            ||  c == '\n'
-            ||  c == '\t'
-
-    character = (Combinators.satisfy predicate)
-      where
-        predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
-
-    endOfLine = (Token.text "\r\n" <?> "newline")
-
-blockCommentContinue :: Parser Text
-blockCommentContinue = endOfComment <|> continue
-  where
-    endOfComment = void (Token.text "-}") *> pure ""
-
-    continue = do
-        c <- blockCommentChunk
-        c' <- blockCommentContinue
-        pure (c <> c')
+      pure (sourcePos, commentLine)
 
 -- | Consume whitespace lines or lines that only have whitespaces *before* a comment
 whitespace :: Parser ()
@@ -162,9 +110,9 @@ whitespace = Text.Megaparsec.skipMany (Text.Megaparsec.choice
 
 blockCommentParser :: Parser (DhallComment 'RawComment)
 blockCommentParser = do
-    c <- blockCommentParser'
+    c <- Token.blockComment
     whitespace
-    pure $ BlockComment ("{-" <> c <> "-}")
+    pure $ BlockComment c
 
 -- | Parse all comments in a text fragment
 parseComments :: String -> Text -> [DhallComment 'RawComment]
