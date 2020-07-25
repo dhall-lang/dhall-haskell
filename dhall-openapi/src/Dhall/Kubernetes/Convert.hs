@@ -174,6 +174,7 @@ toDefault prefixMap definitions modelName = go
       Dhall.App Dhall.List _ -> Nothing
       -- Simple types should not have a default
       Dhall.Text -> Nothing
+      Dhall.Natural -> Nothing
       -- But most of the times we are dealing with a record.
       -- Here we transform the record type in a value, transforming the keys in
       -- this way:
