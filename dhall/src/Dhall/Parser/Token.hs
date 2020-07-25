@@ -352,6 +352,8 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
       where
         predicate c = 'a' <= c && c <= 'f'
 
+-- | Parse a Dhall's single-line comment, starting from `--` and until the
+--   last character of the line /before/ the end-of-line character
 lineComment :: Parser Text
 lineComment = do
     _ <- text "--"
