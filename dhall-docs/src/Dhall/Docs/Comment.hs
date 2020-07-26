@@ -24,14 +24,13 @@ import Text.Megaparsec     (SourcePos, (<?>))
 
 import qualified Data.Either
 import qualified Data.Foldable
-import qualified Data.List.NonEmpty       as NonEmpty
-import qualified Data.Maybe               as Maybe
+import qualified Data.List.NonEmpty      as NonEmpty
+import qualified Data.Maybe              as Maybe
 import qualified Data.Text
-import qualified Dhall.Parser.Combinators as Combinators
-import qualified Dhall.Parser.Expression  as Expression
-import qualified Dhall.Parser.Token       as Token
+import qualified Dhall.Parser.Expression as Expression
+import qualified Dhall.Parser.Token      as Token
 import qualified Text.Megaparsec
-import qualified Text.Megaparsec.Pos      as Megaparsec.Pos
+import qualified Text.Megaparsec.Pos     as Megaparsec.Pos
 
 -- | For explanation of this data-type see 'DhallComment'
 data CommentType = DhallDocsComment | MarkedComment | RawComment
@@ -95,66 +94,14 @@ lineCommentParser = do
 
     singleLine = do
       sourcePos <- Expression.getSourcePos
-      _ <- Token.text "--"
-
-      let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
-
-      commentText <- Combinators.takeWhile predicate
-
-      endOfLine
-
+      commentLine <- Token.lineComment
       whitespace
-
-      pure (sourcePos, ("--" <> commentText))
-
-    endOfLine =
-        (   void (Token.char '\n' <?> "newline1" )
-        <|> void (Token.text "\r\n" <?> "newline")
-        <|> Text.Megaparsec.eof
-        )
-
-blockCommentParser' :: Parser Text
-blockCommentParser' = do
-    _ <- Token.text "{-"
-    c <- blockCommentContinue
-    pure c
-
-blockCommentChunk :: Parser Text
-blockCommentChunk =
-    Text.Megaparsec.choice
-        [ blockCommentParser'  -- Nested block comment
-        , characters
-        , character
-        , endOfLine
-        ]
-  where
-    characters = (Combinators.takeWhile1 predicate)
-      where
-        predicate c =
-                '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
-            ||  c == '\n'
-            ||  c == '\t'
-
-    character = (Combinators.satisfy predicate)
-      where
-        predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
-
-    endOfLine = (Token.text "\r\n" <?> "newline")
-
-blockCommentContinue :: Parser Text
-blockCommentContinue = endOfComment <|> continue
-  where
-    endOfComment = void (Token.text "-}") *> pure ""
-
-    continue = do
-        c <- blockCommentChunk
-        c' <- blockCommentContinue
-        pure (c <> c')
+      pure (sourcePos, commentLine)
 
 -- | Consume whitespace lines or lines that only have whitespaces *before* a comment
 whitespace :: Parser ()
 whitespace = Text.Megaparsec.skipMany (Text.Megaparsec.choice
-    [ void (Combinators.takeWhile1 predicate)
+    [ void (Text.Megaparsec.takeWhile1P Nothing predicate)
     , void (Token.text "\r\n")
     ] <?> "whitespace")
   where
@@ -162,9 +109,9 @@ whitespace = Text.Megaparsec.skipMany (Text.Megaparsec.choice
 
 blockCommentParser :: Parser (DhallComment 'RawComment)
 blockCommentParser = do
-    c <- blockCommentParser'
+    c <- Token.blockComment
     whitespace
-    pure $ BlockComment ("{-" <> c <> "-}")
+    pure $ BlockComment c
 
 -- | Parse all comments in a text fragment
 parseComments :: String -> Text -> [DhallComment 'RawComment]
