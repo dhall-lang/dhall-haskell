@@ -9,7 +9,7 @@ copyright:      2019 Fabrizio Ferrai
 license:        BSD3
 build-type:     Simple
 
-executable dhall-openapi
+executable openapi-to-dhall
   main-is: Main.hs
   other-modules:
       Dhall.Kubernetes.Convert
