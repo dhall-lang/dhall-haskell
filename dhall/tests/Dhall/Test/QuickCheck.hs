@@ -285,23 +285,23 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             standardizedExpression
       where
         customGens
-            :: Gen Integer  -- Generates all Integer fields in Expr
-            :+ Gen Text     -- Generates all Text fields in Expr
-            :+ ConstrGen "Lam" 0 Text
+            :: ConstrGen "Lam" 0 Text
             :+ ConstrGen "Pi" 0 Text
             :+ ConstrGen "Field" 1 Text
             :+ ConstrGen "Project" 1 (Either (Set Text) (Expr s a))
+            :+ Gen Integer  -- Generates all Integer fields in Expr
+            :+ Gen Text     -- Generates all Text fields in Expr
             :+ ()
         customGens =
-               integer
+               ConstrGen label
+            :+ ConstrGen label
+            :+ ConstrGen label
+            :+ ConstrGen projection
+            :+ integer
                -- 'Lam's and 'Pi's are encoded differently when the binding is
                -- the special string "_", so we generate some of these strings
                -- to improve test coverage for these code paths.
             :+ Test.QuickCheck.oneof [pure "_", arbitrary]
-            :+ ConstrGen label
-            :+ ConstrGen label
-            :+ ConstrGen label
-            :+ ConstrGen projection
             :+ ()
 
         projection =
