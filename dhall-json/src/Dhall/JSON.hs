@@ -27,7 +27,7 @@
     * @Natural@s
     * @Integer@s
     * @Double@s
-    * @Text@
+    * @Text@&#x2800;
     * @List@s
     * @Optional@ values
     * unions
