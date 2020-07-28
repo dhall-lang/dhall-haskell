@@ -378,7 +378,7 @@ fromList [("B",2)]
 withoutKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
 withoutKeys (Map m ks) s = Map m' ks'
   where
-    m' = Data.Map.filterWithKey (\k _ -> Data.Set.notMember k s) m
+    m' = Data.Map.withoutKeys m s
 
     ks' = filterKeys (\k -> Data.Set.notMember k s) ks
 {-# INLINABLE withoutKeys #-}
