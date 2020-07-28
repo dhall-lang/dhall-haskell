@@ -32,11 +32,7 @@ import Language.Haskell.TH.Syntax
     , Type (..)
     )
 
-#if MIN_VERSION_template_haskell(2,12,0)
 import Language.Haskell.TH.Syntax (DerivClause (..), DerivStrategy (..))
-#else
-import Language.Haskell.TH.Syntax (Pred)
-#endif
 
 import qualified Data.List                               as List
 import qualified Data.Text                               as Text
@@ -166,16 +162,11 @@ toNestedHaskellType haskellTypes = loop
             predicate haskellType =
                 Core.judgmentallyEqual (code haskellType) dhallType
 
-#if MIN_VERSION_template_haskell(2,12,0)
 derivingClauses :: [DerivClause]
 derivingClauses =
     [ DerivClause (Just StockStrategy) [ ConT ''Generic ]
     , DerivClause (Just AnyclassStrategy) [ ConT ''FromDhall, ConT ''ToDhall ]
     ]
-#else
-derivingClauses :: [Pred]
-derivingClauses = [ ConT ''Generic, ConT ''FromDhall, ConT ''ToDhall ]
-#endif
 
 -- | Convert a Dhall type to the corresponding Haskell datatype declaration
 toDeclaration
