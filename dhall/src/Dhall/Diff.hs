@@ -68,10 +68,6 @@ instance Monoid (Diff) where
 
         doc = mempty
 
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-#endif
-
 instance IsString (Diff) where
     fromString string = Diff {..}
       where

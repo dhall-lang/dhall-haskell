@@ -261,10 +261,6 @@ instance Semigroup (Chunks s a) where
 instance Monoid (Chunks s a) where
     mempty = Chunks [] mempty
 
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-#endif
-
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)
 

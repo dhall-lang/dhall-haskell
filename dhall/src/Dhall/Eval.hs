@@ -118,10 +118,6 @@ instance Semigroup (VChunks a) where
 instance Monoid (VChunks a) where
   mempty = VChunks [] mempty
 
-#if !(MIN_VERSION_base(4,11,0))
-  mappend = (<>)
-#endif
-
 {-| Some information is lost when `eval` converts a `Lam` or a built-in function
     from the `Expr` type to a `VHLam` of the `Val` type and `quote` needs that
     information in order to reconstruct an equivalent `Expr`.  This `HLamInfo`

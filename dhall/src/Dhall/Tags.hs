@@ -55,7 +55,6 @@ instance Semigroup Tags where
 
 instance Monoid Tags where
     mempty = Tags M.empty
-    mappend = (<>)
 
 {-| For example, for the line: @let foo = \"foo\"@ the tag is:
     > Tag "let " "foo"

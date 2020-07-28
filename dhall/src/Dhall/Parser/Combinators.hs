@@ -184,10 +184,6 @@ instance Semigroup a => Semigroup (Parser a) where
 instance (Semigroup a, Monoid a) => Monoid (Parser a) where
     mempty = pure mempty
 
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-#endif
-
 instance IsString a => IsString (Parser a) where
     fromString x = fromString x <$ Text.Megaparsec.Char.string (fromString x)
 

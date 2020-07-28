@@ -145,11 +145,6 @@ instance Ord k => Monoid (Map k v) where
     mempty = Map Data.Map.empty (Original [])
     {-# INLINABLE mempty #-}
 
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-    {-# INLINABLE mappend #-}
-#endif
-
 instance (Show k, Show v, Ord k) => Show (Map k v) where
     showsPrec d m =
         showParen (d > 10) (showString "fromList " . showsPrec 11 kvs)
