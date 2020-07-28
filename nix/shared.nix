@@ -246,38 +246,6 @@ let
     );
   };
 
-  overlayGHC822 = pkgsNew: pkgsOld: {
-    haskell = pkgsOld.haskell // {
-      packages = pkgsOld.haskell.packages // {
-        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
-            overrides =
-              let
-                extension =
-                  haskellPackagesNew: haskellPackagesOld: {
-                    # Compilation of Dhall.Test.QuickCheck tends to OOM
-                    dhall =
-                      pkgsNew.haskell.lib.dontCheck haskellPackagesOld.dhall;
-
-                    lens-family-core =
-                      haskellPackagesOld.lens-family-core_1_2_1;
-
-                    lens-family = haskellPackagesOld.lens-family_1_2_1;
-
-                    parser-combinators =
-                      pkgsNew.haskell.lib.doJailbreak
-                        haskellPackagesOld.parser-combinators;
-                  };
-
-              in
-                pkgsNew.lib.composeExtensions
-                  (old.overrides or (_: _: {}))
-                  extension;
-          }
-        );
-      };
-    };
-  };
-
   overlayGHC861 = pkgsNew: pkgsOld: {
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
@@ -318,8 +286,7 @@ let
 
     overlays =
           [ overlayShared overlayCabal2nix ]
-      ++  (      if compiler == "ghc822" then [ overlayGHC822 ]
-            else if compiler == "ghc861" then [ overlayGHC861 ]
+      ++  (      if compiler == "ghc861" then [ overlayGHC861 ]
             else                              [               ]
           );
   };

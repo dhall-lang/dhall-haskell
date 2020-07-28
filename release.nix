@@ -9,8 +9,6 @@ let
   callShared = args:
     import ./nix/shared.nix ({ inherit nixpkgs nixpkgsStaticLinux; } // args);
 
-  shared_8_2_2 = callShared { compiler = "ghc822"; };
-
   shared_8_6_1 = callShared { compiler = "ghc861"; };
 
   shared_ghcjs = callShared { compiler = "ghcjs"; };
@@ -26,22 +24,6 @@ in
       { name = "dhall";
 
         constituents = [
-          # Verify that the packages build against the oldest supported version
-          # of the compiler
-          shared_8_2_2.dhall
-          shared_8_2_2.dhall-bash
-          # path >= 0.7.0 → path-io >= 1.6.0 which drops support for ghc <= 8.2
-          # see http://hackage.haskell.org/package/path-io-1.6.0/changelog`
-          # shared_8_2_2.dhall-docs
-          shared_8_2_2.dhall-json
-          # `dhall-nix/dhall-nixpkgs` → `hnix` → `4.11 <= base` → `8.4.1 <= ghc`
-          # shared_8_2_2.dhall-nix
-          # shared_8_2_2.dhall-nixpkgs
-          # `HsYAML-aeson` requires Cabal >= 2.2, which implies GHC 8.4 or newer
-          # shared_8_2_2.dhall-yaml
-          # `base-noprelude` depends on a specific version of `base`
-          # shared_8_2_2.dhall-lsp-server
-
           # Verify that the packages build against the latest supported version
           # of the compiler
           shared_8_6_1.dhall
