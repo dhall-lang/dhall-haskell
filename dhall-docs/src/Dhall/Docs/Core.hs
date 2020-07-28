@@ -4,7 +4,6 @@
     To do so, just wrap your function in `IO` if you need to do I/O operations,
     and make pure functions receive that IO result as an input
 -}
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}

@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE BangPatterns         #-}
-{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE OverloadedStrings    #-}
