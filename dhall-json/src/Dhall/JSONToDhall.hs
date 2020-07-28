@@ -597,10 +597,7 @@ instance Semigroup UnionNumber where
 instance Monoid UnionNumber where
     mempty = minBound
 
-#if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
-#endif
-
 
 unionNumberToAlternatives :: UnionNumber -> [ (Text, Maybe (Expr s a)) ]
 unionNumberToAlternatives UnionAbsent  = []
@@ -661,10 +658,7 @@ instance Monoid UnionSchema where
 
         text = mempty
 
-#if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
-#endif
-
 
 {-| A `Schema` is a subset of the `Expr` type representing all possible
     Dhall types that `inferSchema` could potentially return
@@ -766,10 +760,7 @@ instance Semigroup Schema where
 instance Monoid Schema where
     mempty = Union mempty
 
-#if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
-#endif
-
 
 -- | Convert a `Schema` to the corresponding Dhall type
 schemaToDhallType :: Schema -> Expr s a

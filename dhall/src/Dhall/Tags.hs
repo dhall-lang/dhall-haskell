@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -56,9 +55,7 @@ instance Semigroup Tags where
 
 instance Monoid Tags where
     mempty = Tags M.empty
-#if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
-#endif
 
 {-| For example, for the line: @let foo = \"foo\"@ the tag is:
     > Tag "let " "foo"

@@ -2469,7 +2469,6 @@ instance Monoid (UnionDecoder a) where
     mempty = coerce (mempty :: Dhall.Map.Map Text (Decoder a))
     mappend = (<>)
 
-
 -- | Run a 'UnionDecoder' to build a 'Decoder'.
 union :: UnionDecoder a -> Decoder a
 union (UnionDecoder (Data.Functor.Compose.Compose mp)) = Decoder {..}
