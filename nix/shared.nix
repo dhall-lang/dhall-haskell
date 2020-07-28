@@ -21,6 +21,7 @@ let
     "dhall-lsp-server"
     "dhall-nix"
     "dhall-nixpkgs"
+    "dhall-openapi"
     "dhall-yaml"
   ];
 
@@ -94,6 +95,7 @@ let
                           # "dhall-lsp-server"
                           "dhall-nix"
                           "dhall-nixpkgs"
+                          "dhall-openapi"
                           "dhall-yaml"
                         ]
                         # Test suite doesn't work on GHCJS
@@ -112,6 +114,7 @@ let
                     "dhall-lsp-server"
                     "dhall-nix"
                     "dhall-nixpkgs"
+                    "dhall-openapi"
                     "dhall-yaml"
                   ];
 
@@ -172,6 +175,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-nixpkgs"
                         (pkgsNew.sdist ../dhall-nixpkgs)
+                        { };
+
+                    dhall-openapi =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-openapi"
+                        (pkgsNew.sdist ../dhall-openapi)
                         { };
 
                     dhall-lsp-server =
@@ -372,6 +381,9 @@ let
                     dhall-nixpkgs-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-nixpkgs;
 
+                    dhall-openapi-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-openapi;
+
                     dhall-yaml-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-yaml;
                   };
@@ -421,6 +433,7 @@ let
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
     dhall-nixpkgs    = makeStaticIfPossible "dhall-nixpkgs"   ;
+    dhall-openapi    = makeStaticIfPossible "dhall-openapi"   ;
     dhall-yaml       = makeStaticIfPossible "dhall-yaml"      ;
   };
 
@@ -477,6 +490,7 @@ in
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
     shell-dhall-nixpkgs    = pkgs.haskell.packages."${compiler}".dhall-nixpkgs.env   ;
+    shell-dhall-openapi    = pkgs.haskell.packages."${compiler}".dhall-openapi.env   ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
     shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
 

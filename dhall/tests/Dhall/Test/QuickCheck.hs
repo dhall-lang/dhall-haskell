@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -17,6 +18,7 @@ module Dhall.Test.QuickCheck where
 
 import Data.Either            (isRight)
 import Data.Either.Validation (Validation (..))
+import Data.Text              (Text)
 import Data.Void              (Void)
 import Dhall
     ( FromDhall (..)
@@ -57,7 +59,7 @@ import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Test.Format         (format)
 import Dhall.TypeCheck           (TypeError, Typer)
-import Generic.Random            ((:+) (..), W, Weights, (%))
+import Generic.Random            ((:+) (..), W, Weights, (%), ConstrGen(..))
 import Test.QuickCheck
     ( Arbitrary (..)
     , Gen
@@ -204,10 +206,10 @@ instance Arbitrary Header where
     shrink (Header "") = []
     shrink _           = [Header ""]
 
-instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
+instance (Arbitrary v) => Arbitrary (Map Text v) where
     arbitrary = do
         n   <- Test.QuickCheck.choose (0, 2)
-        kvs <- Test.QuickCheck.vectorOf n ((,) <$> arbitrary <*> arbitrary)
+        kvs <- Test.QuickCheck.vectorOf n ((,) <$> label <*> arbitrary)
         -- Sorting the fields here because serialization needs them in order
         return (Dhall.Map.fromList (Data.List.sortOn fst kvs))
 
@@ -217,12 +219,20 @@ instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Map k v) where
         .   Dhall.Map.toList
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Binding s a) where
-    arbitrary =
-        let adapt = fmap ((,) Nothing)
-            f a b   = Binding Nothing "_" Nothing (adapt a) Nothing b
-            g a b c = Binding Nothing a   Nothing (adapt b) Nothing c
+    arbitrary = do
+        let bindingSrc0 = Nothing
+        let bindingSrc1 = Nothing
+        let bindingSrc2 = Nothing
 
-        in  Test.QuickCheck.oneof [ lift2 f, lift3 g ]
+        variable <- Test.QuickCheck.oneof [ pure "_", label ]
+
+        a <- arbitrary
+
+        let annotation = fmap ((,) Nothing) a
+
+        value <- arbitrary
+
+        return Binding{..}
 
     shrink = genericShrink
 
@@ -274,16 +284,30 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             standardizedExpression
       where
         customGens
-            :: Gen Integer    -- Generates all Integer fields in Expr
-            :+ Gen Text.Text  -- Generates all Text fields in Expr
+            :: ConstrGen "Lam" 0 Text
+            :+ ConstrGen "Pi" 0 Text
+            :+ ConstrGen "Field" 1 Text
+            :+ ConstrGen "Project" 1 (Either (Set Text) (Expr s a))
+            :+ Gen Integer  -- Generates all Integer fields in Expr
+            :+ Gen Text     -- Generates all Text fields in Expr
             :+ ()
         customGens =
-               integer
+               ConstrGen label
+            :+ ConstrGen label
+            :+ ConstrGen label
+            :+ ConstrGen projection
+            :+ integer
                -- 'Lam's and 'Pi's are encoded differently when the binding is
                -- the special string "_", so we generate some of these strings
                -- to improve test coverage for these code paths.
             :+ Test.QuickCheck.oneof [pure "_", arbitrary]
             :+ ()
+
+        projection =
+            Test.QuickCheck.oneof
+                [ fmap (Left . Dhall.Set.fromList) (Test.QuickCheck.listOf label)
+                , arbitrary
+                ]
 
         -- These weights determine the frequency of constructors in the generated
         -- Expr.
@@ -391,6 +415,14 @@ standardizedExpression (Annot (ToMap _ Nothing) _) =
 standardizedExpression _ =
     True
 
+chooseCharacter :: (Char, Char) -> Gen Char
+chooseCharacter =
+#if MIN_VERSION_QuickCheck(2,14,0)
+    Test.QuickCheck.chooseEnum
+#else
+    Test.QuickCheck.choose
+#endif
+
 instance Arbitrary File where
     arbitrary = lift2 File
 
@@ -472,15 +504,9 @@ instance Arbitrary URL where
 
         let validPChar =
                 Test.QuickCheck.frequency
-#if MIN_VERSION_QuickCheck(2,14,0)
-                    [ (26, Test.QuickCheck.chooseEnum ('\x41', '\x5A'))
-                    , (26, Test.QuickCheck.chooseEnum ('\x61', '\x7A'))
-                    , (10, Test.QuickCheck.chooseEnum ('\x30', '\x39'))
-#else
-                    [ (26, Test.QuickCheck.choose ('\x41', '\x5A'))
-                    , (26, Test.QuickCheck.choose ('\x61', '\x7A'))
-                    , (10, Test.QuickCheck.choose ('\x30', '\x39'))
-#endif
+                    [ (26, chooseCharacter ('\x41', '\x5A'))
+                    , (26, chooseCharacter ('\x61', '\x7A'))
+                    , (10, chooseCharacter ('\x30', '\x39'))
                     , (17, Test.QuickCheck.elements "-._~!$&'()*+,;=:@")
                     ]
 
@@ -515,11 +541,19 @@ instance Arbitrary Var where
     arbitrary =
         Test.QuickCheck.oneof
             [ fmap (V "_") (getNonNegative <$> arbitrary)
-            , lift1 (\t -> V t 0)
-            , lift1 V <*> (getNonNegative <$> arbitrary)
+            , fmap (\t -> V t 0) label
+            , V <$> label <*> (getNonNegative <$> arbitrary)
             ]
-
     shrink = genericShrink
+
+label :: Gen Text
+label = fmap Text.pack (Test.QuickCheck.listOf labelCharacter)
+  where
+    labelCharacter =
+        Test.QuickCheck.frequency
+            [ (64, chooseCharacter ('\x20', '\x5F'))
+            , (30, chooseCharacter ('\x61', '\x7e'))
+            ]
 
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
@@ -661,13 +695,13 @@ tests =
           , Test.QuickCheck.property noDoubleNotes
           , adjustQuickCheckTests 100
           )
-        , embedThenExtractIsIdentity (Proxy :: Proxy (Text.Text))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Text))
         , embedThenExtractIsIdentity (Proxy :: Proxy [Nat.Natural])
         , embedThenExtractIsIdentity (Proxy :: Proxy (Bool, Double))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Sequence.Seq ()))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Maybe Integer))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Set.Set Nat.Natural))
-        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text.Text))
+        , embedThenExtractIsIdentity (Proxy :: Proxy (Data.HashSet.HashSet Text))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Vector Double))
         , embedThenExtractIsIdentity (Proxy :: Proxy (Data.Map.Map Double Bool))
         , embedThenExtractIsIdentity (Proxy :: Proxy (HashMap.HashMap Double Bool))
