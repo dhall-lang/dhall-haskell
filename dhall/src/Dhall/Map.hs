@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
@@ -71,7 +70,6 @@ module Dhall.Map
 import Control.Applicative        ((<|>))
 import Control.DeepSeq            (NFData)
 import Data.Data                  (Data)
-import Data.Semigroup
 import GHC.Generics               (Generic)
 import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
@@ -134,7 +132,7 @@ instance Ord k => Traversable (Map k) where
 {-|
 prop> \x y z -> x <> (y <> z) == (x <> y) <> (z :: Map Int Int)
 -}
-instance Ord k => Data.Semigroup.Semigroup (Map k v) where
+instance Ord k => Semigroup (Map k v) where
     (<>) = union
     {-# INLINABLE (<>) #-}
 
@@ -145,11 +143,6 @@ prop> \x -> mempty <> x == (x :: Map Int Int)
 instance Ord k => Monoid (Map k v) where
     mempty = Map Data.Map.empty (Original [])
     {-# INLINABLE mempty #-}
-
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-    {-# INLINABLE mappend #-}
-#endif
 
 instance (Show k, Show v, Ord k) => Show (Map k v) where
     showsPrec d m =
@@ -371,11 +364,7 @@ fromList [("A",1)]
 restrictKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
 restrictKeys (Map m ks) s = Map m' ks'
   where
-#if MIN_VERSION_containers(0,5,8)
     m' = Data.Map.restrictKeys m s
-#else
-    m' = Data.Map.filterWithKey (\k _ -> Data.Set.member k s) m
-#endif
 
     ks' = filterKeys (\k -> Data.Set.member k s) ks
 {-# INLINABLE restrictKeys #-}
@@ -388,11 +377,7 @@ fromList [("B",2)]
 withoutKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
 withoutKeys (Map m ks) s = Map m' ks'
   where
-#if MIN_VERSION_containers(0,5,8)
     m' = Data.Map.withoutKeys m s
-#else
-    m' = Data.Map.filterWithKey (\k _ -> Data.Set.notMember k s) m
-#endif
 
     ks' = filterKeys (\k -> Data.Set.notMember k s) ks
 {-# INLINABLE withoutKeys #-}

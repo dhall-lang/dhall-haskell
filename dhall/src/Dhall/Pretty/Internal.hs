@@ -65,7 +65,6 @@ module Dhall.Pretty.Internal (
 
 import Data.Foldable
 import Data.List.NonEmpty        (NonEmpty (..))
-import Data.Monoid               ((<>))
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map                 (Map)

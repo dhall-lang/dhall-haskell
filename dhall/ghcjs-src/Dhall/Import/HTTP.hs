@@ -9,7 +9,6 @@ import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Data.Semigroup                   ((<>))
 import Data.Void                        (Void)
 import Dhall.Core                       (URL (..))
 import Dhall.Import.Types

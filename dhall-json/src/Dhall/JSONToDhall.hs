@@ -370,7 +370,6 @@ import Data.Foldable            (toList)
 import Data.List                ((\\))
 import Data.Monoid              (Any (..))
 import Data.Scientific          (floatingOrInteger, toRealFloat)
-import Data.Semigroup           (Semigroup (..))
 import Data.Text                (Text)
 import Data.Void                (Void)
 import Dhall.Core               (Chunks (..), DhallDouble (..), Expr (App))
@@ -598,8 +597,6 @@ instance Semigroup UnionNumber where
 instance Monoid UnionNumber where
     mempty = minBound
 
-    mappend = (<>)
-
 unionNumberToAlternatives :: UnionNumber -> [ (Text, Maybe (Expr s a)) ]
 unionNumberToAlternatives UnionAbsent  = []
 unionNumberToAlternatives UnionNatural = [ ("Natural", Just D.Natural) ]
@@ -658,8 +655,6 @@ instance Monoid UnionSchema where
         number = mempty
 
         text = mempty
-
-    mappend = (<>)
 
 {-| A `Schema` is a subset of the `Expr` type representing all possible
     Dhall types that `inferSchema` could potentially return
@@ -760,8 +755,6 @@ instance Semigroup Schema where
 
 instance Monoid Schema where
     mempty = Union mempty
-
-    mappend = (<>)
 
 -- | Convert a `Schema` to the corresponding Dhall type
 schemaToDhallType :: Schema -> Expr s a

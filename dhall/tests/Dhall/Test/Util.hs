@@ -23,7 +23,6 @@ module Dhall.Test.Util
 
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Bifunctor                   (first)
-import Data.Monoid                      ((<>))
 import Data.Text                        (Text)
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)

@@ -24,7 +24,6 @@ module Dhall.Util
 import Control.Exception         (Exception (..))
 import Control.Monad.IO.Class    (MonadIO (..))
 import Data.Bifunctor            (first)
-import Data.Monoid               ((<>))
 import Data.String               (IsString)
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)

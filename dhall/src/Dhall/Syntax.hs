@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
@@ -84,7 +83,6 @@ import Data.Data                  (Data)
 import Data.Foldable
 import Data.HashSet               (HashSet)
 import Data.List.NonEmpty         (NonEmpty (..))
-import Data.Semigroup             (Semigroup (..))
 import Data.Sequence              (Seq)
 import Data.String                (IsString (..))
 import Data.Text                  (Text)
@@ -253,7 +251,7 @@ instance Ord DhallDouble where
 data Chunks s a = Chunks [(Text, Expr s a)] Text
     deriving (Functor, Foldable, Generic, Traversable, Show, Eq, Ord, Data, Lift, NFData)
 
-instance Data.Semigroup.Semigroup (Chunks s a) where
+instance Semigroup (Chunks s a) where
     Chunks xysL zL <> Chunks         []    zR =
         Chunks xysL (zL <> zR)
     Chunks xysL zL <> Chunks ((x, y):xysR) zR =
@@ -261,10 +259,6 @@ instance Data.Semigroup.Semigroup (Chunks s a) where
 
 instance Monoid (Chunks s a) where
     mempty = Chunks [] mempty
-
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-#endif
 
 instance IsString (Chunks s a) where
     fromString str = Chunks [] (fromString str)

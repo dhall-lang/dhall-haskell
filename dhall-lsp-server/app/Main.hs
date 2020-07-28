@@ -9,7 +9,6 @@ module Main
 where
 
 import Control.Applicative ((<|>))
-import Data.Monoid         ((<>))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Data.Version

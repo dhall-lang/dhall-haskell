@@ -18,7 +18,6 @@ module Dhall.Test.QuickCheck where
 
 import Data.Either            (isRight)
 import Data.Either.Validation (Validation (..))
-import Data.Monoid            ((<>))
 import Data.Text              (Text)
 import Data.Void              (Void)
 import Dhall

@@ -114,7 +114,6 @@ import Dhall.Parser.Combinators
 import Control.Applicative     (Alternative (..), optional)
 import Data.Bits               ((.&.))
 import Data.Functor            (void, ($>))
-import Data.Semigroup          (Semigroup (..))
 import Data.Text               (Text)
 import Dhall.Set               (Set)
 import Dhall.Syntax

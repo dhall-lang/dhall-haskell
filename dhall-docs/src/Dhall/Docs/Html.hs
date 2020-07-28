@@ -17,7 +17,6 @@ module Dhall.Docs.Html
     , DocParams(..)
     ) where
 
-import Data.Monoid  ((<>))
 import Data.Text    (Text)
 import Data.Void    (Void)
 import Dhall.Core   (Expr, Import, denote)

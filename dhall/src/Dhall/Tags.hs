@@ -10,7 +10,6 @@ module Dhall.Tags
 import Control.Exception  (SomeException (..), handle)
 import Data.List          (foldl', isSuffixOf)
 import Data.Maybe         (fromMaybe)
-import Data.Semigroup     (Semigroup (..))
 import Data.Text          (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Dhall.Map          (foldMapWithKey)
@@ -56,7 +55,6 @@ instance Semigroup Tags where
 
 instance Monoid Tags where
     mempty = Tags M.empty
-    mappend = (<>)
 
 {-| For example, for the line: @let foo = \"foo\"@ the tag is:
     > Tag "let " "foo"

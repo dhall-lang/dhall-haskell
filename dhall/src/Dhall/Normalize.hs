@@ -21,7 +21,6 @@ module Dhall.Normalize (
 import Control.Applicative   (empty)
 import Data.Foldable
 import Data.Functor.Identity (Identity (..))
-import Data.Semigroup        (Semigroup (..))
 import Data.Sequence         (ViewL (..), ViewR (..))
 import Data.Traversable
 import Instances.TH.Lift     ()

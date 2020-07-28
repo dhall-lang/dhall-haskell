@@ -17,7 +17,6 @@ module Dhall.Docs
     ) where
 
 import Control.Applicative ((<|>))
-import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Data.Version        (showVersion)
 import Dhall.Pretty        (CharacterSet(..))

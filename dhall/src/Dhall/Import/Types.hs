@@ -10,7 +10,6 @@ import Control.Exception                (Exception)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Dynamic
 import Data.List.NonEmpty               (NonEmpty)
-import Data.Semigroup                   ((<>))
 import Data.Text.Prettyprint.Doc        (Pretty (..))
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)

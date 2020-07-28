@@ -2,7 +2,6 @@
 
 module Dhall.Test.Normalization where
 
-import Data.Monoid ((<>))
 import Data.Text   (Text)
 import Data.Void   (Void)
 import Dhall.Core  (Expr (..), Var (..), throws)

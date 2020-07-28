@@ -147,9 +147,7 @@ import Data.Hashable                        (Hashable)
 import Data.HashMap.Strict                  (HashMap)
 import Data.List.NonEmpty                   (NonEmpty (..))
 import Data.Map                             (Map)
-import Data.Monoid                          ((<>))
 import Data.Scientific                      (Scientific)
-import Data.Semigroup                       (Semigroup)
 import Data.Sequence                        (Seq)
 import Data.Text                            (Text)
 import Data.Text.Prettyprint.Doc            (Pretty)
@@ -186,7 +184,6 @@ import qualified Data.List.NonEmpty
 import qualified Data.Map
 import qualified Data.Maybe
 import qualified Data.Scientific
-import qualified Data.Semigroup
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -2465,12 +2462,11 @@ newtype UnionDecoder a =
       ( Data.Functor.Compose.Compose (Dhall.Map.Map Text) Decoder a )
   deriving (Functor)
 
-instance Data.Semigroup.Semigroup (UnionDecoder a) where
+instance Semigroup (UnionDecoder a) where
     (<>) = coerce ((<>) :: Dhall.Map.Map Text (Decoder a) -> Dhall.Map.Map Text (Decoder a) -> Dhall.Map.Map Text (Decoder a))
 
 instance Monoid (UnionDecoder a) where
     mempty = coerce (mempty :: Dhall.Map.Map Text (Decoder a))
-    mappend = (Data.Semigroup.<>)
 
 -- | Run a 'UnionDecoder' to build a 'Decoder'.
 union :: UnionDecoder a -> Decoder a

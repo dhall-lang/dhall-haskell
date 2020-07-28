@@ -12,7 +12,6 @@ import Data.ByteArray.Encoding (Base (..))
 import Data.Foldable           (foldl')
 import Data.Functor            (void)
 import Data.List.NonEmpty      (NonEmpty (..))
-import Data.Semigroup          (Semigroup (..))
 import Data.Text               (Text)
 import Dhall.Src               (Src (..))
 import Dhall.Syntax

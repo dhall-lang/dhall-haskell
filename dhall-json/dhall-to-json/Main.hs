@@ -6,7 +6,6 @@ module Main where
 import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException)
 import Data.Aeson          (Value)
-import Data.Monoid         ((<>))
 import Data.Version        (showVersion)
 import Dhall.JSON          (Conversion, SpecialDoubleMode (..))
 import Options.Applicative (Parser, ParserInfo)

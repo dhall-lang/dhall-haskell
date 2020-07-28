@@ -19,7 +19,9 @@ import Control.Exception
     , throwIO
     )
 import Control.Monad              (forM_)
+#if !(MIN_VERSION_base(4,13,0))
 import Control.Monad.Fail         (MonadFail)
+#endif
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.State.Class  (MonadState, get, modify)
 import Control.Monad.State.Strict (evalStateT)
@@ -33,7 +35,6 @@ import Data.List
     , nub
     )
 import Data.Maybe                          (mapMaybe)
-import Data.Semigroup                      ((<>))
 import Data.Text                           (Text)
 import Data.Void                           (Void)
 import Dhall.Context                       (Context)

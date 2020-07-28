@@ -2,7 +2,6 @@
 
 module Dhall.Test.Tags where
 
-import Data.Monoid ((<>))
 import Data.Text   (Text)
 import Dhall.Util  (Input (..))
 import Prelude     hiding (FilePath)
