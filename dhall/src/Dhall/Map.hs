@@ -370,11 +370,7 @@ fromList [("A",1)]
 restrictKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
 restrictKeys (Map m ks) s = Map m' ks'
   where
-#if MIN_VERSION_containers(0,5,8)
     m' = Data.Map.restrictKeys m s
-#else
-    m' = Data.Map.filterWithKey (\k _ -> Data.Set.member k s) m
-#endif
 
     ks' = filterKeys (\k -> Data.Set.member k s) ks
 {-# INLINABLE restrictKeys #-}
@@ -387,11 +383,7 @@ fromList [("B",2)]
 withoutKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
 withoutKeys (Map m ks) s = Map m' ks'
   where
-#if MIN_VERSION_containers(0,5,8)
-    m' = Data.Map.withoutKeys m s
-#else
     m' = Data.Map.filterWithKey (\k _ -> Data.Set.notMember k s) m
-#endif
 
     ks' = filterKeys (\k -> Data.Set.notMember k s) ks
 {-# INLINABLE withoutKeys #-}
