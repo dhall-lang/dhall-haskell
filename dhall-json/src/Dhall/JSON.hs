@@ -27,7 +27,7 @@
     * @Natural@s
     * @Integer@s
     * @Double@s
-    * @Text@
+    * @Text@ values
     * @List@s
     * @Optional@ values
     * unions
@@ -1178,4 +1178,3 @@ codeToValue conversion specialDoubleMode mFilePath code = do
     case dhallToJSON specialDoubleExpression of
       Left  err  -> Control.Exception.throwIO err
       Right json -> return json
-
