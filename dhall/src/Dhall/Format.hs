@@ -10,7 +10,6 @@ module Dhall.Format
     ) where
 
 import Data.Foldable (for_)
-import Data.Monoid   ((<>))
 import Dhall.Pretty  (CharacterSet (..), annToAnsiStyle)
 
 import Dhall.Util

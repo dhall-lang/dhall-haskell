@@ -1,6 +1,5 @@
 module Dhall.LSP.Backend.Formatting (formatExpr, formatExprWithHeader) where
 
-import Data.Monoid  ((<>))
 import Data.Text    (Text)
 import Dhall.Core   (Expr)
 import Dhall.Parser (Header (..))

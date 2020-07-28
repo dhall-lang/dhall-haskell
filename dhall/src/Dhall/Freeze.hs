@@ -18,7 +18,6 @@ module Dhall.Freeze
     ) where
 
 import Data.Foldable       (for_)
-import Data.Monoid         ((<>))
 import Dhall.Pretty        (CharacterSet)
 import Dhall.Syntax
     ( Expr (..)

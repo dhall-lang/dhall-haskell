@@ -17,7 +17,6 @@ module Dhall.JSON.Yaml
   ) where
 
 import Data.ByteString     (ByteString)
-import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Dhall.JSON          (Conversion (..), SpecialDoubleMode (..))
 import Options.Applicative (Parser)

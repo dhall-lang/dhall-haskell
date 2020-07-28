@@ -3,7 +3,6 @@
 
 module Dhall.URL where
 
-import Data.Monoid ((<>))
 import Data.Text   (Text)
 
 import Dhall.Syntax (Directory (..), File (..), Scheme (..), URL (..))

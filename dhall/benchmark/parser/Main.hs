@@ -6,7 +6,6 @@ module Main where
 import Control.Exception (throw)
 import Control.Monad     (forM)
 import Data.Map          (Map, foldrWithKey, singleton, unions)
-import Data.Monoid       ((<>))
 import Data.Void         (Void)
 import Gauge             (bench, bgroup, defaultMain, env, nf, nfIO, whnf)
 

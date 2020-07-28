@@ -3,7 +3,6 @@
 module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
-import Data.Monoid       ((<>))
 import Data.Text         (Text)
 import Dhall.Import      (MissingImports (..))
 import Dhall.Parser      (SourcedException (..))

@@ -30,7 +30,6 @@ import Control.Monad.Writer.Class (MonadWriter)
 import Data.ByteString            (ByteString)
 import Data.Function              (on)
 import Data.Map.Strict            (Map)
-import Data.Monoid                ((<>))
 import Data.Text                  (Text)
 import Data.Void                  (Void)
 import Dhall.Core

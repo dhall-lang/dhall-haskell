@@ -8,7 +8,6 @@ module Main where
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException, throwIO)
-import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Data.Version        (showVersion)
 import Dhall.JSONToDhall

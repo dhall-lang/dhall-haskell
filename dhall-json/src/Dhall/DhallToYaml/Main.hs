@@ -8,7 +8,6 @@ module Dhall.DhallToYaml.Main (main) where
 import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException)
 import Data.ByteString     (ByteString)
-import Data.Monoid         ((<>))
 import Data.Text           (Text)
 import Dhall.JSON          (parseConversion, parsePreservationAndOmission)
 import Dhall.JSON.Yaml     (Options (..), parseDocuments, parseQuoted)

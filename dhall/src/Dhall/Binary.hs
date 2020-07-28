@@ -52,7 +52,6 @@ import Dhall.Syntax
     )
 
 import Data.Foldable (toList)
-import Data.Monoid   ((<>))
 import Data.Text     (Text)
 import Data.Void     (Void, absurd)
 import GHC.Float     (double2Float, float2Double)

@@ -12,7 +12,6 @@ module Dhall.DirectoryTree
 
 import Control.Applicative (empty)
 import Control.Exception   (Exception)
-import Data.Monoid         ((<>))
 import Data.Void           (Void)
 import Dhall.Syntax        (Chunks (..), Expr (..), RecordField (..))
 import System.FilePath     ((</>))

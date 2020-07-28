@@ -11,7 +11,6 @@ import qualified Dhall.Test.Util         as Util
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
 
-import Data.Monoid      ((<>))
 import Data.Text        (Text)
 import Dhall            (ToDhall)
 import GHC.Generics     (Generic)

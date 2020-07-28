@@ -14,7 +14,6 @@ module Dhall.TH
     , HaskellType(..)
     ) where
 
-import Data.Monoid               ((<>))
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall                     (FromDhall, ToDhall)

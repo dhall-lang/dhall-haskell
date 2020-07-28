@@ -9,7 +9,6 @@ where
 
 import Control.Lens                  (universeOf)
 import Data.Maybe                    (maybeToList)
-import Data.Monoid                   ((<>))
 import Data.Text                     (Text)
 import Dhall.Core
     ( Binding (..)

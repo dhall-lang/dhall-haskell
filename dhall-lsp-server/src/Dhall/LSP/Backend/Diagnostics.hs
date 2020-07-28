@@ -30,7 +30,6 @@ import Dhall.LSP.Util
 
 import Control.Lens               (toListOf)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
-import Data.Monoid                ((<>))
 import Data.Text                  (Text)
 
 import qualified Data.List.NonEmpty                    as NonEmpty

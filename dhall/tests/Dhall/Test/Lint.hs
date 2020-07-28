@@ -2,7 +2,6 @@
 
 module Dhall.Test.Lint where
 
-import Data.Monoid  (mempty, (<>))
 import Data.Text    (Text)
 import Dhall.Parser (Header (..))
 import Prelude      hiding (FilePath)

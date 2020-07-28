@@ -3,7 +3,6 @@
 
 module Main where
 
-import Data.Monoid ((<>))
 import Data.Void   (Void)
 import Test.Tasty  (TestTree)
 

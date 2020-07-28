@@ -4,7 +4,6 @@
 module Dhall.Test.TypeInference where
 
 import Control.Exception (SomeException (..))
-import Data.Monoid       (mempty, (<>))
 import Data.Text         (Text)
 import Prelude           hiding (FilePath)
 import Test.Tasty        (TestTree)

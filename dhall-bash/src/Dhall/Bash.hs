@@ -103,7 +103,6 @@ module Dhall.Bash (
 import Control.Exception (Exception)
 import Data.Bifunctor    (first)
 import Data.ByteString
-import Data.Monoid       ((<>))
 import Data.Typeable     (Typeable)
 import Data.Void         (Void, absurd)
 import Dhall.Core        (Chunks (..), Expr (..))
