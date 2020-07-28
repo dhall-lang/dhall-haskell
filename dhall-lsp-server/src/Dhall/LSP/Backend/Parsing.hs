@@ -22,7 +22,6 @@ import Dhall.Parser.Expression
     , localOnly
     )
 import Dhall.Parser.Token      hiding (text)
-import Dhall.Src               (Src (..))
 import Text.Megaparsec
     ( anySingle
     , eof
