@@ -516,7 +516,7 @@ Library
       if flag(with-http)
         Build-Depends:
           http-types                  >= 0.7.0    && < 0.13,
-          http-client                 >= 0.4.30   && < 0.8 ,
+          http-client                 >= 0.5.0    && < 0.8 ,
           http-client-tls             >= 0.2.0    && < 0.4
 
     Other-Extensions:

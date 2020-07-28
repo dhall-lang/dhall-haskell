@@ -23,15 +23,11 @@ import Dhall.Import.Types
 import Dhall.URL                        (renderURL)
 
 
-#if MIN_VERSION_http_client(0,5,0)
 import Network.HTTP.Client
     ( HttpException (..)
     , HttpExceptionContent (..)
     , Manager
     )
-#else
-import Network.HTTP.Client (HttpException (..), Manager)
-#endif
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
@@ -50,7 +46,6 @@ mkPrettyHttpException url ex =
     PrettyHttpException (renderPrettyHttpException url ex) (toDyn ex)
 
 renderPrettyHttpException :: String -> HttpException -> String
-#if MIN_VERSION_http_client(0,5,0)
 renderPrettyHttpException _ (InvalidUrlException _ r) =
       "\n"
   <>  "\ESC[1;31mError\ESC[0m: Invalid URL\n"
@@ -150,34 +145,11 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
                     prefixedText = Text.unlines prefixedLines
 
     e' -> "\n" <> show e' <> "\n"
-#else
-renderPrettyHttpException url e = case e of
-    FailedConnectionException2 _ _ _ e' ->
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Wrong host:\n"
-        <>  "\n"
-        <>  "Host: " <> show e' <> "\n"
-    InvalidDestinationHost host ->
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Invalid host name:\n"
-        <>  "\n"
-        <>  "Host: " <> show host <> "\n"
-    ResponseTimeout ->
-            "\ESC[1;31mError\ESC[0m: The host took too long to respond\n"
-        <>  "\n"
-        <>  "URL: " <> url <> "\n"
-    e' ->   "\n"
-        <>  show e' <> "\n"
-#endif
 
 newManager :: StateT Status IO Manager
 newManager = do
     let settings = HTTP.tlsManagerSettings
-#if MIN_VERSION_http_client(0,5,0)
           { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
-#else
-          { HTTP.managerResponseTimeout = Just (30 * 1000 * 1000) }  -- 30 seconds
-#endif
 
     Status { _manager = oldManager, ..} <- State.get
 
