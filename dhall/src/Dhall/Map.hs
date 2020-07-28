@@ -71,7 +71,6 @@ module Dhall.Map
 import Control.Applicative        ((<|>))
 import Control.DeepSeq            (NFData)
 import Data.Data                  (Data)
-import Data.Semigroup
 import GHC.Generics               (Generic)
 import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
@@ -134,7 +133,7 @@ instance Ord k => Traversable (Map k) where
 {-|
 prop> \x y z -> x <> (y <> z) == (x <> y) <> (z :: Map Int Int)
 -}
-instance Ord k => Data.Semigroup.Semigroup (Map k v) where
+instance Ord k => Semigroup (Map k v) where
     (<>) = union
     {-# INLINABLE (<>) #-}
 

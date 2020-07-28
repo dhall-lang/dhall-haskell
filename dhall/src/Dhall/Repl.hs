@@ -33,7 +33,6 @@ import Data.List
     , nub
     )
 import Data.Maybe                          (mapMaybe)
-import Data.Semigroup                      ((<>))
 import Data.Text                           (Text)
 import Data.Void                           (Void)
 import Dhall.Context                       (Context)

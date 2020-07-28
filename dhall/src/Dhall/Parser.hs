@@ -21,7 +21,6 @@ module Dhall.Parser (
     ) where
 
 import Control.Exception (Exception)
-import Data.Semigroup    (Semigroup (..))
 import Data.Text         (Text)
 import Data.Void         (Void)
 import Dhall.Src         (Src (..))

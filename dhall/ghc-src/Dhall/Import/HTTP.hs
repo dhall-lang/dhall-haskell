@@ -12,7 +12,6 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
 import Data.Dynamic                     (toDyn)
-import Data.Semigroup                   ((<>))
 import Dhall.Core
     ( Import (..)
     , ImportHashed (..)

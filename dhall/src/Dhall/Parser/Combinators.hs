@@ -26,7 +26,6 @@ module Dhall.Parser.Combinators
 import Control.Applicative       (Alternative (..), liftA2)
 import Control.Exception         (Exception)
 import Control.Monad             (MonadPlus (..))
-import Data.Semigroup            (Semigroup (..))
 import Data.String               (IsString (..))
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Pretty (..))
@@ -179,10 +178,10 @@ instance Text.Megaparsec.MonadParsec Void Text Parser where
 
     updateParserState f = Parser (Text.Megaparsec.updateParserState f)
 
-instance Data.Semigroup.Semigroup a => Data.Semigroup.Semigroup (Parser a) where
+instance Semigroup a => Semigroup (Parser a) where
     (<>) = liftA2 (<>)
 
-instance (Data.Semigroup.Semigroup a, Monoid a) => Monoid (Parser a) where
+instance (Semigroup a, Monoid a) => Monoid (Parser a) where
     mempty = pure mempty
 
 #if !(MIN_VERSION_base(4,11,0))

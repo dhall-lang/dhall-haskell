@@ -52,7 +52,6 @@ module Dhall.Eval (
   ) where
 
 import Data.Foldable  (foldr', toList)
-import Data.Semigroup (Semigroup (..))
 import Data.Sequence  (Seq, ViewL (..), ViewR (..))
 import Data.Text      (Text)
 import Data.Void      (Void)

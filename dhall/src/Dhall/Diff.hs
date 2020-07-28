@@ -19,7 +19,6 @@ module Dhall.Diff (
 import Data.Foldable             (fold, toList)
 import Data.List.NonEmpty        (NonEmpty (..))
 import Data.Monoid               (Any (..))
-import Data.Semigroup            hiding (diff)
 import Data.Sequence             (Seq)
 import Data.String               (IsString (..))
 import Data.Text                 (Text)
@@ -59,7 +58,7 @@ data Diff =
         , doc  :: Doc Ann
         }
 
-instance Data.Semigroup.Semigroup Diff where
+instance Semigroup Diff where
     Diff sameL docL <> Diff sameR docR = Diff (sameL && sameR) (docL <> docR)
 
 instance Monoid (Diff) where
