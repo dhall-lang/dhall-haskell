@@ -39,11 +39,11 @@ Library
         Dhall.Nix
     GHC-Options: -Wall
     Default-Language: Haskell2010
-    if os(windows) || impl(eta)
+    if os(windows)
         Buildable: False
         
 Executable dhall-to-nix
-    if os(windows) || impl(eta)
+    if os(windows)
         Buildable: False
     Hs-Source-Dirs: exec
     Main-Is: Main.hs
