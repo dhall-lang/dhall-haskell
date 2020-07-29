@@ -79,6 +79,7 @@ import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.List.NonEmpty                        as NonEmpty
+import qualified Data.Maybe
 import qualified Data.Set
 import qualified Data.Text                                 as Text
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
@@ -159,18 +160,29 @@ renderSrc
     -> Doc Ann
 renderSrc strip (Just (Src {..}))
     | not (Text.all isWhitespace srcText) =
-        Pretty.align (Pretty.concatWith f newLines <> suffix)
+        renderComment (strip srcText)
+renderSrc _ _ =
+    mempty
+
+{-| Render a comment.
+
+    Any preprocessing, such as whitespace stripping, needs to be handled by the
+    caller, see e.g. 'renderSrc'.
+
+    See the documentation for 'renderSrc' for examples.
+-}
+renderComment :: Text -> Doc Ann
+renderComment text =
+    Pretty.align (Pretty.concatWith f newLines <> suffix)
   where
     horizontalSpace c = c == ' ' || c == '\t'
 
-    strippedText = strip srcText
-
     suffix =
-        if Text.null strippedText || Text.last strippedText == '\n'
+        if Text.null text || Text.last text == '\n'
         then mempty
         else " "
 
-    oldLines = Text.splitOn "\n" strippedText
+    oldLines = Text.splitOn "\n" text
 
     spacePrefix = Text.takeWhile horizontalSpace
 
@@ -199,8 +211,26 @@ renderSrc strip (Just (Src {..}))
                 in  Pretty.pretty l0 : map perLine ls
 
     f x y = x <> Pretty.hardline <> y
-renderSrc _ _ =
-    mempty
+
+{-| This is a variant of 'renderSrc' with the following differences:
+
+      * The 'srcText' is stripped of all whitespace at the start and the end.
+      * When the stripped 'srcText' is empty, the result is 'Nothing'.
+-}
+renderSrcMaybe :: Maybe Src -> Maybe (Doc Ann)
+renderSrcMaybe (Just Src{..}) =
+    case Text.dropAround isWhitespace srcText of
+        "" -> Nothing
+        t  -> Just (renderComment t)
+renderSrcMaybe _ = Nothing
+
+{-| @
+    'containsComment' mSrc ≡ 'Data.Maybe.isJust' ('renderSrcMaybe' mSrc)
+    @
+-}
+containsComment :: Maybe Src -> Bool
+containsComment Nothing        = False
+containsComment (Just Src{..}) = not (Text.all isWhitespace srcText)
 
 -- Annotation helpers
 keyword, syntax, label, literal, builtin, operator :: Doc Ann -> Doc Ann
@@ -454,9 +484,30 @@ prettyLabel = prettyLabelShared False
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
 
-prettyAnyLabels :: Foldable list => list Text -> Doc Ann
-prettyAnyLabels =
-    mconcat . Pretty.punctuate dot . fmap prettyAnyLabel . toList
+prettyAnyLabels :: Foldable list => list (Maybe Src, Text, Maybe Src) -> Doc Ann
+prettyAnyLabels keys = Pretty.group (Pretty.flatAlt long short)
+  where
+    short = (mconcat . Pretty.punctuate dot . map prettyKey . toList) keys
+
+    long =
+        case map prettyKey (toList keys) of
+            []       -> mempty
+            [doc]    -> doc
+            doc:docs ->
+                  Pretty.align
+                . mconcat
+                . Pretty.punctuate (Pretty.hardline <> ". ")
+                $ Pretty.indent 2 doc : docs
+
+    prettyKey (mSrc0, key, mSrc1) =
+          Pretty.align
+        . mconcat
+        . Pretty.punctuate Pretty.hardline
+        . Data.Maybe.catMaybes
+        $ [ renderSrcMaybe mSrc0
+          , Just (prettyAnyLabel key)
+          , renderSrcMaybe mSrc1
+          ]
 
 prettyLabels :: Set Text -> Doc Ann
 prettyLabels a
@@ -725,7 +776,7 @@ prettyPrinters characterSet =
             <>  Pretty.align (keyword "with" <> " " <> update)
 
         (update, _) =
-            prettyKeyValue prettyAnyLabels prettyOperatorExpression equals (b, c)
+            prettyKeyValue prettyOperatorExpression equals (makeKeyValue b c)
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -1129,7 +1180,7 @@ prettyPrinters characterSet =
                 Pretty.align
                     (   prettySelectorExpression a
                     <>  doubleColon
-                    <>  prettyCompletionLit 0 (recordFieldValue <$> kvs)
+                    <>  prettyCompletionLit 0 kvs
                     )
             _ ->    prettySelectorExpression a
                 <>  doubleColon
@@ -1238,9 +1289,9 @@ prettyPrinters characterSet =
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a
     prettyPrimitiveExpression (Record a) =
-        prettyRecord $ recordFieldValue <$> a
+        prettyRecord a
     prettyPrimitiveExpression (RecordLit a) =
-        prettyRecordLit $ recordFieldValue <$> a
+        prettyRecordLit a
     prettyPrimitiveExpression (Union a) =
         prettyUnion a
     prettyPrimitiveExpression (ListLit Nothing b) =
@@ -1261,115 +1312,141 @@ prettyPrinters characterSet =
 
     prettyKeyValue
         :: Pretty a
-        => (k -> Doc Ann)
-        -> (Expr Src a -> Doc Ann)
+        => (Expr Src a -> Doc Ann)
         -> Doc Ann
-        -> (k, Expr Src a)
+        -> KeyValue Src a
         -> (Doc Ann, Doc Ann)
-    prettyKeyValue prettyKey prettyValue separator (key, val) =
+    prettyKeyValue prettyValue separator (KeyValue key mSrc val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
         completion _T r =
-                " "
-            <>  prettySelectorExpression _T
+                prettySelectorExpression _T
             <>  doubleColon
             <>  case shallowDenote r of
                     RecordLit kvs ->
-                        prettyCompletionLit 2 $ recordFieldValue <$> kvs
+                        prettyCompletionLit 2 kvs
                     _ ->
                         prettySelectorExpression r
 
-        short = prettyKey key
+        short = prettyAnyLabels key
             <>  " "
             <>  separator
             <>  " "
+            <>  case renderSrcMaybe mSrc of
+                    Nothing  -> mempty
+                    Just doc -> doc <> Pretty.hardline
             <>  prettyValue val
 
-        long =
-                prettyKey key
-            <>  " "
+        long =  Pretty.align
+                    (   prettyAnyLabels key
+                    <>  preSeparator
+                    )
             <>  separator
-            <>  case shallowDenote val of
-                    Some val' ->
-                            " " <> builtin "Some"
-                        <>  case shallowDenote val' of
-                                RecordCompletion _T r ->
-                                    completion _T r
+            <>  case renderSrcMaybe mSrc of
+                    Just doc ->
+                            preComment
+                        <>  Pretty.align
+                                (   doc
+                                <>  Pretty.hardline
+                                <>  prettyValue val
+                                )
+                    Nothing ->
+                        case shallowDenote val of
+                            Some val' ->
+                                    " "
+                                <>  builtin "Some"
+                                <>  case shallowDenote val' of
+                                        RecordCompletion _T r ->
+                                                " "
+                                            <>  completion _T r
 
-                                RecordLit _ ->
+                                        RecordLit _ ->
+                                                Pretty.hardline
+                                            <>  "  "
+                                            <>  prettyImportExpression_ val'
+
+                                        ListLit _ xs
+                                            | not (null xs) ->
+                                                    Pretty.hardline
+                                                <>  "  "
+                                                <>  prettyImportExpression_ val'
+
+                                        _ ->    Pretty.hardline
+                                            <>  "    "
+                                            <>  prettyImportExpression_ val'
+
+                            ToMap val' Nothing ->
+                                    " "
+                                <>  keyword "toMap"
+                                <>  case shallowDenote val' of
+                                        RecordCompletion _T r ->
+                                            completion _T r
+                                        _ ->    Pretty.hardline
+                                            <>  "    "
+                                            <>  prettyImportExpression_ val'
+
+                            RecordCompletion _T r ->
+                                " " <> completion _T r
+
+                            RecordLit _ ->
+                                    Pretty.hardline
+                                <>  "  "
+                                <>  prettyValue val
+
+                            ListLit _ xs
+                                | not (null xs) ->
                                         Pretty.hardline
                                     <>  "  "
-                                    <>  prettyImportExpression_ val'
+                                    <>  prettyValue val
 
-                                ListLit _ xs
-                                    | not (null xs) ->
-                                            Pretty.hardline
-                                        <>  "  "
-                                        <>  prettyImportExpression_ val'
+                            _ ->
+                                Pretty.group
+                                    (   Pretty.flatAlt (Pretty.hardline <> "    ") " "
+                                    <>  prettyValue val
+                                    )
+          where
+            (preSeparator, preComment) =
+                case key of
+                    (_, _, mSrc2) :| [] | not (containsComment mSrc2) ->
+                        (" ", Pretty.hardline <> "    ")
+                    _ ->
+                        (Pretty.hardline, " ")
 
-                                _ ->    Pretty.hardline
-                                    <>  "    "
-                                    <>  prettyImportExpression_ val'
 
-                    ToMap val' Nothing ->
-                            " " <> keyword "toMap"
-                        <>  case shallowDenote val' of
-                                RecordCompletion _T r ->
-                                    completion _T r
-                                _ ->    Pretty.hardline
-                                    <>  "    "
-                                    <>  prettyImportExpression_ val'
-
-                    RecordCompletion _T r ->
-                        completion _T r
-
-                    RecordLit _ ->
-                            Pretty.hardline
-                        <>  "  "
-                        <>  prettyValue val
-
-                    ListLit _ xs
-                        | not (null xs) ->
-                                Pretty.hardline
-                            <>  "  "
-                            <>  prettyValue val
-
-                    _ -> 
-                            Pretty.hardline
-                        <>  "    "
-                        <>  prettyValue val
-
-    prettyRecord :: Pretty a => Map Text (Expr Src a) -> Doc Ann
+    prettyRecord :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecord =
           braces
-        . map (prettyKeyValue prettyAnyLabel prettyExpression colon)
+        . map (prettyKeyValue prettyExpression colon . adapt)
         . Map.toList
+      where
+        adapt (key, RecordField mSrc0 val mSrc1 mSrc2) = KeyValue (pure (mSrc0, key, mSrc1)) mSrc2 val
 
-    prettyRecordLit :: Pretty a => Map Text (Expr Src a) -> Doc Ann
+    prettyRecordLit :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecordLit = prettyRecordLike braces
 
-    prettyCompletionLit :: Pretty a => Int -> Map Text (Expr Src a) -> Doc Ann
+    prettyCompletionLit :: Pretty a => Int -> Map Text (RecordField Src a) -> Doc Ann
     prettyCompletionLit = prettyRecordLike . hangingBraces
 
     prettyRecordLike braceStyle a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
-            braceStyle (map prettyRecordEntry (Map.toList consolidated))
+            braceStyle (map prettyRecordEntry consolidated)
       where
         consolidated = consolidateRecordLiteral a
 
-        prettyRecordEntry (keys, value) =
+        prettyRecordEntry kv@(KeyValue keys mSrc2 val) =
             case keys of
-                key :| []
-                    | Var (V key' 0) <- Dhall.Syntax.shallowDenote value
-                    , key == key' ->
-                        duplicate (prettyAnyLabel key)
+                (mSrc0, key, mSrc1) :| []
+                    | Var (V key' 0) <- Dhall.Syntax.shallowDenote val
+                    , key == key'
+                    , not (containsComment mSrc2) ->
+                        duplicate (prettyAnyLabels [(mSrc0, key, mSrc1)])
                 _ ->
-                    prettyKeyValue prettyAnyLabels prettyExpression equals (keys, value)
+                    prettyKeyValue prettyExpression equals kv
 
     prettyAlternative (key, Just val) =
-        prettyKeyValue prettyAnyLabel prettyExpression colon (key, val)
+        prettyKeyValue prettyExpression colon (makeKeyValue (pure key) val)
     prettyAlternative (key, Nothing) =
         duplicate (prettyAnyLabel key)
 
@@ -1536,24 +1613,32 @@ escapeTrailingSingleQuote chunks@(Chunks as b) =
 pretty_ :: Pretty a => a -> Text
 pretty_ = prettyToStrictText
 
+data KeyValue s a = KeyValue
+    { _keyValueKeys  :: NonEmpty (Maybe s, Text, Maybe s)
+    , _keyValueSrc   :: Maybe s
+    , _keyValueValue :: Expr s a
+    }
+
+makeKeyValue :: NonEmpty Text -> Expr s a -> KeyValue s a
+makeKeyValue keys expr = KeyValue (adapt <$> keys) Nothing expr
+  where
+    adapt key = (Nothing, key, Nothing)
+
 {- This utility function converts
-   `{ x = { y = { z = 1 } } }` to `{ x.y.z. = 1 }`
+   `{ x = { y = { z = 1 } } }` to `{ x.y.z = 1 }`
 -}
 consolidateRecordLiteral
-    :: Map Text (Expr s a) -> Map (NonEmpty Text) (Expr s a)
-consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
+    :: Map Text (RecordField Src a) -> [KeyValue Src a]
+consolidateRecordLiteral = map adapt . Map.toList
   where
-    adapt :: (Text, Expr s a) -> (NonEmpty Text, Expr s a)
-    adapt (key, expression) =
-        case shallowDenote expression of
-            RecordLit m ->
-                case fmap adapt (Map.toList $ recordFieldValue <$> m) of
-                    [ (keys, expression') ] ->
-                        (NonEmpty.cons key keys, expression')
-                    _ ->
-                        (pure key, RecordLit m)
-            _ ->
-                (pure key, expression)
+    adapt :: (Text, RecordField Src a) -> KeyValue Src a
+    adapt (key, RecordField mSrc0 val mSrc1 mSrc2)
+        | not (containsComment mSrc2)
+        , RecordLit m <- shallowDenote val
+        , [ KeyValue keys mSrc2' val' ] <- map adapt (Map.toList m) =
+            KeyValue (NonEmpty.cons (mSrc0, key, mSrc1) keys) mSrc2' val'
+        | otherwise =
+            KeyValue (pure (mSrc0, key, mSrc1)) mSrc2 val
 
 -- | Escape a `Data.Text.Text` literal using Dhall's escaping rules for
 --   single-quoted @Text@
