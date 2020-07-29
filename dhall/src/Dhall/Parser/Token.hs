@@ -742,7 +742,7 @@ pctEncoded :: Parser Text
 pctEncoded = "%" <> count 2 (satisfy hexdig)
 
 subDelims :: Char -> Bool
-subDelims c = c `elem` ("!$&'()*+,;=" :: String)
+subDelims c = c `elem` ("!$&'*+;=" :: String)
 
 unreserved :: Char -> Bool
 unreserved c =
