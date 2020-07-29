@@ -17,7 +17,7 @@ import qualified Dhall.Parser                          as Parser
 import qualified Dhall.Pretty                          as Pretty
 import qualified Dhall.Test.Util                       as Test.Util
 import qualified Test.Tasty                            as Tasty
-import qualified Test.Tasty.HUnit                      as Tasty.HUnit
+import qualified Test.Tasty.Silver                     as Tasty.Silver
 import qualified Turtle
 
 getTests :: IO TestTree
@@ -55,22 +55,14 @@ format characterSet (Header header, expr) =
 
 formatTest :: CharacterSet -> Text -> TestTree
 formatTest characterSet prefix =
-    Tasty.HUnit.testCase (Text.unpack prefix) $ do
-        let inputFile  = Text.unpack (prefix <> "A.dhall")
-        let outputFile = Text.unpack (prefix <> "B.dhall")
+    let inputFile  = Text.unpack (prefix <> "A.dhall")
+        outputFile = Text.unpack (prefix <> "B.dhall")
 
-        inputText <- Text.IO.readFile inputFile
+        action = do
+            inputText <- Text.IO.readFile inputFile
 
-        headerAndExpr <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
+            headerAndExpr <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
 
-        let actualText = format characterSet headerAndExpr
-        expectedText <- Text.IO.readFile outputFile
-
-        let message =
-                   "The formatted expression did not match the expected output\n"
-                <> "Expected:\n\n" <> Text.unpack expectedText <> "\n\n"
-                <> "Actual:\n\n" <> Text.unpack actualText <> "\n\n"
-                <> "Expected (show): " <> show expectedText <> "\n"
-                <> "Actual   (show): " <> show actualText <> "\n"
-
-        Tasty.HUnit.assertBool message (actualText == expectedText)
+            return (format characterSet headerAndExpr)
+    in
+        Tasty.Silver.goldenVsAction (Text.unpack prefix) outputFile action id
