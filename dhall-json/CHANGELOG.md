@@ -1,3 +1,9 @@
+1.7.1
+
+* [Format documents with leading `---`](https://github.com/dhall-lang/dhall-haskell/pull/1865)
+    * Now if you use the `--documents` flag the first document will also
+      include a leading `---`
+
 1.7.0
 
 * BREAKING CHANGE: [Add `--generated-comment` flag for `dhall-to-yaml{-ng}`](https://github.com/dhall-lang/dhall-haskell/pull/1840)
