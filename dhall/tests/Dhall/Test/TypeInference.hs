@@ -100,11 +100,10 @@ successTest prefix = do
 failureTest :: Text -> TestTree
 failureTest prefix = do
     let expectedFailures =
-               [ typeInferenceDirectory </> "failure/unit/MergeEmptyNeedsDirectAnnotation1"
-
+               [
                -- Duplicate fields are incorrectly caught during parsing:
                -- https://github.com/dhall-lang/dhall-haskell/issues/772
-               , typeInferenceDirectory </> "failure/unit/RecordProjectionDuplicateFields"
+                 typeInferenceDirectory </> "failure/unit/RecordProjectionDuplicateFields"
                , typeInferenceDirectory </> "failure/unit/RecordTypeDuplicateFields"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants1"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants2"
