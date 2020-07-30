@@ -281,15 +281,23 @@ parsers embedded = Parsers {..}
                     let alternative5B1 = do
                             _colon
                             nonemptyWhitespace
-                            b <- expression
                             case (shallowDenote a, a0Info) of
-                                (ListLit Nothing [], _) ->
+                                (ListLit Nothing [], _) -> do
+                                    b <- applicationExpression
+
                                     return (ListLit (Just b) [])
-                                (Merge c d Nothing, NakedMergeOrSomeOrToMap) ->
+                                (Merge c d Nothing, NakedMergeOrSomeOrToMap) -> do
+                                    b <- applicationExpression
+
                                     return (Merge c d (Just b))
-                                (ToMap c Nothing, NakedMergeOrSomeOrToMap) ->
+                                (ToMap c Nothing, NakedMergeOrSomeOrToMap) -> do
+                                    b <- applicationExpression
+
                                     return (ToMap c (Just b))
-                                _ -> return (Annot a b)
+                                _ -> do
+                                    b <- expression
+
+                                    return (Annot a b)
 
                     alternative5B0 <|> alternative5B1 <|> pure a
 
