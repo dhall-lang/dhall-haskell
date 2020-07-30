@@ -159,10 +159,6 @@ shouldNotParse path = do
               -- but this might be fixable.
               parseDirectory </> "failure/unit/ListLitEmptyMissingAnnotation.dhall"
             , parseDirectory </> "failure/unit/ListLitEmptyAnnotation.dhall"
-
-              -- The same performance improvements also broke the
-              -- precedence of parsing empty list literals
-            , parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
             ]
 
     let pathString = Text.unpack path

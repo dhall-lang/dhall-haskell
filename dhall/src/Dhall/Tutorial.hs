@@ -3,6 +3,10 @@
 {-| Dhall is a programming language specialized for configuration files.  This
     module contains a tutorial explaining how to author configuration files
     using this language
+
+    You might also be interested in the
+    <https://docs.dhall-lang.org/tutorials/Language-Tour.html Language Tour>, a
+    Haskell-agnostic tour of Dhall's language features.
 -}
 module Dhall.Tutorial (
     -- * Introduction
@@ -2283,6 +2287,11 @@ import Dhall
 -- you can report them at:
 --
 -- <https://github.com/dhall-lang/dhall-haskell/issues>
+--
+-- Also, you might want to check out the
+-- <https://docs.dhall-lang.org/tutorials/Language-Tour.html Language Tour>, a
+-- more comprehensive tour of Dhall which may cover features missing from this
+-- Haskell tutorial.
 --
 -- You can also request features, support, or documentation improvements on the
 -- above issue tracker.
