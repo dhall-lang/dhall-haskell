@@ -66,6 +66,7 @@ Library
         dhall                >= 1.32.0             ,
         file-embed           >= 0.0.10.0           ,
         filepath             >= 1.4       && < 1.5 ,
+        lens-family-core     >= 1.0.0     && < 2.2 ,
         lucid                >= 2.9.12    && < 2.10,
         mmark                >= 0.0.7.0   && < 0.8 ,
         megaparsec           >= 7         && < 8.1 ,
@@ -80,6 +81,7 @@ Library
         Dhall.Docs
         Dhall.Docs.Core
     Other-Modules:
+        Dhall.Docs.CodeRenderer
         Dhall.Docs.Comment
         Dhall.Docs.Embedded
         Dhall.Docs.Html

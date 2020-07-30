@@ -17,19 +17,22 @@ module Dhall.Docs.Html
     , DocParams(..)
     ) where
 
-import Data.Text    (Text)
-import Data.Void    (Void)
-import Dhall.Core   (Expr, Import, denote)
-import Dhall.Pretty (Ann (..), CharacterSet)
-import Dhall.Src    (Src)
+import Data.Text               (Text)
+import Data.Void               (Void)
+import Dhall.Core              (Expr, Import, denote)
+import Dhall.Docs.CodeRenderer
+import Dhall.Pretty            (Ann (..), CharacterSet)
+import Dhall.Src               (Src)
 import Lucid
-import Path         (Dir, File, Path, Rel)
+import Path                    (Dir, File, Path, Rel)
 
 import qualified Control.Monad
 import qualified Data.Foldable
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc                           as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text               as Pretty.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
+import qualified Dhall.Core                                          as Core
 import qualified Dhall.Pretty
 import qualified Path
 import qualified System.FilePath                                     as FilePath
@@ -42,6 +45,23 @@ import qualified System.FilePath                                     as FilePath
 --   or the whole file
 data ExprType = TypeAnnotation | FileContentsExpr
 
+exprSrcToHtml :: Text -> Expr Src Import -> Html ()
+exprSrcToHtml = renderExpr
+
+exprVoidToHtml :: Dhall.Pretty.CharacterSet -> Expr Void Import -> Html ()
+exprVoidToHtml characterSet expr = exprSrcToHtml contents expr'
+  where
+    expr' = Core.renote expr
+    contents = Pretty.Text.renderStrict $ typeLayout $ Dhall.Pretty.prettyCharacterSet characterSet (expr')
+
+    typeLayout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart opts
+      where
+        -- this is done so the type of a dhall file fits in a single line
+        -- its a safe value, since types in source codes are not that large
+        opts = Pretty.defaultLayoutOptions
+                { Pretty.layoutPageWidth =
+                    Pretty.Unbounded
+                }
 
 exprToHtml :: Dhall.Pretty.CharacterSet -> ExprType -> Expr a Import -> Html ()
 exprToHtml characterSet exprType expr = pre_ $ renderTree prettyTree
@@ -100,12 +120,13 @@ data DocParams = DocParams
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 dhallFileToHtml
     :: Path Rel File            -- ^ Source file name, used to extract the title
-    -> Expr Src Import          -- ^ Contents of the file
+    -> Text                     -- ^ Contents of the file
+    -> Expr Src Import          -- ^ AST of the file
     -> [Expr Void Import]       -- ^ Examples extracted from the assertions of the file
     -> Html ()                  -- ^ Header document as HTML
     -> DocParams                -- ^ Parameters for the documentation
     -> Html ()
-dhallFileToHtml filePath expr examples header params@DocParams{..} =
+dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
     doctypehtml_ $ do
         headContents htmlTitle params
         body_ $ do
@@ -120,7 +141,7 @@ dhallFileToHtml filePath expr examples header params@DocParams{..} =
                     div_ [class_ "source-code code-examples"] $
                         mapM_ (exprToHtml characterSet FileContentsExpr) examples
                 h3_ "Source"
-                div_ [class_ "source-code"] $ exprToHtml characterSet FileContentsExpr expr
+                div_ [class_ "source-code"] $ exprSrcToHtml contents expr
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb

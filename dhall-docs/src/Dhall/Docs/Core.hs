@@ -147,7 +147,8 @@ newtype FileComments = FileComments
 --   add that extra information here.
 data DhallFile = DhallFile
     { path :: Path Rel File             -- ^ Path of the file
-    , expr :: Expr Src Import           -- ^ File contents
+    , contents :: Text                  -- ^ File contents
+    , expr :: Expr Src Import           -- ^ Parsed AST from 'contents'
     , mType :: Maybe (Expr Void Import) -- ^ Type of the parsed expression,
                                         --   extracted from the source code
     , examples :: [Expr Void Import]    -- ^ Examples extracted from assertions
@@ -191,8 +192,8 @@ getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles []
                         Just (Right c) -> return $ Just c
 
                 return $ Just $ DhallFile
-                    { path = relFile
-                    , expr
+                    { expr, contents
+                    , path = relFile
                     , mType = extractTypeIfInSource denoted
                     , examples = examplesFromAssertions denoted
                     , fileComments = FileComments headerContents
@@ -304,6 +305,7 @@ makeHtml packageName characterSet DhallFile {..} = do
 
     let htmlAsText = Text.Lazy.toStrict $ Lucid.renderText $ dhallFileToHtml
             path
+            contents
             expr
             examples
             headerAsHtml
