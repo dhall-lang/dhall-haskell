@@ -447,15 +447,18 @@ import Dhall
 --
 -- Every list can be followed by the type of the list.  The type annotation is
 -- required for empty lists but optional for non-empty lists.  You will get a
--- type error if you provide an empty list without a type annotation:
+-- parse error if you provide an empty list without a type annotation:
 --
 -- >>> input auto "[]" :: IO (Vector Natural)
 -- *** Exception:
--- ...Error...: An empty list requires a type annotation
+-- ...Error...: Invalid input
 -- ...
--- 1│ []
+-- (input):1:3:
+--   |
+-- 1 | []
+--   |   ^
+-- Empty list literal without annotation
 -- ...
--- (input):1:1
 --
 -- Also, list elements must all have the same type.  You will get an error if
 -- you try to store elements of different types in a list:
