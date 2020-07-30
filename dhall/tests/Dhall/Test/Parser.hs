@@ -152,14 +152,7 @@ shouldParse path = do
 
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
-    let expectedFailures =
-            [ -- For parsing performance reasons the implementation
-              -- treats a missing type annotation on an empty list as
-              -- as a type-checking failure instead of a parse failure,
-              -- but this might be fixable.
-              parseDirectory </> "failure/unit/ListLitEmptyMissingAnnotation.dhall"
-            , parseDirectory </> "failure/unit/ListLitEmptyAnnotation.dhall"
-            ]
+    let expectedFailures = []
 
     let pathString = Text.unpack path
 

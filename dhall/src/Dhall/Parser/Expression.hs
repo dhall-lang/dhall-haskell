@@ -299,7 +299,13 @@ parsers embedded = Parsers {..}
 
                                     return (Annot a b)
 
-                    alternative5B0 <|> alternative5B1 <|> pure a
+                    let alternative5B2 =
+                            case shallowDenote a of
+                                ListLit Nothing [] ->
+                                    fail "Empty list literal without annotation"
+                                _ -> pure a
+
+                    alternative5B0 <|> alternative5B1 <|> alternative5B2
 
             alternative5A <|> alternative5B
 
