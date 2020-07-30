@@ -5,9 +5,14 @@
 {-| Contains the logic to render the source code inside a HTML. It also provides
     context-sensitive features such as jump-to-definition
 -}
-module Dhall.Docs.CodeRenderer (renderExpr) where
+module Dhall.Docs.CodeRenderer
+    ( exprSrcToHtml
+    , exprVoidToHtml
+    , ExprType(..)
+    ) where
 
-import Data.Text  (Text)
+import Data.Text       (Text)
+import Data.Void       (Void)
 import Dhall.Core
     ( Expr (..)
     , File (..)
@@ -18,13 +23,18 @@ import Dhall.Core
     , Scheme (..)
     , URL (..)
     )
-import Dhall.Src  (Src (..))
+import Dhall.Docs.Util
+import Dhall.Src       (Src (..))
 import Lucid
 
 import qualified Data.Text
-import qualified Dhall.Core          as Core
-import qualified Lens.Family         as Lens
-import qualified Text.Megaparsec.Pos as SourcePos
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
+import qualified Dhall.Core                            as Core
+import qualified Dhall.Parser
+import qualified Dhall.Pretty
+import qualified Lens.Family                           as Lens
+import qualified Text.Megaparsec.Pos                   as SourcePos
 
 -- | Given a Dhall expression return all imports with their location on the file.
 --   Contents are already sorted by 'Src', which allows 'renderAsHtml' to traverse
@@ -66,8 +76,8 @@ renderImport (Import {importHashed = ImportHashed { importType }}) =
 
 -- | Given a Text and the parsed `Expr Src Import` from it, this will render the
 --   the source code on HTML with jump-to-definition on URL imports
-renderExpr :: Text -> Expr Src Import -> Html ()
-renderExpr contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
+exprSrcToHtml :: Text -> Expr Src Import -> Html ()
+exprSrcToHtml contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
   where
     imports = getImports expr
     sourceLine = SourcePos.unPos . SourcePos.sourceLine
@@ -103,3 +113,33 @@ renderExpr contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
             if Data.Text.null suffixCols then
                 (importEndLine + 1, 1)
             else (importEndLine, importEndCol)
+
+-- | Internal utility to differentiate if a Dhall expr is a type annotation
+--   or the whole file
+data ExprType = TypeAnnotation | AssertionExample
+
+exprVoidToHtml :: Dhall.Pretty.CharacterSet -> ExprType -> Expr Void Import -> Html ()
+exprVoidToHtml characterSet exprType expr = exprSrcToHtml formattedFile expr'
+  where
+    layout = case exprType of
+        AssertionExample -> Dhall.Pretty.layout
+        TypeAnnotation -> typeLayout
+
+    formattedFile = Pretty.Text.renderStrict
+        $ layout
+        $ Dhall.Pretty.prettyCharacterSet characterSet (Core.denote expr)
+
+    expr' = case Dhall.Parser.exprFromText "" formattedFile of
+        Right e -> e
+        Left _ -> fileAnIssue "A failure has occurred while parsing a formatted file"
+
+    typeLayout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
+    typeLayout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart opts
+      where
+        -- this is done so the type of a dhall file fits in a single line
+        -- its a safe value, since types in source codes are not that large
+        opts :: Pretty.LayoutOptions
+        opts = Pretty.defaultLayoutOptions
+                { Pretty.layoutPageWidth =
+                    Pretty.Unbounded
+                }

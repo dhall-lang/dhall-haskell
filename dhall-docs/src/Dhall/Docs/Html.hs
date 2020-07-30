@@ -19,9 +19,9 @@ module Dhall.Docs.Html
 
 import Data.Text               (Text)
 import Data.Void               (Void)
-import Dhall.Core              (Expr, Import, denote)
+import Dhall.Core              (Expr, Import)
 import Dhall.Docs.CodeRenderer
-import Dhall.Pretty            (Ann (..), CharacterSet)
+import Dhall.Pretty            (CharacterSet)
 import Dhall.Src               (Src)
 import Lucid
 import Path                    (Dir, File, Path, Rel)
@@ -29,85 +29,12 @@ import Path                    (Dir, File, Path, Rel)
 import qualified Control.Monad
 import qualified Data.Foldable
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc                           as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text               as Pretty.Text
-import qualified Data.Text.Prettyprint.Doc.Render.Util.SimpleDocTree as Pretty
-import qualified Dhall.Core                                          as Core
-import qualified Dhall.Pretty
 import qualified Path
-import qualified System.FilePath                                     as FilePath
+import qualified System.FilePath as FilePath
 
 -- $setup
 -- >>> :set -XQuasiQuotes
 -- >>> import Path (reldir, relfile)
-
--- | Internal utility to differentiate if a Dhall expr is a type annotation
---   or the whole file
-data ExprType = TypeAnnotation | FileContentsExpr
-
-exprSrcToHtml :: Text -> Expr Src Import -> Html ()
-exprSrcToHtml = renderExpr
-
-exprVoidToHtml :: Dhall.Pretty.CharacterSet -> Expr Void Import -> Html ()
-exprVoidToHtml characterSet expr = exprSrcToHtml contents expr'
-  where
-    expr' = Core.renote expr
-    contents = Pretty.Text.renderStrict $ typeLayout $ Dhall.Pretty.prettyCharacterSet characterSet (expr')
-
-    typeLayout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart opts
-      where
-        -- this is done so the type of a dhall file fits in a single line
-        -- its a safe value, since types in source codes are not that large
-        opts = Pretty.defaultLayoutOptions
-                { Pretty.layoutPageWidth =
-                    Pretty.Unbounded
-                }
-
-exprToHtml :: Dhall.Pretty.CharacterSet -> ExprType -> Expr a Import -> Html ()
-exprToHtml characterSet exprType expr = pre_ $ renderTree prettyTree
-  where
-    layout = case exprType of
-        FileContentsExpr -> Dhall.Pretty.layout
-        TypeAnnotation -> typeLayout
-
-    prettyTree = Pretty.treeForm
-        $ layout
-        $ Dhall.Pretty.prettyCharacterSet characterSet (denote expr)
-
-    textSpaces :: Int -> Text
-    textSpaces n = Data.Text.replicate n (Data.Text.singleton ' ')
-
-    renderTree :: Pretty.SimpleDocTree Ann -> Html ()
-    renderTree sds = case sds of
-        Pretty.STEmpty -> return ()
-        Pretty.STChar c -> toHtml $ Data.Text.singleton c
-        Pretty.STText _ t -> toHtml t
-        Pretty.STLine i -> br_ [] >> toHtml (textSpaces i)
-        Pretty.STAnn ann content -> encloseInTagFor ann (renderTree content)
-        Pretty.STConcat contents -> foldMap renderTree contents
-
-    encloseInTagFor :: Ann -> Html () -> Html ()
-    encloseInTagFor ann = span_ [class_ classForAnn]
-      where
-        classForAnn = "dhall-" <> case ann of
-            Keyword -> "keyword"
-            Syntax -> "syntax"
-            Label -> "label"
-            Literal -> "literal"
-            Builtin -> "builtin"
-            Operator -> "operator"
-
-    typeLayout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
-    typeLayout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart opts
-      where
-        -- this is done so the type of a dhall file fits in a single line
-        -- its a safe value, since types in source codes are not that large
-        opts :: Pretty.LayoutOptions
-        opts = Pretty.defaultLayoutOptions
-                { Pretty.layoutPageWidth =
-                    Pretty.Unbounded
-                }
-
 
 -- | Params for commonly supplied values on the generated documentation
 data DocParams = DocParams
@@ -139,7 +66,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
                 Control.Monad.unless (null examples) $ do
                     h3_ "Examples"
                     div_ [class_ "source-code code-examples"] $
-                        mapM_ (exprToHtml characterSet FileContentsExpr) examples
+                        mapM_ (exprVoidToHtml characterSet AssertionExample) examples
                 h3_ "Source"
                 div_ [class_ "source-code"] $ exprSrcToHtml contents expr
   where
@@ -178,7 +105,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
             a_ [href_ fileRef] $ toHtml itemText
             Data.Foldable.forM_ maybeType $ \typeExpr -> do
                 span_ [class_ "of-type-token"] ":"
-                span_ [class_ "dhall-type source-code"] $ exprToHtml characterSet TypeAnnotation typeExpr
+                span_ [class_ "dhall-type source-code"] $ exprVoidToHtml characterSet TypeAnnotation typeExpr
 
 
     listDir :: Path Rel Dir -> Html ()
