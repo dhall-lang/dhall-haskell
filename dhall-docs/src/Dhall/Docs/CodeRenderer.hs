@@ -70,7 +70,11 @@ renderImport (Import {importHashed = ImportHashed { importType }}) =
 
         Local Here file -> a_ [href_ href] . toHtml
           where
-            href = "./" <> fileAsText file <> ".html"
+            href = "." <> fileAsText file <> ".html"
+
+        Local Parent file -> a_ [href_ href] . toHtml
+          where
+            href = ".." <> fileAsText file <> ".html"
 
         _ -> toHtml
 
