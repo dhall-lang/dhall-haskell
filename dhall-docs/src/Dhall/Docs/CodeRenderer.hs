@@ -35,7 +35,7 @@ getImports expr = concatMap getImports $ Lens.toListOf Core.subExpressions expr
 
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
-    <> file
+    <> "/" <> file
 
 -- | Given an 'Import', render the contents in an HTML element that will allow
 --   users to jump to another file or domain
@@ -56,11 +56,11 @@ renderImport (Import {importHashed = ImportHashed { importType }}) =
 
             -- we don't include the headers here since we treat links to open a file
             -- in another tab
-            href = scheme_ <> authority <> path_ <> query_
+            href = scheme_ <> "://" <> authority <> path_ <> query_
 
-        Local Here file -> a_ [href_ href, target_ "_blank"] . toHtml
+        Local Here file -> a_ [href_ href] . toHtml
           where
-            href = "." <> fileAsText file <> ".html"
+            href = "./" <> fileAsText file <> ".html"
 
         _ -> toHtml
 
@@ -79,6 +79,7 @@ renderExpr contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
     go (currLine, currCol) currentLines ((Src {..}, import_) : rest) = do
         prefix
         renderImport import_ srcText
+        if Data.Text.null suffixCols then br_ [] else return ()
         go nextPosition suffix rest
       where
         importStartLine = sourceLine srcStart
@@ -94,10 +95,10 @@ renderExpr contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
         -- have at least one element
         (firstImportLine, lastImportLine) = (head importLines, last importLines)
         prefixCols = Data.Text.take (importStartCol - currCol) firstImportLine
-        suffixCols = Data.Text.drop (importEndCol - currCol + 1) lastImportLine
+        suffixCols = Data.Text.drop (importEndCol - currCol) lastImportLine
 
         prefix = mapM_ (\t -> toHtml t >> br_ []) prefixLines >> toHtml prefixCols
-        suffix = suffixCols : suffixLines
+        suffix = if Data.Text.null suffixCols then suffixLines else suffixCols : suffixLines
         nextPosition =
             if Data.Text.null suffixCols then
                 (importEndLine + 1, 1)
