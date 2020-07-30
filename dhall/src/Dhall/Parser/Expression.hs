@@ -356,19 +356,17 @@ parsers embedded = Parsers {..}
             let alternative0 = do
                     try (_merge *> nonemptyWhitespace)
 
-                    a <- importExpression_
-
-                    nonemptyWhitespace
+                    a <- importExpression_ <* nonemptyWhitespace
 
                     return (\b -> Merge a b Nothing, Just "second argument to ❰merge❱")
 
             let alternative1 = do
-                    _ <- try (_Some <* nonemptyWhitespace)
+                    try (_Some *> nonemptyWhitespace)
 
                     return (Some, Just "argument to ❰Some❱")
 
             let alternative2 = do
-                    _ <- try (_toMap *> nonemptyWhitespace)
+                    try (_toMap *> nonemptyWhitespace)
 
                     return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
 
