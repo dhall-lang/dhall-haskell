@@ -123,11 +123,7 @@ notesInLetInLet =
 
 shouldParse :: Text -> TestTree
 shouldParse path = do
-    let expectedFailures =
-            -- This is a bug created by a parsing performance
-            -- improvement
-            [ parseDirectory </> "success/unit/MergeParenAnnotation"
-            ]
+    let expectedFailures = []
 
     let pathString = Text.unpack path
 

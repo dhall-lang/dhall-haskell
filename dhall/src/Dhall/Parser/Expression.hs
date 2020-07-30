@@ -246,8 +246,8 @@ parsers embedded = Parsers {..}
 
             let alternative5A = do
                     case a0Info of
-                        ApplicationExpr -> empty
-                        ImportExpr      -> return ()
+                        ImportExpr -> return ()
+                        _          -> empty
 
                     bs <- some (do
                         try (whitespace *> _with *> nonemptyWhitespace)
@@ -282,12 +282,12 @@ parsers embedded = Parsers {..}
                             _colon
                             nonemptyWhitespace
                             b <- expression
-                            case shallowDenote a of
-                                ListLit Nothing [] ->
+                            case (shallowDenote a, a0Info) of
+                                (ListLit Nothing [], _) ->
                                     return (ListLit (Just b) [])
-                                Merge c d Nothing ->
+                                (Merge c d Nothing, NakedMergeOrSomeOrToMap) ->
                                     return (Merge c d (Just b))
-                                ToMap c Nothing ->
+                                (ToMap c Nothing, NakedMergeOrSomeOrToMap) ->
                                     return (ToMap c (Just b))
                                 _ -> return (Annot a b)
 
@@ -393,6 +393,7 @@ parsers embedded = Parsers {..}
 
             let info =
                     case (maybeMessage, bs) of
+                        (Just _ , []) -> NakedMergeOrSomeOrToMap
                         (Nothing, []) -> ImportExpr
                         _             -> ApplicationExpr
 
@@ -1051,10 +1052,12 @@ import_ = (do
 
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
--- | 'ApplicationExprInfo' distinguishes import expressions from /proper/
--- application expressions that aren't import expressions.
+-- | 'ApplicationExprInfo' distinguishes certain subtypes of application
+-- expressions.
 data ApplicationExprInfo
-    = ImportExpr
+    = NakedMergeOrSomeOrToMap
+    -- ^ @merge x y@, @Some x@ or @toMap x@, unparenthesized.
+    | ImportExpr
     -- ^ An import expression.
     | ApplicationExpr
-    -- ^ A proper application expression.
+    -- ^ Any other application expression.
