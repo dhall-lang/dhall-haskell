@@ -39,45 +39,20 @@ did you notice it?
       >Source</h3
       ><div class="source-code"
         ><pre
-          ><span class="dhall-keyword"
-          >let</span
-          > <span class="dhall-label"
-          >Pair</span
-          > <span class="dhall-syntax"
-          >=</span
-          > ./Pair.dhall<br
+          >--| This file contains a markdown error right here `<br
+          />--  did you notice it?<br
           /><br
-          /><span class="dhall-keyword"
-          >let</span
-          > <span class="dhall-label"
-          >DeliveryStatus</span
-          > <span class="dhall-syntax"
-          >=</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >Sent</span
-          > <span class="dhall-syntax"
-          >:</span
-          > <span class="dhall-label"
-          >Pair</span
-          > <span class="dhall-builtin"
-          >Natural</span
-          > <span class="dhall-builtin"
-          >Text</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >InProgress</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >InQueue</span
-          > <span class="dhall-syntax"
-          >&gt;</span
+          />let Pair = <a href="./Pair.dhall.html"
+          >./Pair.dhall</a
           ><br
           /><br
-          /><span class="dhall-keyword"
-          >in</span
-          >  <span class="dhall-label"
-          >DeliveryStatus</span></pre></div></div></body></html>
+          />let DeliveryStatus =<br
+          />    &lt; Sent: Pair Natural Text {-| Message has been _sent_. It carries a ./Pair.dhall reference<br
+          />                                    containing on the `first` field number of retries<br
+          />                                    and on the `second` field the delivered text<br
+          />                                -}<br
+          />    | InProgress                -- | Message is on the way!<br
+          />    | InQueue                   -- | Delivery for this message **hasn&#39;t** started<br
+          />    &gt;<br
+          /><br
+          />in DeliveryStatus<br/></pre></div></div></body></html>
