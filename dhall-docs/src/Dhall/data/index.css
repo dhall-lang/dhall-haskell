@@ -156,6 +156,10 @@ h2.doc-title {
     color: #333333;
 }
 
+.source-code a {
+    font-family: 'Fira Code', monospace;
+}
+
 .source-code span.dhall-keyword {
     color: #0000FF;
     font-weight: bold;
