@@ -354,19 +354,28 @@ parsers embedded = Parsers {..}
     applicationExpressionWithInfo :: Parser (ApplicationExprInfo, Expr Src a)
     applicationExpressionWithInfo = do
             let alternative0 = do
+                    try (_merge *> nonemptyWhitespace)
+
+                    a <- importExpression_
+
+                    nonemptyWhitespace
+
+                    return (\b -> Merge a b Nothing, Just "second argument to ❰merge❱")
+
+            let alternative1 = do
                     _ <- try (_Some <* nonemptyWhitespace)
 
                     return (Some, Just "argument to ❰Some❱")
 
-            let alternative1 = do
+            let alternative2 = do
                     _ <- try (_toMap *> nonemptyWhitespace)
 
                     return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
 
-            let alternative2 =
+            let alternative3 =
                     return (id, Nothing)
 
-            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2
+            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2 <|> alternative3
 
             let adapt parser =
                     case maybeMessage of
@@ -445,7 +454,6 @@ parsers embedded = Parsers {..}
                     , alternative04
                     , unionType
                     , listLiteral
-                    , alternative07
                     , alternative37
                     , alternative09
                     , builtin
@@ -487,13 +495,6 @@ parsers embedded = Parsers {..}
                 _closeBrace
 
                 return a ) <?> "literal"
-
-            alternative07 = do
-                try (_merge *> nonemptyWhitespace)
-                a <- importExpression_
-                nonemptyWhitespace
-                b <- importExpression_ <?> "second argument to ❰merge❱"
-                return (Merge a b Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
