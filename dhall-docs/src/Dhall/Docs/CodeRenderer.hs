@@ -36,6 +36,10 @@ import qualified Dhall.Pretty
 import qualified Lens.Family                           as Lens
 import qualified Text.Megaparsec.Pos                   as SourcePos
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import Dhall.Core (Directory (..))
+
 -- | Given a Dhall expression return all imports with their location on the file.
 --   Contents are already sorted by 'Src', which allows 'renderAsHtml' to traverse
 --   the return of this function to inject anchors
@@ -47,8 +51,19 @@ fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
     <> "/" <> file
 
--- | Given an 'Import', render the contents in an HTML element that will allow
---   users to jump to another file or domain
+{-| Given an 'Import', render the contents in an HTML element that will allow
+    users to jump to another file or domain. The 'Text' argument is the contents
+    inside the anchor tag
+
+    Example:
+
+    >>> :set -Wno-missing-fields
+    >>> let file = File { directory = Directory [], file = ""}
+    >>> let url = URL { scheme = HTTPS, authority = "google.com", query = Nothing, path = file}
+    >>> let import_ = Import {importHashed = ImportHashed { importType = Remote url }}
+    >>> renderImport import_ "link for google"
+    <a href="https://google.com/" target="_blank">link for google</a>
+-}
 renderImport :: Import -> Text -> Html ()
 renderImport (Import {importHashed = ImportHashed { importType }}) =
     case importType of
