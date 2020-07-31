@@ -519,9 +519,9 @@ instance Arbitrary URL where
 
         let validPChar =
                 Test.QuickCheck.frequency
-                    [ (26, chooseCharacter ('\x41', '\x5A'))
-                    , (26, chooseCharacter ('\x61', '\x7A'))
-                    , (10, chooseCharacter ('\x30', '\x39'))
+                    [ (26, chooseCharacter ('A', 'Z'))
+                    , (26, chooseCharacter ('a', 'z'))
+                    , (10, chooseCharacter ('0', '9'))
                     , (17, Test.QuickCheck.elements "-._~!$&'*+;=:@")
                     ]
 
