@@ -1,6 +1,6 @@
 { conversation =
-  [ { author = "robert", content = [] }
-  , { author = "robert", content = [] }
+  [ { author = "robert", content = xs }
+  , { author = "robert", content = xs }
   , { author = "bob"
     , content =
       [ text
