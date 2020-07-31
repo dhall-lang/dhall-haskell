@@ -99,39 +99,51 @@ exprSrcToHtml :: Text -> Expr Src Import -> Html ()
 exprSrcToHtml contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
   where
     imports = getImports expr
-    sourceLine = SourcePos.unPos . SourcePos.sourceLine
-    sourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 
     -- we keep the current line, column and consumed text as part of function argument
     go :: (Int, Int) -> [Text] -> [(Src, Import)] -> Html ()
     go _ textLines [] = mapM_ (\t -> toHtml t >> br_ []) textLines
     go (currLine, currCol) currentLines ((Src {..}, import_) : rest) = do
-        prefix
-        renderImport import_ srcText
-        if Data.Text.null suffixCols then br_ [] else return ()
-        go nextPosition suffix rest
-      where
-        importStartLine = sourceLine srcStart
-        importEndLine = sourceLine srcEnd
+        let sourceLine = SourcePos.unPos . SourcePos.sourceLine
+        let sourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 
-        importStartCol = sourceColumn srcStart
-        importEndCol = sourceColumn srcEnd
+        let importStartLine = sourceLine srcStart
+        let importEndLine = sourceLine srcEnd
 
-        (prefixLines, restLines) = splitAt (importStartLine - currLine) currentLines
-        (importLines, suffixLines) = splitAt (importStartLine - importStartLine + 1) restLines
+        let importStartCol = sourceColumn srcStart
+        let importEndCol = sourceColumn srcEnd
+
+        let (prefixLines, restLines) = splitAt (importStartLine - currLine) currentLines
+        let (importLines, suffixLines) = splitAt (importStartLine - importStartLine + 1) restLines
 
         -- calls to `head` and `last` here should never fail since `importLines`
         -- have at least one element
-        (firstImportLine, lastImportLine) = (head importLines, last importLines)
-        prefixCols = Data.Text.take (importStartCol - currCol) firstImportLine
-        suffixCols = Data.Text.drop (importEndCol - currCol) lastImportLine
+        let (firstImportLine, lastImportLine) = (head importLines, last importLines)
+        let prefixCols = Data.Text.take (importStartCol - currCol) firstImportLine
+        let suffixCols = Data.Text.drop (importEndCol - currCol) lastImportLine
 
-        prefix = mapM_ (\t -> toHtml t >> br_ []) prefixLines >> toHtml prefixCols
-        suffix = if Data.Text.null suffixCols then suffixLines else suffixCols : suffixLines
-        nextPosition =
-            if Data.Text.null suffixCols then
-                (importEndLine + 1, 1)
-            else (importEndLine, importEndCol)
+        -- prefix lines and columns
+        mapM_ (\t -> toHtml t >> br_ []) prefixLines
+        toHtml prefixCols
+
+        -- rendered import
+        renderImport import_ srcText
+
+        -- add a newline if last line of import consumes the remaining line on
+        -- the original text
+        if Data.Text.null suffixCols then br_ [] else return ()
+
+        let suffix = if Data.Text.null suffixCols then suffixLines else suffixCols : suffixLines
+
+        -- move the cursor to next line if no characterse are remaining on the
+        -- suffix cols, otherwise keep the last line and next char right after
+        -- the import. This is done to handle properly several imports on the
+        -- same line
+        let nextPosition = if Data.Text.null suffixCols then
+                               (importEndLine + 1, 1)
+                           else (importEndLine, importEndCol)
+
+        go nextPosition suffix rest
 
 -- | Internal utility to differentiate if a Dhall expr is a type annotation
 --   or the whole file
