@@ -94,7 +94,9 @@ renderImport (Import {importHashed = ImportHashed { importType }}) =
         _ -> toHtml
 
 -- | Given a Text and the parsed `Expr Src Import` from it, this will render the
---   the source code on HTML with jump-to-definition on URL imports
+--   the source code on HTML with jump-to-definition on URL imports. Use this
+--   to render the source code with the same structure (whitespaces, comments,
+--   language elements) as the source file
 exprSrcToHtml :: Text -> Expr Src Import -> Html ()
 exprSrcToHtml contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
   where
