@@ -149,6 +149,11 @@ exprSrcToHtml contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) import
 --   or the whole file
 data ExprType = TypeAnnotation | AssertionExample
 
+-- | Renders an AST /fragment/ from the source file AST. Use this only for that
+--   purpose. The difference between this and 'exprSrcToHtml' is because that
+--   the extracted fragment's 'SourcePos's need to be re-generated to
+--   render them in a better way; just adding whitespace at the beginning of the
+--   first line won't render good results.
 exprVoidToHtml :: Dhall.Pretty.CharacterSet -> ExprType -> Expr Void Import -> Html ()
 exprVoidToHtml characterSet exprType expr = exprSrcToHtml formattedFile expr'
   where
