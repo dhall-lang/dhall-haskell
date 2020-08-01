@@ -68,7 +68,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
                     div_ [class_ "source-code code-examples"] $
                         mapM_ (exprVoidToHtml characterSet AssertionExample) examples
                 h3_ "Source"
-                div_ [class_ "source-code"] $ exprSrcToHtml contents expr
+                div_ [class_ "source-code"] $ renderCodeWithHyperLinks contents expr
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb

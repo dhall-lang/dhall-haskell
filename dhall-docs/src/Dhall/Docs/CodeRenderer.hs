@@ -6,7 +6,7 @@
     context-sensitive features such as jump-to-definition
 -}
 module Dhall.Docs.CodeRenderer
-    ( exprSrcToHtml
+    ( renderCodeWithHyperLinks
     , exprVoidToHtml
     , ExprType(..)
     ) where
@@ -97,8 +97,8 @@ renderImport (Import {importHashed = ImportHashed { importType }}) =
 --   the source code on HTML with jump-to-definition on URL imports. Use this
 --   to render the source code with the same structure (whitespaces, comments,
 --   language elements) as the source file
-exprSrcToHtml :: Text -> Expr Src Import -> Html ()
-exprSrcToHtml contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
+renderCodeWithHyperLinks :: Text -> Expr Src Import -> Html ()
+renderCodeWithHyperLinks contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) imports
   where
     imports = getImports expr
 
@@ -152,12 +152,12 @@ exprSrcToHtml contents expr = pre_ $ go (1, 1) (Data.Text.lines contents) import
 data ExprType = TypeAnnotation | AssertionExample
 
 -- | Renders an AST /fragment/ from the source file AST. Use this only for that
---   purpose. The difference between this and 'exprSrcToHtml' is because that
+--   purpose. The difference between this and 'renderCodeWithHyperLinks' is because that
 --   the extracted fragment's 'SourcePos's need to be re-generated to
 --   render them in a better way; just adding whitespace at the beginning of the
 --   first line won't render good results.
 exprVoidToHtml :: Dhall.Pretty.CharacterSet -> ExprType -> Expr Void Import -> Html ()
-exprVoidToHtml characterSet exprType expr = exprSrcToHtml formattedFile expr'
+exprVoidToHtml characterSet exprType expr = renderCodeWithHyperLinks formattedFile expr'
   where
     layout = case exprType of
         AssertionExample -> Dhall.Pretty.layout
