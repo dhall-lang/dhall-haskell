@@ -7,7 +7,7 @@
 -}
 module Dhall.Docs.CodeRenderer
     ( renderCodeWithHyperLinks
-    , exprVoidToHtml
+    , renderCodeSnippet
     , ExprType(..)
     ) where
 
@@ -156,8 +156,8 @@ data ExprType = TypeAnnotation | AssertionExample
 --   the extracted fragment's 'SourcePos's need to be re-generated to
 --   render them in a better way; just adding whitespace at the beginning of the
 --   first line won't render good results.
-exprVoidToHtml :: Dhall.Pretty.CharacterSet -> ExprType -> Expr Void Import -> Html ()
-exprVoidToHtml characterSet exprType expr = renderCodeWithHyperLinks formattedFile expr'
+renderCodeSnippet :: Dhall.Pretty.CharacterSet -> ExprType -> Expr Void Import -> Html ()
+renderCodeSnippet characterSet exprType expr = renderCodeWithHyperLinks formattedFile expr'
   where
     layout = case exprType of
         AssertionExample -> Dhall.Pretty.layout

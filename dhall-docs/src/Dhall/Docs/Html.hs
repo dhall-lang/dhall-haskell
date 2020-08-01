@@ -66,7 +66,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
                 Control.Monad.unless (null examples) $ do
                     h3_ "Examples"
                     div_ [class_ "source-code code-examples"] $
-                        mapM_ (exprVoidToHtml characterSet AssertionExample) examples
+                        mapM_ (renderCodeSnippet characterSet AssertionExample) examples
                 h3_ "Source"
                 div_ [class_ "source-code"] $ renderCodeWithHyperLinks contents expr
   where
@@ -105,7 +105,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
             a_ [href_ fileRef] $ toHtml itemText
             Data.Foldable.forM_ maybeType $ \typeExpr -> do
                 span_ [class_ "of-type-token"] ":"
-                span_ [class_ "dhall-type source-code"] $ exprVoidToHtml characterSet TypeAnnotation typeExpr
+                span_ [class_ "dhall-type source-code"] $ renderCodeSnippet characterSet TypeAnnotation typeExpr
 
 
     listDir :: Path Rel Dir -> Html ()
