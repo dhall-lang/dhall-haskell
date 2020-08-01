@@ -27,7 +27,7 @@ Executable dhall-to-nixpkgs
                      , mmorph                              < 1.2
                      , neat-interpolation                  < 0.6
                      , optparse-applicative >= 0.14.0.0 && < 0.16
-                     , prettyprinter        >= 1.5.1    && < 1.7
+                     , prettyprinter        >= 1.5.1    && < 1.8
                      , text                 >= 0.11.1.0 && < 1.3
                      , transformers         >= 0.2.0.0  && < 0.6
                      , turtle                              < 1.6
