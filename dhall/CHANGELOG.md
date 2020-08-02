@@ -30,8 +30,15 @@
       correct directory
 * Performance improvements
     * [#1879](https://github.com/dhall-lang/dhall-haskell/pull/1879)
-* Fixes to haddocks
+* Standards compliance
+    * [#1953](https://github.com/dhall-lang/dhall-haskell/pull/1953)
+    * [#1954](https://github.com/dhall-lang/dhall-haskell/pull/1954)
+    * [#1956](https://github.com/dhall-lang/dhall-haskell/pull/1956)
+    * [#1957](https://github.com/dhall-lang/dhall-haskell/pull/1957)
+    * [#1958](https://github.com/dhall-lang/dhall-haskell/pull/1958)
+* Fixes and improvements to haddocks
     * [#1881](https://github.com/dhall-lang/dhall-haskell/pull/1881)
+    * [#1955](https://github.com/dhall-lang/dhall-haskell/pull/1955)
 
 1.33.1
 
