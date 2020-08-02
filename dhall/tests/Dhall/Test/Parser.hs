@@ -124,11 +124,7 @@ notesInLetInLet =
 shouldParse :: Text -> TestTree
 shouldParse path = do
     let expectedFailures =
-            [ parseDirectory </> "success/unit/With"
-            , parseDirectory </> "success/unit/WithMultiple"
-            , parseDirectory </> "success/unit/WithPrecedence1"
-            , parseDirectory </> "success/unit/WithPrecedence2"
-            , parseDirectory </> "success/unit/WithPrecedence3"
+            [ parseDirectory </> "success/unit/WithMultiple"
             ]
 
     let pathString = Text.unpack path

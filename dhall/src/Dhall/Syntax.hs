@@ -1267,13 +1267,10 @@ desugarWith = Optics.rewriteOf subExpressions rewrite
   where
     rewrite e@(With record (key :| []) value) =
         Just
-            (Let
-                (makeBinding "_" record)
-                (Prefer
-                    (PreferFromWith e)
-                    "_"
-                    (RecordLit [ (key, makeRecordField (shift 1 "_" value)) ])
-                )
+            (Prefer
+                (PreferFromWith e)
+                record
+                (RecordLit [ (key, makeRecordField value) ])
             )
     rewrite e@(With record (key0 :| key1 : keys) value) =
         Just
