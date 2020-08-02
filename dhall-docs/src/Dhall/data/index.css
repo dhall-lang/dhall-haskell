@@ -156,23 +156,8 @@ h2.doc-title {
     color: #333333;
 }
 
-.source-code span.dhall-keyword {
-    color: #0000FF;
-    font-weight: bold;
-}
-
-.source-code span.dhall-syntax {
-    color: #AF00DB;
-}
-
-.source-code span.dhall-literal {
-    color: #098658;
-    font-weight: bold;
-}
-
-.source-code span.dhall-builtin {
-    color: #267F99;
-    font-weight: bold;
+.source-code a {
+    font-family: 'Fira Code', monospace;
 }
 
 .dhall-type {

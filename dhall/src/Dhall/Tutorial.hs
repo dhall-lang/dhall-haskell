@@ -3,6 +3,10 @@
 {-| Dhall is a programming language specialized for configuration files.  This
     module contains a tutorial explaining how to author configuration files
     using this language
+
+    You might also be interested in the
+    <https://docs.dhall-lang.org/tutorials/Language-Tour.html Language Tour>, a
+    Haskell-agnostic tour of Dhall's language features.
 -}
 module Dhall.Tutorial (
     -- * Introduction
@@ -443,15 +447,18 @@ import Dhall
 --
 -- Every list can be followed by the type of the list.  The type annotation is
 -- required for empty lists but optional for non-empty lists.  You will get a
--- type error if you provide an empty list without a type annotation:
+-- parse error if you provide an empty list without a type annotation:
 --
 -- >>> input auto "[]" :: IO (Vector Natural)
 -- *** Exception:
--- ...Error...: An empty list requires a type annotation
+-- ...Error...: Invalid input
 -- ...
--- 1│ []
+-- (input):1:3:
+--   |
+-- 1 | []
+--   |   ^
+-- Empty list literal without annotation
 -- ...
--- (input):1:1
 --
 -- Also, list elements must all have the same type.  You will get an error if
 -- you try to store elements of different types in a list:
@@ -2283,6 +2290,11 @@ import Dhall
 -- you can report them at:
 --
 -- <https://github.com/dhall-lang/dhall-haskell/issues>
+--
+-- Also, you might want to check out the
+-- <https://docs.dhall-lang.org/tutorials/Language-Tour.html Language Tour>, a
+-- more comprehensive tour of Dhall which may cover features missing from this
+-- Haskell tutorial.
 --
 -- You can also request features, support, or documentation improvements on the
 -- above issue tracker.

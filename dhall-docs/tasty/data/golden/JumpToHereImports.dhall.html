@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/NonDhallDocsCommentAfterValid.dhall</title
+    >/JumpToHereImports.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,27 +25,34 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >NonDhallDocsCommentAfterValid.dhall</span></h2
-      ><a data-path="/NonDhallDocsCommentAfterValid.dhall"
-          class="copy-to-clipboard"
+        >JumpToHereImports.dhall</span></h2
+      ><a data-path="/JumpToHereImports.dhall" class="copy-to-clipboard"
         ><i
           ><small
           >Copy path to clipboard</small></i></a
       ><br
       /><div class="doc-contents"
-        ><p
-          >This example shows that you can place non-dhall comments after a <em
-          >valid</em>
-dhall comment</p>
-</div
-      ><h3
+      /><h3
       >Source</h3
       ><div class="source-code"
         ><pre
-          >{-|<br
-          />    This example shows that you can place non-dhall comments after a _valid_<br
-          />    dhall comment -}<br
-          />{-<br
-          />    bar -}<br
-          />-- qux<br
-          />{=}<br/></pre></div></div></body></html>
+          >let relatives =<br
+          />    [ <a href="./IndexesExample.dhall.html"
+          >./IndexesExample.dhall</a
+          ><br
+          />    , <a href="./MarkdownExample.dhall.html"
+          >./MarkdownExample.dhall</a
+          ><br
+          />    , <a href="./NoDoc.dhall.html"
+          >./NoDoc.dhall</a
+          ><br
+          />    ]<br
+          /><br
+          />let moreRelatives =<br
+          />    [ <a href="./OrdinaryAnnotation.dhall.html"
+          >./OrdinaryAnnotation.dhall</a
+          > ,    <a href="./TwoAnnotations.dhall.html"
+          >./TwoAnnotations.dhall</a
+          > ]<br
+          /><br
+          />in relatives # moreRelatives<br/></pre></div></div></body></html>

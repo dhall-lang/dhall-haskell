@@ -471,7 +471,7 @@ shouldShowCorrectErrorForInvalidDecoderInUnion =
       Left (Dhall.DhallErrors errs) -> case errs of
         (err :| []) -> case err of
           Dhall.TypeMismatch {} -> fail "The extraction using an invalid decoder failed with a type mismatch"
-          Dhall.ExpectedTypeError _ -> fail "An error occured while determining the expected Dhall type"
+          Dhall.ExpectedTypeError _ -> fail "An error occurred while determining the expected Dhall type"
           Dhall.ExtractError extractError -> assertEqual assertMsg expectedMsg extractError
         _ -> fail "The extraction using an invalid decoder failed with multiple errors"
       Right _ -> fail "The extraction using an invalid decoder succeeded"

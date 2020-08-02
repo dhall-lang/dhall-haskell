@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/NonDhallDocsCommentAfterValid.dhall</title
+    >/JumpToUrls.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,27 +25,30 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >NonDhallDocsCommentAfterValid.dhall</span></h2
-      ><a data-path="/NonDhallDocsCommentAfterValid.dhall"
-          class="copy-to-clipboard"
+        >JumpToUrls.dhall</span></h2
+      ><a data-path="/JumpToUrls.dhall" class="copy-to-clipboard"
         ><i
           ><small
           >Copy path to clipboard</small></i></a
       ><br
       /><div class="doc-contents"
         ><p
-          >This example shows that you can place non-dhall comments after a <em
-          >valid</em>
-dhall comment</p>
+          >Example taken from <a href="https://docs.dhall-lang.org/tutorials/Language-Tour.html#prelude"
+          >dhall documentation</a></p>
 </div
       ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
           >{-|<br
-          />    This example shows that you can place non-dhall comments after a _valid_<br
-          />    dhall comment -}<br
-          />{-<br
-          />    bar -}<br
-          />-- qux<br
-          />{=}<br/></pre></div></div></body></html>
+          />Example taken from [dhall documentation](https://docs.dhall-lang.org/tutorials/Language-Tour.html#prelude)<br
+          />-}<br
+          /><br
+          /><br
+          />let List/generate = <a href="https://prelude.dhall-lang.org/v15.0.0/List/generate"
+                                   target="_blank"
+          >https://prelude.dhall-lang.org/v15.0.0/List/generate</a
+          ><br
+          /><br
+          />in List/generate 10 Text (\(n : Natural) -&gt; &quot;Result #${Natural/show n}&quot;)<br
+          /><br/></pre></div></div></body></html>

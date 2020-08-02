@@ -49,195 +49,22 @@
       >Examples</h3
       ><div class="source-code code-examples"
         ><pre
-          ><span class="dhall-label"
-          >my-even</span
-          > <span class="dhall-literal"
-          >1</span
-          > <span class="dhall-operator"
-          >≡</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >even</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >odd</span
-          > <span class="dhall-syntax"
-          >&gt;</span
-          ><span class="dhall-syntax"
-          >.</span
-          ><span class="dhall-label"
-          >odd</span></pre
+          >my-even 1 ≡ &lt; even | odd &gt;.odd<br/></pre
         ><pre
-          ><span class="dhall-label"
-          >my-even</span
-          > <span class="dhall-literal"
-          >2</span
-          > <span class="dhall-operator"
-          >≡</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >even</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >odd</span
-          > <span class="dhall-syntax"
-          >&gt;</span
-          ><span class="dhall-syntax"
-          >.</span
-          ><span class="dhall-label"
-          >even</span></pre></div
+          >my-even 2 ≡ &lt; even | odd &gt;.even<br/></pre></div
       ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
-          ><span class="dhall-keyword"
-          >let</span
-          > <span class="dhall-label"
-          >my-even</span
-          ><br
-          />    <span class="dhall-syntax"
-          >:</span
-          > <span class="dhall-builtin"
-          >Natural</span
-          > <span class="dhall-syntax"
-          >→</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >even</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >odd</span
-          > <span class="dhall-syntax"
-          >&gt;</span
-          ><br
-          />    <span class="dhall-syntax"
-          >=</span
-          > <span class="dhall-syntax"
-          >λ</span
-          ><span class="dhall-syntax"
-          >(</span
-          ><span class="dhall-label"
-          >n</span
-          > <span class="dhall-syntax"
-          >:</span
-          > <span class="dhall-builtin"
-          >Natural</span
-          ><span class="dhall-syntax"
-          >)</span
-          > <span class="dhall-syntax"
-          >→</span
-          ><br
-          />        <span class="dhall-keyword"
-          >if</span
-          > <span class="dhall-builtin"
-          >Natural/even</span
-          > <span class="dhall-label"
-          >n</span
-          > <span class="dhall-keyword"
-          >then</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >even</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >odd</span
-          > <span class="dhall-syntax"
-          >&gt;</span
-          ><span class="dhall-syntax"
-          >.</span
-          ><span class="dhall-label"
-          >even</span
-          > <span class="dhall-keyword"
-          >else</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >even</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >odd</span
-          > <span class="dhall-syntax"
-          >&gt;</span
-          ><span class="dhall-syntax"
-          >.</span
-          ><span class="dhall-label"
-          >odd</span
-          ><br
+          >{-<br
+          />Check if a natural is even or not returning an union data-type<br
+          />-}<br
+          />let my-even<br
+          />    : Natural → &lt; even | odd &gt;<br
+          />    = λ(n : Natural) →<br
+          />        if Natural/even n then &lt; even | odd&gt;.even else &lt; even | odd &gt;.odd<br
           /><br
-          /><span class="dhall-keyword"
-          >let</span
-          > <span class="dhall-label"
-          >example0</span
-          > <span class="dhall-syntax"
-          >=</span
-          > <span class="dhall-keyword"
-          >assert</span
-          > <span class="dhall-syntax"
-          >:</span
-          > <span class="dhall-label"
-          >my-even</span
-          > <span class="dhall-literal"
-          >1</span
-          > <span class="dhall-operator"
-          >≡</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >even</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >odd</span
-          > <span class="dhall-syntax"
-          >&gt;</span
-          ><span class="dhall-syntax"
-          >.</span
-          ><span class="dhall-label"
-          >odd</span
-          ><br
+          />let example0 = assert : my-even 1 === &lt;even | odd&gt;.odd<br
+          />let example0 = assert : my-even 2 === &lt;even | odd&gt;.even<br
           /><br
-          /><span class="dhall-keyword"
-          >let</span
-          > <span class="dhall-label"
-          >example0</span
-          > <span class="dhall-syntax"
-          >=</span
-          > <span class="dhall-keyword"
-          >assert</span
-          > <span class="dhall-syntax"
-          >:</span
-          > <span class="dhall-label"
-          >my-even</span
-          > <span class="dhall-literal"
-          >2</span
-          > <span class="dhall-operator"
-          >≡</span
-          > <span class="dhall-syntax"
-          >&lt;</span
-          > <span class="dhall-label"
-          >even</span
-          > <span class="dhall-syntax"
-          >|</span
-          > <span class="dhall-label"
-          >odd</span
-          > <span class="dhall-syntax"
-          >&gt;</span
-          ><span class="dhall-syntax"
-          >.</span
-          ><span class="dhall-label"
-          >even</span
-          ><br
-          /><br
-          /><span class="dhall-keyword"
-          >in</span
-          >  <span class="dhall-label"
-          >my-even</span></pre></div></div></body></html>
+          />in my-even<br/></pre></div></div></body></html>

@@ -123,11 +123,7 @@ notesInLetInLet =
 
 shouldParse :: Text -> TestTree
 shouldParse path = do
-    let expectedFailures =
-            -- This is a bug created by a parsing performance
-            -- improvement
-            [ parseDirectory </> "success/unit/MergeParenAnnotation"
-            ]
+    let expectedFailures = []
 
     let pathString = Text.unpack path
 
@@ -156,18 +152,7 @@ shouldParse path = do
 
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
-    let expectedFailures =
-            [ -- For parsing performance reasons the implementation
-              -- treats a missing type annotation on an empty list as
-              -- as a type-checking failure instead of a parse failure,
-              -- but this might be fixable.
-              parseDirectory </> "failure/unit/ListLitEmptyMissingAnnotation.dhall"
-            , parseDirectory </> "failure/unit/ListLitEmptyAnnotation.dhall"
-
-              -- The same performance improvements also broke the
-              -- precedence of parsing empty list literals
-            , parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
-            ]
+    let expectedFailures = []
 
     let pathString = Text.unpack path
 

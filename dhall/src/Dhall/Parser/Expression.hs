@@ -246,8 +246,8 @@ parsers embedded = Parsers {..}
 
             let alternative5A = do
                     case a0Info of
-                        ApplicationExpr -> empty
-                        ImportExpr      -> return ()
+                        ImportExpr -> return ()
+                        _          -> empty
 
                     bs <- some (do
                         try (whitespace *> _with *> nonemptyWhitespace)
@@ -281,17 +281,31 @@ parsers embedded = Parsers {..}
                     let alternative5B1 = do
                             _colon
                             nonemptyWhitespace
-                            b <- expression
+                            case (shallowDenote a, a0Info) of
+                                (ListLit Nothing [], _) -> do
+                                    b <- applicationExpression
+
+                                    return (ListLit (Just b) [])
+                                (Merge c d Nothing, NakedMergeOrSomeOrToMap) -> do
+                                    b <- applicationExpression
+
+                                    return (Merge c d (Just b))
+                                (ToMap c Nothing, NakedMergeOrSomeOrToMap) -> do
+                                    b <- applicationExpression
+
+                                    return (ToMap c (Just b))
+                                _ -> do
+                                    b <- expression
+
+                                    return (Annot a b)
+
+                    let alternative5B2 =
                             case shallowDenote a of
                                 ListLit Nothing [] ->
-                                    return (ListLit (Just b) [])
-                                Merge c d Nothing ->
-                                    return (Merge c d (Just b))
-                                ToMap c Nothing ->
-                                    return (ToMap c (Just b))
-                                _ -> return (Annot a b)
+                                    fail "Empty list literal without annotation"
+                                _ -> pure a
 
-                    alternative5B0 <|> alternative5B1 <|> pure a
+                    alternative5B0 <|> alternative5B1 <|> alternative5B2
 
             alternative5A <|> alternative5B
 
@@ -354,19 +368,26 @@ parsers embedded = Parsers {..}
     applicationExpressionWithInfo :: Parser (ApplicationExprInfo, Expr Src a)
     applicationExpressionWithInfo = do
             let alternative0 = do
-                    _ <- try (_Some <* nonemptyWhitespace)
+                    try (_merge *> nonemptyWhitespace)
+
+                    a <- importExpression_ <* nonemptyWhitespace
+
+                    return (\b -> Merge a b Nothing, Just "second argument to ❰merge❱")
+
+            let alternative1 = do
+                    try (_Some *> nonemptyWhitespace)
 
                     return (Some, Just "argument to ❰Some❱")
 
-            let alternative1 = do
-                    _ <- try (_toMap *> nonemptyWhitespace)
+            let alternative2 = do
+                    try (_toMap *> nonemptyWhitespace)
 
                     return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
 
-            let alternative2 =
+            let alternative3 =
                     return (id, Nothing)
 
-            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2
+            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2 <|> alternative3
 
             let adapt parser =
                     case maybeMessage of
@@ -384,6 +405,7 @@ parsers embedded = Parsers {..}
 
             let info =
                     case (maybeMessage, bs) of
+                        (Just _ , []) -> NakedMergeOrSomeOrToMap
                         (Nothing, []) -> ImportExpr
                         _             -> ApplicationExpr
 
@@ -445,7 +467,6 @@ parsers embedded = Parsers {..}
                     , alternative04
                     , unionType
                     , listLiteral
-                    , alternative07
                     , alternative37
                     , alternative09
                     , builtin
@@ -487,13 +508,6 @@ parsers embedded = Parsers {..}
                 _closeBrace
 
                 return a ) <?> "literal"
-
-            alternative07 = do
-                try (_merge *> nonemptyWhitespace)
-                a <- importExpression_
-                nonemptyWhitespace
-                b <- importExpression_ <?> "second argument to ❰merge❱"
-                return (Merge a b Nothing)
 
             alternative09 = do
                 a <- try doubleInfinity
@@ -1050,10 +1064,12 @@ import_ = (do
 
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
--- | 'ApplicationExprInfo' distinguishes import expressions from /proper/
--- application expressions that aren't import expressions.
+-- | 'ApplicationExprInfo' distinguishes certain subtypes of application
+-- expressions.
 data ApplicationExprInfo
-    = ImportExpr
+    = NakedMergeOrSomeOrToMap
+    -- ^ @merge x y@, @Some x@ or @toMap x@, unparenthesized.
+    | ImportExpr
     -- ^ An import expression.
     | ApplicationExpr
-    -- ^ A proper application expression.
+    -- ^ Any other application expression.
