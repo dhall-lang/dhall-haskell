@@ -7,7 +7,7 @@
       and indentation rules as multi-line strings in Dhall
     * Both block comments and multiple single-line comments are supported
 * [Jump to imports](https://github.com/dhall-lang/dhall-haskell/pull/1959)
-    * The documentation will now generate links for imports found within the
+    * The documentation will now generate links for relative and absolute imports found within the
       rendered source code
 * [Add support for non-`let` type annotations](https://github.com/dhall-lang/dhall-haskell/pull/1928)
     * `dhall-docs` can now also extract the type of a module from a type
