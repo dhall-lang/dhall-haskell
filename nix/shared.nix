@@ -503,8 +503,20 @@ in
     image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
-    generate-dhall-docs    = pkgs.callPackage ./dhall-docs-gen.nix {
+    prelude-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
       inherit dhall-docs;
+      src = pkgs.fetchurl {
+        url = "https://github.com/german1608/dhall-lang/archive/feat/add-dhall-extensions-to-prelude.zip";
+        sha256 = "ade9544719a26b7f3bf008572a794cb3878f284429d425a6c6a2e31c61189619";
+      };
+      packageDir = "./Prelude";
+      name = "prelude-dhall-docs";
+    };
+
+    test-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
+      inherit dhall-docs;
+      src = ../dhall-docs/tasty/data/package;
+      name = "test-dhall-docs";
     };
 
     test-dhall =
