@@ -71,6 +71,7 @@ in
     inherit (shared)
       tarball-dhall
       tarball-dhall-bash
+      tarball-dhall-docs
       tarball-dhall-json
       tarball-dhall-lsp-server
       tarball-dhall-nix
@@ -80,6 +81,7 @@ in
 
     linux-dhall            = shared_linux.possibly-static.dhall;
     linux-dhall-bash       = shared_linux.possibly-static.dhall-bash;
+    linux-dhall-docs       = shared_linux.possibly-static.dhall-docs;
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
@@ -89,6 +91,7 @@ in
     inherit (shared_linux)
       image-dhall
       image-dhall-bash
+      image-dhall-docs
       image-dhall-json
       image-dhall-lsp-server
       image-dhall-nix
