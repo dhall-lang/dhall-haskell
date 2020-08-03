@@ -1,3 +1,45 @@
+1.34.0
+
+* [Supports version 17.1.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v17.1.0)
+    * [Add support for trailing commas](https://github.com/dhall-lang/dhall-haskell/pull/1885)
+* BREAKING CHANGE to the API: [Support prefix comments on record key-value pairs](https://github.com/dhall-lang/dhall-haskell/pull/1908)
+    * The Dhall AST (i.e. `Expr`) now preserves some comments for record types
+      and record literals
+    * The impact of this change is that you will need to add
+      `Dhall.Syntax.makeRecordField` or `Dhall.Syntax.recordFieldValue` in a few
+      places wherever your Haskell assembles or disassembles record expressions
+    * The motivation of this change is two-fold:
+        * To eventually enable `dhall-docs` support for rendering record
+          comments as documentation
+        * To eventually enable support for preserving record-related comments
+          when formatting Dhall code
+* BUG FIX: [Fix `with` expressions to permit functions on their left-hand side](https://github.com/dhall-lang/dhall-haskell/pull/1897)
+    * This was a case of the Haskell implementation not being compliant with the
+      standard grammar
+* [Drop support for GHC 8.2](https://github.com/dhall-lang/dhall-haskell/pull/1949)
+* [Add a new `dhall rewrite-with-schemas` command](https://github.com/dhall-lang/dhall-haskell/pull/1902)
+    * You can now simplify a Dhall expression using a schema record (e.g. a
+      `./schemas.dhall` record that a package might provide)
+    * This simplification replaces large anonymous records with an
+      equivalent use of a record completion when possible
+* [Add `--transitive` flag to `dhall {format,lint,freeze}](https://github.com/dhall-lang/dhall-haskell/pull/1880)
+    * This flag lets you format/lint/freeze a file and all of its transitive
+      dependencies that are reachable via relative file imports
+* [Move `man/dhall.1` to `data-files`](https://github.com/dhall-lang/dhall-haskell/pull/1921)
+    * This ensures that Cabal will install `dhall`'s `man` pages in the
+      correct directory
+* Performance improvements
+    * [#1879](https://github.com/dhall-lang/dhall-haskell/pull/1879)
+* Standards compliance
+    * [#1953](https://github.com/dhall-lang/dhall-haskell/pull/1953)
+    * [#1954](https://github.com/dhall-lang/dhall-haskell/pull/1954)
+    * [#1956](https://github.com/dhall-lang/dhall-haskell/pull/1956)
+    * [#1957](https://github.com/dhall-lang/dhall-haskell/pull/1957)
+    * [#1958](https://github.com/dhall-lang/dhall-haskell/pull/1958)
+* Fixes and improvements to haddocks
+    * [#1881](https://github.com/dhall-lang/dhall-haskell/pull/1881)
+    * [#1955](https://github.com/dhall-lang/dhall-haskell/pull/1955)
+
 1.33.1
 
 * [Multi-line REPL / support `repline-0.4.0.0`](https://github.com/dhall-lang/dhall-haskell/pull/1867)

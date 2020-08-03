@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.33.1
+Version: 1.34.0
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.4.3, GHC == 8.6.1
@@ -38,11 +38,14 @@ Extra-Source-Files:
     dhall-lang/Prelude/Bool/or
     dhall-lang/Prelude/Bool/package.dhall
     dhall-lang/Prelude/Bool/show
+    dhall-lang/Prelude/Bool/*.dhall
     dhall-lang/Prelude/Double/package.dhall
     dhall-lang/Prelude/Double/show
+    dhall-lang/Prelude/Double/*.dhall
     dhall-lang/Prelude/Function/compose
     dhall-lang/Prelude/Function/identity
     dhall-lang/Prelude/Function/package.dhall
+    dhall-lang/Prelude/Function/*.dhall
     dhall-lang/Prelude/Integer/abs
     dhall-lang/Prelude/Integer/add
     dhall-lang/Prelude/Integer/clamp
@@ -62,6 +65,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Integer/subtract
     dhall-lang/Prelude/Integer/toDouble
     dhall-lang/Prelude/Integer/toNatural
+    dhall-lang/Prelude/Integer/*.dhall
     dhall-lang/Prelude/JSON/Format
     dhall-lang/Prelude/JSON/Nesting
     dhall-lang/Prelude/JSON/Tagged
@@ -86,6 +90,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/string
     dhall-lang/Prelude/JSON/tagInline
     dhall-lang/Prelude/JSON/tagNested
+    dhall-lang/Prelude/JSON/*.dhall
     dhall-lang/Prelude/List/all
     dhall-lang/Prelude/List/any
     dhall-lang/Prelude/List/build
@@ -114,8 +119,10 @@ Extra-Source-Files:
     dhall-lang/Prelude/List/unpackOptionals
     dhall-lang/Prelude/List/unzip
     dhall-lang/Prelude/List/zip
+    dhall-lang/Prelude/List/*.dhall
     dhall-lang/Prelude/Location/Type
     dhall-lang/Prelude/Location/package.dhall
+    dhall-lang/Prelude/Location/*.dhall
     dhall-lang/Prelude/Map/Entry
     dhall-lang/Prelude/Map/Type
     dhall-lang/Prelude/Map/empty
@@ -125,6 +132,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Map/map
     dhall-lang/Prelude/Map/package.dhall
     dhall-lang/Prelude/Map/values
+    dhall-lang/Prelude/Map/*.dhall
     dhall-lang/Prelude/Monoid
     dhall-lang/Prelude/Natural/build
     dhall-lang/Prelude/Natural/enumerate
@@ -149,6 +157,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Natural/sum
     dhall-lang/Prelude/Natural/toDouble
     dhall-lang/Prelude/Natural/toInteger
+    dhall-lang/Prelude/Natural/*.dhall
     dhall-lang/Prelude/Optional/all
     dhall-lang/Prelude/Optional/any
     dhall-lang/Prelude/Optional/build
@@ -164,6 +173,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Optional/package.dhall
     dhall-lang/Prelude/Optional/toList
     dhall-lang/Prelude/Optional/unzip
+    dhall-lang/Prelude/Optional/*.dhall
     dhall-lang/Prelude/Text/concat
     dhall-lang/Prelude/Text/concatMap
     dhall-lang/Prelude/Text/concatMapSep
@@ -174,6 +184,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/replicate
     dhall-lang/Prelude/Text/show
     dhall-lang/Prelude/Text/spaces
+    dhall-lang/Prelude/Text/*.dhall
     dhall-lang/Prelude/XML/Type
     dhall-lang/Prelude/XML/attribute
     dhall-lang/Prelude/XML/element
@@ -182,6 +193,8 @@ Extra-Source-Files:
     dhall-lang/Prelude/XML/package.dhall
     dhall-lang/Prelude/XML/render
     dhall-lang/Prelude/XML/text
+    dhall-lang/Prelude/XML/*.dhall
+    dhall-lang/Prelude/*.dhall
     dhall-lang/Prelude/package.dhall
     dhall-lang/tests/alpha-normalization/success/unit/*.dhall
     dhall-lang/tests/alpha-normalization/success/regression/*.dhall
