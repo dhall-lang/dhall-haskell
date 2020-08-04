@@ -161,7 +161,7 @@ data Mode
           }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
-    | Text { file :: Input, outputFile :: Output }
+    | Text { file :: Input, output :: Output }
     | DirectoryTree { file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
@@ -902,7 +902,7 @@ command (Options {..}) = do
 
             case normalizedExpression of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
-                    let write = case outputFile of
+                    let write = case output of
                           StandardOutput -> Data.Text.IO.putStr
                           OutputFile file_ -> Data.Text.IO.writeFile file_
                     in write text
