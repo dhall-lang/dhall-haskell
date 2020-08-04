@@ -1,8 +1,8 @@
 {-| Utilities to interact with the dhall-docs home directory
 -}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# LANGUAGE QuasiQuotes         #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE QuasiQuotes  #-}
 
 
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
@@ -59,7 +59,7 @@ makeHashForDirectory dir = do
 
     renamedFilePairs <- mapM hashFileAndRename files
 
-    inMemoryTarBytes <- Data.ByteString.Lazy.toStrict . Tar.write . map setTimeToZero
+    !inMemoryTarBytes <- Data.ByteString.Lazy.toStrict . Tar.write . map setTimeToZero
                 <$> Tar.pack (Path.fromAbsDir dir) (map Path.fromRelFile renamedFilePairs)
 
     Control.Monad.forM_ renamedFilePairs $ \hashedRelFile ->
