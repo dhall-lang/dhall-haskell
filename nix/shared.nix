@@ -503,8 +503,16 @@ in
     image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
-    generate-dhall-docs    = pkgs.callPackage ./dhall-docs-gen.nix {
+    prelude-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
       inherit dhall-docs;
+      src = ../dhall/dhall-lang/Prelude;
+      name = "prelude-dhall-docs";
+    };
+
+    test-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
+      inherit dhall-docs;
+      src = ../dhall-docs/tasty/data/package;
+      name = "test-dhall-docs";
     };
 
     test-dhall =
