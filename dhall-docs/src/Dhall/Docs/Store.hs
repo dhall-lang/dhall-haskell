@@ -1,19 +1,23 @@
 {-| Utilities to interact with the dhall-docs home directory
 -}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes         #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
 
-import Dhall.Crypto (SHA256Digest (..), sha256Hash)
-import Path         (Abs, Dir, Path, Rel)
+import Dhall.Crypto (SHA256Digest (..))
+import Path         (Abs, Dir, Path, Rel, (</>))
 import Path.IO      (XdgDirectory (..))
 
 import qualified Codec.Archive.Tar       as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
+import qualified Control.Monad
+import qualified Data.ByteString.Char8   as ByteString.Char8
 import qualified Data.ByteString.Lazy
 import qualified Data.List
+import qualified Dhall.Crypto            as Crypto
 import qualified Path
 import qualified Path.IO
 
@@ -37,12 +41,28 @@ getDocsHomeDirectory = do
 -}
 makeHashForDirectory :: Path Abs Dir -> IO SHA256Digest
 makeHashForDirectory dir = do
-    -- Builds a map so key order is preserved between several calls
-    files <- Data.List.sort . map Path.fromRelFile . snd
-            <$> Path.IO.listDirRecurRel dir
-
     let setTimeToZero entry = entry{Tar.Entry.entryTime = 0}
-    inMemoryTarBytes <- Data.ByteString.Lazy.toStrict . Tar.write . map setTimeToZero
-                <$> Tar.pack (Path.fromAbsDir dir) files
 
-    return $ sha256Hash inMemoryTarBytes
+    let hashFileAndRename relFile =
+            do
+                let hashFileName = Crypto.sha256Hash . ByteString.Char8.pack . Path.fromRelFile
+                let hash = hashFileName relFile
+                let hashAsString = Crypto.toString hash
+
+                hashedRelFile <- Path.parseRelFile hashAsString
+                Path.IO.copyFile (dir </> relFile) (dir </> hashedRelFile)
+
+                return hashedRelFile
+
+
+    files <- Data.List.sort . snd <$> Path.IO.listDirRecurRel dir
+
+    renamedFilePairs <- mapM hashFileAndRename files
+
+    inMemoryTarBytes <- Data.ByteString.Lazy.toStrict . Tar.write . map setTimeToZero
+                <$> Tar.pack (Path.fromAbsDir dir) (map Path.fromRelFile renamedFilePairs)
+
+    Control.Monad.forM_ renamedFilePairs $ \hashedRelFile ->
+        Path.IO.removeFile (dir </> hashedRelFile)
+
+    return $ Crypto.sha256Hash inMemoryTarBytes
