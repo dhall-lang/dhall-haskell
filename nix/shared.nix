@@ -505,11 +505,7 @@ in
 
     prelude-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
       inherit dhall-docs;
-      src = pkgs.fetchurl {
-        url = "https://github.com/dhall-lang/dhall-lang/archive/ccb9f5d54b0ecba05a6493e84442ce445e411e9e.zip";
-        sha256 = "a003e9df45c4bc167d8b65201b0609a7b840cb929c966e7510131b5e50d6bfbe";
-      };
-      packageDir = "./Prelude";
+      src = ../dhall/dhall-lang/Prelude;
       name = "prelude-dhall-docs";
     };
 

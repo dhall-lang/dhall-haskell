@@ -1,4 +1,4 @@
-{ stdenv, dhall-docs, unzip, fetchurl, tree, src, packageDir ? "./", name }:
+{ stdenv, dhall-docs, unzip, fetchurl, tree, src, name }:
 
 stdenv.mkDerivation rec {
   inherit src name;
@@ -8,7 +8,7 @@ stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/nix-support
     export XDG_DATA_HOME=$out/
-    dhall-docs --input ${packageDir} --output-link ./dhall-docs > $out/dhall-docs.log
+    dhall-docs --input ./ --output-link ./dhall-docs > $out/dhall-docs.log
     htmlDir=$(readlink -f ./dhall-docs)
     tree $XDG_DATA_HOME/dhall-docs > $out/dhall-docs.log
     echo "report html $htmlDir" >> $out/nix-support/hydra-build-products
