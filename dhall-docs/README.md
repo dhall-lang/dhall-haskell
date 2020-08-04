@@ -24,8 +24,11 @@ file and outputs an HTML documentation of it.
 * Extracts the type of each Dhall file from the source code and renders it
   in the indexes.
 * Renders the source code in each Dhall file's documentation.
+* Jump-to-definition on imports and let-bindings
 
-To see a demo, visit the documentation for the [`Dhall Prelude`](https://hydra.dhall-lang.org/job/dhall-haskell/master/generate-dhall-docs/latest/download/1/docs).
+To see a demo, visit the documentation for the
+[`Dhall Prelude`](https://hydra.dhall-lang.org/job/dhall-haskell/master/generate-dhall-docs/latest/download/1/docs).
+You can also check the [tests](./tasty/data/package/) folder for further examples
 
 ## Usage
 

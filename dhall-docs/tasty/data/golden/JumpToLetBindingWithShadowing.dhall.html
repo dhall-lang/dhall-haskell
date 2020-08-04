@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/JumpToHereImports.dhall</title
+    >/JumpToLetBindingWithShadowing.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,43 +25,43 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >JumpToHereImports.dhall</span></h2
-      ><a data-path="/JumpToHereImports.dhall" class="copy-to-clipboard"
+        >JumpToLetBindingWithShadowing.dhall</span></h2
+      ><a data-path="/JumpToLetBindingWithShadowing.dhall"
+          class="copy-to-clipboard"
         ><i
           ><small
           >Copy path to clipboard</small></i></a
       ><br
       /><div class="doc-contents"
-      /><h3
+        ><p
+          >On this example, the first declaration of variable <code
+          >a</code
+          > is shadowed with the
+later declaration. The jump-to-definintion on the usage of <code
+          >a</code>
+should not highlight the first declaration, and interacting with the first
+declaration should not change the others</p>
+</div
+      ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
-          >let <span id="var1-5" data-variable="var1-5" class="variable-decl"
-          >relatives</span
-          > =<br
-          />    [ <a href="./IndexesExample.dhall.html"
-          >./IndexesExample.dhall</a
-          ><br
-          />    , <a href="./MarkdownExample.dhall.html"
-          >./MarkdownExample.dhall</a
-          ><br
-          />    , <a href="./NoDoc.dhall.html"
-          >./NoDoc.dhall</a
-          ><br
-          />    ]<br
-          /><br
+          >{-|<br
+          />On this example, the first declaration of variable `a` is shadowed with the<br
+          />later declaration. The jump-to-definintion on the usage of `a`<br
+          />should not highlight the first declaration, and interacting with the first<br
+          />declaration should not change the others<br
+          />-}<br
           />let <span id="var7-5" data-variable="var7-5"
                       class="variable-decl"
-          >moreRelatives</span
-          > =<br
-          />    [ <a href="./OrdinaryAnnotation.dhall.html"
-          >./OrdinaryAnnotation.dhall</a
-          > ,    <a href="./TwoAnnotations.dhall.html"
-          >./TwoAnnotations.dhall</a
-          > ]<br
+          >a</span
+          > = 1<br
           /><br
-          />in <a href="#var1-5" data-variable="var1-5" class="variable-use"
-          >relatives</a
-          > # <a href="#var7-5" data-variable="var7-5" class="variable-use"
-          >moreRelatives</a
+          />let <span id="var9-5" data-variable="var9-5"
+                      class="variable-decl"
+          >a</span
+          > = 2<br
+          /><br
+          />in <a href="#var9-5" data-variable="var9-5" class="variable-use"
+          >a</a
           ><br/></pre></div></div></body></html>

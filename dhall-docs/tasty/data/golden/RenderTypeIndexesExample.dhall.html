@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/JumpToHereImports.dhall</title
+    >/RenderTypeIndexesExample.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,43 +25,37 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >JumpToHereImports.dhall</span></h2
-      ><a data-path="/JumpToHereImports.dhall" class="copy-to-clipboard"
+        >RenderTypeIndexesExample.dhall</span></h2
+      ><a data-path="/RenderTypeIndexesExample.dhall"
+          class="copy-to-clipboard"
         ><i
           ><small
           >Copy path to clipboard</small></i></a
       ><br
       /><div class="doc-contents"
-      /><h3
+        ><p
+          >This example shows that <code
+          >dhall-docs</code> will find render the correct type on the
+index respecting variable indices</p>
+</div
+      ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
-          >let <span id="var1-5" data-variable="var1-5" class="variable-decl"
-          >relatives</span
-          > =<br
-          />    [ <a href="./IndexesExample.dhall.html"
-          >./IndexesExample.dhall</a
-          ><br
-          />    , <a href="./MarkdownExample.dhall.html"
-          >./MarkdownExample.dhall</a
-          ><br
-          />    , <a href="./NoDoc.dhall.html"
-          >./NoDoc.dhall</a
-          ><br
-          />    ]<br
+          >{-|<br
+          />This example shows that `dhall-docs` will find render the correct type on the<br
+          />index respecting variable indices<br
+          />-}<br
           /><br
+          />let <span id="var6-5" data-variable="var6-5"
+                      class="variable-decl"
+          >x</span
+          > : Bool = True<br
           />let <span id="var7-5" data-variable="var7-5"
                       class="variable-decl"
-          >moreRelatives</span
-          > =<br
-          />    [ <a href="./OrdinaryAnnotation.dhall.html"
-          >./OrdinaryAnnotation.dhall</a
-          > ,    <a href="./TwoAnnotations.dhall.html"
-          >./TwoAnnotations.dhall</a
-          > ]<br
+          >x</span
+          > : Natural = 1<br
           /><br
-          />in <a href="#var1-5" data-variable="var1-5" class="variable-use"
-          >relatives</a
-          > # <a href="#var7-5" data-variable="var7-5" class="variable-use"
-          >moreRelatives</a
+          />in <a href="#var6-5" data-variable="var6-5" class="variable-use"
+          >x@1</a
           ><br/></pre></div></div></body></html>

@@ -157,7 +157,17 @@ h2.doc-title {
 }
 
 .source-code a {
+    transition: 0s;
     font-family: 'Fira Code', monospace;
+}
+
+.source-code a.variable-use {
+    text-decoration: none;
+    color: inherit;
+}
+
+.source-code .highlighted {
+    background-color: #bdbdbd !important;
 }
 
 .dhall-type {
