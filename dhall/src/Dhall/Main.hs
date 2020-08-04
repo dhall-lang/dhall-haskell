@@ -161,7 +161,7 @@ data Mode
           }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
-    | Text { file :: Input, outputFile :: Maybe FilePath }
+    | Text { file :: Input, outputFile :: Output }
     | DirectoryTree { file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
@@ -250,7 +250,7 @@ parseMode =
             Generate
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
-            (Text <$> parseFile <*> optional parseTextOutput)
+            (Text <$> parseFile <*> parseOutput)
     <|> subcommand
             Generate
             "to-directory-tree"
@@ -503,13 +503,6 @@ parseMode =
             (   Options.Applicative.long "output"
             <>  Options.Applicative.help "The destination path to create"
             <>  Options.Applicative.metavar "PATH"
-            )
-
-    parseTextOutput =
-        Options.Applicative.strOption
-            (   Options.Applicative.long "output"
-            <>  Options.Applicative.help "Write text to a file instead of standard output"
-            <>  Options.Applicative.metavar "FILE"
             )
 
     parseNoted =
@@ -910,8 +903,8 @@ command (Options {..}) = do
             case normalizedExpression of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
                     let write = case outputFile of
-                          Nothing -> Data.Text.IO.putStr
-                          Just file_ -> Data.Text.IO.writeFile file_
+                          StandardOutput -> Data.Text.IO.putStr
+                          OutputFile file_ -> Data.Text.IO.writeFile file_
                     in write text
                 _ -> do
                     let invalidDecoderExpected :: Expr Void Void
