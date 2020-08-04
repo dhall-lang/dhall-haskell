@@ -17,6 +17,8 @@ let
 
   shared_linux = callShared { system = "x86_64-linux"; };
 
+  shared_linux_8_6_1 = callShared { compiler = "ghc861"; system = "x86_64-linux"; };
+
   coverage = callShared { coverage = true; };
 
 in
@@ -47,7 +49,7 @@ in
           shared.tarball-dhall-bash
           # path-io >= 1.6.0 → directory >= 1.3.20 → ghc >= 8.6
           # see http://hackage.haskell.org/package/path-io-1.6.0/changelog`
-          # shared.tarball-dhall-docs
+          shared_8_6_1.tarball-dhall-docs
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix
@@ -71,32 +73,33 @@ in
     inherit (shared)
       tarball-dhall
       tarball-dhall-bash
-      tarball-dhall-docs
       tarball-dhall-json
       tarball-dhall-lsp-server
       tarball-dhall-nix
       tarball-dhall-nixpkgs
       tarball-dhall-yaml
     ;
+    inherit (shared_8_6_1) tarball-dhall-docs;
 
     linux-dhall            = shared_linux.possibly-static.dhall;
-    linux-dhall-bash       = shared_linux.possibly-static.dhall-bash;
     linux-dhall-docs       = shared_linux.possibly-static.dhall-docs;
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
     linux-dhall-nixpkgs    = shared_linux.possibly-static.dhall-nixpkgs;
     linux-dhall-yaml       = shared_linux.possibly-static.dhall-yaml;
+    linux-dhall-bash       = shared_linux_8_6_1.possibly-static.dhall-bash;
 
     inherit (shared_linux)
       image-dhall
       image-dhall-bash
-      image-dhall-docs
       image-dhall-json
       image-dhall-lsp-server
       image-dhall-nix
       image-dhall-nixpkgs
       image-dhall-yaml
     ;
+    inherit (shared_linux_8_6_1) image-dhall-docs;
+
     inherit (shared_8_6_1) generate-dhall-docs;
   }
