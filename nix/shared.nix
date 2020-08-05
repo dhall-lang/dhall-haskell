@@ -515,6 +515,15 @@ in
       name = "test-dhall-docs";
     };
 
+    kubernetes-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
+        inherit dhall-docs;
+        src = pkgs.fetchurl {
+            url = "https://github.com/dhall-lang/dhall-kubernetes/archive/f4bf4b9ddf669f7149ec32150863a93d6c4b3ef1.zip";
+            sha256 = "64c23c08da4f7169adefe70d6ea541a40f9f5785a5a18563ec8895a85bd493d3";
+        };
+        name = "kubernetes-dhall-docs";
+    };
+
     test-dhall =
       pkgs.mkShell
         { buildInputs =

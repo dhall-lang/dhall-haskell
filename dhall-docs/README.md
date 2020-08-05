@@ -505,7 +505,8 @@ https://hydra.dhall-lang.org/job/dhall-haskell/${PR_NUMBER}/${PACKAGE_NAME}/late
 
 ... where `${PACKAGE_NAME}` is one of the following:
 
-* `prelude-dhall-docs` if you want to see the prelude
+* `prelude-dhall-docs` if you want to see Dhall's Prelude documentation
+* `kubernetes-dhall-docs` if you want to see the `dhall-kubernetes` documentation package
 * `test-dhall-docs` if you want to see the test demo package
 
 If you want to see the latest generated docs on the `master` branch, visit:

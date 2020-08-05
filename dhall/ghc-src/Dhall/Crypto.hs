@@ -9,6 +9,7 @@ module Dhall.Crypto (
       SHA256Digest(..)
     , sha256DigestFromByteString
     , sha256Hash
+    , toString
     ) where
 
 import Control.DeepSeq         (NFData)
@@ -26,7 +27,7 @@ newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }
   deriving (Eq, Generic, Ord, NFData, ByteArrayAccess)
 
 instance Show SHA256Digest where
-  show (SHA256Digest bytes) = ByteString.Char8.unpack $ convertToBase Base16 bytes
+  show = toString
 
 {-| Attempt to interpret a `ByteString` as a `SHA256Digest`, returning
     `Nothing` if the conversion fails
@@ -41,3 +42,7 @@ sha256Hash :: ByteString -> SHA256Digest
 sha256Hash bytes = SHA256Digest $ convert h
   where
     h = Crypto.Hash.hash bytes :: Crypto.Hash.Digest SHA256
+
+-- | 'String' representation of a 'SHA256Digest'
+toString :: SHA256Digest -> String
+toString (SHA256Digest bytes) = ByteString.Char8.unpack $ convertToBase Base16 bytes

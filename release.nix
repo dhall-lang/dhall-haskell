@@ -101,5 +101,6 @@ in
     inherit (shared_8_6_1)
       prelude-dhall-docs
       test-dhall-docs
+      kubernetes-dhall-docs
     ;
   }
