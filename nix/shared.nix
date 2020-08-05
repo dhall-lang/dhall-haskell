@@ -396,6 +396,24 @@ let
         );
       };
     };
+
+    python3Packages = pkgsOld.python3Packages.override (old: {
+        overrides =
+          let
+            extension =
+              pythonPackagesNew: pythonPackagesOld: {
+                pyopenssl = pythonPackagesOld.pyopenssl.overrideAttrs (_: {
+                    doInstallCheck = false;
+                  }
+                );
+              };
+
+          in
+            pkgsNew.lib.composeExtensions
+              (old.overrides or (_: _: {}))
+              extension;
+      }
+    );
   };
 
   pkgsStaticLinux = import nixpkgsStaticLinux {
