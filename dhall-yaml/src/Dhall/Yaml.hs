@@ -57,11 +57,14 @@ jsonToYaml
     -> ByteString
 jsonToYaml json documents quoted =
   case (documents, json) of
-    (True, Data.Aeson.Array elems)
-      -> Data.ByteString.intercalate "\n"
-         $ (("---\n" <>) . Data.ByteString.Lazy.toStrict . encoder . (:[])) <$> Data.Vector.toList elems
+    (True, Data.Aeson.Array elems) -> document elems
+    (True, value) -> document (pure value)
     _ -> Data.ByteString.Lazy.toStrict (encoder [json])
   where
+    document elems =
+      Data.ByteString.intercalate "\n"
+         $ (("---\n" <>) . Data.ByteString.Lazy.toStrict . encoder . (:[])) <$> Data.Vector.toList elems
+
     style (Y.SStr s)
         | "\n" `Text.isInfixOf` s =
             Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
