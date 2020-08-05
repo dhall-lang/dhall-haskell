@@ -1,6 +1,6 @@
 {-| Utilities to interact with the dhall-docs home directory
 -}
--- {-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 
