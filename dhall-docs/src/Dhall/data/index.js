@@ -27,7 +27,24 @@ function onReady() {
       document.execCommand("copy");
       temp.remove()
     }))
+
+  document.querySelectorAll('.source-code a.variable-use, .source-code span.variable-decl')
+    .forEach(node => {
+      node.addEventListener('mouseover', () => highlightVariables(node.dataset.variable, true))
+      node.addEventListener('mouseout', () => highlightVariables(node.dataset.variable, false))
+    })
 }
+
+function highlightVariables(varId, highlight) {
+  document.querySelectorAll(`#${varId}, [href="#${varId}"]`).forEach(node => {
+    if (highlight) {
+      node.classList.add('highlighted')
+    } else {
+      node.classList.remove('highlighted')
+    }
+  })
+}
+
 
 if (document.readyState != 'loading'){
   onReady();

@@ -42,12 +42,21 @@ did you notice it?
           >--| This file contains a markdown error right here `<br
           />--  did you notice it?<br
           /><br
-          />let Pair = <a href="./Pair.dhall.html"
+          />let <span id="var4-5" data-variable="var4-5"
+                      class="variable-decl"
+          >Pair</span
+          > = <a href="./Pair.dhall.html"
           >./Pair.dhall</a
           ><br
           /><br
-          />let DeliveryStatus =<br
-          />    &lt; Sent: Pair Natural Text {-| Message has been _sent_. It carries a ./Pair.dhall reference<br
+          />let <span id="var6-5" data-variable="var6-5"
+                      class="variable-decl"
+          >DeliveryStatus</span
+          > =<br
+          />    &lt; Sent: <a href="#var4-5" data-variable="var4-5"
+                              class="variable-use"
+          >Pair</a
+          > Natural Text {-| Message has been _sent_. It carries a ./Pair.dhall reference<br
           />                                    containing on the `first` field number of retries<br
           />                                    and on the `second` field the delivered text<br
           />                                -}<br
@@ -55,4 +64,6 @@ did you notice it?
           />    | InQueue                   -- | Delivery for this message **hasn&#39;t** started<br
           />    &gt;<br
           /><br
-          />in DeliveryStatus<br/></pre></div></div></body></html>
+          />in <a href="#var6-5" data-variable="var6-5" class="variable-use"
+          >DeliveryStatus</a
+          ><br/></pre></div></div></body></html>

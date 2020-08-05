@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/IndexesExample.dhall</title
+    >/JumpToLetbindingComplex.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,36 +25,52 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >IndexesExample.dhall</span></h2
-      ><a data-path="/IndexesExample.dhall" class="copy-to-clipboard"
+        >JumpToLetbindingComplex.dhall</span></h2
+      ><a data-path="/JumpToLetbindingComplex.dhall"
+          class="copy-to-clipboard"
         ><i
           ><small
           >Copy path to clipboard</small></i></a
       ><br
       /><div class="doc-contents"
         ><p
-          >This example shows that <code
-          >dhall-docs</code> will find render the correct type on the
-index respecting variable indices</p>
+        >A complex example of jump-to-definition on let-bindings</p>
 </div
       ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
           >{-|<br
-          />This example shows that `dhall-docs` will find render the correct type on the<br
-          />index respecting variable indices<br
+          />A complex example of jump-to-definition on let-bindings<br
           />-}<br
-          /><br
-          />let <span id="var6-5" data-variable="var6-5"
+          />let <span id="var4-5" data-variable="var4-5"
                       class="variable-decl"
-          >x</span
-          > : Bool = True<br
+          >f</span
+          > = \(f : Natural) -&gt;<br
+          />    let <span id="var5-9" data-variable="var5-9"
+                          class="variable-decl"
+          >a</span
+          > = 1 in f + <a href="#var5-9" data-variable="var5-9"
+                          class="variable-use"
+          >a</a
+          ><br
+          /><br
           />let <span id="var7-5" data-variable="var7-5"
                       class="variable-decl"
-          >x</span
-          > : Natural = 1<br
+          >a</span
+          > = <a href="#var4-5" data-variable="var4-5" class="variable-use"
+          >f</a
+          > 1<br
           /><br
-          />in <a href="#var6-5" data-variable="var6-5" class="variable-use"
-          >x@1</a
+          />let <span id="var9-5" data-variable="var9-5"
+                      class="variable-decl"
+          >b</span
+          > = <a href="#var7-5" data-variable="var7-5" class="variable-use"
+          >a</a
+          > + <a href="#var4-5" data-variable="var4-5" class="variable-use"
+          >f</a
+          > 3<br
+          /><br
+          />in <a href="#var9-5" data-variable="var9-5" class="variable-use"
+          >b</a
           ><br/></pre></div></div></body></html>

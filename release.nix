@@ -99,7 +99,11 @@ in
       image-dhall-nixpkgs
       image-dhall-yaml
     ;
+
     inherit (shared_linux_8_6_1) image-dhall-docs;
 
-    inherit (shared_8_6_1) generate-dhall-docs;
+    inherit (shared_8_6_1)
+      prelude-dhall-docs
+      test-dhall-docs
+    ;
   }
