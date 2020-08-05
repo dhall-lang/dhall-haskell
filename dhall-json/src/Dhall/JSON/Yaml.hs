@@ -56,7 +56,7 @@ parseDocuments :: Parser Bool
 parseDocuments =
   Options.Applicative.switch
             (   Options.Applicative.long "documents"
-            <>  Options.Applicative.help "If given a Dhall list, output a document for every element.  Each document, including the first one, will be preceded by \"---\", even if there is only one document"
+            <>  Options.Applicative.help "If given a Dhall list, output a document for every element.  Each document, including the first one, will be preceded by \"---\", even if there is only one document.  If not given a list, output a single document (as if it were a list of one element)"
             )
 
 parseQuoted :: Parser Bool
