@@ -42,8 +42,6 @@ getDocsHomeDirectory = do
 -}
 makeHashForDirectory :: Path Abs Dir -> IO SHA256Digest
 makeHashForDirectory dir = do
-    let setTimeToZero entry = entry{Tar.Entry.entryTime = 0}
-
     let makeEntry isDir path_ = do
             let realFilePath = Path.toFilePath $ dir </> path_
             let hashFilepath = Crypto.toString
@@ -59,7 +57,9 @@ makeHashForDirectory dir = do
 
                         Right tp -> tp
             let pack = if isDir then Tar.Entry.packDirectoryEntry else Tar.Entry.packFileEntry
-            pack realFilePath entryTarPath
+            entry <- pack realFilePath entryTarPath
+            -- we set the entry time to 0 to avoid the hash to change on every run
+            return entry{Tar.Entry.entryTime = 0}
 
     (dirs, files) <- Path.IO.listDirRecurRel dir
     let sortedDirs = Data.List.sort dirs
@@ -67,6 +67,6 @@ makeHashForDirectory dir = do
 
     entries <- Applicative.liftA2 (++) (mapM (makeEntry True) sortedDirs) (mapM (makeEntry False) sortedFiles)
 
-    let inMemoryTarBytes = ByteString.Lazy.toStrict $ Tar.write $ map setTimeToZero entries
+    let inMemoryTarBytes = ByteString.Lazy.toStrict $ Tar.write entries
 
     return $ Crypto.sha256Hash inMemoryTarBytes
