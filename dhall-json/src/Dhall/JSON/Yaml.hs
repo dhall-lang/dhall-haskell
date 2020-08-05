@@ -106,6 +106,11 @@ jsonToYaml json documents quoted =
             then Data.Aeson.Yaml.encodeQuotedDocuments
             else Data.Aeson.Yaml.encodeDocuments
          ) (Data.Vector.toList elems)
+    (True, value)
+      -> (if quoted
+            then Data.Aeson.Yaml.encodeQuotedDocuments
+            else Data.Aeson.Yaml.encodeDocuments
+         ) [ value ]
     _ -> (if quoted
             then Data.Aeson.Yaml.encodeQuoted
             else Data.Aeson.Yaml.encode
