@@ -1,22 +1,23 @@
 {-| Utilities to interact with the dhall-docs home directory
 -}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE QuasiQuotes  #-}
+-- {-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
 
-import Dhall.Crypto (SHA256Digest (..))
-import Path         (Abs, Dir, Path, Rel, (</>))
-import Path.IO      (XdgDirectory (..))
+import Dhall.Crypto    (SHA256Digest (..))
+import Dhall.Docs.Util
+import Path            (Abs, Dir, Path, Rel, (</>))
+import Path.IO         (XdgDirectory (..))
 
 import qualified Codec.Archive.Tar       as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
-import qualified Control.Monad
+import qualified Control.Applicative     as Applicative
 import qualified Data.ByteString.Char8   as ByteString.Char8
-import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Lazy    as ByteString.Lazy
 import qualified Data.List
+import qualified Data.Text               as Text
 import qualified Dhall.Crypto            as Crypto
 import qualified Path
 import qualified Path.IO
@@ -43,26 +44,29 @@ makeHashForDirectory :: Path Abs Dir -> IO SHA256Digest
 makeHashForDirectory dir = do
     let setTimeToZero entry = entry{Tar.Entry.entryTime = 0}
 
-    let hashFileAndRename relFile =
-            do
-                let hashFileName = Crypto.sha256Hash . ByteString.Char8.pack . Path.fromRelFile
-                let hash = hashFileName relFile
-                let hashAsString = Crypto.toString hash
+    let makeEntry isDir path_ = do
+            let realFilePath = Path.toFilePath $ dir </> path_
+            let hashFilepath = Crypto.toString
+                    $ Crypto.sha256Hash
+                    $ ByteString.Char8.pack
+                    $ Path.toFilePath path_
+            let entryTarPath =
+                    case Tar.Entry.toTarPath isDir hashFilepath of
+                        Left e ->
+                            fileAnIssue $ Text.pack $
+                                "An error has occurred when invoking Tar.Entry.toTarPath with " <>
+                                realFilePath <> ": " <> e
 
-                hashedRelFile <- Path.parseRelFile hashAsString
-                Path.IO.copyFile (dir </> relFile) (dir </> hashedRelFile)
+                        Right tp -> tp
+            let pack = if isDir then Tar.Entry.packDirectoryEntry else Tar.Entry.packFileEntry
+            pack realFilePath entryTarPath
 
-                return hashedRelFile
+    (dirs, files) <- Path.IO.listDirRecurRel dir
+    let sortedDirs = Data.List.sort dirs
+    let sortedFiles = Data.List.sort files
 
+    entries <- Applicative.liftA2 (++) (mapM (makeEntry True) sortedDirs) (mapM (makeEntry False) sortedFiles)
 
-    files <- Data.List.sort . snd <$> Path.IO.listDirRecurRel dir
-
-    renamedFilePairs <- mapM hashFileAndRename files
-
-    !inMemoryTarBytes <- Data.ByteString.Lazy.toStrict . Tar.write . map setTimeToZero
-                <$> Tar.pack (Path.fromAbsDir dir) (map Path.fromRelFile renamedFilePairs)
-
-    Control.Monad.forM_ renamedFilePairs $ \hashedRelFile ->
-        Path.IO.removeFile (dir </> hashedRelFile)
+    let inMemoryTarBytes = ByteString.Lazy.toStrict $ Tar.write $ map setTimeToZero entries
 
     return $ Crypto.sha256Hash inMemoryTarBytes
