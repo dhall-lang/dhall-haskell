@@ -208,6 +208,9 @@ let
                             '';
                           }
                         );
+
+                    lens-family-core =
+                        haskellPackagesOld.lens-family-core_1_2_3;
                   };
 
               in
@@ -263,9 +266,6 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    lens-family-core =
-                        haskellPackagesOld.lens-family-core_1_2_3;
-
                     # GHC 8.6.1 accidentally shipped with an unpublished
                     # unix-2.8 package.  Normally we'd deal with that by
                     # using `pkgsNew.haskell.lib.jailbreak` but it doesn't
