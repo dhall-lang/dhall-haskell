@@ -39,6 +39,7 @@ import Dhall.Core
     , Expr (..)
     , File (..)
     , FilePrefix (..)
+    , FunctionBinding (..)
     , Import (..)
     , ImportHashed (..)
     , ImportMode (..)
@@ -60,7 +61,7 @@ import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Test.Format         (format)
 import Dhall.TypeCheck           (TypeError, Typer)
-import Generic.Random            ((:+) (..), W, Weights, (%), ConstrGen(..))
+import Generic.Random            ((:+) (..), ConstrGen (..), W, Weights, (%))
 import Test.QuickCheck
     ( Arbitrary (..)
     , Gen
@@ -282,6 +283,14 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (RecordField s a) where
 
     shrink = genericShrink
 
+instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
+    arbitrary = do
+        l <- label
+        type_ <- arbitrary
+        return $ FunctionBinding Nothing l Nothing Nothing type_
+
+    shrink = genericShrink
+
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =
         Test.QuickCheck.suchThat
@@ -292,7 +301,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             standardizedExpression
       where
         customGens
-            :: ConstrGen "Lam" 0 Text
+            :: ConstrGen "Lam" 0 (FunctionBinding s a)
             :+ ConstrGen "Pi" 0 Text
             :+ ConstrGen "Field" 1 Text
             :+ ConstrGen "Project" 1 (Either (Set Text) (Expr s a))
@@ -300,7 +309,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             :+ Gen Text     -- Generates all Text fields in Expr
             :+ ()
         customGens =
-               ConstrGen label
+               ConstrGen arbitrary
             :+ ConstrGen label
             :+ ConstrGen label
             :+ ConstrGen projection

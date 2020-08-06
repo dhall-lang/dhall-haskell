@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Dhall.Normalize (
       alphaNormalize
@@ -31,6 +32,7 @@ import Dhall.Syntax
     , Chunks (..)
     , DhallDouble (..)
     , Expr (..)
+    , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
     , Var (..)
@@ -120,7 +122,8 @@ shift :: Int -> Var -> Expr s a -> Expr s a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
     n'' = if x == x' && n <= n' then n' + d else n'
-shift d (V x n) (Lam x' _A b) = Lam x' _A' b'
+shift d (V x n) (Lam (FunctionBinding src0 x' src1 src2 _A) b) =
+    Lam (FunctionBinding src0 x' src1 src2 _A') b'
   where
     _A' = shift d (V x n ) _A
     b'  = shift d (V x n') b
@@ -149,7 +152,8 @@ shift d v expression = Lens.over Syntax.subExpressions (shift d v) expression
 -}
 subst :: Var -> Expr s a -> Expr s a -> Expr s a
 subst _ _ (Const a) = Const a
-subst (V x n) e (Lam y _A b) = Lam y _A' b'
+subst (V x n) e (Lam (FunctionBinding src0 y src1 src2 _A) b) =
+    Lam (FunctionBinding src0 y src1 src2 _A') b'
   where
     _A' = subst (V x n )                  e  _A
     b'  = subst (V x n') (shift 1 (V y 0) e)  b
@@ -196,8 +200,9 @@ boundedType _                = False
 {-| α-normalize an expression by renaming all bound variables to @\"_\"@ and
     using De Bruijn indices to distinguish them
 
->>> alphaNormalize (Lam "a" (Const Type) (Lam "b" (Const Type) (Lam "x" "a" (Lam "y" "b" "x"))))
-Lam "_" (Const Type) (Lam "_" (Const Type) (Lam "_" (Var (V "_" 1)) (Lam "_" (Var (V "_" 1)) (Var (V "_" 1)))))
+>>> mfb = Syntax.makeFunctionBinding
+>>> alphaNormalize (Lam (mfb "a" (Const Type)) (Lam (mfb "b" (Const Type)) (Lam (mfb "x" "a") (Lam (mfb "y" "b") "x"))))
+Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Const Type}) (Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Const Type}) (Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Var (V "_" 1)}) (Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
 
     α-normalization does not affect free variables:
 
@@ -256,7 +261,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
  loop e =  case e of
     Const k -> pure (Const k)
     Var v -> pure (Var v)
-    Lam x _A b -> Lam x <$> _A' <*> b'
+    Lam (FunctionBinding { fbVariable = x, fbAnnotation = _A }) b ->
+        Lam <$> (Syntax.makeFunctionBinding x <$> _A') <*> b'
       where
         _A' = loop _A
         b'  = loop b
@@ -272,7 +278,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
               f' <- loop f
               a' <- loop a
               case f' of
-                Lam x _A b₀ -> do
+                Lam (FunctionBinding _ x _ _ _A) b₀ -> do
 
                     let a₂ = shift 1 (V x 0) a'
                     let b₁ = subst (V x 0) a₂ b₀
@@ -299,7 +305,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         lazyLoop !n = App succ' (lazyLoop (n - 1))
                     App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
                       where
-                        succ = Lam "n" Natural (NaturalPlus "n" (NaturalLit 1))
+                        succ = Lam (Syntax.makeFunctionBinding "n" Natural) (NaturalPlus "n" (NaturalLit 1))
 
                         zero = NaturalLit 0
                     App NaturalIsZero (NaturalLit n) -> pure (BoolLit (n == 0))
@@ -341,9 +347,9 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         list = App List _A₀
 
                         cons =
-                            Lam "a" _A₀
-                                (Lam "as"
-                                    (App List _A₁)
+                            Lam (Syntax.makeFunctionBinding "a" _A₀)
+                                (Lam
+                                    (Syntax.makeFunctionBinding "as" (App List _A₁))
                                     (ListAppend (ListLit Nothing (pure "a")) "as")
                                 )
 
@@ -732,10 +738,10 @@ isNormalized e0 = loop (Syntax.denote e0)
     loop e = case e of
       Const _ -> True
       Var _ -> True
-      Lam _ a b -> loop a && loop b
+      Lam (Syntax.fbAnnotation -> a) b -> loop a && loop b
       Pi _ a b -> loop a && loop b
       App f a -> loop f && loop a && case App f a of
-          App (Lam _ _ _) _ -> False
+          App (Lam _ _) _ -> False
           App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
           App NaturalBuild _ -> False
           App NaturalIsZero (NaturalLit _) -> False
@@ -916,7 +922,7 @@ isNormalized e0 = loop (Syntax.denote e0)
 True
 >>> "x" `freeIn` "y"
 False
->>> "x" `freeIn` Lam "x" (Const Type) "x"
+>>> "x" `freeIn` Lam (mfb "x" (Const Type)) "x"
 False
 -}
 freeIn :: Eq a => Var -> Expr s a -> Bool

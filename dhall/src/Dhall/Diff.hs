@@ -32,6 +32,7 @@ import Dhall.Syntax
     , Const (..)
     , DhallDouble (..)
     , Expr (..)
+    , FunctionBinding (..)
     , RecordField (..)
     , Var (..)
     )
@@ -645,7 +646,9 @@ diff :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diff l@(Lam {}) r@(Lam {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
-    docs (Lam aL bL cL) (Lam aR bR cR) =
+    docs
+        (Lam (FunctionBinding { fbVariable = aL, fbAnnotation = bL }) cL)
+        (Lam (FunctionBinding { fbVariable = aR, fbAnnotation = bR }) cR) =
         Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
         doc =   lambda

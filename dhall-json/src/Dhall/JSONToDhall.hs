@@ -1007,8 +1007,8 @@ dhallFromJSON (Conversion {..}) expressionType =
                   D.Field "json" "null"
 
           let result =
-                D.Lam "JSON" (D.Const D.Type)
-                    (D.Lam "json"
+                D.Lam (D.makeFunctionBinding "JSON" (D.Const D.Type))
+                    (D.Lam (D.makeFunctionBinding "json"
                         (D.Record
                             [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List "JSON") "JSON")
                             , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool "JSON")
@@ -1021,7 +1021,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                                     ])) "JSON")
                             , ("string", D.makeRecordField $ D.Pi "_" D.Text "JSON")
                             ]
-                        )
+                        ))
                         (outer value)
                     )
 
@@ -1097,8 +1097,8 @@ dhallFromJSON (Conversion {..}) expressionType =
                   D.Field "json" "null"
 
           let result =
-                D.Lam "JSON" (D.Const D.Type)
-                    (D.Lam "json"
+                D.Lam (D.makeFunctionBinding "JSON" (D.Const D.Type))
+                    (D.Lam (D.makeFunctionBinding "json"
                         (D.Record
                             [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List "JSON") "JSON")
                             , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool "JSON")
@@ -1111,7 +1111,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                                     , ("mapValue", D.makeRecordField "JSON")])) "JSON")
                             , ("string", D.makeRecordField $ D.Pi "_" D.Text "JSON")
                             ]
-                        )
+                        ))
                         (outer value)
                     )
 

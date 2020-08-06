@@ -6,6 +6,7 @@
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -29,6 +30,8 @@ module Dhall.Syntax (
     , Expr(..)
     , RecordField(..)
     , makeRecordField
+    , FunctionBinding(..)
+    , makeFunctionBinding
 
     -- ** 'Let'-blocks
     , MultiLet(..)
@@ -41,6 +44,7 @@ module Dhall.Syntax (
     , chunkExprs
     , bindingExprs
     , recordFieldExprs
+    , functionBindingExprs
 
     -- ** Handling 'Note's
     , denote
@@ -314,6 +318,43 @@ instance Bifunctor RecordField where
         RecordField (k <$> s0) (first k value)
     second = fmap
 
+{-| Record the label of a function or a function-type expression
+
+For example,
+
+> λ({- A -} a {- B -} : {- C -} T) -> e
+
+will be instantiated as follows:
+* @fbSrc0@ corresponds to the @A@ comment
+* @fbVariable@ is @a@
+* @fbSrc1@ corresponds to the @B@ comment
+* @fbSrc2@ corresponds to the @C@ comment
+* @fbAnnotation@ is @T@
+-}
+data FunctionBinding s a = FunctionBinding
+    { fbSrc0 :: Maybe s
+    , fbVariable :: Text
+    , fbSrc1 :: Maybe s
+    , fbSrc2 :: Maybe s
+    , fbAnnotation :: Expr s a
+    } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
+
+makeFunctionBinding :: Text -> Expr s a -> FunctionBinding s a
+makeFunctionBinding l t = FunctionBinding Nothing l Nothing Nothing t
+
+-- pattern Lam :: Text -> Expr s a -> Expr s a -> Expr s a
+-- pattern Lam l t e <- Lam (FunctionBinding _ l _ _ t) e
+--   where
+--     Lam l t e = Lam (FunctionBinding Nothing l Nothing Nothing t) e
+
+-- {-# COMPLETE Lam #-}
+
+instance Bifunctor FunctionBinding where
+    first k (FunctionBinding src0 label src1 src2 type_) =
+        FunctionBinding (k <$> src0) label (k <$> src1) (k <$> src2) (first k type_)
+
+    second = fmap
+
 {-| Syntax tree for expressions
 
     The @s@ type parameter is used to track the presence or absence of `Src`
@@ -334,8 +375,8 @@ data Expr s a
     -- | > Var (V x 0)                              ~  x
     --   > Var (V x n)                              ~  x@n
     | Var Var
-    -- | > Lam x     A b                            ~  λ(x : A) -> b
-    | Lam Text (Expr s a) (Expr s a)
+    -- | > Lam (FunctionBinding _ "x" _ _ A) b      ~  λ(x : A) -> b
+    | Lam (FunctionBinding s a) (Expr s a)
     -- | > Pi "_" A B                               ~        A  -> B
     --   > Pi x   A B                               ~  ∀(x : A) -> B
     | Pi  Text (Expr s a) (Expr s a)
@@ -520,6 +561,19 @@ data Expr s a
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
 
+-- {-# COMPLETE Lam, Var, Pi, App, Let, Annot, Bool, BoolLit, BoolAnd,
+--              BoolOr, BoolEQ, BoolNE, BoolIf, Natural, NaturalLit, NaturalFold,
+--              NaturalBuild, NaturalIsZero, NaturalEven, NaturalOdd,
+--              NaturalToInteger, NaturalShow, NaturalSubtract, NaturalPlus,
+--              NaturalTimes, Integer, IntegerLit, IntegerClamp, IntegerNegate,
+--              IntegerShow, IntegerToDouble, Double, DoubleLit, DoubleShow, Text,
+--              TextLit, TextAppend, TextShow, List, ListLit, ListAppend,
+--              ListBuild, ListFold, ListLength, ListHead, ListLast, ListIndexed,
+--              ListReverse, Optional, Some, None, Record, RecordLit, Union,
+--              Combine, CombineTypes, Prefer, RecordCompletion, Merge, ToMap,
+--              Field, Project, Assert, Equivalent, With, Note, ImportAlt, Embed
+--              #-}
+
 -- | This instance encodes what the Dhall standard calls an \"exact match\"
 -- between two expressions.
 --
@@ -543,6 +597,7 @@ instance Functor (Expr s) where
   fmap f (Note s e1) = Note s (fmap f e1)
   fmap f (Record a) = Record $ fmap f <$> a
   fmap f (RecordLit a) = RecordLit $ fmap f <$> a
+  fmap f (Lam fb e) = Lam (f <$> fb) (f <$> e)
   fmap f expression = Lens.over unsafeSubExpressions (fmap f) expression
   {-# INLINABLE fmap #-}
 
@@ -560,12 +615,16 @@ instance Monad (Expr s) where
         Note a b   -> Note a (b >>= k)
         Record a -> Record $ bindRecordKeyValues <$> a
         RecordLit a -> RecordLit $ bindRecordKeyValues <$> a
+        Lam a b -> Lam (adaptFunctionBinding a) (b >>= k)
         _ -> Lens.over unsafeSubExpressions (>>= k) expression
       where
         bindRecordKeyValues (RecordField s0 e) = RecordField s0 (e >>= k)
 
         adaptBinding (Binding src0 c src1 d src2 e) =
             Binding src0 c src1 (fmap adaptBindingAnnotation d) src2 (e >>= k)
+
+        adaptFunctionBinding (FunctionBinding src0 label src1 src2 type_) =
+            FunctionBinding src0 label src1 src2 (type_ >>= k)
 
         adaptBindingAnnotation (src3, f) = (src3, f >>= k)
 
@@ -575,6 +634,7 @@ instance Bifunctor Expr where
     first k (Let a b    ) = Let (first k a) (first k b)
     first k (Record a   ) = Record $ first k <$> a
     first k (RecordLit a) = RecordLit $ first k <$> a
+    first k (Lam a b    ) = Lam (first k a) (first k b)
     first k  expression  = Lens.over unsafeSubExpressions (first k) expression
 
     second = fmap
@@ -644,6 +704,7 @@ subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Record a) = Record <$> traverse (recordFieldExprs f) a
 subExpressions f (RecordLit a) = RecordLit <$> traverse (recordFieldExprs f) a
+subExpressions f (Lam fb e) = Lam <$> functionBindingExprs f fb <*> f e
 subExpressions f expression = unsafeSubExpressions f expression
 {-# INLINABLE subExpressions #-}
 
@@ -658,7 +719,6 @@ unsafeSubExpressions
     :: Applicative f => (Expr s a -> f (Expr t b)) -> Expr s a -> f (Expr t b)
 unsafeSubExpressions _ (Const c) = pure (Const c)
 unsafeSubExpressions _ (Var v) = pure (Var v)
-unsafeSubExpressions f (Lam a b c) = Lam a <$> f b <*> f c
 unsafeSubExpressions f (Pi a b c) = Pi a <$> f b <*> f c
 unsafeSubExpressions f (App a b) = App <$> f a <*> f b
 unsafeSubExpressions f (Annot a b) = Annot <$> f a <*> f b
@@ -731,6 +791,7 @@ unsafeSubExpressions _ (Note {}) = unhandledConstructor "Note"
 unsafeSubExpressions _ (Embed {}) = unhandledConstructor "Embed"
 unsafeSubExpressions _ (Record {}) = unhandledConstructor "Record"
 unsafeSubExpressions _ (RecordLit {}) = unhandledConstructor "RecordLit"
+unsafeSubExpressions _ (Lam {}) = unhandledConstructor "Lam"
 {-# INLINABLE unsafeSubExpressions #-}
 
 unhandledConstructor :: Text -> a
@@ -767,6 +828,20 @@ recordFieldExprs f (RecordField s0 e) =
     RecordField
         <$> pure s0
         <*> f e
+
+{-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
+-}
+functionBindingExprs
+    :: Applicative f
+    => (Expr s a -> f (Expr s b))
+    -> FunctionBinding s a -> f (FunctionBinding s b)
+functionBindingExprs f (FunctionBinding s0 label s1 s2 type_) =
+    FunctionBinding
+        <$> pure s0
+        <*> pure label
+        <*> pure s1
+        <*> pure s2
+        <*> f type_
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
@@ -990,6 +1065,7 @@ denote = \case
     Combine _ b c -> Combine Nothing (denote b) (denote c)
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
+    Lam a b -> Lam (denoteFunctionBinding a) (denote b)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ e) = RecordField Nothing (denote e)
@@ -997,6 +1073,9 @@ denote = \case
         Binding Nothing c Nothing (fmap denoteBindingAnnotation d) Nothing (denote e)
 
     denoteBindingAnnotation (_, f) = (Nothing, denote f)
+
+    denoteFunctionBinding (FunctionBinding _ l _ _ t) =
+        FunctionBinding Nothing l Nothing Nothing (denote t)
 
 -- | The \"opposite\" of `denote`, like @first absurd@ but faster
 renote :: Expr Void a -> Expr s a

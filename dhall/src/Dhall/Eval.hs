@@ -50,14 +50,14 @@ module Dhall.Eval (
   , textShow
   ) where
 
-import Data.Foldable  (foldr', toList)
-import Data.Sequence  (Seq, ViewL (..), ViewR (..))
-import Data.Text      (Text)
-import Data.Void      (Void)
-import Dhall.Map      (Map)
-import Dhall.Set      (Set)
-import GHC.Natural    (Natural)
-import Prelude        hiding (succ)
+import Data.Foldable (foldr', toList)
+import Data.Sequence (Seq, ViewL (..), ViewR (..))
+import Data.Text     (Text)
+import Data.Void     (Void)
+import Dhall.Map     (Map)
+import Dhall.Set     (Set)
+import GHC.Natural   (Natural)
+import Prelude       hiding (succ)
 
 import Dhall.Syntax
     ( Binding (..)
@@ -65,6 +65,7 @@ import Dhall.Syntax
     , Const (..)
     , DhallDouble (..)
     , Expr (..)
+    , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
     , Var (..)
@@ -389,7 +390,7 @@ eval !env t0 =
             VConst k
         Var v ->
             vVar env v
-        Lam x a t ->
+        Lam (FunctionBinding { fbVariable = x, fbAnnotation = a }) t ->
             VLam (eval env a) (Closure x env t)
         Pi x a b ->
             VPi (eval env a) (Closure x env b)
@@ -984,10 +985,15 @@ quote !env !t0 =
         VApp t u ->
             quote env t `qApp` u
         VLam a (freshClosure -> (x, v, t)) ->
-            Lam x (quote env a) (quoteBind x (instantiate t v))
+            Lam
+                (Syntax.makeFunctionBinding x (quote env a))
+                (quoteBind x (instantiate t v))
         VHLam i t ->
             case i of
-                Typed (fresh -> (x, v)) a -> Lam x (quote env a) (quoteBind x (t v))
+                Typed (fresh -> (x, v)) a ->
+                    Lam
+                        (Syntax.makeFunctionBinding x (quote env a))
+                        (quoteBind x (t v))
                 Prim                      -> quote env (t VPrimVar)
                 NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
 
@@ -1165,8 +1171,8 @@ alphaNormalize = goEnv EmptyNames
                 Const k
             Var (V x i) ->
                 goVar e0 x i
-            Lam x t u ->
-                Lam "_" (go t) (goBind x u)
+            Lam (FunctionBinding src0 x src1 src2 t) u ->
+                Lam (FunctionBinding src0 "_" src1 src2 (go t)) (goBind x u)
             Pi x a b ->
                 Pi "_" (go a) (goBind x b)
             App t u ->

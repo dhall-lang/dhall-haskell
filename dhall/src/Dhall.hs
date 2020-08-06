@@ -161,6 +161,7 @@ import Dhall.Syntax
     ( Chunks (..)
     , DhallDouble (..)
     , Expr (..)
+    , FunctionBinding (..)
     , RecordField (..)
     , Var (..)
     )
@@ -1361,10 +1362,10 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
           where
             die = typeError expected expr0
 
-            extract0 (Lam x _ expr) = extract1 (rename x "result" expr)
+            extract0 (Lam (FunctionBinding { fbVariable = x }) expr) = extract1 (rename x "result" expr)
             extract0  _             = die
 
-            extract1 (Lam y _ expr) = extract2 (rename y "Make" expr)
+            extract1 (Lam (FunctionBinding { fbVariable = y }) expr) = extract2 (rename y "Make" expr)
             extract1  _             = die
 
             extract2 expr = fmap resultToFix (Dhall.extract (autoWith inputNormalizer) expr)

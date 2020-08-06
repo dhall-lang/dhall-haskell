@@ -103,6 +103,7 @@ import Dhall.Core
     , Chunks (..)
     , DhallDouble (..)
     , Expr (..)
+    , FunctionBinding (..)
     , MultiLet (..)
     , PreferAnnotation (..)
     , Var (..)
@@ -236,7 +237,7 @@ dhallToNix e =
     -- If any other number, then rename the variable to include the maximum
     -- depth.
     maximumDepth :: Var -> Expr s Void -> Maybe Int
-    maximumDepth v@(V x n) (Lam x' a b)
+    maximumDepth v@(V x n) (Lam FunctionBinding {fbVariable = x', fbAnnotation = a} b)
         | x == x' =
             max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
     maximumDepth v@(V x n) (Pi x' a b)
@@ -271,10 +272,10 @@ dhallToNix e =
                 x' = x <> Data.Text.pack (show n)
 
     renameShadowed :: Expr s Void -> Maybe (Expr s Void)
-    renameShadowed (Lam x a b) = do
+    renameShadowed (Lam FunctionBinding { fbVariable = x, fbAnnotation = a} b) = do
         (x', b') <- rename (x, b)
 
-        return (Lam x' a b')
+        return (Lam (Dhall.Core.makeFunctionBinding x' a) b')
     renameShadowed (Pi x a b) = do
         (x', b') <- rename (x, b)
 
@@ -293,7 +294,7 @@ dhallToNix e =
     loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Fix (NSym a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
-    loop (Lam a _ c) = do
+    loop (Lam FunctionBinding { fbVariable = a } c) = do
         c' <- loop c
         return (Fix (NAbs (Param a) c'))
     loop (Pi _ _ _) = return untranslatable

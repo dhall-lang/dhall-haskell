@@ -173,6 +173,7 @@ import Dhall.Syntax
     , RecordField (..)
     , URL (..)
     , bindingExprs
+    , functionBindingExprs
     , recordFieldExprs
     )
 
@@ -1074,6 +1075,7 @@ loadWith expr₀ = case expr₀ of
   Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
   Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
   RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
+  Lam a b              -> Lam <$> functionBindingExprs loadWith a <*> loadWith b
   expression           -> Syntax.unsafeSubExpressions loadWith expression
 
 -- | Resolve all imports within an expression

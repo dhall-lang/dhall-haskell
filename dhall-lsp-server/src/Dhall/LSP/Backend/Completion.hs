@@ -16,6 +16,7 @@ import System.Timeout                (timeout)
 import Dhall.Core
     ( Binding (..)
     , Expr (..)
+    , FunctionBinding (..)
     , RecordField (..)
     , Var (..)
     , normalize
@@ -123,7 +124,7 @@ buildCompletionContext' context values (Let (Binding { variable = x, annotation 
 
     in buildCompletionContext' context' values' e
 
-buildCompletionContext' context values (Lam x _A b) =
+buildCompletionContext' context values (Lam (FunctionBinding { fbVariable = x, fbAnnotation = _A}) b) =
   let _A' | Right _ <- typeWithA absurd context _A = normalize _A
           | otherwise = holeExpr
 

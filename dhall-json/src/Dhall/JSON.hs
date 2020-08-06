@@ -500,8 +500,8 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
         Core.App (Core.Field (Core.Union _) _) b -> loop b
         Core.Field (Core.Union _) k -> return (Aeson.toJSON k)
-        Core.Lam _ (Core.Const Core.Type)
-            (Core.Lam _
+        Core.Lam (Core.fbAnnotation -> Core.Const Core.Type)
+            (Core.Lam (Core.fbAnnotation ->
                 (Core.Record
                     [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
                     , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))
@@ -513,7 +513,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                         , ("mapValue", Core.recordFieldValue -> V 0)])) (V 1))
                     , ("string", Core.recordFieldValue -> Core.Pi _ Core.Text (V 1))
                     ]
-                )
+                ))
                 value
             ) -> do
                 let outer (Core.Field (V 0) "null") = return Aeson.Null
@@ -542,8 +542,8 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     outer _ = Left (Unsupported e)
 
                 outer value
-        Core.Lam _ (Core.Const Core.Type)
-            (Core.Lam _
+        Core.Lam (Core.fbAnnotation -> Core.Const Core.Type)
+            (Core.Lam (Core.fbAnnotation ->
                 (Core.Record
                     [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
                     , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))
@@ -557,7 +557,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                         ])) (V 1))
                     , ("string", Core.recordFieldValue -> Core.Pi _ Core.Text (V 1))
                     ]
-                )
+                ))
                 value
             ) -> do
                 let outer (Core.Field (V 0) "null") =
@@ -728,8 +728,8 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
            case we do *not* want to perform this rewrite since it will
            interfere with decoding the value.
         -}
-        Core.Lam a b c ->
-            Core.Lam a b c
+        Core.Lam a b ->
+            Core.Lam a b
 
         Core.Pi a b c ->
             Core.Pi a b' c'
