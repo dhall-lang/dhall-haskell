@@ -36,6 +36,7 @@ in
           # `hnix` depends on `unix-2.7.*` and doesn't work with GHC 8.6
           # shared_8_6_1.dhall-nix
           # shared_8_6_1.dhall-nixpkgs
+          shared_8_6_1.dhall-openapi
 
           shared_ghcjs.dhall-try
 
@@ -52,6 +53,7 @@ in
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix
           shared.tarball-dhall-nixpkgs
+          shared.tarball-dhall-openapi
           shared.tarball-dhall-yaml
 
           # This is the only `dhall` build that runs the test suite
@@ -76,6 +78,7 @@ in
       tarball-dhall-lsp-server
       tarball-dhall-nix
       tarball-dhall-nixpkgs
+      tarball-dhall-openapi
       tarball-dhall-yaml
     ;
 
@@ -86,6 +89,7 @@ in
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
     linux-dhall-nixpkgs    = shared_linux.possibly-static.dhall-nixpkgs;
+    linux-dhall-openapi    = shared_linux.possibly-static.dhall-openapi;
     linux-dhall-yaml       = shared_linux.possibly-static.dhall-yaml;
 
     inherit (shared_linux)
@@ -96,6 +100,7 @@ in
       image-dhall-lsp-server
       image-dhall-nix
       image-dhall-nixpkgs
+      image-dhall-openapi
       image-dhall-yaml
     ;
     inherit (shared_8_6_1)

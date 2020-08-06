@@ -464,6 +464,7 @@ in
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
     tarball-dhall-nix        = makeTarball "dhall-nix"       ;
     tarball-dhall-nixpkgs    = makeTarball "dhall-nixpkgs"   ;
+    tarball-dhall-openapi    = makeTarball "dhall-openapi"   ;
     tarball-dhall-yaml       = makeTarball "dhall-yaml"      ;
 
     inherit (pkgs) tarball-website website;
@@ -477,6 +478,7 @@ in
       dhall-lsp-server
       dhall-nix
       dhall-nixpkgs
+      dhall-openapi
       dhall-try
       dhall-yaml
     ;
@@ -501,6 +503,7 @@ in
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
     image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
+    image-dhall-openapi    = toDockerImage "dhall-openapi"   ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
     prelude-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
