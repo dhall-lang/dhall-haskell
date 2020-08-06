@@ -339,15 +339,9 @@ data FunctionBinding s a = FunctionBinding
     , fbAnnotation :: Expr s a
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
+-- | Smart constructor for 'FunctionBinding' with no src information
 makeFunctionBinding :: Text -> Expr s a -> FunctionBinding s a
 makeFunctionBinding l t = FunctionBinding Nothing l Nothing Nothing t
-
--- pattern Lam :: Text -> Expr s a -> Expr s a -> Expr s a
--- pattern Lam l t e <- Lam (FunctionBinding _ l _ _ t) e
---   where
---     Lam l t e = Lam (FunctionBinding Nothing l Nothing Nothing t) e
-
--- {-# COMPLETE Lam #-}
 
 instance Bifunctor FunctionBinding where
     first k (FunctionBinding src0 label src1 src2 type_) =
