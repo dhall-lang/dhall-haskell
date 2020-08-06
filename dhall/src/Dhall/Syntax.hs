@@ -561,19 +561,6 @@ data Expr s a
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
 
--- {-# COMPLETE Lam, Var, Pi, App, Let, Annot, Bool, BoolLit, BoolAnd,
---              BoolOr, BoolEQ, BoolNE, BoolIf, Natural, NaturalLit, NaturalFold,
---              NaturalBuild, NaturalIsZero, NaturalEven, NaturalOdd,
---              NaturalToInteger, NaturalShow, NaturalSubtract, NaturalPlus,
---              NaturalTimes, Integer, IntegerLit, IntegerClamp, IntegerNegate,
---              IntegerShow, IntegerToDouble, Double, DoubleLit, DoubleShow, Text,
---              TextLit, TextAppend, TextShow, List, ListLit, ListAppend,
---              ListBuild, ListFold, ListLength, ListHead, ListLast, ListIndexed,
---              ListReverse, Optional, Some, None, Record, RecordLit, Union,
---              Combine, CombineTypes, Prefer, RecordCompletion, Merge, ToMap,
---              Field, Project, Assert, Equivalent, With, Note, ImportAlt, Embed
---              #-}
-
 -- | This instance encodes what the Dhall standard calls an \"exact match\"
 -- between two expressions.
 --
