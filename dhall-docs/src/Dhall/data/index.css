@@ -1,11 +1,3 @@
-/*
-    primary-color: #C4C4C4
-    secondary-color: #EBEBEB
-    accent-color1: #FFA632
-    accent-color2: #008489
-    accent-color3: #914669
-*/
-
 /******** Common rules ********/
 
 body {
@@ -156,6 +148,10 @@ h2.doc-title {
     color: #333333;
 }
 
+.source-code span.variable-decl {
+    border-bottom: 1px solid #bdbdbd;
+}
+
 .source-code a {
     transition: 0s;
     font-family: 'Fira Code', monospace;
@@ -164,6 +160,7 @@ h2.doc-title {
 .source-code a.variable-use {
     text-decoration: none;
     color: inherit;
+    border-bottom: 1px solid #bdbdbd;
 }
 
 .source-code .highlighted {
@@ -218,21 +215,6 @@ body.dark-mode {
     color: #D4D4D4;
 }
 
-.dark-mode .source-code span.dhall-keyword {
-    color: #569CD6;
-}
-
-.dark-mode .source-code span.dhall-syntax {
-    color: #C586C0;
-}
-
-.dark-mode .source-code span.dhall-literal {
-    color: #B5CEA8;
-}
-
-.dark-mode .source-code span.dhall-builtin {
-    color: #4EC9B0;
-}
 
 .dark-mode a.copy-to-clipboard {
     color: #bdbdbd !important;

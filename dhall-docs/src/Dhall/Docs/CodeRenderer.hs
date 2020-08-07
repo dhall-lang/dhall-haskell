@@ -36,6 +36,7 @@ import Dhall.Core
     , Expr (..)
     , File (..)
     , FilePrefix (..)
+    , FunctionBinding (..)
     , Import (..)
     , ImportHashed (..)
     , ImportType (..)
@@ -83,8 +84,8 @@ data SourceCodeType
     --   Other imports are rendered as plain-text
     = ImportExpr Import
 
-    -- | Used to render a variable declared in let-binding that is used in
-    --   any expression
+    -- | Used to render a variable declared in let-binding or function argument
+    --   that is used in any expression
     | VariableUse VarDecl
 
     -- | Used to render the declaration of a variable. This is used to jump
@@ -123,19 +124,7 @@ fragments = go Context.empty
 
             fromValue = go context value
 
-            initialSourcePos = srcEnd0
-            endSourcePos = srcStart1
-            varSrc = Src {..}
-              where
-                srcStart = initialSourcePos
-                srcText =
-                    if Text.length variable == realLength then variable
-                    -- the variable was quoted using backticks
-                    else "`" <> variable <> "`"
-
-                srcEnd = endSourcePos
-
-                realLength = getSourceColumn srcEnd - getSourceColumn srcStart
+            varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
 
             varDecl = VarDecl varSrc variable
 
@@ -149,8 +138,28 @@ fragments = go Context.empty
                 Nothing -> []
                 Just varDecl -> [SourceCodeFragment src $ VariableUse varDecl]
 
+        Lam (FunctionBinding
+                (Just Src{srcEnd = srcEnd0})
+                variable
+                (Just Src{srcStart = srcStart1})
+                _
+                t) expr ->
+            sourceCodeFragment : fromAnnotation ++ fromExpr
+          where
+            varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
+            varDecl = VarDecl varSrc variable
+            sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
+
+            fromAnnotation = go context t
+            fromExpr = go (Context.insert variable varDecl context) expr
         e -> concatMap (go context) $ Lens.toListOf Core.subExpressions e
 
+    makeSrcForLabel srcStart srcEnd variable = Src {..}
+      where
+        realLength = getSourceColumn srcEnd - getSourceColumn srcStart
+        srcText =
+            if Text.length variable == realLength then variable
+            else "`" <> variable <> "`"
 
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
