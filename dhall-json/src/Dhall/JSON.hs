@@ -500,8 +500,8 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
         Core.App (Core.Field (Core.Union _) _) b -> loop b
         Core.Field (Core.Union _) k -> return (Aeson.toJSON k)
-        Core.Lam (Core.fbAnnotation -> Core.Const Core.Type)
-            (Core.Lam (Core.fbAnnotation ->
+        Core.Lam (Core.functionBindingAnnotation -> Core.Const Core.Type)
+            (Core.Lam (Core.functionBindingAnnotation ->
                 (Core.Record
                     [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
                     , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))
@@ -542,8 +542,8 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     outer _ = Left (Unsupported e)
 
                 outer value
-        Core.Lam (Core.fbAnnotation -> Core.Const Core.Type)
-            (Core.Lam (Core.fbAnnotation ->
+        Core.Lam (Core.functionBindingAnnotation -> Core.Const Core.Type)
+            (Core.Lam (Core.functionBindingAnnotation ->
                 (Core.Record
                     [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
                     , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))

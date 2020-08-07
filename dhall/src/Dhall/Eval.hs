@@ -390,7 +390,7 @@ eval !env t0 =
             VConst k
         Var v ->
             vVar env v
-        Lam (FunctionBinding { fbVariable = x, fbAnnotation = a }) t ->
+        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a }) t ->
             VLam (eval env a) (Closure x env t)
         Pi x a b ->
             VPi (eval env a) (Closure x env b)

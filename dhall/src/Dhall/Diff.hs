@@ -647,8 +647,8 @@ diff l@(Lam {}) r@(Lam {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs
-        (Lam (FunctionBinding { fbVariable = aL, fbAnnotation = bL }) cL)
-        (Lam (FunctionBinding { fbVariable = aR, fbAnnotation = bR }) cR) =
+        (Lam (FunctionBinding { functionBindingVariable = aL, functionBindingAnnotation = bL }) cL)
+        (Lam (FunctionBinding { functionBindingVariable = aR, functionBindingAnnotation = bR }) cR) =
         Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
         doc =   lambda

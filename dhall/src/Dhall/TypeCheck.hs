@@ -228,7 +228,7 @@ infer typer = loop
 
             go types n0
 
-        Lam (FunctionBinding { fbVariable = x, fbAnnotation = _A}) b -> do
+        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A}) b -> do
             tA' <- loop ctx _A
 
             case tA' of

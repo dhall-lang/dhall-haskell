@@ -536,7 +536,7 @@ prettyCharacterSet characterSet expression =
     prettyExpression a0@(Lam _ _) =
         arrows characterSet (docs a0)
       where
-        docs (Lam (FunctionBinding { fbVariable = a, fbAnnotation = b }) c) =
+        docs (Lam (FunctionBinding { functionBindingVariable = a, functionBindingAnnotation = b }) c) =
             Pretty.group (Pretty.flatAlt long short) : docs c
           where
             long =  (lambda characterSet <> space)

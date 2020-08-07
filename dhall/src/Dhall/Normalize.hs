@@ -202,7 +202,7 @@ boundedType _                = False
 
 >>> mfb = Syntax.makeFunctionBinding
 >>> alphaNormalize (Lam (mfb "a" (Const Type)) (Lam (mfb "b" (Const Type)) (Lam (mfb "x" "a") (Lam (mfb "y" "b") "x"))))
-Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Const Type}) (Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Const Type}) (Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Var (V "_" 1)}) (Lam (FunctionBinding {fbSrc0 = Nothing, fbVariable = "_", fbSrc1 = Nothing, fbSrc2 = Nothing, fbAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
+Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
 
     α-normalization does not affect free variables:
 
@@ -261,7 +261,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
  loop e =  case e of
     Const k -> pure (Const k)
     Var v -> pure (Var v)
-    Lam (FunctionBinding { fbVariable = x, fbAnnotation = _A }) b ->
+    Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
         Lam <$> (Syntax.makeFunctionBinding x <$> _A') <*> b'
       where
         _A' = loop _A
@@ -738,7 +738,7 @@ isNormalized e0 = loop (Syntax.denote e0)
     loop e = case e of
       Const _ -> True
       Var _ -> True
-      Lam (Syntax.fbAnnotation -> a) b -> loop a && loop b
+      Lam (Syntax.functionBindingAnnotation -> a) b -> loop a && loop b
       Pi _ a b -> loop a && loop b
       App f a -> loop f && loop a && case App f a of
           App (Lam _ _) _ -> False

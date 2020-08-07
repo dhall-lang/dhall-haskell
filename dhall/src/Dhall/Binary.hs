@@ -707,13 +707,13 @@ encodeExpressionInternal encodeEmbed = go
           where
             (function, arguments) = unApply a
 
-        Lam (FunctionBinding { fbVariable = "_", fbAnnotation = _A }) b ->
+        Lam (FunctionBinding { functionBindingVariable = "_", functionBindingAnnotation = _A }) b ->
             encodeList3
                 (Encoding.encodeInt 1)
                 (go _A)
                 (go b)
 
-        Lam (FunctionBinding { fbVariable = x, fbAnnotation = _A }) b ->
+        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
             encodeList4
                 (Encoding.encodeInt 1)
                 (Encoding.encodeString x)

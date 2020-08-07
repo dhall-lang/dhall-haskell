@@ -50,8 +50,9 @@ typeAt' pos ctx (Note src (Let (Binding { value = a }) _)) | pos `inside` getLet
   return (Just $ getLetIdentifier src, typ)
 
 -- "..." in a lambda expression
-typeAt' pos _ctx (Note src (Lam FunctionBinding { fbAnnotation = _A} _)) | Just src' <- getLamIdentifier src
-                                         , pos `inside` src' =
+typeAt' pos _ctx (Note src (Lam FunctionBinding { functionBindingAnnotation = _A} _))
+  | Just src' <- getLamIdentifier src
+  , pos `inside` src' =
   return (Just src', _A)
 
 -- "..." in a forall expression
@@ -64,10 +65,11 @@ typeAt' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) | pos
   let a' = shift 1 (V x 0) (normalize a)
   typeAt' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
 
-typeAt' pos ctx (Lam FunctionBinding { fbVariable = x, fbAnnotation = _A} b@(Note src _)) | pos `inside` src = do
-  let _A' = Dhall.Core.normalize _A
-      ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-  typeAt' pos ctx' b
+typeAt' pos ctx (Lam FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A} b@(Note src _))
+  | pos `inside` src = do
+      let _A' = Dhall.Core.normalize _A
+          ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
+      typeAt' pos ctx' b
 
 typeAt' pos ctx (Pi x _A  _B@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
@@ -137,7 +139,7 @@ annotateLet' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) 
   let a' = shift 1 (V x 0) (normalize a)
   annotateLet' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
 
-annotateLet' pos ctx (Lam FunctionBinding{ fbVariable = x, fbAnnotation = _A } b@(Note src _)) | pos `inside` src = do
+annotateLet' pos ctx (Lam FunctionBinding{ functionBindingVariable = x, functionBindingAnnotation = _A } b@(Note src _)) | pos `inside` src = do
   let _A' = Dhall.Core.normalize _A
       ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
   annotateLet' pos ctx' b

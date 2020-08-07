@@ -325,18 +325,18 @@ For example,
 > λ({- A -} a {- B -} : {- C -} T) -> e
 
 will be instantiated as follows:
-* @fbSrc0@ corresponds to the @A@ comment
-* @fbVariable@ is @a@
-* @fbSrc1@ corresponds to the @B@ comment
-* @fbSrc2@ corresponds to the @C@ comment
-* @fbAnnotation@ is @T@
+* @functionBindingSrc0@ corresponds to the @A@ comment
+* @functionBindingVariable@ is @a@
+* @functionBindingSrc1@ corresponds to the @B@ comment
+* @functionBindingSrc2@ corresponds to the @C@ comment
+* @functionBindingAnnotation@ is @T@
 -}
 data FunctionBinding s a = FunctionBinding
-    { fbSrc0 :: Maybe s
-    , fbVariable :: Text
-    , fbSrc1 :: Maybe s
-    , fbSrc2 :: Maybe s
-    , fbAnnotation :: Expr s a
+    { functionBindingSrc0 :: Maybe s
+    , functionBindingVariable :: Text
+    , functionBindingSrc1 :: Maybe s
+    , functionBindingSrc2 :: Maybe s
+    , functionBindingAnnotation :: Expr s a
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 -- | Smart constructor for 'FunctionBinding' with no src information
