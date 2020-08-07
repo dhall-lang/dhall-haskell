@@ -39,6 +39,7 @@ import Dhall.Syntax
     , Expr (..)
     , File (..)
     , FilePrefix (..)
+    , FunctionBinding (..)
     , Import (..)
     , ImportHashed (..)
     , ImportMode (..)
@@ -256,7 +257,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         b <- go
 
-                                        return (Lam "_" _A b)
+                                        return (Lam (Syntax.makeFunctionBinding "_" _A) b)
 
                                     4 -> do
                                         x <- Decoding.decodeString
@@ -269,7 +270,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         b <- go
 
-                                        return (Lam x _A b)
+                                        return (Lam (Syntax.makeFunctionBinding x _A) b)
 
                                     _ ->
                                         die ("Incorrect number of tokens used to encode a λ expression: " <> show len)
@@ -706,13 +707,13 @@ encodeExpressionInternal encodeEmbed = go
           where
             (function, arguments) = unApply a
 
-        Lam "_" _A b ->
+        Lam (FunctionBinding { functionBindingVariable = "_", functionBindingAnnotation = _A }) b ->
             encodeList3
                 (Encoding.encodeInt 1)
                 (go _A)
                 (go b)
 
-        Lam x _A b ->
+        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
             encodeList4
                 (Encoding.encodeInt 1)
                 (Encoding.encodeString x)

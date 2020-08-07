@@ -533,10 +533,11 @@ prettyCharacterSet :: Pretty a => CharacterSet -> Expr Src a -> Doc Ann
 prettyCharacterSet characterSet expression =
     Pretty.group (prettyExpression expression)
   where
-    prettyExpression a0@(Lam _ _ _) =
+    prettyExpression a0@(Lam _ _) =
         arrows characterSet (docs a0)
       where
-        docs (Lam a b c) = Pretty.group (Pretty.flatAlt long short) : docs c
+        docs (Lam (FunctionBinding { functionBindingVariable = a, functionBindingAnnotation = b }) c) =
+            Pretty.group (Pretty.flatAlt long short) : docs c
           where
             long =  (lambda characterSet <> space)
                 <>  Pretty.align

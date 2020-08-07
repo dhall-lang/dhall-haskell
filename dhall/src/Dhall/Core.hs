@@ -27,6 +27,8 @@ module Dhall.Core (
     , PreferAnnotation(..)
     , RecordField(..)
     , makeRecordField
+    , FunctionBinding(..)
+    , makeFunctionBinding
     , Expr(..)
 
     -- * Normalization
@@ -55,6 +57,7 @@ module Dhall.Core (
     , chunkExprs
     , bindingExprs
     , recordFieldExprs
+    , functionBindingExprs
 
     -- * Let-blocks
     , multiLet

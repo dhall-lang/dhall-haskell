@@ -56,6 +56,7 @@ import Dhall.Syntax
     , Chunks (..)
     , Const (..)
     , Expr (..)
+    , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
     , Var (..)
@@ -227,7 +228,7 @@ infer typer = loop
 
             go types n0
 
-        Lam x _A b -> do
+        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A}) b -> do
             tA' <- loop ctx _A
 
             case tA' of

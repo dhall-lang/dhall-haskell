@@ -13,7 +13,13 @@ where
 
 import Control.Applicative     (optional, (<|>))
 import Data.Text               (Text)
-import Dhall.Core              (Binding (..), Expr (..), Import, Var (..))
+import Dhall.Core
+    ( Binding (..)
+    , Expr (..)
+    , Import
+    , Var (..)
+    , makeFunctionBinding
+    )
 import Dhall.Parser
 import Dhall.Parser.Expression
     ( getSourcePos
@@ -308,4 +314,4 @@ binderExprFromText txt =
           <|> (do skipManyTill anySingle _arrow; return holeExpr)
       whitespace
       inner <- parseBinderExpr
-      return (Lam name typ inner)
+      return (Lam (makeFunctionBinding name typ) inner)

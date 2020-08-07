@@ -137,11 +137,11 @@ parsers embedded = Parsers {..}
             _lambda
             whitespace
             _openParens
-            whitespace
+            src0 <- src whitespace
             a <- label
-            whitespace
+            src1 <- src whitespace
             _colon
-            nonemptyWhitespace
+            src2 <- src nonemptyWhitespace
             b <- expression
             whitespace
             _closeParens
@@ -149,7 +149,7 @@ parsers embedded = Parsers {..}
             _arrow
             whitespace
             c <- expression
-            return (Lam a b c)
+            return (Lam (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
 
         alternative1 = do
             try (_if *> nonemptyWhitespace)
