@@ -922,7 +922,7 @@ isNormalized e0 = loop (Syntax.denote e0)
 True
 >>> "x" `freeIn` "y"
 False
->>> "x" `freeIn` Lam (mfb "x" (Const Type)) "x"
+>>> "x" `freeIn` Lam (Syntax.makeFunctionBinding "x" (Const Type)) "x"
 False
 -}
 freeIn :: Eq a => Var -> Expr s a -> Bool
