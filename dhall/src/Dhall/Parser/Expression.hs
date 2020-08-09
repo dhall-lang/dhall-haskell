@@ -826,6 +826,7 @@ parsers embedded = Parsers {..}
                     src0 <- case maybeSrc of
                         Just src0 -> return src0
                         Nothing -> src whitespace
+                    -- TODO: Use the same logic of RecordField for the keys in dot-syntax
                     keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
                     src1 <- src whitespace
 
