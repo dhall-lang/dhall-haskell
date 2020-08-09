@@ -6,6 +6,8 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -170,7 +172,6 @@ import Dhall.Syntax
     , ImportHashed (..)
     , ImportMode (..)
     , ImportType (..)
-    , RecordField (..)
     , URL (..)
     , bindingExprs
     , functionBindingExprs
@@ -779,7 +780,7 @@ toHeaders _ = []
 
 toHeader :: Expr s a -> Maybe HTTPHeader
 toHeader (RecordLit m) = do
-    (RecordField _ (TextLit (Chunks [] keyText)), RecordField _ (TextLit (Chunks [] valueText)))
+    (Core.recordFieldValue -> TextLit (Chunks [] keyText), Core.recordFieldValue -> TextLit (Chunks [] valueText))
         <- lookupHeader <|> lookupMapKey
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText

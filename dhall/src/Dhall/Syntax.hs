@@ -293,29 +293,36 @@ For example,
 
 ... or
 
-> { {- A -} x = T }
+> { {- A -} x {- B -} = {- C -} T }
 
 will be instantiated as follows:
 
-* @recordFieldSrc@ corresponds to the @A@ comment.
+* @recordFieldSrc0@ corresponds to the @A@ comment.
 * @field@ is @"T"@
+* @recordFieldSrc1@ corresponds to the @B@ comment.
+* @recordFieldSrc2@ corresponds to the @C@ comment.
 
 Although the @A@ comment isn't annotating the @"T"@ Record Field,
-this is the best place to keep these comments
+this is the best place to keep these comments.
+
+Note that @recordFieldSrc2@ is always 'Nothing' when the 'RecordField' is for
+a punned entry.
 -}
 data RecordField s a = RecordField
-    { recordFieldSrc  :: Maybe s
+    { recordFieldSrc0  :: Maybe s
     , recordFieldValue :: Expr s a
+    , recordFieldSrc1  :: Maybe s
+    , recordFieldSrc2  :: Maybe s
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 -- | Construct a 'RecordField' with no src information
 makeRecordField :: Expr s a -> RecordField s a
-makeRecordField = RecordField Nothing
+makeRecordField e = RecordField Nothing e Nothing Nothing
 
 
 instance Bifunctor RecordField where
-    first k (RecordField s0 value) =
-        RecordField (k <$> s0) (first k value)
+    first k (RecordField s0 value s1 s2) =
+        RecordField (k <$> s0) (first k value) (k <$> s1) (k <$> s2)
     second = fmap
 
 {-| Record the label of a function or a function-type expression
@@ -599,7 +606,8 @@ instance Monad (Expr s) where
         Lam a b -> Lam (adaptFunctionBinding a) (b >>= k)
         _ -> Lens.over unsafeSubExpressions (>>= k) expression
       where
-        bindRecordKeyValues (RecordField s0 e) = RecordField s0 (e >>= k)
+        bindRecordKeyValues (RecordField s0 e s1 s2) =
+            RecordField s0 (e >>= k) s1 s2
 
         adaptBinding (Binding src0 c src1 d src2 e) =
             Binding src0 c src1 (fmap adaptBindingAnnotation d) src2 (e >>= k)
@@ -805,10 +813,12 @@ recordFieldExprs
     :: Applicative f
     => (Expr s a -> f (Expr s b))
     -> RecordField s a -> f (RecordField s b)
-recordFieldExprs f (RecordField s0 e) =
+recordFieldExprs f (RecordField s0 e s1 s2) =
     RecordField
         <$> pure s0
         <*> f e
+        <*> pure s1
+        <*> pure s2
 
 {-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
 -}
@@ -1049,7 +1059,7 @@ denote = \case
     Lam a b -> Lam (denoteFunctionBinding a) (denote b)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
-    denoteRecordField (RecordField _ e) = RecordField Nothing (denote e)
+    denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing
     denoteBinding (Binding _ c _ d _ e) =
         Binding Nothing c Nothing (fmap denoteBindingAnnotation d) Nothing (denote e)
 

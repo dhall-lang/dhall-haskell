@@ -786,12 +786,15 @@ parsers embedded = Parsers {..}
 
     nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
-                    a <- try (anyLabelOrSome <* whitespace <* _colon)
-                    nonemptyWhitespace
+                    (firstKeySrc1, a) <- try $ do
+                        a <- anyLabelOrSome
+                        s <- src whitespace
+                        _colon
+                        return (s, a)
+
+                    firstKeySrc2 <- src nonemptyWhitespace
 
                     b <- expression
-
-                    whitespace
 
                     e <- Text.Megaparsec.many $ do
                         (src0', c) <- try $ do
@@ -800,22 +803,22 @@ parsers embedded = Parsers {..}
                             c <- anyLabelOrSome
                             return (src0', c)
 
-                        whitespace
+                        src1 <- src whitespace
 
                         _colon
 
-                        nonemptyWhitespace
+                        src2 <- src nonemptyWhitespace
 
                         d <- expression
 
                         whitespace
 
-                        return (c, RecordField (Just src0') d)
+                        return (c, RecordField (Just src0') d (Just src1) (Just src2))
 
                     _ <- optional (whitespace *> _comma)
                     whitespace
 
-                    m <- toMap ((a, RecordField (Just firstSrc0) b) : e)
+                    m <- toMap ((a, RecordField (Just firstSrc0) b (Just firstKeySrc1) (Just firstKeySrc2)) : e)
 
                     return (Record m)
 
@@ -824,24 +827,25 @@ parsers embedded = Parsers {..}
                         Just src0 -> return src0
                         Nothing -> src whitespace
                     keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
+                    src1 <- src whitespace
 
                     let normalRecordEntry = do
                             try (whitespace *> _equal)
 
-                            whitespace
+                            src2 <- src whitespace
 
                             value <- expression
 
-                            let cons key (key', values@(RecordField s0 _)) =
-                                    (key, RecordField s0 $ RecordLit [ (key', values) ])
+                            let cons key (key', values@(RecordField s0 _ s1 s2)) =
+                                    (key, RecordField s0 (RecordLit [ (key', values) ]) s1 s2)
 
-                            let nil = (NonEmpty.last keys, RecordField (Just src0) value)
+                            let nil = (NonEmpty.last keys, RecordField (Just src0) value (Just src1) (Just src2))
 
                             return (foldr cons nil (NonEmpty.init keys))
 
                     let punnedEntry =
                             case keys of
-                                x :| [] -> return (x, RecordField (Just src0) $ Var (V x 0))
+                                x :| [] -> return (x, RecordField (Just src0) (Var (V x 0)) (Just src1) Nothing)
                                 _       -> empty
 
                     (normalRecordEntry <|> punnedEntry) <* whitespace

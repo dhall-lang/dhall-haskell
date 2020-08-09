@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE ViewPatterns      #-}
@@ -258,7 +259,7 @@ normalizeWithM
     :: (Monad m, Eq a) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (Syntax.denote e0)
  where
- loop e =  case e of
+ loop =  \case
     Const k -> pure (Const k)
     Var v -> pure (Var v)
     Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
@@ -534,11 +535,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     None -> pure None
     Record kts -> Record . Dhall.Map.sort <$> kts'
       where
-        f (RecordField s0 expr) = RecordField s0 <$> loop expr
+        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
         kts' = traverse f kts
     RecordLit kvs -> RecordLit . Dhall.Map.sort <$> kvs'
       where
-        f (RecordField s0 expr) = RecordField s0 <$> loop expr
+        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
         kvs' = traverse f kvs
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
@@ -552,7 +553,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.unionWith f m n)
           where
-            f (RecordField _ expr) (RecordField _ expr') =
+            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
               Syntax.makeRecordField $ decide expr expr'
         decide l r =
             Combine mk l r
@@ -565,7 +566,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (Record m) (Record n) =
             Record (Dhall.Map.unionWith f m n)
           where
-            f (RecordField _ expr) (RecordField _ expr') =
+            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
               Syntax.makeRecordField $ decide expr expr'
         decide l r =
             CombineTypes l r
