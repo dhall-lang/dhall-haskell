@@ -295,9 +295,7 @@ let
 
     overlays =
           [ overlayShared overlayCabal2nix ]
-      ++  (      if compiler == "ghc861" then [ overlayGHC861 ]
-            else                              [               ]
-          );
+      ++  (if compiler == "ghc861" then [ overlayGHC861 ] else []);
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
@@ -418,7 +416,9 @@ let
 
   pkgsStaticLinux = import nixpkgsStaticLinux {
     config = {};
-    overlays = [ overlayShared overlayStaticLinux ];
+    overlays =
+          [ overlayShared overlayStaticLinux ]
+      ++  (if compiler == "ghc861" then [ overlayGHC861 ] else []);
     system = "x86_64-linux";
   };
 
