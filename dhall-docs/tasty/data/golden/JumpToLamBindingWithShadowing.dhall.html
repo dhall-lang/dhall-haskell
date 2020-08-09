@@ -1,0 +1,88 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToLamBindingWithShadowing.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToLamBindingWithShadowing.dhall</span></h2
+      ><a data-path="/JumpToLamBindingWithShadowing.dhall"
+          class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          >On this example, the first parameter <code
+          >a</code
+          > is shadowed with the second declaration.
+The jump-to-definintion on the usage of <code
+          >a</code> should not highlight the first declaration,
+and interacting with the first declaration should not change the others</p>
+</div
+      ><h3
+      >Examples</h3
+      ><div class="source-code code-examples"
+        ><pre
+          >fun &quot;a&quot; &quot;b&quot; ≡ [ &quot;bb&quot; ]<br/></pre></div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />On this example, the first parameter `a` is shadowed with the second declaration.<br
+          />The jump-to-definintion on the usage of `a` should not highlight the first declaration,<br
+          />and interacting with the first declaration should not change the others<br
+          />-}<br
+          />let <span id="var6-5" data-variable="var6-5"
+                      class="variable-decl"
+          >fun</span
+          > =<br
+          />    λ(<span id="var7-7" data-variable="var7-7"
+                        class="variable-decl"
+          >a</span
+          > : Text) -&gt;<br
+          />    λ(<span id="var8-7" data-variable="var8-7"
+                        class="variable-decl"
+          >a</span
+          > : Text) -&gt;<br
+          />    [ <a href="#var8-7" data-variable="var8-7"
+                     class="variable-use"
+          >a</a
+          > ++ <a href="#var8-7" data-variable="var8-7" class="variable-use"
+          >a</a
+          > ]<br
+          /><br
+          />let <span id="var11-5" data-variable="var11-5"
+                      class="variable-decl"
+          >example0</span
+          > = assert : <a href="#var6-5" data-variable="var6-5"
+                          class="variable-use"
+          >fun</a
+          > &quot;a&quot; &quot;b&quot; === [&quot;bb&quot;]<br
+          /><br
+          />in <a href="#var6-5" data-variable="var6-5" class="variable-use"
+          >fun</a
+          ><br
+          /><br/></pre></div></div></body></html>
