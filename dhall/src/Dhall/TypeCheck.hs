@@ -733,7 +733,7 @@ infer typer = loop
             return (VOptional _A')
 
         Record xTs -> do
-            let process x (RecordField _ _T) = do
+            let process x (RecordField {recordFieldValue = _T}) = do
                     tT' <- lift (loop ctx _T)
 
                     case tT' of

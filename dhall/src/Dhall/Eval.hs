@@ -1309,4 +1309,4 @@ alphaNormalize = goEnv EmptyNames
         go                     = goEnv e0
         goBind x               = goEnv (Bind e0 x)
         goChunks (Chunks ts x) = Chunks (fmap (fmap go) ts) x
-        goRecordField (RecordField s0 e) = RecordField s0 (go e)
+        goRecordField (RecordField s0 e s1 s2) = RecordField s0 (go e) s1 s2
