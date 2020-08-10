@@ -149,7 +149,6 @@ fragments = go Context.empty
 
             fromExpr' = go (Context.insert variable varDecl context) expr'
 
-
         Note src (Var (V name index)) ->
             case Context.lookup name index context of
                 Nothing -> []
@@ -169,6 +168,18 @@ fragments = go Context.empty
 
             fromAnnotation = go context t
             fromExpr = go (Context.insert variable varDecl context) expr
+
+        RecordLit m -> Map.foldMapWithKey f m
+          where
+            f key (RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) =
+                srcFragment : go context val
+              where
+                varSrc = makeSrcForLabel startPos endPos key
+                varDecl = VarDecl varSrc key (dhallTypeFromExpr val)
+
+                srcFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
+            f _ _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
+
         e -> concatMap (go context) $ Lens.toListOf Core.subExpressions e
 
 fileAsText :: File -> Text
