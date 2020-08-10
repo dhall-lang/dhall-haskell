@@ -1,0 +1,88 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToLamBindingWithIndex.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToLamBindingWithIndex.dhall</span></h2
+      ><a data-path="/JumpToLamBindingWithIndex.dhall"
+          class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          >On this example, we introduce the <code
+          >a</code
+          > variable in the two parameters of the
+<code
+          >fun</code> function and the jump-to-definition engine correctly highlights the usage
+when indexes are used</p>
+</div
+      ><h3
+      >Examples</h3
+      ><div class="source-code code-examples"
+        ><pre
+          >fun &quot;a&quot; &quot;b&quot; ≡ [ &quot;ab&quot; ]<br/></pre></div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />On this example, we introduce the `a` variable in the two parameters of the<br
+          />`fun` function and the jump-to-definition engine correctly highlights the usage<br
+          />when indexes are used<br
+          />-}<br
+          />let <span id="var6-5" data-variable="var6-5"
+                      class="variable-decl"
+          >fun</span
+          > =<br
+          />    λ(<span id="var7-7" data-variable="var7-7"
+                        class="variable-decl"
+          >a</span
+          > : Text) -&gt;<br
+          />    λ(<span id="var8-7" data-variable="var8-7"
+                        class="variable-decl"
+          >a</span
+          > : Text) -&gt;<br
+          />    [ <a href="#var7-7" data-variable="var7-7"
+                     class="variable-use"
+          >a@1</a
+          > ++ <a href="#var8-7" data-variable="var8-7" class="variable-use"
+          >a@0</a
+          > ]<br
+          /><br
+          />let <span id="var11-5" data-variable="var11-5"
+                      class="variable-decl"
+          >example0</span
+          > = assert : <a href="#var6-5" data-variable="var6-5"
+                          class="variable-use"
+          >fun</a
+          > &quot;a&quot; &quot;b&quot; === [&quot;ab&quot;]<br
+          /><br
+          />in <a href="#var6-5" data-variable="var6-5" class="variable-use"
+          >fun</a
+          ><br
+          /><br/></pre></div></div></body></html>
