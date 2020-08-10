@@ -2,6 +2,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| Contains the logic to render the source code inside a HTML. It also provides
     context-sensitive features such as jump-to-definition.
@@ -40,6 +41,7 @@ import Dhall.Core
     , Import (..)
     , ImportHashed (..)
     , ImportType (..)
+    , RecordField (..)
     , Scheme (..)
     , URL (..)
     , Var (..)
@@ -54,8 +56,10 @@ import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
 import qualified Dhall.Context                         as Context
 import qualified Dhall.Core                            as Core
+import qualified Dhall.Map                             as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
+import qualified Dhall.Set                             as Set
 import qualified Lens.Family                           as Lens
 import qualified Text.Megaparsec.Pos                   as SourcePos
 
@@ -68,12 +72,25 @@ getSourceLine, getSourceColumn :: SourcePos -> Int
 getSourceLine = SourcePos.unPos . SourcePos.sourceLine
 getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 
+-- | To support jump-to-definition on record literals we need to know the
+--   the type of a name as we traverse the AST. Using 'Dhall.TypeCheck' is not
+--   possible since we always try to extract as much information as we can from
+--   source.
+data DhallType
+    -- | Used for record literals, each field is a variable declaration
+    --   Could be a map, but 'VarDecl' already records the variable name
+    = RecordLiteral (Set.Set VarDecl)
+    -- | Default type for cases we don't handle
+    | AnyType
+    deriving (Eq, Ord)
+
 -- | To make each variable unique we record the source position where it was
 --   found.
-data VarDecl = VarDecl Src Text
+data VarDecl = VarDecl Src Text DhallType
+    deriving (Eq, Ord)
 
 makeHtmlId :: VarDecl -> Text
-makeHtmlId (VarDecl Src{srcStart} _) =
+makeHtmlId (VarDecl Src{srcStart} _ _) =
        "var"
     <> Text.pack (show $ getSourceLine srcStart) <> "-"
     <> Text.pack (show $ getSourceColumn srcStart)
@@ -126,7 +143,7 @@ fragments = go Context.empty
 
             varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
 
-            varDecl = VarDecl varSrc variable
+            varDecl = VarDecl varSrc variable (dhallTypeFromExpr value)
 
             sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
 
@@ -147,23 +164,43 @@ fragments = go Context.empty
             sourceCodeFragment : fromAnnotation ++ fromExpr
           where
             varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            varDecl = VarDecl varSrc variable
+            varDecl = VarDecl varSrc variable (dhallTypeFromExpr t)
             sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
 
             fromAnnotation = go context t
             fromExpr = go (Context.insert variable varDecl context) expr
         e -> concatMap (go context) $ Lens.toListOf Core.subExpressions e
 
-    makeSrcForLabel srcStart srcEnd variable = Src {..}
-      where
-        realLength = getSourceColumn srcEnd - getSourceColumn srcStart
-        srcText =
-            if Text.length variable == realLength then variable
-            else "`" <> variable <> "`"
-
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
     <> "/" <> file
+
+-- | Generic way of creating a Src for a label, taking quoted variables into
+--   account
+makeSrcForLabel
+    :: SourcePos  -- ^ Prefix whitespace end position, will be 'srcStart'
+    -> SourcePos  -- ^ Suffix whitespace start position, will be 'srcEnd'
+    -> Text       -- ^ Label name, will be the 'srcText' with surrounding @`@ if needed
+    -> Src
+makeSrcForLabel srcStart srcEnd variable = Src {..}
+  where
+    realLength = getSourceColumn srcEnd - getSourceColumn srcStart
+    srcText =
+        if Text.length variable == realLength then variable
+        else "`" <> variable <> "`"
+
+-- | Get the 'DhallType' from a @'Expr' 'Src' 'Import'@
+dhallTypeFromExpr :: Expr Src Import -> DhallType
+dhallTypeFromExpr = \case
+    RecordLit (Map.toList -> l) -> RecordLiteral s
+      where
+        s = Set.fromList $ map toVarDecl l
+
+        toVarDecl (label, RecordField (Just Src{srcEnd = posStart}) val (Just Src{srcStart = posEnd}) _) =
+            VarDecl (makeSrcForLabel posStart posEnd label) label (dhallTypeFromExpr val)
+        toVarDecl _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
+    _ -> AnyType
+
 
 renderSourceCodeFragment :: SourceCodeFragment -> Html ()
 renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
