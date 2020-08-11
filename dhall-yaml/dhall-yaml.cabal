@@ -66,7 +66,7 @@ Executable yaml-to-dhall
     Build-Depends:
         base                                             ,
         aeson                                            ,
-        ansi-terminal               >= 0.6.3.1  && < 0.11,
+        ansi-terminal               >= 0.6.3.1  && < 0.12,
         bytestring                                 < 0.11,
         dhall                                            ,
         dhall-json                                       ,
