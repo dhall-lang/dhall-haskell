@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -908,9 +909,12 @@ infer typer = loop
                   | not (Dhall.Map.member "Type" xLs')
                      -> die (InvalidRecordCompletion "Type" l)
                   | otherwise
-                     -> loop ctx (Annot (Prefer PreferFromCompletion (Field l "default") r) (Field l "Type"))
+                     -> loop ctx (Annot (Prefer PreferFromCompletion (Field l def) r) (Field l typ))
                 _ -> die (CompletionSchemaMustBeARecord l (quote names _L'))
 
+              where
+                def = Syntax.makeFieldAccess "default"
+                typ = Syntax.makeFieldAccess "Type"
         Merge t u mT₁ -> do
             _T' <- loop ctx t
 
@@ -1113,7 +1117,7 @@ infer typer = loop
 
                        die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
 
-        Field e x -> do
+        Field e (Syntax.fieldAccessLabel -> x) -> do
             _E' <- loop ctx e
 
             let _E'' = quote names _E'

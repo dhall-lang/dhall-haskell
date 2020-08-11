@@ -4,6 +4,7 @@
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 {-| This library only exports a single `dhallToNix` function for translating a
     Dhall syntax tree to a Nix syntax tree for the @hnix@ library
@@ -301,7 +302,7 @@ dhallToNix e =
     -- None needs a type to convert to an Optional
     loop (App None _) =
       return (Fix (NConstant NNull))
-    loop (App (Field (Union kts) k) v) = do
+    loop (App (Field (Union kts) (Dhall.Core.fieldAccessLabel -> k)) v) = do
         v' <- loop v
         let e0 = do
                 k' <- Dhall.Map.keys kts
@@ -594,8 +595,11 @@ dhallToNix e =
         c' <- loop c
         return (Fix (NBinary NUpdate b' c'))
     loop (RecordCompletion a b) =
-        loop (Annot (Prefer PreferFromCompletion (Field a "default") b) (Field a "Type"))
-    loop (Field (Union kts) k) =
+        loop (Annot (Prefer PreferFromCompletion (Field a def) b) (Field a typ))
+      where
+        def = Dhall.Core.makeFieldAccess "default"
+        typ = Dhall.Core.makeFieldAccess "Type"
+    loop (Field (Union kts) (Dhall.Core.fieldAccessLabel -> k)) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we
             -- need introduce the partial application through an extra abstraction
@@ -615,7 +619,7 @@ dhallToNix e =
                         return (k', Nothing)
                 let e2 = Fix (NSym k)
                 return (Fix (NAbs (ParamSet e0 False Nothing) e2))
-    loop (Field a b) = do
+    loop (Field a (Dhall.Core.fieldAccessLabel -> b)) = do
         a' <- loop a
         return (Fix (NSelect a' [StaticKey b] Nothing))
     loop (Project a (Left b)) = do

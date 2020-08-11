@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -1142,7 +1143,7 @@ prettyPrinters characterSet =
             prettySelectorExpression a
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettySelectorExpression (Field a b) =
+    prettySelectorExpression (Field a (Dhall.Syntax.fieldAccessLabel -> b)) =
         prettySelectorExpression a <> dot <> prettyAnyLabel b
     prettySelectorExpression (Project a (Left b)) =
         prettySelectorExpression a <> dot <> prettyLabels b

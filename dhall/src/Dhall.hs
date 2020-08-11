@@ -16,6 +16,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
@@ -1499,9 +1500,9 @@ unsafeExpectUnionLit
     :: Text
     -> Expr Src Void
     -> (Text, Maybe (Expr Src Void))
-unsafeExpectUnionLit _ (Field (Union _) k) =
+unsafeExpectUnionLit _ (Field (Union _) (Core.fieldAccessLabel -> k)) =
     (k, Nothing)
-unsafeExpectUnionLit _ (App (Field (Union _) k) v) =
+unsafeExpectUnionLit _ (App (Field (Union _) (Core.fieldAccessLabel -> k)) v) =
     (k, Just v)
 unsafeExpectUnionLit name expression =
     Core.internalError
@@ -1526,9 +1527,9 @@ notEmptyRecord e = case e of
     _                 -> Just e
 extractUnionConstructor
     :: Expr s a -> Maybe (Text, Expr s a, Dhall.Map.Map Text (Maybe (Expr s a)))
-extractUnionConstructor (App (Field (Union kts) fld) e) =
+extractUnionConstructor (App (Field (Union kts) (Core.fieldAccessLabel -> fld)) e) =
   return (fld, e, Dhall.Map.delete fld kts)
-extractUnionConstructor (Field (Union kts) fld) =
+extractUnionConstructor (Field (Union kts) (Core.fieldAccessLabel -> fld)) =
   return (fld, RecordLit mempty, Dhall.Map.delete fld kts)
 extractUnionConstructor _ =
   empty
@@ -2133,16 +2134,16 @@ instance (Constructor c1, Constructor c2, GenericToDhall f1, GenericToDhall f2) 
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
                 Nothing ->
-                    Field declared keyL
+                    Field declared $ Core.makeFieldAccess keyL
                 Just valL ->
-                    App (Field declared keyL) valL
+                    App (Field declared $ Core.makeFieldAccess keyL) valL
 
         embed (R1 (M1 r)) =
             case notEmptyRecordLit (embedR r) of
                 Nothing ->
-                    Field declared keyR
+                    Field declared $ Core.makeFieldAccess keyR
                 Just valR ->
-                    App (Field declared keyR) valR
+                    App (Field declared $ Core.makeFieldAccess keyR) valR
 
         declared =
             Union
@@ -2169,15 +2170,15 @@ instance (Constructor c, GenericToDhall (f :+: g), GenericToDhall h) => GenericT
       where
         embed (L1 l) =
             case maybeValL of
-                Nothing   -> Field declared keyL
-                Just valL -> App (Field declared keyL) valL
+                Nothing   -> Field declared $ Core.makeFieldAccess keyL
+                Just valL -> App (Field declared $ Core.makeFieldAccess keyL) valL
           where
             (keyL, maybeValL) =
               unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedL l)
         embed (R1 (M1 r)) =
             case notEmptyRecordLit (embedR r) of
-                Nothing   -> Field declared keyR
-                Just valR -> App (Field declared keyR) valR
+                Nothing   -> Field declared $ Core.makeFieldAccess keyR
+                Just valR -> App (Field declared $ Core.makeFieldAccess keyR) valR
 
         nR :: M1 i c h a
         nR = undefined
@@ -2196,12 +2197,12 @@ instance (Constructor c, GenericToDhall f, GenericToDhall (g :+: h)) => GenericT
       where
         embed (L1 (M1 l)) =
             case notEmptyRecordLit (embedL l) of
-                Nothing   -> Field declared keyL
-                Just valL -> App (Field declared keyL) valL
+                Nothing   -> Field declared $ Core.makeFieldAccess keyL
+                Just valL -> App (Field declared $ Core.makeFieldAccess keyL) valL
         embed (R1 r) =
             case maybeValR of
-                Nothing   -> Field declared keyR
-                Just valR -> App (Field declared keyR) valR
+                Nothing   -> Field declared $ Core.makeFieldAccess keyR
+                Just valR -> App (Field declared $ Core.makeFieldAccess keyR) valR
           where
             (keyR, maybeValR) =
                 unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedR r)
@@ -2223,15 +2224,15 @@ instance (GenericToDhall (f :+: g), GenericToDhall (h :+: i)) => GenericToDhall 
       where
         embed (L1 l) =
             case maybeValL of
-                Nothing   -> Field declared keyL
-                Just valL -> App (Field declared keyL) valL
+                Nothing   -> Field declared $ Core.makeFieldAccess keyL
+                Just valL -> App (Field declared $ Core.makeFieldAccess keyL) valL
           where
             (keyL, maybeValL) =
                 unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedL l)
         embed (R1 r) =
             case maybeValR of
-                Nothing   -> Field declared keyR
-                Just valR -> App (Field declared keyR) valR
+                Nothing   -> Field declared $ Core.makeFieldAccess keyR
+                Just valR -> App (Field declared $ Core.makeFieldAccess keyR) valR
           where
             (keyR, maybeValR) =
                 unsafeExpectUnionLit "genericToDhallWithNormalizer (:+:)" (embedR r)
@@ -2682,8 +2683,8 @@ unionEncoder ( UnionEncoder ( Data.Functor.Product.Pair ( Control.Applicative.Co
       { embed = \x ->
           let (name, y) = embedF x
           in  case notEmptyRecordLit y of
-                  Nothing  -> Field (Union fields') name
-                  Just val -> App (Field (Union fields') name) val
+                  Nothing  -> Field (Union fields') $ Core.makeFieldAccess name
+                  Just val -> App (Field (Union fields') $ Core.makeFieldAccess name) val
       , declared =
           Union fields'
       }

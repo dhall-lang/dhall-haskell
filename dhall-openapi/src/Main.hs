@@ -3,22 +3,32 @@
 
 module Main (main) where
 
-import Control.Applicative.Combinators (sepBy1, option)
-import Data.Aeson (decodeFileStrict)
-import Data.Bifunctor (bimap)
-import Data.Foldable (for_)
-import Data.Text (Text, pack)
-import Data.Void (Void)
+import Control.Applicative.Combinators (option, sepBy1)
+import Data.Aeson                      (decodeFileStrict)
+import Data.Bifunctor                  (bimap)
+import Data.Foldable                   (for_)
+import Data.Text                       (Text, pack)
+import Data.Void                       (Void)
 import Data.Yaml
-import Dhall.Core (Expr(..))
-import Dhall.Format (Format(..))
-import Dhall.Kubernetes.Data (patchCyclicImports)
-import Numeric.Natural (Natural)
-import Text.Megaparsec (Parsec, some, parse, (<|>), errorBundlePretty)
-import Text.Megaparsec.Char (char, alphaNumChar)
+import Dhall.Core                      (Expr (..))
+import Dhall.Format                    (Format (..))
+import Dhall.Kubernetes.Data           (patchCyclicImports)
+import Numeric.Natural                 (Natural)
+import Text.Megaparsec
+    ( Parsec
+    , errorBundlePretty
+    , parse
+    , some
+    , (<|>)
+    )
+import Text.Megaparsec.Char            (alphaNumChar, char)
 
 import Dhall.Kubernetes.Types
-    (DuplicateHandler, ModelName(..), Prefix, Swagger(..))
+    ( DuplicateHandler
+    , ModelName (..)
+    , Prefix
+    , Swagger (..)
+    )
 
 import qualified Data.List                             as List
 import qualified Data.Map.Strict                       as Data.Map
@@ -28,17 +38,17 @@ import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 import qualified Dhall.Core                            as Dhall
 import qualified Dhall.Format
-import qualified Dhall.Map
 import qualified Dhall.Kubernetes.Convert              as Convert
 import qualified Dhall.Kubernetes.Types                as Types
+import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
+import qualified System.IO
 import qualified Text.Megaparsec                       as Megaparsec
 import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Lexer
-import qualified System.IO
 import qualified Turtle
 
 -- | Top-level program options
@@ -290,7 +300,7 @@ main = do
           (Embed (Convert.mkImport prefixMap [ ] "schemas.dhall"))
           (RecordLit
               [ ( "IntOrString"
-                , Dhall.makeRecordField $ Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) "IntOrString"
+                , Dhall.makeRecordField $ Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) $ Dhall.makeFieldAccess "IntOrString"
                 )
               , ( "Resource", mkEmbedField (Convert.mkImport prefixMap [ ] "typesUnion.dhall"))
               ]

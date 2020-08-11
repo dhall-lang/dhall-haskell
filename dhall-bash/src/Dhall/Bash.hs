@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 {-| This library exports two utilities for compiling Dhall expressions to Bash:
 
@@ -360,7 +361,7 @@ dhallToExpression expr0 = go (Dhall.Core.normalize expr0)
     go (TextLit (Chunks [] a)) = do
         let bytes = Data.Text.Encoding.encodeUtf8 a
         return (Text.ShellEscape.bytes (Text.ShellEscape.bash bytes))
-    go e@(Field (Union m) k) =
+    go e@(Field (Union m) (Dhall.Core.fieldAccessLabel -> k)) =
         case Dhall.Map.lookup k m of
             Just Nothing -> go (TextLit (Chunks [] k))
             _            -> Left (UnsupportedExpression e)

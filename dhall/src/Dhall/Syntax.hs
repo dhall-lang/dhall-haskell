@@ -32,6 +32,8 @@ module Dhall.Syntax (
     , makeRecordField
     , FunctionBinding(..)
     , makeFunctionBinding
+    , FieldAccess(..)
+    , makeFieldAccess
 
     -- ** 'Let'-blocks
     , MultiLet(..)
@@ -356,6 +358,32 @@ instance Bifunctor FunctionBinding where
 
     second = fmap
 
+{-| Record the field on a dot-access expression
+
+For example,
+
+> e . {- A -} x {- B -}
+
+will be instantiated as follows:
+* @fieldAccessSrc0@ corresponds to the @A@ comment
+* @fieldAccessLabel@ corresponds to @x@
+* @fieldAccessSrc1@ corresponds to the @B@ comment
+
+Given our limitation that not all expressions recover their whitespaces, the
+purpose of @fieldAccessSrc1@ is to save the 'SourcePos' where the
+@fieldAccessLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@) to
+be consistent with similar data types such as 'Binding', for example.
+-}
+
+data FieldAccess s = FieldAccess
+    { fieldAccessSrc0 :: Maybe s
+    , fieldAccessLabel :: Text
+    , fieldAccessSrc1 :: Maybe s
+    } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
+
+makeFieldAccess :: Text -> FieldAccess s
+makeFieldAccess t = FieldAccess Nothing t Nothing
+
 {-| Syntax tree for expressions
 
     The @s@ type parameter is used to track the presence or absence of `Src`
@@ -541,8 +569,8 @@ data Expr s a
     -- | > ToMap x (Just t)                         ~  toMap x : t
     --   > ToMap x  Nothing                         ~  toMap x
     | ToMap (Expr s a) (Maybe (Expr s a))
-    -- | > Field e x                                ~  e.x
-    | Field (Expr s a) Text
+    -- | > Field e (FieldAccess _ x _)              ~  e.x
+    | Field (Expr s a) (FieldAccess s)
     -- | > Project e (Left xs)                      ~  e.{ xs }
     --   > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
@@ -586,6 +614,7 @@ instance Functor (Expr s) where
   fmap f (Record a) = Record $ fmap f <$> a
   fmap f (RecordLit a) = RecordLit $ fmap f <$> a
   fmap f (Lam fb e) = Lam (f <$> fb) (f <$> e)
+  fmap f (Field a b) = Field (f <$> a) b
   fmap f expression = Lens.over unsafeSubExpressions (fmap f) expression
   {-# INLINABLE fmap #-}
 
@@ -598,12 +627,13 @@ instance Monad (Expr s) where
     return = pure
 
     expression >>= k = case expression of
-        Embed a    -> k a
-        Let a b    -> Let (adaptBinding a) (b >>= k)
-        Note a b   -> Note a (b >>= k)
-        Record a -> Record $ bindRecordKeyValues <$> a
+        Embed a     -> k a
+        Let a b     -> Let (adaptBinding a) (b >>= k)
+        Note a b    -> Note a (b >>= k)
+        Record a    -> Record $ bindRecordKeyValues <$> a
         RecordLit a -> RecordLit $ bindRecordKeyValues <$> a
-        Lam a b -> Lam (adaptFunctionBinding a) (b >>= k)
+        Lam a b     -> Lam (adaptFunctionBinding a) (b >>= k)
+        Field a b   -> Field (a >>= k) b
         _ -> Lens.over unsafeSubExpressions (>>= k) expression
       where
         bindRecordKeyValues (RecordField s0 e s1 s2) =
@@ -624,6 +654,7 @@ instance Bifunctor Expr where
     first k (Record a   ) = Record $ first k <$> a
     first k (RecordLit a) = RecordLit $ first k <$> a
     first k (Lam a b    ) = Lam (first k a) (first k b)
+    first k (Field a b  ) = Field (first k a) (k <$> b)
     first k  expression  = Lens.over unsafeSubExpressions (first k) expression
 
     second = fmap
@@ -694,6 +725,7 @@ subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Record a) = Record <$> traverse (recordFieldExprs f) a
 subExpressions f (RecordLit a) = RecordLit <$> traverse (recordFieldExprs f) a
 subExpressions f (Lam fb e) = Lam <$> functionBindingExprs f fb <*> f e
+subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f expression = unsafeSubExpressions f expression
 {-# INLINABLE subExpressions #-}
 
@@ -769,7 +801,6 @@ unsafeSubExpressions f (Prefer a b c) = Prefer <$> a' <*> f b <*> f c
 unsafeSubExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 unsafeSubExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 unsafeSubExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
-unsafeSubExpressions f (Field a b) = Field <$> f a <*> pure b
 unsafeSubExpressions f (Project a b) = Project <$> f a <*> traverse f b
 unsafeSubExpressions f (Assert a) = Assert <$> f a
 unsafeSubExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
@@ -781,6 +812,7 @@ unsafeSubExpressions _ (Embed {}) = unhandledConstructor "Embed"
 unsafeSubExpressions _ (Record {}) = unhandledConstructor "Record"
 unsafeSubExpressions _ (RecordLit {}) = unhandledConstructor "RecordLit"
 unsafeSubExpressions _ (Lam {}) = unhandledConstructor "Lam"
+unsafeSubExpressions _ (Field {}) = unhandledConstructor "Field"
 {-# INLINABLE unsafeSubExpressions #-}
 
 unhandledConstructor :: Text -> a
@@ -1058,6 +1090,7 @@ denote = \case
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
     Lam a b -> Lam (denoteFunctionBinding a) (denote b)
+    Field a (FieldAccess _ b _) -> Field (denote a) (FieldAccess Nothing b Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing
@@ -1251,7 +1284,9 @@ desugarWith = Optics.rewriteOf subExpressions rewrite
         Just
             (Prefer (PreferFromWith e) record
                 (RecordLit
-                    [ (key0, makeRecordField $ With (Field record key0) (key1 :| keys) value) ]
+                    [ (key0, makeRecordField $
+                        With (Field record (FieldAccess Nothing key0 Nothing)) (key1 :| keys) value)
+                    ]
                 )
             )
     rewrite _ = Nothing

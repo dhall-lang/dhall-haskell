@@ -37,6 +37,7 @@ import Dhall.Core
     , DhallDouble (..)
     , Directory (..)
     , Expr (..)
+    , FieldAccess (..)
     , File (..)
     , FilePrefix (..)
     , FunctionBinding (..)
@@ -291,6 +292,10 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
 
     shrink = genericShrink
 
+instance Arbitrary s => Arbitrary (FieldAccess s) where
+    arbitrary = FieldAccess <$> pure Nothing <*> label <*> pure Nothing
+    shrink = genericShrink
+
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =
         Test.QuickCheck.suchThat
@@ -303,7 +308,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
         customGens
             :: ConstrGen "Lam" 0 (FunctionBinding s a)
             :+ ConstrGen "Pi" 0 Text
-            :+ ConstrGen "Field" 1 Text
+            :+ ConstrGen "Field" 1 (FieldAccess s)
             :+ ConstrGen "Project" 1 (Either (Set Text) (Expr s a))
             :+ Gen Integer  -- Generates all Integer fields in Expr
             :+ Gen Text     -- Generates all Text fields in Expr
@@ -311,7 +316,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
         customGens =
                ConstrGen arbitrary
             :+ ConstrGen label
-            :+ ConstrGen label
+            :+ ConstrGen arbitrary
             :+ ConstrGen projection
             :+ integer
                -- 'Lam's and 'Pi's are encoded differently when the binding is

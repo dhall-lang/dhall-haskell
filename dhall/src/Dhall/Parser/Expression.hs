@@ -443,18 +443,29 @@ parsers embedded = Parsers {..}
     selectorExpression = noted (do
             a <- primitiveExpression
 
-            let recordType = _openParens *> whitespace *> expression <* whitespace <* _closeParens
+            let recordType = whitespace *> _openParens *> whitespace *> expression <* whitespace <* _closeParens
 
             let field               x  e = Field   e  x
             let projectBySet        xs e = Project e (Left  xs)
             let projectByExpression xs e = Project e (Right xs)
 
+            let fieldParser = do
+                    src0 <- src whitespace
+                    l <- anyLabel
+                    pos <- getSourcePos
+
+                    -- FIXME: Suffix whitespace can't be parsed given our limitation
+                    -- about whitespace treatment, but for @dhall-docs@ this
+                    -- is enough
+                    let src1 = Src pos pos ""
+                    return (FieldAccess (Just src0) l (Just src1))
+
             let alternatives =
-                        fmap field               anyLabel
-                    <|> fmap projectBySet        labels
+                        fmap field               fieldParser
+                    <|> fmap projectBySet        (whitespace *> labels)
                     <|> fmap projectByExpression recordType
 
-            b <- Text.Megaparsec.many (try (whitespace *> _dot *> whitespace *> alternatives))
+            b <- Text.Megaparsec.many (try (whitespace *> _dot *> alternatives))
             return (foldl' (\e k -> k e) a b) )
 
     primitiveExpression =

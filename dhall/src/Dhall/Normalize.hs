@@ -33,6 +33,7 @@ import Dhall.Syntax
     , Chunks (..)
     , DhallDouble (..)
     , Expr (..)
+    , FieldAccess (..)
     , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
@@ -583,14 +584,17 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l r =
             Prefer PreferFromSource l r
     RecordCompletion x y ->
-        loop (Annot (Prefer PreferFromCompletion (Field x "default") y) (Field x "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field x def) y) (Field x typ))
+      where
+        def = Syntax.makeFieldAccess "default"
+        typ = Syntax.makeFieldAccess "Type"
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y
         case x' of
             RecordLit kvsX ->
                 case y' of
-                    Field (Union ktsY) kY ->
+                    Field (Union ktsY) (Syntax.fieldAccessLabel -> kY) ->
                         case Dhall.Map.lookup kY ktsY of
                             Just Nothing ->
                                 case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
@@ -598,7 +602,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                     Nothing -> Merge x' y' <$> t'
                             _ ->
                                 Merge x' y' <$> t'
-                    App (Field (Union ktsY) kY) vY ->
+                    App (Field (Union ktsY) (Syntax.fieldAccessLabel -> kY)) vY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just (Just _) ->
                                 case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
@@ -642,7 +646,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 return (ListLit listType keyValues)
             _ ->
                 return (ToMap x' t')
-    Field r x        -> do
+    Field r k@FieldAccess{fieldAccessLabel = x}        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
 
         r' <- loop r
@@ -650,21 +654,21 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
                     Just v  -> pure $ recordFieldValue v
-                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure x
-            Project r_ _ -> loop (Field r_ x)
+                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure k
+            Project r_ _ -> loop (Field r_ k)
             Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
-                Nothing -> loop (Field r_ x)
+                Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) k)
+                Nothing -> loop (Field r_ k)
             Prefer _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure $ recordFieldValue v
-                Nothing -> loop (Field l x)
+                Nothing -> loop (Field l k)
             Combine m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine m (singletonRecordLit v) r_) x)
-                Nothing -> loop (Field r_ x)
+                Just v -> pure (Field (Combine m (singletonRecordLit v) r_) k)
+                Nothing -> loop (Field r_ k)
             Combine m l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine m l (singletonRecordLit v)) x)
-                Nothing -> loop (Field l x)
-            _ -> pure (Field r' x)
+                Just v -> pure (Field (Combine m l (singletonRecordLit v)) k)
+                Nothing -> loop (Field l k)
+            _ -> pure (Field r' k)
     Project x (Left fields)-> do
         x' <- loop x
         let fieldsSet = Dhall.Set.toSet fields
@@ -892,7 +896,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r k -> case r of
+      Field r (Syntax.fieldAccessLabel -> k) -> case r of
           RecordLit _ -> False
           Project _ _ -> False
           Prefer _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
