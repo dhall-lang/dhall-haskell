@@ -18,6 +18,7 @@ import Dhall.Syntax
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
+import qualified Control.Monad.Combinators          as Combinators
 import qualified Control.Monad.Combinators.NonEmpty as Combinators.NonEmpty
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
@@ -834,30 +835,40 @@ parsers embedded = Parsers {..}
                     return (Record m)
 
             let keysValue maybeSrc = do
-                    src0 <- case maybeSrc of
+                    firstSrc0' <- case maybeSrc of
                         Just src0 -> return src0
                         Nothing -> src whitespace
-                    -- TODO: Use the same logic of RecordField for the keys in dot-syntax
-                    keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
-                    src1 <- src whitespace
+                    firstLabel <- anyLabelOrSome
+                    firstSrc1 <- src whitespace
+
+                    let parseLabelWithWhsp = try $ do
+                            _dot
+                            src0 <- src whitespace
+                            l <- anyLabelOrSome
+                            src1 <- src whitespace
+                            return (Just src0, l, Just src1, Just src1)
+
+                    restKeys <- Combinators.many parseLabelWithWhsp
+                    let keys = (Just firstSrc0', firstLabel, Just firstSrc1, Just firstSrc1) :| restKeys
 
                     let normalRecordEntry = do
-                            try (whitespace *> _equal)
+                            try _equal
 
-                            src2 <- src whitespace
+                            lastSrc2 <- src whitespace
 
                             value <- expression
 
-                            let cons key (key', values@(RecordField s0 _ s1 s2)) =
+                            let cons (s0, key, s1, s2) (key', values) =
                                     (key, RecordField s0 (RecordLit [ (key', values) ]) s1 s2)
 
-                            let nil = (NonEmpty.last keys, RecordField (Just src0) value (Just src1) (Just src2))
+                            let (lastSrc0, lastLabel, lastSrc1, _) = NonEmpty.last keys
+                            let nil = (lastLabel, RecordField lastSrc0 value lastSrc1 (Just lastSrc2))
 
                             return (foldr cons nil (NonEmpty.init keys))
 
                     let punnedEntry =
                             case keys of
-                                x :| [] -> return (x, RecordField (Just src0) (Var (V x 0)) (Just src1) Nothing)
+                                (_, x, _, _) :| [] -> return (x, RecordField (Just firstSrc0') (Var (V x 0)) (Just firstSrc1) Nothing)
                                 _       -> empty
 
                     (normalRecordEntry <|> punnedEntry) <* whitespace
