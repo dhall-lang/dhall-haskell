@@ -31,7 +31,6 @@ module Dhall.Docs.CodeRenderer
     ) where
 
 import Control.Monad.Trans.Writer.Strict (Writer)
-import Debug.Trace (traceShow)
 import Data.Text                         (Text)
 import Data.Void                         (Void)
 import Dhall.Context                     (Context)
@@ -186,7 +185,7 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
             infer (Context.insert variable varDecl context) expr
 
         Field e (FieldAccess (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
-            fields <- traceShow e $ do
+            fields <- do
                 dhallType <- infer context e
                 case dhallType of
                     AnyType -> return mempty
