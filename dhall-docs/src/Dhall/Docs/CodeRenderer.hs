@@ -32,7 +32,6 @@ module Dhall.Docs.CodeRenderer
 
 import Data.Text           (Text)
 import Data.Void           (Void)
-import Debug.Trace         (traceShow)
 import Dhall.Context       (Context)
 import Dhall.Core
     ( Binding (..)
@@ -202,7 +201,7 @@ fragments = go Context.empty
 -- | Gets the 'DhallType' from a 'Expr Src Import' with the given context
 inferWithContext :: Context VarDecl -> Expr Src Import -> DhallType
 inferWithContext context = \case
-    Var (V name index) | traceShow (Context.toList context) True ->
+    Var (V name index) ->
         case Context.lookup name index context of
             Nothing -> AnyType
             Just (VarDecl _ _ t) -> t

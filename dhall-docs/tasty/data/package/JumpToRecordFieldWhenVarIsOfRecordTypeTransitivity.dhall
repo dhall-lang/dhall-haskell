@@ -6,7 +6,7 @@ Transitivity is respected when the variable is assigned using let-bindings.
 For instance, if the user clicks the `y` from the `ax.y.z`, it will jump to
 the definition of `x` on the record literal.
 
-_(the code is the same from [](./JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall))_
+_(the code is the same from <./JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall>)_
 -}
 let a = { x.y.z = 1 }
 
