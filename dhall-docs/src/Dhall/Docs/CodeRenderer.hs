@@ -200,7 +200,17 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
                     return t
                 _ -> return AnyType
 
-        RecordLit (Map.toList -> l) -> RecordLiteral . Set.fromList <$> mapM f l
+        RecordLit (Map.toList -> l) -> handleRecordLike l
+
+        Record (Map.toList -> l) -> handleRecordLike l
+
+        Note _ e -> infer context e
+        e -> do
+            mapM_ (infer context) $ Lens.toListOf Core.subExpressions e
+            return AnyType
+
+      where
+        handleRecordLike l = RecordLiteral . Set.fromList <$> mapM f l
           where
             f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
                 dhallType <- infer context val
@@ -210,13 +220,6 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
                 return varDecl
               where
             f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
-
-        Note _ e -> infer context e
-
-        e -> do
-            mapM_ (infer context) $ Lens.toListOf Core.subExpressions e
-            return AnyType
-
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
     <> "/" <> file
