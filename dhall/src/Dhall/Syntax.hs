@@ -382,13 +382,13 @@ purpose of @fieldAccessSrc1@ is to save the 'SourcePos' where the
 @fieldAccessLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@) to
 be consistent with similar data types such as 'Binding', for example.
 -}
-
 data FieldAccess s = FieldAccess
     { fieldAccessSrc0 :: Maybe s
     , fieldAccessLabel :: Text
     , fieldAccessSrc1 :: Maybe s
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
+-- | Smart constructor for 'FieldAccess' with no src information
 makeFieldAccess :: Text -> FieldAccess s
 makeFieldAccess t = FieldAccess Nothing t Nothing
 
