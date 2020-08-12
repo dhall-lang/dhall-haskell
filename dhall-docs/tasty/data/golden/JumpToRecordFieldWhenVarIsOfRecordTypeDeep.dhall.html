@@ -1,0 +1,81 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall"
+          class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          >On this example, <code
+          >dhall-docs</code
+          > will detect that the variable <code
+          >a</code
+          > is bounded
+to a record literal. It will also detect that the <code
+          >field</code
+          > key from the record
+literal is another record literal. When the user clicks <code
+          >deep</code
+          > from the
+<code
+          >a.field.deep</code>, it will jump to the definition of that variable in the source
+code.</p>
+</div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />On this example, `dhall-docs` will detect that the variable `a` is bounded<br
+          />to a record literal. It will also detect that the `field` key from the record<br
+          />literal is another record literal. When the user clicks `deep` from the<br
+          />`a.field.deep`, it will jump to the definition of that variable in the source<br
+          />code.<br
+          />-}<br
+          />let <span id="var8-5" data-variable="var8-5"
+                      class="variable-decl"
+          >a</span
+          > = { <span id="var8-11" data-variable="var8-11"
+                      class="variable-decl"
+          >field</span
+          > = { <span id="var8-21" data-variable="var8-21"
+                      class="variable-decl"
+          >deep</span
+          > = &quot;bar&quot; } }<br
+          /><br
+          />in Text/show <a href="#var8-5" data-variable="var8-5"
+                            class="variable-use"
+          >a</a
+          >.<a href="#var8-11" data-variable="var8-11" class="variable-use"
+          >field</a
+          >.<a href="#var8-21" data-variable="var8-21" class="variable-use"
+          >deep</a
+          ><br/></pre></div></div></body></html>
