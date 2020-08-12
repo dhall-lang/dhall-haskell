@@ -846,10 +846,10 @@ parsers embedded = Parsers {..}
                             src0 <- src whitespace
                             l <- anyLabelOrSome
                             src1 <- src whitespace
-                            return (Just src0, l, Just src1, Just src1)
+                            return (src0, l, src1, src1)
 
                     restKeys <- Combinators.many parseLabelWithWhsp
-                    let keys = (Just firstSrc0', firstLabel, Just firstSrc1, Just firstSrc1) :| restKeys
+                    let keys = (firstSrc0', firstLabel, firstSrc1, firstSrc1) :| restKeys
 
                     let normalRecordEntry = do
                             try _equal
@@ -859,10 +859,10 @@ parsers embedded = Parsers {..}
                             value <- expression
 
                             let cons (s0, key, s1, s2) (key', values) =
-                                    (key, RecordField s0 (RecordLit [ (key', values) ]) s1 s2)
+                                    (key, RecordField (Just s0) (RecordLit [ (key', values) ]) (Just s1) (Just s2))
 
                             let (lastSrc0, lastLabel, lastSrc1, _) = NonEmpty.last keys
-                            let nil = (lastLabel, RecordField lastSrc0 value lastSrc1 (Just lastSrc2))
+                            let nil = (lastLabel, RecordField (Just lastSrc0) value (Just lastSrc1) (Just lastSrc2))
 
                             return (foldr cons nil (NonEmpty.init keys))
 
