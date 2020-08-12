@@ -32,9 +32,12 @@ module Dhall.Docs.CodeRenderer
 
 import Data.Text           (Text)
 import Data.Void           (Void)
+import Debug.Trace         (traceShow)
+import Dhall.Context       (Context)
 import Dhall.Core
     ( Binding (..)
     , Expr (..)
+    , FieldAccess (..)
     , File (..)
     , FilePrefix (..)
     , FunctionBinding (..)
@@ -51,6 +54,7 @@ import Dhall.Src           (Src (..))
 import Lucid
 import Text.Megaparsec.Pos (SourcePos (..))
 
+import qualified Data.Set                              as Set
 import qualified Data.Text                             as Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
@@ -59,7 +63,6 @@ import qualified Dhall.Core                            as Core
 import qualified Dhall.Map                             as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.Set                             as Set
 import qualified Lens.Family                           as Lens
 import qualified Text.Megaparsec.Pos                   as SourcePos
 
@@ -82,12 +85,12 @@ data DhallType
     = RecordLiteral (Set.Set VarDecl)
     -- | Default type for cases we don't handle
     | AnyType
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 -- | To make each variable unique we record the source position where it was
 --   found.
 data VarDecl = VarDecl Src Text DhallType
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 makeHtmlId :: VarDecl -> Text
 makeHtmlId (VarDecl Src{srcStart} _ _) =
@@ -133,7 +136,7 @@ fragments = go Context.empty
                 annotation
                 _
                 value) expr' ->
-            sourceCodeFragment : fromAnnotation ++ fromValue ++ fromExpr'
+            sourceCodeFragment : fromAnnotation <> fromValue <> fromExpr'
           where
             fromAnnotation = case annotation of
                 Nothing -> []
@@ -143,7 +146,7 @@ fragments = go Context.empty
 
             varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
 
-            varDecl = VarDecl varSrc variable (dhallTypeFromExpr value)
+            varDecl = VarDecl varSrc variable (inferWithContext context value)
 
             sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
 
@@ -160,14 +163,28 @@ fragments = go Context.empty
                 (Just Src{srcStart = srcStart1})
                 _
                 t) expr ->
-            sourceCodeFragment : fromAnnotation ++ fromExpr
+            sourceCodeFragment : fromAnnotation <> fromExpr
           where
             varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            varDecl = VarDecl varSrc variable (dhallTypeFromExpr t)
+            varDecl = VarDecl varSrc variable (inferWithContext context t)
             sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
 
             fromAnnotation = go context t
             fromExpr = go (Context.insert variable varDecl context) expr
+
+        Field e (FieldAccess (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) ->
+            go context e <> fromLabel
+          where
+            fields = case inferWithContext context e of
+                AnyType -> mempty
+                RecordLiteral s -> Set.toList s
+
+            src = makeSrcForLabel posStart posEnd label
+            match (VarDecl _ t _) = t == label
+            fromLabel = case filter match fields of
+                x@(VarDecl _ _ _) : _ ->
+                    [SourceCodeFragment src (VariableUse x)]
+                _ -> mempty
 
         RecordLit m -> Map.foldMapWithKey f m
           where
@@ -175,12 +192,39 @@ fragments = go Context.empty
                 srcFragment : go context val
               where
                 varSrc = makeSrcForLabel startPos endPos key
-                varDecl = VarDecl varSrc key (dhallTypeFromExpr val)
+                varDecl = VarDecl varSrc key (inferWithContext context val)
 
                 srcFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
             f _ _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
 
         e -> concatMap (go context) $ Lens.toListOf Core.subExpressions e
+
+-- | Gets the 'DhallType' from a 'Expr Src Import' with the given context
+inferWithContext :: Context VarDecl -> Expr Src Import -> DhallType
+inferWithContext context = \case
+    Var (V name index) | traceShow (Context.toList context) True ->
+        case Context.lookup name index context of
+            Nothing -> AnyType
+            Just (VarDecl _ _ t) -> t
+    RecordLit (Map.toList -> l) -> RecordLiteral s
+      where
+        s = Set.fromList $ map toVarDecl l
+
+        toVarDecl (label, RecordField (Just Src{srcEnd = posStart}) val (Just Src{srcStart = posEnd}) _) =
+            VarDecl (makeSrcForLabel posStart posEnd label) label (inferWithContext context val)
+        toVarDecl _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
+    Field e (FieldAccess {fieldAccessLabel = label}) -> case inferWithContext context e of
+        AnyType -> AnyType
+        RecordLiteral (Set.toList -> fields) -> t
+          where
+            match (VarDecl _ l _) = l == label
+            t = case filter match fields of
+                (VarDecl _ _ dt) : _ -> dt
+                _ -> AnyType
+
+    Note _ e -> inferWithContext context e
+    _ -> AnyType
+
 
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
@@ -199,19 +243,6 @@ makeSrcForLabel srcStart srcEnd variable = Src {..}
     srcText =
         if Text.length variable == realLength then variable
         else "`" <> variable <> "`"
-
--- | Get the 'DhallType' from a @'Expr' 'Src' 'Import'@
-dhallTypeFromExpr :: Expr Src Import -> DhallType
-dhallTypeFromExpr = \case
-    RecordLit (Map.toList -> l) -> RecordLiteral s
-      where
-        s = Set.fromList $ map toVarDecl l
-
-        toVarDecl (label, RecordField (Just Src{srcEnd = posStart}) val (Just Src{srcStart = posEnd}) _) =
-            VarDecl (makeSrcForLabel posStart posEnd label) label (dhallTypeFromExpr val)
-        toVarDecl _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
-    _ -> AnyType
-
 
 renderSourceCodeFragment :: SourceCodeFragment -> Html ()
 renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
@@ -258,7 +289,6 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
                 href = ".." <> fileAsText file <> ".html"
 
             _ -> toHtml
-
 
 renderSourceCodeFragment (SourceCodeFragment Src{..} (VariableDeclaration varDecl)) =
     span_ attributes $ toHtml srcText
