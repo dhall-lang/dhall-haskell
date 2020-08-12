@@ -316,7 +316,7 @@ every label except the last one @recordFieldSrc1@ should be equal to
 as described from above. Also, for any subsequent labels l1 and l2, the following
 property holds:
 
-prop> recordFieldSrc1 l1 == recordFieldSrc0 l2
+@recordFieldSrc1 l1 == recordFieldSrc0 l2@
 -}
 data RecordField s a = RecordField
     { recordFieldSrc0  :: Maybe s
