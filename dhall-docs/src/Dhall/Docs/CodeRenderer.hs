@@ -30,9 +30,11 @@ module Dhall.Docs.CodeRenderer
     , ExprType(..)
     ) where
 
-import Data.Text           (Text)
-import Data.Void           (Void)
-import Dhall.Context       (Context)
+import Control.Monad.Trans.Writer.Strict (Writer)
+import Debug.Trace (traceShow)
+import Data.Text                         (Text)
+import Data.Void                         (Void)
+import Dhall.Context                     (Context)
 import Dhall.Core
     ( Binding (..)
     , Expr (..)
@@ -49,10 +51,12 @@ import Dhall.Core
     , Var (..)
     )
 import Dhall.Docs.Util
-import Dhall.Src           (Src (..))
+import Dhall.Src                         (Src (..))
 import Lucid
-import Text.Megaparsec.Pos (SourcePos (..))
+import Text.Megaparsec.Pos               (SourcePos (..))
 
+import qualified Control.Monad.Trans.Writer.Strict     as Writer
+import qualified Data.List
 import qualified Data.Set                              as Set
 import qualified Data.Text                             as Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
@@ -122,108 +126,96 @@ data SourceCodeFragment =
 -- | Returns all 'SourceCodeFragment's in lexicographic order i.e. in the same
 --   order as in the source code.
 fragments :: Expr Src Import -> [SourceCodeFragment]
-fragments = go Context.empty
+fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
   where
-    go context = \case
-        -- The parsed text of the import is located in it's `Note` constructor
-        Note src (Embed a) -> [SourceCodeFragment src $ ImportExpr a]
+    sorter (SourceCodeFragment Src{srcStart = srcStart0} _)
+           (SourceCodeFragment Src{srcStart = srcStart1} _) = pos0 `compare` pos1
+      where
+        pos0 = (getSourceLine srcStart0, getSourceColumn srcStart0)
+        pos1 = (getSourceLine srcStart1, getSourceColumn srcStart1)
 
+    infer :: Context VarDecl -> Expr Src Import -> Writer [SourceCodeFragment] DhallType
+    infer context = \case
+        -- The parsed text of the import is located in it's `Note` constructor
+        Note src (Embed a) -> Writer.tell [SourceCodeFragment src $ ImportExpr a] >> return AnyType
+
+        -- since we have to 'infer' the 'DhallType' of the annotation, we
+        -- are not able to generate the 'SourceCodeFragment's in lexicographical
+        -- without calling 'Data.List.sortBy' after
         Let (Binding
                 (Just Src { srcEnd = srcEnd0 })
                 variable
                 (Just Src { srcStart = srcStart1 })
                 annotation
                 _
-                value) expr' ->
-            sourceCodeFragment : fromAnnotation <> fromValue <> fromExpr'
-          where
-            fromAnnotation = case annotation of
-                Nothing -> []
-                Just (_, e) -> go context e
+                value) expr' -> do
 
-            fromValue = go context value
+            -- If annotation is missing, the type is inferred from the bound value
+            bindingDhallType <- case annotation of
+                Nothing -> infer context value
+                Just (_, t) -> do
+                    t' <- infer context t
+                    _ <- infer context value
+                    return t'
 
-            varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
+            let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
+            let varDecl = VarDecl varSrc variable bindingDhallType
 
-            varDecl = VarDecl varSrc variable (inferWithContext context value)
-
-            sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
-
-            fromExpr' = go (Context.insert variable varDecl context) expr'
+            Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+            infer (Context.insert variable varDecl context) expr'
 
         Note src (Var (V name index)) ->
             case Context.lookup name index context of
-                Nothing -> []
-                Just varDecl -> [SourceCodeFragment src $ VariableUse varDecl]
+                Nothing -> return AnyType
+                Just varDecl@(VarDecl _ _ t) -> do
+                    Writer.tell [SourceCodeFragment src $ VariableUse varDecl]
+                    return t
 
         Lam (FunctionBinding
                 (Just Src{srcEnd = srcEnd0})
                 variable
                 (Just Src{srcStart = srcStart1})
                 _
-                t) expr ->
-            sourceCodeFragment : fromAnnotation <> fromExpr
+                t) expr -> do
+            dhallType <- infer context t
+
+            let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
+            let varDecl = VarDecl varSrc variable dhallType
+
+            Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+            infer (Context.insert variable varDecl context) expr
+
+        Field e (FieldAccess (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
+            fields <- traceShow e $ do
+                dhallType <- infer context e
+                case dhallType of
+                    AnyType -> return mempty
+                    RecordLiteral s -> return $ Set.toList s
+
+            let src = makeSrcForLabel posStart posEnd label
+            let match (VarDecl _ l _) = l == label
+            case filter match fields of
+                x@(VarDecl _ _ t) : _ -> do
+                    Writer.tell [SourceCodeFragment src (VariableUse x)]
+                    return t
+                _ -> return AnyType
+
+        RecordLit (Map.toList -> l) -> RecordLiteral . Set.fromList <$> mapM f l
           where
-            varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            varDecl = VarDecl varSrc variable (inferWithContext context t)
-            sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
-
-            fromAnnotation = go context t
-            fromExpr = go (Context.insert variable varDecl context) expr
-
-        Field e (FieldAccess (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) ->
-            go context e <> fromLabel
-          where
-            fields = case inferWithContext context e of
-                AnyType -> mempty
-                RecordLiteral s -> Set.toList s
-
-            src = makeSrcForLabel posStart posEnd label
-            match (VarDecl _ t _) = t == label
-            fromLabel = case filter match fields of
-                x@(VarDecl _ _ _) : _ ->
-                    [SourceCodeFragment src (VariableUse x)]
-                _ -> mempty
-
-        RecordLit m -> Map.foldMapWithKey f m
-          where
-            f key (RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) =
-                srcFragment : go context val
+            f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
+                dhallType <- infer context val
+                let varSrc = makeSrcForLabel startPos endPos key
+                let varDecl = VarDecl varSrc key dhallType
+                Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+                return varDecl
               where
-                varSrc = makeSrcForLabel startPos endPos key
-                varDecl = VarDecl varSrc key (inferWithContext context val)
+            f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
 
-                srcFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
-            f _ _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
+        Note _ e -> infer context e
 
-        e -> concatMap (go context) $ Lens.toListOf Core.subExpressions e
-
--- | Gets the 'DhallType' from a 'Expr Src Import' with the given context
-inferWithContext :: Context VarDecl -> Expr Src Import -> DhallType
-inferWithContext context = \case
-    Var (V name index) ->
-        case Context.lookup name index context of
-            Nothing -> AnyType
-            Just (VarDecl _ _ t) -> t
-    RecordLit (Map.toList -> l) -> RecordLiteral s
-      where
-        s = Set.fromList $ map toVarDecl l
-
-        toVarDecl (label, RecordField (Just Src{srcEnd = posStart}) val (Just Src{srcStart = posEnd}) _) =
-            VarDecl (makeSrcForLabel posStart posEnd label) label (inferWithContext context val)
-        toVarDecl _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
-    Field e (FieldAccess {fieldAccessLabel = label}) -> case inferWithContext context e of
-        AnyType -> AnyType
-        RecordLiteral (Set.toList -> fields) -> t
-          where
-            match (VarDecl _ l _) = l == label
-            t = case filter match fields of
-                (VarDecl _ _ dt) : _ -> dt
-                _ -> AnyType
-
-    Note _ e -> inferWithContext context e
-    _ -> AnyType
-
+        e -> do
+            mapM_ (infer context) $ Lens.toListOf Core.subExpressions e
+            return AnyType
 
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
