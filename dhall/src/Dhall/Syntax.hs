@@ -308,7 +308,15 @@ Although the @A@ comment isn't annotating the @"T"@ Record Field,
 this is the best place to keep these comments.
 
 Note that @recordFieldSrc2@ is always 'Nothing' when the 'RecordField' is for
-a punned entry.
+a punned entry, because there is no @=@ sign.
+
+If dot-syntax is being used all three srcs are 'Just's, but for
+every label except the last one @recordFieldSrc1@ should be equal to
+@recordFieldSrc2@. On the last label, @recordFieldSrc2@ semantics are the same
+as described from above. Also, for any subsequent labels l1 and l2, the following
+property holds:
+
+prop> recordFieldSrc1 l1 == recordFieldSrc0 l2
 -}
 data RecordField s a = RecordField
     { recordFieldSrc0  :: Maybe s
