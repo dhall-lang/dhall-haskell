@@ -37,7 +37,7 @@ import Dhall.Core
     , DhallDouble (..)
     , Directory (..)
     , Expr (..)
-    , FieldAccess (..)
+    , FieldSelection (..)
     , File (..)
     , FilePrefix (..)
     , FunctionBinding (..)
@@ -292,8 +292,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
 
     shrink = genericShrink
 
-instance Arbitrary s => Arbitrary (FieldAccess s) where
-    arbitrary = FieldAccess <$> pure Nothing <*> label <*> pure Nothing
+instance Arbitrary s => Arbitrary (FieldSelection s) where
+    arbitrary = FieldSelection <$> pure Nothing <*> label <*> pure Nothing
     shrink = genericShrink
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
@@ -308,7 +308,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
         customGens
             :: ConstrGen "Lam" 0 (FunctionBinding s a)
             :+ ConstrGen "Pi" 0 Text
-            :+ ConstrGen "Field" 1 (FieldAccess s)
+            :+ ConstrGen "Field" 1 (FieldSelection s)
             :+ ConstrGen "Project" 1 (Either (Set Text) (Expr s a))
             :+ Gen Integer  -- Generates all Integer fields in Expr
             :+ Gen Text     -- Generates all Text fields in Expr

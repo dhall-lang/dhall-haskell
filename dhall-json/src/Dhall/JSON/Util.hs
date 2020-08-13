@@ -7,13 +7,13 @@ module Dhall.JSON.Util
     ) where
 
 import Data.Text  (Text)
-import Dhall.Core (Expr, FieldAccess)
+import Dhall.Core (Expr, FieldSelection)
 
 import qualified Dhall.Core as Core
 
 pattern V :: Int -> Expr s a
 pattern V n = Core.Var (Core.V "_" n)
 
-pattern FA :: Text -> FieldAccess s
-pattern FA t <- Core.FieldAccess _ t _
-  where FA = Core.makeFieldAccess
+pattern FA :: Text -> FieldSelection s
+pattern FA t <- Core.FieldSelection _ t _
+  where FA = Core.makeFieldSelection

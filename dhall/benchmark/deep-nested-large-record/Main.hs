@@ -30,9 +30,9 @@ issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
       $ Core.ListLit Nothing
       $ Seq.replicate 5
       $ Core.Var (Core.V "prelude" 0) `Core.Field` types `Core.Field` little `Core.Field` foo
-    types = Core.makeFieldAccess "types"
-    little = Core.makeFieldAccess "little"
-    foo = Core.makeFieldAccess "Foo"
+    types = Core.makeFieldSelection "types"
+    little = Core.makeFieldSelection "little"
+    foo = Core.makeFieldSelection "Foo"
 
 unionPerformance :: Core.Expr s Void -> Gauge.Benchmarkable
 unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
@@ -58,8 +58,8 @@ unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
                 )
             )
             "x"
-    types = Core.makeFieldAccess "types"
-    big = Core.makeFieldAccess "Big"
+    types = Core.makeFieldSelection "types"
+    big = Core.makeFieldSelection "Big"
 
 main :: IO ()
 main =

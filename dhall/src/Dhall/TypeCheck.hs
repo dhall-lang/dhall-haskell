@@ -913,8 +913,8 @@ infer typer = loop
                 _ -> die (CompletionSchemaMustBeARecord l (quote names _L'))
 
               where
-                def = Syntax.makeFieldAccess "default"
-                typ = Syntax.makeFieldAccess "Type"
+                def = Syntax.makeFieldSelection "default"
+                typ = Syntax.makeFieldSelection "Type"
         Merge t u mT₁ -> do
             _T' <- loop ctx t
 
@@ -1117,7 +1117,7 @@ infer typer = loop
 
                        die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
 
-        Field e (Syntax.fieldAccessLabel -> x) -> do
+        Field e (Syntax.fieldSelectionLabel -> x) -> do
             _E' <- loop ctx e
 
             let _E'' = quote names _E'

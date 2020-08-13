@@ -37,7 +37,7 @@ import Dhall.Context                     (Context)
 import Dhall.Core
     ( Binding (..)
     , Expr (..)
-    , FieldAccess (..)
+    , FieldSelection (..)
     , File (..)
     , FilePrefix (..)
     , FunctionBinding (..)
@@ -184,7 +184,7 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
             Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
             infer (Context.insert variable varDecl context) expr
 
-        Field e (FieldAccess (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
+        Field e (FieldSelection (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
             fields <- do
                 dhallType <- infer context e
                 case dhallType of

@@ -1065,7 +1065,7 @@ diffSelectorExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffSelectorExpression l@(Field {}) r@(Field {}) =
     enclosed' "  " (dot <> " ") (Data.List.NonEmpty.reverse (docs l r))
   where
-    docs (Field aL (Syntax.fieldAccessLabel -> bL)) (Field aR (Syntax.fieldAccessLabel -> bR)) =
+    docs (Field aL (Syntax.fieldSelectionLabel -> bL)) (Field aR (Syntax.fieldSelectionLabel -> bR)) =
         Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
     docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)
@@ -1080,7 +1080,7 @@ diffSelectorExpression l r@(Field {}) =
 diffSelectorExpression l@(Project {}) r@(Project {}) =
     enclosed' "  " (dot <> " ") (Data.List.NonEmpty.reverse (docs l r))
   where
-    docs (Field aL (Syntax.fieldAccessLabel -> bL)) (Field aR (Syntax.fieldAccessLabel ->bR)) =
+    docs (Field aL (Syntax.fieldSelectionLabel -> bL)) (Field aR (Syntax.fieldSelectionLabel ->bR)) =
         Data.List.NonEmpty.cons (diffLabel bL bR) (docs aL aR)
     docs (Project aL (Left bL)) (Project aR (Left bR)) =
         Data.List.NonEmpty.cons (diffLabels bL bR) (docs aL aR)

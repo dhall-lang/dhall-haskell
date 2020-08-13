@@ -32,8 +32,8 @@ module Dhall.Syntax (
     , makeRecordField
     , FunctionBinding(..)
     , makeFunctionBinding
-    , FieldAccess(..)
-    , makeFieldAccess
+    , FieldSelection(..)
+    , makeFieldSelection
 
     -- ** 'Let'-blocks
     , MultiLet(..)
@@ -373,24 +373,24 @@ For example,
 > e . {- A -} x {- B -}
 
 will be instantiated as follows:
-* @fieldAccessSrc0@ corresponds to the @A@ comment
-* @fieldAccessLabel@ corresponds to @x@
-* @fieldAccessSrc1@ corresponds to the @B@ comment
+* @fieldSelectionSrc0@ corresponds to the @A@ comment
+* @fieldSelectionLabel@ corresponds to @x@
+* @fieldSelectionSrc1@ corresponds to the @B@ comment
 
 Given our limitation that not all expressions recover their whitespaces, the
-purpose of @fieldAccessSrc1@ is to save the 'SourcePos' where the
-@fieldAccessLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@) to
+purpose of @fieldSelectionSrc1@ is to save the 'SourcePos' where the
+@fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@) to
 be consistent with similar data types such as 'Binding', for example.
 -}
-data FieldAccess s = FieldAccess
-    { fieldAccessSrc0 :: Maybe s
-    , fieldAccessLabel :: Text
-    , fieldAccessSrc1 :: Maybe s
+data FieldSelection s = FieldSelection
+    { fieldSelectionSrc0 :: Maybe s
+    , fieldSelectionLabel :: Text
+    , fieldSelectionSrc1 :: Maybe s
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
--- | Smart constructor for 'FieldAccess' with no src information
-makeFieldAccess :: Text -> FieldAccess s
-makeFieldAccess t = FieldAccess Nothing t Nothing
+-- | Smart constructor for 'FieldSelection' with no src information
+makeFieldSelection :: Text -> FieldSelection s
+makeFieldSelection t = FieldSelection Nothing t Nothing
 
 {-| Syntax tree for expressions
 
@@ -577,8 +577,8 @@ data Expr s a
     -- | > ToMap x (Just t)                         ~  toMap x : t
     --   > ToMap x  Nothing                         ~  toMap x
     | ToMap (Expr s a) (Maybe (Expr s a))
-    -- | > Field e (FieldAccess _ x _)              ~  e.x
-    | Field (Expr s a) (FieldAccess s)
+    -- | > Field e (FieldSelection _ x _)              ~  e.x
+    | Field (Expr s a) (FieldSelection s)
     -- | > Project e (Left xs)                      ~  e.{ xs }
     --   > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
@@ -1098,7 +1098,7 @@ denote = \case
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
     Lam a b -> Lam (denoteFunctionBinding a) (denote b)
-    Field a (FieldAccess _ b _) -> Field (denote a) (FieldAccess Nothing b Nothing)
+    Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing
@@ -1293,7 +1293,7 @@ desugarWith = Optics.rewriteOf subExpressions rewrite
             (Prefer (PreferFromWith e) record
                 (RecordLit
                     [ (key0, makeRecordField $
-                        With (Field record (FieldAccess Nothing key0 Nothing)) (key1 :| keys) value)
+                        With (Field record (FieldSelection Nothing key0 Nothing)) (key1 :| keys) value)
                     ]
                 )
             )

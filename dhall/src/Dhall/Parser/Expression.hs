@@ -459,7 +459,7 @@ parsers embedded = Parsers {..}
                     -- about whitespace treatment, but for @dhall-docs@ this
                     -- is enough
                     let src1 = Src pos pos ""
-                    return (FieldAccess (Just src0) l (Just src1))
+                    return (FieldSelection (Just src0) l (Just src1))
 
             let alternatives =
                         fmap field               fieldParser

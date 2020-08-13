@@ -116,7 +116,7 @@ shouldTreatAConstructorStoringUnitAsEmptyAlternative = testCase "Handle unit con
     let exampleEncoder :: Dhall.Encoder ()
         exampleEncoder = Dhall.unionEncoder (Dhall.encodeConstructor "A")
 
-    let a = Dhall.Core.makeFieldAccess "A"
+    let a = Dhall.Core.makeFieldSelection "A"
     Dhall.embed exampleEncoder () @=? Field (Union (Dhall.Map.singleton "A" Nothing)) a
 
 newtype RecursiveType a = RecursiveType (RecursiveType a)

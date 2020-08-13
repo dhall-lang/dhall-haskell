@@ -33,7 +33,7 @@ import Dhall.Syntax
     , Chunks (..)
     , DhallDouble (..)
     , Expr (..)
-    , FieldAccess (..)
+    , FieldSelection (..)
     , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
@@ -586,15 +586,15 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     RecordCompletion x y ->
         loop (Annot (Prefer PreferFromCompletion (Field x def) y) (Field x typ))
       where
-        def = Syntax.makeFieldAccess "default"
-        typ = Syntax.makeFieldAccess "Type"
+        def = Syntax.makeFieldSelection "default"
+        typ = Syntax.makeFieldSelection "Type"
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y
         case x' of
             RecordLit kvsX ->
                 case y' of
-                    Field (Union ktsY) (Syntax.fieldAccessLabel -> kY) ->
+                    Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
                         case Dhall.Map.lookup kY ktsY of
                             Just Nothing ->
                                 case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
@@ -602,7 +602,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                     Nothing -> Merge x' y' <$> t'
                             _ ->
                                 Merge x' y' <$> t'
-                    App (Field (Union ktsY) (Syntax.fieldAccessLabel -> kY)) vY ->
+                    App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) vY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just (Just _) ->
                                 case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
@@ -646,7 +646,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 return (ListLit listType keyValues)
             _ ->
                 return (ToMap x' t')
-    Field r k@FieldAccess{fieldAccessLabel = x}        -> do
+    Field r k@FieldSelection{fieldSelectionLabel = x}        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
 
         r' <- loop r
@@ -896,7 +896,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r (Syntax.fieldAccessLabel -> k) -> case r of
+      Field r (Syntax.fieldSelectionLabel -> k) -> case r of
           RecordLit _ -> False
           Project _ _ -> False
           Prefer _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r

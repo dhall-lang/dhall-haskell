@@ -679,8 +679,8 @@ eval !env t0 =
         RecordCompletion t u ->
             eval env (Annot (Prefer PreferFromCompletion (Field t def) u) (Field t typ))
           where
-            def = Syntax.makeFieldAccess "default"
-            typ = Syntax.makeFieldAccess "Type"
+            def = Syntax.makeFieldSelection "default"
+            typ = Syntax.makeFieldSelection "Type"
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
@@ -711,7 +711,7 @@ eval !env t0 =
                     in  VListLit Nothing s
                 (x', ma') ->
                     VToMap x' ma'
-        Field t (Syntax.fieldAccessLabel -> k) ->
+        Field t (Syntax.fieldSelectionLabel -> k) ->
             vField (eval env t) k
         Project t (Left ks) ->
             vProjectByFields env (eval env t) (Dhall.Set.sort ks)
@@ -1111,7 +1111,7 @@ quote !env !t0 =
         VToMap t ma ->
             ToMap (quote env t) (fmap (quote env) ma)
         VField t k ->
-            Field (quote env t) $ Syntax.makeFieldAccess k
+            Field (quote env t) $ Syntax.makeFieldSelection k
         VProject t p ->
             Project (quote env t) (fmap (quote env) p)
         VAssert t ->
@@ -1119,9 +1119,9 @@ quote !env !t0 =
         VEquivalent t u ->
             Equivalent (quote env t) (quote env u)
         VInject m k Nothing ->
-            Field (Union (fmap (fmap (quote env)) m)) $ Syntax.makeFieldAccess k
+            Field (Union (fmap (fmap (quote env)) m)) $ Syntax.makeFieldSelection k
         VInject m k (Just t) ->
-            Field (Union (fmap (fmap (quote env)) m)) (Syntax.makeFieldAccess k) `qApp` t
+            Field (Union (fmap (fmap (quote env)) m)) (Syntax.makeFieldSelection k) `qApp` t
         VEmbed a ->
             Embed a
         VPrimVar ->

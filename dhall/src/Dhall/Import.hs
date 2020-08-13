@@ -690,15 +690,15 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = case importType of
-            Missing -> Field locationType $ Core.makeFieldAccess  "Missing"
+            Missing -> Field locationType $ Core.makeFieldSelection  "Missing"
             local@(Local _ _) ->
-                App (Field locationType $ Core.makeFieldAccess "Local")
+                App (Field locationType $ Core.makeFieldSelection "Local")
                   (TextLit (Chunks [] (Core.pretty local)))
             remote_@(Remote _) ->
-                App (Field locationType $ Core.makeFieldAccess "Remote")
+                App (Field locationType $ Core.makeFieldSelection "Remote")
                   (TextLit (Chunks [] (Core.pretty remote_)))
             Env env ->
-                App (Field locationType $ Core.makeFieldAccess "Environment")
+                App (Field locationType $ Core.makeFieldSelection "Environment")
                   (TextLit (Chunks [] (Core.pretty env)))
 
     return (ImportSemantics {..})

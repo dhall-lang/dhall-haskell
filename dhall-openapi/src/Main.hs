@@ -300,7 +300,7 @@ main = do
           (Embed (Convert.mkImport prefixMap [ ] "schemas.dhall"))
           (RecordLit
               [ ( "IntOrString"
-                , Dhall.makeRecordField $ Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) $ Dhall.makeFieldAccess "IntOrString"
+                , Dhall.makeRecordField $ Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) $ Dhall.makeFieldSelection "IntOrString"
                 )
               , ( "Resource", mkEmbedField (Convert.mkImport prefixMap [ ] "typesUnion.dhall"))
               ]

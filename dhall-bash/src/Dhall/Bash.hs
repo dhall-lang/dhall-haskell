@@ -361,7 +361,7 @@ dhallToExpression expr0 = go (Dhall.Core.normalize expr0)
     go (TextLit (Chunks [] a)) = do
         let bytes = Data.Text.Encoding.encodeUtf8 a
         return (Text.ShellEscape.bytes (Text.ShellEscape.bash bytes))
-    go e@(Field (Union m) (Dhall.Core.fieldAccessLabel -> k)) =
+    go e@(Field (Union m) (Dhall.Core.fieldSelectionLabel -> k)) =
         case Dhall.Map.lookup k m of
             Just Nothing -> go (TextLit (Chunks [] k))
             _            -> Left (UnsupportedExpression e)
