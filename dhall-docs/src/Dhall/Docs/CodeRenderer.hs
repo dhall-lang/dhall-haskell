@@ -150,12 +150,13 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
                 value) expr' -> do
 
             -- If annotation is missing, the type is inferred from the bound value
-            bindingDhallType <- case annotation of
-                Nothing -> infer context value
+            case annotation of
+                Nothing -> return ()
                 Just (_, t) -> do
-                    t' <- infer context t
-                    _ <- infer context value
-                    return t'
+                    _ <- infer context t
+                    return ()
+
+            bindingDhallType <- infer context value
 
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
             let varDecl = VarDecl varSrc variable bindingDhallType

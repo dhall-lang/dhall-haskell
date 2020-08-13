@@ -40,7 +40,7 @@
           >a</code
           > and <code
           >b</code> is of
-record-type. If on a field-access expression the field is not found on the type,
+record-type. If on a selector-expression the field is not found on the type,
 no-link will be created</p>
 </div
       ><h3
@@ -49,7 +49,7 @@ no-link will be created</p>
         ><pre
           >{-|<br
           />On this example, `dhall-docs` will detect that the variable `a` and `b` is of<br
-          />record-type. If on a field-access expression the field is not found on the type,<br
+          />record-type. If on a selector-expression the field is not found on the type,<br
           />no-link will be created<br
           /><br
           />-}<br
@@ -63,14 +63,10 @@ no-link will be created</p>
           />let <span id="var8-5" data-variable="var8-5"
                       class="variable-decl"
           >b</span
-          > : { <span id="var8-11" data-variable="var8-11"
-                      class="variable-decl"
-          >x</span
-          > : Text }= { <span id="var8-25" data-variable="var8-25"
-                              class="variable-decl"
-          >x</span
-          > = &quot;bar&quot; }<br
+          > = False<br
           /><br
           />in <a href="#var7-5" data-variable="var7-5" class="variable-use"
           >a</a
-          >.y<br/></pre></div></div></body></html>
+          >.y + <a href="#var8-5" data-variable="var8-5" class="variable-use"
+          >b</a
+          >.`does not exist`<br/></pre></div></div></body></html>

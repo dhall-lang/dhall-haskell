@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/JumpToRecordFieldWhenVarIsAnnotatedWithNonRecordType.dhall</title
+    >/JumpToRecordFieldWhenLetAnnotationPresentShouldIgnoreAnnotation.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,8 +25,8 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >JumpToRecordFieldWhenVarIsAnnotatedWithNonRecordType.dhall</span></h2
-      ><a data-path="/JumpToRecordFieldWhenVarIsAnnotatedWithNonRecordType.dhall"
+        >JumpToRecordFieldWhenLetAnnotationPresentShouldIgnoreAnnotation.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenLetAnnotationPresentShouldIgnoreAnnotation.dhall"
           class="copy-to-clipboard"
         ><i
           ><small
@@ -39,10 +39,15 @@
           > will detect that the variable <code
           >a</code
           > is annotated
-with a non-record type, therefore not associating any information for jump to
-definition i.e. hovering the <code
-          >x</code> on the field-access expression won&#39;t highlight
-anything</p>
+with a type, but it will ignore it anyways. On let-bindings, <code
+          >dhall-docs</code
+          > infers
+the type of the variable from the bounded expression. As a consequence, on
+this example, hovering the <code
+          >x</code
+          > on the selector-expression will highlight the
+<code
+          >x</code> label on the record-literal</p>
 </div
       ><h3
       >Source</h3
@@ -50,18 +55,21 @@ anything</p>
         ><pre
           >{-|<br
           />On this example, `dhall-docs` will detect that the variable `a` is annotated<br
-          />with a non-record type, therefore not associating any information for jump to<br
-          />definition i.e. hovering the `x` on the field-access expression won&#39;t highlight<br
-          />anything<br
+          />with a type, but it will ignore it anyways. On let-bindings, `dhall-docs` infers<br
+          />the type of the variable from the bounded expression. As a consequence, on<br
+          />this example, hovering the `x` on the selector-expression will highlight the<br
+          />`x` label on the record-literal<br
           />-}<br
-          />let <span id="var7-5" data-variable="var7-5"
+          />let <span id="var8-5" data-variable="var8-5"
                       class="variable-decl"
           >a</span
-          > : Bool = { <span id="var7-18" data-variable="var7-18"
+          > : Bool = { <span id="var8-18" data-variable="var8-18"
                              class="variable-decl"
           >x</span
           > = &quot;foo&quot; }<br
           /><br
-          />in <a href="#var7-5" data-variable="var7-5" class="variable-use"
+          />in <a href="#var8-5" data-variable="var8-5" class="variable-use"
           >a</a
-          >.x<br/></pre></div></div></body></html>
+          >.<a href="#var8-18" data-variable="var8-18" class="variable-use"
+          >x</a
+          ><br/></pre></div></div></body></html>

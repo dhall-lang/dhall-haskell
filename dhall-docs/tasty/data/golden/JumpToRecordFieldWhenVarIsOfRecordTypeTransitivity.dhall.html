@@ -37,94 +37,47 @@
           >On this example, <code
           >dhall-docs</code
           > will detect that the variable <code
-          >a</code> is bounded
-to a record literal and it will be aware that it uses dot-syntax.</p
-        >
-<p
-          >Transitivity is respected when the variable is assigned using let-bindings.
-For instance, if the user clicks the <code
-          >y</code
-          > from the <code
-          >ax.y.z</code
-          >, it will jump to
-the definition of <code
-          >x</code> on the record literal.</p
-        >
-<p
-          ><em
-            >(the code is the same from <a href="./JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall"
-            >./JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall</a>)</em></p>
+          >b</code
+          > is bounded
+to the value of <code
+          >a</code
+          >, and the later is bounded to a record-literal. All selector
+expressions over <code
+          >b</code
+          > will interact with the record-literal assigned to <code
+          >a</code>, since
+that is the actual definition of the fields.</p>
 </div
       ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
           >{-|<br
-          />On this example, `dhall-docs` will detect that the variable `a` is bounded<br
-          />to a record literal and it will be aware that it uses dot-syntax.<br
-          /><br
-          />Transitivity is respected when the variable is assigned using let-bindings.<br
-          />For instance, if the user clicks the `y` from the `ax.y.z`, it will jump to<br
-          />the definition of `x` on the record literal.<br
-          /><br
-          />_(the code is the same from &lt;./JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall&gt;)_<br
+          />On this example, `dhall-docs` will detect that the variable `b` is bounded<br
+          />to the value of `a`, and the later is bounded to a record-literal. All selector<br
+          />expressions over `b` will interact with the record-literal assigned to `a`, since<br
+          />that is the actual definition of the fields.<br
           />-}<br
-          />let <span id="var11-5" data-variable="var11-5"
+          />let <span id="var7-5" data-variable="var7-5"
                       class="variable-decl"
           >a</span
-          > = { <span id="var11-11" data-variable="var11-11"
+          > = { <span id="var7-11" data-variable="var7-11"
                       class="variable-decl"
           >x</span
-          >.<span id="var11-13" data-variable="var11-13"
-                  class="variable-decl"
-          >y</span
-          >.<span id="var11-15" data-variable="var11-15"
-                  class="variable-decl"
-          >z</span
           > = 1 }<br
-          /><br
-          />let <span id="var13-5" data-variable="var13-5"
+          />let <span id="var8-5" data-variable="var8-5"
                       class="variable-decl"
-          >ax</span
-          > = <a href="#var11-5" data-variable="var11-5" class="variable-use"
+          >b</span
+          > = <a href="#var7-5" data-variable="var7-5" class="variable-use"
           >a</a
-          >.<a href="#var11-11" data-variable="var11-11" class="variable-use"
-          >x</a
-          ><br
-          />let <span id="var14-5" data-variable="var14-5"
-                      class="variable-decl"
-          >axy</span
-          > = <a href="#var11-5" data-variable="var11-5" class="variable-use"
-          >a</a
-          >.<a href="#var11-11" data-variable="var11-11" class="variable-use"
-          >x</a
-          >.<a href="#var11-13" data-variable="var11-13" class="variable-use"
-          >y</a
-          ><br
-          />let <span id="var15-5" data-variable="var15-5"
-                      class="variable-decl"
-          >axyz</span
-          > = <a href="#var11-5" data-variable="var11-5" class="variable-use"
-          >a</a
-          >.<a href="#var11-11" data-variable="var11-11" class="variable-use"
-          >x</a
-          >.<a href="#var11-13" data-variable="var11-13" class="variable-use"
-          >y</a
-          >.<a href="#var11-15" data-variable="var11-15" class="variable-use"
-          >z</a
           ><br
           /><br
-          />in <a href="#var13-5" data-variable="var13-5"
-                  class="variable-use"
-          >ax</a
-          >.<a href="#var11-13" data-variable="var11-13" class="variable-use"
-          >y</a
-          >.<a href="#var11-15" data-variable="var11-15" class="variable-use"
-          >z</a
-          > + <a href="#var14-5" data-variable="var14-5" class="variable-use"
-          >axy</a
-          >.<a href="#var11-15" data-variable="var11-15" class="variable-use"
-          >z</a
-          > + <a href="#var15-5" data-variable="var15-5" class="variable-use"
-          >axyz</a
+          />in <a href="#var7-5" data-variable="var7-5" class="variable-use"
+          >a</a
+          >.<a href="#var7-11" data-variable="var7-11" class="variable-use"
+          >x</a
+          > + <a href="#var8-5" data-variable="var8-5" class="variable-use"
+          >b</a
+          >.<a href="#var7-11" data-variable="var7-11" class="variable-use"
+          >x</a
           ><br/></pre></div></div></body></html>
