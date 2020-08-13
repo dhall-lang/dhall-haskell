@@ -1,10 +1,10 @@
 {-|
 On this example, `dhall-docs` will detect that the variable `a` and `b` is of
-record-type. If on a field-access expression the field is not found on the type,
+record-type. If on a selector-expression the field is not found on the type,
 no-link will be created
 
 -}
 let a = { x = "foo" }
-let b : { x : Text }= { x = "bar" }
+let b = False
 
-in a.y
+in a.y + b.`does not exist`

@@ -1,11 +1,11 @@
 {-|
-On this example, `dhall-docs` will detect that the variable `a` is annotated
-with a record-type, and associate all jump-to-definition features on its field
-access to jump to the fields on that record-type
+On this example, even when the variable `a` is annotated with a record-type,
+`dhall-docs` will infer the actual type from the bounded value.
 
-Note that the `x` field on the record literal isn't highlighted since we consider
-that the variable was _defined_ in the annotation
+All interactions with fields on selector-expressions won't affect the rendered-type.
+
+(The example is intended to not type-check as a Dhall expression)
 -}
-let a : { x : Text } = { x = "foo" }
+let a : { x : Text } = { x = "foo", y = "bar" }
 
-in a.x
+in a.x ++ a.y
