@@ -319,26 +319,27 @@ will be instantiated as follows:
 * @recordFieldSrc1@ corresponds to the @B@ comment.
 * @recordFieldSrc2@ will be 'Nothing'
 
-If dot-syntax is being used all three srcs are 'Just's, but for
-every label except the last one @recordFieldSrc1@ should be equal to
-@recordFieldSrc2@. On the last label, @recordFieldSrc2@ semantics are the same
-as described from above. Also, for any subsequent labels l1 and l2,
-@recordFieldSrc1 l1 == recordFieldSrc0 l2@. For example,
+The labels involved in a record using dot-syntax like in this example:
 
 > { {- A -} a {- B -} . {- C -} b {- D -} . {- E -} c {- F -} = {- G -} e }
 
 will be instantiated as follows:
 
+* For both the @a@ and @b@ field, @recordfieldSrc2@ is 'Nothing'
 * For the @a@ field:
   * @recordFieldSrc0@ corresponds to the @A@ comment
-  * @recordFieldSrc1@ and @recordFieldSrc2@ corresponds to the @B@ comment
+  * @recordFieldSrc1@ corresponds to the @B@ comment
 * For the @b@ field:
   * @recordFieldSrc0@ corresponds to the @C@ comment
-  * @recordFieldSrc1@ and @recordFieldSrc2@ corresponds to the @D@ comment
+  * @recordFieldSrc1@ corresponds to the @D@ comment
 * For the @c@ field:
   * @recordFieldSrc0@ corresponds to the @E@ comment
   * @recordFieldSrc1@ corresponds to the @F@ comment
   * @recordFieldSrc2@ corresponds to the @G@ comment
+
+That is, for every label except the last one the semantics of @recordFieldSrc0@
+and @recordFieldSrc1@ are the same from a regular record label but
+@recordFieldSrc2@ is always 'Nothing'. For the last keyword, all srcs are 'Just'
 -}
 data RecordField s a = RecordField
     { recordFieldSrc0  :: Maybe s

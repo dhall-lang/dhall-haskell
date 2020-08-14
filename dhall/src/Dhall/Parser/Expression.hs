@@ -846,10 +846,10 @@ parsers embedded = Parsers {..}
                             src0 <- src whitespace
                             l <- anyLabelOrSome
                             src1 <- src whitespace
-                            return (src0, l, src1, src1)
+                            return (src0, l, src1)
 
                     restKeys <- Combinators.many parseLabelWithWhsp
-                    let keys = (firstSrc0', firstLabel, firstSrc1, firstSrc1) :| restKeys
+                    let keys = (firstSrc0', firstLabel, firstSrc1) :| restKeys
 
                     let normalRecordEntry = do
                             try _equal
@@ -858,17 +858,17 @@ parsers embedded = Parsers {..}
 
                             value <- expression
 
-                            let cons (s0, key, s1, s2) (key', values) =
-                                    (key, RecordField (Just s0) (RecordLit [ (key', values) ]) (Just s1) (Just s2))
+                            let cons (s0, key, s1) (key', values) =
+                                    (key, RecordField (Just s0) (RecordLit [ (key', values) ]) (Just s1) Nothing)
 
-                            let (lastSrc0, lastLabel, lastSrc1, _) = NonEmpty.last keys
+                            let (lastSrc0, lastLabel, lastSrc1) = NonEmpty.last keys
                             let nil = (lastLabel, RecordField (Just lastSrc0) value (Just lastSrc1) (Just lastSrc2))
 
                             return (foldr cons nil (NonEmpty.init keys))
 
                     let punnedEntry =
                             case keys of
-                                (_, x, _, _) :| [] -> return (x, RecordField (Just firstSrc0') (Var (V x 0)) (Just firstSrc1) Nothing)
+                                (s0, x, s1) :| [] -> return (x, RecordField (Just s0) (Var (V x 0)) (Just s1) Nothing)
                                 _       -> empty
 
                     (normalRecordEntry <|> punnedEntry) <* whitespace
