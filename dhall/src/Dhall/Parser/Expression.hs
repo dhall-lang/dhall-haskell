@@ -450,7 +450,7 @@ parsers embedded = Parsers {..}
             let projectBySet        xs e = Project e (Left  xs)
             let projectByExpression xs e = Project e (Right xs)
 
-            let fieldParser = do
+            let fieldSelection = do
                     src0 <- src whitespace
                     l <- anyLabel
                     pos <- getSourcePos
@@ -462,7 +462,7 @@ parsers embedded = Parsers {..}
                     return (FieldSelection (Just src0) l (Just src1))
 
             let alternatives =
-                        fmap field               fieldParser
+                        fmap field               fieldSelection
                     <|> fmap projectBySet        (whitespace *> labels)
                     <|> fmap projectByExpression recordType
 
