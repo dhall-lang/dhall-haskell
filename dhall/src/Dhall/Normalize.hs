@@ -40,7 +40,6 @@ import Dhall.Syntax
     , Var (..)
     )
 
-import qualified Data.Maybe    as Maybe
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
@@ -744,9 +743,8 @@ isNormalized e0 = loop (Syntax.denote e0)
     loop e = case e of
       Const _ -> True
       Var _ -> True
-      Lam (FunctionBinding s0 _ s1 s2 a) b ->
-          Maybe.isNothing s0 && Maybe.isNothing s1 && Maybe.isNothing s2 &&
-            loop a && loop b
+      Lam (FunctionBinding Nothing _ Nothing Nothing a) b -> loop a && loop b
+      Lam _ _ -> False
       Pi _ a b -> loop a && loop b
       App f a -> loop f && loop a && case App f a of
           App (Lam _ _) _ -> False
@@ -905,7 +903,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r (FieldSelection s0 k s1) -> Maybe.isNothing s0 && Maybe.isNothing s1 && case r of
+      Field r (FieldSelection Nothing k Nothing) -> case r of
           RecordLit _ -> False
           Project _ _ -> False
           Prefer _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
@@ -913,6 +911,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           Combine _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
           Combine _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
           _ -> loop r
+      Field _ _ -> False
       Project r p -> loop r &&
           case p of
               Left s -> case r of
