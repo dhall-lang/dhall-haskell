@@ -1,0 +1,97 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToDefOnUnused.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToDefOnUnused.dhall</span></h2
+      ><a data-path="/JumpToDefOnUnused.dhall" class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          ><code
+          >dhall-docs</code> will detect some names (record fields, let-bindings and lam-bindings)
+are unused and therefore won&#39;t be highlighted</p>
+</div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />`dhall-docs` will detect some names (record fields, let-bindings and lam-bindings)<br
+          />are unused and therefore won&#39;t be highlighted<br
+          />-}<br
+          /><br
+          />let unused = 1<br
+          />let <span id="var7-5" data-variable="var7-5"
+                      class="variable-decl"
+          >used</span
+          > = 3<br
+          /><br
+          />let unusedRecord = { foo = 1 }<br
+          />let <span id="var10-5" data-variable="var10-5"
+                      class="variable-decl"
+          >usedRecord</span
+          > = { <span id="var10-20" data-variable="var10-20"
+                      class="variable-decl"
+          >foo</span
+          > = 1 }<br
+          /><br
+          />let <span id="var12-5" data-variable="var12-5"
+                      class="variable-decl"
+          >f</span
+          > =<br
+          />       \(unused : Bool)<br
+          />    -&gt; \(<span id="var14-10" data-variable="var14-10"
+                              class="variable-decl"
+          >used</span
+          > : Natural)<br
+          />    -&gt; \(<span id="var15-10" data-variable="var15-10"
+                              class="variable-decl"
+          >r</span
+          > : { unused : Text, <span id="var15-31" data-variable="var15-31"
+                                     class="variable-decl"
+          >used</span
+          > : Natural}) -&gt; <a href="#var14-10" data-variable="var14-10"
+                                 class="variable-use"
+          >used</a
+          > + <a href="#var15-10" data-variable="var15-10"
+                 class="variable-use"
+          >r</a
+          >.<a href="#var15-31" data-variable="var15-31" class="variable-use"
+          >used</a
+          ><br
+          /><br
+          />in <a href="#var7-5" data-variable="var7-5" class="variable-use"
+          >used</a
+          > + <a href="#var10-5" data-variable="var10-5" class="variable-use"
+          >usedRecord</a
+          >.<a href="#var10-20" data-variable="var10-20" class="variable-use"
+          >foo</a
+          > + <a href="#var12-5" data-variable="var12-5" class="variable-use"
+          >f</a
+          > True 1 { unused = &quot;foo&quot;, used = 3 }<br/></pre></div></div></body></html>
