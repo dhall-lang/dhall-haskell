@@ -76,7 +76,7 @@ Library
         tar                  >= 0.5.1.0   && < 0.6 ,
         text                 >= 0.11.1.0  && < 1.3 ,
         mtl                  >= 2.2.1     && < 2.3 ,
-        optparse-applicative >= 0.14.0.0  && < 0.16
+        optparse-applicative >= 0.14.0.0  && < 0.17
     Exposed-Modules:
         Dhall.Docs
         Dhall.Docs.Core
