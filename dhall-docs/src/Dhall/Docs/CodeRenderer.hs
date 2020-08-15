@@ -77,13 +77,30 @@ getSourceLine, getSourceColumn :: SourcePos -> Int
 getSourceLine = SourcePos.unPos . SourcePos.sourceLine
 getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 
--- | To support jump-to-definition on record literals we need to know the
---   the type of a name as we traverse the AST. Using 'Dhall.TypeCheck' is not
---   possible since we always try to extract as much information as we can from
---   source.
+{-| Every 'Expr' constructor has extra information that tell us what to highlight on
+    hover and where to jump on click events. 'JtdInfo' records that extra
+    information.
+-}
 data JtdInfo
-    -- | Used for record type and literals' fields. Each field is a variable declaration
-    --   Could be a map, but 'VarDecl' already records the variable name
+    {-| Each field in a Dhall record (type or literal) is associated with a
+        'VarDecl', and selector-expressions behave like 'Var's by using a
+        'VariableUse' with the field 'VarDecl' to jump to that label.
+
+        For example, a Dhall expression like this:
+
+        > { a = foo, b = bar }
+
+        has the following 'JtdInfo':
+
+        > RecordFields (Set.fromList [VarDecl posA "a" jtdInfoA, VarDecl posB "b" jtdInfoB])
+
+        ... where
+
+        * @posA@ and @posB@ records the source position used to make them
+        identifiel across the rendered source code
+        * @jtdInfoA@ and @jtdInfoB@ are the associated 'JtdInfo' infered from
+        @foo@ and @bar@
+    -}
     = RecordFields (Set.Set VarDecl)
     -- | Default type for cases we don't handle
     | NoInfo
