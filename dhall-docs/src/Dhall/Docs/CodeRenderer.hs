@@ -55,6 +55,7 @@ import Lucid
 import Text.Megaparsec.Pos               (SourcePos (..))
 
 import qualified Control.Monad.Trans.Writer.Strict     as Writer
+import qualified Data.Maybe as Maybe
 import qualified Data.List
 import qualified Data.Set                              as Set
 import qualified Data.Text                             as Text
@@ -142,13 +143,26 @@ data SourceCodeFragment =
 -- | Returns all 'SourceCodeFragment's in lexicographic order i.e. in the same
 --   order as in the source code.
 fragments :: Expr Src Import -> [SourceCodeFragment]
-fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
+fragments = removeUnusedDecls . Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
   where
     sorter (SourceCodeFragment Src{srcStart = srcStart0} _)
            (SourceCodeFragment Src{srcStart = srcStart1} _) = pos0 `compare` pos1
       where
         pos0 = (getSourceLine srcStart0, getSourceColumn srcStart0)
         pos1 = (getSourceLine srcStart1, getSourceColumn srcStart1)
+
+    removeUnusedDecls sourceCodeFragments = filter isUsed sourceCodeFragments
+      where
+        makePosPair Src{srcStart} = (getSourceLine srcStart, getSourceColumn srcStart)
+        varUsePos (SourceCodeFragment _ (VariableUse (VarDecl src _ _))) =
+            Just $ makePosPair src
+        varUsePos _ = Nothing
+
+        usedVariables = Set.fromList $ Maybe.mapMaybe varUsePos sourceCodeFragments
+
+        isUsed (SourceCodeFragment _ (VariableDeclaration (VarDecl src _ _))) =
+            makePosPair src `Set.member` usedVariables
+        isUsed _ = True
 
     infer :: Context VarDecl -> Expr Src Import -> Writer [SourceCodeFragment] JtdInfo
     infer context = \case
@@ -237,6 +251,7 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
                 return varDecl
               where
             f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
+
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
     <> "/" <> file
