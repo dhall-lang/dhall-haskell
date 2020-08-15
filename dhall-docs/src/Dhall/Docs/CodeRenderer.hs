@@ -81,17 +81,17 @@ getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 --   the type of a name as we traverse the AST. Using 'Dhall.TypeCheck' is not
 --   possible since we always try to extract as much information as we can from
 --   source.
-data DhallType
-    -- | Used for record literals, each field is a variable declaration
+data JtdInfo
+    -- | Used for record type and literals' fields. Each field is a variable declaration
     --   Could be a map, but 'VarDecl' already records the variable name
-    = RecordLiteral (Set.Set VarDecl)
+    = RecordFields (Set.Set VarDecl)
     -- | Default type for cases we don't handle
-    | AnyType
+    | NoInfo
     deriving (Eq, Ord, Show)
 
 -- | To make each variable unique we record the source position where it was
 --   found.
-data VarDecl = VarDecl Src Text DhallType
+data VarDecl = VarDecl Src Text JtdInfo
     deriving (Eq, Ord, Show)
 
 makeHtmlId :: VarDecl -> Text
@@ -133,12 +133,12 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
         pos0 = (getSourceLine srcStart0, getSourceColumn srcStart0)
         pos1 = (getSourceLine srcStart1, getSourceColumn srcStart1)
 
-    infer :: Context VarDecl -> Expr Src Import -> Writer [SourceCodeFragment] DhallType
+    infer :: Context VarDecl -> Expr Src Import -> Writer [SourceCodeFragment] JtdInfo
     infer context = \case
         -- The parsed text of the import is located in it's `Note` constructor
-        Note src (Embed a) -> Writer.tell [SourceCodeFragment src $ ImportExpr a] >> return AnyType
+        Note src (Embed a) -> Writer.tell [SourceCodeFragment src $ ImportExpr a] >> return NoInfo
 
-        -- since we have to 'infer' the 'DhallType' of the annotation, we
+        -- since we have to 'infer' the 'JtdInfo' of the annotation, we
         -- are not able to generate the 'SourceCodeFragment's in lexicographical
         -- without calling 'Data.List.sortBy' after
         Let (Binding
@@ -156,17 +156,17 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
                     _ <- infer context t
                     return ()
 
-            bindingDhallType <- infer context value
+            bindingJtdInfo <- infer context value
 
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            let varDecl = VarDecl varSrc variable bindingDhallType
+            let varDecl = VarDecl varSrc variable bindingJtdInfo
 
             Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
             infer (Context.insert variable varDecl context) expr'
 
         Note src (Var (V name index)) ->
             case Context.lookup name index context of
-                Nothing -> return AnyType
+                Nothing -> return NoInfo
                 Just varDecl@(VarDecl _ _ t) -> do
                     Writer.tell [SourceCodeFragment src $ VariableUse varDecl]
                     return t
@@ -189,8 +189,8 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
             fields <- do
                 dhallType <- infer context e
                 case dhallType of
-                    AnyType -> return mempty
-                    RecordLiteral s -> return $ Set.toList s
+                    NoInfo -> return mempty
+                    RecordFields s -> return $ Set.toList s
 
             let src = makeSrcForLabel posStart posEnd label
             let match (VarDecl _ l _) = l == label
@@ -198,7 +198,7 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
                 x@(VarDecl _ _ t) : _ -> do
                     Writer.tell [SourceCodeFragment src (VariableUse x)]
                     return t
-                _ -> return AnyType
+                _ -> return NoInfo
 
         RecordLit (Map.toList -> l) -> handleRecordLike l
 
@@ -207,10 +207,10 @@ fragments = Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
         Note _ e -> infer context e
         e -> do
             mapM_ (infer context) $ Lens.toListOf Core.subExpressions e
-            return AnyType
+            return NoInfo
 
       where
-        handleRecordLike l = RecordLiteral . Set.fromList <$> mapM f l
+        handleRecordLike l = RecordFields . Set.fromList <$> mapM f l
           where
             f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
                 dhallType <- infer context val
