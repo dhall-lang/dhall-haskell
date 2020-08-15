@@ -276,6 +276,11 @@ let
                       pkgsNew.haskell.lib.appendPatch
                         haskellPackagesOld.turtle
                         ./turtle.patch;
+
+                    unix-compat =
+                      pkgsNew.haskell.lib.appendPatch
+                        haskellPackagesOld.unix-compat
+                        ./unix-compat.patch;
                   };
 
               in

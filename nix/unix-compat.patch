@@ -1,0 +1,13 @@
+diff --git a/unix-compat.cabal b/unix-compat.cabal
+index 0af62fc..026a1a9 100644
+--- a/unix-compat.cabal
++++ b/unix-compat.cabal
+@@ -63,7 +63,7 @@ Library
+       System.PosixCompat.Internal.Time
+ 
+   else
+-    build-depends: unix >= 2.4 && < 2.8
++    build-depends: unix >= 2.4 && < 2.9
+     include-dirs: include
+     includes: HsUnixCompat.h
+     install-includes: HsUnixCompat.h
