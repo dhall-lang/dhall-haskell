@@ -912,7 +912,8 @@ instance Pretty URL where
         <>  queryDoc
         <>  foldMap prettyHeaders headers
       where
-        prettyHeaders h = " using " <> Pretty.pretty h
+        prettyHeaders h =
+          " using " <> Pretty.unAnnotate (prettyImportExpression h)
 
         File {..} = path
 
