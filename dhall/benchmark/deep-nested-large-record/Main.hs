@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
+import Data.Void (Void)
 import Gauge (defaultMain)
 
 import qualified Data.Sequence   as Seq
@@ -21,7 +22,7 @@ dhallPreludeImport = Core.Import
     }
   }
 
-issue412 :: Core.Expr s TypeCheck.X -> Gauge.Benchmarkable
+issue412 :: Core.Expr s Void -> Gauge.Benchmarkable
 issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
   where
     expr
@@ -30,7 +31,7 @@ issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
       $ Seq.replicate 5
       $ Core.Var (Core.V "prelude" 0) `Core.Field` "types" `Core.Field` "Little" `Core.Field` "Foo"
 
-unionPerformance :: Core.Expr s TypeCheck.X -> Gauge.Benchmarkable
+unionPerformance :: Core.Expr s Void -> Gauge.Benchmarkable
 unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
   where
     expr =
