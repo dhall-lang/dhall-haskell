@@ -84,8 +84,8 @@ getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 -}
 data JtdInfo
     {-| Each field in a Dhall record (type or literal) is associated with a
-        'VarDecl', and selector-expressions behave like 'Var's by using a
-        'VariableUse' with the field 'VarDecl' to jump to that label.
+        'NameDecl', and selector-expressions behave like 'Var's by using a
+        'VariableUse' with the field 'NameDecl' to jump to that label.
 
         For example, a Dhall expression like this:
 
@@ -93,7 +93,7 @@ data JtdInfo
 
         has the following 'JtdInfo':
 
-        > RecordFields (Set.fromList [VarDecl posA "a" jtdInfoA, VarDecl posB "b" jtdInfoB])
+        > RecordFields (Set.fromList [NameDecl posA "a" jtdInfoA, NameDecl posB "b" jtdInfoB])
 
         ... where
 
@@ -102,18 +102,18 @@ data JtdInfo
         * @jtdInfoA@ and @jtdInfoB@ are the associated 'JtdInfo' inferred from
         @foo@ and @bar@
     -}
-    = RecordFields (Set.Set VarDecl)
+    = RecordFields (Set.Set NameDecl)
     -- | Default type for cases we don't handle
     | NoInfo
     deriving (Eq, Ord, Show)
 
 -- | To make each variable unique we record the source position where it was
 --   found.
-data VarDecl = VarDecl Src Text JtdInfo
+data NameDecl = NameDecl Src Text JtdInfo
     deriving (Eq, Ord, Show)
 
-makeHtmlId :: VarDecl -> Text
-makeHtmlId (VarDecl Src{srcStart} _ _) =
+makeHtmlId :: NameDecl -> Text
+makeHtmlId (NameDecl Src{srcStart} _ _) =
        "var"
     <> Text.pack (show $ getSourceLine srcStart) <> "-"
     <> Text.pack (show $ getSourceColumn srcStart)
@@ -126,11 +126,11 @@ data SourceCodeType
 
     -- | Used to render a variable declared in let-binding or function argument
     --   that is used in any expression
-    | VariableUse VarDecl
+    | VariableUse NameDecl
 
     -- | Used to render the declaration of a variable. This is used to jump
     --   to that variable after clicking an 'VariableUse'
-    | VariableDeclaration VarDecl
+    | VariableDeclaration NameDecl
 
 {-| The 'Expr Src Import' parsed from a 'Text' is split into a
     '[SourceCodeFragment]'.
@@ -154,17 +154,17 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
     removeUnusedDecls sourceCodeFragments = filter isUsed sourceCodeFragments
       where
         makePosPair Src{srcStart} = (getSourceLine srcStart, getSourceColumn srcStart)
-        varUsePos (SourceCodeFragment _ (VariableUse (VarDecl src _ _))) =
+        varUsePos (SourceCodeFragment _ (VariableUse (NameDecl src _ _))) =
             Just $ makePosPair src
         varUsePos _ = Nothing
 
         usedVariables = Set.fromList $ Maybe.mapMaybe varUsePos sourceCodeFragments
 
-        isUsed (SourceCodeFragment _ (VariableDeclaration (VarDecl src _ _))) =
+        isUsed (SourceCodeFragment _ (VariableDeclaration (NameDecl src _ _))) =
             makePosPair src `Set.member` usedVariables
         isUsed _ = True
 
-    infer :: Context VarDecl -> Expr Src Import -> Writer [SourceCodeFragment] JtdInfo
+    infer :: Context NameDecl -> Expr Src Import -> Writer [SourceCodeFragment] JtdInfo
     infer context = \case
         -- The parsed text of the import is located in it's `Note` constructor
         Note src (Embed a) -> Writer.tell [SourceCodeFragment src $ ImportExpr a] >> return NoInfo
@@ -190,7 +190,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             bindingJtdInfo <- infer context value
 
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            let varDecl = VarDecl varSrc variable bindingJtdInfo
+            let varDecl = NameDecl varSrc variable bindingJtdInfo
 
             Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
             infer (Context.insert variable varDecl context) expr'
@@ -198,7 +198,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
         Note src (Var (V name index)) ->
             case Context.lookup name index context of
                 Nothing -> return NoInfo
-                Just varDecl@(VarDecl _ _ t) -> do
+                Just varDecl@(NameDecl _ _ t) -> do
                     Writer.tell [SourceCodeFragment src $ VariableUse varDecl]
                     return t
 
@@ -211,7 +211,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             dhallType <- infer context t
 
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            let varDecl = VarDecl varSrc variable dhallType
+            let varDecl = NameDecl varSrc variable dhallType
 
             Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
             infer (Context.insert variable varDecl context) expr
@@ -224,9 +224,9 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                     RecordFields s -> return $ Set.toList s
 
             let src = makeSrcForLabel posStart posEnd label
-            let match (VarDecl _ l _) = l == label
+            let match (NameDecl _ l _) = l == label
             case filter match fields of
-                x@(VarDecl _ _ t) : _ -> do
+                x@(NameDecl _ _ t) : _ -> do
                     Writer.tell [SourceCodeFragment src (VariableUse x)]
                     return t
                 _ -> return NoInfo
@@ -246,7 +246,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
                 dhallType <- infer context val
                 let varSrc = makeSrcForLabel startPos endPos key
-                let varDecl = VarDecl varSrc key dhallType
+                let varDecl = NameDecl varSrc key dhallType
                 Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
                 return varDecl
               where
