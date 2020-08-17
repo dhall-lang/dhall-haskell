@@ -321,15 +321,15 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (NameDeclaration nameDecl))
   where
     attributes =
         [id_ $ makeHtmlId nameDecl
-        , class_ "variable-decl"
-        , data_ "variable" $ makeHtmlId nameDecl ]
+        , class_ "name-decl"
+        , data_ "name" $ makeHtmlId nameDecl ]
 renderSourceCodeFragment (SourceCodeFragment Src{..} (NameUse nameDecl)) =
     a_ attributes $ toHtml srcText
   where
     attributes =
         [ href_ $ "#" <> makeHtmlId nameDecl
-        , class_ "variable-use"
-        , data_ "variable" $ makeHtmlId nameDecl
+        , class_ "name-use"
+        , data_ "name" $ makeHtmlId nameDecl
         ]
 
 -- | Given a Text and the parsed `Expr Src Import` from it, this will render the
