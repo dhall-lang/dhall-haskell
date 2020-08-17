@@ -107,8 +107,12 @@ data JtdInfo
     | NoInfo
     deriving (Eq, Ord, Show)
 
--- | To make each name unique we record the source position where it was
---   found.
+{-| To make each name unique we record the source position where it was
+    found.
+
+    The names that we handle are the ones introduced by let-bindings, lambda
+    arguments and record (types and literals) labels.
+-}
 data NameDecl = NameDecl Src Text JtdInfo
     deriving (Eq, Ord, Show)
 
