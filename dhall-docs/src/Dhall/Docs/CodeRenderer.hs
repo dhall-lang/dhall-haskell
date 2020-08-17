@@ -143,7 +143,7 @@ data SourceCodeFragment =
 -- | Returns all 'SourceCodeFragment's in lexicographic order i.e. in the same
 --   order as in the source code.
 fragments :: Expr Src Import -> [SourceCodeFragment]
-fragments = removeUnusedDecls . Data.List.sortBy sorter . Writer.execWriter . infer Context.empty
+fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . infer Context.empty
   where
     sorter (SourceCodeFragment Src{srcStart = srcStart0} _)
            (SourceCodeFragment Src{srcStart = srcStart1} _) = pos0 `compare` pos1
