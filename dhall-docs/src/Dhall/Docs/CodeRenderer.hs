@@ -154,14 +154,14 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
     removeUnusedDecls sourceCodeFragments = filter isUsed sourceCodeFragments
       where
         makePosPair Src{srcStart} = (getSourceLine srcStart, getSourceColumn srcStart)
-        varUsePos (SourceCodeFragment _ (NameUse (NameDecl src _ _))) =
+        nameUsePos (SourceCodeFragment _ (NameUse (NameDecl src _ _))) =
             Just $ makePosPair src
-        varUsePos _ = Nothing
+        nameUsePos _ = Nothing
 
-        usedVariables = Set.fromList $ Maybe.mapMaybe varUsePos sourceCodeFragments
+        usedNames = Set.fromList $ Maybe.mapMaybe nameUsePos sourceCodeFragments
 
         isUsed (SourceCodeFragment _ (NameDeclaration (NameDecl src _ _))) =
-            makePosPair src `Set.member` usedVariables
+            makePosPair src `Set.member` usedNames
         isUsed _ = True
 
     infer :: Context NameDecl -> Expr Src Import -> Writer [SourceCodeFragment] JtdInfo
@@ -189,10 +189,10 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
 
             bindingJtdInfo <- infer context value
 
-            let varSrc = makeSrcForLabel srcEnd0 srcStart1 name
-            let nameDecl = NameDecl varSrc name bindingJtdInfo
+            let nameSrc = makeSrcForLabel srcEnd0 srcStart1 name
+            let nameDecl = NameDecl nameSrc name bindingJtdInfo
 
-            Writer.tell [SourceCodeFragment varSrc (NameDeclaration nameDecl)]
+            Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
             infer (Context.insert name nameDecl context) expr'
 
         Note src (Var (V name index)) ->
@@ -210,10 +210,10 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                 t) expr -> do
             dhallType <- infer context t
 
-            let varSrc = makeSrcForLabel srcEnd0 srcStart1 name
-            let nameDecl = NameDecl varSrc name dhallType
+            let nameSrc = makeSrcForLabel srcEnd0 srcStart1 name
+            let nameDecl = NameDecl nameSrc name dhallType
 
-            Writer.tell [SourceCodeFragment varSrc (NameDeclaration nameDecl)]
+            Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
             infer (Context.insert name nameDecl context) expr
 
         Field e (FieldSelection (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
@@ -245,9 +245,9 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
           where
             f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
                 dhallType <- infer context val
-                let varSrc = makeSrcForLabel startPos endPos key
-                let nameDecl = NameDecl varSrc key dhallType
-                Writer.tell [SourceCodeFragment varSrc (NameDeclaration nameDecl)]
+                let nameSrc = makeSrcForLabel startPos endPos key
+                let nameDecl = NameDecl nameSrc key dhallType
+                Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
                 return nameDecl
               where
             f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
@@ -256,7 +256,7 @@ fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
     <> "/" <> file
 
--- | Generic way of creating a Src for a label, taking quoted variables into
+-- | Generic way of creating a Src for a label, taking quoted names into
 --   account
 makeSrcForLabel
     :: SourcePos  -- ^ Prefix whitespace end position, will be 'srcStart'
