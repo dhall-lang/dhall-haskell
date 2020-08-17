@@ -85,7 +85,7 @@ getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 data JtdInfo
     {-| Each field in a Dhall record (type or literal) is associated with a
         'NameDecl', and selector-expressions behave like 'Var's by using a
-        'VariableUse' with the field 'NameDecl' to jump to that label.
+        'NameUse' with the field 'NameDecl' to jump to that label.
 
         For example, a Dhall expression like this:
 
@@ -126,10 +126,10 @@ data SourceCodeType
 
     -- | Used to render a variable declared in let-binding or function argument
     --   that is used in any expression
-    | VariableUse NameDecl
+    | NameUse NameDecl
 
     -- | Used to render the declaration of a variable. This is used to jump
-    --   to that variable after clicking an 'VariableUse'
+    --   to that variable after clicking an 'NameUse'
     | VariableDeclaration NameDecl
 
 {-| The 'Expr Src Import' parsed from a 'Text' is split into a
@@ -154,7 +154,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
     removeUnusedDecls sourceCodeFragments = filter isUsed sourceCodeFragments
       where
         makePosPair Src{srcStart} = (getSourceLine srcStart, getSourceColumn srcStart)
-        varUsePos (SourceCodeFragment _ (VariableUse (NameDecl src _ _))) =
+        varUsePos (SourceCodeFragment _ (NameUse (NameDecl src _ _))) =
             Just $ makePosPair src
         varUsePos _ = Nothing
 
@@ -199,7 +199,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             case Context.lookup name index context of
                 Nothing -> return NoInfo
                 Just varDecl@(NameDecl _ _ t) -> do
-                    Writer.tell [SourceCodeFragment src $ VariableUse varDecl]
+                    Writer.tell [SourceCodeFragment src $ NameUse varDecl]
                     return t
 
         Lam (FunctionBinding
@@ -227,7 +227,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             let match (NameDecl _ l _) = l == label
             case filter match fields of
                 x@(NameDecl _ _ t) : _ -> do
-                    Writer.tell [SourceCodeFragment src (VariableUse x)]
+                    Writer.tell [SourceCodeFragment src (NameUse x)]
                     return t
                 _ -> return NoInfo
 
@@ -323,7 +323,7 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (VariableDeclaration varDec
         [id_ $ makeHtmlId varDecl
         , class_ "variable-decl"
         , data_ "variable" $ makeHtmlId varDecl ]
-renderSourceCodeFragment (SourceCodeFragment Src{..} (VariableUse varDecl)) =
+renderSourceCodeFragment (SourceCodeFragment Src{..} (NameUse varDecl)) =
     a_ attributes $ toHtml srcText
   where
     attributes =
