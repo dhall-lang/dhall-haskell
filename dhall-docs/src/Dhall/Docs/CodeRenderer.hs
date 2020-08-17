@@ -130,7 +130,7 @@ data SourceCodeType
 
     -- | Used to render the declaration of a variable. This is used to jump
     --   to that variable after clicking an 'NameUse'
-    | VariableDeclaration NameDecl
+    | NameDeclaration NameDecl
 
 {-| The 'Expr Src Import' parsed from a 'Text' is split into a
     '[SourceCodeFragment]'.
@@ -160,7 +160,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
 
         usedVariables = Set.fromList $ Maybe.mapMaybe varUsePos sourceCodeFragments
 
-        isUsed (SourceCodeFragment _ (VariableDeclaration (NameDecl src _ _))) =
+        isUsed (SourceCodeFragment _ (NameDeclaration (NameDecl src _ _))) =
             makePosPair src `Set.member` usedVariables
         isUsed _ = True
 
@@ -192,7 +192,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
             let varDecl = NameDecl varSrc variable bindingJtdInfo
 
-            Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+            Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
             infer (Context.insert variable varDecl context) expr'
 
         Note src (Var (V name index)) ->
@@ -213,7 +213,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
             let varDecl = NameDecl varSrc variable dhallType
 
-            Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+            Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
             infer (Context.insert variable varDecl context) expr
 
         Field e (FieldSelection (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
@@ -247,7 +247,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                 dhallType <- infer context val
                 let varSrc = makeSrcForLabel startPos endPos key
                 let varDecl = NameDecl varSrc key dhallType
-                Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+                Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
                 return varDecl
               where
             f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
@@ -316,7 +316,7 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
 
             _ -> toHtml
 
-renderSourceCodeFragment (SourceCodeFragment Src{..} (VariableDeclaration varDecl)) =
+renderSourceCodeFragment (SourceCodeFragment Src{..} (NameDeclaration varDecl)) =
     span_ attributes $ toHtml srcText
   where
     attributes =
