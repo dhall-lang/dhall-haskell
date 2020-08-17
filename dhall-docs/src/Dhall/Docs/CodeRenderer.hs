@@ -107,7 +107,7 @@ data JtdInfo
     | NoInfo
     deriving (Eq, Ord, Show)
 
--- | To make each variable unique we record the source position where it was
+-- | To make each name unique we record the source position where it was
 --   found.
 data NameDecl = NameDecl Src Text JtdInfo
     deriving (Eq, Ord, Show)
@@ -124,12 +124,12 @@ data SourceCodeType
     --   Other imports are rendered as plain-text
     = ImportExpr Import
 
-    -- | Used to render a variable declared in let-binding or function argument
+    -- | Used to render a name declared in let-binding or function argument
     --   that is used in any expression
     | NameUse NameDecl
 
-    -- | Used to render the declaration of a variable. This is used to jump
-    --   to that variable after clicking an 'NameUse'
+    -- | Used to render the declaration of a name. This is used to jump
+    --   to that name after clicking an 'NameUse'
     | NameDeclaration NameDecl
 
 {-| The 'Expr Src Import' parsed from a 'Text' is split into a
@@ -174,7 +174,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
         -- without calling 'Data.List.sortBy' after
         Let (Binding
                 (Just Src { srcEnd = srcEnd0 })
-                variable
+                name
                 (Just Src { srcStart = srcStart1 })
                 annotation
                 _
@@ -189,11 +189,11 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
 
             bindingJtdInfo <- infer context value
 
-            let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            let varDecl = NameDecl varSrc variable bindingJtdInfo
+            let varSrc = makeSrcForLabel srcEnd0 srcStart1 name
+            let varDecl = NameDecl varSrc name bindingJtdInfo
 
             Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
-            infer (Context.insert variable varDecl context) expr'
+            infer (Context.insert name varDecl context) expr'
 
         Note src (Var (V name index)) ->
             case Context.lookup name index context of
@@ -204,17 +204,17 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
 
         Lam (FunctionBinding
                 (Just Src{srcEnd = srcEnd0})
-                variable
+                name
                 (Just Src{srcStart = srcStart1})
                 _
                 t) expr -> do
             dhallType <- infer context t
 
-            let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            let varDecl = NameDecl varSrc variable dhallType
+            let varSrc = makeSrcForLabel srcEnd0 srcStart1 name
+            let varDecl = NameDecl varSrc name dhallType
 
             Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
-            infer (Context.insert variable varDecl context) expr
+            infer (Context.insert name varDecl context) expr
 
         Field e (FieldSelection (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
             fields <- do
@@ -263,12 +263,12 @@ makeSrcForLabel
     -> SourcePos  -- ^ Suffix whitespace start position, will be 'srcEnd'
     -> Text       -- ^ Label name, will be the 'srcText' with surrounding @`@ if needed
     -> Src
-makeSrcForLabel srcStart srcEnd variable = Src {..}
+makeSrcForLabel srcStart srcEnd name = Src {..}
   where
     realLength = getSourceColumn srcEnd - getSourceColumn srcStart
     srcText =
-        if Text.length variable == realLength then variable
-        else "`" <> variable <> "`"
+        if Text.length name == realLength then name
+        else "`" <> name <> "`"
 
 renderSourceCodeFragment :: SourceCodeFragment -> Html ()
 renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
