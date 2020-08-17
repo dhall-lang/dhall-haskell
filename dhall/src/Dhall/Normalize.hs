@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE ViewPatterns      #-}
@@ -32,6 +33,7 @@ import Dhall.Syntax
     , Chunks (..)
     , DhallDouble (..)
     , Expr (..)
+    , FieldSelection (..)
     , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
@@ -258,7 +260,7 @@ normalizeWithM
     :: (Monad m, Eq a) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (Syntax.denote e0)
  where
- loop e =  case e of
+ loop =  \case
     Const k -> pure (Const k)
     Var v -> pure (Var v)
     Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
@@ -534,11 +536,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     None -> pure None
     Record kts -> Record . Dhall.Map.sort <$> kts'
       where
-        f (RecordField s0 expr) = RecordField s0 <$> loop expr
+        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
         kts' = traverse f kts
     RecordLit kvs -> RecordLit . Dhall.Map.sort <$> kvs'
       where
-        f (RecordField s0 expr) = RecordField s0 <$> loop expr
+        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
         kvs' = traverse f kvs
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
@@ -552,7 +554,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.unionWith f m n)
           where
-            f (RecordField _ expr) (RecordField _ expr') =
+            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
               Syntax.makeRecordField $ decide expr expr'
         decide l r =
             Combine mk l r
@@ -565,7 +567,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (Record m) (Record n) =
             Record (Dhall.Map.unionWith f m n)
           where
-            f (RecordField _ expr) (RecordField _ expr') =
+            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
               Syntax.makeRecordField $ decide expr expr'
         decide l r =
             CombineTypes l r
@@ -582,14 +584,17 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide l r =
             Prefer PreferFromSource l r
     RecordCompletion x y ->
-        loop (Annot (Prefer PreferFromCompletion (Field x "default") y) (Field x "Type"))
+        loop (Annot (Prefer PreferFromCompletion (Field x def) y) (Field x typ))
+      where
+        def = Syntax.makeFieldSelection "default"
+        typ = Syntax.makeFieldSelection "Type"
     Merge x y t      -> do
         x' <- loop x
         y' <- loop y
         case x' of
             RecordLit kvsX ->
                 case y' of
-                    Field (Union ktsY) kY ->
+                    Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
                         case Dhall.Map.lookup kY ktsY of
                             Just Nothing ->
                                 case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
@@ -597,7 +602,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                     Nothing -> Merge x' y' <$> t'
                             _ ->
                                 Merge x' y' <$> t'
-                    App (Field (Union ktsY) kY) vY ->
+                    App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) vY ->
                         case Dhall.Map.lookup kY ktsY of
                             Just (Just _) ->
                                 case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
@@ -641,7 +646,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 return (ListLit listType keyValues)
             _ ->
                 return (ToMap x' t')
-    Field r x        -> do
+    Field r k@FieldSelection{fieldSelectionLabel = x}        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
 
         r' <- loop r
@@ -649,21 +654,21 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
                     Just v  -> pure $ recordFieldValue v
-                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure x
-            Project r_ _ -> loop (Field r_ x)
+                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure k
+            Project r_ _ -> loop (Field r_ k)
             Prefer _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) x)
-                Nothing -> loop (Field r_ x)
+                Just v -> pure (Field (Prefer PreferFromSource (singletonRecordLit v) r_) k)
+                Nothing -> loop (Field r_ k)
             Prefer _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
                 Just v -> pure $ recordFieldValue v
-                Nothing -> loop (Field l x)
+                Nothing -> loop (Field l k)
             Combine m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine m (singletonRecordLit v) r_) x)
-                Nothing -> loop (Field r_ x)
+                Just v -> pure (Field (Combine m (singletonRecordLit v) r_) k)
+                Nothing -> loop (Field r_ k)
             Combine m l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine m l (singletonRecordLit v)) x)
-                Nothing -> loop (Field l x)
-            _ -> pure (Field r' x)
+                Just v -> pure (Field (Combine m l (singletonRecordLit v)) k)
+                Nothing -> loop (Field l k)
+            _ -> pure (Field r' k)
     Project x (Left fields)-> do
         x' <- loop x
         let fieldsSet = Dhall.Set.toSet fields
@@ -738,7 +743,8 @@ isNormalized e0 = loop (Syntax.denote e0)
     loop e = case e of
       Const _ -> True
       Var _ -> True
-      Lam (Syntax.functionBindingAnnotation -> a) b -> loop a && loop b
+      Lam (FunctionBinding Nothing _ Nothing Nothing a) b -> loop a && loop b
+      Lam _ _ -> False
       Pi _ a b -> loop a && loop b
       App f a -> loop f && loop a && case App f a of
           App (Lam _ _) _ -> False
@@ -858,8 +864,14 @@ isNormalized e0 = loop (Syntax.denote e0)
       Optional -> True
       Some a -> loop a
       None -> True
-      Record kts -> Dhall.Map.isSorted kts && all (loop . recordFieldValue) kts
-      RecordLit kvs -> Dhall.Map.isSorted kvs && all (loop . recordFieldValue) kvs
+      Record kts -> Dhall.Map.isSorted kts && all decide kts
+        where
+          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
+          decide _ = False
+      RecordLit kvs -> Dhall.Map.isSorted kvs && all decide kvs
+        where
+          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
+          decide _ = False
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
       Combine _ x y -> loop x && loop y && decide x y
         where
@@ -891,7 +903,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r k -> case r of
+      Field r (FieldSelection Nothing k Nothing) -> case r of
           RecordLit _ -> False
           Project _ _ -> False
           Prefer _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
@@ -899,6 +911,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           Combine _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
           Combine _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
           _ -> loop r
+      Field _ _ -> False
       Project r p -> loop r &&
           case p of
               Left s -> case r of

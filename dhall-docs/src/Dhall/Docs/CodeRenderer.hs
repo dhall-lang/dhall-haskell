@@ -2,6 +2,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| Contains the logic to render the source code inside a HTML. It also provides
     context-sensitive features such as jump-to-definition.
@@ -29,31 +30,40 @@ module Dhall.Docs.CodeRenderer
     , ExprType(..)
     ) where
 
-import Data.Text           (Text)
-import Data.Void           (Void)
+import Control.Monad.Trans.Writer.Strict (Writer)
+import Data.Text                         (Text)
+import Data.Void                         (Void)
+import Dhall.Context                     (Context)
 import Dhall.Core
     ( Binding (..)
     , Expr (..)
+    , FieldSelection (..)
     , File (..)
     , FilePrefix (..)
     , FunctionBinding (..)
     , Import (..)
     , ImportHashed (..)
     , ImportType (..)
+    , RecordField (..)
     , Scheme (..)
     , URL (..)
     , Var (..)
     )
 import Dhall.Docs.Util
-import Dhall.Src           (Src (..))
+import Dhall.Src                         (Src (..))
 import Lucid
-import Text.Megaparsec.Pos (SourcePos (..))
+import Text.Megaparsec.Pos               (SourcePos (..))
 
+import qualified Control.Monad.Trans.Writer.Strict     as Writer
+import qualified Data.Maybe as Maybe
+import qualified Data.List
+import qualified Data.Set                              as Set
 import qualified Data.Text                             as Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
 import qualified Dhall.Context                         as Context
 import qualified Dhall.Core                            as Core
+import qualified Dhall.Map                             as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Lens.Family                           as Lens
@@ -68,12 +78,42 @@ getSourceLine, getSourceColumn :: SourcePos -> Int
 getSourceLine = SourcePos.unPos . SourcePos.sourceLine
 getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 
+{-| Every 'Expr' constructor has extra information that tell us what to highlight on
+    hover and where to jump on click events. 'JtdInfo' record that extra
+    information.
+-}
+data JtdInfo
+    {-| Each field in a Dhall record (type or literal) is associated with a
+        'VarDecl', and selector-expressions behave like 'Var's by using a
+        'VariableUse' with the field 'VarDecl' to jump to that label.
+
+        For example, a Dhall expression like this:
+
+        > { a = foo, b = bar }
+
+        has the following 'JtdInfo':
+
+        > RecordFields (Set.fromList [VarDecl posA "a" jtdInfoA, VarDecl posB "b" jtdInfoB])
+
+        ... where
+
+        * @posA@ and @posB@ record the source position used to make them
+        unique across the rendered source code
+        * @jtdInfoA@ and @jtdInfoB@ are the associated 'JtdInfo' inferred from
+        @foo@ and @bar@
+    -}
+    = RecordFields (Set.Set VarDecl)
+    -- | Default type for cases we don't handle
+    | NoInfo
+    deriving (Eq, Ord, Show)
+
 -- | To make each variable unique we record the source position where it was
 --   found.
-data VarDecl = VarDecl Src Text
+data VarDecl = VarDecl Src Text JtdInfo
+    deriving (Eq, Ord, Show)
 
 makeHtmlId :: VarDecl -> Text
-makeHtmlId (VarDecl Src{srcStart} _) =
+makeHtmlId (VarDecl Src{srcStart} _ _) =
        "var"
     <> Text.pack (show $ getSourceLine srcStart) <> "-"
     <> Text.pack (show $ getSourceColumn srcStart)
@@ -103,67 +143,132 @@ data SourceCodeFragment =
 -- | Returns all 'SourceCodeFragment's in lexicographic order i.e. in the same
 --   order as in the source code.
 fragments :: Expr Src Import -> [SourceCodeFragment]
-fragments = go Context.empty
+fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . infer Context.empty
   where
-    go context = \case
-        -- The parsed text of the import is located in it's `Note` constructor
-        Note src (Embed a) -> [SourceCodeFragment src $ ImportExpr a]
+    sorter (SourceCodeFragment Src{srcStart = srcStart0} _)
+           (SourceCodeFragment Src{srcStart = srcStart1} _) = pos0 `compare` pos1
+      where
+        pos0 = (getSourceLine srcStart0, getSourceColumn srcStart0)
+        pos1 = (getSourceLine srcStart1, getSourceColumn srcStart1)
 
+    removeUnusedDecls sourceCodeFragments = filter isUsed sourceCodeFragments
+      where
+        makePosPair Src{srcStart} = (getSourceLine srcStart, getSourceColumn srcStart)
+        varUsePos (SourceCodeFragment _ (VariableUse (VarDecl src _ _))) =
+            Just $ makePosPair src
+        varUsePos _ = Nothing
+
+        usedVariables = Set.fromList $ Maybe.mapMaybe varUsePos sourceCodeFragments
+
+        isUsed (SourceCodeFragment _ (VariableDeclaration (VarDecl src _ _))) =
+            makePosPair src `Set.member` usedVariables
+        isUsed _ = True
+
+    infer :: Context VarDecl -> Expr Src Import -> Writer [SourceCodeFragment] JtdInfo
+    infer context = \case
+        -- The parsed text of the import is located in it's `Note` constructor
+        Note src (Embed a) -> Writer.tell [SourceCodeFragment src $ ImportExpr a] >> return NoInfo
+
+        -- since we have to 'infer' the 'JtdInfo' of the annotation, we
+        -- are not able to generate the 'SourceCodeFragment's in lexicographical
+        -- without calling 'Data.List.sortBy' after
         Let (Binding
                 (Just Src { srcEnd = srcEnd0 })
                 variable
                 (Just Src { srcStart = srcStart1 })
                 annotation
                 _
-                value) expr' ->
-            sourceCodeFragment : fromAnnotation ++ fromValue ++ fromExpr'
-          where
-            fromAnnotation = case annotation of
-                Nothing -> []
-                Just (_, e) -> go context e
+                value) expr' -> do
 
-            fromValue = go context value
+            -- If annotation is missing, the type is inferred from the bound value
+            case annotation of
+                Nothing -> return ()
+                Just (_, t) -> do
+                    _ <- infer context t
+                    return ()
 
-            varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
+            bindingJtdInfo <- infer context value
 
-            varDecl = VarDecl varSrc variable
+            let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
+            let varDecl = VarDecl varSrc variable bindingJtdInfo
 
-            sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
-
-            fromExpr' = go (Context.insert variable varDecl context) expr'
-
+            Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+            infer (Context.insert variable varDecl context) expr'
 
         Note src (Var (V name index)) ->
             case Context.lookup name index context of
-                Nothing -> []
-                Just varDecl -> [SourceCodeFragment src $ VariableUse varDecl]
+                Nothing -> return NoInfo
+                Just varDecl@(VarDecl _ _ t) -> do
+                    Writer.tell [SourceCodeFragment src $ VariableUse varDecl]
+                    return t
 
         Lam (FunctionBinding
                 (Just Src{srcEnd = srcEnd0})
                 variable
                 (Just Src{srcStart = srcStart1})
                 _
-                t) expr ->
-            sourceCodeFragment : fromAnnotation ++ fromExpr
-          where
-            varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
-            varDecl = VarDecl varSrc variable
-            sourceCodeFragment = SourceCodeFragment varSrc (VariableDeclaration varDecl)
+                t) expr -> do
+            dhallType <- infer context t
 
-            fromAnnotation = go context t
-            fromExpr = go (Context.insert variable varDecl context) expr
-        e -> concatMap (go context) $ Lens.toListOf Core.subExpressions e
+            let varSrc = makeSrcForLabel srcEnd0 srcStart1 variable
+            let varDecl = VarDecl varSrc variable dhallType
 
-    makeSrcForLabel srcStart srcEnd variable = Src {..}
+            Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+            infer (Context.insert variable varDecl context) expr
+
+        Field e (FieldSelection (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
+            fields <- do
+                dhallType <- infer context e
+                case dhallType of
+                    NoInfo -> return mempty
+                    RecordFields s -> return $ Set.toList s
+
+            let src = makeSrcForLabel posStart posEnd label
+            let match (VarDecl _ l _) = l == label
+            case filter match fields of
+                x@(VarDecl _ _ t) : _ -> do
+                    Writer.tell [SourceCodeFragment src (VariableUse x)]
+                    return t
+                _ -> return NoInfo
+
+        RecordLit (Map.toList -> l) -> handleRecordLike l
+
+        Record (Map.toList -> l) -> handleRecordLike l
+
+        Note _ e -> infer context e
+        e -> do
+            mapM_ (infer context) $ Lens.toListOf Core.subExpressions e
+            return NoInfo
+
       where
-        realLength = getSourceColumn srcEnd - getSourceColumn srcStart
-        srcText =
-            if Text.length variable == realLength then variable
-            else "`" <> variable <> "`"
+        handleRecordLike l = RecordFields . Set.fromList <$> mapM f l
+          where
+            f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
+                dhallType <- infer context val
+                let varSrc = makeSrcForLabel startPos endPos key
+                let varDecl = VarDecl varSrc key dhallType
+                Writer.tell [SourceCodeFragment varSrc (VariableDeclaration varDecl)]
+                return varDecl
+              where
+            f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
 
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
     <> "/" <> file
+
+-- | Generic way of creating a Src for a label, taking quoted variables into
+--   account
+makeSrcForLabel
+    :: SourcePos  -- ^ Prefix whitespace end position, will be 'srcStart'
+    -> SourcePos  -- ^ Suffix whitespace start position, will be 'srcEnd'
+    -> Text       -- ^ Label name, will be the 'srcText' with surrounding @`@ if needed
+    -> Src
+makeSrcForLabel srcStart srcEnd variable = Src {..}
+  where
+    realLength = getSourceColumn srcEnd - getSourceColumn srcStart
+    srcText =
+        if Text.length variable == realLength then variable
+        else "`" <> variable <> "`"
 
 renderSourceCodeFragment :: SourceCodeFragment -> Html ()
 renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
@@ -210,7 +315,6 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
                 href = ".." <> fileAsText file <> ".html"
 
             _ -> toHtml
-
 
 renderSourceCodeFragment (SourceCodeFragment Src{..} (VariableDeclaration varDecl)) =
     span_ attributes $ toHtml srcText

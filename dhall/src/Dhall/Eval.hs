@@ -677,7 +677,10 @@ eval !env t0 =
         Prefer _ t u ->
             vPrefer env (eval env t) (eval env u)
         RecordCompletion t u ->
-            eval env (Annot (Prefer PreferFromCompletion (Field t "default") u) (Field t "Type"))
+            eval env (Annot (Prefer PreferFromCompletion (Field t def) u) (Field t typ))
+          where
+            def = Syntax.makeFieldSelection "default"
+            typ = Syntax.makeFieldSelection "Type"
         Merge x y ma ->
             case (eval env x, eval env y, fmap (eval env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
@@ -708,7 +711,7 @@ eval !env t0 =
                     in  VListLit Nothing s
                 (x', ma') ->
                     VToMap x' ma'
-        Field t k ->
+        Field t (Syntax.fieldSelectionLabel -> k) ->
             vField (eval env t) k
         Project t (Left ks) ->
             vProjectByFields env (eval env t) (Dhall.Set.sort ks)
@@ -1108,7 +1111,7 @@ quote !env !t0 =
         VToMap t ma ->
             ToMap (quote env t) (fmap (quote env) ma)
         VField t k ->
-            Field (quote env t) k
+            Field (quote env t) $ Syntax.makeFieldSelection k
         VProject t p ->
             Project (quote env t) (fmap (quote env) p)
         VAssert t ->
@@ -1116,9 +1119,9 @@ quote !env !t0 =
         VEquivalent t u ->
             Equivalent (quote env t) (quote env u)
         VInject m k Nothing ->
-            Field (Union (fmap (fmap (quote env)) m)) k
+            Field (Union (fmap (fmap (quote env)) m)) $ Syntax.makeFieldSelection k
         VInject m k (Just t) ->
-            Field (Union (fmap (fmap (quote env)) m)) k `qApp` t
+            Field (Union (fmap (fmap (quote env)) m)) (Syntax.makeFieldSelection k) `qApp` t
         VEmbed a ->
             Embed a
         VPrimVar ->
@@ -1309,4 +1312,4 @@ alphaNormalize = goEnv EmptyNames
         go                     = goEnv e0
         goBind x               = goEnv (Bind e0 x)
         goChunks (Chunks ts x) = Chunks (fmap (fmap go) ts) x
-        goRecordField (RecordField s0 e) = RecordField s0 (go e)
+        goRecordField (RecordField s0 e s1 s2) = RecordField s0 (go e) s1 s2

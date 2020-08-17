@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/JumpToLetBindingWithShadowing.dhall</title
+    >/JumpToRecordFieldWhenVarIsOfRecordType.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,8 +25,8 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >JumpToLetBindingWithShadowing.dhall</span></h2
-      ><a data-path="/JumpToLetBindingWithShadowing.dhall"
+        >JumpToRecordFieldWhenVarIsOfRecordType.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenVarIsOfRecordType.dhall"
           class="copy-to-clipboard"
         ><i
           ><small
@@ -34,31 +34,41 @@
       ><br
       /><div class="doc-contents"
         ><p
-          >On this example, the first declaration of variable <code
+          >On this example, <code
+          >dhall-docs</code
+          > will detect that the variable <code
           >a</code
-          > is shadowed with the
-later declaration. The jump-to-definintion on the usage of <code
-          >a</code>
-should not highlight the first declaration, and interacting with the first
-declaration should not change the others</p>
+          > is bounded
+to a record-literal. When the user clicks on the <code
+          >field</code
+          > in the <code
+          >a.field</code
+          >, it
+will jump to the definition of that field in the source code i.e. to the <code
+          >field</code>
+key in the record literal</p>
 </div
       ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
           >{-|<br
-          />On this example, the first declaration of variable `a` is shadowed with the<br
-          />later declaration. The jump-to-definintion on the usage of `a`<br
-          />should not highlight the first declaration, and interacting with the first<br
-          />declaration should not change the others<br
+          />On this example, `dhall-docs` will detect that the variable `a` is bounded<br
+          />to a record-literal. When the user clicks on the `field` in the `a.field`, it<br
+          />will jump to the definition of that field in the source code i.e. to the `field`<br
+          />key in the record literal<br
           />-}<br
-          />let a = 1<br
-          /><br
-          />let <span id="var9-5" data-variable="var9-5"
+          />let <span id="var7-5" data-variable="var7-5"
                       class="variable-decl"
           >a</span
-          > = 2<br
+          > = { <span id="var7-11" data-variable="var7-11"
+                      class="variable-decl"
+          >field</span
+          > = &quot;foo&quot; }<br
           /><br
-          />in <a href="#var9-5" data-variable="var9-5" class="variable-use"
+          />in Text/show <a href="#var7-5" data-variable="var7-5"
+                            class="variable-use"
           >a</a
+          >.<a href="#var7-11" data-variable="var7-11" class="variable-use"
+          >field</a
           ><br/></pre></div></div></body></html>

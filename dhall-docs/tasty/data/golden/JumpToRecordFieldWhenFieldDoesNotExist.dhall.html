@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/JumpToLetBindingWithIndex.dhall</title
+    >/JumpToRecordFieldWhenFieldDoesNotExist.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,8 +25,8 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >JumpToLetBindingWithIndex.dhall</span></h2
-      ><a data-path="/JumpToLetBindingWithIndex.dhall"
+        >JumpToRecordFieldWhenFieldDoesNotExist.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenFieldDoesNotExist.dhall"
           class="copy-to-clipboard"
         ><i
           ><small
@@ -34,25 +34,36 @@
       ><br
       /><div class="doc-contents"
         ><p
-          >Although we have a similar example on this <a href="./RenderTypeIndexesExample.dhall"
-          >file</a>,
-this example showcases the jump-to-definition feature when indexes are used.</p>
+          >On this example, <code
+          >dhall-docs</code
+          > will detect that the variable <code
+          >a</code
+          > and <code
+          >b</code> is of
+record-type. If on a selector-expression the field is not found on the type,
+no-link will be created</p>
 </div
       ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
           >{-|<br
-          />Although we have a similar example on this [file](./RenderTypeIndexesExample.dhall),<br
-          />this example showcases the jump-to-definition feature when indexes are used.<br
+          />On this example, `dhall-docs` will detect that the variable `a` and `b` is of<br
+          />record-type. If on a selector-expression the field is not found on the type,<br
+          />no-link will be created<br
+          /><br
           />-}<br
-          />let <span id="var5-5" data-variable="var5-5"
+          />let <span id="var7-5" data-variable="var7-5"
                       class="variable-decl"
           >a</span
-          > = 1<br
+          > = { x = &quot;foo&quot; }<br
+          />let <span id="var8-5" data-variable="var8-5"
+                      class="variable-decl"
+          >b</span
+          > = False<br
           /><br
-          />let a = 2<br
-          /><br
-          />in <a href="#var5-5" data-variable="var5-5" class="variable-use"
-          >a@1</a
-          ><br/></pre></div></div></body></html>
+          />in <a href="#var7-5" data-variable="var7-5" class="variable-use"
+          >a</a
+          >.y + <a href="#var8-5" data-variable="var8-5" class="variable-use"
+          >b</a
+          >.`does not exist`<br/></pre></div></div></body></html>

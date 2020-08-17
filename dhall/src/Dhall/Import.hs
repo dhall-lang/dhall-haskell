@@ -6,6 +6,8 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 {-| Dhall lets you import external expressions located either in local files or
@@ -170,7 +172,6 @@ import Dhall.Syntax
     , ImportHashed (..)
     , ImportMode (..)
     , ImportType (..)
-    , RecordField (..)
     , URL (..)
     , bindingExprs
     , functionBindingExprs
@@ -689,15 +690,15 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = case importType of
-            Missing -> Field locationType "Missing"
+            Missing -> Field locationType $ Core.makeFieldSelection  "Missing"
             local@(Local _ _) ->
-                App (Field locationType "Local")
+                App (Field locationType $ Core.makeFieldSelection "Local")
                   (TextLit (Chunks [] (Core.pretty local)))
             remote_@(Remote _) ->
-                App (Field locationType "Remote")
+                App (Field locationType $ Core.makeFieldSelection "Remote")
                   (TextLit (Chunks [] (Core.pretty remote_)))
             Env env ->
-                App (Field locationType "Environment")
+                App (Field locationType $ Core.makeFieldSelection "Environment")
                   (TextLit (Chunks [] (Core.pretty env)))
 
     return (ImportSemantics {..})
@@ -779,7 +780,7 @@ toHeaders _ = []
 
 toHeader :: Expr s a -> Maybe HTTPHeader
 toHeader (RecordLit m) = do
-    (RecordField _ (TextLit (Chunks [] keyText)), RecordField _ (TextLit (Chunks [] valueText)))
+    (Core.recordFieldValue -> TextLit (Chunks [] keyText), Core.recordFieldValue -> TextLit (Chunks [] valueText))
         <- lookupHeader <|> lookupMapKey
     let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
     let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
@@ -1076,6 +1077,7 @@ loadWith expr₀ = case expr₀ of
   Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
   RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
   Lam a b              -> Lam <$> functionBindingExprs loadWith a <*> loadWith b
+  Field a b            -> Field <$> loadWith a <*> pure b
   expression           -> Syntax.unsafeSubExpressions loadWith expression
 
 -- | Resolve all imports within an expression

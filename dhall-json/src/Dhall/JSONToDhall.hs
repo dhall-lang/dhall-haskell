@@ -373,7 +373,7 @@ import Data.Scientific          (floatingOrInteger, toRealFloat)
 import Data.Text                (Text)
 import Data.Void                (Void)
 import Dhall.Core               (Chunks (..), DhallDouble (..), Expr (App))
-import Dhall.JSON.Util          (pattern V)
+import Dhall.JSON.Util          (pattern FA, pattern V)
 import Dhall.Parser             (Src)
 import Options.Applicative      (Parser)
 
@@ -814,12 +814,12 @@ dhallFromJSON (Conversion {..}) expressionType =
               Just _type -> do
                 expression <- loop jsonPath _type v
 
-                return (D.App (D.Field t key) expression)
+                return (D.App (D.Field t $ FA key) expression)
 
               Nothing ->
                 case v of
                     Aeson.String text | key == text ->
-                        return (D.Field t key)
+                        return (D.Field t $ FA key)
                     _ ->
                         Left (Mismatch t v jsonPath)
 
@@ -871,7 +871,7 @@ dhallFromJSON (Conversion {..}) expressionType =
           toKey <-
               case mapKey of
                   D.Text    -> return $ D.TextLit . Chunks []
-                  D.Union _ -> return $ D.Field mapKey
+                  D.Union _ -> return $ D.Field mapKey . FA
                   _         -> Left (Mismatch t v jsonPath)
 
           let f :: (Text, ExprX) -> ExprX
@@ -988,7 +988,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       keyValues = D.ListLit elementType elements
 
-                  in  D.App (D.Field "json" "object") keyValues
+                  in  D.App (D.Field "json" $ FA "object") keyValues
               outer (Aeson.Array a) =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
@@ -996,15 +996,15 @@ dhallFromJSON (Conversion {..}) expressionType =
                           | null elements = Just (D.App D.List "JSON")
                           | otherwise     = Nothing
 
-                  in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
+                  in  D.App (D.Field "json" $ FA "array") (D.ListLit elementType elements)
               outer (Aeson.String s) =
-                  D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
+                  D.App (D.Field "json" $ FA "string") (D.TextLit (D.Chunks [] s))
               outer (Aeson.Number n) =
-                  D.App (D.Field "json" "number") (D.DoubleLit (DhallDouble (toRealFloat n)))
+                  D.App (D.Field "json" $ FA "number") (D.DoubleLit (DhallDouble (toRealFloat n)))
               outer (Aeson.Bool b) =
-                  D.App (D.Field "json" "bool") (D.BoolLit b)
+                  D.App (D.Field "json" $ FA "bool") (D.BoolLit b)
               outer Aeson.Null =
-                  D.Field "json" "null"
+                  D.Field "json" $ FA "null"
 
           let result =
                 D.Lam (D.makeFunctionBinding "JSON" (D.Const D.Type))
@@ -1076,7 +1076,7 @@ dhallFromJSON (Conversion {..}) expressionType =
 
                       keyValues = D.ListLit elementType elements
 
-                  in  D.App (D.Field "json" "object") keyValues
+                  in  D.App (D.Field "json" (FA "object")) keyValues
               outer (Aeson.Array a) =
                   let elements = Seq.fromList (fmap outer (Vector.toList a))
 
@@ -1084,17 +1084,17 @@ dhallFromJSON (Conversion {..}) expressionType =
                           | null elements = Just (D.App D.List "JSON")
                           | otherwise     = Nothing
 
-                  in  D.App (D.Field "json" "array") (D.ListLit elementType elements)
+                  in  D.App (D.Field "json" (FA "array")) (D.ListLit elementType elements)
               outer (Aeson.String s) =
-                  D.App (D.Field "json" "string") (D.TextLit (D.Chunks [] s))
+                  D.App (D.Field "json" (FA "string")) (D.TextLit (D.Chunks [] s))
               outer (Aeson.Number n) =
                   case floatingOrInteger n of
-                      Left floating -> D.App (D.Field "json" "double") (D.DoubleLit (DhallDouble floating))
-                      Right integer -> D.App (D.Field "json" "integer") (D.IntegerLit integer)
+                      Left floating -> D.App (D.Field "json" (FA "double")) (D.DoubleLit (DhallDouble floating))
+                      Right integer -> D.App (D.Field "json" (FA "integer")) (D.IntegerLit integer)
               outer (Aeson.Bool b) =
-                  D.App (D.Field "json" "bool") (D.BoolLit b)
+                  D.App (D.Field "json" (FA "bool")) (D.BoolLit b)
               outer Aeson.Null =
-                  D.Field "json" "null"
+                  D.Field "json" (FA "null")
 
           let result =
                 D.Lam (D.makeFunctionBinding "JSON" (D.Const D.Type))

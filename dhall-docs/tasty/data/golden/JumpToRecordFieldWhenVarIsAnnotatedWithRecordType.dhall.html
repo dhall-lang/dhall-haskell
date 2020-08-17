@@ -1,0 +1,80 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall"
+          class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          >On this example, even when the variable <code
+          >a</code
+          > is annotated with a record-type,
+<code
+          >dhall-docs</code> will infer the actual type from the bounded value.</p
+        >
+<p
+        >All interactions with fields on selector-expressions won&#39;t affect the rendered-type.</p
+        >
+<p
+        >(The example is intended to not type-check as a Dhall expression)</p>
+</div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />On this example, even when the variable `a` is annotated with a record-type,<br
+          />`dhall-docs` will infer the actual type from the bounded value.<br
+          /><br
+          />All interactions with fields on selector-expressions won&#39;t affect the rendered-type.<br
+          /><br
+          />(The example is intended to not type-check as a Dhall expression)<br
+          />-}<br
+          />let <span id="var9-5" data-variable="var9-5"
+                      class="variable-decl"
+          >a</span
+          > : { x : Text } = { <span id="var9-26" data-variable="var9-26"
+                                     class="variable-decl"
+          >x</span
+          > = &quot;foo&quot;, <span id="var9-37" data-variable="var9-37"
+                                     class="variable-decl"
+          >y</span
+          > = &quot;bar&quot; }<br
+          /><br
+          />in <a href="#var9-5" data-variable="var9-5" class="variable-use"
+          >a</a
+          >.<a href="#var9-26" data-variable="var9-26" class="variable-use"
+          >x</a
+          > ++ <a href="#var9-5" data-variable="var9-5" class="variable-use"
+          >a</a
+          >.<a href="#var9-37" data-variable="var9-37" class="variable-use"
+          >y</a
+          ><br/></pre></div></div></body></html>

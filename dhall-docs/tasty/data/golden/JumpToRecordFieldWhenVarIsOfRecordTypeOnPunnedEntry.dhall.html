@@ -2,7 +2,7 @@
 <html
   ><head
     ><title
-    >/IndexesExample.dhall</title
+    >/JumpToRecordFieldWhenVarIsOfRecordTypeOnPunnedEntry.dhall</title
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
@@ -25,36 +25,50 @@
         ><span class="crumb-divider"
         >/</span
         ><span href="index.html" class="title-crumb"
-        >IndexesExample.dhall</span></h2
-      ><a data-path="/IndexesExample.dhall" class="copy-to-clipboard"
+        >JumpToRecordFieldWhenVarIsOfRecordTypeOnPunnedEntry.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeOnPunnedEntry.dhall"
+          class="copy-to-clipboard"
         ><i
           ><small
           >Copy path to clipboard</small></i></a
       ><br
       /><div class="doc-contents"
         ><p
-          >This example shows that <code
-          >dhall-docs</code> will find render the correct type on the
-index respecting variable indices</p>
+          >On this example, <code
+          >dhall-docs</code
+          > will detect that the variable <code
+          >a</code
+          > is bounded
+to a record literal. It will also be aware that that the attribute <code
+          >x</code
+          >. When
+the user clicks the <code
+          >x</code
+          > from <code
+          >a.x</code
+          >, it will jump to the <code
+          >x</code> punned-entry</p>
 </div
       ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
           >{-|<br
-          />This example shows that `dhall-docs` will find render the correct type on the<br
-          />index respecting variable indices<br
+          />On this example, `dhall-docs` will detect that the variable `a` is bounded<br
+          />to a record literal. It will also be aware that that the attribute `x`. When<br
+          />the user clicks the `x` from `a.x`, it will jump to the `x` punned-entry<br
           />-}<br
-          /><br
-          />let <span id="var6-5" data-variable="var6-5"
-                      class="variable-decl"
-          >x</span
-          > : Bool = True<br
+          />let x = 1<br
           />let <span id="var7-5" data-variable="var7-5"
                       class="variable-decl"
+          >a</span
+          > = { <span id="var7-11" data-variable="var7-11"
+                      class="variable-decl"
           >x</span
-          > : Natural = 1<br
+          > }<br
           /><br
-          />in <a href="#var6-5" data-variable="var6-5" class="variable-use"
-          >x@1</a
+          />in <a href="#var7-5" data-variable="var7-5" class="variable-use"
+          >a</a
+          >.<a href="#var7-11" data-variable="var7-11" class="variable-use"
+          >x</a
           ><br/></pre></div></div></body></html>
