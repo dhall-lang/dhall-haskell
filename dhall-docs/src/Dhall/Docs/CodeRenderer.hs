@@ -190,16 +190,16 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             bindingJtdInfo <- infer context value
 
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 name
-            let varDecl = NameDecl varSrc name bindingJtdInfo
+            let nameDecl = NameDecl varSrc name bindingJtdInfo
 
-            Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
-            infer (Context.insert name varDecl context) expr'
+            Writer.tell [SourceCodeFragment varSrc (NameDeclaration nameDecl)]
+            infer (Context.insert name nameDecl context) expr'
 
         Note src (Var (V name index)) ->
             case Context.lookup name index context of
                 Nothing -> return NoInfo
-                Just varDecl@(NameDecl _ _ t) -> do
-                    Writer.tell [SourceCodeFragment src $ NameUse varDecl]
+                Just nameDecl@(NameDecl _ _ t) -> do
+                    Writer.tell [SourceCodeFragment src $ NameUse nameDecl]
                     return t
 
         Lam (FunctionBinding
@@ -211,10 +211,10 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             dhallType <- infer context t
 
             let varSrc = makeSrcForLabel srcEnd0 srcStart1 name
-            let varDecl = NameDecl varSrc name dhallType
+            let nameDecl = NameDecl varSrc name dhallType
 
-            Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
-            infer (Context.insert name varDecl context) expr
+            Writer.tell [SourceCodeFragment varSrc (NameDeclaration nameDecl)]
+            infer (Context.insert name nameDecl context) expr
 
         Field e (FieldSelection (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
             fields <- do
@@ -246,9 +246,9 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
                 dhallType <- infer context val
                 let varSrc = makeSrcForLabel startPos endPos key
-                let varDecl = NameDecl varSrc key dhallType
-                Writer.tell [SourceCodeFragment varSrc (NameDeclaration varDecl)]
-                return varDecl
+                let nameDecl = NameDecl varSrc key dhallType
+                Writer.tell [SourceCodeFragment varSrc (NameDeclaration nameDecl)]
+                return nameDecl
               where
             f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
 
@@ -316,20 +316,20 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
 
             _ -> toHtml
 
-renderSourceCodeFragment (SourceCodeFragment Src{..} (NameDeclaration varDecl)) =
+renderSourceCodeFragment (SourceCodeFragment Src{..} (NameDeclaration nameDecl)) =
     span_ attributes $ toHtml srcText
   where
     attributes =
-        [id_ $ makeHtmlId varDecl
+        [id_ $ makeHtmlId nameDecl
         , class_ "variable-decl"
-        , data_ "variable" $ makeHtmlId varDecl ]
-renderSourceCodeFragment (SourceCodeFragment Src{..} (NameUse varDecl)) =
+        , data_ "variable" $ makeHtmlId nameDecl ]
+renderSourceCodeFragment (SourceCodeFragment Src{..} (NameUse nameDecl)) =
     a_ attributes $ toHtml srcText
   where
     attributes =
-        [ href_ $ "#" <> makeHtmlId varDecl
+        [ href_ $ "#" <> makeHtmlId nameDecl
         , class_ "variable-use"
-        , data_ "variable" $ makeHtmlId varDecl
+        , data_ "variable" $ makeHtmlId nameDecl
         ]
 
 -- | Given a Text and the parsed `Expr Src Import` from it, this will render the
