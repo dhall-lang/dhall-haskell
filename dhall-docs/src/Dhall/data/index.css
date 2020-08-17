@@ -148,7 +148,7 @@ h2.doc-title {
     color: #333333;
 }
 
-.source-code span.variable-decl {
+.source-code span.name-decl {
     border-bottom: 1px solid #bdbdbd;
 }
 
@@ -157,7 +157,7 @@ h2.doc-title {
     font-family: 'Fira Code', monospace;
 }
 
-.source-code a.variable-use {
+.source-code a.name-use {
     text-decoration: none;
     color: inherit;
     border-bottom: 1px solid #bdbdbd;
