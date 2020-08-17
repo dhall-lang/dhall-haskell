@@ -79,7 +79,7 @@ getSourceLine = SourcePos.unPos . SourcePos.sourceLine
 getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 
 {-| Every 'Expr' constructor has extra information that tell us what to highlight on
-    hover and where to jump on click events. 'JtdInfo' records that extra
+    hover and where to jump on click events. 'JtdInfo' record that extra
     information.
 -}
 data JtdInfo
@@ -97,9 +97,9 @@ data JtdInfo
 
         ... where
 
-        * @posA@ and @posB@ records the source position used to make them
-        identifiel across the rendered source code
-        * @jtdInfoA@ and @jtdInfoB@ are the associated 'JtdInfo' infered from
+        * @posA@ and @posB@ record the source position used to make them
+        unique across the rendered source code
+        * @jtdInfoA@ and @jtdInfoB@ are the associated 'JtdInfo' inferred from
         @foo@ and @bar@
     -}
     = RecordFields (Set.Set VarDecl)
