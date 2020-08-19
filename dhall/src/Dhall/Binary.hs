@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -395,7 +396,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 x <- Decoding.decodeString
 
-                                return (Field t x)
+                                return (Field t (Syntax.makeFieldSelection x))
 
                             10 -> do
                                 t <- go
@@ -840,7 +841,7 @@ encodeExpressionInternal encodeEmbed = go
                 (Encoding.encodeInt 8)
                 (encodeMapWith (go. recordFieldValue) xts)
 
-        Field t x ->
+        Field t (Syntax.fieldSelectionLabel -> x) ->
             encodeList3
                 (Encoding.encodeInt 9)
                 (go t)

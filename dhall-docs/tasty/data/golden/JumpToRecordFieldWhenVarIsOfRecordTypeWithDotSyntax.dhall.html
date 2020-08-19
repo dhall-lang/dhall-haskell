@@ -1,0 +1,113 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeWithDotSyntax.dhall"
+          class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          >On this example, <code
+          >dhall-docs</code
+          > will detect that the variable <code
+          >a</code> is bounded
+to a record literal and it will be aware that it uses dot-syntax.</p
+        >
+<p
+          >When the user clicks <code
+          >x</code
+          > from <code
+          >a.x</code
+          >, it will jump to the <code
+          >x</code> on the record-literal.
+The same applies for each other field.</p>
+</div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />On this example, `dhall-docs` will detect that the variable `a` is bounded<br
+          />to a record literal and it will be aware that it uses dot-syntax.<br
+          /><br
+          />When the user clicks `x` from `a.x`, it will jump to the `x` on the record-literal.<br
+          />The same applies for each other field.<br
+          />-}<br
+          />let <span data-name="var8-5" id="var8-5" class="name-decl"
+          >a</span
+          > = { <span data-name="var8-11" id="var8-11" class="name-decl"
+          >x</span
+          >.<span data-name="var8-13" id="var8-13" class="name-decl"
+          >y</span
+          >.<span data-name="var8-15" id="var8-15" class="name-decl"
+          >z</span
+          > = 1 }<br
+          /><br
+          />let <span data-name="var10-5" id="var10-5" class="name-decl"
+          >ax</span
+          > = <a href="#var8-5" data-name="var8-5" class="name-use"
+          >a</a
+          >.<a href="#var8-11" data-name="var8-11" class="name-use"
+          >x</a
+          ><br
+          />let <span data-name="var11-5" id="var11-5" class="name-decl"
+          >axy</span
+          > = <a href="#var8-5" data-name="var8-5" class="name-use"
+          >a</a
+          >.<a href="#var8-11" data-name="var8-11" class="name-use"
+          >x</a
+          >.<a href="#var8-13" data-name="var8-13" class="name-use"
+          >y</a
+          ><br
+          />let <span data-name="var12-5" id="var12-5" class="name-decl"
+          >axyz</span
+          > = <a href="#var8-5" data-name="var8-5" class="name-use"
+          >a</a
+          >.<a href="#var8-11" data-name="var8-11" class="name-use"
+          >x</a
+          >.<a href="#var8-13" data-name="var8-13" class="name-use"
+          >y</a
+          >.<a href="#var8-15" data-name="var8-15" class="name-use"
+          >z</a
+          ><br
+          /><br
+          />in <a href="#var10-5" data-name="var10-5" class="name-use"
+          >ax</a
+          >.<a href="#var8-13" data-name="var8-13" class="name-use"
+          >y</a
+          >.<a href="#var8-15" data-name="var8-15" class="name-use"
+          >z</a
+          > + <a href="#var11-5" data-name="var11-5" class="name-use"
+          >axy</a
+          >.<a href="#var8-15" data-name="var8-15" class="name-use"
+          >z</a
+          > + <a href="#var12-5" data-name="var12-5" class="name-use"
+          >axyz</a
+          ><br/></pre></div></div></body></html>

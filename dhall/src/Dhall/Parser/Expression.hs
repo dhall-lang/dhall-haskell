@@ -18,6 +18,7 @@ import Dhall.Syntax
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad
+import qualified Control.Monad.Combinators          as Combinators
 import qualified Control.Monad.Combinators.NonEmpty as Combinators.NonEmpty
 import qualified Data.ByteArray.Encoding
 import qualified Data.ByteString
@@ -443,18 +444,29 @@ parsers embedded = Parsers {..}
     selectorExpression = noted (do
             a <- primitiveExpression
 
-            let recordType = _openParens *> whitespace *> expression <* whitespace <* _closeParens
+            let recordType = whitespace *> _openParens *> whitespace *> expression <* whitespace <* _closeParens
 
             let field               x  e = Field   e  x
             let projectBySet        xs e = Project e (Left  xs)
             let projectByExpression xs e = Project e (Right xs)
 
+            let fieldSelection = do
+                    src0 <- src whitespace
+                    l <- anyLabel
+                    pos <- getSourcePos
+
+                    -- FIXME: Suffix whitespace can't be parsed given our limitation
+                    -- about whitespace treatment, but for @dhall-docs@ this
+                    -- is enough
+                    let src1 = Src pos pos ""
+                    return (FieldSelection (Just src0) l (Just src1))
+
             let alternatives =
-                        fmap field               anyLabel
-                    <|> fmap projectBySet        labels
+                        fmap field               fieldSelection
+                    <|> fmap projectBySet        (whitespace *> labels)
                     <|> fmap projectByExpression recordType
 
-            b <- Text.Megaparsec.many (try (whitespace *> _dot *> whitespace *> alternatives))
+            b <- Text.Megaparsec.many (try (whitespace *> _dot *> alternatives))
             return (foldl' (\e k -> k e) a b) )
 
     primitiveExpression =
@@ -786,12 +798,15 @@ parsers embedded = Parsers {..}
 
     nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
-                    a <- try (anyLabelOrSome <* whitespace <* _colon)
-                    nonemptyWhitespace
+                    (firstKeySrc1, a) <- try $ do
+                        a <- anyLabelOrSome
+                        s <- src whitespace
+                        _colon
+                        return (s, a)
+
+                    firstKeySrc2 <- src nonemptyWhitespace
 
                     b <- expression
-
-                    whitespace
 
                     e <- Text.Megaparsec.many $ do
                         (src0', c) <- try $ do
@@ -800,48 +815,60 @@ parsers embedded = Parsers {..}
                             c <- anyLabelOrSome
                             return (src0', c)
 
-                        whitespace
+                        src1 <- src whitespace
 
                         _colon
 
-                        nonemptyWhitespace
+                        src2 <- src nonemptyWhitespace
 
                         d <- expression
 
                         whitespace
 
-                        return (c, RecordField (Just src0') d)
+                        return (c, RecordField (Just src0') d (Just src1) (Just src2))
 
                     _ <- optional (whitespace *> _comma)
                     whitespace
 
-                    m <- toMap ((a, RecordField (Just firstSrc0) b) : e)
+                    m <- toMap ((a, RecordField (Just firstSrc0) b (Just firstKeySrc1) (Just firstKeySrc2)) : e)
 
                     return (Record m)
 
             let keysValue maybeSrc = do
-                    src0 <- case maybeSrc of
+                    firstSrc0' <- case maybeSrc of
                         Just src0 -> return src0
                         Nothing -> src whitespace
-                    keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
+                    firstLabel <- anyLabelOrSome
+                    firstSrc1 <- src whitespace
+
+                    let parseLabelWithWhsp = try $ do
+                            _dot
+                            src0 <- src whitespace
+                            l <- anyLabelOrSome
+                            src1 <- src whitespace
+                            return (src0, l, src1)
+
+                    restKeys <- Combinators.many parseLabelWithWhsp
+                    let keys = (firstSrc0', firstLabel, firstSrc1) :| restKeys
 
                     let normalRecordEntry = do
-                            try (whitespace *> _equal)
+                            try _equal
 
-                            whitespace
+                            lastSrc2 <- src whitespace
 
                             value <- expression
 
-                            let cons key (key', values@(RecordField s0 _)) =
-                                    (key, RecordField s0 $ RecordLit [ (key', values) ])
+                            let cons (s0, key, s1) (key', values) =
+                                    (key, RecordField (Just s0) (RecordLit [ (key', values) ]) (Just s1) Nothing)
 
-                            let nil = (NonEmpty.last keys, RecordField (Just src0) value)
+                            let (lastSrc0, lastLabel, lastSrc1) = NonEmpty.last keys
+                            let nil = (lastLabel, RecordField (Just lastSrc0) value (Just lastSrc1) (Just lastSrc2))
 
                             return (foldr cons nil (NonEmpty.init keys))
 
                     let punnedEntry =
                             case keys of
-                                x :| [] -> return (x, RecordField (Just src0) $ Var (V x 0))
+                                (s0, x, s1) :| [] -> return (x, RecordField (Just s0) (Var (V x 0)) (Just s1) Nothing)
                                 _       -> empty
 
                     (normalRecordEntry <|> punnedEntry) <* whitespace

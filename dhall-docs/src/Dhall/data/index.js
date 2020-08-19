@@ -28,14 +28,14 @@ function onReady() {
       temp.remove()
     }))
 
-  document.querySelectorAll('.source-code a.variable-use, .source-code span.variable-decl')
+  document.querySelectorAll('.source-code a.name-use, .source-code span.name-decl')
     .forEach(node => {
-      node.addEventListener('mouseover', () => highlightVariables(node.dataset.variable, true))
-      node.addEventListener('mouseout', () => highlightVariables(node.dataset.variable, false))
+      node.addEventListener('mouseover', () => highlightNames(node.dataset.name, true))
+      node.addEventListener('mouseout', () => highlightNames(node.dataset.name, false))
     })
 }
 
-function highlightVariables(varId, highlight) {
+function highlightNames(varId, highlight) {
   document.querySelectorAll(`#${varId}, [href="#${varId}"]`).forEach(node => {
     if (highlight) {
       node.classList.add('highlighted')

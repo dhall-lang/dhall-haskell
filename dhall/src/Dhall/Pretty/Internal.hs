@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -16,6 +17,7 @@ module Dhall.Pretty.Internal (
 
     , CharacterSet(..)
     , prettyCharacterSet
+    , prettyImportExpression
 
     , prettyVar
     , pretty_
@@ -530,9 +532,28 @@ let y = 2 in let x = 1 in x
 This means the structure of parsed let-blocks is preserved.
 -}
 prettyCharacterSet :: Pretty a => CharacterSet -> Expr Src a -> Doc Ann
-prettyCharacterSet characterSet expression =
-    Pretty.group (prettyExpression expression)
+prettyCharacterSet characterSet = prettyCompleteExpression
   where
+    PrettyPrinters{..} = prettyPrinters characterSet
+
+-- Mainly used by the `Pretty` instance for `Import`
+prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
+prettyImportExpression = prettyImportExpression_
+  where
+    PrettyPrinters{..} = prettyPrinters Unicode
+
+data PrettyPrinters a = PrettyPrinters
+    { prettyCompleteExpression :: Expr Src a -> Doc Ann
+    , prettyImportExpression_  :: Expr Src a -> Doc Ann
+    }
+
+prettyPrinters :: Pretty a => CharacterSet -> PrettyPrinters a
+prettyPrinters characterSet =
+    PrettyPrinters{..}
+  where
+    prettyCompleteExpression expression =
+        Pretty.group (prettyExpression expression)
+
     prettyExpression a0@(Lam _ _) =
         arrows characterSet (docs a0)
       where
@@ -731,18 +752,18 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "merge"
                 <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
+                <>  Pretty.indent 2 (prettyImportExpression_ a)
                 <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression b)
+                <>  Pretty.indent 2 (prettyImportExpression_ b)
                 <>  Pretty.hardline
                 <>  colon <> space
                 <>  prettyApplicationExpression c
                 )
 
         short = keyword "merge" <> space
-            <>  prettyImportExpression a
+            <>  prettyImportExpression_ a
             <>  " "
-            <>  prettyImportExpression b
+            <>  prettyImportExpression_ b
             <>  space <> colon <> space
             <>  prettyApplicationExpression c
     prettyAnnotatedExpression (ToMap a (Just b)) =
@@ -752,14 +773,14 @@ prettyCharacterSet characterSet expression =
             Pretty.align
                 (   keyword "toMap"
                 <>  Pretty.hardline
-                <>  Pretty.indent 2 (prettyImportExpression a)
+                <>  Pretty.indent 2 (prettyImportExpression_ a)
                 <>  Pretty.hardline
                 <>  colon <> space
                 <>  prettyApplicationExpression b
                 )
 
         short = keyword "toMap" <> space
-            <>  prettyImportExpression a
+            <>  prettyImportExpression_ a
             <>  space <> colon <> space
             <>  prettyApplicationExpression b
     prettyAnnotatedExpression a0@(Annot _ _) =
@@ -1077,27 +1098,27 @@ prettyCharacterSet characterSet expression =
             e | Note _ b <- e ->
                   go args b
               | null args ->
-                  prettyImportExpression e -- just a performance optimization
+                  prettyImportExpression_ e -- just a performance optimization
               | Just doc <- preserveSource e ->
                   app doc args
               | otherwise ->
-                  app (prettyImportExpression e) args
+                  app (prettyImportExpression_ e) args
 
         app f args =
             enclose'
                 "" "" " " ""
                 ( duplicate f
-                : map (fmap (Pretty.indent 2) . duplicate . prettyImportExpression) args
+                : map (fmap (Pretty.indent 2) . duplicate . prettyImportExpression_) args
                 )
 
-    prettyImportExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyImportExpression (Embed a) =
+    prettyImportExpression_ :: Pretty a => Expr Src a -> Doc Ann
+    prettyImportExpression_ (Embed a) =
         Pretty.pretty a
-    prettyImportExpression a
+    prettyImportExpression_ a
         | Just doc <- preserveSource a =
             doc
         | Note _ b <- a =
-            prettyImportExpression b
+            prettyImportExpression_ b
         | otherwise =
             prettyCompletionExpression a
 
@@ -1122,7 +1143,7 @@ prettyCharacterSet characterSet expression =
             prettySelectorExpression a
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettySelectorExpression (Field a b) =
+    prettySelectorExpression (Field a (Dhall.Syntax.fieldSelectionLabel -> b)) =
         prettySelectorExpression a <> dot <> prettyAnyLabel b
     prettySelectorExpression (Project a (Left b)) =
         prettySelectorExpression a <> dot <> prettyLabels b
@@ -1278,17 +1299,17 @@ prettyCharacterSet characterSet expression =
                                 RecordLit _ ->
                                         Pretty.hardline
                                     <>  "  "
-                                    <>  prettyImportExpression val'
+                                    <>  prettyImportExpression_ val'
 
                                 ListLit _ xs
                                     | not (null xs) ->
                                             Pretty.hardline
                                         <>  "  "
-                                        <>  prettyImportExpression val'
+                                        <>  prettyImportExpression_ val'
 
                                 _ ->    Pretty.hardline
                                     <>  "    "
-                                    <>  prettyImportExpression val'
+                                    <>  prettyImportExpression_ val'
 
                     ToMap val' Nothing ->
                             " " <> keyword "toMap"
@@ -1297,7 +1318,7 @@ prettyCharacterSet characterSet expression =
                                     completion _T r
                                 _ ->    Pretty.hardline
                                     <>  "    "
-                                    <>  prettyImportExpression val'
+                                    <>  prettyImportExpression_ val'
 
                     RecordCompletion _T r ->
                         completion _T r

@@ -1,0 +1,67 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToRecordFieldWhenFieldDoesNotExist.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToRecordFieldWhenFieldDoesNotExist.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenFieldDoesNotExist.dhall"
+          class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          >On this example, <code
+          >dhall-docs</code
+          > will detect that the variable <code
+          >a</code
+          > and <code
+          >b</code> is of
+record-type. If on a selector-expression the field is not found on the type,
+no-link will be created</p>
+</div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />On this example, `dhall-docs` will detect that the variable `a` and `b` is of<br
+          />record-type. If on a selector-expression the field is not found on the type,<br
+          />no-link will be created<br
+          /><br
+          />-}<br
+          />let <span data-name="var7-5" id="var7-5" class="name-decl"
+          >a</span
+          > = { x = &quot;foo&quot; }<br
+          />let <span data-name="var8-5" id="var8-5" class="name-decl"
+          >b</span
+          > = False<br
+          /><br
+          />in <a href="#var7-5" data-name="var7-5" class="name-use"
+          >a</a
+          >.y + <a href="#var8-5" data-name="var8-5" class="name-use"
+          >b</a
+          >.`does not exist`<br/></pre></div></div></body></html>

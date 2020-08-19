@@ -1,0 +1,112 @@
+<!DOCTYPE HTML>
+<html
+  ><head
+    ><title
+    >/JumpToRecordFieldWhenVarIsOfRecordTypeFromLamBinding.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
+    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
+            type="text/css" rel="stylesheet"
+    /><script src="index.js" type="text/javascript"
+    /><meta charset="UTF-8"/></head
+  ><body
+    ><div class="nav-bar"
+      ><img src="dhall-icon.svg" class="dhall-icon"
+      /><p class="package-title"
+      >test-package</p
+      ><div class="nav-bar-content-divider"
+      /><a id="switch-light-dark-mode" class="nav-option"
+      >Switch Light/Dark Mode</a></div
+    ><div class="main-container"
+      ><h2 class="doc-title"
+        ><span class="crumb-divider"
+        >/</span
+        ><a href="index.html"
+        >test-package</a
+        ><span class="crumb-divider"
+        >/</span
+        ><span href="index.html" class="title-crumb"
+        >JumpToRecordFieldWhenVarIsOfRecordTypeFromLamBinding.dhall</span></h2
+      ><a data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeFromLamBinding.dhall"
+          class="copy-to-clipboard"
+        ><i
+          ><small
+          >Copy path to clipboard</small></i></a
+      ><br
+      /><div class="doc-contents"
+        ><p
+          >On this example, <code
+          >dhall-docs</code
+          > will detect that the argument <code
+          >a</code
+          > of the only
+function in this file is of record type. Therefore, any interactions on selector
+expressions over the <code
+          >a</code> variable will interact with the fields on the record-type.</p
+        >
+<p
+          >Note that the treatment for <code
+          >Lam</code
+          > variables is different from <code
+          >Let</code
+          > bindings:
+the annotation doesn&#39;t affect on the later case. This can be seen in the
+<a href="./JumpToRecordFieldWhenLetAnnotationPresentShouldIgnoreAnnotation.dhall"
+          >test case for let bindings</a></p>
+</div
+      ><h3
+      >Source</h3
+      ><div class="source-code"
+        ><pre
+          >{-|<br
+          />On this example, `dhall-docs` will detect that the argument `a` of the only<br
+          />function in this file is of record type. Therefore, any interactions on selector<br
+          />expressions over the `a` variable will interact with the fields on the record-type.<br
+          /><br
+          />Note that the treatment for `Lam` variables is different from `Let` bindings:<br
+          />the annotation doesn&#39;t affect on the later case. This can be seen in the<br
+          />[test case for let bindings](./JumpToRecordFieldWhenLetAnnotationPresentShouldIgnoreAnnotation.dhall)<br
+          />-}<br
+          /><br
+          />λ(<span data-name="var11-3" id="var11-3" class="name-decl"
+          >b</span
+          > : Type) →<br
+          />λ(<span data-name="var12-3" id="var12-3" class="name-decl"
+          >c</span
+          > : Type) →<br
+          />λ(<span data-name="var13-3" id="var13-3" class="name-decl"
+          >a</span
+          > : { <span data-name="var13-9" id="var13-9" class="name-decl"
+          >list</span
+          > : List <a href="#var11-3" data-name="var11-3" class="name-use"
+          >b</a
+          >, <span data-name="var13-24" id="var13-24" class="name-decl"
+          >cons</span
+          > : <a href="#var11-3" data-name="var11-3" class="name-use"
+          >b</a
+          > → <a href="#var12-3" data-name="var12-3" class="name-use"
+          >c</a
+          > → <a href="#var12-3" data-name="var12-3" class="name-use"
+          >c</a
+          >, <span data-name="var13-42" id="var13-42" class="name-decl"
+          >nil</span
+          > : <a href="#var12-3" data-name="var12-3" class="name-use"
+          >c</a
+          > }) →<br
+          />  List/fold <a href="#var11-3" data-name="var11-3"
+                           class="name-use"
+          >b</a
+          > <a href="#var13-3" data-name="var13-3" class="name-use"
+          >a</a
+          >.<a href="#var13-9" data-name="var13-9" class="name-use"
+          >list</a
+          > <a href="#var12-3" data-name="var12-3" class="name-use"
+          >c</a
+          > <a href="#var13-3" data-name="var13-3" class="name-use"
+          >a</a
+          >.<a href="#var13-24" data-name="var13-24" class="name-use"
+          >cons</a
+          > <a href="#var13-3" data-name="var13-3" class="name-use"
+          >a</a
+          >.<a href="#var13-42" data-name="var13-42" class="name-use"
+          >nil</a
+          ><br/></pre></div></div></body></html>
