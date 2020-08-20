@@ -6,6 +6,9 @@
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
+    /><script src="https://unpkg.com/@popperjs/core@2"
+              type="text/javascript"
+    /><script src="https://unpkg.com/tippy.js@6" type="text/javascript"
     /><script src="index.js" type="text/javascript"
     /><meta charset="UTF-8"/></head
   ><body
@@ -46,17 +49,29 @@ are unused and therefore won&#39;t be highlighted</p>
           />are unused and therefore won&#39;t be highlighted<br
           />-}<br
           /><br
-          />let unused = 1<br
+          />let unused = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                               class="type-tooltip"
+          >1</span
+          ><br
           />let <span data-name="var7-5" id="var7-5" class="name-decl"
           >used</span
-          > = 3<br
+          > = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                    class="type-tooltip"
+          >3</span
+          ><br
           /><br
-          />let unusedRecord = { foo = 1 }<br
+          />let unusedRecord = { foo = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                                             class="type-tooltip"
+          >1</span
+          > }<br
           />let <span data-name="var10-5" id="var10-5" class="name-decl"
           >usedRecord</span
           > = { <span data-name="var10-20" id="var10-20" class="name-decl"
           >foo</span
-          > = 1 }<br
+          > = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                    class="type-tooltip"
+          >1</span
+          > }<br
           /><br
           />let <span data-name="var12-5" id="var12-5" class="name-decl"
           >f</span
@@ -89,4 +104,13 @@ are unused and therefore won&#39;t be highlighted</p>
           >foo</a
           > + <a href="#var12-5" data-name="var12-5" class="name-use"
           >f</a
-          > True 1 { unused = &quot;foo&quot;, used = 3 }<br/></pre></div></div></body></html>
+          > <span data-tippy-content="&lt;pre&gt;Bool&lt;br&gt;&lt;/pre&gt;"
+                  class="type-tooltip"
+          >True</span
+          > <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                  class="type-tooltip"
+          >1</span
+          > { unused = &quot;foo&quot;, used = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                                                     class="type-tooltip"
+          >3</span
+          > }<br/></pre></div></div></body></html>

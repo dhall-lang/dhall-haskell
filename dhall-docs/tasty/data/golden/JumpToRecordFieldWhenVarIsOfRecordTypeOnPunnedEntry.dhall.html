@@ -6,6 +6,9 @@
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
+    /><script src="https://unpkg.com/@popperjs/core@2"
+              type="text/javascript"
+    /><script src="https://unpkg.com/tippy.js@6" type="text/javascript"
     /><script src="index.js" type="text/javascript"
     /><meta charset="UTF-8"/></head
   ><body
@@ -58,7 +61,10 @@ the user clicks the <code
           />to a record literal. It will also be aware that that the attribute `x`. When<br
           />the user clicks the `x` from `a.x`, it will jump to the `x` punned-entry<br
           />-}<br
-          />let x = 1<br
+          />let x = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                          class="type-tooltip"
+          >1</span
+          ><br
           />let <span data-name="var7-5" id="var7-5" class="name-decl"
           >a</span
           > = { <span data-name="var7-11" id="var7-11" class="name-decl"

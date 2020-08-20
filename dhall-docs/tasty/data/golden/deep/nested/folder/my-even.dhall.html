@@ -6,6 +6,9 @@
     ><link href="../../../index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
+    /><script src="https://unpkg.com/@popperjs/core@2"
+              type="text/javascript"
+    /><script src="https://unpkg.com/tippy.js@6" type="text/javascript"
     /><script src="../../../index.js" type="text/javascript"
     /><meta charset="UTF-8"/></head
   ><body
@@ -49,9 +52,15 @@
       >Examples</h3
       ><div class="source-code code-examples"
         ><pre
-          >my-even 1 ≡ &lt; even | odd &gt;.odd<br/></pre
+          >my-even <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                         class="type-tooltip"
+          >1</span
+          > ≡ &lt; even | odd &gt;.odd<br/></pre
         ><pre
-          >my-even 2 ≡ &lt; even | odd &gt;.even<br/></pre></div
+          >my-even <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                         class="type-tooltip"
+          >2</span
+          > ≡ &lt; even | odd &gt;.even<br/></pre></div
       ><h3
       >Source</h3
       ><div class="source-code"
@@ -74,11 +83,17 @@
           />let example0 = assert : <a href="#var4-5" data-name="var4-5"
                                        class="name-use"
           >my-even</a
-          > 1 === &lt;even | odd&gt;.odd<br
+          > <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                  class="type-tooltip"
+          >1</span
+          > === &lt;even | odd&gt;.odd<br
           />let example0 = assert : <a href="#var4-5" data-name="var4-5"
                                        class="name-use"
           >my-even</a
-          > 2 === &lt;even | odd&gt;.even<br
+          > <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                  class="type-tooltip"
+          >2</span
+          > === &lt;even | odd&gt;.even<br
           /><br
           />in <a href="#var4-5" data-name="var4-5" class="name-use"
           >my-even</a

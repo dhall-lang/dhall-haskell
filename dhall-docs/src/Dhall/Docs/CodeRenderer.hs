@@ -255,6 +255,11 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                 Left _ -> fileAnIssue "typeOfStatic"
                 Right e -> e
 
+        Note src (NaturalLit n) -> Writer.tell [SourceCodeFragment src $ StaticExpression _type] >> return NoInfo
+          where
+            _type = TypeFromSource $ case TypeCheck.typeOf (NaturalLit n) of
+                Left _ -> fileAnIssue "typeOfStatic"
+                Right e -> e
 
         Note _ e -> infer context e
         e -> do

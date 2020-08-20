@@ -6,6 +6,9 @@
     ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
+    /><script src="https://unpkg.com/@popperjs/core@2"
+              type="text/javascript"
+    /><script src="https://unpkg.com/tippy.js@6" type="text/javascript"
     /><script src="index.js" type="text/javascript"
     /><meta charset="UTF-8"/></head
   ><body
@@ -52,11 +55,17 @@ declaration should not change the others</p>
           />should not highlight the first declaration, and interacting with the first<br
           />declaration should not change the others<br
           />-}<br
-          />let a = 1<br
+          />let a = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                          class="type-tooltip"
+          >1</span
+          ><br
           /><br
           />let <span data-name="var9-5" id="var9-5" class="name-decl"
           >a</span
-          > = 2<br
+          > = <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                    class="type-tooltip"
+          >2</span
+          ><br
           /><br
           />in <a href="#var9-5" data-name="var9-5" class="name-use"
           >a</a

@@ -39,8 +39,8 @@ function onReady() {
     theme: 'source-code',
     arrow: false,
     // uncomment to debug the tooltip
-    hideOnClick: false,
-    trigger: 'click'
+    // hideOnClick: false,
+    // trigger: 'click'
   })
 }
 

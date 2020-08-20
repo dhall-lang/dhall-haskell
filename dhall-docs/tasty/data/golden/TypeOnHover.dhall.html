@@ -2,18 +2,18 @@
 <html
   ><head
     ><title
-    >/a/b/JumpToGrandfather.dhall</title
-    ><link href="../../index.css" type="text/css" rel="stylesheet"
+    >/TypeOnHover.dhall</title
+    ><link href="index.css" type="text/css" rel="stylesheet"
     /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
             type="text/css" rel="stylesheet"
     /><script src="https://unpkg.com/@popperjs/core@2"
               type="text/javascript"
     /><script src="https://unpkg.com/tippy.js@6" type="text/javascript"
-    /><script src="../../index.js" type="text/javascript"
+    /><script src="index.js" type="text/javascript"
     /><meta charset="UTF-8"/></head
   ><body
     ><div class="nav-bar"
-      ><img src="../../dhall-icon.svg" class="dhall-icon"
+      ><img src="dhall-icon.svg" class="dhall-icon"
       /><p class="package-title"
       >test-package</p
       ><div class="nav-bar-content-divider"
@@ -23,39 +23,41 @@
       ><h2 class="doc-title"
         ><span class="crumb-divider"
         >/</span
-        ><a href="../../index.html"
+        ><a href="index.html"
         >test-package</a
         ><span class="crumb-divider"
         >/</span
-        ><a href="../index.html" class="title-crumb"
-        >a</a
-        ><span class="crumb-divider"
-        >/</span
-        ><a href="index.html" class="title-crumb"
-        >b</a
-        ><span class="crumb-divider"
-        >/</span
         ><span href="index.html" class="title-crumb"
-        >JumpToGrandfather.dhall</span></h2
-      ><a data-path="/a/b/JumpToGrandfather.dhall"
-          class="copy-to-clipboard"
+        >TypeOnHover.dhall</span></h2
+      ><a data-path="/TypeOnHover.dhall" class="copy-to-clipboard"
         ><i
           ><small
           >Copy path to clipboard</small></i></a
       ><br
       /><div class="doc-contents"
-      /><h3
+        ><p
+        >This example shows the type-on-hover feature over builtins</p>
+</div
+      ><h3
       >Source</h3
       ><div class="source-code"
         ><pre
-          >let <span data-name="var1-5" id="var1-5" class="name-decl"
-          >parents</span
-          > =<br
-          />    [ <a href="../../IndexesExample.dhall.html"
-          >../../IndexesExample.dhall</a
+          >{-|<br
+          />This example shows the type-on-hover feature over builtins<br
+          />-}<br
+          />let true = <span data-tippy-content="&lt;pre&gt;Bool&lt;br&gt;&lt;/pre&gt;"
+                             class="type-tooltip"
+          >True</span
           ><br
-          />    ]<br
+          />let false = <span data-tippy-content="&lt;pre&gt;Bool&lt;br&gt;&lt;/pre&gt;"
+                              class="type-tooltip"
+          >False</span
+          ><br
           /><br
-          />in <a href="#var1-5" data-name="var1-5" class="name-use"
-          >parents</a
+          />in <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                     class="type-tooltip"
+          >1</span
+          > + <span data-tippy-content="&lt;pre&gt;Natural&lt;br&gt;&lt;/pre&gt;"
+                    class="type-tooltip"
+          >3</span
           ><br/></pre></div></div></body></html>
