@@ -170,9 +170,6 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
 
     infer :: Context NameDecl -> Expr Src Import -> Writer [SourceCodeFragment] JtdInfo
     infer context = \case
-        -- The parsed text of the import is located in it's `Note` constructor
-        Note src (Embed a) -> Writer.tell [SourceCodeFragment src $ ImportExpr a] >> return NoInfo
-
         -- since we have to 'infer' the 'JtdInfo' of the annotation, we
         -- are not able to generate the 'SourceCodeFragment's in lexicographical
         -- without calling 'Data.List.sortBy' after
@@ -198,13 +195,6 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
 
             Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
             infer (Context.insert name nameDecl context) expr'
-
-        Note src (Var (V name index)) ->
-            case Context.lookup name index context of
-                Nothing -> return NoInfo
-                Just nameDecl@(NameDecl _ _ t) -> do
-                    Writer.tell [SourceCodeFragment src $ NameUse nameDecl]
-                    return t
 
         Lam (FunctionBinding
                 (Just Src{srcEnd = srcEnd0})
@@ -238,6 +228,16 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
         RecordLit (Map.toList -> l) -> handleRecordLike l
 
         Record (Map.toList -> l) -> handleRecordLike l
+
+        -- The parsed text of the import is located in it's `Note` constructor
+        Note src (Embed a) -> Writer.tell [SourceCodeFragment src $ ImportExpr a] >> return NoInfo
+
+        Note src (Var (V name index)) ->
+            case Context.lookup name index context of
+                Nothing -> return NoInfo
+                Just nameDecl@(NameDecl _ _ t) -> do
+                    Writer.tell [SourceCodeFragment src $ NameUse nameDecl]
+                    return t
 
         Note _ e -> infer context e
         e -> do
