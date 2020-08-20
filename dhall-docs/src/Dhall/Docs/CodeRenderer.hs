@@ -52,6 +52,7 @@ import Dhall.Core
 import Dhall.Docs.Util
 import Dhall.Src                         (Src (..))
 import Lucid
+import Data.Text.Prettyprint.Doc (Pretty)
 import Text.Megaparsec.Pos               (SourcePos (..))
 
 import qualified Control.Monad.Trans.Writer.Strict     as Writer
@@ -66,6 +67,7 @@ import qualified Dhall.Core                            as Core
 import qualified Dhall.Map                             as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
+import qualified Dhall.TypeCheck as TypeCheck
 import qualified Lens.Family                           as Lens
 import qualified Text.Megaparsec.Pos                   as SourcePos
 
@@ -122,6 +124,9 @@ makeHtmlId (NameDecl Src{srcStart} _ _) =
     <> Text.pack (show $ getSourceLine srcStart) <> "-"
     <> Text.pack (show $ getSourceColumn srcStart)
 
+-- | Dhall type, extracted or inferred from source code
+newtype TypeFromSource = TypeFromSource (Expr Void Void)
+
 -- | Available ways of rendering source code as HTML
 data SourceCodeType
     -- | Relative and remote imports are rendered using an HTML anchor tag.
@@ -136,6 +141,10 @@ data SourceCodeType
     --   to that name after clicking an 'NameUse'
     | NameDeclaration NameDecl
 
+    -- | Used to render static expressions. These are expressions that are typed
+    --   with an empty context
+    | StaticExpression TypeFromSource
+
 {-| The 'Expr Src Import' parsed from a 'Text' is split into a
     '[SourceCodeFragment]'.
 -}
@@ -143,6 +152,7 @@ data SourceCodeFragment =
     SourceCodeFragment
         Src -- ^ The start and end position of this fragment
         SourceCodeType -- ^ The type of 'SourceCodeFragment' that will guide HTML rendering
+
 
 -- | Returns all 'SourceCodeFragment's in lexicographic order i.e. in the same
 --   order as in the source code.
@@ -239,6 +249,13 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                     Writer.tell [SourceCodeFragment src $ NameUse nameDecl]
                     return t
 
+        Note src (BoolLit b) -> Writer.tell [SourceCodeFragment src $ StaticExpression _type] >> return NoInfo
+          where
+            _type = TypeFromSource $ case TypeCheck.typeOf (BoolLit b) of
+                Left _ -> fileAnIssue "typeOfStatic"
+                Right e -> e
+
+
         Note _ e -> infer context e
         e -> do
             mapM_ (infer context) $ Lens.toListOf Core.subExpressions e
@@ -255,6 +272,8 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                 return nameDecl
               where
             f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
+
+        -- denote e = Core.denote (e :: Expr Src Import)
 
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)
@@ -274,8 +293,8 @@ makeSrcForLabel srcStart srcEnd name = Src {..}
         if Text.length name == realLength then name
         else "`" <> name <> "`"
 
-renderSourceCodeFragment :: SourceCodeFragment -> Html ()
-renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
+renderSourceCodeFragment :: Dhall.Pretty.CharacterSet -> SourceCodeFragment -> Html ()
+renderSourceCodeFragment _ (SourceCodeFragment Src{..} (ImportExpr import_)) =
     renderImport import_ srcText
   where
     {-  Given an 'Import', render the contents in an HTML element that will allow
@@ -320,14 +339,14 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (ImportExpr import_)) =
 
             _ -> toHtml
 
-renderSourceCodeFragment (SourceCodeFragment Src{..} (NameDeclaration nameDecl)) =
+renderSourceCodeFragment _ (SourceCodeFragment Src{..} (NameDeclaration nameDecl)) =
     span_ attributes $ toHtml srcText
   where
     attributes =
         [id_ $ makeHtmlId nameDecl
         , class_ "name-decl"
         , data_ "name" $ makeHtmlId nameDecl ]
-renderSourceCodeFragment (SourceCodeFragment Src{..} (NameUse nameDecl)) =
+renderSourceCodeFragment _ (SourceCodeFragment Src{..} (NameUse nameDecl)) =
     a_ attributes $ toHtml srcText
   where
     attributes =
@@ -336,12 +355,25 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (NameUse nameDecl)) =
         , data_ "name" $ makeHtmlId nameDecl
         ]
 
+renderSourceCodeFragment characterSet (SourceCodeFragment Src{..} (StaticExpression (TypeFromSource e))) =
+    span_ attributes $ toHtml srcText
+  where
+    typeFromSourceHtml = renderCodeSnippet characterSet TypeAnnotation e
+    attributes =
+        [ class_ "type-tooltip"
+        , data_ "tippy-content" $ Text.pack $ show typeFromSourceHtml
+        ]
+
 -- | Given a Text and the parsed `Expr Src Import` from it, this will render the
 --   the source code on HTML with jump-to-definition on URL imports. Use this
 --   to render the source code with the same structure (whitespaces, comments,
 --   language elements) as the source file
-renderCodeWithHyperLinks :: Text -> Expr Src Import -> Html ()
-renderCodeWithHyperLinks contents expr = pre_ $ go (1, 1) (Text.lines contents) imports
+renderCodeWithHyperLinks
+    :: Dhall.Pretty.CharacterSet -- ^ CharacterSet used for type-annotations in type-on-hover's tooltips
+    -> Text                      -- ^ Source text
+    -> Expr Src Import           -- ^ Parsed expression from source text
+    -> Html ()
+renderCodeWithHyperLinks characterSet contents expr = pre_ $ go (1, 1) (Text.lines contents) imports
   where
     imports = fragments expr
 
@@ -375,7 +407,7 @@ renderCodeWithHyperLinks contents expr = pre_ $ go (1, 1) (Text.lines contents) 
         toHtml prefixCols
 
         -- rendered element
-        renderSourceCodeFragment scf
+        renderSourceCodeFragment characterSet scf
 
         -- add a newline if last line of import consumes the remaining line on
         -- the original text
@@ -403,8 +435,8 @@ data ExprType = TypeAnnotation | AssertionExample
 --   the extracted fragment's 'SourcePos's need to be re-generated to
 --   render them in a better way; just adding whitespace at the beginning of the
 --   first line won't render good results.
-renderCodeSnippet :: Dhall.Pretty.CharacterSet -> ExprType -> Expr Void Import -> Html ()
-renderCodeSnippet characterSet exprType expr = renderCodeWithHyperLinks formattedFile expr'
+renderCodeSnippet :: (Pretty a) => Dhall.Pretty.CharacterSet -> ExprType -> Expr Void a -> Html ()
+renderCodeSnippet characterSet exprType expr = renderCodeWithHyperLinks characterSet formattedFile expr'
   where
     layout = case exprType of
         AssertionExample -> Dhall.Pretty.layout

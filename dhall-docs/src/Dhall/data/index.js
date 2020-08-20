@@ -33,6 +33,15 @@ function onReady() {
       node.addEventListener('mouseover', () => highlightNames(node.dataset.name, true))
       node.addEventListener('mouseout', () => highlightNames(node.dataset.name, false))
     })
+
+  tippy('.type-tooltip', {
+    allowHTML: true,
+    theme: 'source-code',
+    arrow: false,
+    // uncomment to debug the tooltip
+    hideOnClick: false,
+    trigger: 'click'
+  })
 }
 
 function highlightNames(varId, highlight) {

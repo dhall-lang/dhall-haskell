@@ -181,6 +181,33 @@ span.of-type-token {
     margin-right: 0.5rem;
 }
 
+.tippy-box[data-theme~='source-code'] {
+    background-color: #EBEBEB;
+    border: 2px solid #484848;
+}
+
+.tippy-box[data-theme~='source-code'] pre {
+    font-size: 16px;
+    font-family: 'Fira Code', monospace !important;
+    color: #333333;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* .tippy-box[data-theme~='source-code'][data-placement^='top'] > .tippy-arrow::before {
+    border-top-color: #333333;
+  }
+  .tippy-box[data-theme~='source-code'][data-placement^='bottom'] > .tippy-arrow::before {
+    border-bottom-color: #333333;
+  }
+  .tippy-box[data-theme~='source-code'][data-placement^='left'] > .tippy-arrow::before {
+    border-left-color: #333333;
+  }
+  .tippy-box[data-theme~='source-code'][data-placement^='right'] > .tippy-arrow::before {
+    border-right-color: #333333;
+  }
+   */
+
 /******** Dark mode styling ********/
 
 .dark-mode .main-container {

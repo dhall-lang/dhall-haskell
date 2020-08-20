@@ -68,7 +68,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
                     div_ [class_ "source-code code-examples"] $
                         mapM_ (renderCodeSnippet characterSet AssertionExample) examples
                 h3_ "Source"
-                div_ [class_ "source-code"] $ renderCodeWithHyperLinks contents expr
+                div_ [class_ "source-code"] $ renderCodeWithHyperLinks characterSet contents expr
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
@@ -224,7 +224,9 @@ headContents title DocParams{..} =
         title_ $ toHtml title
         stylesheet $ relativeResourcesPath <> "index.css"
         stylesheet "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Lato:ital,wght@0,400;0,700;1,400&display=swap"
-        script relativeResourcesPath
+        script $ "https://unpkg.com/@popperjs/core@2"
+        script $ "https://unpkg.com/tippy.js@6"
+        script $ relativeResourcesPath <> "index.js"
         meta_ [charset_ "UTF-8"]
 
 -- | main-container component builder of the HTML documentation
@@ -239,8 +241,8 @@ stylesheet path =
         , href_ $ Data.Text.pack path]
 
 script :: FilePath -> Html ()
-script relativeResourcesPath =
+script path =
     script_
         [ type_ "text/javascript"
-        , src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
+        , src_ $ Data.Text.pack path]
         ("" :: Text)
