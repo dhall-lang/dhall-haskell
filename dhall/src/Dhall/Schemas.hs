@@ -185,7 +185,7 @@ rewriteWithSchemas _schemas expression = do
 
                 let defaultedRecord = RecordLit defaultedKeyValues
 
-                return (RecordCompletion (Field "schemas" name) defaultedRecord)
+                return (RecordCompletion (Field "schemas" $ Core.makeFieldSelection name) defaultedRecord)
         schemasRewrite subExpression =
             subExpression
 

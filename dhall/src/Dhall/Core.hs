@@ -29,6 +29,8 @@ module Dhall.Core (
     , makeRecordField
     , FunctionBinding(..)
     , makeFunctionBinding
+    , FieldSelection (..)
+    , makeFieldSelection
     , Expr(..)
 
     -- * Normalization

@@ -32,6 +32,8 @@ module Dhall.Syntax (
     , makeRecordField
     , FunctionBinding(..)
     , makeFunctionBinding
+    , FieldSelection(..)
+    , makeFieldSelection
 
     -- ** 'Let'-blocks
     , MultiLet(..)
@@ -78,6 +80,9 @@ module Dhall.Syntax (
 
     -- * Utilities
     , internalError
+    -- `shift` should really be in `Dhall.Normalize`, but it's here to avoid a
+    -- module cycle
+    , shift
     ) where
 
 import Control.DeepSeq            (NFData)
@@ -289,33 +294,71 @@ instance Bifunctor PreferAnnotation where
 
 For example,
 
-> { {- A -} x : T }
+> { {- A -} x {- B -} : {- C -} T }
 
 ... or
 
-> { {- A -} x = T }
+> { {- A -} x {- B -} = {- C -} T }
 
 will be instantiated as follows:
 
-* @recordFieldSrc@ corresponds to the @A@ comment.
-* @field@ is @"T"@
+* @recordFieldSrc0@ corresponds to the @A@ comment.
+* @recordFieldValue@ is @"T"@
+* @recordFieldSrc1@ corresponds to the @B@ comment.
+* @recordFieldSrc2@ corresponds to the @C@ comment.
 
 Although the @A@ comment isn't annotating the @"T"@ Record Field,
-this is the best place to keep these comments
+this is the best place to keep these comments.
+
+Note that @recordFieldSrc2@ is always 'Nothing' when the 'RecordField' is for
+a punned entry, because there is no @=@ sign. For example,
+
+> { {- A -} x {- B -} }
+
+will be instantiated as follows:
+
+* @recordFieldSrc0@ corresponds to the @A@ comment.
+* @recordFieldValue@ corresponds to @(Var "x")@
+* @recordFieldSrc1@ corresponds to the @B@ comment.
+* @recordFieldSrc2@ will be 'Nothing'
+
+The labels involved in a record using dot-syntax like in this example:
+
+> { {- A -} a {- B -} . {- C -} b {- D -} . {- E -} c {- F -} = {- G -} e }
+
+will be instantiated as follows:
+
+* For both the @a@ and @b@ field, @recordfieldSrc2@ is 'Nothing'
+* For the @a@ field:
+  * @recordFieldSrc0@ corresponds to the @A@ comment
+  * @recordFieldSrc1@ corresponds to the @B@ comment
+* For the @b@ field:
+  * @recordFieldSrc0@ corresponds to the @C@ comment
+  * @recordFieldSrc1@ corresponds to the @D@ comment
+* For the @c@ field:
+  * @recordFieldSrc0@ corresponds to the @E@ comment
+  * @recordFieldSrc1@ corresponds to the @F@ comment
+  * @recordFieldSrc2@ corresponds to the @G@ comment
+
+That is, for every label except the last one the semantics of @recordFieldSrc0@
+and @recordFieldSrc1@ are the same from a regular record label but
+@recordFieldSrc2@ is always 'Nothing'. For the last keyword, all srcs are 'Just'
 -}
 data RecordField s a = RecordField
-    { recordFieldSrc  :: Maybe s
+    { recordFieldSrc0  :: Maybe s
     , recordFieldValue :: Expr s a
+    , recordFieldSrc1  :: Maybe s
+    , recordFieldSrc2  :: Maybe s
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 -- | Construct a 'RecordField' with no src information
 makeRecordField :: Expr s a -> RecordField s a
-makeRecordField = RecordField Nothing
+makeRecordField e = RecordField Nothing e Nothing Nothing
 
 
 instance Bifunctor RecordField where
-    first k (RecordField s0 value) =
-        RecordField (k <$> s0) (first k value)
+    first k (RecordField s0 value s1 s2) =
+        RecordField (k <$> s0) (first k value) (k <$> s1) (k <$> s2)
     second = fmap
 
 {-| Record the label of a function or a function-type expression
@@ -348,6 +391,32 @@ instance Bifunctor FunctionBinding where
         FunctionBinding (k <$> src0) label (k <$> src1) (k <$> src2) (first k type_)
 
     second = fmap
+
+{-| Record the field on a selector-expression
+
+For example,
+
+> e . {- A -} x {- B -}
+
+will be instantiated as follows:
+* @fieldSelectionSrc0@ corresponds to the @A@ comment
+* @fieldSelectionLabel@ corresponds to @x@
+* @fieldSelectionSrc1@ corresponds to the @B@ comment
+
+Given our limitation that not all expressions recover their whitespaces, the
+purpose of @fieldSelectionSrc1@ is to save the 'SourcePos' where the
+@fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@) to
+be consistent with similar data types such as 'Binding', for example.
+-}
+data FieldSelection s = FieldSelection
+    { fieldSelectionSrc0 :: Maybe s
+    , fieldSelectionLabel :: !Text
+    , fieldSelectionSrc1 :: Maybe s
+    } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
+
+-- | Smart constructor for 'FieldSelection' with no src information
+makeFieldSelection :: Text -> FieldSelection s
+makeFieldSelection t = FieldSelection Nothing t Nothing
 
 {-| Syntax tree for expressions
 
@@ -534,8 +603,8 @@ data Expr s a
     -- | > ToMap x (Just t)                         ~  toMap x : t
     --   > ToMap x  Nothing                         ~  toMap x
     | ToMap (Expr s a) (Maybe (Expr s a))
-    -- | > Field e x                                ~  e.x
-    | Field (Expr s a) Text
+    -- | > Field e (FieldSelection _ x _)              ~  e.x
+    | Field (Expr s a) (FieldSelection s)
     -- | > Project e (Left xs)                      ~  e.{ xs }
     --   > Project e (Right t)                      ~  e.(t)
     | Project (Expr s a) (Either (Set Text) (Expr s a))
@@ -579,6 +648,7 @@ instance Functor (Expr s) where
   fmap f (Record a) = Record $ fmap f <$> a
   fmap f (RecordLit a) = RecordLit $ fmap f <$> a
   fmap f (Lam fb e) = Lam (f <$> fb) (f <$> e)
+  fmap f (Field a b) = Field (f <$> a) b
   fmap f expression = Lens.over unsafeSubExpressions (fmap f) expression
   {-# INLINABLE fmap #-}
 
@@ -591,15 +661,17 @@ instance Monad (Expr s) where
     return = pure
 
     expression >>= k = case expression of
-        Embed a    -> k a
-        Let a b    -> Let (adaptBinding a) (b >>= k)
-        Note a b   -> Note a (b >>= k)
-        Record a -> Record $ bindRecordKeyValues <$> a
+        Embed a     -> k a
+        Let a b     -> Let (adaptBinding a) (b >>= k)
+        Note a b    -> Note a (b >>= k)
+        Record a    -> Record $ bindRecordKeyValues <$> a
         RecordLit a -> RecordLit $ bindRecordKeyValues <$> a
-        Lam a b -> Lam (adaptFunctionBinding a) (b >>= k)
+        Lam a b     -> Lam (adaptFunctionBinding a) (b >>= k)
+        Field a b   -> Field (a >>= k) b
         _ -> Lens.over unsafeSubExpressions (>>= k) expression
       where
-        bindRecordKeyValues (RecordField s0 e) = RecordField s0 (e >>= k)
+        bindRecordKeyValues (RecordField s0 e s1 s2) =
+            RecordField s0 (e >>= k) s1 s2
 
         adaptBinding (Binding src0 c src1 d src2 e) =
             Binding src0 c src1 (fmap adaptBindingAnnotation d) src2 (e >>= k)
@@ -616,6 +688,7 @@ instance Bifunctor Expr where
     first k (Record a   ) = Record $ first k <$> a
     first k (RecordLit a) = RecordLit $ first k <$> a
     first k (Lam a b    ) = Lam (first k a) (first k b)
+    first k (Field a b  ) = Field (first k a) (k <$> b)
     first k  expression  = Lens.over unsafeSubExpressions (first k) expression
 
     second = fmap
@@ -686,6 +759,7 @@ subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Record a) = Record <$> traverse (recordFieldExprs f) a
 subExpressions f (RecordLit a) = RecordLit <$> traverse (recordFieldExprs f) a
 subExpressions f (Lam fb e) = Lam <$> functionBindingExprs f fb <*> f e
+subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f expression = unsafeSubExpressions f expression
 {-# INLINABLE subExpressions #-}
 
@@ -761,7 +835,6 @@ unsafeSubExpressions f (Prefer a b c) = Prefer <$> a' <*> f b <*> f c
 unsafeSubExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 unsafeSubExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 unsafeSubExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
-unsafeSubExpressions f (Field a b) = Field <$> f a <*> pure b
 unsafeSubExpressions f (Project a b) = Project <$> f a <*> traverse f b
 unsafeSubExpressions f (Assert a) = Assert <$> f a
 unsafeSubExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
@@ -773,6 +846,7 @@ unsafeSubExpressions _ (Embed {}) = unhandledConstructor "Embed"
 unsafeSubExpressions _ (Record {}) = unhandledConstructor "Record"
 unsafeSubExpressions _ (RecordLit {}) = unhandledConstructor "RecordLit"
 unsafeSubExpressions _ (Lam {}) = unhandledConstructor "Lam"
+unsafeSubExpressions _ (Field {}) = unhandledConstructor "Field"
 {-# INLINABLE unsafeSubExpressions #-}
 
 unhandledConstructor :: Text -> a
@@ -805,10 +879,12 @@ recordFieldExprs
     :: Applicative f
     => (Expr s a -> f (Expr s b))
     -> RecordField s a -> f (RecordField s b)
-recordFieldExprs f (RecordField s0 e) =
+recordFieldExprs f (RecordField s0 e s1 s2) =
     RecordField
         <$> pure s0
         <*> f e
+        <*> pure s1
+        <*> pure s2
 
 {-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
 -}
@@ -1048,9 +1124,10 @@ denote = \case
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
     Lam a b -> Lam (denoteFunctionBinding a) (denote b)
+    Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
-    denoteRecordField (RecordField _ e) = RecordField Nothing (denote e)
+    denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing
     denoteBinding (Binding _ c _ d _ e) =
         Binding Nothing c Nothing (fmap denoteBindingAnnotation d) Nothing (denote e)
 
@@ -1231,17 +1308,114 @@ toDoubleQuoted literal =
 
     indent = Data.Text.length longestSharedPrefix
 
+{-| `shift` is used by both normalization and type-checking to avoid variable
+    capture by shifting variable indices
+
+    For example, suppose that you were to normalize the following expression:
+
+> λ(a : Type) → λ(x : a) → (λ(y : a) → λ(x : a) → y) x
+
+    If you were to substitute @y@ with @x@ without shifting any variable
+    indices, then you would get the following incorrect result:
+
+> λ(a : Type) → λ(x : a) → λ(x : a) → x  -- Incorrect normalized form
+
+    In order to substitute @x@ in place of @y@ we need to `shift` @x@ by @1@ in
+    order to avoid being misinterpreted as the @x@ bound by the innermost
+    lambda.  If we perform that `shift` then we get the correct result:
+
+> λ(a : Type) → λ(x : a) → λ(x : a) → x@1
+
+    As a more worked example, suppose that you were to normalize the following
+    expression:
+
+>     λ(a : Type)
+> →   λ(f : a → a → a)
+> →   λ(x : a)
+> →   λ(x : a)
+> →   (λ(x : a) → f x x@1) x@1
+
+    The correct normalized result would be:
+
+>     λ(a : Type)
+> →   λ(f : a → a → a)
+> →   λ(x : a)
+> →   λ(x : a)
+> →   f x@1 x
+
+    The above example illustrates how we need to both increase and decrease
+    variable indices as part of substitution:
+
+    * We need to increase the index of the outer @x\@1@ to @x\@2@ before we
+      substitute it into the body of the innermost lambda expression in order
+      to avoid variable capture.  This substitution changes the body of the
+      lambda expression to @(f x\@2 x\@1)@
+
+    * We then remove the innermost lambda and therefore decrease the indices of
+      both @x@s in @(f x\@2 x\@1)@ to @(f x\@1 x)@ in order to reflect that one
+      less @x@ variable is now bound within that scope
+
+    Formally, @(shift d (V x n) e)@ modifies the expression @e@ by adding @d@ to
+    the indices of all variables named @x@ whose indices are greater than
+    @(n + m)@, where @m@ is the number of bound variables of the same name
+    within that scope
+
+    In practice, @d@ is always @1@ or @-1@ because we either:
+
+    * increment variables by @1@ to avoid variable capture during substitution
+    * decrement variables by @1@ when deleting lambdas after substitution
+
+    @n@ starts off at @0@ when substitution begins and increments every time we
+    descend into a lambda or let expression that binds a variable of the same
+    name in order to avoid shifting the bound variables by mistake.
+-}
+shift :: Int -> Var -> Expr s a -> Expr s a
+shift d (V x n) (Var (V x' n')) = Var (V x' n'')
+  where
+    n'' = if x == x' && n <= n' then n' + d else n'
+shift d (V x n) (Lam (FunctionBinding src0 x' src1 src2 _A) b) =
+    Lam (FunctionBinding src0 x' src1 src2 _A') b'
+  where
+    _A' = shift d (V x n ) _A
+    b'  = shift d (V x n') b
+      where
+        n' = if x == x' then n + 1 else n
+shift d (V x n) (Pi x' _A _B) = Pi x' _A' _B'
+  where
+    _A' = shift d (V x n ) _A
+    _B' = shift d (V x n') _B
+      where
+        n' = if x == x' then n + 1 else n
+shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
+    Let (Binding src0 f src1 mt' src2 r') e'
+  where
+    e' = shift d (V x n') e
+      where
+        n' = if x == f then n + 1 else n
+
+    mt' = fmap (fmap (shift d (V x n))) mt
+    r'  =             shift d (V x n)  r
+shift d v expression = Lens.over subExpressions (shift d v) expression
+
 -- | Desugar all @with@ expressions
 desugarWith :: Expr s a -> Expr s a
 desugarWith = Optics.rewriteOf subExpressions rewrite
   where
     rewrite e@(With record (key :| []) value) =
-        Just (Prefer (PreferFromWith e) record (RecordLit [ (key, makeRecordField value) ]))
+        Just
+            (Prefer
+                (PreferFromWith e)
+                record
+                (RecordLit [ (key, makeRecordField value) ])
+            )
     rewrite e@(With record (key0 :| key1 : keys) value) =
         Just
-            (Prefer (PreferFromWith e) record
-                (RecordLit
-                    [ (key0, makeRecordField $ With (Field record key0) (key1 :| keys) value) ]
+            (Let
+                (makeBinding "_" record)
+                (Prefer (PreferFromWith e) "_"
+                    (RecordLit
+                        [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing key0 Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
+                    )
                 )
             )
     rewrite _ = Nothing

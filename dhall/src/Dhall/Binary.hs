@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -30,6 +31,7 @@ import Codec.Serialise      (Serialise (decode, encode))
 import Control.Applicative  (empty, (<|>))
 import Control.Exception    (Exception)
 import Data.ByteString.Lazy (ByteString)
+import Data.Foldable (Foldable)
 import Dhall.Syntax
     ( Binding (..)
     , Chunks (..)
@@ -67,6 +69,8 @@ import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Short
+import qualified Data.Foldable         as Foldable
+import qualified Data.List.NonEmpty    as NonEmpty
 import qualified Data.Sequence
 import qualified Dhall.Crypto
 import qualified Dhall.Map
@@ -392,7 +396,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                 x <- Decoding.decodeString
 
-                                return (Field t x)
+                                return (Field t (Syntax.makeFieldSelection x))
 
                             10 -> do
                                 t <- go
@@ -579,6 +583,23 @@ decodeExpressionInternal decodeEmbed = go
                                 _T <- go
 
                                 return (ListLit (Just _T) empty)
+
+                            29 -> do
+                                l <- go
+
+                                n <- Decoding.decodeListLen
+
+                                ks₀ <- replicateDecoder n Decoding.decodeString
+
+                                ks₁ <- case NonEmpty.nonEmpty ks₀ of
+                                    Nothing ->
+                                        die "0 field labels in decoded with expression"
+                                    Just ks₁ ->
+                                        return ks₁
+
+                                r <- go
+
+                                return (With l ks₁ r)
 
                             _ ->
                                 die ("Unexpected tag: " <> show tag)
@@ -820,7 +841,7 @@ encodeExpressionInternal encodeEmbed = go
                 (Encoding.encodeInt 8)
                 (encodeMapWith (go. recordFieldValue) xts)
 
-        Field t x ->
+        Field t (Syntax.fieldSelectionLabel -> x) ->
             encodeList3
                 (Encoding.encodeInt 9)
                 (go t)
@@ -940,8 +961,12 @@ encodeExpressionInternal encodeEmbed = go
                 (go t)
                 (go _T)
 
-        a@With{} ->
-            go (Syntax.desugarWith a)
+        With l ks r ->
+            encodeList4
+                (Encoding.encodeInt 29)
+                (go l)
+                (encodeList (fmap Encoding.encodeString ks))
+                (go r)
 
         Note _ b ->
             go b
@@ -975,11 +1000,12 @@ encodeList4 :: Encoding -> Encoding -> Encoding -> Encoding -> Encoding
 encodeList4 a b c d = Encoding.encodeListLen 4 <> a <> b <> c <> d
 {-# INLINE encodeList4 #-}
 
-encodeListN :: Int -> [ Encoding ] -> Encoding
-encodeListN len xs = Encoding.encodeListLen (fromIntegral len) <> mconcat xs
+encodeListN :: Foldable f => Int -> f Encoding -> Encoding
+encodeListN len xs =
+    Encoding.encodeListLen (fromIntegral len) <> Foldable.fold xs
 {-# INLINE encodeListN #-}
 
-encodeList :: [ Encoding ] -> Encoding
+encodeList :: Foldable f => f Encoding -> Encoding
 encodeList xs = encodeListN (length xs) xs
 {-# INLINE encodeList #-}
 
