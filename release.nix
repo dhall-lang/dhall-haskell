@@ -61,7 +61,7 @@ in
 
       prelude-dhall-docs
       test-dhall-docs
-#     kubernetes-dhall-docs
+      kubernetes-dhall-docs
     ;
 
     linux-dhall            = shared_linux.possibly-static.dhall;
