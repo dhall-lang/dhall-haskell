@@ -1,24 +1,20 @@
-{-| Utilities to interact with the dhall-docs home directory
--}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# LANGUAGE QuasiQuotes #-}
+-- | Utilities to interact with the dhall-docs home directory
 
+{-# LANGUAGE QuasiQuotes #-}
 
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
 
-import Dhall.Crypto    (SHA256Digest (..))
-import Dhall.Docs.Util
-import Path            (Abs, Dir, Path, Rel, (</>))
-import Path.IO         (XdgDirectory (..))
+import Crypto.Hash  (Digest, SHA256)
+import Dhall.Crypto (SHA256Digest (..))
+import Path         (Abs, Dir, Path, (</>))
+import Path.IO      (XdgDirectory (..))
 
-import qualified Codec.Archive.Tar       as Tar
-import qualified Codec.Archive.Tar.Entry as Tar.Entry
-import qualified Control.Applicative     as Applicative
+import qualified Control.Monad           as Monad
+import qualified Crypto.Hash             as Hash
+import qualified Data.ByteArray          as ByteArray
+import qualified Data.ByteString         as ByteString
 import qualified Data.ByteString.Char8   as ByteString.Char8
-import qualified Data.ByteString.Lazy    as ByteString.Lazy
-import qualified Data.List
-import qualified Data.Text               as Text
-import qualified Dhall.Crypto            as Crypto
+import qualified Data.List               as List
 import qualified Path
 import qualified Path.IO
 
@@ -42,31 +38,27 @@ getDocsHomeDirectory = do
 -}
 makeHashForDirectory :: Path Abs Dir -> IO SHA256Digest
 makeHashForDirectory dir = do
-    let makeEntry isDir path_ = do
-            let realFilePath = Path.toFilePath $ dir </> path_
-            let hashFilepath = Crypto.toString
-                    $ Crypto.sha256Hash
-                    $ ByteString.Char8.pack
-                    $ Path.toFilePath path_
-            let entryTarPath =
-                    case Tar.Entry.toTarPath isDir hashFilepath of
-                        Left e ->
-                            fileAnIssue $ Text.pack $
-                                "An error has occurred when invoking Tar.Entry.toTarPath with " <>
-                                realFilePath <> ": " <> e
-
-                        Right tp -> tp
-            let pack = if isDir then Tar.Entry.packDirectoryEntry else Tar.Entry.packFileEntry
-            entry <- pack realFilePath entryTarPath
-            -- we set the entry time to 0 to avoid the hash to change on every run
-            return entry{Tar.Entry.entryTime = 0}
-
     (dirs, files) <- Path.IO.listDirRecurRel dir
-    let sortedDirs = Data.List.sort dirs
-    let sortedFiles = Data.List.sort files
 
-    entries <- Applicative.liftA2 (++) (mapM (makeEntry True) sortedDirs) (mapM (makeEntry False) sortedFiles)
+    let context0 = Hash.hashInit
 
-    let inMemoryTarBytes = ByteString.Lazy.toStrict $ Tar.write entries
+    let addDir context directory = do
+            let nameBytes = ByteString.Char8.pack (Path.toFilePath directory)
 
-    return $ Crypto.sha256Hash inMemoryTarBytes
+            return $! Hash.hashUpdate context nameBytes
+
+    context1 <- Monad.foldM addDir context0 (List.sort dirs)
+
+    let addFile context file = do
+            let nameBytes = ByteString.Char8.pack (Path.toFilePath file)
+
+            contentBytes <- ByteString.readFile (Path.toFilePath (dir </> file))
+
+            return $! Hash.hashUpdates context [ nameBytes, contentBytes ]
+
+    context2 <- Monad.foldM addFile context1 (List.sort files)
+
+    let digest :: Digest SHA256
+        digest = Hash.hashFinalize context2
+
+    return (SHA256Digest (ByteArray.convert digest))
