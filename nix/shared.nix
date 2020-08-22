@@ -1,12 +1,11 @@
 let
   pinned = import ./pinnedNixpkgs.nix;
   
-  defaultCompiler = "ghc843";
+  defaultCompiler = "ghc865";
 
 in
 
 { nixpkgs ? pinned.nixpkgs
-, nixpkgsStaticLinux ? pinned.nixpkgsStaticLinux
 , compiler ? defaultCompiler
 , coverage ? false
 , system ? builtins.currentSystem
@@ -37,11 +36,60 @@ let
       builtins.listToAttrs (map toNameValue names);
 
   overlayShared = pkgsNew: pkgsOld: {
+    applyPatchesToCabalDrv =
+      cabalDrv: pkgsNew.haskell.lib.overrideCabal cabalDrv (old: {
+          patches = (old.patches or []) ++ [
+            (pkgsNew.makeCabalPatch {
+                name = "5446.patch";
+                url = "https://github.com/haskell/cabal/commit/cb221c23c274f79dcab65aef3756377af113ae21.patch";
+                sha256 = "02qalj5y35lq22f19sz3c18syym53d6bdqzbnx9f6z3m7xg591p1";
+              }
+            )
+            (pkgsNew.makeCabalPatch {
+                name = "5451.patch";
+                url = "https://github.com/haskell/cabal/commit/0aeb541393c0fce6099ea7b0366c956e18937791.patch";
+                sha256 = "0pa9r79730n1kah8x54jrd6zraahri21jahasn7k4ng30rnnidgz";
+              }
+            )
+          ];
+        }
+      );
+
+
+    fixedCabal =
+      let
+        buildPlatformHaskellPackagesWithFixedCabal =
+          pkgsNew.pkgsMusl.haskell.packages."${compiler}".override (old: {
+              overrides =
+                pkgsNew.lib.composeExtensions
+                  (old.overrides or (_: _: {}))
+                  (haskellPackagesNew: haskellPackagesOld: {
+                      Cabal = pkgsNew.applyPatchesToCabalDrv haskellPackagesNew.Cabal_2_4_1_0;
+                    }
+                  );
+            }
+          );
+
+      in
+        buildPlatformHaskellPackagesWithFixedCabal.Cabal;
+
     sdist = pkgsNew.callPackage ./sdist.nix { };
 
     dhallToNix = pkgsOld.dhallToNix.override {
       inherit (pkgsNew.haskell.packages."${compiler}") dhall-nix;
     };
+
+    makeCabalPatch = { name, url, sha256 }:
+      let
+        plainPatchFile = pkgsNew.fetchpatch { inherit name url sha256; };
+
+      in
+        pkgsNew.runCommand "${name}-Cabal-only" {} ''
+          ${pkgsNew.patchutils}/bin/filterdiff \
+            -p1 -i 'Cabal/*' -x 'Cabal/ChangeLog.md' \
+            --strip=2 --addoldprefix=a/ --addnewprefix=b/ \
+            ${plainPatchFile} > $out
+        '';
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
@@ -89,7 +137,6 @@ let
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
                           "dhall-docs"
-                          "dhall-json"
                           # The test suite fails due to a relative reference
                           # to ../dhall/dhall-lang/
                           # "dhall-lsp-server"
@@ -100,6 +147,9 @@ let
                         ]
                         # Test suite doesn't work on GHCJS
                     ++  pkgsNew.lib.optional (!(compiler == "ghcjs")) "dhall"
+                        # Test suite fails on GHCJS due to `aeson` ordering
+                        # HashMap values in a different order
+                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs")) "dhall-json"
                     );
 
                 doBenchmarkExtension =
@@ -208,6 +258,25 @@ let
                             '';
                           }
                         );
+
+                    generic-random = haskellPackagesOld.generic-random_1_3_0_0;
+
+                    haskeline = haskellPackagesNew.haskeline_0_8_0_0;
+
+                    haskell-lsp = haskellPackagesNew.haskell-lsp_0_19_0_0;
+
+                    haskell-lsp-types =
+                      haskellPackagesNew.haskell-lsp-types_0_19_0_0;
+
+                    HsYAML = haskellPackagesNew.HsYAML_0_2_1_0;
+
+                    path = haskellPackagesNew.path_0_7_0;
+
+                    path-io = haskellPackagesNew.path-io_1_6_0;
+
+                    prettyprinter = haskellPackagesNew.prettyprinter_1_6_0;
+
+                    semialign = haskellPackagesNew.semialign_1_1;
                   };
 
               in
@@ -225,9 +294,6 @@ let
         );
       };
     };
-  };
-
-  overlayCabal2nix = pkgsNew: pkgsOld: {
 
     # we only reference git repositories with cabal2nix
     nix-prefetch-scripts = pkgsOld.nix-prefetch-scripts.override {
@@ -236,116 +302,51 @@ let
       cvs = null;
       subversion = null;
     };
-
-    haskellPackages = pkgsOld.haskellPackages.override (old: {
-        overrides =
-          let
-            extension =
-              haskellPackagesNew: haskellPackagesOld: {
-                # `cabal2nix` requires a newer version of `hpack`
-                hpack =
-                  haskellPackagesOld.hpack_0_29_6;
-              };
-
-          in
-            pkgsNew.lib.composeExtensions
-              (old.overrides or (_: _: {}))
-              extension;
-      }
-    );
-  };
-
-  overlayGHC861 = pkgsNew: pkgsOld: {
-    haskell = pkgsOld.haskell // {
-      packages = pkgsOld.haskell.packages // {
-        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
-            overrides =
-              let
-                extension =
-                  haskellPackagesNew: haskellPackagesOld: {
-                    lens-family-core =
-                        haskellPackagesOld.lens-family-core_1_2_3;
-
-                    # GHC 8.6.1 accidentally shipped with an unpublished
-                    # unix-2.8 package.  Normally we'd deal with that by
-                    # using `pkgsNew.haskell.lib.jailbreak` but it doesn't
-                    # work for dependencies guarded by conditions.  See:
-                    # 
-                    # https://github.com/peti/jailbreak-cabal/issues/7
-                    turtle =
-                      pkgsNew.haskell.lib.appendPatch
-                        haskellPackagesOld.turtle
-                        ./turtle.patch;
-                  };
-
-              in
-                pkgsNew.lib.composeExtensions
-                  (old.overrides or (_: _: {}))
-                  extension;
-          }
-        );
-      };
-    };
   };
 
   pkgs = import nixpkgs {
     inherit system;
 
-    config = {};
+    config = { allowBroken = true; };
 
-    overlays =
-          [ overlayShared overlayCabal2nix ]
-      ++  (      if compiler == "ghc861" then [ overlayGHC861 ]
-            else                              [               ]
-          );
+    overlays = [ overlayShared ];
   };
 
   overlayStaticLinux = pkgsNew: pkgsOld: {
     cabal2nix = pkgs.cabal2nix;
 
-    cabal_patched_src = pkgsNew.fetchFromGitHub {
-      owner = "nh2";
-      repo = "cabal";
-      rev = "748f07b50724f2618798d200894f387020afc300";
-      sha256 = "1k559m291f6spip50rly5z9rbxhfgzxvaz64cx4jqpxgfhbh2gfs";
-    };
-
-    Cabal_patched_Cabal_subdir = pkgsNew.stdenv.mkDerivation {
-      name = "cabal-dedupe-src";
-      buildCommand = ''
-        cp -rv ${pkgsNew.cabal_patched_src}/Cabal/ $out
-      '';
-    };
-
     haskell = pkgsOld.haskell // {
       lib = pkgsOld.haskell.lib // {
-        useFixedCabal = drv: pkgsNew.haskell.lib.overrideCabal drv (old: {
-            setupHaskellDepends =
-              (old.setupHaskellDepends or []) ++ [
-                pkgsNew.haskell.packages."${compiler}".Cabal_patched
-              ];
+        useFixedCabal = drv:
+          (pkgsNew.haskell.lib.overrideCabal drv (old: {
+              setupHaskellDepends = (old.setupHaskellDepends or []) ++ [ pkgsNew.fixedCabal ];
+            }
+          )).overrideAttrs (old: {
+              preCompileBuildDriver = (old.preCompileBuildDriver or "") + ''
+                cabalPackageId=$(basename --suffix=.conf ${pkgsNew.fixedCabal}/lib/ghc-*/package.conf.d/*.conf)
+                echo "Determined cabalPackageId as $cabalPackageId"
+                setupCompileFlags="$setupCompileFlags -package-id $cabalPackageId"
+              '';
+            }
+          );
 
-            libraryHaskellDepends =
-              (old.libraryHaskellDepends or []) ++ [
-                pkgsNew.haskell.packages."${compiler}".Cabal_patched
-              ];
-          }
-        );
-
-      statify = drv:
-        pkgsNew.lib.foldl pkgsNew.haskell.lib.appendConfigureFlag
-          (pkgsNew.haskell.lib.disableLibraryProfiling
-            (pkgsNew.haskell.lib.disableSharedExecutables
-              (pkgsNew.haskell.lib.useFixedCabal
-                 (pkgsNew.haskell.lib.justStaticExecutables drv)
+        statify = drv:
+          pkgsNew.haskell.lib.appendConfigureFlags
+            (pkgsNew.haskell.lib.disableLibraryProfiling
+              (pkgsNew.haskell.lib.disableSharedExecutables
+                (pkgsNew.haskell.lib.useFixedCabal
+                   (pkgsNew.haskell.lib.justStaticExecutables
+                     (pkgsNew.haskell.lib.dontCheck drv)
+                   )
+                )
               )
             )
-          )
-          [ "--enable-executable-static"
-            "--extra-lib-dirs=${pkgsNew.gmp6.override { withStatic = true; }}/lib"
-            "--extra-lib-dirs=${pkgsNew.zlib.static}/lib"
-            "--extra-lib-dirs=${pkgsNew.ncurses.override { enableStatic = true; }}/lib"
-          ];
+            [ "--enable-executable-static"
+              "--extra-lib-dirs=${pkgsNew.pkgsMusl.ncurses.override { enableStatic = true; }}/lib"
+              "--extra-lib-dirs=${pkgsNew.pkgsMusl.gmp6.override { withStatic = true; }}/lib"
+              "--extra-lib-dirs=${pkgsNew.pkgsMusl.zlib.static}/lib"
+              "--extra-lib-dirs=${pkgsNew.pkgsMusl.libffi.overrideAttrs (old: { dontDisableStatic = true; })}/lib"
+            ];
       };
 
       packages = pkgsOld.haskell.packages // {
@@ -354,12 +355,6 @@ let
               let
                 extension =
                   haskellPackagesNew: haskellPackagesOld: {
-                    Cabal_patched =
-                      haskellPackagesNew.callCabal2nix
-                        "Cabal"
-                        pkgsNew.Cabal_patched_Cabal_subdir
-                        { };
-
                     dhall-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall;
 
@@ -398,8 +393,8 @@ let
     };
   };
 
-  pkgsStaticLinux = import nixpkgsStaticLinux {
-    config = {};
+  pkgsStaticLinux = import nixpkgs {
+    config = { allowBroken = true; };
     overlays = [ overlayShared overlayStaticLinux ];
     system = "x86_64-linux";
   };

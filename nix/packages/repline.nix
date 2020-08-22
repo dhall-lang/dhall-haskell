@@ -9,7 +9,6 @@ mkDerivation {
     base containers exceptions haskeline mtl process
   ];
   testHaskellDepends = [ base containers mtl process ];
-  doHaddock = false;
   homepage = "https://github.com/sdiehl/repline";
   description = "Haskeline wrapper for GHCi-like REPL interfaces";
   license = stdenv.lib.licenses.mit;

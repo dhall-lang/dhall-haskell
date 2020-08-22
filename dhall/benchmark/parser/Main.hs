@@ -6,11 +6,10 @@ import Control.Exception (throw)
 import Control.Monad     (forM)
 import Data.Map          (Map, foldrWithKey, singleton, unions)
 import Data.Void         (Void)
-import Gauge             (bench, bgroup, defaultMain, env, nf, nfIO, whnf)
+import Gauge             (bench, bgroup, defaultMain, env, nf, whnf)
 
 import System.Directory
 
-import qualified Codec.Serialise
 import qualified Data.ByteString.Lazy
 import qualified Data.Text            as T
 import qualified Data.Text.IO         as TIO
@@ -50,7 +49,7 @@ benchExprFromText name expr =
 
 benchExprFromBytes
     :: String -> Data.ByteString.Lazy.ByteString -> Gauge.Benchmark
-benchExprFromBytes name bytes = bench name (nf f bytes)
+benchExprFromBytes name bs = bench name (nf f bs)
   where
     f bytes =
         case Dhall.Binary.decodeExpression bytes of
