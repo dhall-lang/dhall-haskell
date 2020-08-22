@@ -1,12 +1,13 @@
 -- | Utilities to interact with the dhall-docs home directory
 
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
 
 import Crypto.Hash  (Digest, SHA256)
 import Dhall.Crypto (SHA256Digest (..))
-import Path         (Abs, Dir, Path, (</>))
+import Path         (Abs, Dir, Path, Rel, (</>))
 import Path.IO      (XdgDirectory (..))
 
 import qualified Control.Monad           as Monad
