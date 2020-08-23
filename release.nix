@@ -42,6 +42,10 @@ in
           # Check that the package builds with HTTP support compiled out
           shared.dhall-no-http
 
+          shared.prelude-dhall-docs
+          shared.test-dhall-docs
+          shared.kubernetes-dhall-docs
+
           (shared.trivial src.rev)
         ];
       };
