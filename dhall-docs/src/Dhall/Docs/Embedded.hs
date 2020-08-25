@@ -29,14 +29,14 @@ import qualified Path.IO
 
 getDataDir :: IO [(Path Rel File, ByteString)]
 #if defined(EMBED)
-getDataDir = mapM f $(embedDir "src/Dhall/data")
+getDataDir = mapM f $(embedDir "src/Dhall/data/assets")
   where
     f :: (FilePath, ByteString) -> IO (Path Rel File, ByteString)
     f (filePath, contents) = (,contents) <$> Path.parseRelFile filePath
 #else
 getDataDir = do
     dir <- Path.parent
-        <$> (getDataFileName "src/Dhall/data/index.css" >>= Path.parseAbsFile)
+        <$> (getDataFileName "src/Dhall/data/assets/index.css" >>= Path.parseAbsFile)
     files <- snd <$> Path.IO.listDir dir
     Control.Monad.forM files $ \file -> do
         contents <- ByteString.readFile $ Path.fromAbsFile file
