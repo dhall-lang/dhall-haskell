@@ -23,10 +23,11 @@ dhall-docs - Dhall documentation tool
 :   Directory of Dhall package
 
 **-\-output-link**
-:   Directory for generated documentation, or symlink to directory
+:   Directory for generated documentation, or symlink to directory. Defaults to
+ \'./docs\'
 
 **-\-package-name**
-:   Package name
+:   Package name; defaults to the input directory if not given.
 
 **-\-ascii**
 :   Format rendered code using ASCII syntax
