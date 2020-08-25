@@ -44,6 +44,7 @@ Data-Files:
     *.css
     *.js
     *.svg
+    man/dhall-docs.1
 Data-Dir:
     src/Dhall/data
 
