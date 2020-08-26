@@ -41,9 +41,10 @@ Extra-Source-Files:
     tasty/data/comments/invalid/*.txt
     tasty/data/comments/valid/*.txt
 Data-Files:
-    *.css
-    *.js
-    *.svg
+    assets/*.css
+    assets/*.js
+    assets/*.svg
+    man/dhall-docs.1
 Data-Dir:
     src/Dhall/data
 
