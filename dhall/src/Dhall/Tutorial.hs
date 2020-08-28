@@ -614,13 +614,16 @@ import Dhall
 -- >     [ n && True, n && False, n || True, n || False ]
 --
 -- ... or we can use Dhall's support for Unicode characters to use @λ@ (U+03BB)
--- instead of @\\@ and @→@ (U+2192) instead of @->@ (for people who are into that
--- sort of thing):
+-- instead of @\\@ and @→@ (U+2192) instead of @->@ (for people who are into
+-- that sort of thing):
 --
 -- > $ -- ./makeBools.dhall
 -- > λ(n : Bool) →
 -- >     [ n && True, n && False, n || True, n || False ]
 -- > <Ctrl-D>
+--
+-- We'll be sticking to ASCII for the remainder of the tutorial, though, while
+-- still pointing out Unicode equivalents as we go.
 --
 -- You can read this as a function of one argument named @n@ that has type
 -- @Bool@.  This function returns a @List@ of @Bool@s.  Each element of the
@@ -644,7 +647,7 @@ import Dhall
 -- Thanks to currying, this instance works for functions of multiple simple
 -- arguments:
 --
--- >>> dhallAnd <- input auto "λ(x : Bool) → λ(y : Bool) → x && y" :: IO (Bool -> Bool -> Bool)
+-- >>> dhallAnd <- input auto "\\(x : Bool) -> \\(y : Bool) -> x && y" :: IO (Bool -> Bool -> Bool)
 -- >>> dhallAnd True False
 -- False
 --
@@ -666,7 +669,7 @@ import Dhall
 -- >     deriving (Generic, ToDhall)
 -- >
 -- > main = do
--- >     f <- input auto "λ(r : { foo : Bool, bar : Bool }) → r.foo && r.bar"
+-- >     f <- input auto "\\(r : { foo : Bool, bar : Bool }) -> r.foo && r.bar"
 -- >     print (f (Example0 { foo = True, bar = False }) :: Bool)
 -- >     print (f (Example0 { foo = True, bar = True  }) :: Bool)
 --
@@ -686,6 +689,12 @@ import Dhall
 -- > $ dhall --annotate <<< './makeBools.dhall'
 -- > (λ(n : Bool) → [ n, False, True, n ]) : ∀(n : Bool) → List Bool
 --
+-- The @dhall@ command emits Unicode output by default, but you can switch to
+-- ASCII output using the @--ascii@ flag:
+--
+-- > $ dhall --annotate --ascii <<< './makeBools.dhall'
+-- > (\(n : Bool) -> [ n, False, True, n ]) : forall (n : Bool) -> List Bool
+--
 -- The @--annotate@ flag adds a type signature to the output to let us know
 -- what type the interpreter inferred for our expression.  The type signature
 -- is @∀(n : Bool) → List Bool@ which says that @makeBools@ is a function of one
@@ -693,16 +702,16 @@ import Dhall
 -- @Bool@s.  The @∀@ (U+2200) symbol is shorthand for the ASCII @forall@
 -- keyword:
 --
--- > ∀(x : a) → b        -- This type ...
+-- > ∀(x : a) → b         -- This type ...
 -- >
--- > forall (x : a) → b  -- ... is the same as this type
+-- > forall (x : a) -> b  -- ... is the same as this type
 --
 -- ... and Dhall's @forall@ keyword behaves the same way as Haskell's @forall@
 -- keyword for input values that are @Type@s:
 --
--- > forall (x : Type) → b  -- This Dhall type ...
+-- > forall (x : Type) -> b  -- This Dhall type ...
 --
--- > forall x . b           -- ... is the same as this Haskell type
+-- > forall x . b            -- ... is the same as this Haskell type
 --
 -- The part where Dhall differs from Haskell is that you can also use
 -- @∀@/@forall@ to give names to non-@Type@ arguments (such as the first
@@ -734,7 +743,7 @@ import Dhall
 -- Remember that file paths are synonymous with their contents, so the above
 -- code is exactly equivalent to:
 --
--- > $ dhall <<< '(λ(n : Bool) → [n && True, n && False, n || True, n || False]) True'
+-- > $ dhall <<< '(\(n : Bool) -> [n && True, n && False, n || True, n || False]) True'
 -- > [True, False, True, True]
 --
 -- When you apply an anonymous function to an argument, you substitute the
@@ -742,9 +751,9 @@ import Dhall
 --
 -- >    Bound variable
 -- >    ⇩
--- > (λ(n : Bool) → ...) True
--- >                     ⇧
--- >                     Function argument
+-- > (\(n : Bool) -> ...) True
+-- >                      ⇧
+-- >                      Function argument
 --
 -- So in our above example, we would replace all occurrences of @n@ with @True@,
 -- like this:
@@ -767,7 +776,7 @@ import Dhall
 -- __Exercise__: Create a file named @getFoo@ that is a function of the following
 -- type:
 --
--- > ∀(r : { foo : Bool, bar : Text }) → Bool
+-- > forall (r : { foo : Bool, bar : Text }) -> Bool
 --
 -- This function should take a single input argument named @r@ that is a record
 -- with two fields.  The function should return the value of the @foo@ field.
@@ -878,7 +887,7 @@ import Dhall
 -- ... but fails with a type error if either shared field is not a record:
 --
 -- > $ dhall
--- > { foo = 1, bar = "ABC" } ∧ { foo = True }
+-- > { foo = 1, bar = "ABC" } /\ { foo = True }
 -- > <Ctrl-D>
 -- > Use "dhall --explain" for detailed errors
 -- >
@@ -894,7 +903,7 @@ import Dhall
 -- You can analogously combine record types using the @//\\\\@ operator (or @(⩓)@ U+2A53):
 --
 -- > $ dhall
--- > { foo : Natural } ⩓ { bar : Text }
+-- > { foo : Natural } //\\ { bar : Text }
 -- > <Ctrl-D>
 -- > { foo : Natural, bar : Text }
 --
@@ -902,7 +911,7 @@ import Dhall
 -- operator descends recursively into record types:
 --
 -- > $ dhall
--- > { foo : { bar : Text } } ⩓ { foo : { baz : Bool }, qux : Natural }
+-- > { foo : { bar : Text } } //\\ { foo : { baz : Bool }, qux : Natural }
 -- > <Ctrl-D>
 -- > { foo : { bar : Text, baz : Bool }, qux : Natural }
 
@@ -941,7 +950,7 @@ import Dhall
 -- function:
 --
 -- > $ dhall
--- > let twice = λ(x : Text) → x ++ x in twice "ha"
+-- > let twice = \(x : Text) -> x ++ x in twice "ha"
 -- > <Ctrl-D>
 -- > "haha"
 --
@@ -1092,10 +1101,10 @@ import Dhall
 -- would write:
 --
 -- > $ cat > process <<EOF
--- >     λ(union : < Left : Natural | Right : Bool >)
--- > →   let handlers =
+-- >   \(union : < Left : Natural | Right : Bool >) ->
+-- >     let handlers =
 -- >             { Left  = Natural/even  -- Natural/even is a built-in function
--- >             , Right = λ(b : Bool) → b
+-- >             , Right = \(b : Bool) -> b
 -- >             }
 -- > in  merge handlers union
 -- > EOF
@@ -1125,14 +1134,14 @@ import Dhall
 --
 -- So, for example:
 --
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } (< Left : Natural | Right : Bool >.Left 3)
+-- > merge { Left = Natural/even, Right = \(b : Bool) -> b } (< Left : Natural | Right : Bool >.Left 3)
 -- >     = Natural/even 3
 -- >     = False
 --
 -- ... and similarly:
 --
--- > merge { Left = Natural/even, Right = λ(b : Bool) → b } (< Left : Natural | Right : Bool >.Right True)
--- >     = (λ(b : Bool) → b) True
+-- > merge { Left = Natural/even, Right = \(b : Bool) -> b } (< Left : Natural | Right : Bool >.Right True)
+-- >     = (\(b : Bool) -> b) True
 -- >     = True
 --
 -- Notice that each handler has to return the same type of result (@Bool@ in
@@ -1165,13 +1174,13 @@ import Dhall
 -- ... and when you @merge@ an empty alternative the correspond handler takes no
 -- argument:
 --
--- >     λ(x : < Empty | Person : { name : Text, age : Natural } >)
--- > →   merge
--- >     {   Empty = "Unknown"  -- Note the absence of a `λ`
+-- > \(x : < Empty | Person : { name : Text, age : Natural } >) ->
+-- >   merge
+-- >     { Empty = "Unknown"  -- Note the absence of an anonymous function
 -- >
--- >     ,   Person =
--- >             λ(person : { name : Text, age : Natural })
--- >         →   "Name: ${person.name}, Age: ${Natural/show person.age}"
+-- >     , Person =
+-- >         \(person : { name : Text, age : Natural }) ->
+-- >           "Name: ${person.name}, Age: ${Natural/show person.age}"
 -- >     }
 -- >     x
 --
@@ -1203,14 +1212,14 @@ import Dhall
 --
 -- The equivalent function in Dhall is:
 --
--- > λ(a : Type) → λ(x : a) → x
+-- > \(a : Type) -> \(x : a) -> x
 --
 -- Notice how this function takes two arguments instead of one.  The first
 -- argument is the type of the second argument.
 --
 -- Let's illustrate how this works by actually using the above function:
 --
--- > $ echo "λ(a : Type) → λ(x : a) → x" > id
+-- > $ echo "\\(a : Type) -> \\(x : a) -> x" > id
 --
 -- Let's ask the interpreter for the type of this function:
 -- the first line:
@@ -1280,7 +1289,7 @@ import Dhall
 -- argument type then that means that the name of the argument is @"_"@.  This
 -- is true even for user-defined functions:
 --
--- > $ dhall type <<< 'λ(_ : Text) → 1'
+-- > $ dhall type <<< '\\(_ : Text) -> 1'
 -- > Text → Natural
 --
 -- The type @Text → Natural@ is the same as @∀(_ : Text) → Natural@
@@ -1313,8 +1322,8 @@ import Dhall
 -- complex example:
 --
 -- > $ dhall
--- >     let List/map = https://prelude.dhall-lang.org/List/map
--- > in  λ(f : Natural → Natural) → List/map Natural Natural f [1, 2, 3]
+-- > let List/map = https://prelude.dhall-lang.org/List/map
+-- > in  \(f : Natural → Natural) -> List/map Natural Natural f [1, 2, 3]
 -- > <Ctrl-D>
 -- > λ(f : Natural → Natural) → [f 1, f 2, f 3]
 --
@@ -1348,8 +1357,8 @@ import Dhall
 -- code.  For example, we can add some tests to our @not@ function like this:
 --
 -- > let not
--- >     : Bool → Bool
--- >     = λ(b : Bool) → b == False
+-- >     : Bool -> Bool
+-- >     = \(b : Bool) -> b == False
 -- >
 -- > let example0 = assert : not False === True
 -- >
@@ -1366,8 +1375,8 @@ import Dhall
 -- > -- ./test.dhall
 -- >
 -- > let not
--- >     : Bool → Bool
--- >     = λ(b : Bool) → b == False
+-- >     : Bool -> Bool
+-- >     = \(b : Bool) -> b == False
 -- >
 -- > let example0 = assert : not False === True
 -- >
@@ -1684,30 +1693,30 @@ import Dhall
 -- ... and run the expression through the formatter:
 --
 -- > $ dhall format < ./unformatted
--- >   λ(a : Type)
--- > → λ(kvss : List (List { index : Natural, value : a }))
--- > → List/build
+-- > λ(a : Type) →
+-- > λ(kvss : List (List { index : Natural, value : a })) →
+-- >   List/build
 -- >     { index : Natural, value : a }
--- >     (   λ(list : Type)
--- >       → λ(cons : { index : Natural, value : a } → list → list)
--- >       → λ(nil : list)
--- >       → ( List/fold
+-- >     ( λ(list : Type) →
+-- >       λ(cons : { index : Natural, value : a } → list → list) →
+-- >       λ(nil : list) →
+-- >         ( List/fold
 -- >             (List { index : Natural, value : a })
 -- >             kvss
 -- >             { count : Natural, diff : Natural → list }
--- >             (   λ(kvs : List { index : Natural, value : a })
--- >               → λ(y : { count : Natural, diff : Natural → list })
--- >               → { count =
+-- >             ( λ(kvs : List { index : Natural, value : a }) →
+-- >               λ(y : { count : Natural, diff : Natural → list }) →
+-- >                 { count =
 -- >                     y.count + List/length { index : Natural, value : a } kvs
 -- >                 , diff =
--- >                       λ(n : Natural)
--- >                     → List/fold
+-- >                     λ(n : Natural) →
+-- >                       List/fold
 -- >                         { index : Natural, value : a }
 -- >                         kvs
 -- >                         list
--- >                         (   λ(kvOld : { index : Natural, value : a })
--- >                           → λ(z : list)
--- >                           → cons
+-- >                         ( λ(kvOld : { index : Natural, value : a }) →
+-- >                           λ(z : list) →
+-- >                             cons
 -- >                               { index = kvOld.index + n, value = kvOld.value }
 -- >                               z
 -- >                         )
@@ -1880,7 +1889,7 @@ import Dhall
 -- new built-in functions.  This section contains a simple Haskell recipe to add
 -- a new @Natural/equal@ built-in function of type:
 --
--- > Natural/equal : Natural → Natural → Bool
+-- > Natural/equal : Natural -> Natural -> Bool
 --
 -- To do so, we:
 --
@@ -2237,10 +2246,10 @@ import Dhall
 -- convenience:
 --
 -- > $ dhall
--- >     let Prelude = https://prelude.dhall-lang.org/package.dhall
+-- > let Prelude = https://prelude.dhall-lang.org/package.dhall
 -- >
--- > in    λ(x : Text)
--- >     → Prelude.List.length Text (Prelude.List.replicate 10 Text x)
+-- > in  \(x : Text) ->
+-- >       Prelude.List.length Text (Prelude.List.replicate 10 Text x)
 -- > <Ctrl-D>
 -- > ∀(x : Text) → Natural
 -- >
