@@ -13,6 +13,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE UndecidableInstances       #-}
@@ -73,6 +74,16 @@ module Dhall
     , bool
     , natural
     , integer
+    , word
+    , word8
+    , word16
+    , word32
+    , word64
+    , int
+    , int8
+    , int16
+    , int32
+    , int64
     , scientific
     , double
     , lazyText
@@ -155,7 +166,8 @@ import Data.Text.Prettyprint.Doc            (Pretty)
 import Data.Typeable                        (Proxy (..), Typeable)
 import Data.Vector                          (Vector)
 import Data.Void                            (Void)
-import Data.Word                            (Word16, Word32, Word64, Word8)
+import Data.Word                            (Word8, Word16, Word32, Word64)
+import Data.Int                             (Int8, Int16, Int32, Int64)
 import Dhall.Import                         (Imported (..))
 import Dhall.Parser                         (Src (..))
 import Dhall.Syntax
@@ -812,7 +824,114 @@ integer = Decoder {..}
 
     expected = pure Integer
 
+wordHelper :: forall a . (Bounded a, Integral a) => Text -> Decoder a
+wordHelper name = Decoder {..}
+  where
+    extract (NaturalLit n)
+        | toInteger n <= toInteger (maxBound @a) =
+            pure (fromIntegral n)
+        | otherwise =
+            extractError ("Decoded " <> name <> " is out of bounds: " <> Data.Text.pack (show n))
+    extract expr =
+        typeError expected expr
+
+    expected = pure Natural
+
+{-| Decode a `Word` from a Dhall @Natural@
+
+>>> input word "42"
+42
+-}
+word :: Decoder Word
+word = wordHelper "Word"
+
+{-| Decode a `Word8` from a Dhall @Natural@
+
+>>> input word8 "42"
+42
+-}
+word8 :: Decoder Word8
+word8 = wordHelper "Word8"
+
+{-| Decode a `Word16` from a Dhall @Natural@
+
+>>> input word16 "42"
+42
+-}
+word16 :: Decoder Word16
+word16 = wordHelper "Word16"
+
+{-| Decode a `Word32` from a Dhall @Natural@
+
+>>> input word32 "42"
+42
+-}
+word32 :: Decoder Word32
+word32 = wordHelper "Word32"
+
+{-| Decode a `Word64` from a Dhall @Natural@
+
+>>> input word64 "42"
+42
+-}
+word64 :: Decoder Word64
+word64 = wordHelper "Word64"
+
+intHelper :: forall a . (Bounded a, Integral a) => Text -> Decoder a
+intHelper name = Decoder {..}
+  where
+    extract (IntegerLit n)
+        | toInteger (minBound @a) <= n && n <= toInteger (maxBound @a) =
+            pure (fromIntegral n)
+        | otherwise =
+            extractError ("Decoded " <> name <> " is out of bounds: " <> Data.Text.pack (show n))
+    extract expr =
+        typeError expected expr
+
+    expected = pure Integer
+
+{-| Decode an `Int` from a Dhall @Integer@
+
+>>> input int "-42"
+-42
+-}
+int :: Decoder Int
+int = intHelper "Int"
+
+{-| Decode an `Int8` from a Dhall @Integer@
+
+>>> input int8 "-42"
+-42
+-}
+int8 :: Decoder Int8
+int8 = intHelper "Int8"
+
+{-| Decode an `Int16` from a Dhall @Integer@
+
+>>> input int16 "-42"
+-42
+-}
+int16 :: Decoder Int16
+int16 = intHelper "Int16"
+
+{-| Decode an `Int32` from a Dhall @Integer@
+
+>>> input int32 "-42"
+-42
+-}
+int32 :: Decoder Int32
+int32 = intHelper "Int32"
+
+{-| Decode an `Int64` from a Dhall @Integer@
+
+>>> input int64 "-42"
+-42
+-}
+int64 :: Decoder Int64
+int64 = intHelper "Int64"
+
 {-| Decode a `Scientific`
+r
 
 >>> input scientific "1e100"
 1.0e100
@@ -1203,8 +1322,38 @@ instance FromDhall Bool where
 instance FromDhall Natural where
     autoWith _ = natural
 
+instance FromDhall Word where
+    autoWith _ = word
+
+instance FromDhall Word8 where
+    autoWith _ = word8
+
+instance FromDhall Word16 where
+    autoWith _ = word16
+
+instance FromDhall Word32 where
+    autoWith _ = word32
+
+instance FromDhall Word64 where
+    autoWith _ = word64
+
 instance FromDhall Integer where
     autoWith _ = integer
+
+instance FromDhall Int where
+    autoWith _ = int
+
+instance FromDhall Int8 where
+    autoWith _ = int8
+
+instance FromDhall Int16 where
+    autoWith _ = int16
+
+instance FromDhall Int32 where
+    autoWith _ = int32
+
+instance FromDhall Int64 where
+    autoWith _ = int64
 
 instance FromDhall Scientific where
     autoWith _ = scientific
