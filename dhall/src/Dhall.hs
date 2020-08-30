@@ -881,7 +881,7 @@ intHelper :: forall a . (Bounded a, Integral a) => Text -> Decoder a
 intHelper name = Decoder {..}
   where
     extract (IntegerLit n)
-        | toInteger (minBound @a) <= toInteger n && toInteger n <= toInteger (maxBound @a) =
+        | toInteger (minBound @a) <= n && n <= toInteger (maxBound @a) =
             pure (fromIntegral n)
         | otherwise =
             extractError ("Decoded " <> name <> " is out of bounds: " <> Data.Text.pack (show n))
