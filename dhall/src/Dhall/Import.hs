@@ -130,6 +130,7 @@ module Dhall.Import (
     , chainImport
     , dependencyToFile
     , ImportSemantics
+    , HTTPHeader
     , Cycle(..)
     , ReferentiallyOpaque(..)
     , Imported(..)
@@ -345,6 +346,7 @@ instance Show MissingImports where
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
 
+-- | HTTP headers
 type HTTPHeader = (CI ByteString, ByteString)
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
@@ -498,9 +500,9 @@ chainImport (Chained parent) child =
     return (Chained (canonicalize (parent <> child)))
 
 -- | Load an import, resulting in a fully resolved, type-checked and normalised
---   expression. @loadImport@ handles the 'hot' cache in @Status@ and defers to
---   `loadImportWithSemanticCache` for imports that aren't in the @Status@ cache
---   already.
+--   expression. @loadImport@ handles the \"hot\" cache in @Status@ and defers
+--   to @loadImportWithSemanticCache@ for imports that aren't in the @Status@
+--   cache already.
 loadImport :: Chained -> StateT Status IO ImportSemantics
 loadImport import_ = do
     Status {..} <- State.get
@@ -513,7 +515,7 @@ loadImport import_ = do
             return importSemantics
 
 -- | Load an import from the 'semantic cache'. Defers to
---   `loadImportWithSemisemanticCache` for imports that aren't frozen (and
+--   @loadImportWithSemisemanticCache@ for imports that aren't frozen (and
 --   therefore not cached semantically), as well as those that aren't cached yet.
 loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemanticCache

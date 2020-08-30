@@ -76,7 +76,7 @@ instance Show ParseError where
 
 instance Exception ParseError
 
--- | Parse an expression from `Text` containing a Dhall program
+-- | Parse an expression from `Data.Text.Text` containing a Dhall program
 exprFromText
   :: String -- ^ User-friendly name describing the input expression,
             --   used in parsing error messages

@@ -58,7 +58,7 @@ module Dhall.Deriving
   , TrainCase
 
     -- * Type-level versions of SingletonConstructors
-  , ToSingletonConstructors
+  , ToSingletonConstructors(..)
   , Bare
   , Wrapped
   , Smart
@@ -402,7 +402,7 @@ instance FromDhall Font where
 
 Second, we defined the @Name@ type in Haskell as a newtype over @Text@, with a
 @getName@ field for unwrapping. In Dhall, however, @Name@ is a synonym of
-'Text', which is why 'input' above was expecting a record.
+'Data.Text.Text', which is why 'Dhall.input' above was expecting a record.
 The 'Dhall.Bare' option for 'singletonConstructors' is a perfect fit here:
 it translates Haskell singleton constructors into the Dhall version of the
 nested type, without wrapping it into a record.

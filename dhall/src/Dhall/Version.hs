@@ -8,7 +8,7 @@ module Dhall.Version ( dhallVersion
 import qualified Data.Version as V
 import qualified Paths_dhall  as P
 
--- | The current `Version` of the Haskell implementation
+-- | The current `V.Version` of the Haskell implementation
 dhallVersion :: V.Version
 dhallVersion = P.version
 

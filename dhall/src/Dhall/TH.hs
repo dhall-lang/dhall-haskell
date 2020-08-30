@@ -58,8 +58,8 @@ import qualified System.IO
 
     > < This : Natural | Other : ../Other/Type.dhall >
 
-    ... rather than duplicating the AST manually in a Haskell `Type`, you can
-    do:
+    ... rather than duplicating the AST manually in a Haskell `Dhall.Type`, you
+    can do:
 
     > Dhall.Type
     > (\case
@@ -363,7 +363,7 @@ data HaskellType code
 --
 -- By default, the generated types only derive `GHC.Generics.Generic`,
 -- `Dhall.FromDhall`, and `Dhall.ToDhall`.  To add any desired instances (such
--- as `Eq`\/`Ord`\/`Show`), you can use the `StandaloneDeriving` language
+-- as `Eq`\/`Ord`\/`Show`), you can use the @StandaloneDeriving@ language
 -- extension, like this:
 --
 -- > {-# LANGUAGE DeriveAnyClass     #-}

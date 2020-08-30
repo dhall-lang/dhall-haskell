@@ -75,33 +75,35 @@ toSet (Set s _) = s
 toSeq :: Set a -> Seq a
 toSeq (Set _ xs) = xs
 
--- | Convert a `Set` to a list, preserving the original order of the elements
+{-| Convert a `Dhall.Set.Set` to a list, preserving the original order of the
+    elements
+-}
 toList :: Set a -> [a]
 toList (Set _ xs) = Data.Foldable.toList xs
 
--- | Convert a `Set` to a list of ascending elements
+-- | Convert a `Dhall.Set.Set` to a list of ascending elements
 toAscList :: Set a -> [a]
 toAscList (Set s _) = Data.Set.toAscList s
 
--- | Convert a list to a `Set`, remembering the element order
+-- | Convert a list to a `Dhall.Set.Set`, remembering the element order
 fromList :: Ord a => [a] -> Set a
 fromList = foldl' (flip append) empty
 -- O(n log n) time complexity, O(n) space complexity.
 -- Implementing it this way is a little silly, but is faster than (nub xs).
 -- n.b. toList . fromList = id, only if the list elements are unique
 
--- | Convert a @"Data.Set".`Data.Set.Set`@ to a sorted `Set`
+-- | Convert a @"Data.Set".`Data.Set.Set`@ to a sorted `Dhall.Set.Set`
 fromSet :: Data.Set.Set a -> Set a
 fromSet s = Set s (Data.Sequence.fromList (Data.Set.elems s))
 
--- | Append an element to the end of a `Set`
+-- | Append an element to the end of a `Dhall.Set.Set`
 append :: Ord a => a -> Set a -> Set a
 append x os@(Set s xs)
     | Data.Set.member x s = os
     | otherwise = Set (Data.Set.insert x s) (xs |> x)
 -- O(log n) time complexity.
 
--- | The empty `Set`
+-- | The empty `Dhall.Set.Set`
 empty :: Set a
 empty = Set Data.Set.empty Data.Sequence.empty
 

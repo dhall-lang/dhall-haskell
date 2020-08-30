@@ -185,7 +185,7 @@ signPrefix = (do
     let negative = fmap (\_ -> negate) (char '-')
     positive <|> negative ) <?> "sign"
 
-{-| Parse a `Double` literal
+{-| Parse a `Dhall.Syntax.Double` literal
 
     This corresponds to the @double-literal@ rule from the official grammar
 -}
@@ -257,7 +257,7 @@ doubleInfinity = (do
     a <- text "Infinity" >> return (1.0/0.0)
     return (sign a) ) <?> "literal"
 
-{-| Parse an `Integer` literal
+{-| Parse an `Dhall.Syntax.Integer` literal
 
     This corresponds to the @integer-literal@ rule from the official grammar
 -}
@@ -267,7 +267,7 @@ integerLiteral = (do
     a    <- naturalLiteral
     return (sign (fromIntegral a)) ) <?> "literal"
 
-{-| Parse a `Natural` literal 
+{-| Parse a `Dhall.Syntax.Natural` literal 
 
     This corresponds to the @natural-literal@ rule from the official grammar
 -}
@@ -552,7 +552,7 @@ quotedPathCharacter c =
     ||  ('\x23' <= c && c <= '\x2E')
     ||  ('\x30' <= c && c <= '\x10FFFF')
 
-{-| The `pathComponent` function uses this type to distinguish whether to parse
+{-| The @pathComponent@ function uses this type to distinguish whether to parse
     a URL path component or a file path component
 -}
 data ComponentType = URLComponent | FileComponent
