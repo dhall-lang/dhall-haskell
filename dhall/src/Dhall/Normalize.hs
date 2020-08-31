@@ -143,7 +143,7 @@ normalize = Eval.normalize
 {-| Reduce an expression to its normal form, performing beta reduction and applying
     any custom definitions.
 
-    `normalizeWith` is designed to be used with function `typeWith`. The `typeWith`
+    `normalizeWith` is designed to be used with function `Dhall.TypeCheck.typeWith`. The `Dhall.TypeCheck.typeWith`
     function allows typing of Dhall functions in a custom typing context whereas
     `normalizeWith` allows evaluating Dhall expressions in a custom context.
 

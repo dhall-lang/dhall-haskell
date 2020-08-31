@@ -13,6 +13,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE UndecidableInstances       #-}
@@ -40,7 +41,7 @@ module Dhall
     , InputSettings
     , defaultEvaluateSettings
     , EvaluateSettings
-    , HasEvaluateSettings
+    , HasEvaluateSettings(..)
     , detailed
 
     -- * Decoders
@@ -73,6 +74,16 @@ module Dhall
     , bool
     , natural
     , integer
+    , word
+    , word8
+    , word16
+    , word32
+    , word64
+    , int
+    , int8
+    , int16
+    , int32
+    , int64
     , scientific
     , double
     , lazyText
@@ -99,7 +110,7 @@ module Dhall
     , union
     , constructor
     , GenericFromDhall(..)
-
+    , GenericFromDhallUnion(..)
     , ToDhall(..)
     , Inject
     , inject
@@ -122,6 +133,7 @@ module Dhall
     , rawInput
     , (>$<)
     , (>*<)
+    , Result
 
     -- * Re-exports
     , Natural
@@ -155,7 +167,8 @@ import Data.Text.Prettyprint.Doc            (Pretty)
 import Data.Typeable                        (Proxy (..), Typeable)
 import Data.Vector                          (Vector)
 import Data.Void                            (Void)
-import Data.Word                            (Word16, Word32, Word64, Word8)
+import Data.Word                            (Word8, Word16, Word32, Word64)
+import Data.Int                             (Int8, Int16, Int32, Int64)
 import Dhall.Import                         (Imported (..))
 import Dhall.Parser                         (Src (..))
 import Dhall.Syntax
@@ -247,7 +260,7 @@ typeError expected actual = Failure $ case expected of
     Failure e         -> fmap ExpectedTypeError e
     Success expected' -> DhallErrors $ pure $ TypeMismatch $ InvalidDecoder expected' actual
 
--- | Turn a `Text` message into an extraction failure
+-- | Turn a `Data.Text.Text` message into an extraction failure
 extractError :: Text -> Extractor s a b
 extractError = Failure . DhallErrors . pure . ExtractError
 
@@ -622,7 +635,7 @@ inputHelper annotate settings txt = do
 --   The intended use case is to allow easy extraction of Dhall values for
 --   making the function `Core.normalizeWith` easier to use.
 --
---   For other use cases, use `input` from `Dhall` module. It will give you
+--   For other use cases, use `input` from "Dhall" module. It will give you
 --   a much better user experience.
 rawInput
     :: Alternative f
@@ -777,7 +790,7 @@ data Decoder a = Decoder
     }
     deriving (Functor)
 
-{-| Decode a `Bool`
+{-| Decode a `Prelude.Bool`
 
 >>> input bool "True"
 True
@@ -790,7 +803,7 @@ bool = Decoder {..}
 
     expected = pure Bool
 
-{-| Decode a `Natural`
+{-| Decode a `Prelude.Natural`
 
 >>> input natural "42"
 42
@@ -803,7 +816,7 @@ natural = Decoder {..}
 
     expected = pure Natural
 
-{-| Decode an `Integer`
+{-| Decode an `Prelude.Integer`
 
 >>> input integer "+42"
 42
@@ -816,7 +829,114 @@ integer = Decoder {..}
 
     expected = pure Integer
 
+wordHelper :: forall a . (Bounded a, Integral a) => Text -> Decoder a
+wordHelper name = Decoder {..}
+  where
+    extract (NaturalLit n)
+        | toInteger n <= toInteger (maxBound @a) =
+            pure (fromIntegral n)
+        | otherwise =
+            extractError ("Decoded " <> name <> " is out of bounds: " <> Data.Text.pack (show n))
+    extract expr =
+        typeError expected expr
+
+    expected = pure Natural
+
+{-| Decode a `Word` from a Dhall @Natural@
+
+>>> input word "42"
+42
+-}
+word :: Decoder Word
+word = wordHelper "Word"
+
+{-| Decode a `Word8` from a Dhall @Natural@
+
+>>> input word8 "42"
+42
+-}
+word8 :: Decoder Word8
+word8 = wordHelper "Word8"
+
+{-| Decode a `Word16` from a Dhall @Natural@
+
+>>> input word16 "42"
+42
+-}
+word16 :: Decoder Word16
+word16 = wordHelper "Word16"
+
+{-| Decode a `Word32` from a Dhall @Natural@
+
+>>> input word32 "42"
+42
+-}
+word32 :: Decoder Word32
+word32 = wordHelper "Word32"
+
+{-| Decode a `Word64` from a Dhall @Natural@
+
+>>> input word64 "42"
+42
+-}
+word64 :: Decoder Word64
+word64 = wordHelper "Word64"
+
+intHelper :: forall a . (Bounded a, Integral a) => Text -> Decoder a
+intHelper name = Decoder {..}
+  where
+    extract (IntegerLit n)
+        | toInteger (minBound @a) <= n && n <= toInteger (maxBound @a) =
+            pure (fromIntegral n)
+        | otherwise =
+            extractError ("Decoded " <> name <> " is out of bounds: " <> Data.Text.pack (show n))
+    extract expr =
+        typeError expected expr
+
+    expected = pure Integer
+
+{-| Decode an `Int` from a Dhall @Integer@
+
+>>> input int "-42"
+-42
+-}
+int :: Decoder Int
+int = intHelper "Int"
+
+{-| Decode an `Int8` from a Dhall @Integer@
+
+>>> input int8 "-42"
+-42
+-}
+int8 :: Decoder Int8
+int8 = intHelper "Int8"
+
+{-| Decode an `Int16` from a Dhall @Integer@
+
+>>> input int16 "-42"
+-42
+-}
+int16 :: Decoder Int16
+int16 = intHelper "Int16"
+
+{-| Decode an `Int32` from a Dhall @Integer@
+
+>>> input int32 "-42"
+-42
+-}
+int32 :: Decoder Int32
+int32 = intHelper "Int32"
+
+{-| Decode an `Int64` from a Dhall @Integer@
+
+>>> input int64 "-42"
+-42
+-}
+int64 :: Decoder Int64
+int64 = intHelper "Int64"
+
 {-| Decode a `Scientific`
+r
 
 >>> input scientific "1e100"
 1.0e100
@@ -824,7 +944,7 @@ integer = Decoder {..}
 scientific :: Decoder Scientific
 scientific = fmap Data.Scientific.fromFloatDigits double
 
-{-| Decode a `Double`
+{-| Decode a `Prelude.Double`
 
 >>> input double "42.0"
 42.0
@@ -837,7 +957,7 @@ double = Decoder {..}
 
     expected = pure Double
 
-{-| Decode lazy `Text`
+{-| Decode lazy `Data.Text.Text`
 
 >>> input lazyText "\"Test\""
 "Test"
@@ -845,7 +965,7 @@ double = Decoder {..}
 lazyText :: Decoder Data.Text.Lazy.Text
 lazyText = fmap Data.Text.Lazy.fromStrict strictText
 
-{-| Decode strict `Text`
+{-| Decode strict `Data.Text.Text`
 
 >>> input strictText "\"Test\""
 "Test"
@@ -939,7 +1059,7 @@ functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
 
     expectedOut = Pi "_" declared <$> expectedIn
 
-{-| Decode a `Set` from a `List`
+{-| Decode a `Data.Set.Set` from a `List`
 
 >>> input (setIgnoringDuplicates natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -953,7 +1073,7 @@ fromList [1,3]
 setIgnoringDuplicates :: (Ord a) => Decoder a -> Decoder (Data.Set.Set a)
 setIgnoringDuplicates = fmap Data.Set.fromList . list
 
-{-| Decode a `HashSet` from a `List`
+{-| Decode a `Data.HashSet.HashSet` from a `List`
 
 >>> input (hashSetIgnoringDuplicates natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -969,7 +1089,7 @@ hashSetIgnoringDuplicates :: (Hashable a, Ord a)
                           -> Decoder (Data.HashSet.HashSet a)
 hashSetIgnoringDuplicates = fmap Data.HashSet.fromList . list
 
-{-| Decode a `Set` from a `List` with distinct elements
+{-| Decode a `Data.Set.Set` from a `List` with distinct elements
 
 >>> input (setFromDistinctList natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -998,7 +1118,7 @@ An error is thrown if the list contains duplicates.
 setFromDistinctList :: (Ord a, Show a) => Decoder a -> Decoder (Data.Set.Set a)
 setFromDistinctList = setHelper Data.Set.size Data.Set.fromList
 
-{-| Decode a `HashSet` from a `List` with distinct elements
+{-| Decode a `Data.HashSet.HashSet` from a `List` with distinct elements
 
 >>> input (hashSetFromDistinctList natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -1207,8 +1327,38 @@ instance FromDhall Bool where
 instance FromDhall Natural where
     autoWith _ = natural
 
+instance FromDhall Word where
+    autoWith _ = word
+
+instance FromDhall Word8 where
+    autoWith _ = word8
+
+instance FromDhall Word16 where
+    autoWith _ = word16
+
+instance FromDhall Word32 where
+    autoWith _ = word32
+
+instance FromDhall Word64 where
+    autoWith _ = word64
+
 instance FromDhall Integer where
     autoWith _ = integer
+
+instance FromDhall Int where
+    autoWith _ = int
+
+instance FromDhall Int8 where
+    autoWith _ = int8
+
+instance FromDhall Int16 where
+    autoWith _ = int16
+
+instance FromDhall Int32 where
+    autoWith _ = int32
+
+instance FromDhall Int64 where
+    autoWith _ = int64
 
 instance FromDhall Scientific where
     autoWith _ = scientific
@@ -1538,6 +1688,9 @@ extractUnionConstructor (Field (Union kts) (Core.fieldSelectionLabel -> fld)) =
 extractUnionConstructor _ =
   empty
 
+{-| This is the underlying class that powers the `FromDhall` class's support
+    for automatically deriving a generic implementation for a union type
+-}
 class GenericFromDhallUnion t f where
     genericUnionAutoWithNormalizer :: Proxy t -> InputNormalizer -> InterpretOptions -> UnionDecoder (f a)
 

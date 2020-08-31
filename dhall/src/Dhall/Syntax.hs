@@ -69,7 +69,7 @@ module Dhall.Syntax (
     , reservedIdentifiers
     , reservedKeywords
 
-    -- * `Text` manipulation
+    -- * `Data.Text.Text` manipulation
     , toDoubleQuoted
     , longestSharedWhitespacePrefix
     , linesLiteral
@@ -148,7 +148,7 @@ instance Pretty Const where
 
 {-| Label for a bound variable
 
-    The `Text` field is the variable's name (i.e. \"@x@\").
+    The `Data.Text.Text` field is the variable's name (i.e. \"@x@\").
 
     The `Int` field disambiguates variables with the same name if there are
     multiple bound variables of the same name in scope.  Zero refers to the
@@ -175,7 +175,7 @@ instance Pretty Const where
 >                               v           │
 > λ(x : Type) → λ(y : Type) → λ(x : Type) → x
 
-    Zero indices are omitted when pretty-printing `Var`s and non-zero indices
+    Zero indices are omitted when pretty-printing @Var@s and non-zero indices
     appear as a numeric suffix.
 -}
 data Var = V Text !Int
@@ -404,9 +404,9 @@ will be instantiated as follows:
 * @fieldSelectionSrc1@ corresponds to the @B@ comment
 
 Given our limitation that not all expressions recover their whitespaces, the
-purpose of @fieldSelectionSrc1@ is to save the 'SourcePos' where the
-@fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@) to
-be consistent with similar data types such as 'Binding', for example.
+purpose of @fieldSelectionSrc1@ is to save the 'Text.Megaparsec.SourcePos' where
+the @fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@)
+to be consistent with similar data types such as 'Binding', for example.
 -}
 data FieldSelection s = FieldSelection
     { fieldSelectionSrc0 :: Maybe s
@@ -423,7 +423,7 @@ makeFieldSelection t = FieldSelection Nothing t Nothing
     The @s@ type parameter is used to track the presence or absence of `Src`
     spans:
 
-    * If @s = `Src`@ then the code may contains `Src` spans (either in a `Noted`
+    * If @s = `Src`@ then the code may contains `Src` spans (either in a `Note`
       constructor or inline within another constructor, like `Let`)
     * If @s = `Void`@ then the code has no `Src` spans
 
@@ -1150,7 +1150,7 @@ shallowDenote :: Expr s a -> Expr s a
 shallowDenote (Note _ e) = shallowDenote e
 shallowDenote         e  = e
 
--- | The set of reserved keywords according to the `keyword` rule in the grammar
+-- | The set of reserved keywords according to the @keyword@ rule in the grammar
 reservedKeywords :: HashSet Text
 reservedKeywords =
     Data.HashSet.fromList

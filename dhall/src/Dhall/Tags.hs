@@ -111,11 +111,11 @@ getTagsFromText t = case exprFromText "" t of
     _ -> mempty
 
 {-| Used to update tag position and to build tag from term.
-    After getTagsFromExpr line and column in line are in `LineColumn` for each tag.
+    After getTagsFromExpr line and column in line are in @LineColumn@ for each tag.
     And tagPattern is not added.
     Emacs use tag pattern to check if tag is on line. It compares line from start
     with tag pattern and in case they are the same, relocate user.
-    fixPosAndDefinition change position to line and byte offset (`LineOffset`) and
+    fixPosAndDefinition change position to line and byte offset (@LineOffset@) and
     add tag pattern. For example, for Dhall string:
 
     >>> let dhallSource = "let foo = \"bar\"\nlet baz = \"qux\""
@@ -161,7 +161,7 @@ fixPosAndDefinition t = foldMap (\(LC ln c, term) ->
           lengthInBytes = BS.length . encodeUtf8
 
           {-| get information about term from map of lines
-              In most cases, `LineColumn` after `getTagsFromExpr` points to byte before term.
+              In most cases, @LineColumn@ after `getTagsFromExpr` points to byte before term.
               It's better to have term in term pattern, so this function finds and updates
               line number and byte offset and generate pattern.
           -}

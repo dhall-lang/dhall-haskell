@@ -68,7 +68,7 @@ removeUnusedBindings (Let (Binding _ a _ _ _ _) d)
         Just (Core.shift (-1) (V a 0) d)
 removeUnusedBindings _ = Nothing
 
--- | Fix `Let` bindings  that the user probably meant to be `assert`s
+-- | Fix `Let` bindings  that the user probably meant to be @assert@s
 fixAssert :: Expr s a -> Maybe (Expr s a)
 fixAssert (Let (Binding { value = v@(Core.shallowDenote -> Equivalent {}), ..}) body) =
     Just (Let (Binding { value = Assert v, .. }) body)

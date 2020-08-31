@@ -98,7 +98,7 @@ data StandardVersion
     -- ^ Version "1.0.0"
     deriving (Enum, Bounded)
 
--- | Render a `StandardVersion` as `Text`
+-- | Render a `StandardVersion` as `Data.Text.Text`
 renderStandardVersion :: StandardVersion -> Text
 renderStandardVersion NoVersion = "none"
 renderStandardVersion V_1_0_0   = "1.0.0"
@@ -1206,7 +1206,7 @@ instance Serialise (Expr Void Import) where
 encodeExpression :: Serialise (Expr Void a) => Expr Void a -> ByteString
 encodeExpression = Serialise.serialise
 
--- | Decode a Dhall expression from a CBOR `Term`
+-- | Decode a Dhall expression from a CBOR `Codec.CBOR.Term.Term`
 decodeExpression
     :: Serialise (Expr s a) => ByteString -> Either DecodingFailure (Expr s a)
 decodeExpression bytes =

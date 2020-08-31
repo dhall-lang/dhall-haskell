@@ -12,6 +12,7 @@ module Dhall.Main
     ( -- * Options
       Options(..)
     , Mode(..)
+    , ResolveMode(..)
     , parseOptions
     , parserInfoOptions
 
@@ -166,10 +167,14 @@ data Mode
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
 
+-- | This specifies how to resolve transitive dependencies
 data ResolveMode
     = Dot
+    -- ^ Generate a DOT file for @graphviz@
     | ListTransitiveDependencies
+    -- ^ List all transitive dependencies as text, one per line
     | ListImmediateDependencies
+    -- ^ List immediate dependencies as text, one per line
 
 -- | Groups of subcommands
 data Group

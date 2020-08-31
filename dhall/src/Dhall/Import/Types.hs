@@ -39,8 +39,8 @@ import qualified Dhall.Context
 import qualified Dhall.Map          as Map
 import qualified Dhall.Substitution
 
--- | A fully 'chained' import, i.e. if it contains a relative path that path is
---   relative to the current directory. If it is a remote import with headers
+-- | A fully \"chained\" import, i.e. if it contains a relative path that path
+--   is relative to the current directory. If it is a remote import with headers
 --   those are well-typed (either of type `List { header : Text, value Text}` or
 --   `List { mapKey : Text, mapValue Text})` and in normal form. These
 --   invariants are preserved by the API exposed by @Dhall.Import@.
@@ -86,7 +86,8 @@ data Status = Status
 #else
     , _manager :: Maybe Void
 #endif
-    -- ^ Used to cache the `Manager` when making multiple requests
+    -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
+    -- requests
 
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
@@ -171,11 +172,9 @@ startingContext k s =
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
-    the `expected` type then the `extract` function must succeed.  If not, then
-    this exception is thrown
 
-    This exception indicates that an invalid `Type` was provided to the `input`
-    function
+    This exception indicates that an invalid `Dhall.Syntax.Type` was provided to
+    the `Dhall.input` function
 -}
 data InternalError = InternalError deriving (Typeable)
 
@@ -202,11 +201,12 @@ instance Show InternalError where
 
 instance Exception InternalError
 
--- | Wrapper around `HttpException`s with a prettier `Show` instance.
+-- | Wrapper around `Network.HTTP.Client.HttpException`s with a prettier `Show`
+-- instance
 --
 -- In order to keep the library API constant even when the @with-http@ Cabal
 -- flag is disabled the pretty error message is pre-rendered and the real
--- 'HttpExcepion' is stored in a 'Dynamic'
+-- 'Network.HTTP.Client.HttpException' is stored in a 'Dynamic'
 data PrettyHttpException = PrettyHttpException String Dynamic
     deriving (Typeable)
 
