@@ -68,7 +68,7 @@ jsonToYaml json documents quoted =
     style (Y.SStr s)
         | "\n" `Text.isInfixOf` s =
             Right (YE.untagged, YE.Literal YE.Clip YE.IndentAuto, s)
-        | quoted || Text.all isNumberOrDateRelated s || isBoolString =
+        | quoted || Text.all isNumberOrDateRelated s || isBoolString || Text.any isColon s =
             Right (YE.untagged, YE.SingleQuoted, s)
       where
         -- For backwards compatibility with YAML 1.1, we need to add the following to the set of boolean values:
@@ -76,6 +76,7 @@ jsonToYaml json documents quoted =
         isBoolString = Text.length s <= 5 &&
                       Text.toLower s `elem` ["y", "yes", "n", "no", "true", "false", "on", "off"]
         isNumberOrDateRelated c = Char.isDigit c || c == '.' || c == 'e' || c == '-'
+        isColon c = c == ':'
     style s =
         YS.schemaEncoderScalar Y.coreSchemaEncoder s
 
