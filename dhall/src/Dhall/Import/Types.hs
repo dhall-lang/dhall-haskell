@@ -86,7 +86,8 @@ data Status = Status
 #else
     , _manager :: Maybe Void
 #endif
-    -- ^ Used to cache the `Manager` when making multiple requests
+    -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
+    -- requests
 
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
