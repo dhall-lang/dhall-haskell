@@ -1501,7 +1501,8 @@ escapeControlCharacters (Chunks as0 b0) = Chunks as1 b1
 
     toChunk (t0, t1) = (t0, TextLit (Chunks [] t1))
 
--- | Split `Text` on a predicate, preserving all parts of the original string.
+-- | Split `Data.Text.Text` on a predicate, preserving all parts of the original
+-- string.
 --
 -- >>> splitOnPredicate (== 'x') ""
 -- ([],"")
@@ -1554,8 +1555,8 @@ consolidateRecordLiteral = Map.fromList . fmap adapt . Map.toList
             _ ->
                 (pure key, expression)
 
--- | Escape a `Text` literal using Dhall's escaping rules for single-quoted
---   @Text@
+-- | Escape a `Data.Text.Text` literal using Dhall's escaping rules for
+--   single-quoted @Text@
 escapeSingleQuotedText :: Text -> Text
 escapeSingleQuotedText inputText = outputText
   where
@@ -1563,7 +1564,7 @@ escapeSingleQuotedText inputText = outputText
 
     substitute before after = Text.intercalate after . Text.splitOn before
 
-{-| Escape a `Text` literal using Dhall's escaping rules
+{-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 
     Note that the result does not include surrounding quotes
 -}

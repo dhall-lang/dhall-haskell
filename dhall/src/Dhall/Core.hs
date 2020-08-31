@@ -99,7 +99,7 @@ pretty :: Pretty a => a -> Text
 pretty = pretty_
 {-# INLINE pretty #-}
 
-{-| Escape a `Text` literal using Dhall's escaping rules
+{-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 
     Note that the result does not include surrounding quotes
 -}
@@ -111,7 +111,7 @@ escapeText = escapeText_
 {-| Utility used to implement the @--censor@ flag, by:
 
     * Replacing all `Src` text with spaces
-    * Replacing all `Text` literals inside type errors with spaces
+    * Replacing all `Dhall.Syntax.Text` literals inside type errors with spaces
 -}
 censorExpression :: Expr Src a -> Expr Src a
 censorExpression (TextLit chunks) = TextLit (censorChunks chunks)
@@ -125,7 +125,9 @@ censorChunks (Chunks xys z) = Chunks xys' z'
 
     xys' = [ (censorText x, censorExpression y) | (x, y) <- xys ]
 
--- | Utility used to censor `Text` by replacing all characters with a space
+{-| Utility used to censor `Data.Text.Text` by replacing all characters with a
+    space
+-}
 censorText :: Text -> Text
 censorText = Data.Text.map (\_ -> ' ')
 

@@ -41,7 +41,7 @@ module Dhall
     , InputSettings
     , defaultEvaluateSettings
     , EvaluateSettings
-    , HasEvaluateSettings
+    , HasEvaluateSettings(..)
     , detailed
 
     -- * Decoders
@@ -110,7 +110,7 @@ module Dhall
     , union
     , constructor
     , GenericFromDhall(..)
-
+    , GenericFromDhallUnion(..)
     , ToDhall(..)
     , Inject
     , inject
@@ -133,6 +133,7 @@ module Dhall
     , rawInput
     , (>$<)
     , (>*<)
+    , Result
 
     -- * Re-exports
     , Natural
@@ -259,7 +260,7 @@ typeError expected actual = Failure $ case expected of
     Failure e         -> fmap ExpectedTypeError e
     Success expected' -> DhallErrors $ pure $ TypeMismatch $ InvalidDecoder expected' actual
 
--- | Turn a `Text` message into an extraction failure
+-- | Turn a `Data.Text.Text` message into an extraction failure
 extractError :: Text -> Extractor s a b
 extractError = Failure . DhallErrors . pure . ExtractError
 
@@ -630,7 +631,7 @@ inputHelper annotate settings txt = do
 --   The intended use case is to allow easy extraction of Dhall values for
 --   making the function `Core.normalizeWith` easier to use.
 --
---   For other use cases, use `input` from `Dhall` module. It will give you
+--   For other use cases, use `input` from "Dhall" module. It will give you
 --   a much better user experience.
 rawInput
     :: Alternative f
@@ -785,7 +786,7 @@ data Decoder a = Decoder
     }
     deriving (Functor)
 
-{-| Decode a `Bool`
+{-| Decode a `Prelude.Bool`
 
 >>> input bool "True"
 True
@@ -798,7 +799,7 @@ bool = Decoder {..}
 
     expected = pure Bool
 
-{-| Decode a `Natural`
+{-| Decode a `Prelude.Natural`
 
 >>> input natural "42"
 42
@@ -811,7 +812,7 @@ natural = Decoder {..}
 
     expected = pure Natural
 
-{-| Decode an `Integer`
+{-| Decode an `Prelude.Integer`
 
 >>> input integer "+42"
 42
@@ -939,7 +940,7 @@ r
 scientific :: Decoder Scientific
 scientific = fmap Data.Scientific.fromFloatDigits double
 
-{-| Decode a `Double`
+{-| Decode a `Prelude.Double`
 
 >>> input double "42.0"
 42.0
@@ -952,7 +953,7 @@ double = Decoder {..}
 
     expected = pure Double
 
-{-| Decode lazy `Text`
+{-| Decode lazy `Data.Text.Text`
 
 >>> input lazyText "\"Test\""
 "Test"
@@ -960,7 +961,7 @@ double = Decoder {..}
 lazyText :: Decoder Data.Text.Lazy.Text
 lazyText = fmap Data.Text.Lazy.fromStrict strictText
 
-{-| Decode strict `Text`
+{-| Decode strict `Data.Text.Text`
 
 >>> input strictText "\"Test\""
 "Test"
@@ -1054,7 +1055,7 @@ functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
 
     expectedOut = Pi "_" declared <$> expectedIn
 
-{-| Decode a `Set` from a `List`
+{-| Decode a `Data.Set.Set` from a `List`
 
 >>> input (setIgnoringDuplicates natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -1068,7 +1069,7 @@ fromList [1,3]
 setIgnoringDuplicates :: (Ord a) => Decoder a -> Decoder (Data.Set.Set a)
 setIgnoringDuplicates = fmap Data.Set.fromList . list
 
-{-| Decode a `HashSet` from a `List`
+{-| Decode a `Data.HashSet.HashSet` from a `List`
 
 >>> input (hashSetIgnoringDuplicates natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -1084,7 +1085,7 @@ hashSetIgnoringDuplicates :: (Hashable a, Ord a)
                           -> Decoder (Data.HashSet.HashSet a)
 hashSetIgnoringDuplicates = fmap Data.HashSet.fromList . list
 
-{-| Decode a `Set` from a `List` with distinct elements
+{-| Decode a `Data.Set.Set` from a `List` with distinct elements
 
 >>> input (setFromDistinctList natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -1113,7 +1114,7 @@ An error is thrown if the list contains duplicates.
 setFromDistinctList :: (Ord a, Show a) => Decoder a -> Decoder (Data.Set.Set a)
 setFromDistinctList = setHelper Data.Set.size Data.Set.fromList
 
-{-| Decode a `HashSet` from a `List` with distinct elements
+{-| Decode a `Data.HashSet.HashSet` from a `List` with distinct elements
 
 >>> input (hashSetFromDistinctList natural) "[1, 2, 3]"
 fromList [1,2,3]
@@ -1683,6 +1684,9 @@ extractUnionConstructor (Field (Union kts) (Core.fieldSelectionLabel -> fld)) =
 extractUnionConstructor _ =
   empty
 
+{-| This is the underlying class that powers the `FromDhall` class's support
+    for automatically deriving a generic implementation for a union type
+-}
 class GenericFromDhallUnion t f where
     genericUnionAutoWithNormalizer :: Proxy t -> InputNormalizer -> InterpretOptions -> UnionDecoder (f a)
 

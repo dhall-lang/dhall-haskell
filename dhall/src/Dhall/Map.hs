@@ -356,7 +356,7 @@ filter predicate (Map m ks) = Map m' ks'
     ks' = filterKeys (\k -> Data.Map.member k m') ks
 {-# INLINABLE filter #-}
 
-{-| Restrict a 'Map' to only those keys found in a @"Data.Set".'Set'@.
+{-| Restrict a 'Map' to only those keys found in a @"Data.Set".'Data.Set.Set'@.
 
 >>> restrictKeys (fromList [("A",1),("B",2)]) (Data.Set.fromList ["A"])
 fromList [("A",1)]
@@ -369,7 +369,7 @@ restrictKeys (Map m ks) s = Map m' ks'
     ks' = filterKeys (\k -> Data.Set.member k s) ks
 {-# INLINABLE restrictKeys #-}
 
-{-| Remove all keys in a @"Data.Set".'Set'@ from a 'Map'
+{-| Remove all keys in a @"Data.Set".'Data.Set.Set'@ from a 'Map'
 
 >>> withoutKeys (fromList [("A",1),("B",2)]) (Data.Set.fromList ["A"])
 fromList [("B",2)]
@@ -679,7 +679,7 @@ elems (Map m Sorted)        = Data.Map.elems m
 elems (Map m (Original ks)) = fmap (\k -> m Data.Map.! k) ks
 {-# INLINABLE elems #-}
 
-{-| Return the @"Data.Set".'Set'@ of the keys
+{-| Return the @"Data.Set".'Data.Set.Set'@ of the keys
 
 >>> keysSet (fromList [("B",1),("A",2)])
 fromList ["A","B"]

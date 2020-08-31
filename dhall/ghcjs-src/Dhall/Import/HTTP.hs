@@ -18,11 +18,11 @@ import qualified Data.Text      as Text
 import qualified JavaScript.XHR
 
 
-{-| The GHCJS implementation does not require a `Manager`
+{-| The GHCJS implementation does not require a `Network.HTTP.Client.Manager`
 
     The purpose of this synonym is so that "Dhall.Import.Types" can import a
-    `Manager` type from "Dhall.Import.HTTP" that does the correct thing for
-    both the GHC and GHCJS implementations
+    `Dhall.Import.Manager.Manager` type from "Dhall.Import.HTTP" that does the
+    correct thing for both the GHC and GHCJS implementations
 -}
 type Manager = Void
 

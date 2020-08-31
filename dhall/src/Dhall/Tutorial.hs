@@ -148,8 +148,8 @@ import Dhall
 -- >>> input auto "True" :: IO Bool
 -- True
 --
--- The `input` function can decode any value if we specify the value's expected
--- `Type`:
+-- The `Dhall.input` function can decode any value if we specify the value's
+-- expected `Dhall.Type`:
 --
 -- > input
 -- >     :: Type a  -- Expected type
@@ -180,7 +180,7 @@ import Dhall
 -- You can see what types `auto` supports \"out-of-the-box\" by browsing the
 -- instances for the `FromDhall` class.  For example, the following instance
 -- says that we can directly decode any Dhall expression that evaluates to a
--- @Bool@ into a Haskell `Bool`:
+-- @Bool@ into a Haskell `Prelude.Bool`:
 --
 -- > instance FromDhall Bool
 --
@@ -198,8 +198,8 @@ import Dhall
 -- >>> input auto "[True, False]" :: IO (Vector Bool)
 -- [True,False]
 --
--- We could also specify what type to decode by providing an explicit `Type`
--- instead of using `auto` with a type annotation:
+-- We could also specify what type to decode by providing an explicit
+-- `Dhall.Type` instead of using `auto` with a type annotation:
 --
 -- >>> input (vector bool) "[True, False]"
 -- [True,False]
@@ -253,7 +253,7 @@ import Dhall
 -- ...
 --
 -- The interpreter complains because the string @\"1\"@ cannot be decoded into a
--- Haskell value of type `Bool`.  This part of the type error:
+-- Haskell value of type `Prelude.Bool`.  This part of the type error:
 --
 -- > - Bool
 -- > + Natural
@@ -594,7 +594,7 @@ import Dhall
 -- using the @dhall@ command.
 --
 -- You can convert a record to a list of key-value pairs (a.k.a. a \"Map\") by
--- using the `toMap` keyword.  For example:
+-- using the @toMap@ keyword.  For example:
 --
 -- > $ dhall <<< 'toMap { foo = 1, bar = 2 }'
 -- > [ { mapKey = "bar", mapValue = 2 }, { mapKey = "foo", mapValue = 1 } ]
@@ -1537,7 +1537,7 @@ import Dhall
 -- From Dhall's point of view, the hash is the true address and the file path
 -- is just a suggestion for how to obtain the import if it's not already cached.
 --
--- You can disable the cache by setting `XDG_CACHE_HOME` to `/var/empty` (an
+-- You can disable the cache by setting @XDG_CACHE_HOME@ to `/var/empty` (an
 -- empty and unwritable directory), like this:
 --
 -- > $ XDG_CACHE_HOME=/var/empty dhall <<< './foo'
@@ -1629,8 +1629,8 @@ import Dhall
 -- $rawText
 --
 -- Sometimes you want to import the contents of a raw text file as a Dhall
--- value of type `Text`.  For example, one of the fields of a record might be
--- the contents of a software license:
+-- value of type `Dhall.Syntax.Text`.  For example, one of the fields of a
+-- record might be the contents of a software license:
 --
 -- > { package = "dhall"
 -- > , author  = "Gabriel Gonzalez"
@@ -2039,10 +2039,10 @@ import Dhall
 -- The @not@ function is just a UTF8-encoded text file hosted online with the
 -- following contents
 --
--- > $ $ dhall <<< 'https://prelude.dhall-lang.org/Bool/not as Text'
+-- > $ dhall <<< 'https://prelude.dhall-lang.org/Bool/not as Text'
 -- > ''
 -- > {-
--- > Flip the value of a `Bool`
+-- > Flip the value of a Bool
 -- > -}
 -- > let not : Bool → Bool = λ(b : Bool) → b == False
 -- >

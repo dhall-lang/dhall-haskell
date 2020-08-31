@@ -137,8 +137,8 @@ toDirectoryTree path expression = case expression of
         unexpectedExpression = expression
 
 {- | This error indicates that you supplied an invalid Dhall expression to the
-     `directoryTree` function.  The Dhall expression could not be translated to
-     a directory tree.
+     `toDirectoryTree` function.  The Dhall expression could not be translated
+     to a directory tree.
 -}
 newtype FilesystemError =
     FilesystemError { unexpectedExpression :: Expr Void Void }

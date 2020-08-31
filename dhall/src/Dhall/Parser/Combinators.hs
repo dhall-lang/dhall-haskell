@@ -63,7 +63,7 @@ instance Show e => Show (SourcedException e) where
         <>  Pretty.renderString
                 (Dhall.Pretty.layout (pretty source))
 
--- | Doesn't force the 'Text' part
+-- | Doesn't force the 'Data.Text.Text' part
 laxSrcEq :: Src -> Src -> Bool
 laxSrcEq (Src p q _) (Src p' q' _) = eq p p' && eq q q'
   where

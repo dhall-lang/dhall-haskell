@@ -15,8 +15,8 @@ module Dhall.Context (
 import Data.Text (Text)
 import Prelude   hiding (lookup)
 
-{-| A @(Context a)@ associates `Text` labels with values of type @a@.  Each
-    `Text` label can correspond to multiple values of type @a@
+{-| A @(Context a)@ associates `Data.Text.Text` labels with values of type @a@.
+    Each `Data.Text.Text` label can correspond to multiple values of type @a@
 
     The `Context` is used for type-checking when @(a = Expr X)@
 
