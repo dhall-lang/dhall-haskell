@@ -1,3 +1,13 @@
+1.0.1
+
+* Improved jump to definition support
+    * [Jump to definition on `let` bindings](https://github.com/dhall-lang/dhall-haskell/pull/1966)
+    * [Jump to definition on `λ` bindings](https://github.com/dhall-lang/dhall-haskell/pull/1982)
+    * [Jump to definition on record fields](https://github.com/dhall-lang/dhall-haskell/pull/1991)
+* [BUG FIX: Support for long path names](https://github.com/dhall-lang/dhall-haskell/pull/1976)
+* [BUG FIX: Support for large directory trees](https://github.com/dhall-lang/dhall-haskell/pull/2006)
+* [Add `dhall-docs` `man` page](https://github.com/dhall-lang/dhall-haskell/pull/2010)
+
 1.0.0
 
 * [Generate documentation from header comment](https://github.com/dhall-lang/dhall-haskell/pull/1929)

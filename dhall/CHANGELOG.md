@@ -1,3 +1,32 @@
+1.35.0
+
+* [Supports version 18.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v18.0.0)
+    * [Implement more efficient `with` desugaring](https://github.com/dhall-lang/dhall-haskell/pull/1993)
+        * Chained `with` expressions will now be much more efficient
+* [BREAKING CHANGE TO THE API: Preserve whitespace for `Lam` constructor](https://github.com/dhall-lang/dhall-haskell/pull/1980)
+    * This change extends the `Lam` constructor to preserve whitespace around
+      the variable binding
+    * The motivation for this change is to enable `dhall-docs` to support
+      jumping to definitions
+    * You can replace your existing `Lam` constructors with
+      `Dhall.Core.makeFunctionBinding`
+* [BREAKING CHANGE TO THE API: Preserve whitespace for `Field` constructors](https://github.com/dhall-lang/dhall-haskell/pull/1991)
+    * This change extends the `Field` constructor to preserve whitespace around
+      the selected field
+    * The motivation for this change is to enable `dhall-docs` to support
+      jumping to definitions
+    * You can use `Dhall.Core.makeFieldSelection` and
+      `Dhall.Core.fieldSelectionLabel` to convert between the detailed and the
+      simple representation of the selected field.
+* [Add `FromDhall` instances for `{Int,Word}{,8,16,32,64}`](https://github.com/dhall-lang/dhall-haskell/pull/2012)
+* [Add `--output` option for `dhall text` subcommand](https://github.com/dhall-lang/dhall-haskell/pull/1974)
+* [Add `Dhall.Crypto.toString`](https://github.com/dhall-lang/dhall-haskell/pull/1976)
+* Fixes and improvements to code formatting
+    * [#2000](https://github.com/dhall-lang/dhall-haskell/pull/2000)
+* Fixes and improvements to documentation
+    * [#2011](https://github.com/dhall-lang/dhall-haskell/pull/2011)
+    * [#2014](https://github.com/dhall-lang/dhall-haskell/pull/2014)
+
 1.34.0
 
 * [Supports version 17.1.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v17.1.0)
