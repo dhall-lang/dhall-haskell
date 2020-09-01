@@ -273,7 +273,8 @@ integerLiteral = (do
 -}
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
-    a <-    try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
+    a <-    (try (char '0' >> char 'x') >> Text.Megaparsec.Char.Lexer.hexadecimal)
+        <|> (try (char '0' >> char 'o') >> Text.Megaparsec.Char.Lexer.octal)
         <|> decimal
         <|> (char '0' $> 0)
     return a ) <?> "literal"
