@@ -328,7 +328,8 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError
 {-| Every `Decoder` must obey the contract that if an expression's type matches
     the `expected` type then the `extract` function must not fail with a type
     error.  However, decoding may still fail for other reasons (such as the
-    `set` decoder rejecting a Dhall @List@ with duplicate elements).
+    decoder for `Data.Map.Set`s rejecting a Dhall @List@ with duplicate
+    elements).
 
     This error type is used to indicate an internal error in the implementation
     of a `Decoder` where the expected type matched the Dhall expression, but the
