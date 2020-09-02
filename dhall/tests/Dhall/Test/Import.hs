@@ -36,6 +36,8 @@ getTests = do
               --
               --     URL: https://test.dhall-lang.org/Bool/package.dhall
               importDirectory </> "success/headerForwardingA.dhall"
+            , importDirectory </> "success/unit/SimpleRemoteA.dhall"
+            , importDirectory </> "success/unit/RemoteAsTextA.dhall"
             ]
 
     successTests <- Test.Util.discover (Turtle.chars <> "A.dhall") successTest (do
