@@ -36,8 +36,9 @@ getTests = do
               --
               --     URL: https://test.dhall-lang.org/Bool/package.dhall
               importDirectory </> "success/headerForwardingA.dhall"
-            , importDirectory </> "success/unit/SimpleRemoteA.dhall"
             , importDirectory </> "success/unit/RemoteAsTextA.dhall"
+            , importDirectory </> "success/unit/SimpleRemoteA.dhall"
+            , importDirectory </> "success/unit/asLocation/RemoteChain3A.dhall"
             , importDirectory </> "success/unit/asLocation/RemoteChainMissingA.dhall"
             ]
 
