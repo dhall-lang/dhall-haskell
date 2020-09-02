@@ -325,12 +325,17 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a)
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError s a)
 
-{-| Every `Decoder` must obey the contract that if an expression's type matches the
-    the `expected` type then the `extract` function must not fail with a type error.
-    If not, then this value is returned.
+{-| Every `Decoder` must obey the contract that if an expression's type matches
+    the `expected` type then the `extract` function must not fail with a type
+    error.  However, decoding may still fail for other reasons (such as the
+    decoder for `Data.Map.Set`s rejecting a Dhall @List@ with duplicate
+    elements).
 
-    This value indicates that an invalid `Decoder` was provided to the `input`
-    function
+    This error type is used to indicate an internal error in the implementation
+    of a `Decoder` where the expected type matched the Dhall expression, but the
+    expression supplied to the extraction function did not match the expected
+    type.  If this happens that means that the `Decoder` itself needs to be
+    fixed.
 -}
 data InvalidDecoder s a = InvalidDecoder
   { invalidDecoderExpected   :: Expr s a
