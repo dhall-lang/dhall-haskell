@@ -38,6 +38,7 @@ getTests = do
               importDirectory </> "success/headerForwardingA.dhall"
             , importDirectory </> "success/unit/SimpleRemoteA.dhall"
             , importDirectory </> "success/unit/RemoteAsTextA.dhall"
+            , importDirectory </> "success/unit/asLocation/RemoteChainMissingA.dhall"
             ]
 
     successTests <- Test.Util.discover (Turtle.chars <> "A.dhall") successTest (do
