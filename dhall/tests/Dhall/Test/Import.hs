@@ -39,6 +39,7 @@ getTests = do
             , importDirectory </> "success/unit/RemoteAsTextA.dhall"
             , importDirectory </> "success/unit/SimpleRemoteA.dhall"
             , importDirectory </> "success/unit/asLocation/RemoteChain1A.dhall"
+            , importDirectory </> "success/unit/asLocation/RemoteChain2A.dhall"
             , importDirectory </> "success/unit/asLocation/RemoteChain3A.dhall"
             , importDirectory </> "success/unit/asLocation/RemoteChainMissingA.dhall"
             ]
