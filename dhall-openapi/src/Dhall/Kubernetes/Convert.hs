@@ -57,9 +57,14 @@ requiredFields maybeName required
     --   in the Swagger spec but just in the docs
     notRequiredConstraints = Data.Map.fromList
       [ ( ModelName "io.k8s.api.core.v1.ObjectFieldSelector"
-        , Set.fromList [FieldName "apiVersion"])
+        , Set.fromList [ FieldName "apiVersion" ]
+        )
       , ( ModelName "io.k8s.apimachinery.pkg.apis.meta.v1.StatusDetails"
-        , Set.fromList [FieldName "kind"])
+        , Set.fromList [ FieldName "kind" ]
+        )
+      , ( ModelName "io.k8s.api.core.v1.PersistentVolumeClaim"
+        , Set.fromList [ FieldName "apiVersion", FieldName "kind" ]
+        )
       ]
 
 
