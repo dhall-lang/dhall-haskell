@@ -13,23 +13,25 @@
 
 module Dhall.Test.Dhall where
 
-import Control.Exception  (SomeException, try)
-import Data.Fix           (Fix (..))
-import Data.List.NonEmpty (NonEmpty (..))
-import Data.Maybe         (isJust)
-import Data.Scientific    (Scientific)
-import Data.Sequence      (Seq)
-import Data.Text          (Text)
-import Data.Vector        (Vector)
-import Data.Void          (Void)
-import Dhall              (FromDhall, ToDhall)
-import Dhall.Core         (Expr (..))
-import GHC.Generics       (Generic, Rep)
-import Numeric.Natural    (Natural)
-import System.Timeout     (timeout)
+import Control.Exception    (SomeException, try)
+import Data.Fix             (Fix (..))
+import Data.Functor.Classes (Eq1(..), Show1(..))
+import Data.List.NonEmpty   (NonEmpty (..))
+import Data.Maybe           (isJust)
+import Data.Scientific      (Scientific)
+import Data.Sequence        (Seq)
+import Data.Text            (Text)
+import Data.Vector          (Vector)
+import Data.Void            (Void)
+import Dhall                (FromDhall, ToDhall)
+import Dhall.Core           (Expr (..))
+import GHC.Generics         (Generic, Rep)
+import Numeric.Natural      (Natural)
+import System.Timeout       (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import qualified Data.Functor.Classes as Classes
 import qualified Data.Text.Lazy
 import qualified Dhall
 import qualified Dhall.Core
@@ -42,6 +44,17 @@ data ExprF expr
    | AddF expr expr
    | MulF expr expr
    deriving (Eq, Functor, Generic, FromDhall, Show)
+
+instance Eq1 ExprF where
+    liftEq _  (LitF aL) (LitF aR) = aL == aR
+    liftEq eq (AddF aL bL) (AddF aR bR) = (aL `eq` aR) && (bL `eq` bR)
+    liftEq eq (MulF aL bL) (MulF aR bR) = (aL `eq` aR) && (bL `eq` bR)
+    liftEq _ _ _ = False
+
+instance Show1 ExprF where
+    liftShowsPrec _  _ d (LitF a) = showsPrec d a
+    liftShowsPrec sp _ d (AddF a b) = Classes.showsBinaryWith sp sp "AddF" d a b
+    liftShowsPrec sp _ d (MulF a b) = Classes.showsBinaryWith sp sp "MulF" d a b
 
 tests :: TestTree
 tests =
