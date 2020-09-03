@@ -160,7 +160,7 @@ parseAndLoad src = do
       Right a ->
         return a
 
-  let status = Dhall.emptyStatus "."
+  let status = Dhall.emptyStatus Dhall.defaultNewManager "."
 
   liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
 

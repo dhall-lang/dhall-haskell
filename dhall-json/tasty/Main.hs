@@ -78,7 +78,7 @@ testDhallToJSON prefix = Test.Tasty.HUnit.testCase prefix $ do
     parsedExpression <-
         Core.throws (Dhall.Parser.exprFromText inputFile text)
 
-    resolvedExpression <- Dhall.Import.load parsedExpression
+    resolvedExpression <- Dhall.Import.load Dhall.Import.defaultNewManager parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -127,7 +127,7 @@ testCustomConversionJSONToDhall infer conv prefix =
     parsedExpression <-
         Core.throws (Dhall.Parser.exprFromText outputFile outputText)
 
-    resolvedExpression <- Dhall.Import.load parsedExpression
+    resolvedExpression <- Dhall.Import.load Dhall.Import.defaultNewManager parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -152,7 +152,7 @@ loadSchemaFromFile schemaFile = do
 
     parsedSchema <- Core.throws (Dhall.Parser.exprFromText schemaFile schemaText)
 
-    Dhall.Import.load parsedSchema
+    Dhall.Import.load Dhall.Import.defaultNewManager parsedSchema
 
 testJSONToDhallErrorMessage :: String -> JSONToDhall.Conversion -> TestTree
 testJSONToDhallErrorMessage prefix conv =

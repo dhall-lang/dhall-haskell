@@ -53,11 +53,12 @@ import qualified System.IO
 
 -- | Retrieve an `Import` and update the hash to match the latest contents
 freezeImport
-    :: FilePath
+    :: IO Dhall.Import.Manager
+    -> FilePath
     -- ^ Current working directory
     -> Import
     -> IO Import
-freezeImport directory import_ = do
+freezeImport newManager directory import_ = do
     let unprotectedImport =
             import_
                 { importHashed =
@@ -66,7 +67,7 @@ freezeImport directory import_ = do
                         }
                 }
 
-    let status = Dhall.Import.emptyStatus directory
+    let status = Dhall.Import.emptyStatus newManager directory
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
@@ -89,13 +90,14 @@ freezeImport directory import_ = do
 
 -- | Freeze an import only if the import is a `Remote` import
 freezeRemoteImport
-    :: FilePath
+    :: IO Dhall.Import.Manager
+    -> FilePath
     -- ^ Current working directory
     -> Import
     -> IO Import
-freezeRemoteImport directory import_ =
+freezeRemoteImport newManager directory import_ =
     case importType (importHashed import_) of
-        Remote {} -> freezeImport directory import_
+        Remote {} -> freezeImport newManager directory import_
         _         -> return import_
 
 -- | Specifies which imports to freeze
@@ -118,14 +120,15 @@ data Intent
 
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
-    :: OutputMode
+    :: IO Dhall.Import.Manager
+    -> OutputMode
     -> PossiblyTransitiveInput
     -> Scope
     -> Intent
     -> CharacterSet
     -> Censor
     -> IO ()
-freeze outputMode input0 scope intent characterSet censor = go input0
+freeze newManager outputMode input0 scope intent characterSet censor = go input0
   where
     go input = do
         let directory = case input of
@@ -134,7 +137,7 @@ freeze outputMode input0 scope intent characterSet censor = go input0
                 PossiblyTransitiveInputFile file _ ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatus directory
+        let status = Dhall.Import.emptyStatus newManager directory
 
         (originalText, transitivity) <- case input of
             PossiblyTransitiveInputFile file transitivity -> do
@@ -160,7 +163,7 @@ freeze outputMode input0 scope intent characterSet censor = go input0
             NonTransitive ->
                 return ()
 
-        frozenExpression <- freezeExpression directory scope intent parsedExpression
+        frozenExpression <- freezeExpression newManager directory scope intent parsedExpression
 
         let doc =  Pretty.pretty header
                 <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
@@ -207,19 +210,20 @@ freeze outputMode input0 scope intent characterSet censor = go input0
     expression are passed in explicitly
 -}
 freezeExpression
-    :: FilePath
+    :: IO Dhall.Import.Manager
+    -> FilePath
     -- ^ Starting directory
     -> Scope
     -> Intent
     -> Expr s Import
     -> IO (Expr s Import)
-freezeExpression directory scope intent expression = do
+freezeExpression newManager directory scope intent expression = do
     let freezeScope =
             case scope of
                 AllImports        -> freezeImport
                 OnlyRemoteImports -> freezeRemoteImport
 
-    let freezeFunction = freezeScope directory
+    let freezeFunction = freezeScope newManager directory
 
     let cache
             -- This case is necessary because `transformOf` is a bottom-up

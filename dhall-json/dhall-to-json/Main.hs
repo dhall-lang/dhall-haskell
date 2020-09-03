@@ -16,6 +16,7 @@ import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Lazy
 import qualified Data.Text.IO             as Text.IO
 import qualified Dhall
+import qualified Dhall.Import
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative      as Options
@@ -142,7 +143,7 @@ main = do
                     Nothing   -> Text.IO.getContents
                     Just path -> Text.IO.readFile path
 
-                json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode file text)
+                json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode Dhall.Import.defaultNewManager file text)
 
                 let write =
                         case output of

@@ -5,4 +5,6 @@ import qualified Dhall.JSON.Yaml
 import qualified Paths_dhall_json       as Meta
 
 main :: IO ()
-main = Dhall.DhallToYaml.Main.main Meta.version Dhall.JSON.Yaml.dhallToYaml
+main = Dhall.DhallToYaml.Main.main
+           Meta.version
+           (flip Dhall.JSON.Yaml.dhallToYaml Dhall.JSON.Yaml.defaultNewManager)

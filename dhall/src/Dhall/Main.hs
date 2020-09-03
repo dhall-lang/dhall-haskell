@@ -532,6 +532,9 @@ noHeaders
 noHeaders i =
     i
 
+newManager :: IO Dhall.Import.Manager
+newManager = Dhall.Import.defaultNewManager
+
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
@@ -545,7 +548,7 @@ command (Options {..}) = do
             InputFile f   -> System.FilePath.takeDirectory f
             StandardInput -> "."
 
-    let toStatus = Dhall.Import.emptyStatus . rootDirectory
+    let toStatus = Dhall.Import.emptyStatus newManager . rootDirectory
 
     let getExpression = Dhall.Util.getExpression censor
 
@@ -633,7 +636,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+                Dhall.Import.loadRelativeTo newManager (rootDirectory file) semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -712,7 +715,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+                Dhall.Import.loadRelativeTo newManager (rootDirectory file) semanticCacheMode expression
 
             render System.IO.stdout resolvedExpression
 
@@ -736,7 +739,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+                Dhall.Import.loadRelativeTo newManager (rootDirectory file) semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -769,13 +772,13 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode possiblyTransitiveInput scope intent characterSet censor
+            Dhall.Freeze.freeze newManager outputMode possiblyTransitiveInput scope intent characterSet censor
 
         Hash {..} -> do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                Dhall.Import.loadRelativeTo newManager (rootDirectory file) UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -791,7 +794,7 @@ command (Options {..}) = do
                         NonTransitiveStandardInput         -> "."
                         PossiblyTransitiveInputFile file _ -> System.FilePath.takeDirectory file
 
-                let status = Dhall.Import.emptyStatus directory
+                let status = Dhall.Import.emptyStatus newManager directory
 
                 (originalText, transitivity) <- case input of
                     PossiblyTransitiveInputFile file transitivity -> do
@@ -899,7 +902,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                Dhall.Import.loadRelativeTo newManager (rootDirectory file) UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
 
@@ -933,7 +936,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                Dhall.Import.loadRelativeTo newManager (rootDirectory file) UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -942,7 +945,7 @@ command (Options {..}) = do
             DirectoryTree.toDirectoryTree path normalizedExpression
 
         Dhall.Main.Schemas{..} ->
-            Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}
+            Dhall.Schemas.schemasCommand newManager Dhall.Schemas.Schemas{ input = file, ..}
 
         SyntaxTree {..} -> do
             expression <- getExpression file

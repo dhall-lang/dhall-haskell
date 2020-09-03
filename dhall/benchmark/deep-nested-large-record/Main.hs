@@ -70,4 +70,4 @@ main =
         , Gauge.bench "union performance" (unionPerformance p)
         ]
     ]
-  where prelude = Import.load (Core.Embed dhallPreludeImport)
+  where prelude = Import.load Import.defaultNewManager (Core.Embed dhallPreludeImport)

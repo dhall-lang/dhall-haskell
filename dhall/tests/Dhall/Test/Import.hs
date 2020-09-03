@@ -82,7 +82,9 @@ successTest path = do
         let unsetCache = Turtle.unset "XDG_CACHE_HOME"
 
         let load =
-                State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
+                State.evalStateT
+                  (Test.Util.loadWith actualExpr)
+                  (Import.emptyStatus Import.defaultNewManager directoryString)
 
         let usesCache = [ "hashFromCacheA.dhall"
                         , "unit/asLocation/HashA.dhall"

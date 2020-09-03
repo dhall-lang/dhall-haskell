@@ -34,7 +34,7 @@ hashTest prefix =
 
         expr <- Core.throws (Parser.exprFromText mempty codeFile)
 
-        resolved <- Import.load expr
+        resolved <- Import.load Import.defaultNewManager expr
 
         let normalized = Core.alphaNormalize (Core.normalize resolved)
 

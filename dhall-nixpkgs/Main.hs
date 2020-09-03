@@ -587,7 +587,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText baseDirectoryString expressionText)
 
-    let status = Dhall.Import.emptyStatus baseDirectoryString
+    let status = Dhall.Import.emptyStatus Dhall.Import.defaultNewManager baseDirectoryString
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -644,7 +644,7 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText directoryString expressionText)
 
-    let status = Dhall.Import.emptyStatus directoryString
+    let status = Dhall.Import.emptyStatus Dhall.Import.defaultNewManager directoryString
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 

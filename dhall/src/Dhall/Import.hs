@@ -111,6 +111,8 @@ module Dhall.Import (
     , writeExpressionToSemanticCache
     , warnAboutMissingCaches
     , assertNoImports
+    , Manager
+    , defaultNewManager
     , Status(..)
     , SemanticCacheMode(..)
     , Chained
@@ -1015,8 +1017,8 @@ normalizeHeaders url@URL { headers = Just headersExpression } = do
 normalizeHeaders url = return url
 
 -- | Default starting `Status`, importing relative to the given directory.
-emptyStatus :: FilePath -> Status
-emptyStatus = emptyStatusWith fetchRemote
+emptyStatus :: IO Manager -> FilePath -> Status
+emptyStatus newManager = emptyStatusWith newManager fetchRemote
 
 {-| Generalized version of `load`
 
@@ -1083,8 +1085,8 @@ loadWith expr₀ = case expr₀ of
   expression           -> Syntax.unsafeSubExpressions loadWith expression
 
 -- | Resolve all imports within an expression
-load :: Expr Src Import -> IO (Expr Src Void)
-load = loadRelativeTo "." UseSemanticCache
+load :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
+load newManager = loadRelativeTo newManager "." UseSemanticCache
 
 printWarning :: (MonadIO m) => String -> m ()
 printWarning message = do
@@ -1097,11 +1099,11 @@ printWarning message = do
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
-loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
-loadRelativeTo rootDirectory semanticCacheMode expression =
+loadRelativeTo :: IO Manager -> FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
+loadRelativeTo newManager rootDirectory semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
-        (emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
+        (emptyStatus newManager rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression
     :: StandardVersion
@@ -1157,17 +1159,17 @@ assertNoImports expression =
     to descend into
 
 #ifndef mingw32_HOST_OS
-    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "foo") }, importMode = Code }
+    >>> dependencyToFile (emptyStatus defaultNewManager ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "foo") }, importMode = Code }
     Just "./foo"
 
-    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "bar") }, importMode = Code }
+    >>> dependencyToFile (emptyStatus defaultNewManager "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Local Here (File (Directory []) "bar") }, importMode = Code }
     Just "./foo/bar"
 
 
-    >>> dependencyToFile (emptyStatus "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Remote (URL HTTPS "example.com" (File (Directory []) "") Nothing Nothing) }, importMode = Code }
+    >>> dependencyToFile (emptyStatus defaultNewManager "./foo") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Remote (URL HTTPS "example.com" (File (Directory []) "") Nothing Nothing) }, importMode = Code }
     Nothing
 
-    >>> dependencyToFile (emptyStatus ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Env "foo" }, importMode = Code }
+    >>> dependencyToFile (emptyStatus defaultNewManager ".") Import{ importHashed = ImportHashed{ hash = Nothing, importType = Env "foo" }, importMode = Code }
     Nothing
 #endif
 -}

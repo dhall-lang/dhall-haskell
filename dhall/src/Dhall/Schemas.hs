@@ -65,8 +65,8 @@ data Schemas = Schemas
     }
 
 -- | Implementation of the @dhall rewrite-with-schemas@ subcommand
-schemasCommand :: Schemas -> IO ()
-schemasCommand Schemas{..} = do
+schemasCommand :: IO Import.Manager -> Schemas -> IO ()
+schemasCommand newManager Schemas{..} = do
     originalText <- case input of
         InputFile file -> Text.IO.readFile file
         StandardInput  -> Text.IO.getContents
@@ -75,7 +75,7 @@ schemasCommand Schemas{..} = do
 
     schemasRecord <- Core.throws (Parser.exprFromText "(schemas)" schemas)
 
-    schemasExpression <- rewriteWithSchemas schemasRecord expression
+    schemasExpression <- rewriteWithSchemas newManager schemasRecord expression
 
     let docStream =
             Dhall.Pretty.layout
@@ -139,14 +139,15 @@ decodeSchemas  _ =
 
 -- | Simplify a Dhall expression using a record of schemas
 rewriteWithSchemas
-    :: Expr Src Import
+    :: IO Import.Manager
+    -> Expr Src Import
     -- ^ Record of schemas
     -> Expr Src Import
     -- ^ Expression to simplify using the supplied schemas
     -> IO (Expr Src Import)
-rewriteWithSchemas _schemas expression = do
-    resolvedSchemas    <- Import.load _schemas
-    resolvedExpression <- Import.load expression
+rewriteWithSchemas newManager _schemas expression = do
+    resolvedSchemas    <- Import.load newManager _schemas
+    resolvedExpression <- Import.load newManager expression
 
     _ <- Core.throws (TypeCheck.typeOf resolvedSchemas)
     _ <- Core.throws (TypeCheck.typeOf resolvedExpression)

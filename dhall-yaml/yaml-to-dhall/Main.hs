@@ -178,7 +178,8 @@ main = do
             handle $ do
                 yaml <- toBytes file
 
-                expression <- dhallFromYaml (Options schema conversion) yaml
+                expression <-
+                  dhallFromYaml (Options schema conversion) YamlToDhall.defaultNewManager yaml
 
                 renderExpression characterSet plain output expression
 
