@@ -26,4 +26,5 @@ stack*.yaml.lock
 .vscode
 docs
 result
+result-*
 report.html
