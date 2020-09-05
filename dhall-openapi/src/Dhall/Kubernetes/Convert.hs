@@ -103,10 +103,12 @@ toTextLit :: Text -> Expr
 toTextLit str = Dhall.TextLit (Dhall.Chunks [] str)
 
 
--- | Converts all the Swagger definitions to Dhall Types
---   Note: we cannot do 1-to-1 conversion and we need the whole Map because
---   many types reference other types so we need to access them to decide things
---   like "should this key be optional"
+{-| Converts all the Swagger definitions to Dhall Types
+
+    Note: we cannot do 1-to-1 conversion and we need the whole Map because
+    many types reference other types so we need to access them to decide things
+    like "should this key be optional"
+-}
 toTypes :: Data.Map.Map Prefix Dhall.Import -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
 toTypes prefixMap definitions = memo
   where
@@ -184,9 +186,9 @@ toDefault prefixMap definitions modelName = go
       -- Here we transform the record type in a value, transforming the keys in
       -- this way:
       --
-      -- * take the BaseData from definition and populate it
-      -- * skip other required fields, except if they are records
-      -- * set the optional fields to None and the lists to empty
+      --   * take the BaseData from definition and populate it
+      --   * skip other required fields, except if they are records
+      --   * set the optional fields to None and the lists to empty
       Dhall.Record kvsf ->
         let getBaseData :: Maybe Definition -> Dhall.Map.Map Text Expr
             getBaseData (Just Definition { baseData = Just BaseData{..} }) =
