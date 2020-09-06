@@ -711,6 +711,7 @@ eval !env t0 =
                     in  VListLit Nothing s
                 (x', ma') ->
                     VToMap x' ma'
+        ToJSON _x _ma -> error "ToJSON not implemented"
         Field t (Syntax.fieldSelectionLabel -> k) ->
             vField (eval env t) k
         Project t (Left ks) ->
@@ -1292,6 +1293,8 @@ alphaNormalize = goEnv EmptyNames
                 Merge (go x) (go y) (fmap go ma)
             ToMap x ma ->
                 ToMap (go x) (fmap go ma)
+            ToJSON x ma ->
+                ToJSON (go x) (fmap go ma)
             Field t k ->
                 Field (go t) k
             Project t ks ->

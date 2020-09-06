@@ -1116,6 +1116,7 @@ infer typer = loop
                        let _T₁'' = quote names _T₁'
 
                        die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
+        ToJSON _e _mt -> error "ToJSON not implemented"
 
         Field e (Syntax.fieldSelectionLabel -> x) -> do
             _E' <- loop ctx e
