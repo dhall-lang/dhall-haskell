@@ -47,6 +47,7 @@ module Dhall.Eval (
   , Environment(..)
   , Val(..)
   , (~>)
+  , vJSON
   , textShow
   ) where
 
@@ -76,6 +77,7 @@ import qualified Data.Sequence as Sequence
 import qualified Data.Set
 import qualified Data.Text     as Text
 import qualified Dhall.Map     as Map
+import qualified Dhall.Map
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf
@@ -227,6 +229,22 @@ deriving instance (Show a, Show (Val a -> Val a)) => Show (Val a)
 (~>) :: Val a -> Val a -> Val a
 (~>) a b = VHPi "_" a (\_ -> b)
 {-# INLINE (~>) #-}
+
+vJSON :: Val a
+vJSON = VHPi "t" (VConst Type) (\t ->
+              (VRecord (Dhall.Map.fromList [
+              ("array", (VList t) ~> t),
+              ("bool", VBool ~> t),
+              ("double", VDouble ~> t),
+              ("integer", VInteger ~> t),
+              ("null", t),
+              ("object", VList (VRecord (Dhall.Map.fromList [
+                ("mapKey", VText),
+                ("mapValue", t)
+              ]))),
+              ("string", VText ~> t)
+            ])) ~> t)
+
 
 infixr 5 ~>
 
