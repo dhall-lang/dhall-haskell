@@ -27,7 +27,6 @@ import qualified Data.Foldable
 import qualified Data.List.NonEmpty      as NonEmpty
 import qualified Data.Maybe              as Maybe
 import qualified Data.Text
-import qualified Dhall.Parser.Expression as Expression
 import qualified Dhall.Parser.Token      as Token
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Pos     as Megaparsec.Pos
@@ -93,7 +92,7 @@ lineCommentParser = do
             | otherwise = (x :| [], ys)
 
     singleLine = do
-      sourcePos <- Expression.getSourcePos
+      sourcePos <- Text.Megaparsec.getSourcePos
       commentLine <- Token.lineComment
       whitespace
       pure (sourcePos, commentLine)
