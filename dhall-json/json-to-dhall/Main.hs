@@ -22,7 +22,6 @@ import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Core
-import qualified Dhall.Import
 import qualified Dhall.Pretty
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
@@ -155,7 +154,7 @@ main = do
 
     let toSchema schema value = do
             finalSchema <- case schema of
-                Just text -> resolveSchemaExpr Dhall.Import.defaultNewManager text
+                Just text -> resolveSchemaExpr text
                 Nothing   -> return (schemaToDhallType (inferSchema value))
 
             typeCheckSchemaExpr id finalSchema

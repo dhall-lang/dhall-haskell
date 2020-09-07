@@ -12,7 +12,6 @@ import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
 import qualified Dhall.Core       as Core
 import qualified Dhall.Freeze     as Freeze
-import qualified Dhall.Import     as Import
 import qualified Dhall.Parser     as Parser
 import qualified Dhall.Test.Util  as Test.Util
 import qualified Test.Tasty       as Tasty
@@ -40,9 +39,7 @@ freezeTest prefix =
 
         parsedInput <- Core.throws (Parser.exprFromText mempty inputText)
 
-        actualExpression <- Freeze.freezeExpression
-            Import.defaultNewManager
-            (Turtle.encodeString freezeDirectory) AllImports Cache parsedInput
+        actualExpression <- Freeze.freezeExpression (Turtle.encodeString freezeDirectory) AllImports Cache parsedInput
 
         let actualText = Core.pretty actualExpression <> "\n"
 

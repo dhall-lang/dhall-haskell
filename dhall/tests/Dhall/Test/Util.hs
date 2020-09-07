@@ -92,8 +92,7 @@ loadRelativeTo :: FilePath.FilePath -> SemanticCacheMode -> Expr Src Import -> I
 loadRelativeTo rootDirectory semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
-        (Dhall.Import.emptyStatus Dhall.Import.defaultNewManager rootDirectory)
-          { _semanticCacheMode = semanticCacheMode }
+        (Dhall.Import.emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 #ifdef WITH_HTTP
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)

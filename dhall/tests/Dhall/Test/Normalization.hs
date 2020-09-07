@@ -180,7 +180,7 @@ betaNormalizationTest prefix = do
 
         actualExpr <- throws (Parser.exprFromText mempty actualCode)
 
-        actualResolved <- Import.load Import.defaultNewManager actualExpr
+        actualResolved <- Import.load actualExpr
 
         _ <- throws (TypeCheck.typeOf actualResolved)
 
@@ -190,7 +190,7 @@ betaNormalizationTest prefix = do
 
         expectedExpr <- throws (Parser.exprFromText mempty expectedCode)
 
-        expectedResolved <- Import.load Import.defaultNewManager expectedExpr
+        expectedResolved <- Import.load expectedExpr
 
         _ <- throws (TypeCheck.typeOf expectedResolved)
 

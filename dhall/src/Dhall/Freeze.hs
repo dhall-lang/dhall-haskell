@@ -8,9 +8,13 @@
 module Dhall.Freeze
     ( -- * Freeze
       freeze
+    , freezeWithManager
     , freezeExpression
+    , freezeExpressionWithManager
     , freezeImport
+    , freezeImportWithManager
     , freezeRemoteImport
+    , freezeRemoteImportWithManager
 
       -- * Types
     , Scope(..)
@@ -53,12 +57,19 @@ import qualified System.IO
 
 -- | Retrieve an `Import` and update the hash to match the latest contents
 freezeImport
-    :: IO Dhall.Import.Manager
-    -> FilePath
+    :: FilePath
     -- ^ Current working directory
     -> Import
     -> IO Import
-freezeImport newManager directory import_ = do
+freezeImport = freezeImportWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freezeImport'.
+freezeImportWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeImportWithManager newManager directory import_ = do
     let unprotectedImport =
             import_
                 { importHashed =
@@ -67,7 +78,7 @@ freezeImport newManager directory import_ = do
                         }
                 }
 
-    let status = Dhall.Import.emptyStatus newManager directory
+    let status = Dhall.Import.emptyStatusWithManager newManager directory
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
@@ -90,14 +101,21 @@ freezeImport newManager directory import_ = do
 
 -- | Freeze an import only if the import is a `Remote` import
 freezeRemoteImport
-    :: IO Dhall.Import.Manager
-    -> FilePath
+    :: FilePath
     -- ^ Current working directory
     -> Import
     -> IO Import
-freezeRemoteImport newManager directory import_ =
+freezeRemoteImport = freezeRemoteImportWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freezeRemoteImport'.
+freezeRemoteImportWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeRemoteImportWithManager newManager directory import_ =
     case importType (importHashed import_) of
-        Remote {} -> freezeImport newManager directory import_
+        Remote {} -> freezeImportWithManager newManager directory import_
         _         -> return import_
 
 -- | Specifies which imports to freeze
@@ -120,6 +138,17 @@ data Intent
 
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
+    :: OutputMode
+    -> PossiblyTransitiveInput
+    -> Scope
+    -> Intent
+    -> CharacterSet
+    -> Censor
+    -> IO ()
+freeze = freezeWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freeze'.
+freezeWithManager
     :: IO Dhall.Import.Manager
     -> OutputMode
     -> PossiblyTransitiveInput
@@ -128,7 +157,7 @@ freeze
     -> CharacterSet
     -> Censor
     -> IO ()
-freeze newManager outputMode input0 scope intent characterSet censor = go input0
+freezeWithManager newManager outputMode input0 scope intent characterSet censor = go input0
   where
     go input = do
         let directory = case input of
@@ -137,7 +166,7 @@ freeze newManager outputMode input0 scope intent characterSet censor = go input0
                 PossiblyTransitiveInputFile file _ ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatus newManager directory
+        let status = Dhall.Import.emptyStatusWithManager newManager directory
 
         (originalText, transitivity) <- case input of
             PossiblyTransitiveInputFile file transitivity -> do
@@ -163,7 +192,7 @@ freeze newManager outputMode input0 scope intent characterSet censor = go input0
             NonTransitive ->
                 return ()
 
-        frozenExpression <- freezeExpression newManager directory scope intent parsedExpression
+        frozenExpression <- freezeExpressionWithManager newManager directory scope intent parsedExpression
 
         let doc =  Pretty.pretty header
                 <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
@@ -210,18 +239,27 @@ freeze newManager outputMode input0 scope intent characterSet censor = go input0
     expression are passed in explicitly
 -}
 freezeExpression
-    :: IO Dhall.Import.Manager
-    -> FilePath
+    :: FilePath
     -- ^ Starting directory
     -> Scope
     -> Intent
     -> Expr s Import
     -> IO (Expr s Import)
-freezeExpression newManager directory scope intent expression = do
+freezeExpression = freezeExpressionWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freezeExpression'.
+freezeExpressionWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Scope
+    -> Intent
+    -> Expr s Import
+    -> IO (Expr s Import)
+freezeExpressionWithManager newManager directory scope intent expression = do
     let freezeScope =
             case scope of
-                AllImports        -> freezeImport
-                OnlyRemoteImports -> freezeRemoteImport
+                AllImports        -> freezeImportWithManager
+                OnlyRemoteImports -> freezeRemoteImportWithManager
 
     let freezeFunction = freezeScope newManager directory
 

@@ -48,7 +48,7 @@ main = handle (Dhall.detailed (do
         Left  err  -> Control.Exception.throwIO err
         Right expr -> return expr
 
-    expr' <- Dhall.Import.load Dhall.Import.defaultNewManager expr
+    expr' <- Dhall.Import.load expr
     case Dhall.TypeCheck.typeOf expr' of
         Left  err -> Control.Exception.throwIO err
         Right _   -> return ()

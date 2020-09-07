@@ -639,7 +639,7 @@ inputHelper annotate settings txt = do
             .  Lens.Family.set Dhall.Import.normalizer      _normalizer
             .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
-    let status = transform (Dhall.Import.emptyStatus _newManager _rootDirectory)
+    let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 

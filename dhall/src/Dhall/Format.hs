@@ -53,9 +53,7 @@ format (Format { input = input0, ..}) = go input0
                 PossiblyTransitiveInputFile file _ ->
                     System.FilePath.takeDirectory file
 
-        let newManager = fail "unreachable: HTTP import during formatting"
-
-        let status = Dhall.Import.emptyStatus newManager directory
+        let status = Dhall.Import.emptyStatus directory
 
         let layoutHeaderAndExpr (Header header, expr) =
                 Dhall.Pretty.layout

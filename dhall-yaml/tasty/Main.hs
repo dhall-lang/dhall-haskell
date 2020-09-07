@@ -88,7 +88,7 @@ testDhallToYaml options prefix testScope =
 
         text <- Data.Text.IO.readFile inputFile
 
-        actualValue <- dhallToYaml options Dhall.Yaml.defaultNewManager (Just inputFile) text
+        actualValue <- dhallToYaml options (Just inputFile) text
 
         expectedValue <- Data.ByteString.readFile outputFile
 
@@ -104,8 +104,7 @@ testYamlToDhall prefix =
 
         bytes <- Data.ByteString.readFile inputFile
 
-        expression <-
-          YamlToDhall.dhallFromYaml (YamlToDhall.defaultOptions Nothing) YamlToDhall.defaultNewManager bytes
+        expression <- YamlToDhall.dhallFromYaml (YamlToDhall.defaultOptions Nothing) bytes
 
         let actualValue = Dhall.Core.pretty expression <> "\n"
 

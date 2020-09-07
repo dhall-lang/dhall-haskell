@@ -140,7 +140,7 @@ parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
 load :: FileIdentifier -> Expr Src Dhall.Import -> Cache ->
   IO (Either DhallError (Cache, Expr Src Void))
 load (FileIdentifier chained) expr (Cache graph cache) = do
-  let emptyStatus = Dhall.emptyStatus Dhall.defaultNewManager ""
+  let emptyStatus = Dhall.emptyStatus ""
       status = -- reuse cache and import graph
                set Dhall.cache cache .
                set Dhall.graph graph .

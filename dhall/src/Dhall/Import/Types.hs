@@ -116,8 +116,8 @@ data Status = Status
     , _semanticCacheMode :: SemanticCacheMode
     }
 
--- | Initial `Status`, parameterised over the remote resolver, importing
---   relative to the given directory.
+-- | Initial `Status`, parameterised over the HTTP 'Manager' and the remote resolver,
+--   importing relative to the given directory.
 emptyStatusWith :: IO Manager -> (URL -> StateT Status IO Data.Text.Text) -> FilePath -> Status
 emptyStatusWith _newManager _remote rootDirectory = Status {..}
   where

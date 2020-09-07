@@ -208,8 +208,6 @@ module Dhall.JSON (
     , SpecialDoubleMode(..)
     , handleSpecialDoubles
     , codeToValue
-    , Dhall.Import.Manager
-    , Dhall.Import.defaultNewManager
 
     -- * Exceptions
     , CompileError(..)
@@ -1150,25 +1148,24 @@ handleSpecialDoubles specialDoubleMode =
 
 >>> :set -XOverloadedStrings
 >>> import Core
->>> Dhall.JSON.codeToValue defaultConversion ForbidWithinJSON (fail "no HTTP manager provided") Nothing "{ a = 1 }"
+>>> Dhall.JSON.codeToValue defaultConversion ForbidWithinJSON Nothing "{ a = 1 }"
 >>> Object (fromList [("a",Number 1.0)])
 -}
 codeToValue
   :: Conversion
   -> SpecialDoubleMode
-  -> IO Dhall.Import.Manager
   -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
                      -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO Value
-codeToValue conversion specialDoubleMode newManager mFilePath code = do
+codeToValue conversion specialDoubleMode mFilePath code = do
     parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(input)" mFilePath) code)
 
     let rootDirectory = case mFilePath of
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    resolvedExpression <- Dhall.Import.loadRelativeTo newManager rootDirectory UseSemanticCache parsedExpression
+    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
 
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

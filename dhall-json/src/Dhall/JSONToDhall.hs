@@ -344,8 +344,6 @@ module Dhall.JSONToDhall (
       parseConversion
     , Conversion(..)
     , defaultConversion
-    , Dhall.Import.Manager
-    , Dhall.Import.defaultNewManager
     , resolveSchemaExpr
     , typeCheckSchemaExpr
     , dhallFromJSON
@@ -487,15 +485,14 @@ defaultConversion = Conversion
 type ExprX = Expr Src Void
 
 -- | Parse schema code and resolve imports
-resolveSchemaExpr :: IO Dhall.Import.Manager
-                  -> Text  -- ^ type code (schema)
+resolveSchemaExpr :: Text  -- ^ type code (schema)
                   -> IO ExprX
-resolveSchemaExpr newManager code = do
+resolveSchemaExpr code = do
     parsedExpression <-
       case Dhall.Parser.exprFromText "\n\ESC[1;31mSCHEMA\ESC[0m" code of
         Left  err              -> throwIO err
         Right parsedExpression -> return parsedExpression
-    Dhall.Import.load newManager parsedExpression
+    Dhall.Import.load parsedExpression
 
 {-| Check that the Dhall type expression actually has type 'Type'
 >>> :set -XOverloadedStrings

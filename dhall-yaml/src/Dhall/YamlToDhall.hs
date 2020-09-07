@@ -4,8 +4,6 @@ module Dhall.YamlToDhall
   ( Options(..)
   , defaultOptions
   , YAMLCompileError(..)
-  , Dhall.Import.Manager
-  , Dhall.Import.defaultNewManager
   , dhallFromYaml
   , schemaFromYaml
   ) where
@@ -31,7 +29,6 @@ import Dhall.Src         (Src)
 
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.YAML.Aeson
-import qualified Dhall.Import
 
 -- | Options to parametrize conversion
 data Options = Options
@@ -52,13 +49,13 @@ instance Exception YAMLCompileError
 
 
 -- | Transform yaml representation into dhall
-dhallFromYaml :: Options -> IO Dhall.Import.Manager -> ByteString -> IO (Expr Src Void)
-dhallFromYaml Options{..} newManager yaml = do
+dhallFromYaml :: Options -> ByteString -> IO (Expr Src Void)
+dhallFromYaml Options{..} yaml = do
   value <- either (throwIO . userError) pure (yamlToJson yaml)
 
   finalSchema <-
       case schema of
-          Just text -> resolveSchemaExpr newManager text
+          Just text -> resolveSchemaExpr text
           Nothing   -> return (schemaToDhallType (inferSchema value))
 
   expr <- typeCheckSchemaExpr YAMLCompileError finalSchema

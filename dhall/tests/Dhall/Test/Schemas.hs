@@ -13,7 +13,6 @@ import qualified Data.Text.IO                          as Text.IO
 import qualified Data.Text.Prettyprint.Doc             as Doc
 import qualified Data.Text.Prettyprint.Doc.Render.Text as Doc.Render.Text
 import qualified Dhall.Core                            as Core
-import qualified Dhall.Import                          as Import
 import qualified Dhall.Parser                          as Parser
 import qualified Dhall.Pretty                          as Pretty
 import qualified Dhall.Schemas                         as Schemas
@@ -53,7 +52,7 @@ schemaTest prefix =
 
         parsedSchema <- Core.throws (Parser.exprFromText mempty (Test.Util.toDhallPath (prefix <> "Schema.dhall")))
 
-        actualExpression <- Schemas.rewriteWithSchemas Import.defaultNewManager parsedSchema parsedInput
+        actualExpression <- Schemas.rewriteWithSchemas parsedSchema parsedInput
 
         let actualText = format header actualExpression
 

@@ -96,8 +96,7 @@ main = do
                 Left exception ->
                     errOutput exception
                 Right parsedExpression -> do
-                  eitherResolvedExpression <- Control.Exception.try
-                      (Dhall.Import.load Dhall.Import.defaultNewManager parsedExpression)
+                  eitherResolvedExpression <- Control.Exception.try (Dhall.Import.load parsedExpression)
                   case eitherResolvedExpression of
                       Left exception ->
                           errOutput (exception :: SomeException)
