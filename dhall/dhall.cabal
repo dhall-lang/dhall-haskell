@@ -486,7 +486,7 @@ Library
         haskeline                   >= 0.7.2.1  && < 0.9 ,
         hashable                    >= 1.2      && < 1.4 ,
         lens-family-core            >= 1.0.0    && < 2.2 ,
-        megaparsec                  >= 7        && < 8.1 ,
+        megaparsec                  >= 7        && < 9.1 ,
         memory                      >= 0.14     && < 0.16,
         mmorph                                     < 1.2 ,
         mtl                         >= 2.2.1    && < 2.3 ,
