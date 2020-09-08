@@ -2,29 +2,18 @@
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
-    , Manager
     ) where
 
 import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Data.Void                        (Void)
 import Dhall.Core                       (URL (..))
-import Dhall.Import.Types
+import Dhall.Import.Types               (Status)
 import Dhall.URL                        (renderURL)
 
 import qualified Data.Text      as Text
 import qualified JavaScript.XHR
-
-
-{-| The GHCJS implementation does not require a `Network.HTTP.Client.Manager`
-
-    The purpose of this synonym is so that "Dhall.Import.Types" can import a
-    `Dhall.Import.Manager.Manager` type from "Dhall.Import.HTTP" that does the
-    correct thing for both the GHC and GHCJS implementations
--}
-type Manager = Void
 
 fetchFromHttpUrl
     :: URL
