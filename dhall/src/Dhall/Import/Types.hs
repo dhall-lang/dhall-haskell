@@ -31,7 +31,7 @@ import Lens.Family                      (LensLike')
 import System.FilePath                  (isRelative, splitDirectories)
 
 #ifdef WITH_HTTP
-import Dhall.Import.Manager (Manager)
+import qualified Dhall.Import.Manager
 #endif
 
 import qualified Data.Text
@@ -67,6 +67,24 @@ data Depends = Depends { parent :: Chained, child :: Chained }
 -}
 data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache deriving (Eq)
 
+-- | Shared state for HTTP requests
+type Manager =
+#ifdef WITH_HTTP
+    Dhall.Import.Manager.Manager
+#else
+    ()
+#endif
+
+-- | The default HTTP 'Manager'
+defaultNewManager :: IO Manager
+defaultNewManager =
+#ifdef WITH_HTTP
+  Dhall.Import.Manager.defaultNewManager
+#else
+  pure ()
+#endif
+
+
 -- | State threaded throughout the import process
 data Status = Status
     { _stack :: NonEmpty Chained
@@ -81,11 +99,8 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
-#ifdef WITH_HTTP
+    , _newManager :: IO Manager
     , _manager :: Maybe Manager
-#else
-    , _manager :: Maybe Void
-#endif
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
     -- requests
 
@@ -101,10 +116,10 @@ data Status = Status
     , _semanticCacheMode :: SemanticCacheMode
     }
 
--- | Initial `Status`, parameterised over the remote resolver, importing
---   relative to the given directory.
-emptyStatusWith :: (URL -> StateT Status IO Data.Text.Text) -> FilePath -> Status
-emptyStatusWith _remote rootDirectory = Status {..}
+-- | Initial `Status`, parameterised over the HTTP 'Manager' and the remote resolver,
+--   importing relative to the given directory.
+emptyStatusWith :: IO Manager -> (URL -> StateT Status IO Data.Text.Text) -> FilePath -> Status
+emptyStatusWith _newManager _remote rootDirectory = Status {..}
   where
     _stack = pure (Chained rootImport)
 

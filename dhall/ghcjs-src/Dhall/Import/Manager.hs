@@ -11,9 +11,16 @@
 module Dhall.Import.Manager
     ( -- * Manager
       Manager
+    , defaultNewManager
     ) where
 
-import Data.Void (Void)
+{-| The GHCJS implementation does not require a `Network.HTTP.Client.Manager`
 
--- | GHCJS does not use a `Network.HTTP.Client.Manager`
-type Manager = Void
+    The purpose of this synonym is so that "Dhall.Import.Types" can import a
+    `Dhall.Import.Manager.Manager` type from "Dhall.Import.HTTP" that does the
+    correct thing for both the GHC and GHCJS implementations
+-}
+type Manager = ()
+
+defaultNewManager :: IO Manager
+defaultNewManager = pure ()

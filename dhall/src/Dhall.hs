@@ -37,6 +37,7 @@ module Dhall
     , startingContext
     , substitutions
     , normalizer
+    , newManager
     , defaultInputSettings
     , InputSettings
     , defaultEvaluateSettings
@@ -386,6 +387,7 @@ defaultInputSettings = InputSettings
   , _evaluateSettings = defaultEvaluateSettings
   }
 
+
 -- | Access the directory to resolve imports relative to.
 --
 -- @since 1.16
@@ -411,6 +413,7 @@ data EvaluateSettings = EvaluateSettings
   { _substitutions   :: Dhall.Substitution.Substitutions Src Void
   , _startingContext :: Dhall.Context.Context (Expr Src Void)
   , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
+  , _newManager      :: IO Dhall.Import.Manager
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -422,6 +425,7 @@ defaultEvaluateSettings = EvaluateSettings
   { _substitutions   = Dhall.Substitution.empty
   , _startingContext = Dhall.Context.empty
   , _normalizer      = Nothing
+  , _newManager      = Dhall.Import.defaultNewManager
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -459,6 +463,18 @@ normalizer = evaluateSettings . l
     l :: (Functor f)
       => LensLike' f EvaluateSettings (Maybe (Core.ReifiedNormalizer Void))
     l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+
+-- | Access the HTTP manager initializer.
+--
+-- @since 1.36
+newManager
+  :: (Functor f, HasEvaluateSettings s)
+  => LensLike' f s (IO Dhall.Import.Manager)
+newManager = evaluateSettings . l
+  where
+    l :: (Functor f)
+      => LensLike' f EvaluateSettings (IO Dhall.Import.Manager)
+    l k s = fmap (\x -> s { _newManager = x }) (k (_newManager s))
 
 -- | @since 1.16
 class HasEvaluateSettings s where
@@ -623,7 +639,7 @@ inputHelper annotate settings txt = do
             .  Lens.Family.set Dhall.Import.normalizer      _normalizer
             .  Lens.Family.set Dhall.Import.startingContext _startingContext
 
-    let status = transform (Dhall.Import.emptyStatus _rootDirectory)
+    let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
 
     expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
 

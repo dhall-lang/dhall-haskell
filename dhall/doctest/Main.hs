@@ -33,6 +33,7 @@ main = do
 
         Test.DocTest.doctest
             [ "-DWITH_HTTP"
+            , "-DUSE_HTTP_CLIENT_TLS"
             , "--fast"
             , prefix </> "ghc-src"
 

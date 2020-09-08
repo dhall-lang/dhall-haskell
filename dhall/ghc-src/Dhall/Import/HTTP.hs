@@ -25,7 +25,6 @@ import Dhall.URL                        (renderURL)
 import Network.HTTP.Client
     ( HttpException (..)
     , HttpExceptionContent (..)
-    , Manager
     )
 
 import qualified Control.Exception
@@ -37,7 +36,6 @@ import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Util
 import qualified Network.HTTP.Client              as HTTP
-import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified Network.HTTP.Types
 
 mkPrettyHttpException :: String -> HttpException -> PrettyHttpException
@@ -147,14 +145,11 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
 
 newManager :: StateT Status IO Manager
 newManager = do
-    let settings = HTTP.tlsManagerSettings
-          { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
-
     Status { _manager = oldManager, ..} <- State.get
 
     case oldManager of
         Nothing -> do
-            manager <- liftIO (HTTP.newManager settings)
+            manager <- liftIO _newManager
 
             State.put (Status { _manager = Just manager , ..})
 

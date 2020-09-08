@@ -8,9 +8,13 @@
 module Dhall.Freeze
     ( -- * Freeze
       freeze
+    , freezeWithManager
     , freezeExpression
+    , freezeExpressionWithManager
     , freezeImport
+    , freezeImportWithManager
     , freezeRemoteImport
+    , freezeRemoteImportWithManager
 
       -- * Types
     , Scope(..)
@@ -57,7 +61,15 @@ freezeImport
     -- ^ Current working directory
     -> Import
     -> IO Import
-freezeImport directory import_ = do
+freezeImport = freezeImportWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freezeImport'.
+freezeImportWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeImportWithManager newManager directory import_ = do
     let unprotectedImport =
             import_
                 { importHashed =
@@ -66,7 +78,7 @@ freezeImport directory import_ = do
                         }
                 }
 
-    let status = Dhall.Import.emptyStatus directory
+    let status = Dhall.Import.emptyStatusWithManager newManager directory
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
@@ -93,9 +105,17 @@ freezeRemoteImport
     -- ^ Current working directory
     -> Import
     -> IO Import
-freezeRemoteImport directory import_ =
+freezeRemoteImport = freezeRemoteImportWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freezeRemoteImport'.
+freezeRemoteImportWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeRemoteImportWithManager newManager directory import_ =
     case importType (importHashed import_) of
-        Remote {} -> freezeImport directory import_
+        Remote {} -> freezeImportWithManager newManager directory import_
         _         -> return import_
 
 -- | Specifies which imports to freeze
@@ -125,7 +145,19 @@ freeze
     -> CharacterSet
     -> Censor
     -> IO ()
-freeze outputMode input0 scope intent characterSet censor = go input0
+freeze = freezeWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freeze'.
+freezeWithManager
+    :: IO Dhall.Import.Manager
+    -> OutputMode
+    -> PossiblyTransitiveInput
+    -> Scope
+    -> Intent
+    -> CharacterSet
+    -> Censor
+    -> IO ()
+freezeWithManager newManager outputMode input0 scope intent characterSet censor = go input0
   where
     go input = do
         let directory = case input of
@@ -134,7 +166,7 @@ freeze outputMode input0 scope intent characterSet censor = go input0
                 PossiblyTransitiveInputFile file _ ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatus directory
+        let status = Dhall.Import.emptyStatusWithManager newManager directory
 
         (originalText, transitivity) <- case input of
             PossiblyTransitiveInputFile file transitivity -> do
@@ -160,7 +192,7 @@ freeze outputMode input0 scope intent characterSet censor = go input0
             NonTransitive ->
                 return ()
 
-        frozenExpression <- freezeExpression directory scope intent parsedExpression
+        frozenExpression <- freezeExpressionWithManager newManager directory scope intent parsedExpression
 
         let doc =  Pretty.pretty header
                 <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
@@ -213,13 +245,23 @@ freezeExpression
     -> Intent
     -> Expr s Import
     -> IO (Expr s Import)
-freezeExpression directory scope intent expression = do
+freezeExpression = freezeExpressionWithManager Dhall.Import.defaultNewManager
+
+-- | See 'freezeExpression'.
+freezeExpressionWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Scope
+    -> Intent
+    -> Expr s Import
+    -> IO (Expr s Import)
+freezeExpressionWithManager newManager directory scope intent expression = do
     let freezeScope =
             case scope of
-                AllImports        -> freezeImport
-                OnlyRemoteImports -> freezeRemoteImport
+                AllImports        -> freezeImportWithManager
+                OnlyRemoteImports -> freezeRemoteImportWithManager
 
-    let freezeFunction = freezeScope directory
+    let freezeFunction = freezeScope newManager directory
 
     let cache
             -- This case is necessary because `transformOf` is a bottom-up

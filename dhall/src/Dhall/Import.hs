@@ -103,7 +103,9 @@
 module Dhall.Import (
     -- * Import
       load
+    , loadWithManager
     , loadRelativeTo
+    , loadRelativeToWithManager
     , loadWith
     , localToPath
     , hashExpression
@@ -111,6 +113,8 @@ module Dhall.Import (
     , writeExpressionToSemanticCache
     , warnAboutMissingCaches
     , assertNoImports
+    , Manager
+    , defaultNewManager
     , Status(..)
     , SemanticCacheMode(..)
     , Chained
@@ -118,6 +122,7 @@ module Dhall.Import (
     , chainedFromLocalHere
     , chainedChangeMode
     , emptyStatus
+    , emptyStatusWithManager
     , stack
     , cache
     , Depends(..)
@@ -1016,7 +1021,11 @@ normalizeHeaders url = return url
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus = emptyStatusWith fetchRemote
+emptyStatus = emptyStatusWithManager defaultNewManager
+
+-- | See 'emptyStatus'.
+emptyStatusWithManager :: IO Manager -> FilePath -> Status
+emptyStatusWithManager newManager = emptyStatusWith newManager fetchRemote
 
 {-| Generalized version of `load`
 
@@ -1084,7 +1093,11 @@ loadWith expr₀ = case expr₀ of
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)
-load = loadRelativeTo "." UseSemanticCache
+load = loadWithManager defaultNewManager
+
+-- | See 'load'.
+loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
+loadWithManager newManager = loadRelativeToWithManager newManager "." UseSemanticCache
 
 printWarning :: (MonadIO m) => String -> m ()
 printWarning message = do
@@ -1098,10 +1111,19 @@ printWarning message = do
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
-loadRelativeTo rootDirectory semanticCacheMode expression =
+loadRelativeTo = loadRelativeToWithManager defaultNewManager
+
+-- | See 'loadRelativeTo'.
+loadRelativeToWithManager
+    :: IO Manager
+    -> FilePath
+    -> SemanticCacheMode
+    -> Expr Src Import
+    -> IO (Expr Src Void)
+loadRelativeToWithManager newManager rootDirectory semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
-        (emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
+        (emptyStatusWithManager newManager rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression
     :: StandardVersion
