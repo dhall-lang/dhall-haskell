@@ -9,9 +9,35 @@ copyright:      2019 Fabrizio Ferrai
 license:        BSD3
 build-type:     Simple
 
+source-repository head
+  type: git
+  location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi
+
 executable openapi-to-dhall
   main-is: Main.hs
-  other-modules:
+  hs-source-dirs:
+      openapi-to-dhall
+  default-extensions: DuplicateRecordFields GeneralizedNewtypeDeriving LambdaCase RecordWildCards ScopedTypeVariables OverloadedStrings FlexibleInstances ConstraintKinds ApplicativeDo TupleSections
+  ghc-options: -Wall
+  build-depends:
+    base                    >= 4.8.2.0   && < 5    ,
+    aeson                   >= 1.0.0.0   && < 1.5  ,
+    containers              >= 0.5.0.0   && < 0.7  ,
+    dhall                   >= 1.34.0    && < 1.35 ,
+    dhall-openapi                                  ,
+    megaparsec              >= 7.0       && < 9.1  ,
+    optparse-applicative    >= 0.14.3.0  && < 0.17 ,
+    parser-combinators      >= 1.0.3     && < 1.3  ,
+    prettyprinter           >= 1.2.0.1   && < 1.8  ,
+    sort                    >= 1.0       && < 1.1  ,
+    text                    >= 0.11.1.0  && < 1.3  ,
+    turtle                  >= 1.5.0     && < 1.6  ,
+    vector                  >= 0.11.0.0  && < 0.13 ,
+    yaml                    >= 0.8.3     && < 0.12
+  default-language: Haskell2010
+
+library
+  exposed-Modules:
       Dhall.Kubernetes.Convert
       Dhall.Kubernetes.Data
       Dhall.Kubernetes.Types
@@ -24,17 +50,10 @@ executable openapi-to-dhall
     aeson                   >= 1.0.0.0   && < 1.5  ,
     containers              >= 0.5.0.0   && < 0.7  ,
     dhall                   >= 1.34.0    && < 1.35 ,
-    megaparsec              >= 7.0       && < 9.1  ,
     optparse-applicative    >= 0.14.3.0  && < 0.17 ,
-    parser-combinators      >= 1.0.3     && < 1.3  ,
     prettyprinter           >= 1.2.0.1   && < 1.8  ,
     sort                    >= 1.0       && < 1.1  ,
     text                    >= 0.11.1.0  && < 1.3  ,
-    turtle                  >= 1.5.0     && < 1.6  ,
     vector                  >= 0.11.0.0  && < 0.13 ,
     yaml                    >= 0.8.3     && < 0.12
   default-language: Haskell2010
-
-source-repository head
-  type: git
-  location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi
