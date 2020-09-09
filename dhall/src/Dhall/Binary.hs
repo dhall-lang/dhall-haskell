@@ -31,7 +31,6 @@ import Codec.Serialise      (Serialise (decode, encode))
 import Control.Applicative  (empty, (<|>))
 import Control.Exception    (Exception)
 import Data.ByteString.Lazy (ByteString)
-import Data.Foldable (Foldable)
 import Dhall.Syntax
     ( Binding (..)
     , Chunks (..)

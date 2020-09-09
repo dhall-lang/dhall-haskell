@@ -22,8 +22,7 @@ import Dhall.Core
     )
 import Dhall.Parser
 import Dhall.Parser.Expression
-    ( getSourcePos
-    , importHash_
+    ( importHash_
     , importType_
     , localOnly
     )
@@ -63,9 +62,9 @@ getLetInner (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetInnerOff
           whitespace
           _ <- optional _in
           whitespace
-          begin <- getSourcePos
+          begin <- Megaparsec.getSourcePos
           tokens <- Megaparsec.takeRest
-          end <- getSourcePos
+          end <- Megaparsec.getSourcePos
           return (Src begin end tokens)
 
 -- | Given an Src of a let expression return the Src containing the type
@@ -79,13 +78,13 @@ getLetAnnot (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetAnnot) t
           nonemptyWhitespace
           _ <- label
           whitespace
-          begin <- getSourcePos
+          begin <- Megaparsec.getSourcePos
           (tokens, _) <- Megaparsec.match $ optional (do
             _ <- _colon
             nonemptyWhitespace
             _ <- expr
             whitespace)
-          end <- getSourcePos
+          end <- Megaparsec.getSourcePos
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
 
@@ -101,9 +100,9 @@ getLetIdentifier src@(Src left _ text) =
           setSourcePos left
           _let
           nonemptyWhitespace
-          begin <- getSourcePos
+          begin <- Megaparsec.getSourcePos
           (tokens, _) <- Megaparsec.match label
-          end <- getSourcePos
+          end <- Megaparsec.getSourcePos
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
 
@@ -117,9 +116,9 @@ getLamIdentifier (Src left _ text) =
           whitespace
           _openParens
           whitespace
-          begin <- getSourcePos
+          begin <- Megaparsec.getSourcePos
           (tokens, _) <- Megaparsec.match label
-          end <- getSourcePos
+          end <- Megaparsec.getSourcePos
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
 
@@ -133,9 +132,9 @@ getForallIdentifier (Src left _ text) =
           whitespace
           _openParens
           whitespace
-          begin <- getSourcePos
+          begin <- Megaparsec.getSourcePos
           (tokens, _) <- Megaparsec.match label
-          end <- getSourcePos
+          end <- Megaparsec.getSourcePos
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
 
@@ -149,9 +148,9 @@ getImportHash (Src left _ text) =
           setSourcePos left
           _ <- importType_
           whitespace
-          begin <- getSourcePos
+          begin <- Megaparsec.getSourcePos
           (tokens, _) <- Megaparsec.match $ optional importHash_
-          end <- getSourcePos
+          end <- Megaparsec.getSourcePos
           _ <- Megaparsec.takeRest
           return (Src begin end tokens)
 
@@ -169,10 +168,10 @@ getImportLink src@(Src left _ text) =
  where
   parseImportLink = do
     setSourcePos left
-    begin <- getSourcePos
+    begin <- Megaparsec.getSourcePos
     (tokens, _) <-
       Megaparsec.match $ (localOnly *> return ()) <|> (httpRaw *> return ())
-    end <- getSourcePos
+    end <- Megaparsec.getSourcePos
     _ <- Megaparsec.takeRest
     return (Src begin end tokens)
 

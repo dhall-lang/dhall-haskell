@@ -34,13 +34,6 @@ import qualified Text.Megaparsec
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
 
--- | Get the current source position
-getSourcePos :: Text.Megaparsec.MonadParsec e s m =>
-                m Text.Megaparsec.SourcePos
-getSourcePos =
-    Text.Megaparsec.getSourcePos
-{-# INLINE getSourcePos #-}
-
 -- | Get the current source offset (in tokens)
 getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
 getOffset = Text.Megaparsec.stateOffset <$> Text.Megaparsec.getParserState
@@ -58,17 +51,17 @@ setOffset o = Text.Megaparsec.updateParserState $ \state ->
 -}
 src :: Parser a -> Parser Src
 src parser = do
-    before      <- getSourcePos
+    before      <- Text.Megaparsec.getSourcePos
     (tokens, _) <- Text.Megaparsec.match parser
-    after       <- getSourcePos
+    after       <- Text.Megaparsec.getSourcePos
     return (Src before after tokens)
 
 -- | Same as `src`, except also return the parsed value
 srcAnd :: Parser a -> Parser (Src, a)
 srcAnd parser = do
-    before      <- getSourcePos
+    before      <- Text.Megaparsec.getSourcePos
     (tokens, x) <- Text.Megaparsec.match parser
-    after       <- getSourcePos
+    after       <- Text.Megaparsec.getSourcePos
     return (Src before after tokens, x)
 
 {-| Wrap a `Parser` to still match the same text, but to wrap the resulting
@@ -76,9 +69,9 @@ srcAnd parser = do
 -}
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
-    before      <- getSourcePos
+    before      <- Text.Megaparsec.getSourcePos
     (tokens, e) <- Text.Megaparsec.match parser
-    after       <- getSourcePos
+    after       <- Text.Megaparsec.getSourcePos
     let src₀ = Src before after tokens
     case e of
         Note src₁ _ | laxSrcEq src₀ src₁ -> return e
@@ -453,7 +446,7 @@ parsers embedded = Parsers {..}
             let fieldSelection = do
                     src0 <- src whitespace
                     l <- anyLabel
-                    pos <- getSourcePos
+                    pos <- Text.Megaparsec.getSourcePos
 
                     -- FIXME: Suffix whitespace can't be parsed given our limitation
                     -- about whitespace treatment, but for @dhall-docs@ this

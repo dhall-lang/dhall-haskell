@@ -12,7 +12,6 @@ import Data.Void                       (Void)
 import Data.Yaml
 import Dhall.Core                      (Expr (..))
 import Dhall.Format                    (Format (..))
-import Dhall.Kubernetes.Data           (patchCyclicImports)
 import Numeric.Natural                 (Natural)
 import Text.Megaparsec
     ( Parsec
@@ -23,6 +22,7 @@ import Text.Megaparsec
     )
 import Text.Megaparsec.Char            (alphaNumChar, char)
 
+import Dhall.Kubernetes.Data           (patchCyclicImports)
 import Dhall.Kubernetes.Types
     ( DuplicateHandler
     , ModelName (..)

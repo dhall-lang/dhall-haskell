@@ -455,6 +455,12 @@ Flag with-http
   Default:     True
   Manual:      True
 
+Flag use-http-client-tls
+  Description: Use http-client-tls for resolving HTTP imports by default
+               (requires with-http to be enabled)
+  Default:     True
+  Manual:      True
+
 Flag cross
   Description: Disable TemplateHaskell to make cross-compiling easier
   Default:     False
@@ -486,7 +492,7 @@ Library
         haskeline                   >= 0.7.2.1  && < 0.9 ,
         hashable                    >= 1.2      && < 1.4 ,
         lens-family-core            >= 1.0.0    && < 2.2 ,
-        megaparsec                  >= 7        && < 8.1 ,
+        megaparsec                  >= 7        && < 9.1 ,
         memory                      >= 0.14     && < 0.16,
         mmorph                                     < 1.2 ,
         mtl                         >= 2.2.1    && < 2.3 ,
@@ -513,6 +519,9 @@ Library
     if flag(with-http)
       CPP-Options:
         -DWITH_HTTP
+      if flag(use-http-client-tls)
+        CPP-Options:
+          -DUSE_HTTP_CLIENT_TLS
     if impl(ghcjs)
       Hs-Source-Dirs: ghcjs-src
       Build-Depends:
@@ -525,8 +534,10 @@ Library
       if flag(with-http)
         Build-Depends:
           http-types                  >= 0.7.0    && < 0.13,
-          http-client                 >= 0.5.0    && < 0.8 ,
-          http-client-tls             >= 0.2.0    && < 0.4
+          http-client                 >= 0.5.0    && < 0.8
+        if flag(use-http-client-tls)
+          Build-Depends:
+            http-client-tls           >= 0.2.0    && < 0.4
 
     Other-Extensions:
         BangPatterns
