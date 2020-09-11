@@ -28,6 +28,10 @@
       manager (e.g. one from `http-client-openssl`)
 * Fixes and improvements to code formatting
     * [#2000](https://github.com/dhall-lang/dhall-haskell/pull/2000)
+    * [#2021](https://github.com/dhall-lang/dhall-haskell/pull/2021)
+
+      The formatter now preserves comments for record fields (both record types
+      and record literals)
 * Fixes and improvements to documentation
     * [#2011](https://github.com/dhall-lang/dhall-haskell/pull/2011)
     * [#2013](https://github.com/dhall-lang/dhall-haskell/pull/2013)
