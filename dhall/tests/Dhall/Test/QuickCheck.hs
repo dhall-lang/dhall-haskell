@@ -279,8 +279,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (PreferAnnotation s a) where
             ]
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (RecordField s a) where
-    arbitrary =
-        lift1 Dhall.Core.makeRecordField
+    arbitrary = lift4 RecordField
 
     shrink = genericShrink
 
@@ -459,7 +458,10 @@ instance Arbitrary Src where
     arbitrary = do
         lift2 Src <*> whitespace
 
-    shrink _ = []
+    shrink (Src start end text) =
+            (Src <$> shrink start <*> pure end   <*> pure text)
+        ++  (Src <$> pure start   <*> shrink end <*> pure text)
+        ++  (Src <$> pure start   <*> pure end   <*> shrinkWhitespace text)
 
 instance Arbitrary SourcePos where
     arbitrary = lift3 SourcePos
@@ -617,10 +619,15 @@ isNormalizedIsConsistentWithNormalize expression =
         Nothing -> Test.QuickCheck.discard
         Just v -> v
   where
+      denotedExpression :: Expr Void Import
+      denotedExpression = Dhall.Core.denote expression
+
       maybeProp = do
           nf <- Control.Spoon.spoon (Dhall.Core.normalize expression)
           isNormalized <- Control.Spoon.spoon (Dhall.Core.isNormalized expression)
-          return $ isNormalized === (nf == expression)
+          -- Dhall.Core.isNormalized ignores 'Note's and other annotations.
+          -- So we do the same when checking the result of 'normalize'.
+          return $ isNormalized === (nf == denotedExpression)
 
 normalizeWithMIsConsistentWithNormalize :: Expr () Import -> Property
 normalizeWithMIsConsistentWithNormalize expression =
