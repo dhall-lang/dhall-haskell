@@ -220,7 +220,6 @@ parseOptions = Options <$> parseSkip <*> parsePrefixMap' <*> fileArg <*> crdArg
     crdArg = Options.Applicative.switch
       (  Options.Applicative.long "crd"
       <> Options.Applicative.help "The input file is a custom resource definition"
-      <> Options.Applicative.action "file"
       )
 
 -- | `ParserInfo` for the `Options` type
