@@ -339,6 +339,7 @@ parseMode =
                 (   Options.Applicative.long "file"
                 <>  Options.Applicative.help "Read expression from a file instead of standard input"
                 <>  Options.Applicative.metavar "FILE"
+                <>  Options.Applicative.action "file"
                 )
 
     parseOutput = fmap f (optional p)
@@ -350,6 +351,7 @@ parseMode =
                 (   Options.Applicative.long "output"
                 <>  Options.Applicative.help "Write result to a file instead of standard output"
                 <>  Options.Applicative.metavar "FILE"
+                <>  Options.Applicative.action "file"
                 )
 
     parseAlpha =
@@ -410,6 +412,7 @@ parseMode =
             (   Options.Applicative.long "inplace"
             <>  Options.Applicative.help "Modify the specified file in-place"
             <>  Options.Applicative.metavar "FILE"
+            <>  Options.Applicative.action "file"
             )
 
     parseInplaceNonTransitive =
@@ -425,6 +428,7 @@ parseMode =
             (   Options.Applicative.long "transitive"
             <>  Options.Applicative.help "Modify the specified file and its transitive relative imports in-place"
             <>  Options.Applicative.metavar "FILE"
+            <>  Options.Applicative.action "file"
             )
 
     parseInput = fmap f (optional p)
@@ -436,6 +440,8 @@ parseMode =
             (   Options.Applicative.long "path"
             <>  Options.Applicative.help "Index all files in path recursively. Will get list of files from STDIN if omitted."
             <>  Options.Applicative.metavar "PATH"
+            <>  Options.Applicative.action "file"
+            <>  Options.Applicative.action "directory"
             )
 
     parseTagsOutput = fmap f (optional p)
@@ -447,6 +453,7 @@ parseMode =
             (   Options.Applicative.long "output"
             <>  Options.Applicative.help "The name of the file that the tags are written to. Defaults to \"tags\""
             <>  Options.Applicative.metavar "FILENAME"
+            <>  Options.Applicative.action "file"
             )
 
     parseSuffixes = fmap f (optional p)
@@ -508,6 +515,7 @@ parseMode =
             (   Options.Applicative.long "output"
             <>  Options.Applicative.help "The destination path to create"
             <>  Options.Applicative.metavar "PATH"
+            <>  Options.Applicative.action "directory"
             )
 
     parseNoted =

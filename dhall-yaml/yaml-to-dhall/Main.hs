@@ -105,6 +105,7 @@ parseOptions =
             (   Options.long "file"
             <>  Options.help "Read YAML expression from a file instead of standard input"
             <>  Options.metavar "FILE"
+            <>  Options.action "file"
             )
 
     parseOutput =
@@ -112,6 +113,7 @@ parseOptions =
             (   Options.long "output"
             <>  Options.help "Write Dhall expression to a file instead of standard output"
             <>  Options.metavar "FILE"
+            <>  Options.action "file"
             )
 
     parseASCII =

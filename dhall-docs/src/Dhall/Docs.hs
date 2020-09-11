@@ -53,7 +53,9 @@ parseOptions =
     <$> Options.Applicative.strOption
         ( Options.Applicative.long "input"
        <> Options.Applicative.metavar "INPUT"
-       <> Options.Applicative.help "Directory of your dhall package" )
+       <> Options.Applicative.help "Directory of your dhall package"
+       <> Options.Applicative.action "directory"
+       )
     <*> Options.Applicative.strOption
         ( Options.Applicative.long "output-link"
        <> Options.Applicative.metavar "OUTPUT-LINK"
@@ -62,7 +64,9 @@ parseOptions =
            <> "documentation. The path needs to not exist or to be a symlink, "
            <> "otherwise the tool won't generate any docs at all"
             )
-       <> Options.Applicative.value "./docs" )
+       <> Options.Applicative.value "./docs"
+       <> Options.Applicative.action "directory"
+       )
     <*> parsePackageNameResolver
     <*> parseAscii
     ) <|> parseVersion

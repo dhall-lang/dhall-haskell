@@ -48,6 +48,7 @@ parseOptions =
             (   Options.long "file"
             <>  Options.help "Read expression from a file instead of standard input"
             <>  Options.metavar "FILE"
+            <>  Options.action "file"
             )
 
     parseVersion =
@@ -62,6 +63,7 @@ parseOptions =
             (   Options.long "output"
             <>  Options.help "Write YAML to a file instead of standard output"
             <>  Options.metavar "FILE"
+            <>  Options.action "file"
             )
 
     parseNoEdit =

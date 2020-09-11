@@ -188,6 +188,7 @@ parseFile =
         (   Options.long "file"
         <>  Options.help "File to import, relative to the top-level directory"
         <>  Options.value "package.dhall"
+        <>  Options.action "file"
         )
 
 parseSource :: Parser Bool
@@ -239,6 +240,7 @@ parseGitHub = do
             (   Options.long "directory"
             <>  Options.help "Subdirectory containing the Dhall package"
             <>  Options.value ""
+            <>  Options.action "directory"
             )
 
     file <- parseFile
