@@ -92,6 +92,7 @@ parseOptions =
             (   Options.long "file"
             <>  Options.help "Read expression from a file instead of standard input"
             <>  Options.metavar "FILE"
+            <>  Options.action "file"
             )
 
     parseOutput =
@@ -99,6 +100,7 @@ parseOptions =
             (   Options.long "output"
             <>  Options.help "Write JSON to a file instead of standard output"
             <>  Options.metavar "FILE"
+            <>  Options.action "file"
             )
 
 parserInfo :: ParserInfo Options

@@ -32,8 +32,9 @@ parseOptions =
   Options <$> parseMode <*> Options.Applicative.optional parseLogFile <*> parseVersion
   where
     parseLogFile = Options.Applicative.strOption
-      (Options.Applicative.long "log" <> Options.Applicative.help
-        "If present writes debug output to the specified file"
+      (  Options.Applicative.long "log"
+      <> Options.Applicative.help "If present writes debug output to the specified file"
+      <> Options.Applicative.action "file"
       )
 
     parseVersion = Options.Applicative.switch
