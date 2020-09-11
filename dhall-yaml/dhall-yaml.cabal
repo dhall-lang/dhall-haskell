@@ -1,5 +1,5 @@
 Name: dhall-yaml
-Version: 1.2.1
+Version: 1.2.2
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.4.3, GHC == 8.6.1
