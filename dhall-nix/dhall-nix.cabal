@@ -1,5 +1,5 @@
 Name: dhall-nix
-Version: 1.1.16
+Version: 1.1.17
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.0.1
@@ -30,7 +30,7 @@ Library
         base                      >= 4.11.0.0 && < 5   ,
         containers                               < 0.7 ,
         data-fix                                 < 0.4 ,
-        dhall                     >= 1.34     && < 1.35,
+        dhall                     >= 1.35     && < 1.36,
         hnix                      >= 0.7      && < 0.10,
         lens-family-core          >= 1.0.0    && < 2.2 ,
         neat-interpolation                       < 0.6 ,
