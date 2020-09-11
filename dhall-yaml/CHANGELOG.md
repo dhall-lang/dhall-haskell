@@ -1,3 +1,7 @@
+1.2.2
+
+* [The `--documents` flag now wraps non-`List`s in a document](https://github.com/dhall-lang/dhall-haskell/pull/1977)
+
 1.2.1
 
 * [Format documents with leading `---`](https://github.com/dhall-lang/dhall-haskell/pull/1865)

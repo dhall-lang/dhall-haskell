@@ -1,3 +1,44 @@
+1.35.0
+
+* [Supports version 18.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v18.0.0)
+    * [Implement more efficient `with` desugaring](https://github.com/dhall-lang/dhall-haskell/pull/1993)
+        * Chained `with` expressions will now be much more efficient
+* [BREAKING CHANGE TO THE API: Preserve whitespace for `Lam` constructor](https://github.com/dhall-lang/dhall-haskell/pull/1980)
+    * This change extends the `Lam` constructor to preserve whitespace around
+      the variable binding
+    * The motivation for this change is to enable `dhall-docs` to support
+      jumping to definitions
+    * You can replace your existing `Lam` constructors with
+      `Dhall.Core.makeFunctionBinding`
+* [BREAKING CHANGE TO THE API: Preserve whitespace for `Field` constructors](https://github.com/dhall-lang/dhall-haskell/pull/1991)
+    * This change extends the `Field` constructor to preserve whitespace around
+      the selected field
+    * The motivation for this change is to enable `dhall-docs` to support
+      jumping to definitions
+    * You can use `Dhall.Core.makeFieldSelection` and
+      `Dhall.Core.fieldSelectionLabel` to convert between the detailed and the
+      simple representation of the selected field.
+* [Add `FromDhall` instances for `{Int,Word}{,8,16,32,64}`](https://github.com/dhall-lang/dhall-haskell/pull/2012)
+* [Add `--output` option for `dhall text` subcommand](https://github.com/dhall-lang/dhall-haskell/pull/1974)
+* [Add `Dhall.Crypto.toString`](https://github.com/dhall-lang/dhall-haskell/pull/1976)
+* [Make the HTTP `Manager` configurable](https://github.com/dhall-lang/dhall-haskell/pull/2027)
+    * Several import-related functions now provide an alternative variants that
+      allows the user to supply a custom `Manager`
+    * You can use this to tweak HTTP request timeouts or use a different TLS
+      manager (e.g. one from `http-client-openssl`)
+* Fixes and improvements to code formatting
+    * [#2000](https://github.com/dhall-lang/dhall-haskell/pull/2000)
+    * [#2021](https://github.com/dhall-lang/dhall-haskell/pull/2021)
+
+      The formatter now preserves comments for record fields (both record types
+      and record literals)
+* Fixes and improvements to documentation
+    * [#2011](https://github.com/dhall-lang/dhall-haskell/pull/2011)
+    * [#2013](https://github.com/dhall-lang/dhall-haskell/pull/2013)
+    * [#2014](https://github.com/dhall-lang/dhall-haskell/pull/2014)
+* Fixes and improvements to test suite
+    * [#2020](https://github.com/dhall-lang/dhall-haskell/pull/2020)
+
 1.34.0
 
 * [Supports version 17.1.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v17.1.0)
