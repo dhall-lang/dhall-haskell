@@ -874,10 +874,7 @@ parsers embedded = Parsers {..}
                     _ <- optional (whitespace *> _comma)
 
                     whitespace
-                    {- The `flip` is necessary because `toMapWith` is internally
-                       based on `Data.Map.fromListWithKey` which combines keys
-                       in reverse order
-                    -}
+
                     let combine k = liftA2 $ \rf rf' -> makeRecordField $ Combine (Just k)
                                                             (recordFieldValue rf')
                                                             (recordFieldValue rf)
