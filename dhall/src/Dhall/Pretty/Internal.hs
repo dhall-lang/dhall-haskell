@@ -1427,14 +1427,17 @@ prettyPrinters characterSet =
     prettyCompletionLit :: Pretty a => Int -> Map Text (RecordField Src a) -> Doc Ann
     prettyCompletionLit = prettyRecordLike . hangingBraces
 
+    prettyRecordLike
+        :: Pretty a
+        => ([(Doc Ann, Doc Ann)] -> Doc Ann)
+        -> Map Text (RecordField Src a)
+        -> Doc Ann
     prettyRecordLike braceStyle a
         | Data.Foldable.null a =
             lbrace <> equals <> rbrace
         | otherwise =
-            braceStyle (map prettyRecordEntry consolidated)
+            braceStyle (map prettyRecordEntry (consolidateRecordLiteral a))
       where
-        consolidated = consolidateRecordLiteral a
-
         prettyRecordEntry kv@(KeyValue keys mSrc2 val) =
             case keys of
                 (mSrc0, key, mSrc1) :| []
@@ -1627,18 +1630,22 @@ makeKeyValue keys expr = KeyValue (adapt <$> keys) Nothing expr
 {- This utility function converts
    `{ x = { y = { z = 1 } } }` to `{ x.y.z = 1 }`
 -}
-consolidateRecordLiteral
-    :: Map Text (RecordField Src a) -> [KeyValue Src a]
-consolidateRecordLiteral = map adapt . Map.toList
+consolidateRecordLiteral :: Map Text (RecordField Src a) -> [KeyValue Src a]
+consolidateRecordLiteral = concatMap adapt . Map.toList
   where
-    adapt :: (Text, RecordField Src a) -> KeyValue Src a
+    adapt :: (Text, RecordField Src a) -> [KeyValue Src a]
     adapt (key, RecordField mSrc0 val mSrc1 mSrc2)
         | not (containsComment mSrc2)
-        , RecordLit m <- shallowDenote val
-        , [ KeyValue keys mSrc2' val' ] <- map adapt (Map.toList m) =
-            KeyValue (NonEmpty.cons (mSrc0, key, mSrc1) keys) mSrc2' val'
+        , RecordLit m <- e
+        , [ KeyValue keys mSrc2' val' ] <- concatMap adapt (Map.toList m) =
+            [ KeyValue (NonEmpty.cons (mSrc0, key, mSrc1) keys) mSrc2' val' ]
+
+        | Combine (Just _) l r <- e =
+            adapt (key, makeRecordField l) <> adapt (key, makeRecordField r)
         | otherwise =
-            KeyValue (pure (mSrc0, key, mSrc1)) mSrc2 val
+            [ KeyValue (pure (mSrc0, key, mSrc1)) mSrc2 val ]
+      where
+        e = shallowDenote val
 
 -- | Escape a `Data.Text.Text` literal using Dhall's escaping rules for
 --   single-quoted @Text@
