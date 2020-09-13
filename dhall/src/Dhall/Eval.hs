@@ -59,6 +59,7 @@ import Dhall.Map     (Map)
 import Dhall.Set     (Set)
 import GHC.Natural   (Natural)
 import Prelude       hiding (succ)
+import GHC.Generics
 
 import Dhall.Syntax
     ( Binding (..)
@@ -241,7 +242,7 @@ vJSON = VHPi "t" (VConst Type) (\t ->
               ("object", VList (VRecord (Dhall.Map.fromList [
                 ("mapKey", VText),
                 ("mapValue", t)
-              ]))),
+              ])) ~> t),
               ("string", VText ~> t)
             ])) ~> t)
 
@@ -729,7 +730,43 @@ eval !env t0 =
                     in  VListLit Nothing s
                 (x', ma') ->
                     VToMap x' ma'
-        ToJSON _x _ma -> error "ToJSON not implemented"
+        ToJSON x _ma ->
+          let 
+              field :: Text -> Expr s a -> (Text, Syntax.RecordField s a)
+              field name e = (name, Syntax.makeRecordField e)
+
+              var :: Text -> Expr Void a
+              var name = Var (V name 0)
+
+              t :: Expr Void a
+              t = var "t"
+
+              jsonS :: Expr Void a
+              jsonS = Record $ Map.fromList
+                [ (field "array" $ Pi "_" (App List t) t)
+                , (field "bool" $ Pi "_" Bool t)
+                , (field "double" $ Pi "_" Double t)
+                , (field "integer" $ Pi "_" Integer t)
+                , (field "null" t)
+                , (field "string" $ Pi "_" Text t)
+                , (field "object" $
+                  Pi "_" (App List (Record (Map.fromList [
+                    (field "mapKey" Text), (field "mapValue" t)
+                  ]))) t)
+                ]
+
+              app :: Expr Void a -> Expr Void a
+              app e = Lam (Syntax.makeFunctionBinding "json" jsonS) e
+
+              json :: Expr Void a -> Val a
+              json e = VLam (VConst Type) (Closure "t" Empty (app e))
+
+              integer :: Integer -> Val a
+              integer n = json $ App (var "integer") (IntegerLit n)
+
+         in case eval env x of
+          VIntegerLit n -> integer n
+
         Field t (Syntax.fieldSelectionLabel -> k) ->
             vField (eval env t) k
         Project t (Left ks) ->
