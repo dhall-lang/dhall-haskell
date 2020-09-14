@@ -735,34 +735,26 @@ eval !env t0 =
               field :: Text -> Expr s a -> (Text, Syntax.RecordField s a)
               field name e = (name, Syntax.makeRecordField e)
 
-              var :: Text -> Expr Void a
-              var name = Var (V name 0)
+              jsonS :: Val a -> Val a
+              jsonS t = VRecord (Dhall.Map.fromList
+                [ ("array", (VList t) ~> t)
+                , ("bool", VBool ~> t)
+                , ("double", VDouble ~> t)
+                , ("integer", VInteger ~> t)
+                , ("null", t)
+                , ("string", VText ~> t)
+                , ("object", VList (VRecord (Dhall.Map.fromList
+                    [ ("mapKey", VText)
+                    , ("mapValue", t)
+                    ])) ~> t)
+                ])
 
-              t :: Expr Void a
-              t = var "t"
-
-              jsonS :: Expr Void a
-              jsonS = Record $ Map.fromList
-                [ (field "array" $ Pi "_" (App List t) t)
-                , (field "bool" $ Pi "_" Bool t)
-                , (field "double" $ Pi "_" Double t)
-                , (field "integer" $ Pi "_" Integer t)
-                , (field "null" t)
-                , (field "string" $ Pi "_" Text t)
-                , (field "object" $
-                  Pi "_" (App List (Record (Map.fromList [
-                    (field "mapKey" Text), (field "mapValue" t)
-                  ]))) t)
-                ]
-
-              app :: Expr Void a -> Expr Void a
-              app e = Lam (Syntax.makeFunctionBinding "json" jsonS) e
-
-              json :: Expr Void a -> Val a
-              json e = VLam (VConst Type) (Closure "t" Empty (app e))
+              json :: (Val a -> Val a -> Val a) -> Val a
+              json f = VHPi "t" (VConst Type)
+                        (\t -> (VHPi "json" (jsonS t) (f t)))
 
               integer :: Integer -> Val a
-              integer n = json $ App (var "integer") (IntegerLit n)
+              integer n = json $ \t j -> vApp (vField j "integer") (VIntegerLit n)
 
          in case eval env x of
           VIntegerLit n -> integer n
