@@ -274,8 +274,6 @@ let
 
                     path-io = haskellPackagesNew.path-io_1_6_0;
 
-                    prettyprinter = haskellPackagesNew.prettyprinter_1_6_0;
-
                     semialign = haskellPackagesNew.semialign_1_1;
                   };
 

@@ -75,7 +75,6 @@ import Control.Monad.Morph              (hoist)
 import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson                       (FromJSON)
-import Data.Fix                         (Fix)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Text                        (Text)
 import Data.Void                        (Void)
@@ -286,13 +285,6 @@ toListWith _  Nothing  = [ ]
 
 nub :: Ord a => [a] -> [a]
 nub = Foldl.fold Foldl.nub
-
-{-| This specialization of `nub` is necessary to work around a type-checking
-    loop with GHC 8.4
--}
-nub'
-    :: Ord (f (Fix f)) => [ (Text, Maybe (Fix f)) ] -> [ (Text, Maybe (Fix f)) ]
-nub' = nub
 
 {-| The Nixpkgs support for Dhall essentially replaces all remote imports with
     cache hits, but doing so implies that all remote imports must be protected
@@ -601,7 +593,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
             Nix.mkFunction
                 (Nix.mkParamset
                     (   [ (buildDhallGitHubPackage, Nothing) ]
-                    <>  nub' (fmap functionParameter nixDependencies)
+                    <>  nub (fmap functionParameter nixDependencies)
                     )
                     False
                 )
@@ -662,7 +654,7 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
             Nix.mkFunction
                 (Nix.mkParamset
                     (   [ (buildDhallDirectoryPackage, Nothing) ]
-                    <>  nub' (fmap functionParameter nixDependencies)
+                    <>  nub (fmap functionParameter nixDependencies)
                     )
                     False
                 )
