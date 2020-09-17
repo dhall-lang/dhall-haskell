@@ -4,12 +4,11 @@
 module Main (main) where
 
 import Control.Applicative.Combinators (option, sepBy1)
-import Data.Aeson                      (decodeFileStrict)
+import Data.Aeson                      (decodeFileStrict, eitherDecodeFileStrict)
 import Data.Bifunctor                  (bimap)
 import Data.Foldable                   (for_)
 import Data.Text                       (Text, pack)
 import Data.Void                       (Void)
-import Data.Yaml
 import Dhall.Core                      (Expr (..))
 import Dhall.Format                    (Format (..))
 import Numeric.Natural                 (Natural)
@@ -104,16 +103,12 @@ parseStability = parseAlpha <|> parseBeta <|> parseProduction
   where
     parseAlpha = do
         _ <- "alpha"
-
         n <- Megaparsec.Lexer.decimal
-
         return (Alpha n)
 
     parseBeta = do
         _ <- "beta"
-
         n <- Megaparsec.Lexer.decimal
-
         return (Beta n)
 
     parseProduction = do
@@ -127,24 +122,16 @@ parseVersion = Megaparsec.try parseSuffix <|> parsePrefix
 
     parseSuffix = do
         _ <- "v"
-
         version <- Megaparsec.Lexer.decimal
-
         stability <- parseStability
-
         _ <- "."
-
         _ <- parseComponent
-
         Megaparsec.eof
-
         return Version{..}
 
     parsePrefix = do
         _ <- parseComponent
-
         _ <- "."
-
         parseVersion
 
 getVersion :: ModelName -> Maybe Version
@@ -171,11 +158,8 @@ getAutoscaling ModelName{..}
 preferStableResource :: DuplicateHandler
 preferStableResource (_, names) = do
     let issue112 = Ord.comparing getAutoscaling
-
     let defaultComparison = Ord.comparing getVersion
-
     let comparison = issue112 <> defaultComparison
-
     return (List.maximumBy comparison names)
 
 skipDuplicatesHandler :: DuplicateHandler
@@ -245,7 +229,7 @@ main = do
   -- Get the Definitions
   defs <-
         if crd then do
-          crdFile <- decodeFileEither filename
+          crdFile <- eitherDecodeFileStrict filename
           case crdFile of
             Left e -> do
                 fail $ "Unable to decode the CRD file. " <> show e
