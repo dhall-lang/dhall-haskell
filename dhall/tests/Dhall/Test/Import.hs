@@ -19,6 +19,8 @@ import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
+import qualified Network.HTTP.Client              as HTTP
+import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.FilePath                  as FilePath
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.HUnit                 as Tasty.HUnit
@@ -81,8 +83,14 @@ successTest path = do
 
         let unsetCache = Turtle.unset "XDG_CACHE_HOME"
 
+        let httpManager =
+                HTTP.newManager
+                    HTTP.tlsManagerSettings
+                        { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
         let load =
-                State.evalStateT (Test.Util.loadWith actualExpr) (Import.emptyStatus directoryString)
+                State.evalStateT
+                    (Test.Util.loadWith actualExpr)
+                    (Import.emptyStatusWithManager httpManager directoryString)
 
         let usesCache = [ "hashFromCacheA.dhall"
                         , "unit/asLocation/HashA.dhall"

@@ -665,6 +665,8 @@ Test-Suite tasty
         filepath                                       ,
         foldl                                    < 1.5 ,
         generic-random            >= 1.3.0.0  && < 1.4 ,
+        http-client                                    ,
+        http-client-tls                                ,
         lens-family-core                               ,
         megaparsec                                     ,
         prettyprinter                                  ,
