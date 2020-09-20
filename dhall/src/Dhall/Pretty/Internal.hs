@@ -765,8 +765,13 @@ prettyPrinters characterSet =
                 docs d
             | otherwise =
                 [ prettyExpression c ]
-    prettyExpression (With a b c) =
-            prettyExpression a
+    prettyExpression (With (Dhall.Syntax.shallowDenote -> a) b c) =
+            case a of
+                With{} ->
+                    -- Don't parenthesize an inner with-expression
+                    prettyExpression a
+                _ ->
+                    prettyImportExpression_ a
         <>  Pretty.flatAlt long short
       where
         short = " " <> keyword "with" <> " " <> update
