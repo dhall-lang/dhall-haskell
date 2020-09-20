@@ -27,7 +27,7 @@ in
     cd src
     ${coreutils}/bin/chmod --recursive u+w .
     ${coreutils}/bin/mkdir dist tmp
-    HOME=$PWD ${cabal-install}/bin/cabal sdist --output-dir=tmp
+    HOME=$PWD ${cabal-install}/bin/cabal sdist --verbose=0 --output-dir=tmp
     ${gnutar}/bin/tar --directory tmp --extract --file tmp/*.tar.gz
     ${coreutils}/bin/rm tmp/*.tar.gz
     ${coreutils}/bin/mv tmp/* $out
