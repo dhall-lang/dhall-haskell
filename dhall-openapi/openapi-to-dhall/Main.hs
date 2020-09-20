@@ -4,12 +4,11 @@
 module Main (main) where
 
 import Control.Applicative.Combinators (option, sepBy1)
-import Data.Aeson                      (decodeFileStrict)
+import Data.Aeson                      (decodeFileStrict, eitherDecodeFileStrict)
 import Data.Bifunctor                  (bimap)
 import Data.Foldable                   (for_)
-import Data.Text                       (Text, pack)
+import Data.Text                       (Text, pack, unpack)
 import Data.Void                       (Void)
-import Data.Yaml
 import Dhall.Core                      (Expr (..))
 import Dhall.Format                    (Format (..))
 import Numeric.Natural                 (Natural)
@@ -29,11 +28,13 @@ import Dhall.Kubernetes.Types
     , Prefix
     , Swagger (..)
     )
+import System.FilePath                  (FilePath, (</>))
 
 import qualified Data.List                             as List
 import qualified Data.Map.Strict                       as Data.Map
 import qualified Data.Ord                              as Ord
 import qualified Data.Text                             as Text
+import qualified Data.Text.IO                          as Text
 import qualified Data.Text.Prettyprint.Doc             as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Text as PrettyText
 import qualified Dhall.Core                            as Dhall
@@ -47,9 +48,9 @@ import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.IO
+import qualified System.Directory                      as Directory
 import qualified Text.Megaparsec                       as Megaparsec
 import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Lexer
-import qualified Turtle
 
 -- | Top-level program options
 data Options = Options
@@ -60,10 +61,10 @@ data Options = Options
     }
 
 -- | Write and format a Dhall expression to a file
-writeDhall :: Turtle.FilePath -> Types.Expr -> IO ()
+writeDhall :: FilePath -> Types.Expr -> IO ()
 writeDhall path expr = do
-  echoStr $ "Writing file '" <> Turtle.encodeString path <> "'"
-  Turtle.writeTextFile path $ pretty expr <> "\n"
+  putStrLn $ "Writing file '" <> path <> "'"
+  Text.writeFile path $ pretty expr <> "\n"
 
   let characterSet = Dhall.Pretty.ASCII
 
@@ -73,7 +74,7 @@ writeDhall path expr = do
 
   let input =
         Dhall.Util.PossiblyTransitiveInputFile
-            (Turtle.encodeString path)
+            path
             Dhall.Util.NonTransitive
 
   let formatOptions = Dhall.Format.Format{..}
@@ -85,12 +86,6 @@ pretty :: Pretty.Pretty a => a -> Text
 pretty = PrettyText.renderStrict
   . Pretty.layoutPretty Pretty.defaultLayoutOptions
   . Pretty.pretty
-
-echo :: Turtle.MonadIO m => Text -> m ()
-echo = Turtle.printf (Turtle.s Turtle.% "\n")
-
-echoStr :: Turtle.MonadIO m => String -> m ()
-echoStr = echo . Text.pack
 
 data Stability = Alpha Natural | Beta Natural | Production deriving (Eq, Ord)
 
@@ -104,16 +99,12 @@ parseStability = parseAlpha <|> parseBeta <|> parseProduction
   where
     parseAlpha = do
         _ <- "alpha"
-
         n <- Megaparsec.Lexer.decimal
-
         return (Alpha n)
 
     parseBeta = do
         _ <- "beta"
-
         n <- Megaparsec.Lexer.decimal
-
         return (Beta n)
 
     parseProduction = do
@@ -127,24 +118,16 @@ parseVersion = Megaparsec.try parseSuffix <|> parsePrefix
 
     parseSuffix = do
         _ <- "v"
-
         version <- Megaparsec.Lexer.decimal
-
         stability <- parseStability
-
         _ <- "."
-
         _ <- parseComponent
-
         Megaparsec.eof
-
         return Version{..}
 
     parsePrefix = do
         _ <- parseComponent
-
         _ <- "."
-
         parseVersion
 
 getVersion :: ModelName -> Maybe Version
@@ -171,11 +154,8 @@ getAutoscaling ModelName{..}
 preferStableResource :: DuplicateHandler
 preferStableResource (_, names) = do
     let issue112 = Ord.comparing getAutoscaling
-
     let defaultComparison = Ord.comparing getVersion
-
     let comparison = issue112 <> defaultComparison
-
     return (List.maximumBy comparison names)
 
 skipDuplicatesHandler :: DuplicateHandler
@@ -245,7 +225,7 @@ main = do
   -- Get the Definitions
   defs <-
         if crd then do
-          crdFile <- decodeFileEither filename
+          crdFile <- eitherDecodeFileStrict filename
           case crdFile of
             Left e -> do
                 fail $ "Unable to decode the CRD file. " <> show e
@@ -271,18 +251,18 @@ main = do
             defs
 
   -- Output to types
-  Turtle.mktree "types"
+  Directory.createDirectoryIfMissing True "types"
   for_ (Data.Map.toList types) $ \(ModelName name, expr) -> do
-    let path = "./types" Turtle.</> Turtle.fromText (name <> ".dhall")
+    let path = "./types" </> unpack name <> ".dhall"
     writeDhall path expr
 
   -- Convert from Dhall types to defaults
   let defaults = Data.Map.mapMaybeWithKey (Convert.toDefault prefixMap defs) types
 
   -- Output to defaults
-  Turtle.mktree "defaults"
+  Directory.createDirectoryIfMissing True "defaults"
   for_ (Data.Map.toList defaults) $ \(ModelName name, expr) -> do
-    let path = "./defaults" Turtle.</> Turtle.fromText (name <> ".dhall")
+    let path = "./defaults" </> unpack name <> ".dhall"
     writeDhall path expr
 
   let mkEmbedField = Dhall.makeRecordField . Dhall.Embed
@@ -308,9 +288,9 @@ main = do
           )
 
   -- Output schemas that combine both the types and defaults
-  Turtle.mktree "schemas"
+  Directory.createDirectoryIfMissing True "schemas"
   for_ (Data.Map.toList schemas) $ \(ModelName name, expr) -> do
-    let path = "./schemas" Turtle.</> Turtle.fromText (name <> ".dhall")
+    let path = "./schemas" </> unpack name <> ".dhall"
     writeDhall path expr
 
   -- Output the types record, the defaults record, and the giant union type
