@@ -1410,13 +1410,15 @@ prettyPrinters characterSet =
                                     <>  prettyValue val
                                     )
           where
-            (preSeparator, preComment) =
-                case key of
-                    (_, _, mSrc2) :| [] | not (containsComment mSrc2) ->
-                        (" ", Pretty.hardline <> "    ")
-                    _ ->
-                        (Pretty.hardline, " ")
-
+            (preSeparator, preComment)
+                | (_, _, mSrc2) :| ks <- key
+                , not (containsComment mSrc2)
+                , not (any hasComment ks) =
+                    (" ", Pretty.hardline <> "    ")
+                | otherwise =
+                    (Pretty.hardline, " ")
+              where
+                hasComment (mSrc1, _, mSrc2) = containsComment mSrc1 || containsComment mSrc2
 
     prettyRecord :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecord =
