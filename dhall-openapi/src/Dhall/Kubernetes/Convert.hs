@@ -221,7 +221,7 @@ toDefault prefixMap definitions modelName = go
 
             adaptRecordMap = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
 
-        in  Just $ Dhall.RecordLit $ adaptRecordMap $ Dhall.Map.union baseData $ Dhall.Map.mapMaybe valueForField kvs
+        in  Just $ Dhall.RecordLit $ adaptRecordMap $ Dhall.Map.unionWith (\_ v -> v) baseData (Dhall.Map.mapMaybe valueForField kvs)
 
       -- We error out here because wildcards are bad, and we should know if
       -- we get something unexpected
