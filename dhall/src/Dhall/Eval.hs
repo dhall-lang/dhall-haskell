@@ -50,14 +50,15 @@ module Dhall.Eval (
   , textShow
   ) where
 
-import Data.Foldable (foldr', toList)
-import Data.Sequence (Seq, ViewL (..), ViewR (..))
-import Data.Text     (Text)
-import Data.Void     (Void)
-import Dhall.Map     (Map)
-import Dhall.Set     (Set)
-import GHC.Natural   (Natural)
-import Prelude       hiding (succ)
+import Data.Foldable      (foldr', toList)
+import Data.List.NonEmpty (NonEmpty(..))
+import Data.Sequence      (Seq, ViewL (..), ViewR (..))
+import Data.Text          (Text)
+import Data.Void          (Void)
+import Dhall.Map          (Map)
+import Dhall.Set          (Set)
+import GHC.Natural        (Natural)
+import Prelude            hiding (succ)
 
 import Dhall.Syntax
     ( Binding (..)
@@ -219,6 +220,7 @@ data Val a
     | VProject !(Val a) !(Either (Set Text) (Val a))
     | VAssert !(Val a)
     | VEquivalent !(Val a) !(Val a)
+    | VWith !(Val a) (NonEmpty Text) !(Val a)
     | VEmbed a
 
 -- | For use with "Text.Show.Functions".
@@ -382,6 +384,18 @@ vProjectByFields env t ks =
                 in  vPrefer env (vProjectByFields env l ks') (VRecordLit kvs')
             t' ->
                 VProject t' (Left ks)
+
+vWith :: Val a -> NonEmpty Text -> Val a -> Val a
+vWith (VRecordLit kvs) (k  :| []     ) v = VRecordLit (Map.insert k  v  kvs)
+vWith (VRecordLit kvs) (k₀ :| k₁ : ks) v = VRecordLit (Map.insert k₀ e₂ kvs)
+  where
+    e₁ =
+        case Map.lookup k₀ kvs of
+            Nothing  -> VRecordLit mempty
+            Just e₁' -> e₁'
+
+    e₂ = vWith e₁ (k₁ :| ks) v
+vWith e₀ ks v₀ = VWith e₀ ks v₀
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
 eval !env t0 =
@@ -725,8 +739,8 @@ eval !env t0 =
             VAssert (eval env t)
         Equivalent t u ->
             VEquivalent (eval env t) (eval env u)
-        e@With{} ->
-            eval env (Syntax.desugarWith e)
+        With e₀ ks v ->
+            vWith (eval env e₀) ks (eval env v)
         Note _ e ->
             eval env e
         ImportAlt t _ ->
@@ -1118,6 +1132,8 @@ quote !env !t0 =
             Assert (quote env t)
         VEquivalent t u ->
             Equivalent (quote env t) (quote env u)
+        VWith e ks v ->
+            With (quote env e) ks (quote env v)
         VInject m k Nothing ->
             Field (Union (fmap (fmap (quote env)) m)) $ Syntax.makeFieldSelection k
         VInject m k (Just t) ->

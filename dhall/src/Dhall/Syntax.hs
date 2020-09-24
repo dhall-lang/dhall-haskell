@@ -75,9 +75,6 @@ module Dhall.Syntax (
     , linesLiteral
     , unlinesLiteral
 
-    -- * Desugaring
-    , desugarWith
-
     -- * Utilities
     , internalError
     -- `shift` should really be in `Dhall.Normalize`, but it's here to avoid a
@@ -114,7 +111,6 @@ import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Dhall.Crypto
-import qualified Dhall.Optics              as Optics
 import qualified Lens.Family               as Lens
 import qualified Network.URI               as URI
 
@@ -1396,29 +1392,6 @@ shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
     mt' = fmap (fmap (shift d (V x n))) mt
     r'  =             shift d (V x n)  r
 shift d v expression = Lens.over subExpressions (shift d v) expression
-
--- | Desugar all @with@ expressions
-desugarWith :: Expr s a -> Expr s a
-desugarWith = Optics.rewriteOf subExpressions rewrite
-  where
-    rewrite e@(With record (key :| []) value) =
-        Just
-            (Prefer
-                (PreferFromWith e)
-                record
-                (RecordLit [ (key, makeRecordField value) ])
-            )
-    rewrite e@(With record (key0 :| key1 : keys) value) =
-        Just
-            (Let
-                (makeBinding "_" record)
-                (Prefer (PreferFromWith e) "_"
-                    (RecordLit
-                        [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing key0 Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
-                    )
-                )
-            )
-    rewrite _ = Nothing
 
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
