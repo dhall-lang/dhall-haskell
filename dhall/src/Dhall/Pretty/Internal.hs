@@ -1411,10 +1411,10 @@ prettyPrinters characterSet =
                                     )
           where
             (preSeparator, preComment)
-                | not (any hasComment key) = 
-                    (" ", Pretty.hardline <> "    ")
-                | otherwise =
+                | not (any hasComment (NonEmpty.tail key)) = 
                     (Pretty.hardline, " ")
+                | otherwise =
+                    (" ", Pretty.hardline <> "    ")
               where
                 hasComment (_, _, mSrc2) = containsComment mSrc2
 
