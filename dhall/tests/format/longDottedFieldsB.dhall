@@ -8,4 +8,12 @@
   =
     {- comment -}
     y
+,   ggggggggggggggggggggggggggggggggggggggggggggggg
+  . hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+  . iiiiiiiiiiiiiiiiiii
+  =
+    ''
+    foo
+    bar
+    ''
 }
