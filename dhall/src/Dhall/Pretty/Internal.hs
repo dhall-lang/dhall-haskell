@@ -1342,9 +1342,11 @@ prettyPrinters characterSet =
                     Just doc -> doc <> Pretty.hardline
             <>  prettyValue val
 
-        long =  Pretty.align
-                    (   prettyAnyLabels key
-                    <>  preSeparator
+        long =  Pretty.group
+                    ( Pretty.align
+                        (   prettyAnyLabels key
+                        <>  Pretty.flatAlt Pretty.hardline " "
+                        )
                     )
             <>  separator
             <>  case renderSrcMaybe mSrc of
@@ -1410,7 +1412,7 @@ prettyPrinters characterSet =
                                     <>  prettyValue val
                                     )
           where
-            (preSeparator, preComment)
+            (_, preComment)
                 | (_, _, mSrc2) :| ks <- key
                 , not (containsComment mSrc2)
                 , not (any hasComment ks) =

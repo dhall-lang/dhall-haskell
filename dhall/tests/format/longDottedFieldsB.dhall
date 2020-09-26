@@ -1,9 +1,11 @@
 {   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   . bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-  . ccccccccccccccccccc = x
+  . ccccccccccccccccccc
+  = x
 ,   ddddddddddddddddddddddddddddddddddddddddddddddd
   . eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-  . fffffffffffffffffff =
+  . fffffffffffffffffff
+  =
     {- comment -}
     y
 }
