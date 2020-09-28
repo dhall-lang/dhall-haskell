@@ -1251,8 +1251,27 @@ infer typer = loop
 
             return (VConst Type)
 
-        e@With{} ->
-            loop ctx (Syntax.desugarWith e)
+        With e ks v -> do
+            tE' <- loop ctx e
+
+            kTs' <- case tE' of
+                VRecord kTs' -> return kTs'
+                _            -> die (NotWithARecord e (quote names tE'))
+
+            case ks of
+                k :| [] -> do
+                    tV' <- loop ctx v
+
+                    return (VRecord (Dhall.Map.insert k tV' kTs'))
+                k₀ :| k₁ : ks' -> do
+                    let e₁ =
+                            if Dhall.Map.member k₀ kTs'
+                                then Field e (Syntax.makeFieldSelection k₀)
+                                else RecordLit mempty
+
+                    tV' <- loop ctx (With e₁ (k₁ :| ks') v)
+
+                    return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
 
         Note s e ->
             case loop ctx e of
@@ -1343,6 +1362,7 @@ data TypeMessage s a
     | NotAnEquivalence (Expr s a)
     | IncomparableExpression (Expr s a)
     | EquivalenceTypeMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
+    | NotWithARecord (Expr s a) (Expr s a)
     | CantAnd (Expr s a) (Expr s a)
     | CantOr (Expr s a) (Expr s a)
     | CantEQ (Expr s a) (Expr s a)
@@ -4238,6 +4258,45 @@ prettyTypeMessage (EquivalenceTypeMismatch l _L r _R) = ErrorMessages {..}
         \                                                                                \n\
         \" <> insert _R <> "\n"
 
+prettyTypeMessage (NotWithARecord expr0 expr1) = ErrorMessages {..}
+  where
+    short = "❰with❱ only works on records"
+
+    long =
+        "Explanation: You can use ❰with❱ to update a record, like this:                  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────┐                                                 \n\
+        \    │  { a = 5 } with b = 10  │  This is valid because ❰{ a = 5}❱ is a record   \n\
+        \    └────────────────────────┘                                                  \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────────────────┐                                \n\
+        \    │  λ(r : { a : Natural }) → r with b = 10  │  This is also valid because    \n\
+        \    └──────────────────────────────────────────┘  ❰r❱ is a record               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot use ❰with❱ to update an expression that is not a record.  For\n\
+        \example, the following expression is " <> _NOT <> " valid:                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────┐                                                           \n\
+        \    │ 1 with b = 10 │  Invalid: ❰1❱ is not a record                             \n\
+        \    └───────────────┘                                                           \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to update the following expressions:                                  \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which has type\n\
+        \                                                                                \n\
+        \" <> txt1 <> "\n\
+        \                                                                                \n\
+        \... which is not a record type\n"
+      where
+        txt0 = insert expr0
+        txt1 = insert expr1
+
 prettyTypeMessage (CantAnd expr0 expr1) =
         buildBooleanOperator "&&" expr0 expr1
 
@@ -4649,6 +4708,8 @@ messageExpressions f m = case m of
         IncomparableExpression <$> f a
     EquivalenceTypeMismatch a b c d ->
         EquivalenceTypeMismatch <$> f a <*> f b <*> f c <*> f d
+    NotWithARecord a b ->
+        NotWithARecord <$> f a <*> f b
     CantAnd a b ->
         CantAnd <$> f a <*> f b
     CantOr a b ->

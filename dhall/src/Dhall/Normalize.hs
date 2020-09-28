@@ -23,6 +23,7 @@ module Dhall.Normalize (
 import Control.Applicative   (empty)
 import Data.Foldable
 import Data.Functor.Identity (Identity (..))
+import Data.List.NonEmpty    (NonEmpty(..))
 import Data.Sequence         (ViewL (..), ViewR (..))
 import Data.Traversable
 import Instances.TH.Lift     ()
@@ -613,8 +614,26 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         r' <- loop r
 
         pure (Equivalent l' r')
-    With e' k v ->
-        loop (Syntax.desugarWith (With e' k v))
+    With e ks v -> do
+        e' <- loop e
+        v' <- loop v
+
+        case e' of
+            RecordLit kvs ->
+                case ks of
+                    k :| [] ->
+                        return (RecordLit (Dhall.Map.insert k (Syntax.makeRecordField v') kvs))
+                    k₀ :| k₁ : ks' -> do
+                        let e₁ =
+                                case Dhall.Map.lookup k₀ kvs of
+                                    Nothing -> RecordLit mempty
+                                    Just r  -> Syntax.recordFieldValue r
+
+                        e₂ <- loop (With e₁ (k₁ :| ks') v')
+
+                        return (RecordLit (Dhall.Map.insert k₀ (Syntax.makeRecordField e₂) kvs))
+            _ ->
+                return (With e' ks v')
     Note _ e' -> loop e'
     ImportAlt l _r -> loop l
     Embed a -> pure (Embed a)

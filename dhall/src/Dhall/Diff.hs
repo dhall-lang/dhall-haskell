@@ -1032,8 +1032,29 @@ diffApplicationExpression l r =
     diffWithExpression l r
 
 diffWithExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
-diffWithExpression l@With{} r@With{} =
-    diffWithExpression (Syntax.desugarWith l) (Syntax.desugarWith r)
+diffWithExpression (With eL ksL vL) (With eR ksR vR) =
+    align
+        (   format " " (diffImportExpression eL eR)
+        <>  "with "
+        <>  align
+            (   format " " (diffPath ksL ksR)
+            <>  "= "
+            <>  diffOperatorExpression vL vR
+            )
+        )
+  where
+    diffPath (kL :| []) (kR :| []) =
+        diffLabel kL kR
+    diffPath (kL₀ :| kL₁ : ksL') (kR₀ :| kR₁ : ksR') =
+            format "" (diffLabel kL₀ kR₀)
+        <>  dot
+        <>  diffPath (kL₁ :| ksL') (kR₁ :| ksR')
+    diffPath (kL :| []) (kR₀ :| kR₁ : ksR') =
+            format "" (diffLabel kL kR₀)
+        <>  plus (foldMap (\k -> dot <> token (Internal.prettyLabel k)) (kR₁ :| ksR'))
+    diffPath (kL₀ :| kL₁ : ksL') (kR :| []) =
+            format "" (diffLabel kL₀ kR)
+        <>  minus (foldMap (\k -> dot <> token (Internal.prettyLabel k)) (kL₁ :| ksL'))
 diffWithExpression l r@With{} =
     mismatch l r
 diffWithExpression l@With{} r =
