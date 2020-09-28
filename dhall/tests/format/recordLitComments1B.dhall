@@ -1,4 +1,3 @@
 { --| a comment for y
-  y
-  = 42
+  y = 42
 }

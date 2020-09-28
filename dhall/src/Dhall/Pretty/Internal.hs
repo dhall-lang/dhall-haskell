@@ -1345,7 +1345,7 @@ prettyPrinters characterSet =
         long =  Pretty.group
                     ( Pretty.align
                         (   prettyAnyLabels key
-                        <>  Pretty.flatAlt Pretty.hardline " "
+                        <>  preSeparator
                         )
                     )
             <>  separator
@@ -1412,6 +1412,12 @@ prettyPrinters characterSet =
                                     <>  prettyValue val
                                     )
           where
+            preSeparator
+                | (_, _, mSrc2) :| [] <- key
+                , not (containsComment mSrc2) =
+                    " "
+                | otherwise =
+                    Pretty.flatAlt Pretty.hardline " "
             (_, preComment)
                 | (_, _, mSrc2) :| ks <- key
                 , not (containsComment mSrc2)
