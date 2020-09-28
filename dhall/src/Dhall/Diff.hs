@@ -1034,7 +1034,7 @@ diffApplicationExpression l r =
 diffWithExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffWithExpression (With eL ksL vL) (With eR ksR vR) =
     align
-        (    format " " (diffImportExpression eL eR)
+        (   format " " (diffImportExpression eL eR)
         <>  "with "
         <>  align
             (   format " " (diffPath ksL ksR)
