@@ -13,6 +13,7 @@ module Dhall.Lint
     , removeUnusedBindings
     , fixAssert
     , fixParentPath
+    , addPreludeExtensions
     , removeLetInLet
     , useToMap
     ) where
@@ -29,12 +30,14 @@ import Dhall.Syntax
     , Import (..)
     , ImportHashed (..)
     , ImportType (..)
+    , URL (..)
     , Var (..)
     , subExpressions
     )
 
 import qualified Data.Foldable      as Foldable
 import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Text          as Text
 import qualified Dhall.Core         as Core
 import qualified Dhall.Map          as Map
 import qualified Dhall.Optics
@@ -57,6 +60,7 @@ lint =  Dhall.Optics.rewriteOf subExpressions rewrite
         <|> removeUnusedBindings     e
         <|> fixParentPath            e
         <|> removeLetInLet           e
+        <|> addPreludeExtensions     e
 
 -- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -103,6 +107,37 @@ fixParentPath (Embed oldImport) = do
         _ ->
             Nothing
 fixParentPath _  = Nothing
+
+addPreludeExtensions :: Expr s Import -> Maybe (Expr s Import)
+addPreludeExtensions (Embed oldImport) = do
+    let Import{ importHashed = oldImportHashed, .. } = oldImport
+
+    let ImportHashed{ importType = oldImportType, .. } = oldImportHashed
+
+    case oldImportType of
+        Remote URL{ path = oldPath, ..}
+            | authority == "prelude.dhall-lang.org" ->
+                case oldPath of
+                    File{ file = oldFile, .. }
+                        | not (Text.isSuffixOf ".dhall" oldFile) -> do
+                            let newFile = oldFile <> ".dhall"
+
+                            let newPath = File{ file = newFile, .. }
+
+                            let newImportType = Remote URL{ path = newPath, .. }
+
+                            let newImportHashed =
+                                    ImportHashed{ importType = newImportType, .. }
+
+                            let newImport =
+                                    Import{ importHashed = newImportHashed, .. }
+
+                            return (Embed newImport)
+                    _ ->
+                        Nothing
+        _ -> do
+            Nothing
+addPreludeExtensions _ = Nothing
 
 isOrContainsAssert :: Expr s a -> Bool
 isOrContainsAssert (Assert _) = True
