@@ -108,6 +108,9 @@ fixParentPath (Embed oldImport) = do
             Nothing
 fixParentPath _  = Nothing
 
+{-| This transforms @https://prelude.dhall-lang.org/…/foo@ to
+    @https://prelude.dhall-lang.org/…/foo.dhall@
+-}
 addPreludeExtensions :: Expr s Import -> Maybe (Expr s Import)
 addPreludeExtensions (Embed oldImport) = do
     let Import{ importHashed = oldImportHashed, .. } = oldImport
