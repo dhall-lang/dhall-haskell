@@ -20,7 +20,7 @@ let example
 
 let everybody
     : Person → List Text
-    = let concat = http://prelude.dhall-lang.org/List/concat
+    = let concat = http://prelude.dhall-lang.org/List/concat.dhall
 
       in  λ(x : Person) →
             x
