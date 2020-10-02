@@ -25,7 +25,7 @@ file and outputs an HTML documentation of it.
 * Jump-to-definition on imports and let-bindings
 
 To see a demo, visit the documentation for the
-[`Dhall Prelude`](https://hydra.dhall-lang.org/job/dhall-haskell/master/generate-dhall-docs/latest/download/1/docs).
+[`Dhall Prelude`](https://hydra.dhall-lang.org/job/dhall-haskell/master/prelude-dhall-docs/latest/download/1/docs).
 You can also check the [tests](./tasty/data/package/) folder for further examples
 
 ## Usage
