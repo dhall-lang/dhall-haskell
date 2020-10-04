@@ -65,6 +65,7 @@ module Dhall.Parser.Token (
     _Integer,
     _Double,
     _Text,
+    _TextReplace,
     _TextShow,
     _List,
     _True,
@@ -1052,6 +1053,13 @@ _Double = builtin "Double"
 -}
 _Text :: Parser ()
 _Text = builtin "Text"
+
+{-| Parse the @Text/replace@ built-in
+
+    This corresponds to the @Text-replace@ rule from the official grammar
+-}
+_TextReplace :: Parser ()
+_TextReplace = builtin "Text/replace"
 
 {-| Parse the @Text/show@ built-in
 

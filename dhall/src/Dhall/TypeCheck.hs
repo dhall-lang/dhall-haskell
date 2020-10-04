@@ -580,6 +580,16 @@ infer typer = loop
 
             return VText
 
+        TextReplace ->
+            return
+                (   VHPi "needle" VText  (\_needle ->
+                        VHPi "replacement" VText (\_replacement ->
+                            VHPi "haystack" VText (\_haystack ->
+                                VText
+                            )
+                        )
+                    )
+                )
         TextShow ->
             return (VText ~> VText)
 

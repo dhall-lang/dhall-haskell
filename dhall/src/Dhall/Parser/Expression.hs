@@ -580,7 +580,8 @@ parsers embedded = Parsers {..}
                     'S' ->    Const Sort       <$ _Sort
                     'T' ->
                         choice
-                            [ TextShow         <$ _TextShow
+                            [ TextReplace      <$ _TextReplace
+                            , TextShow         <$ _TextShow
                             , Text             <$ _Text
                             , BoolLit True     <$ _True
                             , Const Type       <$ _Type

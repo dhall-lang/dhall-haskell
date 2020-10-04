@@ -506,9 +506,9 @@ data Expr s a
     | Integer
     -- | > IntegerLit n                             ~  ±n
     | IntegerLit Integer
-    -- | > IntegerClamp                               ~  Integer/clamp
+    -- | > IntegerClamp                             ~  Integer/clamp
     | IntegerClamp
-    -- | > IntegerNegate                              ~  Integer/negate
+    -- | > IntegerNegate                            ~  Integer/negate
     | IntegerNegate
     -- | > IntegerShow                              ~  Integer/show
     | IntegerShow
@@ -526,6 +526,8 @@ data Expr s a
     | TextLit (Chunks s a)
     -- | > TextAppend x y                           ~  x ++ y
     | TextAppend (Expr s a) (Expr s a)
+    -- | > TextReplace                              ~ Text/replace
+    | TextReplace
     -- | > TextShow                                 ~  Text/show
     | TextShow
     -- | > List                                     ~  List
@@ -809,6 +811,7 @@ unsafeSubExpressions _ Text = pure Text
 unsafeSubExpressions f (TextLit chunks) =
     TextLit <$> chunkExprs f chunks
 unsafeSubExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
+unsafeSubExpressions _ TextReplace = pure TextReplace
 unsafeSubExpressions _ TextShow = pure TextShow
 unsafeSubExpressions _ List = pure List
 unsafeSubExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
@@ -1202,6 +1205,7 @@ reservedIdentifiers = reservedKeywords <>
         , "List/last"
         , "List/indexed"
         , "List/reverse"
+        , "Text/replace"
         , "Text/show"
         , "Bool"
         , "True"

@@ -1258,6 +1258,8 @@ prettyPrinters characterSet =
         builtin "Double/show"
     prettyPrimitiveExpression Text =
         builtin "Text"
+    prettyPrimitiveExpression TextReplace =
+        builtin "Text/replace"
     prettyPrimitiveExpression TextShow =
         builtin "Text/show"
     prettyPrimitiveExpression List =
