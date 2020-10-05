@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Dhall.LSP.Handlers where
@@ -236,8 +237,7 @@ documentLinkHandler :: J.DocumentLinkRequest -> HandlerM ()
 documentLinkHandler req = do
   let uri = req ^. J.params . J.textDocument . J.uri
   path <- case J.uriToFilePath uri of
-    Nothing -> throwE (Log, "Could not process document links; failed to convert\
-                            \ URI to file path.")
+    Nothing -> throwE (Log, "Could not process document links; failed to convert URI to file path.")
     Just p -> return p
   txt <- readUri uri
   expr <- case parse txt of
@@ -564,7 +564,9 @@ completionHandler request = do
        where
         _label = completeText
         _kind = Nothing
+#if MIN_VERSION_haskell_lsp(0,21,0)
         _tags = mempty
+#endif
         _detail = fmap pretty completeType
         _documentation = Nothing
         _deprecated = Nothing
