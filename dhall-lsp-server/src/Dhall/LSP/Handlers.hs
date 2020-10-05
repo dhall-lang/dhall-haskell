@@ -564,7 +564,7 @@ completionHandler request = do
        where
         _label = completeText
         _kind = Nothing
-        _tags = J.List []
+        _tags = mempty
         _detail = fmap pretty completeType
         _documentation = Nothing
         _deprecated = Nothing
