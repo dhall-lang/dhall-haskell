@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | This module contains Dhall's parsing logic
 
@@ -27,8 +28,7 @@ import Dhall.Src         (Src (..))
 import Dhall.Syntax
 import Text.Megaparsec   (ParseErrorBundle (..), PosState (..))
 
-import qualified Data.Char
-import qualified Data.Text
+import qualified Data.Text       as Text
 import qualified Dhall.Core      as Core
 import qualified Text.Megaparsec
 
@@ -76,7 +76,7 @@ instance Show ParseError where
 
 instance Exception ParseError
 
--- | Parse an expression from `Data.Text.Text` containing a Dhall program
+-- | Parse an expression from `Text.Text` containing a Dhall program
 exprFromText
   :: String -- ^ User-friendly name describing the input expression,
             --   used in parsing error messages
@@ -92,8 +92,18 @@ newtype Header = Header Text deriving Show
 
 -- | Create a header with stripped leading spaces and trailing newlines
 createHeader :: Text -> Header
-createHeader =
-    Header . Data.Text.dropWhile Data.Char.isSpace . Data.Text.dropWhileEnd (/= '\n')
+createHeader text = Header (prefix <> newSuffix)
+  where
+    isWhitespace c = c == ' ' || c == '\n' || c == '\r' || c == '\t'
+
+    prefix = Text.dropAround isWhitespace text
+
+    suffix = Text.takeWhileEnd isWhitespace text
+
+    newSuffix
+        | Text.null prefix          = ""
+        | Text.any (== '\n') suffix = "\n"
+        | otherwise                 = " "
 
 -- | Like `exprFromText` but also returns the leading comments and whitespace
 -- (i.e. header) up to the last newline before the code begins
