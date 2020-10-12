@@ -53,7 +53,7 @@ library
     , dhall                >= 1.35.0   && < 1.36
     , dhall-json           >= 1.4      && < 1.8
     , filepath             >= 1.4.2    && < 1.5
-    , haskell-lsp          >= 0.19.0.0 && < 0.23
+    , haskell-lsp          >= 0.19.0.0 && < 0.24
     , rope-utf16-splay     >= 0.3.1.0  && < 0.4
     , hslogger             >= 1.2.10   && < 1.4
     , lens                 >= 4.16.1   && < 4.20
@@ -105,7 +105,7 @@ Test-Suite tests
     GHC-Options: -Wall
     Build-Depends:
         base                                   ,
-        haskell-lsp-types >= 0.19.0  && < 0.23 ,
+        haskell-lsp-types >= 0.19.0  && < 0.24 ,
         lsp-test          >= 0.9     && < 0.12  ,
         tasty             >= 0.11.2  && < 1.4  ,
         tasty-hspec       >= 1.1     && < 1.2  ,
