@@ -101,8 +101,8 @@ createHeader text = Header (prefix <> newSuffix)
     suffix = Text.takeWhileEnd isWhitespace text
 
     newSuffix
-        | Text.null prefix          = ""
-        | otherwise = "\n"
+        | Text.null prefix = ""
+        | otherwise        = "\n"
 
 -- | Like `exprFromText` but also returns the leading comments and whitespace
 -- (i.e. header) up to the last newline before the code begins
