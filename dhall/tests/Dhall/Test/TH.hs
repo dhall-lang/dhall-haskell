@@ -31,6 +31,21 @@ deriving instance Show Department
 deriving instance Eq   Employee
 deriving instance Show Employee
 
+Dhall.TH.makeHaskellTypes
+  [ SingleConstructor "Bar" "MakeBar" "(./tests/th/issue2066.dhall).Bar"
+  , SingleConstructor "Foo" "MakeFoo" "(./tests/th/issue2066.dhall).Foo"
+  , MultipleConstructors "Qux" "(./tests/th/issue2066.dhall).Qux"
+  ]
+
+deriving instance Eq   Bar
+deriving instance Show Bar
+
+deriving instance Eq   Foo
+deriving instance Show Foo
+
+deriving instance Eq   Qux
+deriving instance Show Qux
+
 tests :: TestTree
 tests = Tasty.testGroup "Template Haskell" [ makeHaskellTypeFromUnion ]
 
@@ -51,3 +66,7 @@ makeHaskellTypeFromUnion = Tasty.HUnit.testCase "makeHaskellTypeFromUnion" $ do
     employee <- Dhall.input Dhall.auto "let Department = ./tests/th/Department.dhall in { name = \"John\", department = Department.Marketing }"
 
     Tasty.HUnit.assertEqual "" employee MakeEmployee{ name = "John", department = Marketing }
+
+    qux <- Dhall.input Dhall.auto "let T = ./tests/th/issue2066.dhall in T.Qux.Foo { foo = +2, bar = { baz = +3 } }"
+
+    Tasty.HUnit.assertEqual "" qux (Foo MakeFoo{ foo = 2, bar = MakeBar{ baz = 3 } })

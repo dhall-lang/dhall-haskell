@@ -178,7 +178,7 @@ toDeclaration haskellTypes MultipleConstructors{..} =
         Union kts -> do
             let name = Syntax.mkName (Text.unpack typeName)
 
-            constructors <- traverse (toConstructor haskellTypes) (Dhall.Map.toList kts )
+            constructors <- traverse (toConstructor haskellTypes typeName) (Dhall.Map.toList kts )
 
             return (DataD [] name [] Nothing constructors derivingClauses)
 
@@ -227,7 +227,7 @@ toDeclaration haskellTypes MultipleConstructors{..} =
 toDeclaration haskellTypes SingleConstructor{..} = do
     let name = Syntax.mkName (Text.unpack typeName)
 
-    constructor <- toConstructor haskellTypes (constructorName, Just code)
+    constructor <- toConstructor haskellTypes typeName (constructorName, Just code)
 
     return (DataD [] name [] Nothing [constructor] derivingClauses)
 
@@ -235,15 +235,27 @@ toDeclaration haskellTypes SingleConstructor{..} = do
 toConstructor
     :: (Eq a, Pretty a)
     => [HaskellType (Expr s a)]
+    -> Text
+    -- ^ typeName
     -> (Text, Maybe (Expr s a))
     -- ^ @(constructorName, fieldType)@
     -> Q Con
-toConstructor haskellTypes (constructorName, maybeAlternativeType) = do
+toConstructor haskellTypes outerTypeName (constructorName, maybeAlternativeType) = do
     let name = Syntax.mkName (Text.unpack constructorName)
 
     let bang = Bang NoSourceUnpackedness NoSourceStrictness
 
     case maybeAlternativeType of
+        Just dhallType
+            | let predicate haskellType =
+                    Core.judgmentallyEqual (code haskellType) dhallType
+                    && typeName haskellType /= outerTypeName
+            , Just haskellType <- List.find predicate haskellTypes -> do
+                let innerName =
+                        Syntax.mkName (Text.unpack (typeName haskellType))
+
+                return (NormalC name [ (bang, ConT innerName) ])
+
         Just (Record kts) -> do
             let process (key, dhallFieldType) = do
                     haskellFieldType <- toNestedHaskellType haskellTypes dhallFieldType
