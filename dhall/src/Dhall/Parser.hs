@@ -98,8 +98,6 @@ createHeader text = Header (prefix <> newSuffix)
 
     prefix = Text.dropAround isWhitespace text
 
-    suffix = Text.takeWhileEnd isWhitespace text
-
     newSuffix
         | Text.null prefix = ""
         | otherwise        = "\n"
