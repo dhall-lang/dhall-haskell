@@ -123,6 +123,7 @@ import Nix.Expr
     , ($+)
     , (==>)
     , (@@)
+    , (@.)
     )
 
 import qualified Data.Text
@@ -439,6 +440,17 @@ dhallToNix e =
         a' <- loop a
         b' <- loop b
         return (Fix (NBinary NPlus a' b'))
+    loop TextReplace = do
+        let from = Nix.mkList [ "needle" ]
+
+        let to = Nix.mkList [ "replacement" ]
+
+        return
+            (   "needle"
+            ==> "replacement"
+            ==> "haystack"
+            ==> ("builtins" @. "replaceStrings" @@ from @@ to @@ "haystack")
+            )
     loop TextShow = do
         let from =
                 Nix.mkList
@@ -465,7 +477,7 @@ dhallToNix e =
                     , Nix.mkStr "\\t"
                     ]
 
-        let replaced = "builtins.replaceStrings" @@ from @@ to @@ "t"
+        let replaced = "builtins" @. "replaceStrings" @@ from @@ to @@ "t"
 
         let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
 

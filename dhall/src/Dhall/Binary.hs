@@ -192,6 +192,7 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Natural/even"      -> return NaturalEven
                        | sb == "Natural/fold"      -> return NaturalFold
                        | sb == "Natural/show"      -> return NaturalShow
+                       | sb == "Text/replace"      -> return TextReplace
                     13 | sb == "Integer/clamp"     -> return IntegerClamp
                        | sb == "Natural/build"     -> return NaturalBuild
                     14 | sb == "Integer/negate"    -> return IntegerNegate
@@ -701,6 +702,9 @@ encodeExpressionInternal encodeEmbed = go
 
         Text ->
             Encoding.encodeUtf8ByteArray "Text"
+
+        TextReplace ->
+            Encoding.encodeUtf8ByteArray "Text/replace"
 
         TextShow ->
             Encoding.encodeUtf8ByteArray "Text/show"
