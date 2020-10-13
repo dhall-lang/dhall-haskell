@@ -192,6 +192,7 @@ data Val a
     | VTextLit !(VChunks a)
     | VTextAppend !(Val a) !(Val a)
     | VTextShow !(Val a)
+    | VTextReplace !(Val a) !(Val a) !(Val a)
 
     | VList !(Val a)
     | VListLit !(Maybe (Val a)) !(Seq (Val a))
@@ -361,6 +362,54 @@ vField t0 k = go t0
 
     singletonVRecordLit v = VRecordLit (Map.singleton k v)
 {-# INLINE vField #-}
+
+vTextReplaceSlow :: Text -> Val a -> VChunks a -> VChunks a
+vTextReplaceSlow needle replacement haystack = go haystack
+  where
+    go (VChunks [] lastText) =
+        if Text.null suffix
+        then VChunks [] lastText
+        else
+            let remainder = Text.drop (Text.length needle) suffix
+
+                rest = go (VChunks [] remainder)
+
+            in  case replacement of
+                    VTextLit replacementChunks ->
+                        VChunks [] prefix <> replacementChunks <> rest
+                    _ ->
+                        VChunks [(prefix, replacement)] "" <> rest
+      where
+        (prefix, suffix) = Text.breakOn needle lastText
+    go (VChunks ((firstText, firstInterpolation) : chunks) lastText) =
+       if Text.null suffix
+       then
+           let rest = go (VChunks chunks lastText)
+
+           in  VChunks [(firstText, firstInterpolation)] "" <> rest
+       else
+           let remainder = Text.drop (Text.length needle) suffix
+
+               rest =
+                   go (VChunks ((remainder, firstInterpolation) : chunks) lastText)
+
+           in  case replacement of
+                   VTextLit replacementChunks ->
+                       VChunks [] prefix <> replacementChunks <> rest
+                   _ ->
+                       VChunks [(prefix, replacement)] "" <> rest
+      where
+        (prefix, suffix) = Text.breakOn needle firstText
+
+vTextReplaceFast :: Text -> Text -> VChunks a -> VChunks a
+vTextReplaceFast needle replacement (VChunks xys z) = VChunks xys' z'
+  where
+    xys' = do
+       (x, y) <- xys
+
+       return (Text.replace needle replacement x, y)
+
+    z' = Text.replace needle replacement z
 
 vProjectByFields :: Eq a => Environment a -> Val a -> Set Text -> Val a
 vProjectByFields env t ks =
@@ -580,6 +629,35 @@ eval !env t0 =
             VPrim $ \case
                 VTextLit (VChunks [] x) -> VTextLit (VChunks [] (textShow x))
                 t                       -> VTextShow t
+        TextReplace ->
+            VPrim $ \needle ->
+            VPrim $ \replacement ->
+            VPrim $ \haystack ->
+                case haystack of
+                    VTextLit haystackChunks ->
+                        case needle of
+                            VTextLit (VChunks [] "") ->
+                                haystack
+                            VTextLit (VChunks [] needleText) ->
+                                case replacement of
+                                    VTextLit (VChunks [] replacementText) ->
+                                        VTextLit
+                                            (vTextReplaceFast
+                                                needleText
+                                                replacementText
+                                                haystackChunks
+                                            )
+                                    _ ->
+                                        VTextLit
+                                            (vTextReplaceSlow
+                                                needleText
+                                                replacement
+                                                haystackChunks
+                                            )
+                            _ ->
+                                VTextReplace needle replacement haystack
+                    _ ->
+                        VTextReplace needle replacement haystack
         List ->
             VPrim VList
         ListLit ma ts ->
@@ -895,6 +973,8 @@ conv !env t0 t0' =
             conv env t t' && conv env u u'
         (VTextShow t, VTextShow t') ->
             conv env t t'
+        (VTextReplace a b c, VTextReplace a' b' c') ->
+            conv env a a' && conv env b b' && conv env c c'
         (VList a, VList a') ->
             conv env a a'
         (VListLit _ xs, VListLit _ xs') ->
@@ -1082,6 +1162,8 @@ quote !env !t0 =
             TextAppend (quote env t) (quote env u)
         VTextShow t ->
             TextShow `qApp` t
+        VTextReplace a b c ->
+            TextReplace `qApp` a `qApp` b `qApp` c
         VList t ->
             List `qApp` t
         VListLit ma ts ->
@@ -1264,6 +1346,8 @@ alphaNormalize = goEnv EmptyNames
                 TextAppend (go t) (go u)
             TextShow ->
                 TextShow
+            TextReplace ->
+                TextReplace
             List ->
                 List
             ListLit ma ts ->

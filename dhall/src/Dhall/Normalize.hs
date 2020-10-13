@@ -43,7 +43,7 @@ import Dhall.Syntax
 
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text
+import qualified Data.Text     as Text
 import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Set
@@ -227,7 +227,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App NaturalOdd (NaturalLit n) -> pure (BoolLit (odd n))
                     App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
                     App NaturalShow (NaturalLit n) ->
-                        pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                        pure (TextLit (Chunks [] (Text.pack (show n))))
                     App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
                         -- Use an `Integer` for the subtraction, due to the
                         -- following issue:
@@ -246,14 +246,14 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App IntegerNegate (IntegerLit n) ->
                         pure (IntegerLit (negate n))
                     App IntegerShow (IntegerLit n)
-                        | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Data.Text.pack (show n))))
-                        | otherwise -> pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                        | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Text.pack (show n))))
+                        | otherwise -> pure (TextLit (Chunks [] (Text.pack (show n))))
                     -- `(read . show)` is used instead of `fromInteger` because `read` uses
                     -- the correct rounding rule.
                     -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
                     App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((DhallDouble . read . show) n))
                     App DoubleShow (DoubleLit (DhallDouble n)) ->
-                        pure (TextLit (Chunks [] (Data.Text.pack (show n))))
+                        pure (TextLit (Chunks [] (Text.pack (show n))))
                     App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
                       where
                         _A₁ = Syntax.shift 1 "a" _A₀
@@ -318,6 +318,64 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         loop (TextLit (Chunks [] newText))
                       where
                         newText = Eval.textShow oldText
+                    App
+                        (App (App TextReplace (TextLit (Chunks [] ""))) _)
+                        haystack ->
+                            return haystack
+                    App (App
+                            (App TextReplace (TextLit (Chunks [] needleText)))
+                            (TextLit (Chunks [] replacementText))
+                        )
+                        (TextLit (Chunks xys z)) -> do
+                            let xys' = do
+                                    (x, y) <- xys
+
+                                    let x' = Text.replace needleText replacementText x
+                                    return (x', y)
+
+                            let z' = Text.replace needleText replacementText z
+
+                            return (TextLit (Chunks xys' z'))
+                    App (App
+                            (App TextReplace (TextLit (Chunks [] needleText)))
+                            replacement
+                        )
+                        (TextLit (Chunks [] lastText)) -> do
+                            let (prefix, suffix) =
+                                    Text.breakOn needleText lastText
+
+                            if Text.null suffix
+                                then return (TextLit (Chunks [] lastText))
+                                else do
+                                    let remainder =
+                                            Text.drop
+                                                (Text.length needleText)
+                                                suffix
+
+                                    loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks [] remainder))))
+                    App (App
+                            (App TextReplace (TextLit (Chunks [] needleText)))
+                            replacement
+                        )
+                        (TextLit
+                            (Chunks
+                                ((firstText, firstInterpolation) : chunks)
+                                lastText
+                            )
+                        ) -> do
+                            let (prefix, suffix) =
+                                    Text.breakOn needleText firstText
+
+                            if Text.null suffix
+                                then do
+                                    loop (TextAppend (TextLit (Chunks [(firstText, firstInterpolation)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks chunks lastText))))
+                                else do
+                                    let remainder =
+                                            Text.drop
+                                                (Text.length needleText)
+                                                suffix
+
+                                    loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks ((remainder, firstInterpolation) : chunks) lastText))))
                     _ -> do
                         res2 <- ctx (App f' a')
                         case res2 of
@@ -420,6 +478,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             TextLit c -> pure [Chunks [] x, c]
             _         -> pure [Chunks [(x, y')] mempty]
     TextAppend x y -> loop (TextLit (Chunks [("", x), ("", y)] ""))
+    TextReplace -> pure TextReplace
     TextShow -> pure TextShow
     List -> pure List
     ListLit t es
@@ -703,6 +762,10 @@ isNormalized e0 = loop (Syntax.denote e0)
           App (App ListReverse _) (ListLit _ _) -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
+          App (App (App TextReplace (TextLit (Chunks [] ""))) _) _ ->
+              False
+          App (App (App TextReplace (TextLit (Chunks [] _))) _) (TextLit _) ->
+              False
           _ -> True
       Let _ _ -> False
       Annot _ _ -> False
@@ -775,6 +838,7 @@ isNormalized e0 = loop (Syntax.denote e0)
               TextLit _ -> False
               _         -> True
       TextAppend _ _ -> False
+      TextReplace -> True
       TextShow -> True
       List -> True
       ListLit t es -> all loop t && all loop es

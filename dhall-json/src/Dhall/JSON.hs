@@ -876,6 +876,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' = loop a
             b' = loop b
 
+        Core.TextReplace ->
+            Core.TextReplace
+
         Core.TextShow ->
             Core.TextShow
 
