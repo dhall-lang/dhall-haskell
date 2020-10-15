@@ -2,7 +2,6 @@
 --
 -- To exercise all options documented in https://nethackwiki.com/wiki/Options
 -- see `./unvalidated.dhall`
-
 let types = ./../types.dhall
 
 let defaults = ./../defaults.dhall

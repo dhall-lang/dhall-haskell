@@ -1,5 +1,4 @@
 -- example0.dhall
-
 let Person
     : Type
     =   ∀(Person : Type)
