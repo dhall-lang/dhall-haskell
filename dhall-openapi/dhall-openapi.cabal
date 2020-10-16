@@ -20,20 +20,20 @@ executable openapi-to-dhall
   default-extensions: DuplicateRecordFields GeneralizedNewtypeDeriving LambdaCase RecordWildCards ScopedTypeVariables OverloadedStrings FlexibleInstances ConstraintKinds ApplicativeDo TupleSections
   ghc-options: -Wall
   build-depends:
-    base                    >= 4.11.0.0  && < 5    ,
-    aeson                   >= 1.0.0.0   && < 1.6  ,
-    containers              >= 0.5.8.0   && < 0.7  ,
+    base                                           ,
+    aeson                                          ,
+    containers                                     ,
     directory               >= 1.3.0.0   && < 1.4  ,
-    dhall                   >= 1.35.0    && < 1.37 ,
+    dhall                                          ,
     dhall-openapi                                  ,
     filepath                >= 1.4       && < 1.5  ,
     megaparsec              >= 7.0       && < 9.1  ,
     optparse-applicative    >= 0.14.3.0  && < 0.17 ,
     parser-combinators                             , 
-    prettyprinter           >= 1.7.0     && < 1.8  ,
-    sort                    >= 1.0       && < 1.1  ,
-    text                    >= 0.11.1.0  && < 1.3  ,
-    vector                  >= 0.11.0.0  && < 0.13
+    prettyprinter                                  ,
+    sort                                           ,
+    text                                           ,
+    vector
   default-language: Haskell2010
 
 library
@@ -49,7 +49,7 @@ library
     base                    >= 4.11.0.0  && < 5    ,
     aeson                   >= 1.0.0.0   && < 1.6  ,
     containers              >= 0.5.8.0   && < 0.7  ,
-    dhall                   >= 1.35.0    && < 1.36 ,
+    dhall                   >= 1.35.0    && < 1.37 ,
     prettyprinter           >= 1.7.0     && < 1.8  ,
     sort                    >= 1.0       && < 1.1  ,
     text                    >= 0.11.1.0  && < 1.3  ,
