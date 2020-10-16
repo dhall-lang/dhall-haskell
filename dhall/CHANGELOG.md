@@ -1,3 +1,17 @@
+1.36.0
+
+* [Supports version 19.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v19.0.0)
+    * BREAKING CHANGE TO THE API: [Add `Text/replace` built-in](https://github.com/dhall-lang/dhall-haskell/pull/2063)
+    * [Implement `with` without syntactic sugar](https://github.com/dhall-lang/dhall-haskell/pull/2055)
+* [`dhall lint` will now add a `.dhall` extension to all Prelude imports](https://github.com/dhall-lang/dhall-haskell/pull/2061)
+    * The old extension-free Prelude imports are deprecated
+* [Fix command-line completions for files](https://github.com/dhall-lang/dhall-haskell/pull/2016)
+* [Improve Template Haskell support for record constructors](https://github.com/dhall-lang/dhall-haskell/pull/2070)
+* Fixes and improvements to code formatting
+    * [#2037](https://github.com/dhall-lang/dhall-haskell/pull/2037)
+    * [#2048](https://github.com/dhall-lang/dhall-haskell/pull/2048)
+    * [#2069](https://github.com/dhall-lang/dhall-haskell/pull/2069)
+
 1.35.0
 
 * [Supports version 18.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v18.0.0)
