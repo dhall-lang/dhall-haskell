@@ -1,3 +1,7 @@
+1.0.2
+
+* [Fix command-line completions for files](https://github.com/dhall-lang/dhall-haskell/pull/2034)
+
 1.0.1
 
 * Improved jump to definition support
