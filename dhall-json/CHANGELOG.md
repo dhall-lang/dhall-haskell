@@ -1,3 +1,8 @@
+1.7.3
+
+* [Fix command-line completions for files](https://github.com/dhall-lang/dhall-haskell/pull/2034)
+* [Support new `Text/replace` built-in](https://github.com/dhall-lang/dhall-haskell/pull/2063)
+
 1.7.2
 
 * [The `--documents` flag now wraps non-`List`s in a document](https://github.com/dhall-lang/dhall-haskell/pull/1977)
