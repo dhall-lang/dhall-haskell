@@ -1667,9 +1667,9 @@ escapeSingleQuotedText inputText = outputText
         | otherwise = let (ys, xs') = f xs in go (acc <> ys) xs'
 
     f xs
-        | Just xs' <- "'${" `Text.stripPrefix` xs = ("${\"'\"}", xs')
-        | Just xs' <- "''"  `Text.stripPrefix` xs = ("'''"     , xs')
-        | Just xs' <- "${"  `Text.stripPrefix` xs = ("''${"    , xs')
+        | Just xs' <- "'${" `Text.stripPrefix` xs = ("${\"'\"}''${", xs')
+        | Just xs' <- "''"  `Text.stripPrefix` xs = ("'''"         , xs')
+        | Just xs' <- "${"  `Text.stripPrefix` xs = ("''${"        , xs')
         | Just (x, xs') <- Text.uncons xs = (Text.singleton x, xs')
         | otherwise = ("", "")
 
