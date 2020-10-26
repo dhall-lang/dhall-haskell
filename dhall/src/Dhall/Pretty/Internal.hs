@@ -1659,9 +1659,20 @@ consolidateRecordLiteral = concatMap adapt . Map.toList
 escapeSingleQuotedText :: Text -> Text
 escapeSingleQuotedText inputText = outputText
   where
-    outputText = substitute "${" "''${" (substitute "''" "'''" inputText)
+    outputText = go "" inputText
 
-    substitute before after = Text.intercalate after . Text.splitOn before
+    go :: Text -> Text -> Text
+    go acc xs
+        | xs == "" = acc
+        | otherwise = let (ys, xs') = f xs in go (acc <> ys) xs'
+
+    f xs
+        | Just xs' <- "'${" `Text.stripPrefix` xs = ("${\"'\"}", xs')
+        | Just xs' <- "''"  `Text.stripPrefix` xs = ("'''"     , xs')
+        | Just xs' <- "${"  `Text.stripPrefix` xs = ("''${"    , xs')
+        | Just (x, xs') <- Text.uncons xs = (Text.singleton x, xs')
+        | otherwise = ("", "")
+
 
 {-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 
