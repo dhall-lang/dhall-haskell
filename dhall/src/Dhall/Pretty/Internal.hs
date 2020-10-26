@@ -1497,7 +1497,7 @@ prettyPrinters characterSet =
 
         prettyMultilineText text = mconcat docs
           where
-            lines_ = Text.splitOn "\n" (escapeSingleQuotedText text)
+            lines_ = Text.splitOn "\n" text
 
             -- Annotate only non-empty lines so trailing whitespace can be
             -- removed on empty ones.
@@ -1527,7 +1527,7 @@ prettyPrinters characterSet =
 multilineChunks :: Chunks s a -> Chunks s a
 multilineChunks =
      escapeTrailingSingleQuote
-   . escapeControlCharacters
+   . escapeMultilineChunks
    . escapeSharedWhitespacePrefix
 
 -- | Escape any leading whitespace shared by all lines
@@ -1569,42 +1569,68 @@ escapeSharedWhitespacePrefix literal_ = unlinesLiteral literals₁
         | not (Text.null sharedPrefix) = fmap escapeSharedPrefix literals₀
         | otherwise = literals₀
 
--- | Escape control characters by moving them into string interpolations
+-- | We prepare the multiline-sting for pretty printing:
 --
--- >>> escapeControlCharacters (Chunks [] "\n\NUL\b\f\t")
+--      * Escape interpolations: @${@ becomes @''${}@
+--
+--      * Escape multiline-string terminators: @''@ becomes @'''@
+--
+--      * Escape a @'${@ by moving the single quote into a string interpolation
+--        Otherwise a multiline-string like @'${x}@ would be escaped as @'''${x}@,
+--        which would be parsed as an escaped @''@ followed by the interpolation @${x}@.
+--
+--      * Escape control characters by moving them into string interpolations
+--
+-- >>> escapeMultilineChunks (Chunks [] "\n'${x}")
+-- Chunks [("\n",TextLit (Chunks [] "'"))] "''${x}"
+--
+-- >>> escapeMultilineChunks (Chunks [] "\n\NUL\b\f\t")
 -- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
-escapeControlCharacters :: Chunks s a -> Chunks s a
-escapeControlCharacters (Chunks as0 b0) = Chunks as1 b1
-  where
-    as1 = foldr f (map toChunk bs) as0
+escapeMultilineChunks :: Chunks s a -> Chunks s a
+escapeMultilineChunks = processChunks (go mempty)
+    where
+        go acc xs
+            | xs == "" = acc
+            | otherwise = let (ys, xs') = f xs in go (acc <> ys) xs'
 
-    (bs, b1) = splitOnPredicate predicate b0
+        f xs
+            -- Escape @'${@
+            | Just xs' <- "'${" `Text.stripPrefix` xs
+            = (embedChunks "'" <> toChunks "''${", xs')
+            -- Escape @''@
+            | Just xs' <- "''" `Text.stripPrefix` xs
+            = (toChunks "'''" , xs')
+            -- Escape @${@
+            | Just xs' <- "${" `Text.stripPrefix` xs
+            = (toChunks "''${" , xs')
+            -- Escape control characters
+            | Just (x, xs') <- Text.uncons xs
+            , Data.Char.isControl x && x /= ' ' && x /= '\t' && x /= '\n'
+            = (embedChunks (Text.singleton x), xs')
+            -- No escaping needed
+            | Just (x, xs') <- Text.uncons xs
+            = (toChunks (Text.singleton x), xs')
+            -- For the sake of completion...
+            | otherwise = ("", "")
 
-    f (t0, e) chunks = map toChunk ts1 ++ (t1, e) : chunks
-      where
-        (ts1, t1) = splitOnPredicate predicate t0
+        toChunks = Chunks []
 
-    predicate c = Data.Char.isControl c && c /= ' ' && c /= '\t' && c /= '\n'
+        embedChunks xs = Chunks [("", TextLit (toChunks xs))] ""
 
-    toChunk (t0, t1) = (t0, TextLit (Chunks [] t1))
+processChunks :: (Text -> Chunks s a) -> Chunks s a -> Chunks s a
+processChunks f (Chunks as b) = Chunks (go as') b'
+    where
+        Chunks as' b' = foldMap (\(xs, y) -> f xs <> Chunks [(mempty, y)] mempty) as <> f b
 
--- | Split `Data.Text.Text` on a predicate, preserving all parts of the original
--- string.
---
--- >>> splitOnPredicate (== 'x') ""
--- ([],"")
--- >>> splitOnPredicate (== 'x') " xx "
--- ([(" ","xx")]," ")
--- >>> splitOnPredicate (== 'x') "xx"
--- ([("","xx")],"")
---
--- prop> \(Fun _ p) s -> let {t = Text.pack s; (as, b) = splitOnPredicate p t} in foldMap (uncurry (<>)) as <> b == t
-splitOnPredicate :: (Char -> Bool) -> Text -> ([(Text, Text)], Text)
-splitOnPredicate p t = case Text.break p t of
-    (a, "") -> ([], a)
-    (a, b)  -> case Text.span p b of
-        (c, d) -> case splitOnPredicate p d of
-            (e, f) -> ((a, c) : e, f)
+        go [] = []
+        go ((xs, (TextLit ys)):zs) = goLit xs ys zs
+        go (z:zs) = z : go zs
+
+        goLit xs y [] = [(xs, TextLit y)]
+        goLit xs y1 ((zs, TextLit y2):zss)
+            | Text.null zs = goLit xs (y1 <> y2) zss
+            | otherwise = (xs, TextLit y1) : goLit zs y2 zss
+        goLit xs y (z:zs) = (xs, TextLit y) : z : go zs
 
 -- | Escape a trailing single quote by moving it into a string interpolation
 --
@@ -1653,26 +1679,6 @@ consolidateRecordLiteral = concatMap adapt . Map.toList
             [ KeyValue (pure (mSrc0, key, mSrc1)) mSrc2 val ]
       where
         e = shallowDenote val
-
--- | Escape a `Data.Text.Text` literal using Dhall's escaping rules for
---   single-quoted @Text@
-escapeSingleQuotedText :: Text -> Text
-escapeSingleQuotedText inputText = outputText
-  where
-    outputText = go "" inputText
-
-    go :: Text -> Text -> Text
-    go acc xs
-        | xs == "" = acc
-        | otherwise = let (ys, xs') = f xs in go (acc <> ys) xs'
-
-    f xs
-        | Just xs' <- "'${" `Text.stripPrefix` xs = ("${\"'\"}''${", xs')
-        | Just xs' <- "''"  `Text.stripPrefix` xs = ("'''"         , xs')
-        | Just xs' <- "${"  `Text.stripPrefix` xs = ("''${"        , xs')
-        | Just (x, xs') <- Text.uncons xs = (Text.singleton x, xs')
-        | otherwise = ("", "")
-
 
 {-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 
