@@ -363,16 +363,15 @@ vField t0 k = go t0
     singletonVRecordLit v = VRecordLit (Map.singleton k v)
 {-# INLINE vField #-}
 
-vTextReplaceSlow :: Text -> Val a -> VChunks a -> VChunks a
-vTextReplaceSlow needle replacement haystack = go haystack
+vTextReplace :: Text -> Val a -> Text -> VChunks a
+vTextReplace needle replacement haystack = go haystack
   where
-    go (VChunks [] lastText) =
-        if Text.null suffix
-        then VChunks [] lastText
-        else
+    go t
+        | Text.null suffix = VChunks [] t
+        | otherwise =
             let remainder = Text.drop (Text.length needle) suffix
 
-                rest = go (VChunks [] remainder)
+                rest = go remainder
 
             in  case replacement of
                     VTextLit replacementChunks ->
@@ -380,36 +379,7 @@ vTextReplaceSlow needle replacement haystack = go haystack
                     _ ->
                         VChunks [(prefix, replacement)] "" <> rest
       where
-        (prefix, suffix) = Text.breakOn needle lastText
-    go (VChunks ((firstText, firstInterpolation) : chunks) lastText) =
-       if Text.null suffix
-       then
-           let rest = go (VChunks chunks lastText)
-
-           in  VChunks [(firstText, firstInterpolation)] "" <> rest
-       else
-           let remainder = Text.drop (Text.length needle) suffix
-
-               rest =
-                   go (VChunks ((remainder, firstInterpolation) : chunks) lastText)
-
-           in  case replacement of
-                   VTextLit replacementChunks ->
-                       VChunks [] prefix <> replacementChunks <> rest
-                   _ ->
-                       VChunks [(prefix, replacement)] "" <> rest
-      where
-        (prefix, suffix) = Text.breakOn needle firstText
-
-vTextReplaceFast :: Text -> Text -> VChunks a -> VChunks a
-vTextReplaceFast needle replacement (VChunks xys z) = VChunks xys' z'
-  where
-    xys' = do
-       (x, y) <- xys
-
-       return (Text.replace needle replacement x, y)
-
-    z' = Text.replace needle replacement z
+        (prefix, suffix) = Text.breakOn needle t
 
 vProjectByFields :: Eq a => Environment a -> Val a -> Set Text -> Val a
 vProjectByFields env t ks =
@@ -634,25 +604,25 @@ eval !env t0 =
             VPrim $ \replacement ->
             VPrim $ \haystack ->
                 case haystack of
-                    VTextLit haystackChunks ->
+                    VTextLit (VChunks [] haystackText) ->
                         case needle of
                             VTextLit (VChunks [] "") ->
                                 haystack
                             VTextLit (VChunks [] needleText) ->
                                 case replacement of
                                     VTextLit (VChunks [] replacementText) ->
-                                        VTextLit
-                                            (vTextReplaceFast
+                                        VTextLit $ VChunks []
+                                            (Text.replace
                                                 needleText
                                                 replacementText
-                                                haystackChunks
+                                                haystackText
                                             )
                                     _ ->
                                         VTextLit
-                                            (vTextReplaceSlow
+                                            (vTextReplace
                                                 needleText
                                                 replacement
-                                                haystackChunks
+                                                haystackText
                                             )
                             _ ->
                                 VTextReplace needle replacement haystack
