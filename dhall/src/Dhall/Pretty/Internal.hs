@@ -1589,10 +1589,19 @@ escapeSharedWhitespacePrefix literal_ = unlinesLiteral literals₁
 escapeMultilineChunks :: Chunks s a -> Chunks s a
 escapeMultilineChunks = processChunks (go mempty)
     where
+        -- | We apply `f` until the text is empty.
+        go :: Chunks s a -- ^ The accumulator: We gather out result here
+           -> Text -- ^ The remaining text to be processed
+           -> Chunks s a
         go acc xs
             | xs == "" = acc
             | otherwise = let (ys, xs') = f xs in go (acc <> ys) xs'
 
+        -- | We return the Chunks to be appended to our result and the
+        -- remaining text to be processed.
+        -- Note that this text MUST be shorter than the one we received as
+        -- input or `go` will not terminate.
+        f :: Text -> (Chunks s a, Text)
         f xs
             -- Escape @'${@
             | Just xs' <- "'${" `Text.stripPrefix` xs
@@ -1620,12 +1629,20 @@ escapeMultilineChunks = processChunks (go mempty)
 processChunks :: (Text -> Chunks s a) -> Chunks s a -> Chunks s a
 processChunks f (Chunks as b) = Chunks (go as') b'
     where
+        -- | We pass every text to `f` which will split it into Chunks.
+        -- Interpolated expressions reside in their own chunk.
         Chunks as' b' = foldMap (\(xs, y) -> f xs <> Chunks [(mempty, y)] mempty) as <> f b
 
+        -- | Since the machinery in `escapeMultilineChunks` produces Chunks
+        -- like @Chunks [("f", "\NUL"), ("", "\NUL"), ("", "\NUL")] "oo"@ we
+        -- simplifiy those by merging the TextLit interpolation resulting in
+        -- e.g. @Chunks [("f", "\NUL\NUL\NUL")] "oo"@.
+        go :: [(Text, Expr s a)] -> [(Text, Expr s a)]
         go [] = []
         go ((xs, (TextLit ys)):zs) = goLit xs ys zs
         go (z:zs) = z : go zs
 
+        goLit :: Text -> Chunks s a -> [(Text, Expr s a)] -> [(Text, Expr s a)]
         goLit xs y [] = [(xs, TextLit y)]
         goLit xs y1 ((zs, TextLit y2):zss)
             | Text.null zs = goLit xs (y1 <> y2) zss
