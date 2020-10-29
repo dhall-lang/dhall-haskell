@@ -65,6 +65,11 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
       <>  "\ESC[1;31mError\ESC[0m: The remote host took too long to respond\n"
       <>  "\n"
       <>  "URL: " <> url <> "\n"
+    ConnectionTimeout ->
+          "\n"
+      <>  "\ESC[1;31mError\ESC[0m: Connection establishment took too long\n"
+      <>  "\n"
+      <>  "URL: " <> url <> "\n"
     StatusCodeException response body -> prefix <> suffix
       where
         prefix
@@ -141,7 +146,10 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
 
                     prefixedText = Text.unlines prefixedLines
 
-    e' -> "\n" <> show e' <> "\n"
+    e' -> "\n"
+      <>  "\ESC[1;31mError\ESC[0m: " <> show e'
+      <>  "\n"
+      <>  "URL: " <> url <> "\n"
 
 newManager :: StateT Status IO Manager
 newManager = do
