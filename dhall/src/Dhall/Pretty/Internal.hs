@@ -1497,7 +1497,7 @@ prettyPrinters characterSet =
 
         prettyMultilineText text = mconcat docs
           where
-            lines_ = Text.splitOn "\n" (escapeSingleQuotedText text)
+            lines_ = Text.splitOn "\n" text
 
             -- Annotate only non-empty lines so trailing whitespace can be
             -- removed on empty ones.
@@ -1526,8 +1526,10 @@ prettyPrinters characterSet =
 -- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
 multilineChunks :: Chunks s a -> Chunks s a
 multilineChunks =
-     escapeTrailingSingleQuote
+     escapeSingleQuotedText
+   . escapeTrailingSingleQuote
    . escapeControlCharacters
+   . escapeSingleQuoteBeforeInterpolation
    . escapeSharedWhitespacePrefix
 
 -- | Escape any leading whitespace shared by all lines
@@ -1574,37 +1576,67 @@ escapeSharedWhitespacePrefix literal_ = unlinesLiteral literals₁
 -- >>> escapeControlCharacters (Chunks [] "\n\NUL\b\f\t")
 -- Chunks [("\n",TextLit (Chunks [] "\NUL\b\f"))] "\t"
 escapeControlCharacters :: Chunks s a -> Chunks s a
-escapeControlCharacters (Chunks as0 b0) = Chunks as1 b1
+escapeControlCharacters = splitWith (splitOnPredicate predicate)
   where
-    as1 = foldr f (map toChunk bs) as0
-
-    (bs, b1) = splitOnPredicate predicate b0
-
-    f (t0, e) chunks = map toChunk ts1 ++ (t1, e) : chunks
-      where
-        (ts1, t1) = splitOnPredicate predicate t0
-
     predicate c = Data.Char.isControl c && c /= ' ' && c /= '\t' && c /= '\n'
 
-    toChunk (t0, t1) = (t0, TextLit (Chunks [] t1))
+-- | Escape @'${@ correctly
+--
+-- See: https://github.com/dhall-lang/dhall-haskell/issues/2078
+escapeSingleQuoteBeforeInterpolation :: Chunks s a -> Chunks s a
+escapeSingleQuoteBeforeInterpolation = splitWith f
+  where
+    f text =
+        case Text.splitOn "'${" text of
+            -- `splitOn` should never return an empty list, but just in case…
+            []     -> mempty
+            t : ts -> loop t ts
 
--- | Split `Data.Text.Text` on a predicate, preserving all parts of the original
--- string.
+    loop head_ tail_ =
+        case tail_ of
+            [] ->
+                Chunks [] head_
+            newHead : newTail ->
+                    Chunks [ (head_, TextLit (Chunks [] "'")) ] "${"
+                <>  loop newHead newTail
+
+{-| You can think of this as sort of like `concatMap` for `Chunks`
+
+    Given a function that splits plain text into interpolated chunks, apply
+    that function to each uninterpolated span to yield a new
+    possibly-interpolated span, and flatten the results.
+-}
+splitWith :: (Text -> Chunks s a) -> Chunks s a -> Chunks s a
+splitWith splitter (Chunks xys z) = mconcat (xys' ++ [ splitter z ])
+  where
+    xys' = do
+        (x, y) <- xys
+
+        [ splitter x, Chunks [ ("", y) ] "" ]
+
+-- | Split `Data.Text.Text` into interpolated chunks, where all characters
+-- matching the predicate are pushed into a string interpolation.
 --
 -- >>> splitOnPredicate (== 'x') ""
--- ([],"")
+-- Chunks [] ""
 -- >>> splitOnPredicate (== 'x') " xx "
--- ([(" ","xx")]," ")
+-- Chunks [(" ",TextLit (Chunks [] "xx"))] " "
 -- >>> splitOnPredicate (== 'x') "xx"
--- ([("","xx")],"")
+-- Chunks [("",TextLit (Chunks [] "xx"))] ""
 --
--- prop> \(Fun _ p) s -> let {t = Text.pack s; (as, b) = splitOnPredicate p t} in foldMap (uncurry (<>)) as <> b == t
-splitOnPredicate :: (Char -> Bool) -> Text -> ([(Text, Text)], Text)
-splitOnPredicate p t = case Text.break p t of
-    (a, "") -> ([], a)
-    (a, b)  -> case Text.span p b of
-        (c, d) -> case splitOnPredicate p d of
-            (e, f) -> ((a, c) : e, f)
+-- prop> \(Fun _ p) s -> let {t = Text.pack s; Chunks xys z = splitOnPredicate p t} in foldMap (\(x, TextLit (Chunks [] y)) -> x <> y) xys <> z == t
+splitOnPredicate :: (Char -> Bool) -> Text -> Chunks s a
+splitOnPredicate predicate text
+    | Text.null b =
+        Chunks [] a
+    | otherwise =
+        Chunks ((a, TextLit (Chunks [] c)) : e) f
+  where
+    (a, b) = Text.break predicate text
+
+    (c, d) = Text.span predicate b
+
+    Chunks e f = splitOnPredicate predicate d
 
 -- | Escape a trailing single quote by moving it into a string interpolation
 --
@@ -1656,12 +1688,14 @@ consolidateRecordLiteral = concatMap adapt . Map.toList
 
 -- | Escape a `Data.Text.Text` literal using Dhall's escaping rules for
 --   single-quoted @Text@
-escapeSingleQuotedText :: Text -> Text
-escapeSingleQuotedText inputText = outputText
+escapeSingleQuotedText :: Chunks s a -> Chunks s a
+escapeSingleQuotedText = splitWith f
   where
-    outputText = substitute "${" "''${" (substitute "''" "'''" inputText)
+    f inputText = Chunks [] outputText
+      where
+        outputText = substitute "${" "''${" (substitute "''" "'''" inputText)
 
-    substitute before after = Text.intercalate after . Text.splitOn before
+        substitute before after = Text.intercalate after . Text.splitOn before
 
 {-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 
