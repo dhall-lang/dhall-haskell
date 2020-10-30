@@ -1693,9 +1693,8 @@ escapeSingleQuotedText = splitWith f
   where
     f inputText = Chunks [] outputText
       where
-        outputText = substitute "${" "''${" (substitute "''" "'''" inputText)
-
-        substitute before after = Text.intercalate after . Text.splitOn before
+        outputText =
+            Text.replace "${" "''${" (Text.replace "''" "'''" inputText)
 
 {-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 
