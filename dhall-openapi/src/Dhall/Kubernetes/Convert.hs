@@ -191,7 +191,7 @@ toDefault prefixMap definitions modelName = go
       --   * set the optional fields to None and the lists to empty
       Dhall.Record kvsf ->
         let getBaseData :: Maybe Definition -> Dhall.Map.Map Text Expr
-            getBaseData (Just Definition { baseData = Just BaseData{..} }) =
+            getBaseData (Just Definition{ baseData = Just BaseData{..} }) =
                 Dhall.Map.fromList
                     [ ("apiVersion", toTextLit apiVersion)
                     , ("kind"      , toTextLit kind      )
@@ -221,7 +221,13 @@ toDefault prefixMap definitions modelName = go
 
             adaptRecordMap = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
 
-        in  Just $ Dhall.RecordLit $ adaptRecordMap $ Dhall.Map.unionWith (\_ v -> v) baseData (Dhall.Map.mapMaybe valueForField kvs)
+            -- The main reason for adding this special case is so that the
+            -- `apiVersion` and `kind` fields default to `Some …` instead of
+            -- `None …`.
+            combine l (Dhall.App Dhall.None _T) = Dhall.Some l
+            combine _  r                        = r
+
+        in  Just $ Dhall.RecordLit $ adaptRecordMap $ Dhall.Map.unionWith combine baseData (Dhall.Map.mapMaybe valueForField kvs)
 
       -- We error out here because wildcards are bad, and we should know if
       -- we get something unexpected
