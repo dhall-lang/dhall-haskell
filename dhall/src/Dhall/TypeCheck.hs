@@ -417,27 +417,13 @@ infer typer = loop
 
             _R' <- loop ctx r
 
-            tL' <- loop ctx (quote names _L')
+            _ <- loop ctx (quote names _L')
 
             let _L'' = quote names _L'
 
-            case tL' of
-                VConst Type ->
-                    return ()
-                _  -> do
-                    let tL'' = quote names tL'
-                    die (IfBranchMustBeTerm True l _L'' tL'')
-
-            tR' <- loop ctx (quote names _R')
+            _ <- loop ctx (quote names _R')
 
             let _R'' = quote names _R'
-
-            case tR' of
-                VConst Type ->
-                    return ()
-                _ -> do
-                    let tR'' = quote names tR'
-                    die (IfBranchMustBeTerm True r _R'' tR'')
 
             if Eval.conv values _L' _R'
                 then return ()
@@ -1332,7 +1318,6 @@ data TypeMessage s a
     | InvalidSome (Expr s a) (Expr s a) (Expr s a)
     | InvalidPredicate (Expr s a) (Expr s a)
     | IfBranchMismatch (Expr s a) (Expr s a) (Expr s a) (Expr s a)
-    | IfBranchMustBeTerm Bool (Expr s a) (Expr s a) (Expr s a)
     | InvalidFieldType Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
     | ListAppendMismatch (Expr s a) (Expr s a)
@@ -2147,93 +2132,6 @@ prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
       where
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (IfBranchMustBeTerm b expr0 expr1 expr2) =
-    ErrorMessages {..}
-  where
-    short = "❰if❱ branch is not a term"
-
-    long =
-        "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
-        \is an expression:                                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \                   Expression for ❰then❱ branch                                 \n\
-        \                   ⇩                                                            \n\
-        \    ┌────────────────────────────────┐                                          \n\
-        \    │ if True then \"Hello, world!\"   │                                        \n\
-        \    │         else \"Goodbye, world!\" │                                        \n\
-        \    └────────────────────────────────┘                                          \n\
-        \                   ⇧                                                            \n\
-        \                   Expression for ❰else❱ branch                                 \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \These expressions must be a “term”, where a “term” is defined as an expression  \n\
-        \that has a type thas has kind ❰Type❱                                            \n\
-        \                                                                                \n\
-        \For example, the following expressions are all valid “terms”:                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────┐                                                      \n\
-        \    │ 1 : Natural : Type │  ❰1❱ is a term with a type (❰Natural❱) of kind ❰Type❱\n\
-        \    └────────────────────┘                                                      \n\
-        \      ⇧                                                                         \n\
-        \      term                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────┐                                     \n\
-        \    │ Natural/odd : Natural → Bool : Type │  ❰Natural/odd❱ is a term with a type\n\
-        \    └─────────────────────────────────────┘  (❰Natural → Bool❱) of kind ❰Type❱  \n\
-        \      ⇧                                                                         \n\
-        \      term                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \However, the following expressions are " <> _NOT <> " valid terms:              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────┐                                                      \n\
-        \    │ Text : Type : Kind │  ❰Text❱ has kind (❰Type❱) of sort ❰Kind❱ and is      \n\
-        \    └────────────────────┘  therefore not a term                                \n\
-        \      ⇧                                                                         \n\
-        \      type                                                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────┐                                               \n\
-        \    │ List : Type → Type : Kind │  ❰List❱ has kind (❰Type → Type❱) of sort      \n\
-        \    └───────────────────────────┘  ❰Kind❱ and is therefore not a term           \n\
-        \      ⇧                                                                         \n\
-        \      type-level function                                                       \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \This means that you cannot define an ❰if❱ expression that returns a type.  For  \n\
-        \example, the following ❰if❱ expression is " <> _NOT <> " valid:                 \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────┐                                             \n\
-        \    │ if True then Text else Bool │  Invalid ❰if❱ expression                    \n\
-        \    └─────────────────────────────┘                                             \n\
-        \                   ⇧         ⇧                                                  \n\
-        \                   type      type                                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your ❰" <> txt0 <> "❱ branch of your ❰if❱ expression is:                        \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... which has kind:                                                             \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... of sort:                                                                    \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n\
-        \                                                                                \n\
-        \... and is not a term.  Therefore your ❰if❱ expression is not valid             \n"
-      where
-        txt0 = if b then "then" else "else"
-        txt1 = insert expr0
-        txt2 = insert expr1
-        txt3 = insert expr2
 
 prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     ErrorMessages {..}
@@ -4638,8 +4536,6 @@ messageExpressions f m = case m of
         InvalidPredicate <$> f a <*> f b
     IfBranchMismatch a b c d ->
         IfBranchMismatch <$> f a <*> f b <*> f c <*> f d
-    IfBranchMustBeTerm a b c d ->
-        IfBranchMustBeTerm <$> pure a <*> f b <*> f c <*> f d
     InvalidFieldType a b ->
         InvalidFieldType <$> pure a <*> f b
     InvalidAlternativeType a b ->
