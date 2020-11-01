@@ -12,19 +12,19 @@ import qualified Dhall.Pretty
 
 -- | Pretty-print the given Dhall expression.
 formatExpr :: Pretty.Pretty b => CharacterSet -> Expr Src b -> Text
-formatExpr charSet expr =
+formatExpr characterSet expr =
       Pretty.renderStrict
     . Dhall.Pretty.layout
-    $ Dhall.Pretty.prettyCharacterSet charSet expr
+    $ Dhall.Pretty.prettyCharacterSet characterSet expr
 
 -- | Pretty-print the given Dhall expression, prepending the given a "header"
 --   (usually consisting of comments and whitespace).
 formatExprWithHeader :: Pretty.Pretty b => CharacterSet -> Expr Src b -> Header -> Text
-formatExprWithHeader charSet expr (Header header) = Pretty.renderStrict
+formatExprWithHeader characterSet expr (Header header) = Pretty.renderStrict
   (Dhall.Pretty.layout doc)
   where
     doc =
       Pretty.pretty header
-        <> Dhall.Pretty.prettyCharacterSet charSet expr
+        <> Dhall.Pretty.prettyCharacterSet characterSet expr
         <> "\n"
 
