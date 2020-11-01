@@ -603,12 +603,12 @@ eval !env t0 =
             VPrim $ \needle ->
             VPrim $ \replacement ->
             VPrim $ \haystack ->
-                case haystack of
-                    VTextLit (VChunks [] haystackText) ->
-                        case needle of
-                            VTextLit (VChunks [] "") ->
-                                haystack
-                            VTextLit (VChunks [] needleText) ->
+                case needle of
+                    VTextLit (VChunks [] "") ->
+                        haystack
+                    VTextLit (VChunks [] needleText) ->
+                        case haystack of
+                            VTextLit (VChunks [] haystackText) ->
                                 case replacement of
                                     VTextLit (VChunks [] replacementText) ->
                                         VTextLit $ VChunks []
