@@ -208,7 +208,7 @@ parseOptions =
 
     flag name description =
         Options.Applicative.flag
-            Nothing
+            (Just True)
             Nothing
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
@@ -570,14 +570,11 @@ command (Options {..}) = do
             Nothing -> do
                 configPath <- findConfig $ rootDirectory input
                 config <- decode configPath
-                let isAscii = fromMaybe False $ configToIsAscii config in
-                    return . toCharSet $ isAscii
+                let isAscii = fromMaybe False config
+                return . toCharSet $ isAscii
             where
                 toCharSet True = ASCII
                 toCharSet False = Unicode
-
-                configToIsAscii Nothing = Just False
-                configToIsAscii (Just config) = ascii config
 
                 decode (Just s) = fmap Just $ Dhall.input Dhall.auto $ Data.Text.pack s
                 decode Nothing = return Nothing
@@ -593,7 +590,7 @@ command (Options {..}) = do
 
     let getCharacterSetFromPossiblyTransitive = \case
             NonTransitiveStandardInput -> getCharacterSet StandardInput
-            (PossiblyTransitiveInputFile filePath _) -> getCharacterSet (InputFile filePath)
+            PossiblyTransitiveInputFile filePath _ -> getCharacterSet (InputFile filePath)
  
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
