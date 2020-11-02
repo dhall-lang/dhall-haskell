@@ -3,11 +3,11 @@
 -}
 
 {-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE DeriveGeneric   #-}
 
 module Dhall.Main
     ( -- * Options
@@ -106,21 +106,29 @@ import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
 import qualified System.Console.ANSI
+import qualified System.Directory
 import qualified System.Exit                               as Exit
 import qualified System.FilePath
-import qualified System.Directory
 import qualified System.IO
 import qualified Text.Dot
 import qualified Text.Pretty.Simple
 
 -- | Top-level program options
 data Options = Options
-    { mode    :: Mode
-    , explain :: Bool
-    , plain   :: Bool
-    , optionsAscii   :: Maybe Bool
-    , censor  :: Censor
+    { mode             :: Mode
+    , optionsExplain   :: Maybe Bool
+    , plain            :: Bool
+    , optionsAscii     :: Maybe Bool
+    , censor           :: Censor
     }
+
+-- | dhall-config.dhall
+data Config = Config
+    { ascii   :: Maybe Bool
+    , explain :: Maybe Bool
+    } deriving (Dhall.Generic, Show)
+
+instance Dhall.FromDhall Config
 
 -- | The subcommands for the @dhall@ executable
 data Mode
@@ -195,7 +203,7 @@ parseOptions :: Parser Options
 parseOptions =
         Options
     <$> parseMode
-    <*> switch "explain" "Explain error messages in more detail"
+    <*> flag "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> flag "ascii" "Format code using only ASCII syntax"
     <*> parseCensor
@@ -208,7 +216,7 @@ parseOptions =
 
     flag name description =
         Options.Applicative.flag
-            (Just True)
+            (Just False)
             Nothing
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
@@ -550,11 +558,6 @@ noHeaders
 noHeaders i =
     i
 
-data Config = Config
-    { ascii  :: Maybe Bool } deriving Dhall.Generic
-
-instance Dhall.FromDhall Config
-
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
@@ -565,32 +568,55 @@ command (Options {..}) = do
             InputFile f   -> System.FilePath.takeDirectory f
             StandardInput -> "."
 
-    let getCharacterSet input = case optionsAscii of
-            Just b  -> return $ toCharSet b
-            Nothing -> do
-                configPath <- findConfig $ rootDirectory input
-                config <- decode configPath
-                let isAscii = fromMaybe False config
-                return . toCharSet $ isAscii
+    let resolvedConfig = do
+            configPath <- findConfig . rootDirectory $ inputFromMode mode
+            config <- decode configPath
+            let resolvedCharSet = toCharSet $ resolve optionsAscii ascii config
+            let resolvedExplain = resolve optionsExplain explain config
+            return (resolvedCharSet, resolvedExplain)
             where
+                resolve (Just option) _configKey _config = option
+                resolve Nothing _configKey Nothing = False
+                resolve Nothing configKey (Just config) = fromMaybe False $ configKey config
+
                 toCharSet True = ASCII
                 toCharSet False = Unicode
 
                 decode (Just s) = fmap Just $ Dhall.input Dhall.auto $ Data.Text.pack s
                 decode Nothing = return Nothing
 
-                findConfig startDir =
-                    System.Directory.makeAbsolute startDir >>= \case
-                            "/" -> return Nothing
-                            dir ->
-                                let f = System.FilePath.joinPath [dir, "dhall-config.dhall"] in
-                                    System.Directory.doesFileExist f >>= \case
-                                        True -> return $ Just f
-                                        False -> findConfig $ System.FilePath.takeDirectory dir
+                findConfig startDir = System.Directory.makeAbsolute startDir >>= \dir ->
+                    let f = System.FilePath.joinPath [dir, "dhall-config.dhall"] in
+                        System.Directory.doesFileExist f >>= \case
+                            True -> return $ Just f
+                            False -> case dir of
+                                "/" -> return Nothing
+                                _ -> findConfig $ System.FilePath.takeDirectory dir
 
-    let getCharacterSetFromPossiblyTransitive = \case
-            NonTransitiveStandardInput -> getCharacterSet StandardInput
-            PossiblyTransitiveInputFile filePath _ -> getCharacterSet (InputFile filePath)
+                inputFromMode = \case
+                        Default {..} -> file
+                        Version -> StandardInput
+                        Resolve {..} -> file
+                        Type {..} -> file
+                        Normalize {..} -> file
+                        Repl -> StandardInput
+                        Format {..} -> toInput possiblyTransitiveInput
+                        Freeze {..} -> toInput possiblyTransitiveInput
+                        Hash {..} -> file
+                        Diff {} -> StandardInput
+                        Lint {..} -> toInput possiblyTransitiveInput
+                        Tags {..} -> input
+                        Encode {..} -> file
+                        Decode {..} -> file
+                        Text {..} -> file
+                        DirectoryTree {..} -> file
+                        Dhall.Main.Schemas {..} -> file
+                        SyntaxTree {..} -> file
+                        where
+                            toInput NonTransitiveStandardInput = StandardInput
+                            toInput (PossiblyTransitiveInputFile f _) = InputFile f
+
+    (characterSet, explain) <- resolvedConfig
  
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
@@ -654,7 +680,6 @@ command (Options {..}) = do
 
     let render :: Pretty a => Handle -> Expr Src a -> IO ()
         render h expression = do
-            characterSet <- getCharacterSet StandardInput
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc h doc
@@ -698,8 +723,7 @@ command (Options {..}) = do
             case output of
                 StandardOutput -> render System.IO.stdout annotatedExpression
 
-                OutputFile file_ -> do
-                    characterSet <- getCharacterSet (InputFile file_)
+                OutputFile file_ ->
                     writeDocToFile
                         file_
                         (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
@@ -791,8 +815,7 @@ command (Options {..}) = do
                 then return ()
                 else render System.IO.stdout inferredType
 
-        Repl -> do
-            characterSet <- getCharacterSet StandardInput
+        Repl ->
             Dhall.Repl.repl characterSet explain
 
         Diff {..} -> do
@@ -808,8 +831,7 @@ command (Options {..}) = do
                 then return ()
                 else Exit.exitFailure
 
-        Format {..} -> do
-            characterSet <- getCharacterSetFromPossiblyTransitive possiblyTransitiveInput
+        Format {..} ->
             Dhall.Format.format
                 Dhall.Format.Format{ input = possiblyTransitiveInput, ..}
 
@@ -818,7 +840,6 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            characterSet <- getCharacterSetFromPossiblyTransitive possiblyTransitiveInput
             Dhall.Freeze.freeze outputMode possiblyTransitiveInput scope intent characterSet censor
 
         Hash {..} -> do
@@ -872,8 +893,6 @@ command (Options {..}) = do
                         return ()
 
                 let lintedExpression = Dhall.Lint.lint parsedExpression
-
-                characterSet <- getCharacterSetFromPossiblyTransitive input
 
                 let doc =   Pretty.pretty header
                         <>  Dhall.Pretty.prettyCharacterSet characterSet lintedExpression
@@ -944,7 +963,6 @@ command (Options {..}) = do
             if quiet
                 then return ()
                 else do
-                    characterSet <- getCharacterSet StandardInput
                     let doc =
                             Dhall.Pretty.prettyCharacterSet
                                 characterSet
@@ -999,9 +1017,7 @@ command (Options {..}) = do
             DirectoryTree.toDirectoryTree path normalizedExpression
 
         Dhall.Main.Schemas{..} ->
-            do
-                characterSet <- getCharacterSet file
-                Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}
+            Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}
 
         SyntaxTree {..} -> do
             expression <- getExpression file
