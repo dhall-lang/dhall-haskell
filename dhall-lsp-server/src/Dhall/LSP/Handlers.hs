@@ -337,10 +337,10 @@ documentFormattingHandler request = do
     _ -> throwE (Warning, "Failed to format dhall code; parse error.")
 
   ServerConfig {..} <- getServerConfig
-  let characterSet | asciiOnly = ASCII
+  let charSet | asciiOnly = ASCII
               | otherwise = Unicode
 
-  let formatted = formatExprWithHeader characterSet expr header
+  let formatted = formatExprWithHeader charSet expr header
       numLines = Text.length txt
       range = J.Range (J.Position 0 0) (J.Position numLines 0)
       edits = J.List [J.TextEdit range formatted]
@@ -379,10 +379,10 @@ executeLintAndFormat request = do
     _ -> throwE (Warning, "Failed to lint dhall code; parse error.")
 
   ServerConfig {..} <- getServerConfig
-  let characterSet | asciiOnly = ASCII
+  let charSet | asciiOnly = ASCII
               | otherwise = Unicode
 
-  let linted = formatExprWithHeader characterSet (lint expr) header
+  let linted = formatExprWithHeader charSet (lint expr) header
       numLines = Text.length txt
       range = J.Range (J.Position 0 0) (J.Position numLines 0)
       edit = J.WorkspaceEdit
@@ -406,7 +406,7 @@ executeAnnotateLet request = do
     Right e -> return e
 
   ServerConfig {..} <- getServerConfig
-  let characterSet | asciiOnly = ASCII
+  let charSet | asciiOnly = ASCII
               | otherwise = Unicode
 
   (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, annotExpr)
@@ -416,7 +416,7 @@ executeAnnotateLet request = do
 
   let range = J.Range (J.Position (unPos x1 - 1) (unPos y1 - 1))
                       (J.Position (unPos x2 - 1) (unPos y2 - 1))
-      txt = formatExpr characterSet annotExpr
+      txt = formatExpr charSet annotExpr
       edit = J.WorkspaceEdit
         (Just (HashMap.singleton uri (J.List [J.TextEdit range txt]))) Nothing
 
