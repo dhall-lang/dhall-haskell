@@ -46,6 +46,8 @@ tests =
         , issue1584
         , issue1646
         , issue1732
+        , issue1884
+        , issue2088
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -220,6 +222,13 @@ issue1884 = Test.Tasty.HUnit.testCase "Issue #1884" (do
     -- This test ensures that the parser allows a parenthesized application
     -- expression as the first argument to a with expression
     _ <- Util.code "./tests/regression/issue1884.dhall"
+    return () )
+
+issue2088 :: TestTree
+issue2088 = Test.Tasty.HUnit.testCase "Issue #2088" (do
+    -- This test ensures that the parser for projection by labels doesn't
+    -- accidentally swallow trailing commas OUTSIDE of the projection
+    _ <- Util.code "./tests/regression/issue2088.dhall"
     return () )
 
 parsing0 :: TestTree
