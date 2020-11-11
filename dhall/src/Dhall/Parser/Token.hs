@@ -449,11 +449,7 @@ labels = do
 
     whitespace
 
-    xs <- nonEmptyLabels <|> emptyLabels
-
-    _ <- optional (_comma *> whitespace)
-
-    return xs
+    nonEmptyLabels <|> emptyLabels
   where
     emptyLabels = do
         try (optional (_comma *> whitespace) *> _closeBrace)
