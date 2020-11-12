@@ -437,29 +437,36 @@ parsers embedded = Parsers {..}
     selectorExpression = noted (do
             a <- primitiveExpression
 
-            let recordType = whitespace *> _openParens *> whitespace *> expression <* whitespace <* _closeParens
+            let recordType = _openParens *> whitespace *> expression <* whitespace <* _closeParens
 
             let field               x  e = Field   e  x
             let projectBySet        xs e = Project e (Left  xs)
             let projectByExpression xs e = Project e (Right xs)
 
-            let fieldSelection = do
+            let alternatives = do
                     src0 <- src whitespace
-                    l <- anyLabel
-                    pos <- Text.Megaparsec.getSourcePos
 
-                    -- FIXME: Suffix whitespace can't be parsed given our limitation
-                    -- about whitespace treatment, but for @dhall-docs@ this
-                    -- is enough
-                    let src1 = Src pos pos ""
-                    return (FieldSelection (Just src0) l (Just src1))
+                    let fieldSelection = do
+                            l <- anyLabel
 
-            let alternatives =
-                        fmap field               fieldSelection
-                    <|> fmap projectBySet        (whitespace *> labels)
-                    <|> fmap projectByExpression recordType
+                            pos <- Text.Megaparsec.getSourcePos
+
+                            -- FIXME: Suffix whitespace can't be parsed given our limitation
+                            -- about whitespace treatment, but for @dhall-docs@ this
+                            -- is enough
+                            let src1 = Src pos pos ""
+
+                            return (FieldSelection (Just src0) l (Just src1))
+
+                    let result =
+                                fmap field               fieldSelection
+                            <|> fmap projectBySet        labels
+                            <|> fmap projectByExpression recordType
+
+                    result
 
             b <- Text.Megaparsec.many (try (whitespace *> _dot *> alternatives))
+
             return (foldl' (\e k -> k e) a b) )
 
     primitiveExpression =
