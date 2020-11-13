@@ -399,7 +399,7 @@ dependencyToNix url@URL{ authority, path } = do
                     let functionParameter = (prelude, Nothing)
 
                     let dependencyExpression =
-                                (Nix.mkSym prelude @. "override")
+                                (Nix.mkSym prelude @. "overridePackage")
                             @@  Nix.attrsE
                                     [ ("file", Nix.mkStr fileArgument ) ]
 
@@ -411,7 +411,7 @@ dependencyToNix url@URL{ authority, path } = do
                     let functionParameter = (repo, Nothing)
 
                     let dependencyExpression =
-                                (Nix.mkSym repo @. "override")
+                                (Nix.mkSym repo @. "overridePackage")
                             @@  Nix.attrsE
                                     [ ("file", Nix.mkStr fileArgument ) ]
 
@@ -453,7 +453,7 @@ dependencyToNix url@URL{ authority, path } = do
             let functionParameter = (prelude, Nothing)
 
             let dependencyExpression =
-                        (Nix.mkSym prelude @. "override")
+                        (Nix.mkSym prelude @. "overridePackage")
                     @@  Nix.attrsE
 
                             [ ("file", Nix.mkStr fileArgument) ]
