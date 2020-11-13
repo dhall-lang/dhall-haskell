@@ -151,7 +151,7 @@ data Mode
     | Repl
     | Format { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
     | Freeze { possiblyTransitiveInput :: PossiblyTransitiveInput, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
-    | Hash { file :: Input }
+    | Hash { file :: Input, cache :: Bool }
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
     | Tags
@@ -300,7 +300,7 @@ parseMode =
             Miscellaneous
             "hash"
             "Compute semantic hashes for Dhall expressions"
-            (Hash <$> parseFile)
+            (Hash <$> parseFile <*> parseCache)
     <|> subcommand
             Miscellaneous
             "tags"
@@ -522,6 +522,12 @@ parseMode =
         Options.Applicative.switch
             (   Options.Applicative.long "noted"
             <>  Options.Applicative.help "Print `Note` constructors"
+            )
+
+    parseCache =
+        Options.Applicative.switch
+            (   Options.Applicative.long "cache"
+            <>  Options.Applicative.help "Cache the hashed expression"
             )
 
 -- | `ParserInfo` for the `Options` type
@@ -789,6 +795,10 @@ command (Options {..}) = do
 
             let normalizedExpression =
                     Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+
+            if cache
+                then Dhall.Import.writeExpressionToSemanticCache normalizedExpression
+                else return ()
 
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
