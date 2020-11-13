@@ -203,24 +203,28 @@ parseOptions :: Parser Options
 parseOptions =
         Options
     <$> parseMode
-    <*> flag "explain" "Explain error messages in more detail"
+    <*> parseExplain
     <*> switch "plain" "Disable syntax highlighting"
-    <*> flag "ascii" "Format code using only ASCII syntax"
+    <*> parseAscii
     <*> parseCensor
   where
+    parseExplain = Options.Applicative.flag' (Just True)
+        (Options.Applicative.long "explain" <> Options.Applicative.help "Explain error messages in more detail")
+        <|> Options.Applicative.flag' (Just False)
+            (Options.Applicative.long "concise" <> Options.Applicative.help "Do not explain error messages in detail")
+        <|> pure Nothing
+
     switch name description =
         Options.Applicative.switch
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
             )
 
-    flag name description =
-        Options.Applicative.flag
-            (Just False)
-            Nothing
-            (   Options.Applicative.long name
-            <>  Options.Applicative.help description
-            )
+    parseAscii = Options.Applicative.flag' (Just True)
+        (Options.Applicative.long "ascii" <> Options.Applicative.help "Format code using only ASCII syntax")
+        <|> Options.Applicative.flag' (Just False)
+            (Options.Applicative.long "unicode" <> Options.Applicative.help "Format code using unicode symbols")
+        <|> pure Nothing
 
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where
