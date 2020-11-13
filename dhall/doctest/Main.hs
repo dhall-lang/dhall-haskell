@@ -6,6 +6,7 @@ import System.FilePath ((</>))
 
 import qualified GHC.IO.Encoding
 import qualified System.Directory
+import qualified System.Environment
 import qualified System.IO
 import qualified Test.DocTest
 import qualified Test.Mockery.Directory
@@ -16,6 +17,8 @@ main = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
     pwd    <- System.Directory.getCurrentDirectory
     prefix <- System.Directory.makeAbsolute pwd
+
+    System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
 
     Test.Mockery.Directory.inTempDirectory $ do
         writeFile "makeBools.dhall" "λ(n : Bool) → [ n && True, n && False, n || True, n || False ]"
