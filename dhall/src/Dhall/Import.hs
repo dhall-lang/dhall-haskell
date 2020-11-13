@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -111,7 +112,6 @@ module Dhall.Import (
     , hashExpression
     , hashExpressionToCode
     , writeExpressionToSemanticCache
-    , warnAboutMissingCaches
     , assertNoImports
     , Manager
     , defaultNewManager
@@ -154,12 +154,10 @@ import Control.Exception
     , SomeException
     , toException
     )
-import Control.Monad                    (when)
 import Control.Monad.Catch              (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Morph              (hoist)
-import Control.Monad.Trans.Class        (lift)
-import Control.Monad.Trans.State.Strict (StateT)
+import Control.Monad.State.Strict       (MonadState, StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
 import Data.List.NonEmpty               (NonEmpty (..))
@@ -202,8 +200,9 @@ import Lens.Family.State.Strict (zoom)
 import qualified Codec.CBOR.Encoding                         as Encoding
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
+import qualified Control.Monad                               as Monad
+import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
-import qualified Control.Monad.Trans.State.Strict            as State
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
@@ -536,8 +535,10 @@ loadImportWithSemanticCache
     Status { .. } <- State.get
     mCached <-
         case _semanticCacheMode of
-            UseSemanticCache -> liftIO $ fetchFromSemanticCache semanticHash
-            IgnoreSemanticCache -> pure Nothing
+            UseSemanticCache ->
+                zoom cacheWarning (fetchFromSemanticCache semanticHash)
+            IgnoreSemanticCache ->
+                pure Nothing
 
     case mCached of
         Just bytesStrict -> do
@@ -568,7 +569,7 @@ loadImportWithSemanticCache
             let variants = map (\version -> encodeExpression version (Core.alphaNormalize importSemantics))
                                 [ minBound .. maxBound ]
             case Data.Foldable.find ((== semanticHash). Dhall.Crypto.sha256Hash) variants of
-                Just bytes -> liftIO $ writeToSemanticCache semanticHash bytes
+                Just bytes -> zoom cacheWarning (writeToSemanticCache semanticHash bytes)
                 Nothing -> do
                     let expectedHash = semanticHash
                     Status { _stack } <- State.get
@@ -580,7 +581,10 @@ loadImportWithSemanticCache
 
 
 -- Fetch encoded normal form from "semantic cache"
-fetchFromSemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemanticCache
+    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    => Dhall.Crypto.SHA256Digest
+    -> m (Maybe Data.ByteString.ByteString)
 fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile "dhall" expectedHash
     True <- liftIO (Directory.doesFileExist cacheFile)
@@ -589,12 +593,19 @@ fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
 -- | Ensure that the given expression is present in the semantic cache. The
 --   given expression should be alpha-beta-normal.
 writeExpressionToSemanticCache :: Expr Void Void -> IO ()
-writeExpressionToSemanticCache expression = writeToSemanticCache hash bytes
+writeExpressionToSemanticCache expression =
+    -- Defaulting to not displaying the warning is for backwards compatibility
+    -- with the old behavior
+    State.evalStateT (writeToSemanticCache hash bytes) True
   where
     bytes = encodeExpression NoVersion expression
     hash = Dhall.Crypto.sha256Hash bytes
 
-writeToSemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteString -> IO ()
+writeToSemanticCache
+    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    => Dhall.Crypto.SHA256Digest
+    -> Data.ByteString.ByteString
+    -> m ()
 writeToSemanticCache hash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall" hash
@@ -637,7 +648,8 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
     -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
     -- behind semi-semantic caching.
     let semisemanticHash = computeSemisemanticHash (Core.denote resolvedExpr)
-    mCached <- lift $ fetchFromSemisemanticCache semisemanticHash
+
+    mCached <- zoom cacheWarning (fetchFromSemisemanticCache semisemanticHash)
 
     importSemantics <- case mCached of
         Just bytesStrict -> do
@@ -670,7 +682,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
 
                     let bytes = encodeExpression NoVersion betaNormal
 
-                    lift (writeToSemisemanticCache semisemanticHash bytes)
+                    zoom cacheWarning (writeToSemisemanticCache semisemanticHash bytes)
 
                     return betaNormal
 
@@ -718,13 +730,20 @@ computeSemisemanticHash :: Expr Void Void -> Dhall.Crypto.SHA256Digest
 computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
-fetchFromSemisemanticCache :: Dhall.Crypto.SHA256Digest -> IO (Maybe Data.ByteString.ByteString)
+fetchFromSemisemanticCache
+    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    => Dhall.Crypto.SHA256Digest
+    -> m (Maybe Data.ByteString.ByteString)
 fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
     cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     liftIO (Data.ByteString.readFile cacheFile)
 
-writeToSemisemanticCache :: Dhall.Crypto.SHA256Digest -> Data.ByteString.ByteString -> IO ()
+writeToSemisemanticCache
+    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    => Dhall.Crypto.SHA256Digest
+    -> Data.ByteString.ByteString
+    -> m ()
 writeToSemisemanticCache semisemanticHash bytes = do
     _ <- Maybe.runMaybeT $ do
         cacheFile <- getCacheFile "dhall-haskell" semisemanticHash
@@ -799,23 +818,25 @@ toHeader _ =
     empty
 
 getCacheFile
-    :: (MonadCatch m, Alternative m, MonadIO m) => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
+    :: (MonadCatch m, Alternative m, MonadState Bool m, MonadIO m)
+    => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
 getCacheFile cacheName hash = do
-    cacheDirectory <- getOrCreateCacheDirectory False cacheName
+    cacheDirectory <- getOrCreateCacheDirectory cacheName
 
     let cacheFile = cacheDirectory </> ("1220" <> show hash)
 
     return cacheFile
 
--- | Warn if no cache directory is available
-warnAboutMissingCaches :: (MonadCatch m, Alternative m, MonadIO m) => m ()
-warnAboutMissingCaches = warn <|> return ()
-    where warn = Data.Foldable.traverse_ (getOrCreateCacheDirectory True) ["dhall", "dhall-haskell"]
-
-getOrCreateCacheDirectory :: (MonadCatch m, Alternative m, MonadIO m) => Bool -> FilePath -> m FilePath
-getOrCreateCacheDirectory showWarning cacheName = do
+getOrCreateCacheDirectory
+    :: (MonadCatch m, Alternative m, MonadState Bool m, MonadIO m)
+    => FilePath -> m FilePath
+getOrCreateCacheDirectory cacheName = do
     let warn message = do
-            when showWarning (printWarning message)
+            alreadyWarned <- State.get
+
+            Monad.unless alreadyWarned (printWarning message)
+
+            State.put True
 
             empty
 
@@ -857,14 +878,19 @@ getOrCreateCacheDirectory showWarning cacheName = do
                 then
                     return ()
                 else do
+                    let render f = if f permissions then "✓" else "✗"
                     let message =
                              "The directory:\n"
                           <> "\n"
                           <> "↳ " <> dir <> "\n"
                           <> "\n"
                           <> "... does not give you permission to read, write, or search files.\n\n"
+                          <> "\n"
                           <> "The directory's current permissions are:\n"
-                          <> show permissions <> "\n"
+                          <> "\n"
+                          <> "• " <> render Directory.readable <> " readable\n"
+                          <> "• " <> render Directory.writable <> " writable\n"
+                          <> "• " <> render Directory.searchable <> " searchable\n"
 
                     warn message
 
@@ -908,7 +934,7 @@ getOrCreateCacheDirectory showWarning cacheName = do
 
                             setPermissions dir
 
-    cacheBaseDirectory <- getCacheBaseDirectory showWarning
+    cacheBaseDirectory <- getCacheBaseDirectory
 
     let directory = cacheBaseDirectory </> cacheName
 
@@ -926,8 +952,9 @@ getOrCreateCacheDirectory showWarning cacheName = do
 
     return directory
 
-getCacheBaseDirectory :: (Alternative m, MonadIO m) => Bool -> m FilePath
-getCacheBaseDirectory showWarning = alternative₀ <|> alternative₁ <|> alternative₂
+getCacheBaseDirectory
+    :: (MonadState Bool m, Alternative m, MonadIO m) => m FilePath
+getCacheBaseDirectory = alternative₀ <|> alternative₁ <|> alternative₂
   where
     alternative₀ = do
         maybeXDGCacheHome <-
@@ -957,6 +984,8 @@ getCacheBaseDirectory showWarning = alternative₀ <|> alternative₁ <|> altern
         where isWindows = System.Info.os == "mingw32"
 
     alternative₂ = do
+        alreadyWarned <- State.get
+
         let message =
                 "\n"
              <> "\ESC[1;33mWarning\ESC[0m: "
@@ -965,7 +994,9 @@ getCacheBaseDirectory showWarning = alternative₀ <|> alternative₁ <|> altern
              <> "You can provide a cache base directory by pointing the $XDG_CACHE_HOME\n"
              <> "environment variable to a directory with read and write permissions.\n"
 
-        when showWarning (liftIO (System.IO.hPutStrLn System.IO.stderr message))
+        Monad.unless alreadyWarned (liftIO (System.IO.hPutStrLn System.IO.stderr message))
+
+        State.put True
 
         empty
 
