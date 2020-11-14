@@ -2,12 +2,13 @@
     @dhall@ executable
 -}
 
-{-# LANGUAGE ApplicativeDo     #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ApplicativeDo          #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE DuplicateRecordFields  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE NamedFieldPuns         #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE RecordWildCards        #-}
 
 module Dhall.Main
     ( -- * Options
@@ -115,11 +116,11 @@ import qualified Text.Pretty.Simple
 
 -- | Top-level program options
 data Options = Options
-    { mode             :: Mode
-    , optionsExplain   :: Maybe Bool
-    , plain            :: Bool
-    , optionsAscii     :: Maybe Bool
-    , censor           :: Censor
+    { mode      :: Mode
+    , explain   :: Maybe Bool
+    , plain     :: Bool
+    , ascii     :: Maybe Bool
+    , censor    :: Censor
     }
 
 -- | dhall-config.dhall
@@ -564,7 +565,7 @@ noHeaders i =
 
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
-command (Options {..}) = do
+command (Options {explain=optionsExplain, ascii=optionsAscii, ..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
@@ -575,8 +576,8 @@ command (Options {..}) = do
     let resolvedConfig = do
             configPath <- findConfig . rootDirectory $ inputFromMode mode
             config <- decode configPath
-            let resolvedCharSet = toCharSet $ resolve optionsAscii ascii config
-            let resolvedExplain = resolve optionsExplain explain config
+            let resolvedCharSet = toCharSet $ resolve optionsAscii (ascii :: Config -> Maybe Bool) config
+            let resolvedExplain = resolve optionsExplain (explain :: Config -> Maybe Bool) config
             return (resolvedCharSet, resolvedExplain)
             where
                 resolve (Just option) _configKey _config = option
