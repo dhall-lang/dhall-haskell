@@ -79,7 +79,6 @@ import qualified Dhall.Eval                              as Eval
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
-import qualified Dhall.Set
 import qualified Dhall.Syntax                            as Syntax
 import qualified Dhall.Util
 import qualified Lens.Family
@@ -1140,6 +1139,12 @@ infer typer = loop
 
                             die (CantAccess text e'' _E'')
         Project e (Left xs) -> do
+            case duplicateElement xs of
+                Just x -> do
+                    die (DuplicateProjectionLabel x)
+                Nothing -> do
+                    return ()
+
             _E' <- loop ctx e
 
             let _E'' = quote names _E'
@@ -1153,7 +1158,7 @@ infer typer = loop
 
                     let adapt = VRecord . Dhall.Map.unorderedFromList
 
-                    fmap adapt (traverse process (Dhall.Set.toAscList xs))
+                    fmap adapt (traverse process xs)
 
                 _ -> do
                     let text =
@@ -1350,6 +1355,7 @@ data TypeMessage s a
     | CantAccess Text (Expr s a) (Expr s a)
     | CantProject Text (Expr s a) (Expr s a)
     | CantProjectByExpression (Expr s a)
+    | DuplicateProjectionLabel Text
     | MissingField Text (Expr s a)
     | MissingConstructor Text (Expr s a)
     | ProjectionTypeMismatch Text (Expr s a) (Expr s a) (Expr s a) (Expr s a)
@@ -3851,6 +3857,36 @@ prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
       where
         txt = insert expr
 
+prettyTypeMessage (DuplicateProjectionLabel k) = ErrorMessages {..}
+  where
+    short = "Duplicate projection label: " <> Dhall.Pretty.Internal.prettyLabel k
+
+    long =
+        "Explanation: You can only specify a label once when projecting a record's fields\n\
+        \by label.  For example, this is valid:                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────┐                                 \n\
+        \    │ { x = 1.1, y = 2.4, z = -0.3 }.{ x, y } │                                 \n\
+        \    └─────────────────────────────────────────┘                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but this is not valid:                                                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────┐                                 \n\
+        \    │ { x = 1.1, y = 2.4, z = -0.3 }.{ y, y } │                                 \n\
+        \    └─────────────────────────────────────────┘                                 \n\
+        \                                          ⇧                                     \n\
+        \                                          Invalid: the label ❰y❱ appears twice  \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \You tried to project the following field twice:                                 \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n"
+      where
+        txt0 = insert k
+
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
     short = "Missing record field: " <> Dhall.Pretty.Internal.prettyLabel k
@@ -4600,6 +4636,8 @@ messageExpressions f m = case m of
         CantProject <$> pure a <*> f b <*> f c
     CantProjectByExpression a ->
         CantProjectByExpression <$> f a
+    DuplicateProjectionLabel a ->
+        pure (DuplicateProjectionLabel a)
     MissingField a b ->
         MissingField <$> pure a <*> f b
     MissingConstructor a b ->
@@ -4697,3 +4735,11 @@ toPath :: (Functor list, Foldable list) => list Text -> Text
 toPath ks =
     Text.intercalate "."
         (Foldable.toList (fmap (Dhall.Pretty.Internal.escapeLabel True) ks))
+
+duplicateElement :: Ord a => [a] -> Maybe a
+duplicateElement = go Data.Set.empty
+  where
+    go _ [] = Nothing
+    go found (x : xs)
+        | Data.Set.member x found = Just x
+        | otherwise               = go (Data.Set.insert x found) xs

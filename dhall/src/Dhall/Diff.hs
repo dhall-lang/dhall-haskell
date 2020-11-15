@@ -26,7 +26,6 @@ import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void                 (Void)
 import Dhall.Map                 (Map)
 import Dhall.Pretty.Internal     (Ann)
-import Dhall.Set                 (Set)
 import Dhall.Syntax
     ( Binding (..)
     , Chunks (..)
@@ -47,7 +46,6 @@ import qualified Data.Text.Prettyprint.Doc as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Normalize           as Normalize
 import qualified Dhall.Pretty.Internal     as Internal
-import qualified Dhall.Set
 import qualified Dhall.Syntax              as Syntax
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
@@ -174,20 +172,21 @@ diffPrimitive f l r
 diffLabel :: Text -> Text -> Diff
 diffLabel = diffPrimitive (token . Internal.prettyLabel)
 
-diffLabels :: Set Text -> Set Text -> Diff
+diffLabels :: [Text] -> [Text] -> Diff
 diffLabels ksL ksR =
     braced (diffFieldNames <> (if anyEqual then [ ignore ] else []))
   where
-    extraL = Dhall.Set.difference ksL ksR
-    extraR = Dhall.Set.difference ksR ksL
+    setL = Data.Set.fromList ksL
+    setR = Data.Set.fromList ksR
+
+    extraL = Data.Set.difference setL setR
+    extraR = Data.Set.difference setR setL
 
     diffFieldNames = foldMap (adapt minus) extraL <> foldMap (adapt plus) extraR
       where
         adapt sign key = [ sign (token (Internal.prettyLabel key)) ]
 
-    anyEqual = not (Data.Set.null (Data.Set.intersection
-                                   (Dhall.Set.toSet ksL)
-                                   (Dhall.Set.toSet ksR)))
+    anyEqual = not (Data.Set.null (Data.Set.intersection setL setR))
 
 diffNatural :: Natural -> Natural -> Diff
 diffNatural = diffPrimitive (token . Internal.prettyNatural)

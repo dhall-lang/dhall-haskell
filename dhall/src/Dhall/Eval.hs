@@ -50,6 +50,7 @@ module Dhall.Eval (
   , textShow
   ) where
 
+import Data.Bifunctor     (first)
 import Data.Foldable      (foldr', toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
@@ -776,11 +777,11 @@ eval !env t0 =
         Field t (Syntax.fieldSelectionLabel -> k) ->
             vField (eval env t) k
         Project t (Left ks) ->
-            vProjectByFields env (eval env t) (Dhall.Set.sort ks)
+            vProjectByFields env (eval env t) (Dhall.Set.sort (Dhall.Set.fromList ks))
         Project t (Right e) ->
             case eval env e of
                 VRecord kts ->
-                    eval env (Project t (Left (Dhall.Set.fromSet (Map.keysSet kts))))
+                    vProjectByFields env (eval env t) (Dhall.Set.fromSet (Map.keysSet kts))
                 e' ->
                     VProject (eval env t) (Right e')
         Assert t ->
@@ -1179,7 +1180,7 @@ quote !env !t0 =
         VField t k ->
             Field (quote env t) $ Syntax.makeFieldSelection k
         VProject t p ->
-            Project (quote env t) (fmap (quote env) p)
+            Project (quote env t) (first Dhall.Set.toList (fmap (quote env) p))
         VAssert t ->
             Assert (quote env t)
         VEquivalent t u ->

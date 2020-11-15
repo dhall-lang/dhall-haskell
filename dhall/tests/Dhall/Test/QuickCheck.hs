@@ -308,7 +308,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             :: ConstrGen "Lam" 0 (FunctionBinding s a)
             :+ ConstrGen "Pi" 0 Text
             :+ ConstrGen "Field" 1 (FieldSelection s)
-            :+ ConstrGen "Project" 1 (Either (Set Text) (Expr s a))
+            :+ ConstrGen "Project" 1 (Either [Text] (Expr s a))
             :+ Gen Integer  -- Generates all Integer fields in Expr
             :+ Gen Text     -- Generates all Text fields in Expr
             :+ ()
@@ -326,7 +326,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
 
         projection =
             Test.QuickCheck.oneof
-                [ fmap (Left . Dhall.Set.fromList) (Test.QuickCheck.listOf label)
+                [ fmap Left (Test.QuickCheck.listOf label)
                 , arbitrary
                 ]
 
