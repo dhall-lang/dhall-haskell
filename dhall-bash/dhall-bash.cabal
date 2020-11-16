@@ -29,7 +29,7 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
-        bytestring                               < 0.11,
+        bytestring                               < 0.12,
         containers                               < 0.7 ,
         dhall                     >= 1.36.0   && < 1.39,
         neat-interpolation                       < 0.6 ,
