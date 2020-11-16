@@ -103,8 +103,7 @@ failureTest prefix = do
                [
                -- Duplicate fields are incorrectly caught during parsing:
                -- https://github.com/dhall-lang/dhall-haskell/issues/772
-                 typeInferenceDirectory </> "failure/unit/RecordProjectionDuplicateFields"
-               , typeInferenceDirectory </> "failure/unit/RecordTypeDuplicateFields"
+                 typeInferenceDirectory </> "failure/unit/RecordTypeDuplicateFields"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants1"
                , typeInferenceDirectory </> "failure/unit/UnionTypeDuplicateVariants2"
                ]

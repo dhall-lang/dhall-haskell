@@ -70,7 +70,6 @@ import Data.List.NonEmpty        (NonEmpty (..))
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
 import Dhall.Map                 (Map)
-import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Syntax
 import Numeric.Natural           (Natural)
@@ -80,14 +79,12 @@ import qualified Data.HashSet
 import qualified Data.List
 import qualified Data.List.NonEmpty                        as NonEmpty
 import qualified Data.Maybe
-import qualified Data.Set
 import qualified Data.Text                                 as Text
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.String   as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
 import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
 import qualified Dhall.Map                                 as Map
-import qualified Dhall.Set
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -509,12 +506,10 @@ prettyAnyLabels keys = Pretty.group (Pretty.flatAlt long short)
           , renderSrcMaybe mSrc1
           ]
 
-prettyLabels :: Set Text -> Doc Ann
+prettyLabels :: [Text] -> Doc Ann
 prettyLabels a
-    | Data.Set.null (Dhall.Set.toSet a) =
-        lbrace <> rbrace
-    | otherwise =
-        braces (map (duplicate . prettyAnyLabel) (Dhall.Set.toList a))
+    | null a    = lbrace <> rbrace
+    | otherwise = braces (map (duplicate . prettyAnyLabel) a)
 
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty

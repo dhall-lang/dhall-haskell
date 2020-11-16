@@ -73,7 +73,6 @@ import qualified Data.List.NonEmpty    as NonEmpty
 import qualified Data.Sequence
 import qualified Dhall.Crypto
 import qualified Dhall.Map
-import qualified Dhall.Set
 import qualified Dhall.Syntax          as Syntax
 import qualified Text.Printf           as Printf
 
@@ -415,7 +414,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                             TypeString -> do
                                                 x <- Decoding.decodeString
-                                                return (Left (Dhall.Set.fromList [x]))
+                                                return (Left [x])
 
                                             _ ->
                                                 die ("Unexpected token type for projection: " <> show tokenType₂)
@@ -423,7 +422,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         xs <- replicateDecoder (len - 2) Decoding.decodeString
 
-                                        return (Left (Dhall.Set.fromList xs))
+                                        return (Left xs)
 
                                 return (Project t xs)
 
@@ -852,10 +851,10 @@ encodeExpressionInternal encodeEmbed = go
 
         Project t (Left xs) ->
             encodeListN
-                (2 + Dhall.Set.size xs)
+                (2 + length xs)
                 ( Encoding.encodeInt 10
                 : go t
-                : map Encoding.encodeString (Dhall.Set.toList xs)
+                : map Encoding.encodeString xs
                 )
 
         Project t (Right _T) ->

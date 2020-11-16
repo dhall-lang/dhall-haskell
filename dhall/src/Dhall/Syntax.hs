@@ -100,7 +100,6 @@ import Data.Traversable           ()
 import Data.Void                  (Void)
 import Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import Dhall.Set                  (Set)
 import Dhall.Src                  (Src (..))
 import GHC.Generics               (Generic)
 import Instances.TH.Lift          ()
@@ -609,7 +608,7 @@ data Expr s a
     | Field (Expr s a) (FieldSelection s)
     -- | > Project e (Left xs)                      ~  e.{ xs }
     --   > Project e (Right t)                      ~  e.(t)
-    | Project (Expr s a) (Either (Set Text) (Expr s a))
+    | Project (Expr s a) (Either [Text] (Expr s a))
     -- | > Assert e                                 ~  assert : e
     | Assert (Expr s a)
     -- | > Equivalent x y                           ~  x ≡ y
