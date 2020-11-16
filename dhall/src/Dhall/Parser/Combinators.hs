@@ -17,7 +17,6 @@ module Dhall.Parser.Combinators
     , satisfy
     , Dhall.Parser.Combinators.takeWhile
     , takeWhile1
-    , noDuplicates
     , toMap
     , toMapWith
     ) where
@@ -31,19 +30,16 @@ import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Pretty (..))
 import Data.Void                 (Void)
 import Dhall.Map                 (Map)
-import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Text.Parser.Combinators   (try, (<?>))
 import Text.Parser.Token         (TokenParsing (..))
 
 import qualified Control.Monad.Fail
 import qualified Data.Char
-import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Pretty
-import qualified Dhall.Set
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
@@ -263,16 +259,6 @@ takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
 --   that match the given predicate. It fails when no character was consumed
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
-
--- | Construct a 'Set a' from a '[a]', failing if there was a duplicate element
-noDuplicates :: Ord a => [a] -> Parser (Set a)
-noDuplicates = go Dhall.Set.empty
-  where
-    go found    []  = return found
-    go found (x:xs) =
-        if Data.Set.member x (Dhall.Set.toSet found)
-        then fail "Duplicate key"
-        else go (Dhall.Set.append x found) xs
 
 -- | Creates a map with the given key-value pairs, failing if there was a
 --   duplicate key.
