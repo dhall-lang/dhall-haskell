@@ -17,10 +17,13 @@ module Dhall.Main
     , ResolveMode(..)
     , parseOptions
     , parserInfoOptions
+    , findConfig
+    , resolveSettings
 
       -- * Execution
     , Dhall.Main.command
     , main
+    , CharacterSet(..)
     ) where
 
 import Control.Applicative       (optional, (<|>))
@@ -563,9 +566,34 @@ noHeaders
 noHeaders i =
     i
 
+findConfig :: FilePath -> IO (Maybe FilePath)
+findConfig startDir = System.Directory.makeAbsolute startDir >>= \dir ->
+    let f = System.FilePath.joinPath [dir, "dhall-config.dhall"] in
+        System.Directory.doesFileExist f >>= \case
+            True -> return $ Just f
+            False -> case dir of
+                "/" -> return Nothing
+                _ -> findConfig $ System.FilePath.takeDirectory dir
+
+resolveSettings :: Maybe String -> Options -> IO (CharacterSet, Bool)
+resolveSettings configStr options = do
+    config <- decode configStr
+    let resolvedCharSet = toCharSet $ resolve ascii ascii config
+    let resolvedExplain = resolve explain explain config
+    return (resolvedCharSet, resolvedExplain)
+    where
+        resolve :: (Options -> Maybe Bool) -> (Config -> Maybe Bool) -> Maybe Config -> Bool
+        resolve optionKey configKey config = fromMaybe False $ optionKey options <|> (config >>= configKey)
+
+        toCharSet True = ASCII
+        toCharSet False = Unicode
+
+        decode (Just s) = fmap Just $ Dhall.input Dhall.auto $ Data.Text.pack s
+        decode Nothing = return Nothing
+
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
-command (Options {explain=optionsExplain, ascii=optionsAscii, ..}) = do
+command (options@Options {..}) = do
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
@@ -573,55 +601,36 @@ command (Options {explain=optionsExplain, ascii=optionsAscii, ..}) = do
             InputFile f   -> System.FilePath.takeDirectory f
             StandardInput -> "."
 
-    let resolvedConfig = do
-            configPath <- findConfig . rootDirectory $ inputFromMode mode
-            config <- decode configPath
-            let resolvedCharSet = toCharSet $ resolve optionsAscii (ascii :: Config -> Maybe Bool) config
-            let resolvedExplain = resolve optionsExplain (explain :: Config -> Maybe Bool) config
-            return (resolvedCharSet, resolvedExplain)
+    let inputFromMode = \case
+            Default {..} -> file
+            Version -> StandardInput
+            Resolve {..} -> file
+            Type {..} -> file
+            Normalize {..} -> file
+            Repl -> StandardInput
+            Format {..} -> toInput possiblyTransitiveInput
+            Freeze {..} -> toInput possiblyTransitiveInput
+            Hash {..} -> file
+            Diff {} -> StandardInput
+            Lint {..} -> toInput possiblyTransitiveInput
+            Tags {..} -> input
+            Encode {..} -> file
+            Decode {..} -> file
+            Text {..} -> file
+            DirectoryTree {..} -> file
+            Dhall.Main.Schemas {..} -> file
+            SyntaxTree {..} -> file
             where
-                resolve (Just option) _configKey _config = option
-                resolve Nothing _configKey Nothing = False
-                resolve Nothing configKey (Just config) = fromMaybe False $ configKey config
+                toInput NonTransitiveStandardInput = StandardInput
+                toInput (PossiblyTransitiveInputFile f _) = InputFile f
 
-                toCharSet True = ASCII
-                toCharSet False = Unicode
+    configPath <- findConfig . rootDirectory $ inputFromMode mode
 
-                decode (Just s) = fmap Just $ Dhall.input Dhall.auto $ Data.Text.pack s
-                decode Nothing = return Nothing
+    configStr <- case configPath of
+            Nothing -> return Nothing
+            Just path -> Just <$> readFile path
 
-                findConfig startDir = System.Directory.makeAbsolute startDir >>= \dir ->
-                    let f = System.FilePath.joinPath [dir, "dhall-config.dhall"] in
-                        System.Directory.doesFileExist f >>= \case
-                            True -> return $ Just f
-                            False -> case dir of
-                                "/" -> return Nothing
-                                _ -> findConfig $ System.FilePath.takeDirectory dir
-
-                inputFromMode = \case
-                        Default {..} -> file
-                        Version -> StandardInput
-                        Resolve {..} -> file
-                        Type {..} -> file
-                        Normalize {..} -> file
-                        Repl -> StandardInput
-                        Format {..} -> toInput possiblyTransitiveInput
-                        Freeze {..} -> toInput possiblyTransitiveInput
-                        Hash {..} -> file
-                        Diff {} -> StandardInput
-                        Lint {..} -> toInput possiblyTransitiveInput
-                        Tags {..} -> input
-                        Encode {..} -> file
-                        Decode {..} -> file
-                        Text {..} -> file
-                        DirectoryTree {..} -> file
-                        Dhall.Main.Schemas {..} -> file
-                        SyntaxTree {..} -> file
-                        where
-                            toInput NonTransitiveStandardInput = StandardInput
-                            toInput (PossiblyTransitiveInputFile f _) = InputFile f
-
-    (characterSet, explain) <- resolvedConfig
+    (characterSet, shouldExplain) <- resolveSettings configStr options
  
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
@@ -646,7 +655,7 @@ command (Options {explain=optionsExplain, ascii=optionsAscii, ..}) = do
             handleTypeError e = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src Void
                 System.IO.hPutStrLn System.IO.stderr ""
-                if explain
+                if shouldExplain
                     then
                         case censor of
                             Censor   -> Control.Exception.throwIO (CensoredDetailed (DetailedTypeError e))
@@ -661,7 +670,7 @@ command (Options {explain=optionsExplain, ascii=optionsAscii, ..}) = do
             handleImported (Imported ps e) = Control.Exception.handle handleAll $ do
                 let _ = e :: TypeError Src Void
                 System.IO.hPutStrLn System.IO.stderr ""
-                if explain
+                if shouldExplain
                     then Control.Exception.throwIO (Imported ps (DetailedTypeError e))
                     else do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
@@ -821,7 +830,7 @@ command (Options {explain=optionsExplain, ascii=optionsAscii, ..}) = do
                 else render System.IO.stdout inferredType
 
         Repl ->
-            Dhall.Repl.repl characterSet explain
+            Dhall.Repl.repl characterSet shouldExplain
 
         Diff {..} -> do
             expression1 <- Dhall.inputExpr expr1

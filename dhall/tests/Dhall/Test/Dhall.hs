@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveFunctor       #-}
@@ -31,13 +32,18 @@ import System.Timeout       (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import qualified System.Directory
+import qualified System.FilePath
+
 import qualified Data.Functor.Classes as Classes
 import qualified Data.Text.Lazy
 import qualified Dhall
 import qualified Dhall.Core
 import qualified Dhall.Import
+import qualified Dhall.Main
 import qualified Dhall.Map
 import qualified Dhall.Parser
+import qualified Dhall.Util
 
 data ExprF expr
    = LitF Natural
@@ -68,6 +74,8 @@ tests =
      , shouldConvertDhallToHaskellCorrectly
      , shouldConvertHaskellToDhallCorrectly
      , shouldShowCorrectErrorForInvalidDecoderInUnion
+     , shouldFindConfig
+     , shouldResolveSettings
      ]
 
 data MyType = MyType { foo :: String , bar :: Natural }
@@ -489,3 +497,83 @@ shouldShowCorrectErrorForInvalidDecoderInUnion =
           Dhall.ExtractError extractError -> assertEqual assertMsg expectedMsg extractError
         _ -> fail "The extraction using an invalid decoder failed with multiple errors"
       Right _ -> fail "The extraction using an invalid decoder succeeded"
+
+
+shouldFindConfig :: TestTree
+shouldFindConfig =
+    testGroup "should find the nearest dhall-config.dhall (search up directories)" [
+        -- note: we can't deterministically test the case where no config file is found
+        -- because the machine running the tests could have a config file anywhere outside the repo
+        tCase "tests/config-fixtures" "tests/config-fixtures/dhall-config.dhall"
+        , tCase "tests/config-fixtures/sub/a" "tests/config-fixtures/sub/a/dhall-config.dhall"
+        , tCase "tests/config-fixtures/sub/a/deep" "tests/config-fixtures/sub/a/dhall-config.dhall"
+        , tCase "tests/config-fixtures/sub/b" "tests/config-fixtures/dhall-config.dhall"
+    ]
+    where
+        tCase :: String -> String -> TestTree
+        tCase startDir expected = testCase ("starting in " ++ startDir) $
+            Dhall.Main.findConfig startDir >>= \case
+                Nothing -> fail "config should always be found (in our fixture tests)"
+                Just result -> do
+                    cwd <- System.Directory.getCurrentDirectory
+                    let rel = System.FilePath.makeRelative cwd result in
+                        assertEqual "the path should be correct" (expected) rel
+
+
+shouldResolveSettings :: TestTree
+shouldResolveSettings =
+        testGroup "Should combine settings from Options (command line) and dhall-config.dhall" [
+                -- (optAcii, optExplain) (confAscii, confExplain)
+            testGroup "config overridden by command line True values" [
+                tCase t t asciiAndExplain
+                , tCase t f asciiAndExplain
+                , tCase t n asciiAndExplain
+            ]
+            , testGroup "config overridden by command line False values" [
+                tCase f t unicodeAndConcise
+                , tCase f f unicodeAndConcise
+                , tCase f n unicodeAndConcise
+            ]
+            , testGroup "command line options not provided, config provided" [
+                tCase n t asciiAndExplain
+                , tCase n f unicodeAndConcise
+            ]
+            , testGroup "neither command line nor config provided" [
+                tCase n n unicodeAndConcise
+            ]
+        ]
+    where
+        -- because ascii and and explain options should be independent, we don't
+        -- need to consider them separately in test fixtures
+        t = (Just True, Just True)
+        f = (Just False, Just False)
+        n = (Nothing, Nothing)
+        asciiAndExplain = (Dhall.Main.ASCII, True)
+        unicodeAndConcise = (Dhall.Main.Unicode, False)
+
+        tCase rawOpts@(optAscii, optExplain) rawConf@(confAscii, confExplain) expected =
+            let msg = "opts: " ++ (show rawOpts) ++ " config: " ++ (show rawConf) in
+            testCase msg $
+                    let opts = toOptions optAscii optExplain in
+                    let confStr = toConfigStr confAscii confExplain in do
+                    result <- Dhall.Main.resolveSettings (Just confStr) opts
+                    assertEqual "resolved settings should be correct" expected result
+
+        toOptions ascii explain = Dhall.Main.Options{
+            ascii = ascii
+            , censor = Dhall.Util.Censor
+            , explain = explain
+            , mode = Dhall.Main.Format{
+                possiblyTransitiveInput = Dhall.Util.NonTransitiveStandardInput
+                , outputMode = Dhall.Util.Write
+            }
+            , plain = False
+        }
+
+        toConfigStr ascii explain = "{ ascii = " ++ (showOption ascii)
+                                        ++ ", explain = " ++ (showOption explain)
+                                        ++ "}"
+            where
+                showOption :: Maybe Bool -> String
+                showOption (Just x) = " (Some " ++ (show x) ++ ") "
+                showOption Nothing = " None Bool"
