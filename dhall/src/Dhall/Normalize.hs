@@ -46,7 +46,6 @@ import qualified Data.Set
 import qualified Data.Text     as Text
 import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
-import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
 import qualified Lens.Family   as Lens
 
@@ -642,7 +641,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             _ -> pure (Field r' k)
     Project x (Left fields)-> do
         x' <- loop x
-        let fieldsSet = Dhall.Set.toSet fields
+        let fieldsSet = Data.Set.fromList fields
         case x' of
             RecordLit kvs ->
                 pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
@@ -650,17 +649,17 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 loop (Project y (Left fields))
             Prefer _ l (RecordLit rKvs) -> do
                 let rKs = Dhall.Map.keysSet rKvs
-                let l' = Project l (Left (Dhall.Set.fromSet (Data.Set.difference fieldsSet rKs)))
+                let l' = Project l (Left (Data.Set.toList (Data.Set.difference fieldsSet rKs)))
                 let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
                 loop (Prefer PreferFromSource l' r')
             _ | null fields -> pure (RecordLit mempty)
-              | otherwise   -> pure (Project x' (Left (Dhall.Set.sort fields)))
+              | otherwise   -> pure (Project x' (Left (Data.Set.toList (Data.Set.fromList fields))))
     Project r (Right e1) -> do
         e2 <- loop e1
 
         case e2 of
             Record kts ->
-                loop (Project r (Left (Dhall.Set.fromSet (Dhall.Map.keysSet kts))))
+                loop (Project r (Left (Data.Set.toList (Dhall.Map.keysSet kts))))
             _ -> do
                 r' <- loop r
                 pure (Project r' (Right e2))
@@ -912,7 +911,7 @@ isNormalized e0 = loop (Syntax.denote e0)
                   RecordLit _ -> False
                   Project _ _ -> False
                   Prefer _ _ (RecordLit _) -> False
-                  _ -> not (Dhall.Set.null s) && Dhall.Set.isSorted s
+                  _ -> not (null s) && Data.Set.toList (Data.Set.fromList s) == s
               Right e' -> case e' of
                   Record _ -> False
                   _ -> loop e'
