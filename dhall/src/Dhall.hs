@@ -1326,11 +1326,9 @@ class FromDhall a where
         :: (Generic a, GenericFromDhall a (Rep a)) => InputNormalizer -> Decoder a
     autoWith _ = genericAuto
 
-{-| A compatibility alias for `FromDhall`
-
-This will eventually be removed.
--}
+-- | A compatibility alias for `FromDhall`
 type Interpret = FromDhall
+{-# DEPRECATED Interpret "Use FromDhall instead" #-}
 
 instance FromDhall Void where
     autoWith _ = void
@@ -1967,11 +1965,9 @@ class ToDhall a where
         :: (Generic a, GenericToDhall (Rep a)) => InputNormalizer -> Encoder a
     injectWith _ = genericToDhall
 
-{-| A compatibility alias for `ToDhall`
-
-This will eventually be removed.
--}
+-- | A compatibility alias for `ToDhall`
 type Inject = ToDhall
+{-# DEPRECATED Inject "Use ToDhall instead" #-}
 
 {-| Use the default input normalizer for injecting a value
 
