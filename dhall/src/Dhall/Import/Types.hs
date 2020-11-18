@@ -84,6 +84,10 @@ defaultNewManager =
   pure ()
 #endif
 
+{-| Used internally to track whether or not we've already warned the user about
+    caching issues
+-}
+data CacheWarning = CacheNotWarned | CacheWarned
 
 -- | State threaded throughout the import process
 data Status = Status
@@ -114,6 +118,10 @@ data Status = Status
     , _startingContext :: Context (Expr Src Void)
 
     , _semanticCacheMode :: SemanticCacheMode
+
+    , _cacheWarning :: CacheWarning
+    -- ^ Records whether or not we already warned the user about issues with
+    --   cache directory
     }
 
 -- | Initial `Status`, parameterised over the HTTP 'Manager' and the remote resolver,
@@ -136,6 +144,8 @@ emptyStatusWith _newManager _remote rootDirectory = Status {..}
     _startingContext = Dhall.Context.empty
 
     _semanticCacheMode = UseSemanticCache
+
+    _cacheWarning = CacheNotWarned
 
     prefix = if isRelative rootDirectory
       then Here
@@ -173,8 +183,7 @@ remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
 
 -- | Lens from a `Status` to its `_substitutions` field
 substitutions :: Functor f => LensLike' f Status (Dhall.Substitution.Substitutions Src Void)
-substitutions k s =
-    fmap (\x -> s { _substitutions = x }) (k (_substitutions s))
+substitutions k s = fmap (\x -> s { _substitutions = x }) (k (_substitutions s))
 
 -- | Lens from a `Status` to its `_normalizer` field
 normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer Void))
@@ -184,6 +193,10 @@ normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))
 startingContext :: Functor f => LensLike' f Status (Context (Expr Src Void))
 startingContext k s =
     fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
+
+-- | Lens from a `Status` to its `_cacheWarning` field
+cacheWarning :: Functor f => LensLike' f Status CacheWarning
+cacheWarning k s = fmap (\x -> s { _cacheWarning = x }) (k (_cacheWarning s))
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
