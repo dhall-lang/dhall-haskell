@@ -84,6 +84,10 @@ defaultNewManager =
   pure ()
 #endif
 
+{-| Used internally to track whether or not we've already warned the user about
+    caching issues
+-}
+data CacheWarning = CacheNotWarned | CacheWarned
 
 -- | State threaded throughout the import process
 data Status = Status
@@ -115,7 +119,7 @@ data Status = Status
 
     , _semanticCacheMode :: SemanticCacheMode
 
-    , _cacheWarning :: Bool
+    , _cacheWarning :: CacheWarning
     -- ^ Records whether or not we already warned the user about issues with
     --   cache directory
     }
@@ -141,7 +145,7 @@ emptyStatusWith _newManager _remote rootDirectory = Status {..}
 
     _semanticCacheMode = UseSemanticCache
 
-    _cacheWarning = False
+    _cacheWarning = CacheNotWarned
 
     prefix = if isRelative rootDirectory
       then Here
@@ -191,7 +195,7 @@ startingContext k s =
     fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
 
 -- | Lens from a `Status` to its `_cacheWarning` field
-cacheWarning :: Functor f => LensLike' f Status Bool
+cacheWarning :: Functor f => LensLike' f Status CacheWarning
 cacheWarning k s = fmap (\x -> s { _cacheWarning = x }) (k (_cacheWarning s))
 
 {-| This exception indicates that there was an internal error in Dhall's

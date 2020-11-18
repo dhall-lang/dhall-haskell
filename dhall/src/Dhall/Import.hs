@@ -115,6 +115,7 @@ module Dhall.Import (
     , assertNoImports
     , Manager
     , defaultNewManager
+    , CacheWarning(..)
     , Status(..)
     , SemanticCacheMode(..)
     , Chained
@@ -200,7 +201,6 @@ import Lens.Family.State.Strict (zoom)
 import qualified Codec.CBOR.Encoding                         as Encoding
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
-import qualified Control.Monad                               as Monad
 import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
@@ -582,7 +582,7 @@ loadImportWithSemanticCache
 
 -- Fetch encoded normal form from "semantic cache"
 fetchFromSemanticCache
-    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => Dhall.Crypto.SHA256Digest
     -> m (Maybe Data.ByteString.ByteString)
 fetchFromSemanticCache expectedHash = Maybe.runMaybeT $ do
@@ -596,13 +596,13 @@ writeExpressionToSemanticCache :: Expr Void Void -> IO ()
 writeExpressionToSemanticCache expression =
     -- Defaulting to not displaying the warning is for backwards compatibility
     -- with the old behavior
-    State.evalStateT (writeToSemanticCache hash bytes) True
+    State.evalStateT (writeToSemanticCache hash bytes) CacheWarned
   where
     bytes = encodeExpression NoVersion expression
     hash = Dhall.Crypto.sha256Hash bytes
 
 writeToSemanticCache
-    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => Dhall.Crypto.SHA256Digest
     -> Data.ByteString.ByteString
     -> m ()
@@ -731,7 +731,7 @@ computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
 
 -- Fetch encoded normal form from "semi-semantic cache"
 fetchFromSemisemanticCache
-    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => Dhall.Crypto.SHA256Digest
     -> m (Maybe Data.ByteString.ByteString)
 fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
@@ -740,7 +740,7 @@ fetchFromSemisemanticCache semisemanticHash = Maybe.runMaybeT $ do
     liftIO (Data.ByteString.readFile cacheFile)
 
 writeToSemisemanticCache
-    :: (MonadState Bool m, MonadCatch m, MonadIO m)
+    :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => Dhall.Crypto.SHA256Digest
     -> Data.ByteString.ByteString
     -> m ()
@@ -818,7 +818,7 @@ toHeader _ =
     empty
 
 getCacheFile
-    :: (MonadCatch m, Alternative m, MonadState Bool m, MonadIO m)
+    :: (MonadCatch m, Alternative m, MonadState CacheWarning m, MonadIO m)
     => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
 getCacheFile cacheName hash = do
     cacheDirectory <- getOrCreateCacheDirectory cacheName
@@ -828,15 +828,17 @@ getCacheFile cacheName hash = do
     return cacheFile
 
 getOrCreateCacheDirectory
-    :: (MonadCatch m, Alternative m, MonadState Bool m, MonadIO m)
+    :: (MonadCatch m, Alternative m, MonadState CacheWarning m, MonadIO m)
     => FilePath -> m FilePath
 getOrCreateCacheDirectory cacheName = do
     let warn message = do
-            alreadyWarned <- State.get
+            cacheWarningStatus <- State.get
 
-            Monad.unless alreadyWarned (printWarning message)
+            case cacheWarningStatus of
+                CacheWarned    -> printWarning message
+                CacheNotWarned -> return ()
 
-            State.put True
+            State.put CacheWarned
 
             empty
 
@@ -953,7 +955,7 @@ getOrCreateCacheDirectory cacheName = do
     return directory
 
 getCacheBaseDirectory
-    :: (MonadState Bool m, Alternative m, MonadIO m) => m FilePath
+    :: (MonadState CacheWarning m, Alternative m, MonadIO m) => m FilePath
 getCacheBaseDirectory = alternative₀ <|> alternative₁ <|> alternative₂
   where
     alternative₀ = do
@@ -984,7 +986,7 @@ getCacheBaseDirectory = alternative₀ <|> alternative₁ <|> alternative₂
         where isWindows = System.Info.os == "mingw32"
 
     alternative₂ = do
-        alreadyWarned <- State.get
+        cacheWarningStatus <- State.get
 
         let message =
                 "\n"
@@ -994,9 +996,13 @@ getCacheBaseDirectory = alternative₀ <|> alternative₁ <|> alternative₂
              <> "You can provide a cache base directory by pointing the $XDG_CACHE_HOME\n"
              <> "environment variable to a directory with read and write permissions.\n"
 
-        Monad.unless alreadyWarned (liftIO (System.IO.hPutStrLn System.IO.stderr message))
+        case cacheWarningStatus of
+            CacheNotWarned ->
+                liftIO (System.IO.hPutStrLn System.IO.stderr message)
+            CacheWarned ->
+                return ()
 
-        State.put True
+        State.put CacheWarned
 
         empty
 
