@@ -569,8 +569,6 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
 
     let baseDirectory = Turtle.directory expressionFile
 
-    let baseDirectoryString = Turtle.encodeString baseDirectory
-
     exists <- Turtle.testfile expressionFile
 
     if exists
@@ -579,9 +577,13 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
 
     expressionText <- Turtle.readTextFile expressionFile
 
-    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText baseDirectoryString expressionText)
+    let expressionFileString = Turtle.encodeString expressionFile
+
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFileString expressionText)
 
     let status = Dhall.Import.emptyStatus baseDirectoryString
+          where
+            baseDirectoryString = Turtle.encodeString baseDirectory
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -634,11 +636,14 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
 
     expressionText <- Turtle.readTextFile expressionFile
 
-    let directoryString = Turtle.encodeString directory
+    let expressionFileString = Turtle.encodeString expressionFile
 
-    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText directoryString expressionText)
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFileString expressionText)
 
     let status = Dhall.Import.emptyStatus directoryString
+          where
+            directoryString =
+                Turtle.encodeString (Turtle.directory expressionFile)
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -649,6 +654,8 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
     let src | null directoryString        = directoryString
             | last directoryString == '/' = init directoryString
             | otherwise                   = directoryString
+          where
+            directoryString = Turtle.encodeString directory
 
     let nixExpression =
             Nix.mkFunction

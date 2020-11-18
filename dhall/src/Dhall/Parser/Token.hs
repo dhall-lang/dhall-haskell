@@ -116,7 +116,6 @@ import Control.Applicative     (Alternative (..), optional)
 import Data.Bits               ((.&.))
 import Data.Functor            (void, ($>))
 import Data.Text               (Text)
-import Dhall.Set               (Set)
 import Dhall.Syntax
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -128,7 +127,6 @@ import qualified Data.List                  as List
 import qualified Data.List.NonEmpty
 import qualified Data.Scientific            as Scientific
 import qualified Data.Text
-import qualified Dhall.Set
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
@@ -443,7 +441,7 @@ backtickLabel = do
 
     This corresponds to the @labels@ rule in the official grammar
 -}
-labels :: Parser (Set Text)
+labels :: Parser [Text]
 labels = do
     _openBrace
 
@@ -454,7 +452,7 @@ labels = do
     emptyLabels = do
         try (optional (_comma *> whitespace) *> _closeBrace)
 
-        pure Dhall.Set.empty
+        pure []
 
     nonEmptyLabels = do
         x  <- try (optional (_comma *> whitespace) *> anyLabelOrSome)
@@ -467,7 +465,7 @@ labels = do
 
         _closeBrace
 
-        noDuplicates (x : xs)
+        return (x : xs)
 
 {-| Parse a label (e.g. a variable\/field\/alternative name)
 

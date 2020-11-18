@@ -100,7 +100,6 @@ import Data.Traversable           ()
 import Data.Void                  (Void)
 import Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import Dhall.Set                  (Set)
 import Dhall.Src                  (Src (..))
 import GHC.Generics               (Generic)
 import Instances.TH.Lift          ()
@@ -187,21 +186,20 @@ instance IsString Var where
 instance Pretty Var where
     pretty = Pretty.unAnnotate . prettyVar
 
-{- | Record the binding part of a @let@ expression.
-
-For example,
-
-> let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
-
-will be instantiated as follows:
-
-* @bindingSrc0@ corresponds to the @A@ comment.
-* @variable@ is @"x"@
-* @bindingSrc1@ corresponds to the @B@ comment.
-* @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
-* @bindingSrc2@ corresponds to the @D@ comment.
-* @value@ corresponds to @True@.
--}
+-- | Record the binding part of a @let@ expression.
+--
+-- For example,
+--
+-- > let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
+--
+-- … will be instantiated as follows:
+--
+-- * @bindingSrc0@ corresponds to the @A@ comment.
+-- * @variable@ is @"x"@
+-- * @bindingSrc1@ corresponds to the @B@ comment.
+-- * @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
+-- * @bindingSrc2@ corresponds to the @D@ comment.
+-- * @value@ corresponds to @True@.
 data Binding s a = Binding
     { bindingSrc0 :: Maybe s
     , variable    :: Text
@@ -288,62 +286,62 @@ instance Bifunctor PreferAnnotation where
 
     second = fmap
 
-{-| Record the field of a record-type and record-literal expression.
-    The reason why we use the same ADT for both of them is because they store
-    the same information.
-
-For example,
-
-> { {- A -} x {- B -} : {- C -} T }
-
-... or
-
-> { {- A -} x {- B -} = {- C -} T }
-
-will be instantiated as follows:
-
-* @recordFieldSrc0@ corresponds to the @A@ comment.
-* @recordFieldValue@ is @"T"@
-* @recordFieldSrc1@ corresponds to the @B@ comment.
-* @recordFieldSrc2@ corresponds to the @C@ comment.
-
-Although the @A@ comment isn't annotating the @"T"@ Record Field,
-this is the best place to keep these comments.
-
-Note that @recordFieldSrc2@ is always 'Nothing' when the 'RecordField' is for
-a punned entry, because there is no @=@ sign. For example,
-
-> { {- A -} x {- B -} }
-
-will be instantiated as follows:
-
-* @recordFieldSrc0@ corresponds to the @A@ comment.
-* @recordFieldValue@ corresponds to @(Var "x")@
-* @recordFieldSrc1@ corresponds to the @B@ comment.
-* @recordFieldSrc2@ will be 'Nothing'
-
-The labels involved in a record using dot-syntax like in this example:
-
-> { {- A -} a {- B -} . {- C -} b {- D -} . {- E -} c {- F -} = {- G -} e }
-
-will be instantiated as follows:
-
-* For both the @a@ and @b@ field, @recordfieldSrc2@ is 'Nothing'
-* For the @a@ field:
-  * @recordFieldSrc0@ corresponds to the @A@ comment
-  * @recordFieldSrc1@ corresponds to the @B@ comment
-* For the @b@ field:
-  * @recordFieldSrc0@ corresponds to the @C@ comment
-  * @recordFieldSrc1@ corresponds to the @D@ comment
-* For the @c@ field:
-  * @recordFieldSrc0@ corresponds to the @E@ comment
-  * @recordFieldSrc1@ corresponds to the @F@ comment
-  * @recordFieldSrc2@ corresponds to the @G@ comment
-
-That is, for every label except the last one the semantics of @recordFieldSrc0@
-and @recordFieldSrc1@ are the same from a regular record label but
-@recordFieldSrc2@ is always 'Nothing'. For the last keyword, all srcs are 'Just'
--}
+-- | Record the field of a record-type and record-literal expression.
+-- The reason why we use the same ADT for both of them is because they store
+-- the same information.
+--
+-- For example,
+--
+-- > { {- A -} x {- B -} : {- C -} T }
+--
+-- ... or
+--
+-- > { {- A -} x {- B -} = {- C -} T }
+--
+-- will be instantiated as follows:
+--
+-- * @recordFieldSrc0@ corresponds to the @A@ comment.
+-- * @recordFieldValue@ is @"T"@
+-- * @recordFieldSrc1@ corresponds to the @B@ comment.
+-- * @recordFieldSrc2@ corresponds to the @C@ comment.
+--
+-- Although the @A@ comment isn't annotating the @"T"@ Record Field,
+-- this is the best place to keep these comments.
+--
+-- Note that @recordFieldSrc2@ is always 'Nothing' when the 'RecordField' is for
+-- a punned entry, because there is no @=@ sign. For example,
+--
+-- > { {- A -} x {- B -} }
+--
+-- will be instantiated as follows:
+--
+-- * @recordFieldSrc0@ corresponds to the @A@ comment.
+-- * @recordFieldValue@ corresponds to @(Var "x")@
+-- * @recordFieldSrc1@ corresponds to the @B@ comment.
+-- * @recordFieldSrc2@ will be 'Nothing'
+--
+-- The labels involved in a record using dot-syntax like in this example:
+--
+-- > { {- A -} a {- B -} . {- C -} b {- D -} . {- E -} c {- F -} = {- G -} e }
+--
+-- will be instantiated as follows:
+--
+-- * For both the @a@ and @b@ field, @recordfieldSrc2@ is 'Nothing'
+-- * For the @a@ field:
+--   * @recordFieldSrc0@ corresponds to the @A@ comment
+--   * @recordFieldSrc1@ corresponds to the @B@ comment
+-- * For the @b@ field:
+--   * @recordFieldSrc0@ corresponds to the @C@ comment
+--   * @recordFieldSrc1@ corresponds to the @D@ comment
+-- * For the @c@ field:
+--   * @recordFieldSrc0@ corresponds to the @E@ comment
+--   * @recordFieldSrc1@ corresponds to the @F@ comment
+--   * @recordFieldSrc2@ corresponds to the @G@ comment
+--
+-- That is, for every label except the last one the semantics of
+-- @recordFieldSrc0@ and @recordFieldSrc1@ are the same from a regular record
+-- label but @recordFieldSrc2@ is always 'Nothing'. For the last keyword, all
+-- srcs are 'Just'
 data RecordField s a = RecordField
     { recordFieldSrc0  :: Maybe s
     , recordFieldValue :: Expr s a
@@ -392,22 +390,23 @@ instance Bifunctor FunctionBinding where
 
     second = fmap
 
-{-| Record the field on a selector-expression
-
-For example,
-
-> e . {- A -} x {- B -}
-
-will be instantiated as follows:
-* @fieldSelectionSrc0@ corresponds to the @A@ comment
-* @fieldSelectionLabel@ corresponds to @x@
-* @fieldSelectionSrc1@ corresponds to the @B@ comment
-
-Given our limitation that not all expressions recover their whitespaces, the
-purpose of @fieldSelectionSrc1@ is to save the 'Text.Megaparsec.SourcePos' where
-the @fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src' (@s = 'Src'@)
-to be consistent with similar data types such as 'Binding', for example.
--}
+-- | Record the field on a selector-expression
+--
+-- For example,
+--
+-- > e . {- A -} x {- B -}
+--
+-- … will be instantiated as follows:
+--
+-- * @fieldSelectionSrc0@ corresponds to the @A@ comment
+-- * @fieldSelectionLabel@ corresponds to @x@
+-- * @fieldSelectionSrc1@ corresponds to the @B@ comment
+--
+-- Given our limitation that not all expressions recover their whitespaces, the
+-- purpose of @fieldSelectionSrc1@ is to save the 'Text.Megaparsec.SourcePos'
+-- where the @fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src'
+-- (@s = 'Src'@) to be consistent with similar data types such as 'Binding', for
+-- example.
 data FieldSelection s = FieldSelection
     { fieldSelectionSrc0 :: Maybe s
     , fieldSelectionLabel :: !Text
@@ -609,7 +608,7 @@ data Expr s a
     | Field (Expr s a) (FieldSelection s)
     -- | > Project e (Left xs)                      ~  e.{ xs }
     --   > Project e (Right t)                      ~  e.(t)
-    | Project (Expr s a) (Either (Set Text) (Expr s a))
+    | Project (Expr s a) (Either [Text] (Expr s a))
     -- | > Assert e                                 ~  assert : e
     | Assert (Expr s a)
     -- | > Equivalent x y                           ~  x ≡ y
