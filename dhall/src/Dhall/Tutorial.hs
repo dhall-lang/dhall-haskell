@@ -1992,14 +1992,14 @@ import Dhall
 -- > resultDecoder = Dhall.auto
 -- >
 -- > resultType :: Expr Src Void
--- > resultType = Dhall.expected resultDecoder
+-- > resultType = maximum $ Dhall.expected resultDecoder
 -- >
 -- > resultTypeString :: String
 -- > resultTypeString = show $ pretty resultType
 --
 -- Now we just have to inject that type into the Dhall code and we are done. One common way to do that is to wrap the import of example.dhall in a let expression:
 --
--- > Dhall.input (Dhall.auto :: Dhall.Decoder Result) ("let Result = " ++ Data.Text.pack resultTypeString ++ " in ./example.dhall")
+-- > Dhall.input (Dhall.auto :: Dhall.Decoder Result) ("let Result = " <> Data.Text.pack resultTypeString <> " in ./example.dhall")
 --
 -- Now we can omit the definition of Result in our example.dhall file. While this will work perfectly Dhall provides a cleaner solution for our \"injection problem\":
 --
