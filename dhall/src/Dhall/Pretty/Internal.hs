@@ -692,7 +692,12 @@ prettyPrinters characterSet =
       where
         MultiLet as b = multiLet a0 b0
 
-        stripSpaces = Text.dropAround (\c -> c == ' ' || c == '\t')
+        isSpace c = c == ' ' || c == '\t'
+        stripSpaces =
+            Text.dropAround isSpace
+          . Text.intercalate "\n"
+          . map (Text.dropWhileEnd isSpace)
+          . Text.splitOn "\n"
 
         -- Strip a single newline character. Needed to ensure idempotency in
         -- cases where we add hard line breaks.
