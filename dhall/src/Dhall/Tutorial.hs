@@ -1980,8 +1980,8 @@ import Dhall
 --
 -- > -- example.dhall
 -- >
--- > let Result = < Failure : Integer | Success Text >
--- > in Result.Failure 1
+-- > let Result = < Failure : Integer | Success : Text >
+-- > in Result.Failure +1
 --
 -- Right now it is quite easy to keep these two definitions (the one in Haskell source and the one in the Dhall file) synchronized:
 -- If we implement a new feature in the Haskell source we update the corresponding type in the Dhall file.
