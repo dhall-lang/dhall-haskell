@@ -517,7 +517,7 @@ shouldFindConfig =
                 Just result -> do
                     cwd <- System.Directory.getCurrentDirectory
                     let rel = System.FilePath.makeRelative cwd result in
-                        assertEqual "the path should be correct" (expected) rel
+                        assertEqual "the path should be correct" expected rel
 
 
 shouldResolveSettings :: TestTree
@@ -543,8 +543,6 @@ shouldResolveSettings =
             ]
         ]
     where
-        -- because ascii and and explain options should be independent, we don't
-        -- need to consider them separately in test fixtures
         t = (Just True, Just True)
         f = (Just False, Just False)
         n = (Nothing, Nothing)

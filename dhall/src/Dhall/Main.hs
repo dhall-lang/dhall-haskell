@@ -119,11 +119,11 @@ import qualified Text.Pretty.Simple
 
 -- | Top-level program options
 data Options = Options
-    { mode      :: Mode
-    , explain   :: Maybe Bool
-    , plain     :: Bool
-    , ascii     :: Maybe Bool
-    , censor    :: Censor
+    { mode    :: Mode
+    , explain :: Maybe Bool
+    , plain   :: Bool
+    , ascii   :: Maybe Bool
+    , censor  :: Censor
     }
 
 -- | dhall-config.dhall
