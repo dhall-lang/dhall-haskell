@@ -66,7 +66,7 @@ writeDhall path expr = do
   putStrLn $ "Writing file '" <> path <> "'"
   Text.writeFile path $ pretty expr <> "\n"
 
-  let characterSet = Dhall.Pretty.ASCII
+  let chosenCharacterSet = Just Dhall.Pretty.ASCII
 
   let censor = Dhall.Util.NoCensor
 
