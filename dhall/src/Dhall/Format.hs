@@ -132,7 +132,9 @@ format (Format { input = input0, ..}) = go input0
 
                         Control.Exception.throwIO CheckFailed{..}
 
---
+-- | Detect which character set is used for the syntax of an expression
+-- If any parts of the expression uses the Unicode syntax, the whole expression
+-- is deemed to be using the Unicode syntax.
 detectCharacterSet :: Expr Src a -> CharacterSet
 detectCharacterSet = go mempty
   where
