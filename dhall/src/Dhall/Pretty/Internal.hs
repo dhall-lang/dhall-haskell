@@ -112,6 +112,15 @@ annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 -- | This type determines whether to render code as `ASCII` or `Unicode`
 data CharacterSet = ASCII | Unicode deriving Show
 
+-- | Since ASCII is a subset of Unicode, if either argument is Unicode, the
+-- result is Unicode
+instance Semigroup CharacterSet where
+    Unicode <> _ = Unicode
+    _ <> other = other
+
+instance Monoid CharacterSet where
+    mempty = ASCII
+
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann
 prettyExpr = prettySrcExpr . denote

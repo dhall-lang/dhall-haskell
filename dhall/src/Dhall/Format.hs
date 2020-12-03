@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -10,8 +12,15 @@ module Dhall.Format
     ) where
 
 import Data.Foldable (for_)
+import Data.Maybe    (fromMaybe)
 import Dhall.Pretty  (CharacterSet (..), annToAnsiStyle)
-
+import Dhall.Src     (Src (..))
+import Dhall.Syntax
+    ( Chunks (..)
+    , Expr (..)
+    , PreferAnnotation (PreferFromWith)
+    , RecordField (recordFieldValue)
+    )
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -22,6 +31,7 @@ import Dhall.Util
     )
 
 import qualified Control.Exception
+import qualified Data.Text                                 as Text
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
@@ -36,10 +46,10 @@ import qualified System.IO
 
 -- | Arguments to the `format` subcommand
 data Format = Format
-    { characterSet :: CharacterSet
-    , censor       :: Censor
-    , input        :: PossiblyTransitiveInput
-    , outputMode   :: OutputMode
+    { chosenCharacterSet :: Maybe CharacterSet
+    , censor             :: Censor
+    , input              :: PossiblyTransitiveInput
+    , outputMode         :: OutputMode
     }
 
 -- | Implementation of the @dhall format@ subcommand
@@ -56,6 +66,10 @@ format (Format { input = input0, ..}) = go input0
         let status = Dhall.Import.emptyStatus directory
 
         let layoutHeaderAndExpr (Header header, expr) =
+                let -- When the user does not chose an explicit character set,
+                    -- detect it from the expression
+                    characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
+                in
                 Dhall.Pretty.layout
                     (   Pretty.pretty header
                     <>  Dhall.Pretty.prettyCharacterSet characterSet expr
@@ -117,3 +131,100 @@ format (Format { input = input0, ..}) = go input0
                         let modified = "formatted"
 
                         Control.Exception.throwIO CheckFailed{..}
+
+--
+detectCharacterSet :: Expr Src a -> CharacterSet
+detectCharacterSet = go mempty
+  where
+    recurse = go ASCII
+
+    -- Short-circuit traversal if Unicode encountered
+    go Unicode = \_ -> Unicode
+    go ASCII = \case
+        Note Src{srcText} expr ->
+            case expr of
+                Lam _ _
+                    | "λ" `Text.isInfixOf` srcText ||
+                      "→" `Text.isInfixOf` srcText -> Unicode
+                Pi _ _ _
+                    | "∀" `Text.isInfixOf` srcText ||
+                      "→" `Text.isInfixOf` srcText -> Unicode
+                Prefer _ _ _
+                    | "⫽" `Text.isInfixOf` srcText -> Unicode
+                Combine _ _ _
+                    | "∧" `Text.isInfixOf` srcText -> Unicode
+                CombineTypes _ _
+                    | "⩓" `Text.isInfixOf` srcText -> Unicode
+                _ -> recurse expr
+
+        -- Recurse down the AST
+        Const _ -> ASCII
+        Var _ -> ASCII
+        Lam _ a -> recurse a
+        Pi _ a b -> recurse a <> recurse b
+        App f a -> recurse f <> recurse a
+        Let _ a -> recurse a
+        Annot a b -> recurse a <> recurse b
+        Bool -> ASCII
+        BoolLit _ -> ASCII
+        BoolAnd a b -> recurse a <> recurse b
+        BoolOr a b -> recurse a <> recurse b
+        BoolEQ a b -> recurse a <> recurse b
+        BoolNE a b -> recurse a <> recurse b
+        BoolIf c a b -> recurse c <> recurse a <> recurse b
+        Natural -> ASCII
+        NaturalLit _ -> ASCII
+        NaturalFold -> ASCII
+        NaturalBuild -> ASCII
+        NaturalIsZero -> ASCII
+        NaturalEven -> ASCII
+        NaturalOdd -> ASCII
+        NaturalToInteger -> ASCII
+        NaturalShow -> ASCII
+        NaturalSubtract -> ASCII
+        NaturalPlus a b -> recurse a <> recurse b
+        NaturalTimes a b -> recurse a <> recurse b
+        Integer -> ASCII
+        IntegerLit _ -> ASCII
+        IntegerClamp -> ASCII
+        IntegerNegate -> ASCII
+        IntegerToDouble -> ASCII
+        IntegerShow -> ASCII
+        Double -> ASCII
+        DoubleLit _ -> ASCII
+        DoubleShow -> ASCII
+        Text -> ASCII
+        TextLit (Chunks cs _) -> foldMap (recurse . snd) cs
+        TextAppend a b -> recurse a <> recurse b
+        TextReplace -> ASCII
+        TextShow -> ASCII
+        List -> ASCII
+        ListLit a as -> foldMap recurse a <> foldMap recurse as
+        ListAppend a b -> recurse a <> recurse b
+        ListBuild -> ASCII
+        ListFold -> ASCII
+        ListLength -> ASCII
+        ListHead -> ASCII
+        ListLast -> ASCII
+        ListIndexed -> ASCII
+        ListReverse -> ASCII
+        Optional -> ASCII
+        Some a -> recurse a
+        None -> ASCII
+        Record fs -> foldMap (recurse . recordFieldValue) fs
+        RecordLit fs -> foldMap (recurse . recordFieldValue) fs
+        Union fs -> (foldMap . foldMap) recurse fs
+        Combine _ a b -> recurse a <> recurse b
+        CombineTypes a b -> recurse a <> recurse b
+        Prefer (PreferFromWith w) a b -> recurse w <> recurse a <> recurse b
+        Prefer _ a b -> recurse a <> recurse b
+        RecordCompletion a b -> recurse a <> recurse b
+        Merge a b t -> recurse a <> recurse b <> foldMap recurse t
+        ToMap a t -> recurse a <> foldMap recurse t
+        Field a _ -> recurse a
+        Project a b -> recurse a <> foldMap recurse b
+        Assert a -> recurse a
+        Equivalent a b -> recurse a <> recurse b
+        With a _ b -> recurse a <> recurse b
+        ImportAlt a b -> recurse a <> recurse b
+        Embed _ -> ASCII

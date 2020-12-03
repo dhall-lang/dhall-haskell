@@ -73,7 +73,7 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p p' && eq q q'
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
     comments as whitespace
 -}
-newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
+data Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
 
 instance Functor Parser where
     fmap f (Parser x) = Parser (fmap f x)

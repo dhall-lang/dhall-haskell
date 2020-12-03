@@ -24,6 +24,7 @@ module Dhall.Main
 import Control.Applicative       (optional, (<|>))
 import Control.Exception         (Handler (..), SomeException)
 import Data.Foldable             (for_)
+import Data.Maybe                (fromMaybe)
 import Data.List.NonEmpty        (NonEmpty (..))
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
@@ -116,6 +117,7 @@ data Options = Options
     , explain :: Bool
     , plain   :: Bool
     , ascii   :: Bool
+    , unicode :: Bool
     , censor  :: Censor
     }
 
@@ -195,6 +197,7 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> switch "ascii" "Format code using only ASCII syntax"
+    <*> switch "unicode" "Format code using only Unicode syntax"
     <*> parseCensor
   where
     switch name description =
@@ -542,9 +545,14 @@ noHeaders i =
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
-    let characterSet = case ascii of
-            True  -> ASCII
-            False -> Unicode
+    let chosenCharacterSet =
+            case (ascii, unicode) of
+                -- If both flags are set, default to ASCII
+                (True, _) -> Just ASCII
+                (_, True) -> Just Unicode
+                _         -> Nothing
+
+    let characterSet = fromMaybe Unicode chosenCharacterSet
 
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
