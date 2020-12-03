@@ -413,6 +413,10 @@ let
       installPhase = ''
         releaseName=${name}
         ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/bin" -D $src/bin/*
+        ${pkgs.lib.optionalString (src ? data) ''
+          ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/share" -D ${src.data}/share/*/*/*/man
+        ''
+        }
       '';
     };
 
