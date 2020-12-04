@@ -1,3 +1,7 @@
+1.7.4
+
+* Build against `dhall-1.37.0`
+
 1.7.3
 
 * [Fix command-line completions for files](https://github.com/dhall-lang/dhall-haskell/pull/2034)

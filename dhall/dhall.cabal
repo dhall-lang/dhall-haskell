@@ -1,5 +1,5 @@
 Name: dhall
-Version: 1.36.0
+Version: 1.37.0
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.4.3, GHC == 8.6.1
@@ -85,6 +85,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
     dhall-lang/Prelude/JSON/renderAs
+    dhall-lang/Prelude/JSON/renderCompact
     dhall-lang/Prelude/JSON/renderInteger.dhall
     dhall-lang/Prelude/JSON/renderYAML
     dhall-lang/Prelude/JSON/string
@@ -182,6 +183,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/default
     dhall-lang/Prelude/Text/defaultMap
     dhall-lang/Prelude/Text/package.dhall
+    dhall-lang/Prelude/Text/replace
     dhall-lang/Prelude/Text/replicate
     dhall-lang/Prelude/Text/show
     dhall-lang/Prelude/Text/spaces
