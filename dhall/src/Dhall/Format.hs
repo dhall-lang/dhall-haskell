@@ -134,6 +134,7 @@ detectCharacterSet :: Expr Src a -> CharacterSet
 detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
   where
     exprToCharacterSet = \case
+        Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
         Lam characterSet _ _ -> characterSet
         Pi characterSet _ _ _ -> characterSet
         Combine characterSet _ _ _ -> characterSet
