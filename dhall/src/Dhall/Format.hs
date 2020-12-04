@@ -13,14 +13,10 @@ module Dhall.Format
 
 import Data.Foldable (for_)
 import Data.Maybe    (fromMaybe)
+import Dhall.Optics  (cosmosOf, foldOf, to)
 import Dhall.Pretty  (CharacterSet (..), annToAnsiStyle)
 import Dhall.Src     (Src (..))
-import Dhall.Syntax
-    ( Chunks (..)
-    , Expr (..)
-    , PreferAnnotation (PreferFromWith)
-    , RecordField (recordFieldValue)
-    )
+import Dhall.Syntax  (Expr (..), subExpressions)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -135,79 +131,12 @@ format (Format { input = input0, ..}) = go input0
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
 detectCharacterSet :: Expr Src a -> CharacterSet
-detectCharacterSet = go mempty
+detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
   where
-    go characterSet =
-        let recurse = go characterSet
-        in \case
-        Const _ -> characterSet
-        Var _ -> characterSet
-        Lam cs _ a -> cs <> recurse a
-        Pi cs _ a b -> cs <> recurse a <> recurse b
-        App f a -> recurse f <> recurse a
-        Let _ a -> recurse a
-        Annot a b -> recurse a <> recurse b
-        Bool -> characterSet
-        BoolLit _ -> characterSet
-        BoolAnd a b -> recurse a <> recurse b
-        BoolOr a b -> recurse a <> recurse b
-        BoolEQ a b -> recurse a <> recurse b
-        BoolNE a b -> recurse a <> recurse b
-        BoolIf c a b -> recurse c <> recurse a <> recurse b
-        Natural -> characterSet
-        NaturalLit _ -> characterSet
-        NaturalFold -> characterSet
-        NaturalBuild -> characterSet
-        NaturalIsZero -> characterSet
-        NaturalEven -> characterSet
-        NaturalOdd -> characterSet
-        NaturalToInteger -> characterSet
-        NaturalShow -> characterSet
-        NaturalSubtract -> characterSet
-        NaturalPlus a b -> recurse a <> recurse b
-        NaturalTimes a b -> recurse a <> recurse b
-        Integer -> characterSet
-        IntegerLit _ -> characterSet
-        IntegerClamp -> characterSet
-        IntegerNegate -> characterSet
-        IntegerToDouble -> characterSet
-        IntegerShow -> characterSet
-        Double -> characterSet
-        DoubleLit _ -> characterSet
-        DoubleShow -> characterSet
-        Text -> characterSet
-        TextLit (Chunks cs _) -> foldMap (recurse . snd) cs
-        TextAppend a b -> recurse a <> recurse b
-        TextReplace -> characterSet
-        TextShow -> characterSet
-        List -> characterSet
-        ListLit a as -> foldMap recurse a <> foldMap recurse as
-        ListAppend a b -> recurse a <> recurse b
-        ListBuild -> characterSet
-        ListFold -> characterSet
-        ListLength -> characterSet
-        ListHead -> characterSet
-        ListLast -> characterSet
-        ListIndexed -> characterSet
-        ListReverse -> characterSet
-        Optional -> characterSet
-        Some a -> recurse a
-        None -> characterSet
-        Record fs -> foldMap (recurse . recordFieldValue) fs
-        RecordLit fs -> foldMap (recurse . recordFieldValue) fs
-        Union fs -> (foldMap . foldMap) recurse fs
-        Combine cs _ a b -> cs <> recurse a <> recurse b
-        CombineTypes cs a b -> cs <> recurse a <> recurse b
-        Prefer cs (PreferFromWith w) a b -> cs <> recurse w <> recurse a <> recurse b
-        Prefer cs _ a b -> cs <> recurse a <> recurse b
-        RecordCompletion a b -> recurse a <> recurse b
-        Merge a b t -> recurse a <> recurse b <> foldMap recurse t
-        ToMap a t -> recurse a <> foldMap recurse t
-        Field a _ -> recurse a
-        Project a b -> recurse a <> foldMap recurse b
-        Assert a -> recurse a
-        Equivalent a b -> recurse a <> recurse b
-        With a _ b -> recurse a <> recurse b
-        Note _ a -> recurse a
-        ImportAlt a b -> recurse a <> recurse b
-        Embed _ -> characterSet
+    exprToCharacterSet = \case
+        Lam characterSet _ _ -> characterSet
+        Pi characterSet _ _ _ -> characterSet
+        Combine characterSet _ _ _ -> characterSet
+        CombineTypes characterSet _ _ -> characterSet
+        Prefer characterSet _ _ _ -> characterSet
+        _ -> mempty
