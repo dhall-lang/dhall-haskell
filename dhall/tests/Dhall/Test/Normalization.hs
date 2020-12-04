@@ -67,7 +67,7 @@ simpleCustomization = Tasty.HUnit.testCase "simpleCustomization" $ do
     let tyCtx =
             Context.insert
                 "min"
-                (Pi "_" Natural (Pi "_" Natural Natural))
+                (Pi mempty "_" Natural (Pi mempty "_" Natural Natural))
                 Context.empty
 
         valCtx e =

@@ -114,8 +114,8 @@ boundedType _                = False
     using De Bruijn indices to distinguish them
 
 >>> mfb = Syntax.makeFunctionBinding
->>> alphaNormalize (Lam (mfb "a" (Const Type)) (Lam (mfb "b" (Const Type)) (Lam (mfb "x" "a") (Lam (mfb "y" "b") "x"))))
-Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Lam (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
+>>> alphaNormalize (Lam mempty (mfb "a" (Const Type)) (Lam mempty (mfb "b" (Const Type)) (Lam mempty (mfb "x" "a") (Lam mempty (mfb "y" "b") "x"))))
+Lam mempty (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam mempty (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam mempty (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Lam mempty (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
 
     α-normalization does not affect free variables:
 
@@ -928,7 +928,7 @@ isNormalized e0 = loop (Syntax.denote e0)
 True
 >>> "x" `freeIn` "y"
 False
->>> "x" `freeIn` Lam (Syntax.makeFunctionBinding "x" (Const Type)) "x"
+>>> "x" `freeIn` Lam mempty (Syntax.makeFunctionBinding "x" (Const Type)) "x"
 False
 -}
 freeIn :: Eq a => Var -> Expr s a -> Bool

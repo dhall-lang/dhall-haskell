@@ -54,7 +54,7 @@ unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
                         Nothing
                         (prelude `Core.Field` types `Core.Field` big)
                     )
-                    (Core.Prefer Core.PreferFromSource "big" "big")
+                    (Core.Prefer mempty Core.PreferFromSource "big" "big")
                 )
             )
             "x"

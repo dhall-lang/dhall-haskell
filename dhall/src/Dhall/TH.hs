@@ -128,7 +128,7 @@ toNestedHaskellType haskellTypes = loop
         _   | Just haskellType <- List.find predicate haskellTypes -> do
                 let name = Syntax.mkName (Text.unpack (typeName haskellType))
 
-                return (ConT name) 
+                return (ConT name)
             | otherwise -> do
             let document =
                     mconcat
