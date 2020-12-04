@@ -109,7 +109,7 @@ data Parsers a = Parsers
     , importExpression_   :: Parser (Expr Src a)
     }
 
--- | Given a parser for imports, 
+-- | Given a parser for imports,
 parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
@@ -128,7 +128,7 @@ parsers embedded = Parsers {..}
             ) <?> "expression"
       where
         alternative0 = do
-            _lambda
+            cs <- _lambda
             whitespace
             _openParens
             src0 <- src whitespace
@@ -140,10 +140,10 @@ parsers embedded = Parsers {..}
             whitespace
             _closeParens
             whitespace
-            _arrow
+            cs' <- _arrow
             whitespace
             c <- expression
-            return (Lam (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
+            return (Lam (cs <> cs') (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
 
         alternative1 = do
             try (_if *> nonemptyWhitespace)
@@ -211,7 +211,7 @@ parsers embedded = Parsers {..}
             return (Dhall.Syntax.wrapInLets as b)
 
         alternative3 = do
-            try (_forall *> whitespace *> _openParens)
+            cs <- try (_forall <* whitespace <* _openParens)
             whitespace
             a <- label
             whitespace
@@ -221,10 +221,10 @@ parsers embedded = Parsers {..}
             whitespace
             _closeParens
             whitespace
-            _arrow
+            cs' <- _arrow
             whitespace
             c <- expression
-            return (Pi a b c)
+            return (Pi (cs <> cs') a b c)
 
         alternative4 = do
             try (_assert *> whitespace *> _colon)
@@ -266,11 +266,11 @@ parsers embedded = Parsers {..}
                     whitespace
 
                     let alternative5B0 = do
-                            _arrow
+                            cs <- _arrow
                             whitespace
                             b <- expression
                             whitespace
-                            return (Pi "_" a b)
+                            return (Pi cs "_" a b)
 
                     let alternative5B1 = do
                             _colon
@@ -341,20 +341,20 @@ parsers embedded = Parsers {..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ Equivalent              <$ _equivalent   <* whitespace
-        , ImportAlt               <$ _importAlt    <* nonemptyWhitespace
-        , BoolOr                  <$ _or           <* whitespace
-        , NaturalPlus             <$ _plus         <* nonemptyWhitespace
-        , TextAppend              <$ _textAppend   <* whitespace
-        , ListAppend              <$ _listAppend   <* whitespace
-        , BoolAnd                 <$ _and          <* whitespace
-        , Combine Nothing         <$ _combine      <* whitespace
-        , Prefer PreferFromSource <$ _prefer       <* whitespace
-        , CombineTypes            <$ _combineTypes <* whitespace
-        , NaturalTimes            <$ _times        <* whitespace
+        [ Equivalent                  <$ _equivalent    <* whitespace
+        , ImportAlt                   <$ _importAlt     <* nonemptyWhitespace
+        , BoolOr                      <$ _or            <* whitespace
+        , NaturalPlus                 <$ _plus          <* nonemptyWhitespace
+        , TextAppend                  <$ _textAppend    <* whitespace
+        , ListAppend                  <$ _listAppend    <* whitespace
+        , BoolAnd                     <$ _and           <* whitespace
+        , (`Combine` Nothing)         <$> _combine      <* whitespace
+        , (`Prefer` PreferFromSource) <$> _prefer       <* whitespace
+        , CombineTypes                <$> _combineTypes <* whitespace
+        , NaturalTimes                <$ _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
-        , BoolEQ                  <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace
-        , BoolNE                  <$ _notEqual     <* whitespace
+        , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace
+        , BoolNE                      <$ _notEqual      <* whitespace
         ]
 
     applicationExpression = snd <$> applicationExpressionWithInfo
@@ -678,7 +678,7 @@ parsers embedded = Parsers {..}
 
                     let fourCharacterEscapeSequence = do
                             ns <- Control.Monad.replicateM 4 hexNumber
-                            
+
                             let number = toNumber ns
 
                             Control.Monad.guard (validCodepoint number)
@@ -883,7 +883,7 @@ parsers embedded = Parsers {..}
 
                     whitespace
 
-                    let combine k = liftA2 $ \rf rf' -> makeRecordField $ Combine (Just k)
+                    let combine k = liftA2 $ \rf rf' -> makeRecordField $ Combine mempty (Just k)
                                                             (recordFieldValue rf')
                                                             (recordFieldValue rf)
 

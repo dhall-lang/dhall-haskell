@@ -356,7 +356,7 @@ diffChunks cL cR
 
     diffTextSkeleton = difference textSkeleton textSkeleton
 
-    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR) 
+    chunks = zipWith chunkDiff (toEitherList cL) (toEitherList cR)
 
     chunkDiff a b =
       case (a, b) of
@@ -647,8 +647,8 @@ diff l@(Lam {}) r@(Lam {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
     docs
-        (Lam (FunctionBinding { functionBindingVariable = aL, functionBindingAnnotation = bL }) cL)
-        (Lam (FunctionBinding { functionBindingVariable = aR, functionBindingAnnotation = bR }) cR) =
+        (Lam _ (FunctionBinding { functionBindingVariable = aL, functionBindingAnnotation = bL }) cL)
+        (Lam _ (FunctionBinding { functionBindingVariable = aR, functionBindingAnnotation = bR }) cR) =
         Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
         doc =   lambda
@@ -707,7 +707,7 @@ diff l r@(Let {}) =
 diff l@(Pi {}) r@(Pi {}) =
     enclosed' "  " (rarrow <> " ") (docs l r)
   where
-    docs (Pi aL bL cL) (Pi aR bR cR) =
+    docs (Pi _ aL bL cL) (Pi _ aR bR cR) =
         Data.List.NonEmpty.cons (align doc) (docs cL cR)
       where
         doc | same docA && same docB = ignore
@@ -901,7 +901,7 @@ diffCombineExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffCombineExpression l@(Combine {}) r@(Combine {}) =
     enclosed' "  " (operator "∧" <> " ") (docs l r)
   where
-    docs (Combine _ aL bL) (Combine _ aR bR) =
+    docs (Combine _ _ aL bL) (Combine _ _ aR bR) =
         Data.List.NonEmpty.cons (diffPreferExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffPreferExpression aL aR)
@@ -916,7 +916,7 @@ diffPreferExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> Diff
 diffPreferExpression l@(Prefer {}) r@(Prefer {}) =
     enclosed' "  " (operator "⫽" <> " ") (docs l r)
   where
-    docs (Prefer _ aL bL) (Prefer _ aR bR) =
+    docs (Prefer _ _ aL bL) (Prefer _ _ aR bR) =
         Data.List.NonEmpty.cons (diffCombineTypesExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffCombineTypesExpression aL aR)
@@ -931,7 +931,7 @@ diffCombineTypesExpression :: (Eq a, Pretty a) => Expr Void a -> Expr Void a -> 
 diffCombineTypesExpression l@(CombineTypes {}) r@(CombineTypes {}) =
     enclosed' "  " (operator "*" <> " ") (docs l r)
   where
-    docs (CombineTypes aL bL) (CombineTypes aR bR) =
+    docs (CombineTypes _ aL bL) (CombineTypes _ aR bR) =
         Data.List.NonEmpty.cons (diffTimesExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffTimesExpression aL aR)

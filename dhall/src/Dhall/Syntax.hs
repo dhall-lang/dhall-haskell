@@ -24,6 +24,7 @@ module Dhall.Syntax (
     , Var(..)
     , Binding(..)
     , makeBinding
+    , CharacterSet(..)
     , Chunks(..)
     , DhallDouble(..)
     , PreferAnnotation(..)
@@ -438,10 +439,10 @@ data Expr s a
     --   > Var (V x n)                              ~  x@n
     | Var Var
     -- | > Lam (FunctionBinding _ "x" _ _ A) b      ~  λ(x : A) -> b
-    | Lam (FunctionBinding s a) (Expr s a)
+    | Lam CharacterSet (FunctionBinding s a) (Expr s a)
     -- | > Pi "_" A B                               ~        A  -> B
     --   > Pi x   A B                               ~  ∀(x : A) -> B
-    | Pi  Text (Expr s a) (Expr s a)
+    | Pi  CharacterSet Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
     -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
@@ -588,14 +589,14 @@ data Expr s a
     --   >              _
     --   >              (Combine (Just k) x y)
     --   >            )]
-    | Combine (Maybe Text) (Expr s a) (Expr s a)
+    | Combine CharacterSet (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
-    | CombineTypes (Expr s a) (Expr s a)
+    | CombineTypes CharacterSet (Expr s a) (Expr s a)
     -- | > Prefer False x y                         ~  x ⫽ y
     --
     -- The first field is a `True` when the `Prefer` operator is introduced as a
     -- result of desugaring a @with@ expression
-    | Prefer (PreferAnnotation s a) (Expr s a) (Expr s a)
+    | Prefer CharacterSet (PreferAnnotation s a) (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -648,7 +649,7 @@ instance Functor (Expr s) where
   fmap f (Note s e1) = Note s (fmap f e1)
   fmap f (Record a) = Record $ fmap f <$> a
   fmap f (RecordLit a) = RecordLit $ fmap f <$> a
-  fmap f (Lam fb e) = Lam (f <$> fb) (f <$> e)
+  fmap f (Lam cs fb e) = Lam cs (f <$> fb) (f <$> e)
   fmap f (Field a b) = Field (f <$> a) b
   fmap f expression = Lens.over unsafeSubExpressions (fmap f) expression
   {-# INLINABLE fmap #-}
@@ -667,7 +668,7 @@ instance Monad (Expr s) where
         Note a b    -> Note a (b >>= k)
         Record a    -> Record $ bindRecordKeyValues <$> a
         RecordLit a -> RecordLit $ bindRecordKeyValues <$> a
-        Lam a b     -> Lam (adaptFunctionBinding a) (b >>= k)
+        Lam cs a b  -> Lam cs (adaptFunctionBinding a) (b >>= k)
         Field a b   -> Field (a >>= k) b
         _ -> Lens.over unsafeSubExpressions (>>= k) expression
       where
@@ -688,7 +689,7 @@ instance Bifunctor Expr where
     first k (Let a b    ) = Let (first k a) (first k b)
     first k (Record a   ) = Record $ first k <$> a
     first k (RecordLit a) = RecordLit $ first k <$> a
-    first k (Lam a b    ) = Lam (first k a) (first k b)
+    first k (Lam cs a b ) = Lam cs (first k a) (first k b)
     first k (Field a b  ) = Field (first k a) (k <$> b)
     first k  expression  = Lens.over unsafeSubExpressions (first k) expression
 
@@ -759,7 +760,7 @@ subExpressions f (Note a b) = Note a <$> f b
 subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
 subExpressions f (Record a) = Record <$> traverse (recordFieldExprs f) a
 subExpressions f (RecordLit a) = RecordLit <$> traverse (recordFieldExprs f) a
-subExpressions f (Lam fb e) = Lam <$> functionBindingExprs f fb <*> f e
+subExpressions f (Lam cs fb e) = Lam cs <$> functionBindingExprs f fb <*> f e
 subExpressions f (Field a b) = Field <$> f a <*> pure b
 subExpressions f expression = unsafeSubExpressions f expression
 {-# INLINABLE subExpressions #-}
@@ -775,7 +776,7 @@ unsafeSubExpressions
     :: Applicative f => (Expr s a -> f (Expr t b)) -> Expr s a -> f (Expr t b)
 unsafeSubExpressions _ (Const c) = pure (Const c)
 unsafeSubExpressions _ (Var v) = pure (Var v)
-unsafeSubExpressions f (Pi a b c) = Pi a <$> f b <*> f c
+unsafeSubExpressions f (Pi cs a b c) = Pi cs a <$> f b <*> f c
 unsafeSubExpressions f (App a b) = App <$> f a <*> f b
 unsafeSubExpressions f (Annot a b) = Annot <$> f a <*> f b
 unsafeSubExpressions _ Bool = pure Bool
@@ -826,9 +827,9 @@ unsafeSubExpressions _ Optional = pure Optional
 unsafeSubExpressions f (Some a) = Some <$> f a
 unsafeSubExpressions _ None = pure None
 unsafeSubExpressions f (Union a) = Union <$> traverse (traverse f) a
-unsafeSubExpressions f (Combine a b c) = Combine a <$> f b <*> f c
-unsafeSubExpressions f (CombineTypes a b) = CombineTypes <$> f a <*> f b
-unsafeSubExpressions f (Prefer a b c) = Prefer <$> a' <*> f b <*> f c
+unsafeSubExpressions f (Combine cs a b c) = Combine cs a <$> f b <*> f c
+unsafeSubExpressions f (CombineTypes cs a b) = CombineTypes cs <$> f a <*> f b
+unsafeSubExpressions f (Prefer cs a b c) = Prefer cs <$> a' <*> f b <*> f c
   where
     a' = case a of
         PreferFromSource     -> pure PreferFromSource
@@ -1119,13 +1120,13 @@ pathCharacter c =
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
 denote :: Expr s a -> Expr t a
 denote = \case
-    Note _ b      -> denote b
-    Let a b       -> Let (denoteBinding a) (denote b)
-    Embed a       -> Embed a
-    Combine _ b c -> Combine Nothing (denote b) (denote c)
+    Note _ b -> denote b
+    Let a b -> Let (denoteBinding a) (denote b)
+    Embed a -> Embed a
+    Combine cs _ b c -> Combine cs Nothing (denote b) (denote c)
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
-    Lam a b -> Lam (denoteFunctionBinding a) (denote b)
+    Lam cs a b -> Lam cs (denoteFunctionBinding a) (denote b)
     Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
@@ -1376,14 +1377,14 @@ shift :: Int -> Var -> Expr s a -> Expr s a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
     n'' = if x == x' && n <= n' then n' + d else n'
-shift d (V x n) (Lam (FunctionBinding src0 x' src1 src2 _A) b) =
-    Lam (FunctionBinding src0 x' src1 src2 _A') b'
+shift d (V x n) (Lam cs (FunctionBinding src0 x' src1 src2 _A) b) =
+    Lam cs (FunctionBinding src0 x' src1 src2 _A') b'
   where
     _A' = shift d (V x n ) _A
     b'  = shift d (V x n') b
       where
         n' = if x == x' then n + 1 else n
-shift d (V x n) (Pi x' _A _B) = Pi x' _A' _B'
+shift d (V x n) (Pi cs x' _A _B) = Pi cs x' _A' _B'
   where
     _A' = shift d (V x n ) _A
     _B' = shift d (V x n') _B
@@ -1407,6 +1408,7 @@ desugarWith = Optics.rewriteOf subExpressions rewrite
     rewrite e@(With record (key :| []) value) =
         Just
             (Prefer
+                mempty
                 (PreferFromWith e)
                 record
                 (RecordLit [ (key, makeRecordField value) ])
@@ -1415,7 +1417,7 @@ desugarWith = Optics.rewriteOf subExpressions rewrite
         Just
             (Let
                 (makeBinding "_" record)
-                (Prefer (PreferFromWith e) "_"
+                (Prefer mempty (PreferFromWith e) "_"
                     (RecordLit
                         [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing key0 Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
                     )

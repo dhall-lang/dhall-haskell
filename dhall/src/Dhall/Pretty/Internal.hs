@@ -1,7 +1,11 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveLift         #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -65,14 +69,18 @@ module Dhall.Pretty.Internal (
     , rparen
     ) where
 
+import Control.DeepSeq            (NFData)
+import Data.Data                  (Data)
 import Data.Foldable
-import Data.List.NonEmpty        (NonEmpty (..))
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty, space)
-import Dhall.Map                 (Map)
-import Dhall.Src                 (Src (..))
+import Data.List.NonEmpty         (NonEmpty (..))
+import Data.Text                  (Text)
+import Data.Text.Prettyprint.Doc  (Doc, Pretty, space)
+import Dhall.Map                  (Map)
+import Dhall.Src                  (Src (..))
 import Dhall.Syntax
-import Numeric.Natural           (Natural)
+import GHC.Generics               (Generic)
+import Language.Haskell.TH.Syntax (Lift)
+import Numeric.Natural            (Natural)
 
 import qualified Data.Char
 import qualified Data.HashSet
@@ -110,7 +118,8 @@ annToAnsiStyle Builtin  = Terminal.underlined
 annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 
 -- | This type determines whether to render code as `ASCII` or `Unicode`
-data CharacterSet = ASCII | Unicode deriving Show
+data CharacterSet = ASCII | Unicode
+    deriving (Eq, Ord, Show, Data, Generic, Lift, NFData)
 
 -- | Since ASCII is a subset of Unicode, if either argument is Unicode, the
 -- result is Unicode
@@ -609,10 +618,10 @@ prettyPrinters characterSet =
     prettyCompleteExpression expression =
         Pretty.group (prettyExpression expression)
 
-    prettyExpression a0@(Lam _ _) =
+    prettyExpression a0@(Lam _ _ _) =
         arrows characterSet (docs a0)
       where
-        docs (Lam (FunctionBinding { functionBindingVariable = a, functionBindingAnnotation = b }) c) =
+        docs (Lam _ (FunctionBinding { functionBindingVariable = a, functionBindingAnnotation = b }) c) =
             Pretty.group (Pretty.flatAlt long short) : docs c
           where
             long =  (lambda characterSet <> space)
@@ -745,11 +754,11 @@ prettyPrinters characterSet =
             ( keyword "in" <> " " <> prettyExpression b
             , keyword "in" <> "  "  <> prettyExpression b
             )
-    prettyExpression a0@(Pi _ _ _) =
+    prettyExpression a0@(Pi _ _ _ _) =
         arrows characterSet (docs a0)
       where
-        docs (Pi "_" b c) = prettyOperatorExpression b : docs c
-        docs (Pi a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c
+        docs (Pi _ "_" b c) = prettyOperatorExpression b : docs c
+        docs (Pi _ a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c
           where
             long =  forall characterSet <> space
                 <>  Pretty.align
@@ -1033,10 +1042,10 @@ prettyPrinters characterSet =
             prettyCombineExpression a
 
     prettyCombineExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyCombineExpression a0@(Combine _ _ _) =
+    prettyCombineExpression a0@(Combine _ _ _ _) =
         prettyOperator (combine characterSet) (docs a0)
       where
-        docs (Combine _ a b) = prettyPreferExpression b : docs a
+        docs (Combine _ _ a b) = prettyPreferExpression b : docs a
         docs a
             | Just doc <- preserveSource a =
                 [ doc ]
@@ -1056,7 +1065,7 @@ prettyPrinters characterSet =
     prettyPreferExpression a0@(Prefer {}) =
         prettyOperator (prefer characterSet) (docs a0)
       where
-        docs (Prefer _ a b) = prettyCombineTypesExpression b : docs a
+        docs (Prefer _ _ a b) = prettyCombineTypesExpression b : docs a
         docs a
             | Just doc <- preserveSource a =
                 [ doc ]
@@ -1073,10 +1082,10 @@ prettyPrinters characterSet =
             prettyCombineTypesExpression a
 
     prettyCombineTypesExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyCombineTypesExpression a0@(CombineTypes _ _) =
+    prettyCombineTypesExpression a0@(CombineTypes _ _ _) =
         prettyOperator (combineTypes characterSet) (docs a0)
       where
-        docs (CombineTypes a b) = prettyTimesExpression b : docs a
+        docs (CombineTypes _ a b) = prettyTimesExpression b : docs a
         docs a
             | Just doc <- preserveSource a =
                 [ doc ]
@@ -1688,7 +1697,7 @@ consolidateRecordLiteral = concatMap adapt . Map.toList
         , [ KeyValue keys mSrc2' val' ] <- concatMap adapt (Map.toList m) =
             [ KeyValue (NonEmpty.cons (mSrc0, key, mSrc1) keys) mSrc2' val' ]
 
-        | Combine (Just _) l r <- e =
+        | Combine _ (Just _) l r <- e =
             adapt (key, makeRecordField l) <> adapt (key, makeRecordField r)
         | otherwise =
             [ KeyValue (pure (mSrc0, key, mSrc1)) mSrc2 val ]
