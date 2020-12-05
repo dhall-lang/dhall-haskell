@@ -85,7 +85,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/JSON/package.dhall
     dhall-lang/Prelude/JSON/render
     dhall-lang/Prelude/JSON/renderAs
-    dhall-lang/Prelude/JSON/renderCompact
+    dhall-lang/Prelude/JSON/renderCompact.dhall
     dhall-lang/Prelude/JSON/renderInteger.dhall
     dhall-lang/Prelude/JSON/renderYAML
     dhall-lang/Prelude/JSON/string
@@ -183,7 +183,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Text/default
     dhall-lang/Prelude/Text/defaultMap
     dhall-lang/Prelude/Text/package.dhall
-    dhall-lang/Prelude/Text/replace
+    dhall-lang/Prelude/Text/replace.dhall
     dhall-lang/Prelude/Text/replicate
     dhall-lang/Prelude/Text/show
     dhall-lang/Prelude/Text/spaces
