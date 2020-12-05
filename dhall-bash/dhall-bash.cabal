@@ -1,5 +1,5 @@
 Name: dhall-bash
-Version: 1.0.34
+Version: 1.0.35
 Cabal-Version: >=1.10
 Build-Type: Simple
 Tested-With: GHC == 8.4.3, GHC == 8.6.1
