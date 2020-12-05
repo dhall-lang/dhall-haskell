@@ -143,7 +143,7 @@ parsers embedded = Parsers {..}
             cs' <- _arrow
             whitespace
             c <- expression
-            return (Lam (cs <> cs') (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
+            return (Lam (AlwaysEq (cs <> cs')) (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
 
         alternative1 = do
             try (_if *> nonemptyWhitespace)
@@ -224,7 +224,7 @@ parsers embedded = Parsers {..}
             cs' <- _arrow
             whitespace
             c <- expression
-            return (Pi (cs <> cs') a b c)
+            return (Pi (AlwaysEq (cs <> cs')) a b c)
 
         alternative4 = do
             try (_assert *> whitespace *> _colon)
@@ -270,7 +270,7 @@ parsers embedded = Parsers {..}
                             whitespace
                             b <- expression
                             whitespace
-                            return (Pi cs "_" a b)
+                            return (Pi (AlwaysEq cs) "_" a b)
 
                     let alternative5B1 = do
                             _colon
@@ -348,9 +348,9 @@ parsers embedded = Parsers {..}
         , TextAppend                  <$ _textAppend    <* whitespace
         , ListAppend                  <$ _listAppend    <* whitespace
         , BoolAnd                     <$ _and           <* whitespace
-        , (`Combine` Nothing)         <$> _combine      <* whitespace
-        , (`Prefer` PreferFromSource) <$> _prefer       <* whitespace
-        , CombineTypes                <$> _combineTypes <* whitespace
+        , (\cs -> Combine (AlwaysEq cs) Nothing)         <$> _combine <* whitespace
+        , (\cs -> Prefer (AlwaysEq cs) PreferFromSource) <$> _prefer  <* whitespace
+        , (CombineTypes . AlwaysEq)   <$> _combineTypes <* whitespace
         , NaturalTimes                <$ _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
         , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace

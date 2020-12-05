@@ -1,16 +1,17 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveLift         #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedLists    #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE PatternSynonyms    #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE UnicodeSyntax      #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveLift                 #-}
+{-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedLists            #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE UnicodeSyntax              #-}
 
 {-| This module contains the core syntax types and optics for them.
 
@@ -24,6 +25,7 @@ module Dhall.Syntax (
     , Var(..)
     , Binding(..)
     , makeBinding
+    , AlwaysEq (..)
     , CharacterSet(..)
     , Chunks(..)
     , DhallDouble(..)
@@ -226,7 +228,8 @@ makeBinding name = Binding Nothing name Nothing Nothing Nothing
 -- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
 -- defined via the binary encoding of Dhall @Double@s.
 newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
-    deriving (Show, Data, Lift, NFData, Generic)
+    deriving stock (Show, Data, Lift, Generic)
+    deriving anyclass NFData
 
 -- | This instance satisfies all the customary 'Eq' laws except substitutivity.
 --
@@ -418,6 +421,22 @@ data FieldSelection s = FieldSelection
 makeFieldSelection :: Text -> FieldSelection s
 makeFieldSelection t = FieldSelection Nothing t Nothing
 
+-- | A newtype with an Eq instance where any value is equal to any other one
+-- as well as an Ord instance that does the same
+--
+-- This is useful for example to make part of a type not count towards the
+-- semantic equality of a whole type.
+newtype AlwaysEq a = AlwaysEq a
+    deriving stock (Generic, Show, Data, Lift)
+    deriving anyclass NFData
+    deriving newtype (Semigroup, Monoid)
+
+instance Eq (AlwaysEq a) where
+    _ == _ = True
+
+instance Ord (AlwaysEq a) where
+    compare _ _ = EQ
+
 {-| Syntax tree for expressions
 
     The @s@ type parameter is used to track the presence or absence of `Src`
@@ -439,10 +458,10 @@ data Expr s a
     --   > Var (V x n)                              ~  x@n
     | Var Var
     -- | > Lam (FunctionBinding _ "x" _ _ A) b      ~  λ(x : A) -> b
-    | Lam CharacterSet (FunctionBinding s a) (Expr s a)
+    | Lam (AlwaysEq CharacterSet) (FunctionBinding s a) (Expr s a)
     -- | > Pi "_" A B                               ~        A  -> B
     --   > Pi x   A B                               ~  ∀(x : A) -> B
-    | Pi  CharacterSet Text (Expr s a) (Expr s a)
+    | Pi  (AlwaysEq CharacterSet) Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
     -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
@@ -589,14 +608,14 @@ data Expr s a
     --   >              _
     --   >              (Combine (Just k) x y)
     --   >            )]
-    | Combine CharacterSet (Maybe Text) (Expr s a) (Expr s a)
+    | Combine (AlwaysEq CharacterSet) (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
-    | CombineTypes CharacterSet (Expr s a) (Expr s a)
+    | CombineTypes (AlwaysEq CharacterSet) (Expr s a) (Expr s a)
     -- | > Prefer False x y                         ~  x ⫽ y
     --
     -- The first field is a `True` when the `Prefer` operator is introduced as a
     -- result of desugaring a @with@ expression
-    | Prefer CharacterSet (PreferAnnotation s a) (Expr s a) (Expr s a)
+    | Prefer (AlwaysEq CharacterSet) (PreferAnnotation s a) (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -919,7 +938,8 @@ chunkExprs f (Chunks chunks final) =
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving (Eq, Generic, Ord, Show, NFData)
+    deriving stock (Eq, Generic, Ord, Show)
+    deriving anyclass NFData
 
 instance Semigroup Directory where
     Directory components₀ <> Directory components₁ =

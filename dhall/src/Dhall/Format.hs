@@ -16,7 +16,7 @@ import Data.Maybe    (fromMaybe)
 import Dhall.Optics  (cosmosOf, foldOf, to)
 import Dhall.Pretty  (CharacterSet (..), annToAnsiStyle)
 import Dhall.Src     (Src (..))
-import Dhall.Syntax  (Expr (..), subExpressions)
+import Dhall.Syntax  (AlwaysEq (..), Expr (..), subExpressions)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -131,13 +131,16 @@ format (Format { input = input0, ..}) = go input0
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
 detectCharacterSet :: Expr Src a -> CharacterSet
-detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
+detectCharacterSet expr = characterSet
   where
+    AlwaysEq characterSet =
+        foldOf (cosmosOf subExpressions . to exprToCharacterSet) expr
+
     exprToCharacterSet = \case
         Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
-        Lam characterSet _ _ -> characterSet
-        Pi characterSet _ _ _ -> characterSet
-        Combine characterSet _ _ _ -> characterSet
-        CombineTypes characterSet _ _ -> characterSet
-        Prefer characterSet _ _ _ -> characterSet
+        Lam cs _ _ -> cs
+        Pi cs _ _ _ -> cs
+        Combine cs _ _ _ -> cs
+        CombineTypes cs _ _ -> cs
+        Prefer cs _ _ _ -> cs
         _ -> mempty
