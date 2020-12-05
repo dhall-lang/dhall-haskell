@@ -124,7 +124,7 @@ buildCompletionContext' context values (Let (Binding { variable = x, annotation 
 
     in buildCompletionContext' context' values' e
 
-buildCompletionContext' context values (Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A}) b) =
+buildCompletionContext' context values (Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A}) b) =
   let _A' | Right _ <- typeWithA absurd context _A = normalize _A
           | otherwise = holeExpr
 
@@ -133,7 +133,7 @@ buildCompletionContext' context values (Lam (FunctionBinding { functionBindingVa
 
     in buildCompletionContext' context' values' b
 
-buildCompletionContext' context values (Pi x _A b) =
+buildCompletionContext' context values (Pi _ x _A b) =
   let _A' | Right _ <- typeWithA absurd context _A = normalize _A
           | otherwise = holeExpr
 
@@ -188,7 +188,7 @@ completeProjections (CompletionContext context values) expr =
     let constructor (k, Nothing) =
             Completion (Dhall.Pretty.escapeLabel True k) (Just _A)
         constructor (k, Just v) =
-            Completion (Dhall.Pretty.escapeLabel True k) (Just (Pi k v _A))
+            Completion (Dhall.Pretty.escapeLabel True k) (Just (Pi mempty k v _A))
      in map constructor (Dhall.Map.toList m)
   completeUnion _ _ = []
 

@@ -277,6 +277,7 @@ main = do
 
   let package =
         Combine
+          mempty
           Nothing
           (Embed (Convert.mkImport prefixMap [ ] "schemas.dhall"))
           (RecordLit

@@ -500,18 +500,18 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     return (Aeson.toJSON (Dhall.Map.toMap a'))
         Core.App (Core.Field (Core.Union _) _) b -> loop b
         Core.Field (Core.Union _) (FA k) -> return (Aeson.toJSON k)
-        Core.Lam (Core.functionBindingAnnotation -> Core.Const Core.Type)
-            (Core.Lam (Core.functionBindingAnnotation ->
+        Core.Lam _ (Core.functionBindingAnnotation -> Core.Const Core.Type)
+            (Core.Lam _ (Core.functionBindingAnnotation ->
                 (Core.Record
-                    [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
-                    , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))
+                    [ ("array" , Core.recordFieldValue -> Core.Pi _ _ (Core.App Core.List (V 0)) (V 1))
+                    , ("bool"  , Core.recordFieldValue -> Core.Pi _ _ Core.Bool (V 1))
                     , ("null"  , Core.recordFieldValue -> V 0)
-                    , ("number", Core.recordFieldValue -> Core.Pi _ Core.Double (V 1))
+                    , ("number", Core.recordFieldValue -> Core.Pi _ _ Core.Double (V 1))
                     , ("object", Core.recordFieldValue ->
-                        Core.Pi _ (Core.App Core.List (Core.Record
+                        Core.Pi _ _ (Core.App Core.List (Core.Record
                         [ ("mapKey", Core.recordFieldValue -> Core.Text)
                         , ("mapValue", Core.recordFieldValue -> V 0)])) (V 1))
-                    , ("string", Core.recordFieldValue -> Core.Pi _ Core.Text (V 1))
+                    , ("string", Core.recordFieldValue -> Core.Pi _ _ Core.Text (V 1))
                     ]
                 ))
                 value
@@ -542,20 +542,20 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     outer _ = Left (Unsupported e)
 
                 outer value
-        Core.Lam (Core.functionBindingAnnotation -> Core.Const Core.Type)
-            (Core.Lam (Core.functionBindingAnnotation ->
+        Core.Lam _ (Core.functionBindingAnnotation -> Core.Const Core.Type)
+            (Core.Lam _ (Core.functionBindingAnnotation ->
                 (Core.Record
-                    [ ("array" , Core.recordFieldValue -> Core.Pi _ (Core.App Core.List (V 0)) (V 1))
-                    , ("bool"  , Core.recordFieldValue -> Core.Pi _ Core.Bool (V 1))
-                    , ("double", Core.recordFieldValue -> Core.Pi _ Core.Double (V 1))
-                    , ("integer", Core.recordFieldValue -> Core.Pi _ Core.Integer (V 1))
+                    [ ("array" , Core.recordFieldValue -> Core.Pi _ _ (Core.App Core.List (V 0)) (V 1))
+                    , ("bool"  , Core.recordFieldValue -> Core.Pi _ _ Core.Bool (V 1))
+                    , ("double", Core.recordFieldValue -> Core.Pi _ _ Core.Double (V 1))
+                    , ("integer", Core.recordFieldValue -> Core.Pi _ _ Core.Integer (V 1))
                     , ("null"  , Core.recordFieldValue -> V 0)
                     , ("object", Core.recordFieldValue ->
-                        Core.Pi _ (Core.App Core.List (Core.Record
+                        Core.Pi _ _ (Core.App Core.List (Core.Record
                         [ ("mapKey", Core.recordFieldValue -> Core.Text)
                         , ("mapValue", Core.recordFieldValue -> V 0)
                         ])) (V 1))
-                    , ("string", Core.recordFieldValue -> Core.Pi _ Core.Text (V 1))
+                    , ("string", Core.recordFieldValue -> Core.Pi _ _ Core.Text (V 1))
                     ]
                 ))
                 value
@@ -728,11 +728,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
            case we do *not* want to perform this rewrite since it will
            interfere with decoding the value.
         -}
-        Core.Lam a b ->
-            Core.Lam a b
+        Core.Lam cs a b ->
+            Core.Lam cs a b
 
-        Core.Pi a b c ->
-            Core.Pi a b' c'
+        Core.Pi cs a b c ->
+            Core.Pi cs a b' c'
           where
             b' = loop b
             c' = loop c
@@ -988,20 +988,20 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = fmap (fmap loop) a
 
-        Core.Combine a b c ->
-            Core.Combine a b' c'
+        Core.Combine cs a b c ->
+            Core.Combine cs a b' c'
           where
             b' = loop b
             c' = loop c
 
-        Core.CombineTypes a b ->
-            Core.CombineTypes a' b'
+        Core.CombineTypes cs a b ->
+            Core.CombineTypes cs a' b'
           where
             a' = loop a
             b' = loop b
 
-        Core.Prefer a b c ->
-            Core.Prefer a b' c'
+        Core.Prefer cs a b c ->
+            Core.Prefer cs a b' c'
           where
             b' = loop b
             c' = loop c

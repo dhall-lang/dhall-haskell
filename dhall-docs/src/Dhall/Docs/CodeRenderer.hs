@@ -206,7 +206,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                     Writer.tell [SourceCodeFragment src $ NameUse nameDecl]
                     return t
 
-        Lam (FunctionBinding
+        Lam _ (FunctionBinding
                 (Just Src{srcEnd = srcEnd0})
                 name
                 (Just Src{srcStart = srcStart1})
