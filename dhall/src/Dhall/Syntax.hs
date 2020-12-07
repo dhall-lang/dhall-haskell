@@ -25,7 +25,6 @@ module Dhall.Syntax (
     , Var(..)
     , Binding(..)
     , makeBinding
-    , AlwaysEq (..)
     , CharacterSet(..)
     , Chunks(..)
     , DhallDouble(..)
@@ -421,22 +420,6 @@ data FieldSelection s = FieldSelection
 makeFieldSelection :: Text -> FieldSelection s
 makeFieldSelection t = FieldSelection Nothing t Nothing
 
--- | A newtype with an Eq instance where any value is equal to any other one
--- as well as an Ord instance that does the same
---
--- This is useful for example to make part of a type not count towards the
--- semantic equality of a whole type.
-newtype AlwaysEq a = AlwaysEq a
-    deriving stock (Generic, Show, Data, Lift)
-    deriving anyclass NFData
-    deriving newtype (Semigroup, Monoid)
-
-instance Eq (AlwaysEq a) where
-    _ == _ = True
-
-instance Ord (AlwaysEq a) where
-    compare _ _ = EQ
-
 {-| Syntax tree for expressions
 
     The @s@ type parameter is used to track the presence or absence of `Src`
@@ -458,10 +441,10 @@ data Expr s a
     --   > Var (V x n)                              ~  x@n
     | Var Var
     -- | > Lam (FunctionBinding _ "x" _ _ A) b      ~  λ(x : A) -> b
-    | Lam (AlwaysEq CharacterSet) (FunctionBinding s a) (Expr s a)
+    | Lam (Maybe CharacterSet) (FunctionBinding s a) (Expr s a)
     -- | > Pi "_" A B                               ~        A  -> B
     --   > Pi x   A B                               ~  ∀(x : A) -> B
-    | Pi  (AlwaysEq CharacterSet) Text (Expr s a) (Expr s a)
+    | Pi  (Maybe CharacterSet) Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
     -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
@@ -608,14 +591,14 @@ data Expr s a
     --   >              _
     --   >              (Combine (Just k) x y)
     --   >            )]
-    | Combine (AlwaysEq CharacterSet) (Maybe Text) (Expr s a) (Expr s a)
+    | Combine (Maybe CharacterSet) (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes x y                         ~  x ⩓ y
-    | CombineTypes (AlwaysEq CharacterSet) (Expr s a) (Expr s a)
+    | CombineTypes (Maybe CharacterSet) (Expr s a) (Expr s a)
     -- | > Prefer False x y                         ~  x ⫽ y
     --
     -- The first field is a `True` when the `Prefer` operator is introduced as a
     -- result of desugaring a @with@ expression
-    | Prefer (AlwaysEq CharacterSet) (PreferAnnotation s a) (Expr s a) (Expr s a)
+    | Prefer (Maybe CharacterSet) (PreferAnnotation s a) (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -1138,15 +1121,20 @@ pathCharacter c =
     ||  c == '\x7E'
 
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
+--
+-- This also remove CharacterSet annotations.
 denote :: Expr s a -> Expr t a
 denote = \case
     Note _ b -> denote b
     Let a b -> Let (denoteBinding a) (denote b)
     Embed a -> Embed a
-    Combine cs _ b c -> Combine cs Nothing (denote b) (denote c)
+    Combine _ _ b c -> Combine Nothing Nothing (denote b) (denote c)
+    CombineTypes _ b c -> CombineTypes Nothing (denote b) (denote c)
+    Prefer _ a b c -> Lens.over unsafeSubExpressions denote $ Prefer Nothing a b c
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
-    Lam cs a b -> Lam cs (denoteFunctionBinding a) (denote b)
+    Lam _ a b -> Lam Nothing (denoteFunctionBinding a) (denote b)
+    Pi _ t a b -> Pi Nothing t (denote a) (denote b)
     Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where

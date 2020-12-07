@@ -31,8 +31,7 @@ import Dhall
     , inject
     )
 import Dhall.Core
-    ( AlwaysEq (..)
-    , Binding (..)
+    ( Binding (..)
     , Chunks (..)
     , Const (..)
     , DhallDouble (..)
@@ -295,9 +294,6 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
 instance Arbitrary s => Arbitrary (FieldSelection s) where
     arbitrary = FieldSelection <$> pure Nothing <*> label <*> pure Nothing
     shrink = genericShrink
-
-instance Arbitrary a => Arbitrary (AlwaysEq a) where
-    arbitrary = AlwaysEq <$> arbitrary
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =

@@ -15,8 +15,7 @@ import Control.Applicative     (optional, (<|>))
 import Data.Functor            (void)
 import Data.Text               (Text)
 import Dhall.Core
-    ( AlwaysEq (..)
-    , Binding (..)
+    ( Binding (..)
     , Expr (..)
     , Import
     , Var (..)
@@ -300,7 +299,7 @@ binderExprFromText txt =
           <|> (do cs' <- skipManyTill anySingle _arrow; return (cs', holeExpr))
       whitespace
       inner <- parseBinderExpr
-      return (Pi (AlwaysEq (cs <> cs')) name typ inner)
+      return (Pi (Just (cs <> cs')) name typ inner)
 
     lambdaBinder = do
       cs <- _lambda
@@ -317,4 +316,4 @@ binderExprFromText txt =
           <|> (do cs' <- skipManyTill anySingle _arrow; return (cs', holeExpr))
       whitespace
       inner <- parseBinderExpr
-      return (Lam (AlwaysEq (cs <> cs')) (makeFunctionBinding name typ) inner)
+      return (Lam (Just (cs <> cs')) (makeFunctionBinding name typ) inner)

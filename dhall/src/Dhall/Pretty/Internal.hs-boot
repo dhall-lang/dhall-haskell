@@ -13,6 +13,8 @@ data Ann
 
 data CharacterSet = ASCII | Unicode
 
+instance Eq CharacterSet
+instance Ord CharacterSet
 instance Show CharacterSet
 instance Data CharacterSet
 instance Lift CharacterSet

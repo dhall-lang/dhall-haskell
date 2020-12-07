@@ -119,7 +119,7 @@ annToAnsiStyle Operator = Terminal.bold <> Terminal.colorDull Terminal.Green
 
 -- | This type determines whether to render code as `ASCII` or `Unicode`
 data CharacterSet = ASCII | Unicode
-    deriving (Show, Data, Generic, Lift, NFData)
+    deriving (Eq, Ord, Show, Data, Generic, Lift, NFData)
 
 -- | Since ASCII is a subset of Unicode, if either argument is Unicode, the
 -- result is Unicode
