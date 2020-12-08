@@ -20,6 +20,7 @@ module Dhall.Pretty.Internal (
     , prettySrcExpr
 
     , CharacterSet(..)
+    , detectCharacterSet
     , prettyCharacterSet
     , prettyImportExpression
 
@@ -76,6 +77,7 @@ import Data.List.NonEmpty         (NonEmpty (..))
 import Data.Text                  (Text)
 import Data.Text.Prettyprint.Doc  (Doc, Pretty, space)
 import Dhall.Map                  (Map)
+import Dhall.Optics               (cosmosOf, foldOf, to)
 import Dhall.Src                  (Src (..))
 import Dhall.Syntax
 import GHC.Generics               (Generic)
@@ -129,6 +131,21 @@ instance Semigroup CharacterSet where
 
 instance Monoid CharacterSet where
     mempty = ASCII
+
+-- | Detect which character set is used for the syntax of an expression
+-- If any parts of the expression uses the Unicode syntax, the whole expression
+-- is deemed to be using the Unicode syntax.
+detectCharacterSet :: Expr Src a -> CharacterSet
+detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
+  where
+    exprToCharacterSet = \case
+        Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
+        Lam (Just Unicode) _ _ -> Unicode
+        Pi (Just Unicode) _ _ _ -> Unicode
+        Combine (Just Unicode) _ _ _ -> Unicode
+        CombineTypes (Just Unicode) _ _ -> Unicode
+        Prefer (Just Unicode) _ _ _ -> Unicode
+        _ -> mempty
 
 -- | Pretty print an expression
 prettyExpr :: Pretty a => Expr s a -> Doc Ann

@@ -8,6 +8,7 @@ module Dhall.Pretty
     , prettyExpr
 
     , CharacterSet(..)
+    , detectCharacterSet
     , prettyCharacterSet
 
     , Dhall.Pretty.Internal.layout

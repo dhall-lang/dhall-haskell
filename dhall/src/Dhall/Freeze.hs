@@ -22,7 +22,8 @@ module Dhall.Freeze
     ) where
 
 import Data.Foldable       (for_)
-import Dhall.Pretty        (CharacterSet)
+import Data.Maybe          (fromMaybe)
+import Dhall.Pretty        (CharacterSet, detectCharacterSet)
 import Dhall.Syntax
     ( Expr (..)
     , Import (..)
@@ -142,7 +143,7 @@ freeze
     -> PossiblyTransitiveInput
     -> Scope
     -> Intent
-    -> CharacterSet
+    -> Maybe CharacterSet
     -> Censor
     -> IO ()
 freeze = freezeWithManager Dhall.Import.defaultNewManager
@@ -154,10 +155,10 @@ freezeWithManager
     -> PossiblyTransitiveInput
     -> Scope
     -> Intent
-    -> CharacterSet
+    -> Maybe CharacterSet
     -> Censor
     -> IO ()
-freezeWithManager newManager outputMode input0 scope intent characterSet censor = go input0
+freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet censor = go input0
   where
     go input = do
         let directory = case input of
@@ -180,6 +181,8 @@ freezeWithManager newManager outputMode input0 scope intent characterSet censor 
                 return (text, NonTransitive)
 
         (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+
+        let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 
         case transitivity of
             Transitive ->

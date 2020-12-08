@@ -13,10 +13,7 @@ module Dhall.Format
 
 import Data.Foldable (for_)
 import Data.Maybe    (fromMaybe)
-import Dhall.Optics  (cosmosOf, foldOf, to)
-import Dhall.Pretty  (CharacterSet (..), annToAnsiStyle)
-import Dhall.Src     (Src (..))
-import Dhall.Syntax  (Expr (..), subExpressions)
+import Dhall.Pretty  (CharacterSet, annToAnsiStyle, detectCharacterSet)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -61,9 +58,7 @@ format (Format { input = input0, ..}) = go input0
         let status = Dhall.Import.emptyStatus directory
 
         let layoutHeaderAndExpr (Header header, expr) =
-                let -- When the user does not chose an explicit character set,
-                    -- detect it from the expression
-                    characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
+                let characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
                 in
                 Dhall.Pretty.layout
                     (   Pretty.pretty header
@@ -126,18 +121,3 @@ format (Format { input = input0, ..}) = go input0
                         let modified = "formatted"
 
                         Control.Exception.throwIO CheckFailed{..}
-
--- | Detect which character set is used for the syntax of an expression
--- If any parts of the expression uses the Unicode syntax, the whole expression
--- is deemed to be using the Unicode syntax.
-detectCharacterSet :: Expr Src a -> CharacterSet
-detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
-  where
-    exprToCharacterSet = \case
-        Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
-        Lam (Just Unicode) _ _ -> Unicode
-        Pi (Just Unicode) _ _ _ -> Unicode
-        Combine (Just Unicode) _ _ _ -> Unicode
-        CombineTypes (Just Unicode) _ _ -> Unicode
-        Prefer (Just Unicode) _ _ _ -> Unicode
-        _ -> mempty
