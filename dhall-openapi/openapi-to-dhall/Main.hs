@@ -43,7 +43,6 @@ import qualified Dhall.Kubernetes.Convert              as Convert
 import qualified Dhall.Kubernetes.Types                as Types
 import qualified Dhall.Map
 import qualified Dhall.Parser
-import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
