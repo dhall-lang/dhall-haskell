@@ -1,3 +1,30 @@
+1.37.0
+
+* [Supports version 20.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v20.0.0)
+    * [Implement revised `Text/replace` β-normalization](https://github.com/dhall-lang/dhall-haskell/pull/2072)
+    * [Allow `Text/replace ""` to support an abstract haystack](https://github.com/dhall-lang/dhall-haskell/pull/2084)
+    * [Support `if` expressions returning a type or kind](https://github.com/dhall-lang/dhall-haskell/pull/2080)
+* BREAKING CHANGE TO THE API: [Improve error message for duplicate projection label](https://github.com/dhall-lang/dhall-haskell/pull/2097)
+    * This also makes the implementation more standards-compliant, by treating
+      a duplicate label as a type error instead of a parse error
+    * This is a breaking change since the `Project` constructor now stores a
+      `[Text]` instead of `Set Text`
+* [Add `--cache` flag to `dhall hash`](https://github.com/dhall-lang/dhall-haskell/pull/2093)
+    * This flag adds the hashed expression to the cache when enabled
+* [Deprecate `Inject` / `Interpret`](https://github.com/dhall-lang/dhall-haskell/pull/2099)
+    * You should instead use `ToDhall` / `FromDhall`, respectively
+* Fixes and improvements to the haddocks:
+    * [#2098](https://github.com/dhall-lang/dhall-haskell/pull/2098)
+    * [#2100](https://github.com/dhall-lang/dhall-haskell/pull/2100)
+* Fixes and improvements to error messages:
+    * [#2082](https://github.com/dhall-lang/dhall-haskell/pull/2082)
+    * [#2095](https://github.com/dhall-lang/dhall-haskell/pull/2095)
+* Fixes and improvements to the parser:
+    * [#2083](https://github.com/dhall-lang/dhall-haskell/pull/2089)
+* Fixes and improvements to the pretty printer:
+    * [#2083](https://github.com/dhall-lang/dhall-haskell/pull/2083)
+    * [#2101](https://github.com/dhall-lang/dhall-haskell/pull/2101)
+
 1.36.0
 
 * [Supports version 19.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v19.0.0)
