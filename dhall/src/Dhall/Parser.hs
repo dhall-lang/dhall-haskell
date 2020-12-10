@@ -11,7 +11,7 @@ module Dhall.Parser (
     , createHeader
 
     -- * Parsers
-    , expr, exprA
+    , expr
 
     -- * Types
     , Header(..)
@@ -38,13 +38,7 @@ import Dhall.Parser.Token       hiding (text)
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
-expr = exprA (Text.Megaparsec.try import_)
-
--- | Parser for a top-level Dhall expression. The expression is parameterized
--- over any parseable type, allowing the language to be extended as needed.
-exprA :: Parser a -> Parser (Expr Src a)
-exprA = completeExpression
-{-# DEPRECATED exprA "Support for parsing custom imports will be dropped in a future release" #-}
+expr = completeExpression (Text.Megaparsec.try import_)
 
 -- | A parsing error
 data ParseError = ParseError {
