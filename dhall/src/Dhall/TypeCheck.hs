@@ -1252,27 +1252,32 @@ infer typer = loop
 
             return (VConst Type)
 
-        With e ks v -> do
-            tE' <- loop ctx e
+        With e₀ ks₀ v₀ -> do
+            tE₀' <- loop ctx e₀
 
-            kTs' <- case tE' of
-                VRecord kTs' -> return kTs'
-                _            -> die (NotWithARecord e (quote names tE'))
+            -- The purpose of this inner loop is to ensure that we only need to
+            -- typecheck the record once
+            let with tE' ks v = do
+                    kTs' <- case tE' of
+                        VRecord kTs' -> return kTs'
+                        _            -> die (NotWithARecord e₀ (quote names tE'))
 
-            case ks of
-                k :| [] -> do
-                    tV' <- loop ctx v
+                    case ks of
+                        k :| [] -> do
+                            tV' <- loop ctx v
 
-                    return (VRecord (Dhall.Map.insert k tV' kTs'))
-                k₀ :| k₁ : ks' -> do
-                    let e₁ =
-                            if Dhall.Map.member k₀ kTs'
-                                then Field e (Syntax.makeFieldSelection k₀)
-                                else RecordLit mempty
+                            return (VRecord (Dhall.Map.insert k tV' kTs'))
+                        k₀ :| k₁ : ks' -> do
+                            let _T =
+                                    case Dhall.Map.lookup k₀ kTs' of
+                                        Just _T' -> _T'
+                                        Nothing  -> VRecord mempty
 
-                    tV' <- loop ctx (With e₁ (k₁ :| ks') v)
+                            tV' <- with _T (k₁ :| ks') v
 
-                    return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+                            return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+
+            with tE₀' ks₀ v₀
 
         Note s e ->
             case loop ctx e of
