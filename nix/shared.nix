@@ -524,7 +524,7 @@ in
       pkgs.mkShell
         { buildInputs =
             [ (pkgs.haskell.packages."${compiler}".ghcWithPackages
-                (pkgs: [ pkgs.dhall ])
+                (pkgs: [ pkgs.dhall pkgs.warp ])
               )
             ];
         };
