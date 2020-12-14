@@ -11,6 +11,7 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
 import Data.Dynamic                     (toDyn)
+import Data.List.NonEmpty               (NonEmpty(..))
 import Dhall.Core
     ( Import (..)
     , ImportHashed (..)
@@ -29,7 +30,6 @@ import Network.HTTP.Client
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
@@ -266,11 +266,15 @@ fetchFromHttpUrl childURL mheaders = do
 
     Status {..} <- State.get
 
-    let Chained parentImport = NonEmpty.head _stack
+    case _stack of
+        -- We ignore the first import in the stack since that is the same import
+        -- as the `childUrl`
+        _ :| Chained parentImport : _ -> do
+            let parentImportType = importType (importHashed parentImport)
 
-    let parentImportType = importType (importHashed parentImport)
-
-    corsCompliant parentImportType childURL (HTTP.responseHeaders response)
+            corsCompliant parentImportType childURL (HTTP.responseHeaders response)
+        _ -> do
+            return ()
 
     let bytes = HTTP.responseBody response
 
