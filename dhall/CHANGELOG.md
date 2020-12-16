@@ -1,3 +1,7 @@
+1.37.1
+
+* [Fix performance regression for `with` expressions](https://github.com/dhall-lang/dhall-haskell/pull/2112)
+
 1.37.0
 
 * [Supports version 20.0.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v20.0.0)
