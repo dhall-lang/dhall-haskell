@@ -91,7 +91,7 @@ Test-Suite tasty
         dhall                        ,
         dhall-json                   ,
         dhall-yaml                   ,
-        tasty                  <  1.4,
+        tasty                  <  1.5,
         tasty-expected-failure < 0.13,
         text                                    ,
         tasty-hunit            >= 0.2
