@@ -68,7 +68,7 @@ in
       kubernetes-dhall-docs
     ;
 
-    linux-dhall            = shared_linux.possibly-static.dhall;
+    linux-dhall            = shared_linux.dhall;
     linux-dhall-bash       = shared_linux.possibly-static.dhall-bash;
     linux-dhall-docs       = shared_linux.possibly-static.dhall-docs;
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
