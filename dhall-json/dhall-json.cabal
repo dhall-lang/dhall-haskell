@@ -122,7 +122,7 @@ Test-Suite tasty
         bytestring         ,
         dhall              ,
         dhall-json         ,
-        tasty        <  1.4,
+        tasty        <  1.5,
         text               ,
         tasty-hunit  >= 0.2,
         tasty-silver >= 3.0

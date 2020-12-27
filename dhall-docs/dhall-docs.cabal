@@ -139,8 +139,8 @@ Test-Suite tasty
         path                              ,
         path-io                           ,
         pretty       >= 1.1.1.1           ,
-        tasty        <  1.4               ,
-        tasty-silver <= 3.1.15            ,
+        tasty        < 1.5                ,
+        tasty-silver < 3.3                ,
         tasty-hunit  >= 0.10     && < 0.11,
         turtle       < 1.6                ,
         text
