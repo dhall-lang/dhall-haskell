@@ -71,6 +71,8 @@ module Dhall.Pretty.Internal (
     ) where
 
 import Control.DeepSeq            (NFData)
+import Data.Aeson                 (FromJSON (..), Value (String))
+import Data.Aeson.Types           (typeMismatch, unexpected)
 import Data.Data                  (Data)
 import Data.Foldable
 import Data.List.NonEmpty         (NonEmpty (..))
@@ -131,6 +133,12 @@ instance Semigroup CharacterSet where
 
 instance Monoid CharacterSet where
     mempty = ASCII
+
+instance FromJSON CharacterSet where
+  parseJSON (String "unicode") = pure Unicode
+  parseJSON (String "ascii") = pure ASCII
+  parseJSON v@(String _) = unexpected v
+  parseJSON v = typeMismatch "String" v
 
 -- | Detect which character set is used for the syntax of an expression
 -- If any parts of the expression uses the Unicode syntax, the whole expression

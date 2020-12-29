@@ -14,7 +14,6 @@ import Dhall.Core
     )
 import Dhall.Import (localToPath)
 import Dhall.Parser (Src (..))
-import Dhall.Pretty (CharacterSet (..))
 
 import Dhall.LSP.Backend.Completion
     ( Completion (..)
@@ -337,10 +336,8 @@ documentFormattingHandler request = do
     _ -> throwE (Warning, "Failed to format dhall code; parse error.")
 
   ServerConfig {..} <- getServerConfig
-  let charSet | asciiOnly = ASCII
-              | otherwise = Unicode
 
-  let formatted = formatExprWithHeader charSet expr header
+  let formatted = formatExprWithHeader chosenCharacterSet expr header
       numLines = Text.length txt
       range = J.Range (J.Position 0 0) (J.Position numLines 0)
       edits = J.List [J.TextEdit range formatted]
@@ -379,10 +376,8 @@ executeLintAndFormat request = do
     _ -> throwE (Warning, "Failed to lint dhall code; parse error.")
 
   ServerConfig {..} <- getServerConfig
-  let charSet | asciiOnly = ASCII
-              | otherwise = Unicode
 
-  let linted = formatExprWithHeader charSet (lint expr) header
+  let linted = formatExprWithHeader chosenCharacterSet (lint expr) header
       numLines = Text.length txt
       range = J.Range (J.Position 0 0) (J.Position numLines 0)
       edit = J.WorkspaceEdit
@@ -406,8 +401,6 @@ executeAnnotateLet request = do
     Right e -> return e
 
   ServerConfig {..} <- getServerConfig
-  let charSet | asciiOnly = ASCII
-              | otherwise = Unicode
 
   (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, annotExpr)
     <- case annotateLet (line, col) welltyped of
@@ -416,7 +409,7 @@ executeAnnotateLet request = do
 
   let range = J.Range (J.Position (unPos x1 - 1) (unPos y1 - 1))
                       (J.Position (unPos x2 - 1) (unPos y2 - 1))
-      txt = formatExpr charSet annotExpr
+      txt = formatExpr chosenCharacterSet annotExpr
       edit = J.WorkspaceEdit
         (Just (HashMap.singleton uri (J.List [J.TextEdit range txt]))) Nothing
 
