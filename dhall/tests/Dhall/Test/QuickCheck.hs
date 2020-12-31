@@ -305,8 +305,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             standardizedExpression
       where
         customGens
-            :: ConstrGen "Lam" 0 (FunctionBinding s a)
-            :+ ConstrGen "Pi" 0 Text
+            :: ConstrGen "Lam" 1 (FunctionBinding s a)
+            :+ ConstrGen "Pi" 1 Text
             :+ ConstrGen "Field" 1 (FieldSelection s)
             :+ ConstrGen "Project" 1 (Either [Text] (Expr s a))
             :+ Gen Integer  -- Generates all Integer fields in Expr
@@ -417,13 +417,13 @@ standardizedExpression (ListLit (Just _ ) xs) =
     Data.Sequence.null xs
 standardizedExpression (Note _ _) =
     False
-standardizedExpression (Combine (Just _) _ _) =
+standardizedExpression (Combine _ (Just _) _ _) =
     False
 standardizedExpression With{} =
     False
-standardizedExpression (Prefer PreferFromCompletion _ _) =
+standardizedExpression (Prefer _ PreferFromCompletion _ _) =
     False
-standardizedExpression (Prefer (PreferFromWith _) _ _) =
+standardizedExpression (Prefer _ (PreferFromWith _) _ _) =
     False
 -- The following three expressions are valid ASTs, but they can never be parsed,
 -- because the annotation will associate with `Merge`/`ListLit`/`ToMap` with

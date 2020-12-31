@@ -24,6 +24,7 @@ module Dhall.Main
 import Control.Applicative       (optional, (<|>))
 import Control.Exception         (Handler (..), SomeException)
 import Data.Foldable             (for_)
+import Data.Maybe                (fromMaybe)
 import Data.List.NonEmpty        (NonEmpty (..))
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
@@ -36,7 +37,7 @@ import Dhall.Import
     , _semanticCacheMode
     )
 import Dhall.Parser              (Src)
-import Dhall.Pretty              (Ann, CharacterSet (..), annToAnsiStyle)
+import Dhall.Pretty              (Ann, CharacterSet (..), annToAnsiStyle, detectCharacterSet)
 import Dhall.Schemas             (Schemas (..))
 import Dhall.TypeCheck
     ( Censored (..)
@@ -112,11 +113,11 @@ import qualified Text.Pretty.Simple
 
 -- | Top-level program options
 data Options = Options
-    { mode    :: Mode
-    , explain :: Bool
-    , plain   :: Bool
-    , ascii   :: Bool
-    , censor  :: Censor
+    { mode               :: Mode
+    , explain            :: Bool
+    , plain              :: Bool
+    , chosenCharacterSet :: Maybe CharacterSet
+    , censor             :: Censor
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -194,7 +195,7 @@ parseOptions =
     <$> parseMode
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
-    <*> switch "ascii" "Format code using only ASCII syntax"
+    <*> parseCharacterSet
     <*> parseCensor
   where
     switch name description =
@@ -207,6 +208,19 @@ parseOptions =
       where
         f True  = Censor
         f False = NoCensor
+
+    parseCharacterSet =
+            Options.Applicative.flag'
+                (Just Unicode)
+                (   Options.Applicative.long "unicode"
+                <>  Options.Applicative.help "Format code using only Unicode syntax"
+                )
+        <|> Options.Applicative.flag'
+                (Just ASCII)
+                (   Options.Applicative.long "ascii"
+                <>  Options.Applicative.help "Format code using only ASCII syntax"
+                )
+        <|> pure Nothing
 
 subcommand :: Group -> String -> String -> Parser a -> Parser a
 subcommand group name description parser =
@@ -542,10 +556,6 @@ noHeaders i =
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
-    let characterSet = case ascii of
-            True  -> ASCII
-            False -> Unicode
-
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
     let rootDirectory = \case
@@ -555,6 +565,16 @@ command (Options {..}) = do
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
     let getExpression = Dhall.Util.getExpression censor
+
+    -- The characterSet detection used here only works on the source
+    -- expression, before any transformation is applied. This helper is there
+    -- make sure the detection is done on the correct expr.
+    let getExpressionAndCharacterSet file = do
+            expr <- getExpression file
+
+            let characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
+
+            return (expr, characterSet)
 
     let handle io =
             Control.Exception.catches io
@@ -612,8 +632,8 @@ command (Options {..}) = do
             Pretty.renderIO h ansiStream
             Data.Text.IO.hPutStrLn h ""
 
-    let render :: Pretty a => Handle -> Expr Src a -> IO ()
-        render h expression = do
+    let render :: Pretty a => Handle -> CharacterSet -> Expr Src a -> IO ()
+        render h characterSet expression = do
             let doc = Dhall.Pretty.prettyCharacterSet characterSet expression
 
             renderDoc h doc
@@ -635,7 +655,7 @@ command (Options {..}) = do
                     Exit.exitSuccess
                 else return ()
 
-            expression <- getExpression file
+            (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
                 Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
@@ -655,7 +675,7 @@ command (Options {..}) = do
                         else alphaNormalizedExpression
 
             case output of
-                StandardOutput -> render System.IO.stdout annotatedExpression
+                StandardOutput -> render System.IO.stdout characterSet annotatedExpression
 
                 OutputFile file_ ->
                     writeDocToFile
@@ -714,15 +734,15 @@ command (Options {..}) = do
                  $   _cache
 
         Resolve { resolveMode = Nothing, ..} -> do
-            expression <- getExpression file
+            (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
                 Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
-            render System.IO.stdout resolvedExpression
+            render System.IO.stdout characterSet resolvedExpression
 
         Normalize {..} -> do
-            expression <- getExpression file
+            (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <- Dhall.Import.assertNoImports expression
 
@@ -735,10 +755,10 @@ command (Options {..}) = do
                     then Dhall.Core.alphaNormalize normalizedExpression
                     else normalizedExpression
 
-            render System.IO.stdout alphaNormalizedExpression
+            render System.IO.stdout characterSet alphaNormalizedExpression
 
         Type {..} -> do
-            expression <- getExpression file
+            (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
                 Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
@@ -747,10 +767,12 @@ command (Options {..}) = do
 
             if quiet
                 then return ()
-                else render System.IO.stdout inferredType
+                else render System.IO.stdout characterSet inferredType
 
         Repl ->
-            Dhall.Repl.repl characterSet explain
+            Dhall.Repl.repl
+                (fromMaybe Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
+                explain
 
         Diff {..} -> do
             expression1 <- Dhall.inputExpr expr1
@@ -774,7 +796,7 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode possiblyTransitiveInput scope intent characterSet censor
+            Dhall.Freeze.freeze outputMode possiblyTransitiveInput scope intent chosenCharacterSet censor
 
         Hash {..} -> do
             expression <- getExpression file
@@ -814,6 +836,8 @@ command (Options {..}) = do
 
                 (Header header, parsedExpression) <-
                     Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+
+                let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 
                 case transitivity of
                     Transitive ->
@@ -899,7 +923,7 @@ command (Options {..}) = do
                 else do
                     let doc =
                             Dhall.Pretty.prettyCharacterSet
-                                characterSet
+                                (fromMaybe Unicode chosenCharacterSet) -- default to Unicode
                                 (Dhall.Core.renote expression :: Expr Src Import)
 
                     renderDoc System.IO.stdout doc

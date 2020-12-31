@@ -260,7 +260,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         b <- go
 
-                                        return (Lam (Syntax.makeFunctionBinding "_" _A) b)
+                                        return (Lam mempty (Syntax.makeFunctionBinding "_" _A) b)
 
                                     4 -> do
                                         x <- Decoding.decodeString
@@ -273,7 +273,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         b <- go
 
-                                        return (Lam (Syntax.makeFunctionBinding x _A) b)
+                                        return (Lam mempty (Syntax.makeFunctionBinding x _A) b)
 
                                     _ ->
                                         die ("Incorrect number of tokens used to encode a λ expression: " <> show len)
@@ -285,7 +285,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         _B <- go
 
-                                        return (Pi "_" _A _B)
+                                        return (Pi mempty "_" _A _B)
 
                                     4 -> do
                                         x <- Decoding.decodeString
@@ -298,7 +298,7 @@ decodeExpressionInternal decodeEmbed = go
 
                                         _B <- go
 
-                                        return (Pi x _A _B)
+                                        return (Pi mempty x _A _B)
 
                                     _ ->
                                         die ("Incorrect number of tokens used to encode a ∀ expression: " <> show len)
@@ -315,9 +315,9 @@ decodeExpressionInternal decodeEmbed = go
                                     5  -> return NaturalTimes
                                     6  -> return TextAppend
                                     7  -> return ListAppend
-                                    8  -> return (Combine Nothing)
-                                    9  -> return (Prefer PreferFromSource)
-                                    10 -> return CombineTypes
+                                    8  -> return (Combine mempty Nothing)
+                                    9  -> return (Prefer mempty PreferFromSource)
+                                    10 -> return (CombineTypes mempty)
                                     11 -> return ImportAlt
                                     12 -> return Equivalent
                                     13 -> return RecordCompletion
@@ -730,26 +730,26 @@ encodeExpressionInternal encodeEmbed = go
           where
             (function, arguments) = unApply a
 
-        Lam (FunctionBinding { functionBindingVariable = "_", functionBindingAnnotation = _A }) b ->
+        Lam _ (FunctionBinding { functionBindingVariable = "_", functionBindingAnnotation = _A }) b ->
             encodeList3
                 (Encoding.encodeInt 1)
                 (go _A)
                 (go b)
 
-        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
+        Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
             encodeList4
                 (Encoding.encodeInt 1)
                 (Encoding.encodeString x)
                 (go _A)
                 (go b)
 
-        Pi "_" _A _B ->
+        Pi _ "_" _A _B ->
             encodeList3
                 (Encoding.encodeInt 2)
                 (go _A)
                 (go _B)
 
-        Pi x _A _B ->
+        Pi _ x _A _B ->
             encodeList4
                 (Encoding.encodeInt 2)
                 (Encoding.encodeString x)
@@ -780,13 +780,13 @@ encodeExpressionInternal encodeEmbed = go
         ListAppend l r ->
             encodeOperator 7 l r
 
-        Combine _ l r ->
+        Combine _ _ l r ->
             encodeOperator 8 l r
 
-        Prefer _ l r ->
+        Prefer _ _ l r ->
             encodeOperator 9 l r
 
-        CombineTypes l r ->
+        CombineTypes _ l r ->
             encodeOperator 10 l r
 
         ImportAlt l r ->

@@ -239,10 +239,10 @@ dhallToNix e =
     -- If any other number, then rename the variable to include the maximum
     -- depth.
     maximumDepth :: Var -> Expr s Void -> Maybe Int
-    maximumDepth v@(V x n) (Lam FunctionBinding {functionBindingVariable = x', functionBindingAnnotation = a} b)
+    maximumDepth v@(V x n) (Lam _ FunctionBinding {functionBindingVariable = x', functionBindingAnnotation = a} b)
         | x == x' =
             max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
-    maximumDepth v@(V x n) (Pi x' a b)
+    maximumDepth v@(V x n) (Pi _ x' a b)
         | x == x' =
             max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
     maximumDepth (V x n) (Let (Binding { variable = x' }) a)
@@ -274,14 +274,14 @@ dhallToNix e =
                 x' = x <> Data.Text.pack (show n)
 
     renameShadowed :: Expr s Void -> Maybe (Expr s Void)
-    renameShadowed (Lam FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a} b) = do
+    renameShadowed (Lam cs FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a} b) = do
         (x', b') <- rename (x, b)
 
-        return (Lam (Dhall.Core.makeFunctionBinding x' a) b')
-    renameShadowed (Pi x a b) = do
+        return (Lam cs (Dhall.Core.makeFunctionBinding x' a) b')
+    renameShadowed (Pi cs x a b) = do
         (x', b') <- rename (x, b)
 
-        return (Pi x' a b')
+        return (Pi cs x' a b')
     renameShadowed (Let Binding{ variable = x, .. } a) = do
         (x' , a') <- rename (x, a)
 
@@ -296,10 +296,10 @@ dhallToNix e =
     loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Fix (NSym a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
-    loop (Lam FunctionBinding { functionBindingVariable = a } c) = do
+    loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
         c' <- loop c
         return (Fix (NAbs (Param a) c'))
-    loop (Pi _ _ _) = return untranslatable
+    loop (Pi _ _ _ _) = return untranslatable
     -- None needs a type to convert to an Optional
     loop (App None _) =
       return (Fix (NConstant NNull))
@@ -545,7 +545,7 @@ dhallToNix e =
                 return (NamedVar [StaticKey k] v Nix.nullPos)
         return (Fix (NSet NNonRecursive a''))
     loop (Union _) = return untranslatable
-    loop (Combine _ a b) = do
+    loop (Combine _ _ a b) = do
         a' <- loop a
         b' <- loop b
         let e0 = Fix (NBinary NApp (Fix (NBinary NApp "map" "toKeyVals")) "ks")
@@ -586,7 +586,7 @@ dhallToNix e =
 
         let e11 = Fix (NBinary NApp (Fix (NBinary NApp "combine" a')) b')
         return (Fix (NLet [NamedVar ["combine"] combine Nix.nullPos] e11))
-    loop (CombineTypes _ _) = return untranslatable
+    loop (CombineTypes _ _ _) = return untranslatable
     loop (Merge a b _) = do
         a' <- loop a
         b' <- loop b
@@ -602,12 +602,12 @@ dhallToNix e =
         let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet NNonRecursive setBindings)))))
         let toMap = Fix (NAbs "kvs" (Fix (NBinary NApp map_ ks)))
         return (Fix (NBinary NApp toMap a'))
-    loop (Prefer _ b c) = do
+    loop (Prefer _ _ b c) = do
         b' <- loop b
         c' <- loop c
         return (Fix (NBinary NUpdate b' c'))
     loop (RecordCompletion a b) =
-        loop (Annot (Prefer PreferFromCompletion (Field a def) b) (Field a typ))
+        loop (Annot (Prefer mempty PreferFromCompletion (Field a def) b) (Field a typ))
       where
         def = Dhall.Core.makeFieldSelection "default"
         typ = Dhall.Core.makeFieldSelection "Type"

@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -10,8 +12,8 @@ module Dhall.Format
     ) where
 
 import Data.Foldable (for_)
-import Dhall.Pretty  (CharacterSet (..), annToAnsiStyle)
-
+import Data.Maybe    (fromMaybe)
+import Dhall.Pretty  (CharacterSet, annToAnsiStyle, detectCharacterSet)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -36,10 +38,10 @@ import qualified System.IO
 
 -- | Arguments to the `format` subcommand
 data Format = Format
-    { characterSet :: CharacterSet
-    , censor       :: Censor
-    , input        :: PossiblyTransitiveInput
-    , outputMode   :: OutputMode
+    { chosenCharacterSet :: Maybe CharacterSet
+    , censor             :: Censor
+    , input              :: PossiblyTransitiveInput
+    , outputMode         :: OutputMode
     }
 
 -- | Implementation of the @dhall format@ subcommand
@@ -56,6 +58,8 @@ format (Format { input = input0, ..}) = go input0
         let status = Dhall.Import.emptyStatus directory
 
         let layoutHeaderAndExpr (Header header, expr) =
+                let characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
+                in
                 Dhall.Pretty.layout
                     (   Pretty.pretty header
                     <>  Dhall.Pretty.prettyCharacterSet characterSet expr

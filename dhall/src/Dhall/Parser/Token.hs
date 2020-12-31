@@ -139,8 +139,8 @@ import Numeric.Natural (Natural)
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
 validCodepoint c =
-    not (category == Char.Surrogate 
-      || c .&. 0xFFFE == 0xFFFE 
+    not (category == Char.Surrogate
+      || c .&. 0xFFFE == 0xFFFE
       || c .&. 0xFFFF == 0xFFFF)
   where
     category = Char.generalCategory (Char.chr c)
@@ -266,7 +266,7 @@ integerLiteral = (do
     a    <- naturalLiteral
     return (sign (fromIntegral a)) ) <?> "literal"
 
-{-| Parse a `Dhall.Syntax.Natural` literal 
+{-| Parse a `Dhall.Syntax.Natural` literal
 
     This corresponds to the @natural-literal@ rule from the official grammar
 -}
@@ -1221,32 +1221,40 @@ _importAlt :: Parser ()
 _importAlt = operatorChar '?'
 
 -- | Parse the record combine operator (@/\\@ or @∧@)
-_combine :: Parser ()
-_combine = (void (char '∧' <?> "\"∧\"") <|> void (text "/\\")) <?> "operator"
+_combine :: Parser CharacterSet
+_combine =
+        (Unicode <$ char '∧' <?> "\"∧\"")
+    <|> (ASCII <$ text "/\\" <?> "/\\")
 
 -- | Parse the record type combine operator (@//\\\\@ or @⩓@)
-_combineTypes :: Parser ()
-_combineTypes = (void (char '⩓' <?> "\"⩓\"") <|> void (text "//\\\\")) <?> "operator"
+_combineTypes :: Parser CharacterSet
+_combineTypes =
+        (Unicode <$ char '⩓' <?> "\"⩓\"")
+    <|> (ASCII <$ text "//\\\\" <?> "//\\\\")
 
 -- | Parse the record \"prefer\" operator (@//@ or @⫽@)
-_prefer :: Parser ()
-_prefer = (void (char '⫽' <?> "\"⫽\"") <|> void (text "//")) <?> "operator"
+_prefer :: Parser CharacterSet
+_prefer =
+        (Unicode <$ char '⫽' <?> "\"⫽\"")
+    <|> (ASCII <$ text "//" <?> "//")
 
 -- | Parse a lambda (@\\@ or @λ@)
-_lambda :: Parser ()
-_lambda = void (Text.Parser.Char.satisfy predicate) <?> "\\"
-  where
-    predicate 'λ'  = True
-    predicate '\\' = True
-    predicate _    = False
+_lambda :: Parser CharacterSet
+_lambda =
+        (Unicode <$ char 'λ' <?> "\"λ\"")
+    <|> (ASCII <$ char '\\' <?> "\\")
 
 -- | Parse a forall (@forall@ or @∀@)
-_forall :: Parser ()
-_forall = (void (char '∀' <?> "\"∀\"") <|> void (text "forall")) <?> "forall"
+_forall :: Parser CharacterSet
+_forall =
+        (Unicode <$ char '∀' <?> "\"∀\"")
+    <|> (ASCII <$ text "forall" <?> "forall")
 
 -- | Parse a right arrow (@->@ or @→@)
-_arrow :: Parser ()
-_arrow = (void (char '→' <?> "\"→\"") <|> void (text "->")) <?> "->"
+_arrow :: Parser CharacterSet
+_arrow =
+        (Unicode <$ char '→' <?> "\"→\"")
+    <|> (ASCII <$ text "->" <?> "->")
 
 -- | Parse a double colon (@::@)
 _doubleColon :: Parser ()

@@ -13,11 +13,12 @@ import Data.Aeson
     , (.:)
     , (.:?)
     )
-import Data.Default                     (Default (def))
+import Data.Default                     (Default(def))
 import Data.Dynamic                     (Dynamic)
 import Data.Map.Strict                  (Map, empty)
 import Data.Text                        (Text)
 import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
+import Dhall.Pretty                     (CharacterSet)
 import Lens.Family                      (LensLike')
 
 import qualified Language.Haskell.LSP.Core     as LSP
@@ -40,13 +41,11 @@ data Severity = Error
               -- ^ Log message, not displayed by default.
 
 data ServerConfig = ServerConfig
-  { asciiOnly :: Bool
-  -- ^ Use ASCII symbols rather than fancy unicode when formatting and linting
-  -- code.
+  { chosenCharacterSet :: Maybe CharacterSet
   } deriving Show
 
 instance Default ServerConfig where
-  def = ServerConfig { asciiOnly = False }
+  def = ServerConfig { chosenCharacterSet = Nothing }
 
 -- We need to derive the FromJSON instance manually in order to provide defaults
 -- for absent fields.
@@ -54,7 +53,7 @@ instance FromJSON ServerConfig where
   parseJSON = withObject "settings" $ \v -> do
     s <- v .: "vscode-dhall-lsp-server"
     flip (withObject "vscode-dhall-lsp-server") s $ \o -> ServerConfig
-      <$> o .:? "asciiOnly" .!= asciiOnly def
+      <$> o .:? "character-set" .!= Nothing
 
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache

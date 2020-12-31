@@ -1074,7 +1074,7 @@ functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
         Success o  -> o
         Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
 
-    expectedOut = Pi "_" declared <$> expectedIn
+    expectedOut = Pi mempty "_" declared <$> expectedIn
 
 {-| Decode a `Data.Set.Set` from a `List`
 
@@ -1532,11 +1532,11 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
           where
             die = typeError expected expr0
 
-            extract0 (Lam (FunctionBinding { functionBindingVariable = x }) expr) =
+            extract0 (Lam _ (FunctionBinding { functionBindingVariable = x }) expr) =
                 extract1 (rename x "result" expr)
             extract0  _             = die
 
-            extract1 (Lam (FunctionBinding { functionBindingVariable = y }) expr) =
+            extract1 (Lam _ (FunctionBinding { functionBindingVariable = y }) expr) =
                 extract2 (rename y "Make" expr)
             extract1  _             = die
 
@@ -1546,7 +1546,7 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
                 | a /= b    = Core.subst (V a 0) (Var (V b 0)) (Core.shift 1 (V b 0) expr)
                 | otherwise = expr
 
-        expected = (\x -> Pi "result" (Const Core.Type) (Pi "Make" (Pi "_" x "result") "result"))
+        expected = (\x -> Pi mempty "result" (Const Core.Type) (Pi mempty "Make" (Pi mempty "_" x "result") "result"))
             <$> Dhall.expected (autoWith inputNormalizer :: Decoder (f (Result f)))
 
 {-| `genericAuto` is the default implementation for `auto` if you derive

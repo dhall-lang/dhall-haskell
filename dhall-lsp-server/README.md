@@ -64,6 +64,11 @@ As you type you will be offered completions for:
 - **Formatting and Linting&nbsp;**
 Right click and select "Format Document" to run the file through the Dhall formatter. The command "Lint and Format" can be selected via the *Command Palette* (Ctrl+Shift+P); this will run the linter over the file, removing unused let bindings and formatting the result.
 
+The default formatting behavior is to infer the character set used in the file (Unicode/ASCII operators).
+This can be overriden by using the Dhall LSP settings. For example in VS Code's `settings.json`:
+  - `"vscode-dhall-lsp-server.character-set": "ascii"` to always format using the ASCII character set
+  - `"vscode-dhall-lsp-server.character-set": "unicode"` to always format using the Unicode character set
+
 - **Annotate lets&nbsp;**
 Right-click the bound identifier in a `let` binding and select "Annotate Let binding with its type" to do exactly that.
 

@@ -17,11 +17,12 @@ module Dhall.Schemas
 
 import Control.Applicative (empty)
 import Control.Exception   (Exception)
+import Data.Maybe          (fromMaybe)
 import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Crypto        (SHA256Digest)
 import Dhall.Map           (Map)
-import Dhall.Pretty        (CharacterSet (..))
+import Dhall.Pretty        (CharacterSet (..), detectCharacterSet)
 import Dhall.Src           (Src)
 import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
@@ -57,11 +58,11 @@ import qualified System.IO                                 as IO
 
 -- | Arguments to the @rewrite-with-schemas@ subcommand
 data Schemas = Schemas
-    { characterSet :: CharacterSet
-    , censor       :: Censor
-    , input        :: Input
-    , outputMode   :: OutputMode
-    , schemas      :: Text
+    { chosenCharacterSet :: Maybe CharacterSet
+    , censor             :: Censor
+    , input              :: Input
+    , outputMode         :: OutputMode
+    , schemas            :: Text
     }
 
 -- | Implementation of the @dhall rewrite-with-schemas@ subcommand
@@ -72,6 +73,8 @@ schemasCommand Schemas{..} = do
         StandardInput  -> Text.IO.getContents
 
     (Header header, expression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+
+    let characterSet = fromMaybe (detectCharacterSet expression) chosenCharacterSet
 
     schemasRecord <- Core.throws (Parser.exprFromText "(schemas)" schemas)
 
