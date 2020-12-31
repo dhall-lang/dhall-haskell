@@ -119,14 +119,6 @@ toTypes prefixMap definitions = memo
     intOrString = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
       [ ("Int", Dhall.Natural), ("String", Dhall.Text) ]
 
-    shouldBeRequired :: Maybe ModelName -> FieldName -> Bool
-    shouldBeRequired maybeParent field = Set.member field requiredNames
-      where
-        requiredNames = requiredFields maybeParent $ do
-          name <- maybeParent
-          Definition{..} <- Data.Map.lookup name definitions
-          required
-
     -- | Convert a single Definition to a Dhall Type
     --   Note: we have the ModelName only if this is a top-level import
     convertToType :: Maybe ModelName -> Definition -> Expr
@@ -135,8 +127,13 @@ toTypes prefixMap definitions = memo
       (Just r, _, _) -> Dhall.Embed $ mkImport prefixMap [] (pathFromRef r <> ".dhall")
       -- Otherwise - if we have 'properties' - it's an object
       (_, _, Just props) ->
-        let (required', optional')
-              = Data.Map.partitionWithKey
+        let
+            shouldBeRequired :: Maybe ModelName -> FieldName -> Bool
+            shouldBeRequired maybeParent field = Set.member field requiredNames
+              where
+                requiredNames = requiredFields maybeParent required
+
+            (required', optional') = Data.Map.partitionWithKey
                 (\k _ -> shouldBeRequired maybeModelName (FieldName (unModelName k)))
               -- TODO: labelize
               $ Data.Map.map (convertToType Nothing) props
