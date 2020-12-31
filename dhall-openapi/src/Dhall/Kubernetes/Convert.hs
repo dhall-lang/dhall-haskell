@@ -116,17 +116,17 @@ toTypes prefixMap definitions = memo
 
     kvList = Dhall.App Dhall.List $ Dhall.Record $ Dhall.Map.fromList
       [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField Dhall.Text) ]
-    intOrString = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
+    intOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
       [ ("Int", Dhall.Natural), ("String", Dhall.Text) ]
 
     -- | Convert a single Definition to a Dhall Type
     --   Note: we have the ModelName only if this is a top-level import
     convertToType :: Maybe ModelName -> Definition -> Expr
-    convertToType maybeModelName Definition{..} = case (ref, typ, properties) of
+    convertToType maybeModelName Definition{..} = case (ref, typ, properties, intOrString) of
       -- If we point to a ref we just reference it via Import
-      (Just r, _, _) -> Dhall.Embed $ mkImport prefixMap [] (pathFromRef r <> ".dhall")
+      (Just r, _, _, _) -> Dhall.Embed $ mkImport prefixMap [] (pathFromRef r <> ".dhall")
       -- Otherwise - if we have 'properties' - it's an object
-      (_, _, Just props) ->
+      (_, _, Just props, _) ->
         let
             shouldBeRequired :: Maybe ModelName -> FieldName -> Bool
             shouldBeRequired maybeParent field = Set.member field requiredNames
@@ -145,11 +145,12 @@ toTypes prefixMap definitions = memo
             adaptRecordList = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
 
         in Dhall.Record $ adaptRecordList $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields
+      (_, _, _, Just _) -> intOrStringType
       -- Otherwise - if we have a 'type' - it's a basic type
-      (_, Just basic, _) -> case basic of
+      (_, Just basic, _, _) -> case basic of
         "object"  -> kvList
         "array"   | Just item <- items -> Dhall.App Dhall.List (convertToType Nothing item)
-        "string"  | format == Just "int-or-string" -> intOrString
+        "string"  | format == Just "int-or-string" -> intOrStringType
         "string"  -> Dhall.Text
         "boolean" -> Dhall.Bool
         "integer" -> Dhall.Natural
@@ -297,9 +298,14 @@ stripPrefix n = genericParseJSON options
   where
     options = defaultOptions { fieldLabelModifier }
 
-    fieldLabelModifier string = case drop n string of
-        s : tring -> Char.toLower s : tring
-        []        -> []
+    removePrefix string = case drop n string of
+                                  s : tring -> Char.toLower s : tring
+                                  []        -> []
+    extensionRename string = case string of
+      "IntOrString" -> "x-kubernetes-int-or-string"
+      a -> a
+
+    fieldLabelModifier = removePrefix . extensionRename
 
 data V1CustomResourceDefinition =
     V1CustomResourceDefinition
@@ -355,6 +361,7 @@ data V1JSONSchemaProps =
         , v1JSONSchemaPropsProperties :: Maybe (Data.Map.Map String V1JSONSchemaProps)
         , v1JSONSchemaPropsRequired :: Maybe [Text]
         , v1JSONSchemaPropsType :: Maybe Text
+        , v1JSONSchemaPropsIntOrString :: Maybe Bool
         } deriving (Generic)
 
 instance FromJSON V1JSONSchemaProps where
@@ -370,6 +377,7 @@ mkV1JSONSchemaProps =
         , v1JSONSchemaPropsProperties = Nothing
         , v1JSONSchemaPropsRequired = Nothing
         , v1JSONSchemaPropsType = Nothing
+        , v1JSONSchemaPropsIntOrString = Nothing
         }
 
 orDie :: Maybe a -> e -> Either e a
@@ -438,6 +446,7 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
         , properties  = fmap toProperties v1JSONSchemaPropsProperties
         , required    = fmap (Set.fromList . fmap FieldName) v1JSONSchemaPropsRequired
         , baseData    = basedata
+        , intOrString = v1JSONSchemaPropsIntOrString
         }
 
     toProperties :: Data.Map.Map String V1JSONSchemaProps -> Data.Map.Map ModelName Definition

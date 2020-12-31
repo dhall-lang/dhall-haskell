@@ -44,6 +44,7 @@ data Definition = Definition
   , properties  :: Maybe (Map ModelName Definition)
   , required    :: Maybe (Set FieldName)
   , baseData    :: Maybe BaseData
+  , intOrString :: Maybe Bool
   } deriving (Generic, Show)
 
 instance FromJSON Definition where
@@ -56,6 +57,7 @@ instance FromJSON Definition where
     items       <- o .:? "items"
     description <- o .:? "description"
     baseData    <- fmap join $ optional (o .:? "x-kubernetes-group-version-kind")
+    intOrString <- o .:? "x-kubernetes-int-or-string"
     pure Definition{..}
 
 
