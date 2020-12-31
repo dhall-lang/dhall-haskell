@@ -1,8 +1,8 @@
 # Dhall language support in VSCode/ium
 
 The Dhall language integration consists of the following parts:
-- The VSCode/ium plugin "Dhall Language Support" *([vscode-language-dhall](https://github.com/PanAeon/vscode-language-dhall))* adds syntax highlighting for Dhall files.
-- The VSCode/ium plugin "Dhall LSP Server" *([vscode-dhall-lsp-server](https://github.com/PanAeon/vscode-dhall-lsp-server))* implements the LSP client &ndash; yes, there is a naming issue here &ndash; that communicates with the backend via the [LSP protocol](https://microsoft.github.io/language-server-protocol/specification) to provide advanced language features like error diagnostics or type information, etc.
+- The VSCode/ium plugin "Dhall Language Support" *([vscode-language-dhall](https://github.com/dhall-lang/vscode-language-dhall))* adds syntax highlighting for Dhall files.
+- The VSCode/ium plugin "Dhall LSP Server" *([vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server))* implements the LSP client &ndash; yes, there is a naming issue here &ndash; that communicates with the backend via the [LSP protocol](https://microsoft.github.io/language-server-protocol/specification) to provide advanced language features like error diagnostics or type information, etc.
 - [*dhall-lsp-server*](https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server), which is part of the [*dhall-haskell*](https://github.com/dhall-lang/dhall-haskell) project, implements the actual LSP server (i.e. the backend) that implements those language features in an editor agnostic way, though at the moment only a VSCode/ium frontend exists.
 
 # Installation
@@ -23,7 +23,7 @@ The "official" releases can be installed as follows:
 2. Install the *typescript* compiler with `npm install -g typescript`. I recommend running `npm config set prefix '~/.local'` first to have npm install the executable in `~/.local/bin`; this avoids having to use *sudo* and polluting the rest of the system.
 2. Check out a copy of the vscode-dhall-lsp-server repository into the VSCode/ium extensions folder
    ```
-   git clone git@github.com:PanAeon/vscode-dhall-lsp-server.git ~/.vscode-oss/extensions/vscode-dhall-lsp-server
+   git clone git@github.com:dhall-lang/vscode-dhall-lsp-server.git ~/.vscode-oss/extensions/vscode-dhall-lsp-server
    ```
    (replace `~/.vscode-oss/` with `~/.vscode/` if you use VSCode instead of VSCodium).
 3. Run the remaining commands in the checked-out directory
