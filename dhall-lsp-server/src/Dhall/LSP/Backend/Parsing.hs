@@ -12,6 +12,7 @@ module Dhall.LSP.Backend.Parsing
 where
 
 import Control.Applicative     (optional, (<|>))
+import Data.Functor            (void)
 import Data.Text               (Text)
 import Dhall.Core
     ( Binding (..)
@@ -112,7 +113,7 @@ getLamIdentifier (Src left _ text) =
   Megaparsec.parseMaybe (unParser parseLetIdentifier) text
   where parseLetIdentifier = do
           setSourcePos left
-          _lambda
+          _ <- _lambda
           whitespace
           _openParens
           whitespace
@@ -128,7 +129,7 @@ getForallIdentifier (Src left _ text) =
   Megaparsec.parseMaybe (unParser parseLetIdentifier) text
   where parseLetIdentifier = do
           setSourcePos left
-          _forall
+          _ <- _forall
           whitespace
           _openParens
           whitespace
@@ -191,7 +192,7 @@ binderExprFromText txt =
     Just s -> s
   where
     -- marks the beginning of the next binder
-    boundary = _let <|> _forall <|> _lambda
+    boundary = _let <|> void _forall <|> void _lambda
 
     -- A binder that is out of scope at the end of the input. Discarded in the
     -- resulting 'binder expression'.
@@ -218,7 +219,7 @@ binderExprFromText txt =
         <|> closedLet
 
     closedLambda = do
-      _lambda
+      _ <- _lambda
       whitespace
       _openParens
       whitespace
@@ -230,13 +231,13 @@ binderExprFromText txt =
       whitespace
       _closeParens
       whitespace
-      _arrow
+      _ <- _arrow
       whitespace
       _ <- expr
       return ()
 
     closedPi = do
-      _forall
+      _ <- _forall
       whitespace
       _openParens
       whitespace
@@ -248,7 +249,7 @@ binderExprFromText txt =
       whitespace
       _closeParens
       whitespace
-      _arrow
+      _ <- _arrow
       whitespace
       _ <- expr
       return ()
@@ -284,7 +285,7 @@ binderExprFromText txt =
       return (Let (Binding Nothing name Nothing mType Nothing value) inner)
 
     forallBinder = do
-      _forall
+      cs <- _forall
       whitespace
       _openParens
       whitespace
@@ -293,14 +294,15 @@ binderExprFromText txt =
       _colon
       nonemptyWhitespace
       -- if the bound type does not parse, skip and replace with 'hole'
-      typ <- try (do e <- expr; whitespace; _closeParens; whitespace; _arrow; return e)
-          <|> (do skipManyTill anySingle _arrow; return holeExpr)
+      (cs', typ) <-
+          try (do e <- expr; whitespace; _closeParens; whitespace; cs' <- _arrow; return (cs', e))
+          <|> (do cs' <- skipManyTill anySingle _arrow; return (cs', holeExpr))
       whitespace
       inner <- parseBinderExpr
-      return (Pi name typ inner)
+      return (Pi (Just (cs <> cs')) name typ inner)
 
     lambdaBinder = do
-      _lambda
+      cs <- _lambda
       whitespace
       _openParens
       whitespace
@@ -309,8 +311,9 @@ binderExprFromText txt =
       _colon
       nonemptyWhitespace
       -- if the bound type does not parse, skip and replace with 'hole'
-      typ <- try (do e <- expr; whitespace; _closeParens; whitespace; _arrow; return e)
-          <|> (do skipManyTill anySingle _arrow; return holeExpr)
+      (cs', typ) <-
+          try (do e <- expr; whitespace; _closeParens; whitespace; cs' <- _arrow; return (cs', e))
+          <|> (do cs' <- skipManyTill anySingle _arrow; return (cs', holeExpr))
       whitespace
       inner <- parseBinderExpr
-      return (Lam (makeFunctionBinding name typ) inner)
+      return (Lam (Just (cs <> cs')) (makeFunctionBinding name typ) inner)

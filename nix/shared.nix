@@ -406,13 +406,16 @@ let
     else
       pkgs.haskell.lib.justStaticExecutables (pkgs.haskell.packages."${compiler}"."${name}");
 
-  makeTarball = name:
+  makeTarball = name: manDir:
     pkgsStaticLinux.releaseTools.binaryTarball rec {
       src = pkgsStaticLinux.pkgsMusl.haskell.packages."${compiler}"."${name}-static";
 
       installPhase = ''
         releaseName=${name}
         ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/bin" -D $src/bin/*
+        ${pkgs.lib.optionalString (manDir != null) ''
+          ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/share/man" -D ${manDir}/*
+        ''}
       '';
     };
 
@@ -450,15 +453,15 @@ in
   rec {
     inherit trivial pkgs possibly-static;
 
-    tarball-dhall            = makeTarball "dhall"           ;
-    tarball-dhall-bash       = makeTarball "dhall-bash"      ;
-    tarball-dhall-docs       = makeTarball "dhall-docs"      ;
-    tarball-dhall-json       = makeTarball "dhall-json"      ;
-    tarball-dhall-lsp-server = makeTarball "dhall-lsp-server";
-    tarball-dhall-nix        = makeTarball "dhall-nix"       ;
-    tarball-dhall-nixpkgs    = makeTarball "dhall-nixpkgs"   ;
-    tarball-dhall-openapi    = makeTarball "dhall-openapi"   ;
-    tarball-dhall-yaml       = makeTarball "dhall-yaml"      ;
+    tarball-dhall            = makeTarball "dhall"            ../dhall/man;
+    tarball-dhall-bash       = makeTarball "dhall-bash"       null;
+    tarball-dhall-docs       = makeTarball "dhall-docs"       ../dhall-docs/src/Dhall/data/man;
+    tarball-dhall-json       = makeTarball "dhall-json"       null;
+    tarball-dhall-lsp-server = makeTarball "dhall-lsp-server" null;
+    tarball-dhall-nix        = makeTarball "dhall-nix"        null;
+    tarball-dhall-nixpkgs    = makeTarball "dhall-nixpkgs"    null;
+    tarball-dhall-openapi    = makeTarball "dhall-openapi"    null;
+    tarball-dhall-yaml       = makeTarball "dhall-yaml"       null;
 
     inherit (pkgs) tarball-website website;
 

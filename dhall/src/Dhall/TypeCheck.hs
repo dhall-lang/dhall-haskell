@@ -188,7 +188,7 @@ fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
 {-| `typeWithA` is implemented internally in terms of @infer@ in order to speed
     up equivalence checking.
 
-    Specifically, we extend the `Context` to become a @Ctx@, which can store 
+    Specifically, we extend the `Context` to become a @Ctx@, which can store
     the entire contents of a `let` expression (i.e. the type *and* the value
     of the bound variable).  By storing this extra information in the @Ctx@ we
     no longer need to substitute `let` expressions at all (which is very
@@ -228,7 +228,7 @@ infer typer = loop
 
             go types n0
 
-        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A}) b -> do
+        Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A}) b -> do
             tA' <- loop ctx _A
 
             case tA' of
@@ -251,7 +251,7 @@ infer typer = loop
 
             return (VHPi x _A' (\u -> Eval.eval (Extend values x u) _B''))
 
-        Pi x _A _B -> do
+        Pi _ x _A _B -> do
             tA' <- loop ctx _A
 
             kA <- case tA' of
@@ -767,7 +767,7 @@ infer typer = loop
 
             Max c <- fmap Foldable.fold (Dhall.Map.unorderedTraverseWithKey process xTs)
             return (VConst c)
-        Combine mk l r -> do
+        Combine _ mk l r -> do
             _L' <- loop ctx l
 
             let l'' = quote names (eval values l)
@@ -816,7 +816,7 @@ infer typer = loop
 
             combineTypes [] xLs' xRs'
 
-        CombineTypes l r -> do
+        CombineTypes _ l r -> do
             _L' <- loop ctx l
 
             let l' = eval values l
@@ -863,7 +863,7 @@ infer typer = loop
 
             return (VConst c)
 
-        Prefer a l r -> do
+        Prefer _ a l r -> do
             _L' <- loop ctx l
 
             _R' <- loop ctx r
@@ -898,13 +898,13 @@ infer typer = loop
             _L' <- loop ctx l
 
             case _L' of
-                VRecord xLs' 
+                VRecord xLs'
                   | not (Dhall.Map.member "default" xLs')
                      -> die (InvalidRecordCompletion "default" l)
                   | not (Dhall.Map.member "Type" xLs')
                      -> die (InvalidRecordCompletion "Type" l)
                   | otherwise
-                     -> loop ctx (Annot (Prefer PreferFromCompletion (Field l def) r) (Field l typ))
+                     -> loop ctx (Annot (Prefer mempty PreferFromCompletion (Field l def) r) (Field l typ))
                 _ -> die (CompletionSchemaMustBeARecord l (quote names _L'))
 
               where
@@ -1252,27 +1252,32 @@ infer typer = loop
 
             return (VConst Type)
 
-        With e ks v -> do
-            tE' <- loop ctx e
+        With e₀ ks₀ v₀ -> do
+            tE₀' <- loop ctx e₀
 
-            kTs' <- case tE' of
-                VRecord kTs' -> return kTs'
-                _            -> die (NotWithARecord e (quote names tE'))
+            -- The purpose of this inner loop is to ensure that we only need to
+            -- typecheck the record once
+            let with tE' ks v = do
+                    kTs' <- case tE' of
+                        VRecord kTs' -> return kTs'
+                        _            -> die (NotWithARecord e₀ (quote names tE'))
 
-            case ks of
-                k :| [] -> do
-                    tV' <- loop ctx v
+                    case ks of
+                        k :| [] -> do
+                            tV' <- loop ctx v
 
-                    return (VRecord (Dhall.Map.insert k tV' kTs'))
-                k₀ :| k₁ : ks' -> do
-                    let e₁ =
-                            if Dhall.Map.member k₀ kTs'
-                                then Field e (Syntax.makeFieldSelection k₀)
-                                else RecordLit mempty
+                            return (VRecord (Dhall.Map.insert k tV' kTs'))
+                        k₀ :| k₁ : ks' -> do
+                            let _T =
+                                    case Dhall.Map.lookup k₀ kTs' of
+                                        Just _T' -> _T'
+                                        Nothing  -> VRecord mempty
 
-                    tV' <- loop ctx (With e₁ (k₁ :| ks') v)
+                            tV' <- with _T (k₁ :| ks') v
 
-                    return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+                            return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+
+            with tE₀' ks₀ v₀
 
         Note s e ->
             case loop ctx e of
@@ -2577,11 +2582,11 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = insert expr1
 
-prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {..} 
+prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {..}
  where
-   short = "The completion schema must be a record" 
+   short = "The completion schema must be a record"
 
-   long = 
+   long =
         "Explanation: You can complete records using the ❰::❱ operator:                  \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────────┐ \n\
@@ -2601,11 +2606,11 @@ prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {.
         txt0 = insert expr0
         txt1 = insert expr1
 
-prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..} 
+prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..}
  where
    short = "Completion schema is missing a field: " <> pretty fieldName
 
-   long = 
+   long =
         "Explanation: You can complete records using the ❰::❱ operator like this:\n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────────┐ \n\
@@ -3208,7 +3213,7 @@ prettyTypeMessage (MissingHandler exemplar ks) = ErrorMessages {..}
   where
     short = case Data.Set.toList ks of
          []       -> "Missing handler: " <> Dhall.Pretty.Internal.prettyLabel exemplar
-         xs@(_:_) -> "Missing handlers: " <> (Pretty.hsep . Pretty.punctuate Pretty.comma 
+         xs@(_:_) -> "Missing handlers: " <> (Pretty.hsep . Pretty.punctuate Pretty.comma
                                              . map Dhall.Pretty.Internal.prettyLabel $ exemplar:xs)
 
     long =
@@ -4584,9 +4589,9 @@ messageExpressions f m = case m of
         MustUpdateARecord <$> f a <*> f b <*> f c
     MustCombineARecord a b c ->
         MustCombineARecord <$> pure a <*> f b <*> f c
-    InvalidRecordCompletion a l -> 
+    InvalidRecordCompletion a l ->
         InvalidRecordCompletion a <$> f l
-    CompletionSchemaMustBeARecord l r -> 
+    CompletionSchemaMustBeARecord l r ->
         CompletionSchemaMustBeARecord <$> f l <*> f r
     CombineTypesRequiresRecordType a b ->
         CombineTypesRequiresRecordType <$> f a <*> f b

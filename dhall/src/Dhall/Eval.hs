@@ -424,9 +424,9 @@ eval !env t0 =
             VConst k
         Var v ->
             vVar env v
-        Lam (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a }) t ->
+        Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a }) t ->
             VLam (eval env a) (Closure x env t)
-        Pi x a b ->
+        Pi _ x a b ->
             VPi (eval env a) (Closure x env b)
         App t u ->
             vApp (eval env t) (eval env u)
@@ -733,14 +733,14 @@ eval !env t0 =
             VRecordLit (Map.sort (eval env . recordFieldValue <$> kts))
         Union kts ->
             VUnion (Map.sort (fmap (fmap (eval env)) kts))
-        Combine mk t u ->
+        Combine _ mk t u ->
             vCombine mk (eval env t) (eval env u)
-        CombineTypes t u ->
+        CombineTypes _ t u ->
             vCombineTypes (eval env t) (eval env u)
-        Prefer _ t u ->
+        Prefer _ _ t u ->
             vPrefer env (eval env t) (eval env u)
         RecordCompletion t u ->
-            eval env (Annot (Prefer PreferFromCompletion (Field t def) u) (Field t typ))
+            eval env (Annot (Prefer mempty PreferFromCompletion (Field t def) u) (Field t typ))
           where
             def = Syntax.makeFieldSelection "default"
             typ = Syntax.makeFieldSelection "Type"
@@ -1054,21 +1054,23 @@ quote !env !t0 =
             quote env t `qApp` u
         VLam a (freshClosure -> (x, v, t)) ->
             Lam
+                mempty
                 (Syntax.makeFunctionBinding x (quote env a))
                 (quoteBind x (instantiate t v))
         VHLam i t ->
             case i of
                 Typed (fresh -> (x, v)) a ->
                     Lam
+                        mempty
                         (Syntax.makeFunctionBinding x (quote env a))
                         (quoteBind x (t v))
                 Prim                      -> quote env (t VPrimVar)
                 NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
 
         VPi a (freshClosure -> (x, v, b)) ->
-            Pi x (quote env a) (quoteBind x (instantiate b v))
+            Pi mempty x (quote env a) (quoteBind x (instantiate b v))
         VHPi (fresh -> (x, v)) a b ->
-            Pi x (quote env a) (quoteBind x (b v))
+            Pi mempty x (quote env a) (quoteBind x (b v))
         VBool ->
             Bool
         VBoolLit b ->
@@ -1168,11 +1170,11 @@ quote !env !t0 =
         VUnion m ->
             Union (fmap (fmap (quote env)) m)
         VCombine mk t u ->
-            Combine mk (quote env t) (quote env u)
+            Combine mempty mk (quote env t) (quote env u)
         VCombineTypes t u ->
-            CombineTypes (quote env t) (quote env u)
+            CombineTypes mempty (quote env t) (quote env u)
         VPrefer t u ->
-            Prefer PreferFromSource (quote env t) (quote env u)
+            Prefer mempty PreferFromSource (quote env t) (quote env u)
         VMerge t u ma ->
             Merge (quote env t) (quote env u) (fmap (quote env) ma)
         VToMap t ma ->
@@ -1243,10 +1245,10 @@ alphaNormalize = goEnv EmptyNames
                 Const k
             Var (V x i) ->
                 goVar e0 x i
-            Lam (FunctionBinding src0 x src1 src2 t) u ->
-                Lam (FunctionBinding src0 "_" src1 src2 (go t)) (goBind x u)
-            Pi x a b ->
-                Pi "_" (go a) (goBind x b)
+            Lam cs (FunctionBinding src0 x src1 src2 t) u ->
+                Lam cs (FunctionBinding src0 "_" src1 src2 (go t)) (goBind x u)
+            Pi cs x a b ->
+                Pi cs "_" (go a) (goBind x b)
             App t u ->
                 App (go t) (go u)
             Let (Binding src0 x src1 mA src2 a) b ->
@@ -1351,12 +1353,12 @@ alphaNormalize = goEnv EmptyNames
                 RecordLit (goRecordField <$> kts)
             Union kts ->
                 Union (fmap (fmap go) kts)
-            Combine m t u ->
-                Combine m (go t) (go u)
-            CombineTypes t u ->
-                CombineTypes (go t) (go u)
-            Prefer b t u ->
-                Prefer b (go t) (go u)
+            Combine cs m t u ->
+                Combine cs m (go t) (go u)
+            CombineTypes cs t u ->
+                CombineTypes cs (go t) (go u)
+            Prefer cs b t u ->
+                Prefer cs b (go t) (go u)
             RecordCompletion t u ->
                 RecordCompletion (go t) (go u)
             Merge x y ma ->

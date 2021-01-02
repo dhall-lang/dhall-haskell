@@ -768,20 +768,20 @@ schemaToDhallType (Optional a) = D.App D.Optional (schemaToDhallType a)
 schemaToDhallType (Record r) = recordSchemaToDhallType r
 schemaToDhallType (Union u) = unionSchemaToDhallType u
 schemaToDhallType ArbitraryJSON =
-    D.Pi "_" (D.Const D.Type)
-        (D.Pi "_"
+    D.Pi mempty "_" (D.Const D.Type)
+        (D.Pi mempty "_"
             (D.Record
-                [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List (V 0)) (V 1))
-                , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool (V 1))
-                , ("double", D.makeRecordField $ D.Pi "_" D.Double (V 1))
-                , ("integer", D.makeRecordField $ D.Pi "_" D.Integer (V 1))
+                [ ("array" , D.makeRecordField $ D.Pi mempty "_" (D.App D.List (V 0)) (V 1))
+                , ("bool"  , D.makeRecordField $ D.Pi mempty "_" D.Bool (V 1))
+                , ("double", D.makeRecordField $ D.Pi mempty "_" D.Double (V 1))
+                , ("integer", D.makeRecordField $ D.Pi mempty "_" D.Integer (V 1))
                 , ("null"  , D.makeRecordField $ V 0)
                 , ("object", D.makeRecordField $
-                    D.Pi "_" (D.App D.List (D.Record
+                    D.Pi mempty "_" (D.App D.List (D.Record
                         [ ("mapKey", D.makeRecordField D.Text)
                         , ("mapValue", D.makeRecordField $ V 0)
                         ])) (V 1))
-                , ("string", D.makeRecordField $ D.Pi "_" D.Text (V 1))
+                , ("string", D.makeRecordField $ D.Pi mempty "_" D.Text (V 1))
                 ]
             )
             (V 1)
@@ -942,19 +942,19 @@ dhallFromJSON (Conversion {..}) expressionType =
     -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type (< v13.0.0)
     loop
       _
-      (D.Pi _ (D.Const D.Type)
-          (D.Pi _
+      (D.Pi _ _ (D.Const D.Type)
+          (D.Pi _ _
               (D.Record
-                  [ ("array" , D.recordFieldValue -> D.Pi _ (D.App D.List (V 0)) (V 1))
-                  , ("bool"  , D.recordFieldValue -> D.Pi _ D.Bool (V 1))
+                  [ ("array" , D.recordFieldValue -> D.Pi _ _ (D.App D.List (V 0)) (V 1))
+                  , ("bool"  , D.recordFieldValue -> D.Pi _ _ D.Bool (V 1))
                   , ("null"  , D.recordFieldValue -> V 0)
-                  , ("number", D.recordFieldValue -> D.Pi _ D.Double (V 1))
+                  , ("number", D.recordFieldValue -> D.Pi _ _ D.Double (V 1))
                   , ("object", D.recordFieldValue ->
-                      D.Pi _ (D.App D.List (D.Record
+                      D.Pi _ _ (D.App D.List (D.Record
                       [ ("mapKey", D.recordFieldValue -> D.Text)
                       , ("mapValue", D.recordFieldValue -> V 0)
                       ])) (V 1))
-                  , ("string", D.recordFieldValue -> D.Pi _ D.Text (V 1))
+                  , ("string", D.recordFieldValue -> D.Pi _ _ D.Text (V 1))
                   ]
               )
               (V 1)
@@ -1007,19 +1007,19 @@ dhallFromJSON (Conversion {..}) expressionType =
                   D.Field "json" $ FA "null"
 
           let result =
-                D.Lam (D.makeFunctionBinding "JSON" (D.Const D.Type))
-                    (D.Lam (D.makeFunctionBinding "json"
+                D.Lam mempty (D.makeFunctionBinding "JSON" (D.Const D.Type))
+                    (D.Lam mempty (D.makeFunctionBinding "json"
                         (D.Record
-                            [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List "JSON") "JSON")
-                            , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool "JSON")
+                            [ ("array" , D.makeRecordField $ D.Pi mempty "_" (D.App D.List "JSON") "JSON")
+                            , ("bool"  , D.makeRecordField $ D.Pi mempty "_" D.Bool "JSON")
                             , ("null"  , D.makeRecordField "JSON")
-                            , ("number", D.makeRecordField $ D.Pi "_" D.Double "JSON")
+                            , ("number", D.makeRecordField $ D.Pi mempty "_" D.Double "JSON")
                             , ("object", D.makeRecordField $
-                                D.Pi "_" (D.App D.List (D.Record
+                                D.Pi mempty "_" (D.App D.List (D.Record
                                     [ ("mapKey", D.makeRecordField D.Text)
                                     , ("mapValue", D.makeRecordField "JSON")
                                     ])) "JSON")
-                            , ("string", D.makeRecordField $ D.Pi "_" D.Text "JSON")
+                            , ("string", D.makeRecordField $ D.Pi mempty "_" D.Text "JSON")
                             ]
                         ))
                         (outer value)
@@ -1030,20 +1030,20 @@ dhallFromJSON (Conversion {..}) expressionType =
     -- Arbitrary JSON ~> https://prelude.dhall-lang.org/JSON/Type (v13.0.0 <=)
     loop
       _
-      (D.Pi _ (D.Const D.Type)
-          (D.Pi _
+      (D.Pi _ _ (D.Const D.Type)
+          (D.Pi _ _
               (D.Record
-                  [ ("array" , D.recordFieldValue -> D.Pi _ (D.App D.List (V 0)) (V 1))
-                  , ("bool"  , D.recordFieldValue -> D.Pi _ D.Bool (V 1))
-                  , ("double", D.recordFieldValue -> D.Pi _ D.Double (V 1))
-                  , ("integer", D.recordFieldValue -> D.Pi _ D.Integer (V 1))
+                  [ ("array" , D.recordFieldValue -> D.Pi _ _ (D.App D.List (V 0)) (V 1))
+                  , ("bool"  , D.recordFieldValue -> D.Pi _ _ D.Bool (V 1))
+                  , ("double", D.recordFieldValue -> D.Pi _ _ D.Double (V 1))
+                  , ("integer", D.recordFieldValue -> D.Pi _ _ D.Integer (V 1))
                   , ("null"  , D.recordFieldValue -> V 0)
                   , ("object", D.recordFieldValue ->
-                      D.Pi _ (D.App D.List (D.Record
+                      D.Pi _ _ (D.App D.List (D.Record
                         [ ("mapKey", D.recordFieldValue -> D.Text)
                         , ("mapValue", D.recordFieldValue -> V 0)
                         ])) (V 1))
-                  , ("string", D.recordFieldValue -> D.Pi _ D.Text (V 1))
+                  , ("string", D.recordFieldValue -> D.Pi _ _ D.Text (V 1))
                   ]
               )
               (V 1)
@@ -1097,19 +1097,19 @@ dhallFromJSON (Conversion {..}) expressionType =
                   D.Field "json" (FA "null")
 
           let result =
-                D.Lam (D.makeFunctionBinding "JSON" (D.Const D.Type))
-                    (D.Lam (D.makeFunctionBinding "json"
+                D.Lam mempty (D.makeFunctionBinding "JSON" (D.Const D.Type))
+                    (D.Lam mempty (D.makeFunctionBinding "json"
                         (D.Record
-                            [ ("array" , D.makeRecordField $ D.Pi "_" (D.App D.List "JSON") "JSON")
-                            , ("bool"  , D.makeRecordField $ D.Pi "_" D.Bool "JSON")
-                            , ("double", D.makeRecordField $ D.Pi "_" D.Double "JSON")
-                            , ("integer", D.makeRecordField $ D.Pi "_" D.Integer "JSON")
+                            [ ("array" , D.makeRecordField $ D.Pi mempty "_" (D.App D.List "JSON") "JSON")
+                            , ("bool"  , D.makeRecordField $ D.Pi mempty "_" D.Bool "JSON")
+                            , ("double", D.makeRecordField $ D.Pi mempty "_" D.Double "JSON")
+                            , ("integer", D.makeRecordField $ D.Pi mempty "_" D.Integer "JSON")
                             , ("null"  , D.makeRecordField "JSON")
-                            , ("object", D.makeRecordField $ D.Pi "_"
+                            , ("object", D.makeRecordField $ D.Pi mempty "_"
                                 (D.App D.List (D.Record
                                     [ ("mapKey", D.makeRecordField D.Text)
                                     , ("mapValue", D.makeRecordField "JSON")])) "JSON")
-                            , ("string", D.makeRecordField $ D.Pi "_" D.Text "JSON")
+                            , ("string", D.makeRecordField $ D.Pi mempty "_" D.Text "JSON")
                             ]
                         ))
                         (outer value)

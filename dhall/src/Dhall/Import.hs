@@ -1124,7 +1124,7 @@ loadWith expr₀ = case expr₀ of
   Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
   Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
   RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
-  Lam a b              -> Lam <$> functionBindingExprs loadWith a <*> loadWith b
+  Lam cs a b           -> Lam cs <$> functionBindingExprs loadWith a <*> loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   expression           -> Syntax.unsafeSubExpressions loadWith expression
 

@@ -140,6 +140,7 @@ data GitHub = GitHub
     , directory :: FilePath
     , file :: FilePath
     , source :: Bool
+    , document :: Bool
     }
 
 data Directory = Directory
@@ -147,6 +148,7 @@ data Directory = Directory
     , directory :: FilePath
     , file :: FilePath
     , source :: Bool
+    , document :: Bool
     }
 
 data NixPrefetchGit = NixPrefetchGit
@@ -195,6 +197,13 @@ parseSource =
     Options.switch
         (   Options.long "source"
         <>  Options.help "Configure the Nix package to include source code"
+        )
+
+parseDocument :: Parser Bool
+parseDocument =
+    Options.switch
+        (   Options.long "document"
+        <>  Options.help "Generate documentation for the Nix package"
         )
 
 parseName :: Parser (Maybe Text)
@@ -246,6 +255,8 @@ parseGitHub = do
 
     source <- parseSource
 
+    document <- parseDocument
+
     return GitHub{..}
 
 parseDirectory :: Parser Directory
@@ -257,6 +268,8 @@ parseDirectory = do
     file <- parseFile
 
     source <- parseSource
+
+    document <- parseDocument
 
     return Directory{..}
 
@@ -463,7 +476,7 @@ dependencyToNix url@URL{ authority, path } = do
             die (UnsupportedDomainDependency url authority)
 
 githubToNixpkgs :: GitHub -> IO ()
-githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source } = do
+githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source, document } = do
     URI{ uriScheme, uriAuthority = Just URIAuth{ uriUserInfo, uriRegName, uriPort }, uriPath, uriQuery, uriFragment } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
             Nothing -> die (RepositoryIsNotAValidURI uri)
@@ -612,6 +625,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
                         , ("directory", Nix.mkStr (Turtle.format fp directory))
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
+                        , ("document", Nix.mkBool document)
                         , ("dependencies", Nix.mkList (nub (fmap dependencyExpression nixDependencies)))
                         ]
                 )
@@ -619,7 +633,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
     Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 directoryToNixpkgs :: Directory -> IO ()
-directoryToNixpkgs Directory{ name, directory, file, source } = do
+directoryToNixpkgs Directory{ name, directory, file, source, document } = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
@@ -671,6 +685,7 @@ directoryToNixpkgs Directory{ name, directory, file, source } = do
                         , ("src", Nix.mkPath False src)
                         , ("file", Nix.mkStr (Turtle.format fp file))
                         , ("source", Nix.mkBool source)
+                        , ("document", Nix.mkBool document)
                         , ("dependencies", Nix.mkList (nub (fmap dependencyExpression nixDependencies)))
                         ]
                 )
