@@ -13,21 +13,22 @@
 
 module Dhall.Test.Dhall where
 
-import Control.Exception    (SomeException, try)
-import Data.Fix             (Fix (..))
-import Data.Functor.Classes (Eq1(..), Show1(..))
-import Data.List.NonEmpty   (NonEmpty (..))
-import Data.Maybe           (isJust)
-import Data.Scientific      (Scientific)
-import Data.Sequence        (Seq)
-import Data.Text            (Text)
-import Data.Vector          (Vector)
-import Data.Void            (Void)
-import Dhall                (FromDhall, ToDhall)
-import Dhall.Core           (Expr (..))
-import GHC.Generics         (Generic, Rep)
-import Numeric.Natural      (Natural)
-import System.Timeout       (timeout)
+import Control.Exception      (SomeException, throwIO, try)
+import Data.Either.Validation (validationToEither)
+import Data.Fix               (Fix (..))
+import Data.Functor.Classes   (Eq1(..), Show1(..))
+import Data.List.NonEmpty     (NonEmpty (..))
+import Data.Maybe             (isJust)
+import Data.Scientific        (Scientific)
+import Data.Sequence          (Seq)
+import Data.Text              (Text)
+import Data.Vector            (Vector)
+import Data.Void              (Void)
+import Dhall                  (FromDhall, ToDhall)
+import Dhall.Core             (Expr (..))
+import GHC.Generics           (Generic, Rep)
+import Numeric.Natural        (Natural)
+import System.Timeout         (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -43,7 +44,7 @@ data ExprF expr
    = LitF Natural
    | AddF expr expr
    | MulF expr expr
-   deriving (Eq, Functor, Generic, FromDhall, Show)
+   deriving (Eq, Functor, Generic, FromDhall, ToDhall, Show)
 
 instance Eq1 ExprF where
     liftEq _  (LitF aL) (LitF aR) = aL == aR
@@ -141,6 +142,11 @@ shouldHaveWorkingRecursiveFromDhall :: TestTree
 shouldHaveWorkingRecursiveFromDhall = testGroup "recursive FromDhall instance"
     [ testCase "works for a recursive expression" $ do
         actual <- Dhall.input Dhall.auto "./tests/recursive/expr0.dhall"
+
+        expected @=? actual
+    , testCase "roundtrips (one-way)" $ do
+        let expr = Dhall.embed Dhall.inject expected
+        actual <- either throwIO pure . validationToEither . Dhall.extract Dhall.auto $ expr
 
         expected @=? actual
     , testCase "passes a shadowing sanity check" $ do
