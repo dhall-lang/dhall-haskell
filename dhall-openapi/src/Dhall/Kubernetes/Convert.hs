@@ -153,7 +153,7 @@ toTypes prefixMap definitions = memo
         "string"  | format == Just "int-or-string" -> intOrStringType
         "string"  -> Dhall.Text
         "boolean" -> Dhall.Bool
-        "integer" -> Dhall.Natural
+        "integer" -> Dhall.Integer
         "number"  -> Dhall.Double
         other     -> error $ "Found missing Swagger type: " <> Text.unpack other
       -- There are empty schemas that only have a description, so we return empty record
