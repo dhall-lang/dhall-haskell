@@ -92,14 +92,15 @@ shouldShowDetailedTypeError = testCase "detailed TypeError" $ do
   let expectedMsg =
         "\ESC[1;31mError\ESC[0m: Invalid Dhall.Decoder                                               \n\
         \                                                                                \n\
-        \Every Decoder must provide an extract function that succeeds if an expression   \n\
-        \matches the expected type.  You provided a Decoder that disobeys this contract  \n\
+        \Every Decoder must provide an extract function that does not fail with a type   \n\
+        \error if an expression matches the expected type.  You provided a Decoder that  \n\
+        \disobeys this contract                                                          \n\
         \                                                                                \n\
         \The Decoder provided has the expected dhall type:                               \n\
         \                                                                                \n\
         \↳ { bar : Natural, foo : Text }\n\
         \                                                                                \n\
-        \and it couldn't extract a value from the well-typed expression:                 \n\
+        \and it threw a type error during extraction from the well-typed expression:     \n\
         \                                                                                \n\
         \↳ { bar = 0, foo = \"foo\" }\n\
         \                                                                                \n"
