@@ -14,21 +14,14 @@ import Data.Text.Prettyprint.Doc        (Pretty (..))
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
-    ( Directory (..)
-    , Expr
-    , File (..)
-    , FilePrefix (..)
+    ( Expr
     , Import (..)
-    , ImportHashed (..)
-    , ImportMode (..)
-    , ImportType (..)
     , ReifiedNormalizer (..)
     , URL
     )
 import Dhall.Map                        (Map)
 import Dhall.Parser                     (Src)
 import Lens.Family                      (LensLike')
-import System.FilePath                  (isRelative, splitDirectories)
 
 #ifdef WITH_HTTP
 import qualified Dhall.Import.Manager
@@ -124,10 +117,14 @@ data Status = Status
     --   cache directory
     }
 
--- | Initial `Status`, parameterised over the HTTP 'Manager' and the remote resolver,
---   importing relative to the given directory.
-emptyStatusWith :: IO Manager -> (URL -> StateT Status IO Data.Text.Text) -> FilePath -> Status
-emptyStatusWith _newManager _remote rootDirectory = Status {..}
+-- | Initial `Status`, parameterised over the HTTP 'Manager' and the remote
+--   resolver, importing relative to the given root import.
+emptyStatusWith
+    :: IO Manager
+    -> (URL -> StateT Status IO Data.Text.Text)
+    -> Import
+    -> Status
+emptyStatusWith _newManager _remote rootImport = Status {..}
   where
     _stack = pure (Chained rootImport)
 
@@ -146,23 +143,6 @@ emptyStatusWith _newManager _remote rootDirectory = Status {..}
     _semanticCacheMode = UseSemanticCache
 
     _cacheWarning = CacheNotWarned
-
-    prefix = if isRelative rootDirectory
-      then Here
-      else Absolute
-    pathComponents =
-        fmap Data.Text.pack (reverse (splitDirectories rootDirectory))
-
-    dirAsFile = File (Directory pathComponents) "."
-
-    -- Fake import to set the directory we're relative to.
-    rootImport = Import
-      { importHashed = ImportHashed
-        { hash = Nothing
-        , importType = Local prefix dirAsFile
-        }
-      , importMode = Code
-      }
 
 -- | Lens from a `Status` to its `_stack` field
 stack :: Functor f => LensLike' f Status (NonEmpty Chained)
