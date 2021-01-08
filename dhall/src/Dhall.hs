@@ -353,14 +353,15 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidDecoder s 
     show InvalidDecoder { .. } =
         _ERROR <> ": Invalid Dhall.Decoder                                               \n\
         \                                                                                \n\
-        \Every Decoder must provide an extract function that succeeds if an expression   \n\
-        \matches the expected type.  You provided a Decoder that disobeys this contract  \n\
+        \Every Decoder must provide an extract function that does not fail with a type   \n\
+        \error if an expression matches the expected type.  You provided a Decoder that  \n\
+        \disobeys this contract                                                          \n\
         \                                                                                \n\
         \The Decoder provided has the expected dhall type:                               \n\
         \                                                                                \n\
         \" <> show txt0 <> "\n\
         \                                                                                \n\
-        \and it couldn't extract a value from the well-typed expression:                 \n\
+        \and it threw a type error during extraction from the well-typed expression:     \n\
         \                                                                                \n\
         \" <> show txt1 <> "\n\
         \                                                                                \n"
