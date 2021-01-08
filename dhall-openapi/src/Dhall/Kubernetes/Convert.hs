@@ -65,6 +65,15 @@ requiredFields maybeName required
       , ( ModelName "io.k8s.api.core.v1.PersistentVolumeClaim"
         , Set.fromList [ FieldName "apiVersion", FieldName "kind" ]
         )
+      , ( ModelName "io.k8s.api.batch.v1beta1.JobTemplateSpec"
+        , Set.fromList [ FieldName "metadata" ]
+        )
+      , ( ModelName "io.k8s.api.batch.v2alpha1.JobTemplateSpec"
+        , Set.fromList [ FieldName "metadata" ]
+        )
+      , ( ModelName "io.k8s.api.core.v1.PodTemplateSpec"
+        , Set.fromList [ FieldName "metadata" ]
+        )
       ]
 
 
