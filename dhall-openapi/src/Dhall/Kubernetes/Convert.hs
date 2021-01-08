@@ -261,7 +261,7 @@ getImportsMap prefixMap duplicateNameHandler objectNames folder toInclude
     namespacedToSimple
       = Data.Map.fromList $ mapMaybe selectObject $ Data.Map.toList $ groupByObjectName objectNames
 
-    -- | Given a list of fully namespaced bjects, it will group them by the
+    -- | Given a list of fully namespaced objects, it will group them by the
     --   object name
     groupByObjectName :: [ModelName] -> Data.Map.Map Text [ModelName]
     groupByObjectName modelNames = Data.Map.unionsWith (<>)
