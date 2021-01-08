@@ -353,14 +353,15 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidDecoder s 
     show InvalidDecoder { .. } =
         _ERROR <> ": Invalid Dhall.Decoder                                               \n\
         \                                                                                \n\
-        \Every Decoder must provide an extract function that succeeds if an expression   \n\
-        \matches the expected type.  You provided a Decoder that disobeys this contract  \n\
+        \Every Decoder must provide an extract function that does not fail with a type   \n\
+        \error if an expression matches the expected type.  You provided a Decoder that  \n\
+        \disobeys this contract                                                          \n\
         \                                                                                \n\
         \The Decoder provided has the expected dhall type:                               \n\
         \                                                                                \n\
         \" <> show txt0 <> "\n\
         \                                                                                \n\
-        \and it couldn't extract a value from the well-typed expression:                 \n\
+        \and it threw a type error during extraction from the well-typed expression:     \n\
         \                                                                                \n\
         \" <> show txt1 <> "\n\
         \                                                                                \n"
@@ -1442,6 +1443,9 @@ newtype Result f = Result { _unResult :: f (Result f) }
 resultToFix :: Functor f => Result f -> Fix f
 resultToFix (Result x) = Fix (fmap resultToFix x)
 
+fixToResult :: Functor f => Fix f -> Result f
+fixToResult (Fix x) = Result (fmap fixToResult x)
+
 instance FromDhall (f (Result f)) => FromDhall (Result f) where
     autoWith inputNormalizer = Decoder {..}
       where
@@ -1450,6 +1454,12 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
         extract expr = typeError expected expr
 
         expected = pure "result"
+
+instance ToDhall (f (Result f)) => ToDhall (Result f) where
+    injectWith inputNormalizer = Encoder {..}
+      where
+        embed = App "Make" . Dhall.embed (injectWith inputNormalizer) . _unResult
+        declared = "result"
 
 -- | You can use this instance to marshal recursive types from Dhall to Haskell.
 --
@@ -1548,6 +1558,20 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
 
         expected = (\x -> Pi mempty "result" (Const Core.Type) (Pi mempty "Make" (Pi mempty "_" x "result") "result"))
             <$> Dhall.expected (autoWith inputNormalizer :: Decoder (f (Result f)))
+
+instance forall f. (Functor f, ToDhall (f (Result f))) => ToDhall (Fix f) where
+    injectWith inputNormalizer = Encoder {..}
+      where
+        embed fixf =
+          Lam Nothing (Core.makeFunctionBinding "result" (Const Core.Type)) $
+            Lam Nothing (Core.makeFunctionBinding "Make" makeType) $
+              embed' . fixToResult $ fixf
+
+        declared = Pi Nothing "result" (Const Core.Type) $ Pi Nothing "_" makeType "result"
+
+        makeType = Pi Nothing "_" declared' "result"
+        Encoder embed' _ = injectWith @(Dhall.Result f) inputNormalizer
+        Encoder _ declared' = injectWith @(f (Dhall.Result f)) inputNormalizer
 
 {-| `genericAuto` is the default implementation for `auto` if you derive
     `FromDhall`.  The difference is that you can use `genericAuto` without
