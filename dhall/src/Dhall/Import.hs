@@ -124,6 +124,8 @@ module Dhall.Import (
     , chainedChangeMode
     , emptyStatus
     , emptyStatusWithManager
+    , remoteStatus
+    , remoteStatusWithManager
     , stack
     , cache
     , Depends(..)
@@ -1062,7 +1064,49 @@ emptyStatus = emptyStatusWithManager defaultNewManager
 
 -- | See 'emptyStatus'.
 emptyStatusWithManager :: IO Manager -> FilePath -> Status
-emptyStatusWithManager newManager = emptyStatusWith newManager fetchRemote
+emptyStatusWithManager newManager rootDirectory =
+    emptyStatusWith newManager fetchRemote rootImport
+  where
+    prefix = if FilePath.isRelative rootDirectory
+      then Here
+      else Absolute
+
+    pathComponents =
+        fmap Text.pack (reverse (FilePath.splitDirectories rootDirectory))
+
+    directoryAsFile = File (Directory pathComponents) "."
+
+    rootImport = Import
+      { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local prefix directoryAsFile
+        }
+      , importMode = Code
+      }
+
+{-| Default `Status` appropriate for a server interpreting Dhall code
+
+    Using this `Status` ensures that interpreted Dhall code cannot access
+    server-local resources (like files or environment variables)
+-}
+remoteStatus
+    :: URL
+    -- ^ Public address of the server
+    -> Status
+remoteStatus = remoteStatusWithManager defaultNewManager
+
+-- | See `remoteStatus`
+remoteStatusWithManager :: IO Manager -> URL -> Status
+remoteStatusWithManager newManager url =
+    emptyStatusWith newManager fetchRemote rootImport
+  where
+    rootImport = Import
+      { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Remote url
+        }
+      , importMode = Code
+      }
 
 {-| Generalized version of `load`
 
