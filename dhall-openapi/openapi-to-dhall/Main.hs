@@ -44,7 +44,6 @@ import qualified Dhall.Core                            as Dhall
 import qualified Dhall.Format
 import qualified Dhall.Kubernetes.Convert              as Convert
 import qualified Dhall.Kubernetes.Types                as Types
-import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
@@ -331,7 +330,7 @@ main = do
 
   -- Output the types record, the defaults record, and the giant union type
   let getImportsMap = Convert.getImportsMap prefixMap duplicateHandler objectNames
-      makeRecordMap = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
+      makeRecord = Dhall.RecordLit . fmap Dhall.makeRecordField
       objectNames = Data.Map.keys types
       typesMap = getImportsMap "types" $ Data.Map.keys types
       defaultsMap = getImportsMap "defaults" $ Data.Map.keys defaults
@@ -344,7 +343,7 @@ main = do
       packageRecordPath = "./package.dhall"
 
   writeDhall typesUnionPath (Dhall.Union $ fmap Just typesMap)
-  writeDhall typesRecordPath (Dhall.RecordLit $ makeRecordMap typesMap)
-  writeDhall defaultsRecordPath (Dhall.RecordLit $ makeRecordMap defaultsMap)
-  writeDhall schemasRecordPath (Dhall.RecordLit $ makeRecordMap schemasMap)
+  writeDhall typesRecordPath $ makeRecord typesMap
+  writeDhall defaultsRecordPath $ makeRecord defaultsMap
+  writeDhall schemasRecordPath $ makeRecord schemasMap
   writeDhall packageRecordPath package
