@@ -323,25 +323,25 @@ getImportsMap
   -> [ModelName]                      -- ^ A list of all the object names
   -> Text                             -- ^ The folder we should get imports from
   -> [ModelName]                      -- ^ List of the object names we want to include in the Map
-  -> Dhall.Map.Map Text Expr
+  -> Dhall.Map.Map SimpleModelName Expr
 getImportsMap prefixMap duplicateNameHandler objectNames folder toInclude
   = Dhall.Map.fromList
   $ Data.Map.elems
   -- This intersection is here to "pick" common elements between "all the objects"
   -- and "objects we want to include", already associating keys to their import
   $ Data.Map.intersectionWithKey
-      (\(ModelName name) key _ -> (key, Dhall.Embed $ mkImport prefixMap [folder] (name <> ".dhall")))
+      (\(ModelName name) simple _ -> (simple, Dhall.Embed $ mkImport prefixMap [folder] (name <> ".dhall")))
       namespacedToSimple
       (Data.Map.fromList $ fmap (,()) toInclude)
   where
     -- | A map from namespaced names to simple ones (i.e. without the namespace)
     namespacedToSimple
-      = Data.Map.fromList $ mapMaybe selectObject $ Data.Map.toList $ groupByObjectName objectNames
+      = Data.Map.fromList $ mapMaybe selectObject $ Data.Map.toList $ groupBySimpleName objectNames
 
     -- | Given a list of fully namespaced objects, it will group them by the
     --   object name
-    groupByObjectName :: [ModelName] -> Data.Map.Map Text [ModelName]
-    groupByObjectName modelNames = Data.Map.unionsWith (<>)
+    groupBySimpleName :: [ModelName] -> Data.Map.Map SimpleModelName [ModelName]
+    groupBySimpleName modelNames = Data.Map.unionsWith (<>)
       $ (\name -> Data.Map.singleton (getKind name) [name])
       <$> modelNames
       where
@@ -349,11 +349,11 @@ getImportsMap prefixMap duplicateNameHandler objectNames folder toInclude
           let elems = Text.split (== '.') name
           in elems List.!! (length elems - 1)
 
-    -- | There will be more than one namespaced object for a single object name
+    -- | There will be more than one namespaced object for a simple model name
     --   (because different API versions, and objects move around packages but k8s
     --   cannot break compatibility so we have all of them), so we have to select one
     --   (and we error out if it's not so after the filtering)
-    selectObject :: (Text, [ModelName]) -> Maybe (ModelName, Text)
+    selectObject :: (SimpleModelName, [ModelName]) -> Maybe (ModelName, SimpleModelName)
     selectObject (kind, namespacedNames) = fmap (,kind) namespaced
       where
         filterFn (ModelName name) = not $ or
