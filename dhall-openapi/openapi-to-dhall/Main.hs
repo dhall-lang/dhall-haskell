@@ -7,6 +7,7 @@ import Control.Applicative.Combinators (option, sepBy1)
 import Data.Aeson                      (decodeFileStrict, eitherDecodeFileStrict)
 import Data.Bifunctor                  (bimap)
 import Data.Foldable                   (for_)
+import Data.Maybe                      (isJust)
 import Data.Text                       (Text, pack, unpack)
 import Data.Void                       (Void)
 import Dhall.Core                      (Expr (..))
@@ -330,12 +331,14 @@ main = do
     let path = "./schemas" </> unpack name <> ".dhall"
     writeDhall path expr
 
+  let isStandalone model = and $ (\ def -> isJust $ Types.baseData def) <$> Data.Map.lookup model defs
+
   let makeRecord = Dhall.RecordLit . fmap Dhall.makeRecordField
       typesMap = Dhall.Map.fromList $ List.sortOn snd $ Data.Map.toList $ Convert.groupBySimpleModelName duplicateHandler $ Data.Map.keys types
       defaultsMap = Dhall.Map.filter (`elem` (Data.Map.keys defaults)) typesMap
       schemasMap = Dhall.Map.filter (`elem` (Data.Map.keys schemas)) typesMap
       typesRecord = makeRecord $ fmap (mkImportWithModel ["types"]) typesMap
-      typesUnion = Dhall.Union $ fmap (Just . mkImportWithModel ["types"]) typesMap
+      typesUnion = Dhall.Union $ fmap (Just . mkImportWithModel ["types"]) $ Dhall.Map.filter isStandalone typesMap
       defaultsRecord = makeRecord $ fmap (mkImportWithModel ["defaults"]) defaultsMap
       schemasRecord = makeRecord $ fmap (mkImportWithModel ["schemas"]) schemasMap
 
