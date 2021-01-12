@@ -17,11 +17,11 @@ Build-Type:          Simple
 Executable dhall-to-nixpkgs
   Main-Is:             Main.hs
   Build-Depends:       base                 >= 4.11     && < 5
-                     , aeson                >= 1.0.0.0  && < 1.5
+                     , aeson                >= 1.0.0.0  && < 1.6
                      , data-fix
                      , dhall                >= 1.32.0   && < 1.38
                      , foldl                               < 1.5
-                     , hnix                 >= 0.10.1   && < 0.12
+                     , hnix                 >= 0.10.1   && < 0.13
                      , lens-family-core     >= 1.0.0    && < 2.2
                      , megaparsec           >= 7.0.0    && < 9.1
                      , mmorph                              < 1.2

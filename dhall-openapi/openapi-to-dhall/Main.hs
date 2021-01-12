@@ -150,11 +150,15 @@ getAutoscaling ModelName{..}
     | otherwise =
         Nothing
 
+isK8sNative :: ModelName -> Bool
+isK8sNative ModelName{..} = Text.isPrefixOf "io.k8s." unModelName
+
 preferStableResource :: DuplicateHandler
 preferStableResource (_, names) = do
     let issue112 = Ord.comparing getAutoscaling
+    let k8sOverCrd = Ord.comparing isK8sNative
     let defaultComparison = Ord.comparing getVersion
-    let comparison = issue112 <> defaultComparison
+    let comparison = issue112 <> k8sOverCrd <> defaultComparison
     return (List.maximumBy comparison names)
 
 skipDuplicatesHandler :: DuplicateHandler
