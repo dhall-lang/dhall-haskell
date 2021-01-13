@@ -15,6 +15,7 @@ import Data.Aeson
 import Data.Aeson.Types (Parser, parseMaybe)
 import Data.Bifunctor (first, second)
 import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Scientific (Scientific)
 import Data.Set (Set)
 import Data.Text (Text)
 import Dhall.Kubernetes.Types
@@ -162,8 +163,11 @@ toTypes prefixMap definitions = memo
         "string"  | format == Just "int-or-string" -> intOrStringType
         "string"  -> Dhall.Text
         "boolean" -> Dhall.Bool
-        "integer" -> Dhall.Natural
-        "number"  -> Dhall.Double
+        "integer" -> case (minimum_, exclusiveMinimum) of
+          (Just min_, Just True) | min_ >= -1 -> Dhall.Natural
+          (Just min_, _)         | min_ >= 0 -> Dhall.Natural
+          _                      -> Dhall.Integer
+        "number"  -> Dhall.Double 
         other     -> error $ "Found missing Swagger type: " <> Text.unpack other
       -- There are empty schemas that only have a description, so we return empty record
       _ -> Dhall.Record mempty
@@ -366,6 +370,8 @@ data V1JSONSchemaProps =
         { v1JSONSchemaPropsRef :: Maybe Text
         , v1JSONSchemaPropsDescription :: Maybe Text
         , v1JSONSchemaPropsFormat :: Maybe Text
+        , v1JSONSchemaPropsMinimum :: Maybe Scientific
+        , v1JSONSchemaPropsExclusiveMinimum :: Maybe Bool
         , v1JSONSchemaPropsItems :: Maybe Value
         , v1JSONSchemaPropsProperties :: Maybe (Data.Map.Map String V1JSONSchemaProps)
         , v1JSONSchemaPropsRequired :: Maybe [Text]
@@ -382,6 +388,8 @@ mkV1JSONSchemaProps =
         { v1JSONSchemaPropsRef = Nothing
         , v1JSONSchemaPropsDescription = Nothing
         , v1JSONSchemaPropsFormat = Nothing
+        , v1JSONSchemaPropsMinimum = Nothing
+        , v1JSONSchemaPropsExclusiveMinimum = Nothing
         , v1JSONSchemaPropsItems = Nothing
         , v1JSONSchemaPropsProperties = Nothing
         , v1JSONSchemaPropsRequired = Nothing
@@ -447,15 +455,17 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
     propsToDefinition :: V1JSONSchemaProps -> Maybe BaseData -> Definition
     propsToDefinition V1JSONSchemaProps{..} basedata =
       Definition
-        { typ         = v1JSONSchemaPropsType
-        , ref         = Ref <$> v1JSONSchemaPropsRef
-        , format      = v1JSONSchemaPropsFormat
-        , description = v1JSONSchemaPropsDescription
-        , items       = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
-        , properties  = fmap toProperties v1JSONSchemaPropsProperties
-        , required    = fmap (Set.fromList . fmap FieldName) v1JSONSchemaPropsRequired
-        , baseData    = basedata
-        , intOrString = v1JSONSchemaPropsIntOrString
+        { typ              = v1JSONSchemaPropsType
+        , ref              = Ref <$> v1JSONSchemaPropsRef
+        , format           = v1JSONSchemaPropsFormat
+        , minimum_         = v1JSONSchemaPropsMinimum
+        , exclusiveMinimum = v1JSONSchemaPropsExclusiveMinimum
+        , description      = v1JSONSchemaPropsDescription
+        , items            = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
+        , properties       = fmap toProperties v1JSONSchemaPropsProperties
+        , required         = fmap (Set.fromList . fmap FieldName) v1JSONSchemaPropsRequired
+        , baseData         = basedata
+        , intOrString      = v1JSONSchemaPropsIntOrString
         }
 
     toProperties :: Data.Map.Map String V1JSONSchemaProps -> Data.Map.Map ModelName Definition

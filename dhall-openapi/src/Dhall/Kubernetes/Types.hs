@@ -9,6 +9,7 @@ import           Control.Applicative       (optional)
 import           Control.Monad             (join)
 import           Data.Aeson
 import           Data.Map                  (Map)
+import           Data.Scientific           (Scientific)
 import           Data.Set                  (Set)
 import           Data.Text                 (Text)
 import           Data.Text.Prettyprint.Doc (Pretty)
@@ -36,28 +37,32 @@ instance FromJSON Swagger
 
 
 data Definition = Definition
-  { typ         :: Maybe Text
-  , ref         :: Maybe Ref
-  , format      :: Maybe Text
-  , description :: Maybe Text
-  , items       :: Maybe Definition
-  , properties  :: Maybe (Map ModelName Definition)
-  , required    :: Maybe (Set FieldName)
-  , baseData    :: Maybe BaseData
-  , intOrString :: Maybe Bool
+  { typ              :: Maybe Text
+  , ref              :: Maybe Ref
+  , format           :: Maybe Text
+  , minimum_         :: Maybe Scientific -- Avoid shadowing with Prelude.minimum
+  , exclusiveMinimum :: Maybe Bool
+  , description      :: Maybe Text
+  , items            :: Maybe Definition
+  , properties       :: Maybe (Map ModelName Definition)
+  , required         :: Maybe (Set FieldName)
+  , baseData         :: Maybe BaseData
+  , intOrString      :: Maybe Bool
   } deriving (Generic, Show)
 
 instance FromJSON Definition where
   parseJSON = withObject "definition" $ \o -> do
-    typ         <- o .:? "type"
-    ref         <- o .:? "$ref"
-    format      <- o .:? "format"
-    properties  <- o .:? "properties"
-    required    <- o .:? "required"
-    items       <- o .:? "items"
-    description <- o .:? "description"
-    baseData    <- fmap join $ optional (o .:? "x-kubernetes-group-version-kind")
-    intOrString <- o .:? "x-kubernetes-int-or-string"
+    typ              <- o .:? "type"
+    ref              <- o .:? "$ref"
+    format           <- o .:? "format"
+    minimum_         <- o .:? "minimum"
+    exclusiveMinimum <- o .:? "exclusiveMinimum"
+    properties       <- o .:? "properties"
+    required         <- o .:? "required"
+    items            <- o .:? "items"
+    description      <- o .:? "description"
+    baseData         <- fmap join $ optional (o .:? "x-kubernetes-group-version-kind")
+    intOrString      <- o .:? "x-kubernetes-int-or-string"
     pure Definition{..}
 
 
