@@ -8,6 +8,7 @@ module Dhall.Kubernetes.Convert
   , getImportsMap
   , mkImport
   , toDefinition
+  , pathSplitter
   ) where
 
 import Control.Applicative (empty)
@@ -24,31 +25,32 @@ import GHC.Generics (Generic, Rep)
 import qualified Data.Char         as Char
 import qualified Data.List         as List
 import qualified Data.Map.Strict   as Data.Map
+import qualified Data.Maybe        as Maybe
 import qualified Data.Set          as Set
 import qualified Data.Sort         as Sort
 import qualified Data.Text         as Text
+import qualified Data.Tuple        as Tuple
 import qualified Dhall.Core        as Dhall
 import qualified Dhall.Map
 import qualified Dhall.Optics
+
+modelsToText :: ModelHierarchy -> [Text]
+modelsToText = List.map (\ (ModelName unModelName) -> unModelName)
 
 -- | Get all the required fields for a model
 --   See https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/#required-fields
 --   TLDR: because k8s API allows PUTS etc with partial data,
 --   it's not clear from the data types OR the API which
 --   fields are required for A POST...
-requiredFields :: Maybe ModelName -> Maybe (Set FieldName) -> Set FieldName
-requiredFields maybeName required
+requiredFields :: ModelHierarchy -> Maybe (Set FieldName) -> Set FieldName
+requiredFields modelHierarchy required
   = Set.difference
       (List.foldr Set.union (fromMaybe Set.empty required) [alwaysRequired, toAdd])
       toRemove
   where
     alwaysRequired = Set.fromList $ FieldName <$> [ "apiVersion", "kind", "metadata"]
-    toAdd = fromMaybe Set.empty $ do
-      name <- maybeName
-      Data.Map.lookup name requiredConstraints
-    toRemove = fromMaybe Set.empty $ do
-      name <- maybeName
-      Data.Map.lookup name notRequiredConstraints
+    toAdd = fromMaybe Set.empty $ Data.Map.lookup modelHierarchy requiredConstraints
+    toRemove = fromMaybe Set.empty $ Data.Map.lookup modelHierarchy notRequiredConstraints
 
     -- | Some models require keys that are not in the required set,
     --   but are in the docs or just work
@@ -57,22 +59,22 @@ requiredFields maybeName required
     -- | Some models should not require some keys, and this is not
     --   in the Swagger spec but just in the docs
     notRequiredConstraints = Data.Map.fromList
-      [ ( ModelName "io.k8s.api.core.v1.ObjectFieldSelector"
+      [ ( [ModelName "io.k8s.api.core.v1.ObjectFieldSelector"]
         , Set.fromList [ FieldName "apiVersion" ]
         )
-      , ( ModelName "io.k8s.apimachinery.pkg.apis.meta.v1.StatusDetails"
+      , ( [ModelName "io.k8s.apimachinery.pkg.apis.meta.v1.StatusDetails"]
         , Set.fromList [ FieldName "kind" ]
         )
-      , ( ModelName "io.k8s.api.core.v1.PersistentVolumeClaim"
+      , ( [ModelName "io.k8s.api.core.v1.PersistentVolumeClaim"]
         , Set.fromList [ FieldName "apiVersion", FieldName "kind" ]
         )
-      , ( ModelName "io.k8s.api.batch.v1beta1.JobTemplateSpec"
+      , ( [ModelName "io.k8s.api.batch.v1beta1.JobTemplateSpec"]
         , Set.fromList [ FieldName "metadata" ]
         )
-      , ( ModelName "io.k8s.api.batch.v2alpha1.JobTemplateSpec"
+      , ( [ModelName "io.k8s.api.batch.v2alpha1.JobTemplateSpec"]
         , Set.fromList [ FieldName "metadata" ]
         )
-      , ( ModelName "io.k8s.api.core.v1.PodTemplateSpec"
+      , ( [ModelName "io.k8s.api.core.v1.PodTemplateSpec"]
         , Set.fromList [ FieldName "metadata" ]
         )
       ]
@@ -112,6 +114,47 @@ namespacedObjectFromImport _ = Nothing
 toTextLit :: Text -> Expr
 toTextLit str = Dhall.TextLit (Dhall.Chunks [] str)
 
+-- | Merge maps and error on conflicts
+mergeNoConflicts :: (Ord k, Eq a, Show a, Show k) => (a -> a -> Bool) -> Data.Map.Map k a -> Data.Map.Map k a -> Data.Map.Map k a
+mergeNoConflicts canMerge = Data.Map.unionWithKey
+                   (\key left right ->
+                     if   canMerge left right
+                     then left 
+                     else error ("Cannot merge differing values " ++ show left ++ " and " ++ show right ++ " for key " ++ show key))
+
+{- | Extract the 'ModelName' to be used when splitting a definition.
+
+    This is considered a guess as it does not work with all types. Currently it uses the first word from the description
+    appended to the largest prefix before the last @.@ of the parent.
+-}
+guessModelNameForSplit :: ModelHierarchy -> Definition -> Maybe ModelName
+guessModelNameForSplit models definition = ModelName <$> ((<>) <$> toPrepend <*> firstWordOfDesc)
+  where
+    toPrepend :: Maybe Text.Text
+    toPrepend = (Tuple.fst . Text.breakOnEnd (Text.pack ".") <$> (Maybe.listToMaybe $ modelsToText models))
+
+    firstWordOfDesc :: Maybe Text.Text
+    firstWordOfDesc = (Text.words <$> (description definition) >>= Maybe.listToMaybe)
+
+{- | Given the @pathsAndModels@ Map provides a function to be used with 'toTypes' to split types at mostly arbitrary points
+
+   The @pathsAndModels@ argument takes the form of a path to an optional 'ModelName'. Paths are of the format noted by
+   'modelsToPath'. If a 'ModelName' is provided as a value for the given path, it will be returned (to be then used as
+   the 'ModelName' for the nested definition. If no 'ModelName' is provided, 'guessModelNameForSplit' will try to guess.
+   If that fails, 'Nothing' will be returned such that no split will be done by 'toTypes'
+   
+   Currently not all split points in for nested definitions are supported (in fact only types with a properties
+   attribute are currently supported).
+-}
+pathSplitter :: Data.Map.Map ModelHierarchy (Maybe ModelName) -> ModelHierarchy -> Definition -> Maybe ModelName
+pathSplitter pathsAndModels modelHierarchy definition
+  | (Maybe.isJust $ properties definition) && Maybe.isJust model = model
+  | otherwise = Nothing
+  where
+    model = case Data.Map.lookup modelHierarchy pathsAndModels of
+      Just (Just m) -> Just m
+      Just (Nothing) -> guessModelNameForSplit modelHierarchy definition
+      Nothing -> Nothing
 
 {-| Converts all the Swagger definitions to Dhall Types
 
@@ -119,59 +162,80 @@ toTextLit str = Dhall.TextLit (Dhall.Chunks [] str)
     many types reference other types so we need to access them to decide things
     like "should this key be optional"
 -}
-toTypes :: Data.Map.Map Prefix Dhall.Import -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
-toTypes prefixMap definitions = memo
-  where
-    memo = Data.Map.mapWithKey (\k -> convertToType (Just k)) definitions
+toTypes :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
+toTypes prefixMap typeSplitter definitions = toTypes' prefixMap typeSplitter definitions Data.Map.empty
 
-    kvList = Dhall.App Dhall.List $ Dhall.Record $ Dhall.Map.fromList
-      [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField Dhall.Text) ]
-    intOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
-      [ ("Int", Dhall.Natural), ("String", Dhall.Text) ]
+toTypes' :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr -> Data.Map.Map ModelName Expr
+toTypes' prefixMap typeSplitter definitions toMerge
+  | Data.Map.null definitions = toMerge
+  | otherwise = mergeNoConflicts (==) (toTypes' prefixMap typeSplitter newDefs modelMap) toMerge
+     where
 
-    -- | Convert a single Definition to a Dhall Type
-    --   Note: we have the ModelName only if this is a top-level import
-    convertToType :: Maybe ModelName -> Definition -> Expr
-    convertToType maybeModelName Definition{..} = case (ref, typ, properties, intOrString) of
-      -- If we point to a ref we just reference it via Import
-      (Just r, _, _, _) -> Dhall.Embed $ mkImport prefixMap [] (pathFromRef r <> ".dhall")
-      -- Otherwise - if we have 'properties' - it's an object
-      (_, _, Just props, _) ->
-        let
-            shouldBeRequired :: Maybe ModelName -> FieldName -> Bool
-            shouldBeRequired maybeParent field = Set.member field requiredNames
-              where
-                requiredNames = requiredFields maybeParent required
+        -- some CRDs are equal all except for the top description. This is safe as the only usage of description
+        -- is 'guessModelNameForSplit' which has already been called for the top definition
+        equalsIgnoringDescription :: Definition -> Definition -> Bool
+        equalsIgnoringDescription a b = a { description = description b } == b
 
-            (required', optional') = Data.Map.partitionWithKey
-                (\k _ -> shouldBeRequired maybeModelName (FieldName (unModelName k)))
-              -- TODO: labelize
-              $ Data.Map.map (convertToType Nothing) props
+        convertAndAccumWithKey :: ModelHierarchy -> Data.Map.Map ModelName Definition -> ModelName -> Definition -> (Data.Map.Map ModelName Definition, Expr)
+        convertAndAccumWithKey modelHierarchy accDefs k v = (mergeNoConflicts equalsIgnoringDescription accDefs leftOverDefs, expr)
+          where
+             (expr, leftOverDefs) = convertToType (modelHierarchy ++ [k]) v
 
-            allFields
-              = Data.Map.toList required'
-              <> fmap (second $ Dhall.App Dhall.Optional) (Data.Map.toList optional')
+        (newDefs, modelMap) = Data.Map.mapAccumWithKey (convertAndAccumWithKey []) Data.Map.empty definitions
+       
+        kvList = Dhall.App Dhall.List $ Dhall.Record $ Dhall.Map.fromList
+          [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField Dhall.Text) ]
+        intOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
+          [ ("Int", Dhall.Natural), ("String", Dhall.Text) ]
 
-            adaptRecordList = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
+        -- | Convert a single Definition to a Dhall Type, yielding any definitions to be split
+        --   Note: model hierarchy contains the modelName of of the current definition as the last entry
+        convertToType :: ModelHierarchy -> Definition -> (Expr, Data.Map.Map ModelName Definition)
+        convertToType modelHierarchy definition
+          | Just splitModelName <- typeSplitter modelHierarchy definition =
+            ( Dhall.Embed $ mkImport prefixMap [] ((unModelName splitModelName) <> ".dhall"), Data.Map.singleton splitModelName definition)
+          -- If we point to a ref we just reference it via Import
+          | Just r <- ref definition = ( Dhall.Embed $ mkImport prefixMap [] (pathFromRef r <> ".dhall"), Data.Map.empty)
+          | Just props <- properties definition =
+              let
+                  shouldBeRequired :: ModelHierarchy -> FieldName -> Bool
+                  shouldBeRequired hierarchy field = Set.member field requiredNames
+                    where
+                      requiredNames = requiredFields hierarchy (required definition)
+                  
+                  (newPropDefs, propModelMap) = Data.Map.mapAccumWithKey (convertAndAccumWithKey modelHierarchy) Data.Map.empty props
 
-        in Dhall.Record $ adaptRecordList $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields
-      (_, _, _, Just _) -> intOrStringType
-      -- Otherwise - if we have a 'type' - it's a basic type
-      (_, Just basic, _, _) -> case basic of
-        "object"  -> kvList
-        "array"   | Just item <- items -> Dhall.App Dhall.List (convertToType Nothing item)
-        "string"  | format == Just "int-or-string" -> intOrStringType
-        "string"  -> Dhall.Text
-        "boolean" -> Dhall.Bool
-        "integer" -> case (minimum_, exclusiveMinimum) of
-          (Just min_, Just True) | min_ >= -1 -> Dhall.Natural
-          (Just min_, _)         | min_ >= 0 -> Dhall.Natural
-          _                      -> Dhall.Integer
-        "number"  -> Dhall.Double 
-        other     -> error $ "Found missing Swagger type: " <> Text.unpack other
-      -- There are empty schemas that only have a description, so we return empty record
-      _ -> Dhall.Record mempty
+                  (required', optional') = Data.Map.partitionWithKey
+                      (\k _ -> shouldBeRequired modelHierarchy (FieldName (unModelName k)))
+                    -- TODO: labelize
+                    $ propModelMap
 
+                  allFields
+                    = Data.Map.toList required'
+                    <> fmap (second $ Dhall.App Dhall.Optional) (Data.Map.toList optional')
+
+                  adaptRecordList = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
+
+              in (Dhall.Record $ adaptRecordList $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields, newPropDefs)
+            -- This is another way to declare an intOrString
+          | Maybe.isJust $ intOrString definition = (intOrStringType, Data.Map.empty)
+            -- Otherwise - if we have a 'type' - it's a basic type
+          | Just basic <- typ definition = case basic of
+              "object"  -> (kvList, Data.Map.empty)
+              "array"   | Just item <- items definition ->
+                let (e, tm) = convertToType (modelHierarchy) item
+                in (Dhall.App Dhall.List e, tm)
+              "string"  | format definition == Just "int-or-string" -> (intOrStringType, Data.Map.empty)
+              "string"  -> (Dhall.Text, Data.Map.empty)
+              "boolean" -> (Dhall.Bool, Data.Map.empty)
+              "integer" -> case (minimum_ definition, exclusiveMinimum definition) of
+                (Just min_, Just True) | min_ >= -1 -> (Dhall.Natural, Data.Map.empty)
+                (Just min_, _)         | min_ >= 0 -> (Dhall.Natural, Data.Map.empty)
+                _                      -> (Dhall.Integer, Data.Map.empty)
+              "number"  -> (Dhall.Double, Data.Map.empty)
+              other     -> error $ "Found missing Swagger type: " <> Text.unpack other
+            -- There are empty schemas that only have a description, so we return empty record
+          | otherwise = (Dhall.Record mempty, Data.Map.empty)
 
 -- | Convert a Dhall Type to its default value
 toDefault

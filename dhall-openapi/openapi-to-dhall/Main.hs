@@ -17,7 +17,9 @@ import Text.Megaparsec
     , errorBundlePretty
     , parse
     , some
+    , optional
     , (<|>)
+    , eof
     )
 import Text.Megaparsec.Char            (alphaNumChar, char)
 
@@ -25,6 +27,7 @@ import Dhall.Kubernetes.Data           (patchCyclicImports)
 import Dhall.Kubernetes.Types
     ( DuplicateHandler
     , ModelName (..)
+    , ModelHierarchy
     , Prefix
     , Swagger (..)
     )
@@ -55,6 +58,7 @@ import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Lexer
 data Options = Options
     { skipDuplicates :: Bool
     , prefixMap :: Data.Map.Map Prefix Dhall.Import
+    , splits :: Data.Map.Map ModelHierarchy (Maybe ModelName)
     , filename :: String
     , crd :: Bool
     }
@@ -179,10 +183,27 @@ parsePrefixMap =
       e <- Dhall.Parser.expr
       imp <- parseImport prefix e
       return (pack prefix, imp)
-    result = parse (Dhall.Parser.unParser parser `sepBy1` char ',') "MAPPING"
+    result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "MAPPING"
+
+parseSplits :: Options.Applicative.ReadM (Data.Map.Map ModelHierarchy (Maybe ModelName))
+parseSplits =
+  Options.Applicative.eitherReader $ \s ->
+    bimap errorBundlePretty Data.Map.fromList $ result (pack s)
+  where
+    parseModelInner = some (alphaNumChar <|> char '-' <|> char '.')
+    parseModel = (ModelName . pack) <$> (((char '(') *> parseModelInner <* (char ')')) <|> parseModelInner)
+    parser = do
+      path <- parseModel `sepBy1` char '.'
+      model <- optional $ do
+        char '='
+        mo <- parseModel
+        return mo
+      return (path, model)
+    result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "MAPPING"
+
 
 parseOptions :: Options.Applicative.Parser Options
-parseOptions = Options <$> parseSkip <*> parsePrefixMap' <*> fileArg <*> crdArg
+parseOptions = Options <$> parseSkip <*> parsePrefixMap' <*> parseSplits' <*> fileArg <*> crdArg
   where
     parseSkip =
       Options.Applicative.switch
@@ -194,6 +215,17 @@ parseOptions = Options <$> parseSkip <*> parsePrefixMap' <*> fileArg <*> crdArg
         (  Options.Applicative.long "prefixMap"
         <> Options.Applicative.help "Specify prefix mappings as 'prefix1=importBase1,prefix2=importBase2,...'"
         <> Options.Applicative.metavar "MAPPING"
+        )
+    parseSplits' =
+      option Data.Map.empty $ Options.Applicative.option parseSplits
+        (  Options.Applicative.long "splitPaths"
+        <> Options.Applicative.help
+          "Specifiy path and model name pairs with paths being delimited by '.' and pairs separated by '=' for which \
+          \definitions should be aritifically split with a ref: \n\
+          \'(com.example.v1.Certificate).spec=com.example.v1.CertificateSpec'\n\
+          \When the model name is omitted, a guess will be made based on the first word of the definition's \
+          \description. Also note that top level model names in a path must use () when the name contains '.'"
+        <> Options.Applicative.metavar "SPLITS"
         )
     fileArg = Options.Applicative.strArgument
             (  Options.Applicative.help "The input file to read"
@@ -247,7 +279,7 @@ main = do
   let fix m = Data.Map.adjust patchCyclicImports (ModelName m)
 
   -- Convert to Dhall types in a Map
-  let types = Convert.toTypes prefixMap
+  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits)
         -- TODO: find a better way to deal with this cyclic import
          $ fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps"
          $ fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
