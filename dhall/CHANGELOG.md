@@ -1,3 +1,21 @@
+1.37.2
+
+* [BUG FIX: Fix CORS compliance check](https://github.com/dhall-lang/dhall-haskell/pull/2121)
+    * Previous versions were not correctly enforcing CORS compliance
+    * This implies that some imports that would have worked previously by
+      accident will now fail; specifically: an import from one domain
+      transitively importing something from another domain that has not opted
+      into CORS
+* [Detect preferred character set from input](https://github.com/dhall-lang/dhall-haskell/pull/2108)
+    * `dhall format` will now preserve the character set of the formatted file
+      by default.  In other words, if the file uses ASCII punctuation then
+      `dhall format` will format the file using ASCII punctuation.
+    * If the file contains both ASCII and Unicode punctuation it will prefer
+      Unicode by default
+* [Add `ToDhall (Fix f)` instance](https://github.com/dhall-lang/dhall-haskell/pull/2122)
+* Fixes and improvements to error messages
+    * [#2130](https://github.com/dhall-lang/dhall-haskell/pull/2130)
+
 1.37.1
 
 * [Fix performance regression for `with` expressions](https://github.com/dhall-lang/dhall-haskell/pull/2112)
