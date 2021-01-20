@@ -1122,14 +1122,7 @@ loadWith expr₀ = case expr₀ of
 
     child <- chainImport parent import₀
 
-    let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
-        local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
-        local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
-        local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
-
-    let referentiallySane = not (local child) || local parent
-
-    if importMode import₀ == Location || referentiallySane
+    if importMode import₀ == Location || referentiallySane parent child
         then return ()
         else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
 
@@ -1171,6 +1164,20 @@ loadWith expr₀ = case expr₀ of
   Lam cs a b           -> Lam cs <$> functionBindingExprs loadWith a <*> loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   expression           -> Syntax.unsafeSubExpressions loadWith expression
+
+referentiallySane :: Chained -> Chained -> Bool
+referentiallySane parent child =
+    case (chainedImportType parent, chainedImportType child) of
+        (Remote _ , Remote _        ) -> True
+        (Remote _ , Missing         ) -> True
+        (Env _    , Remote _        ) -> True
+        (Env _    , Missing         ) -> True
+        (Env _    , Local Absolute _) -> True
+        (Env _    , Local Home _    ) -> True
+        (Local _ _, _               ) -> True
+        _                             -> False
+  where
+    chainedImportType = importType . importHashed . chainedImport
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)
