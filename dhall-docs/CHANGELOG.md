@@ -1,3 +1,8 @@
+1.0.4
+
+* Build against `dhall-1.38.0`, `tasty-1.4`, `tasty-silver-3.2`, and
+  `cryptonite-0.28`
+
 1.0.3
 
 * Build against `dhall-1.37.0`
