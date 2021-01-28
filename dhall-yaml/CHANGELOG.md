@@ -1,3 +1,7 @@
+1.2.5
+
+* Build against `dhall-1.38.0`, `tasty-1.4`, and `tasty-silver-3.2`
+
 1.2.4
 
 * Build against `dhall-1.37.0`
