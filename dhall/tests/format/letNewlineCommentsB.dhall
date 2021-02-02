@@ -1,7 +1,7 @@
 let x = 1
 
 in  let {- aaaaaaaaaaaaaaaaaaa
-        -}y
+        -} y
         : {- bbbbbbbbbbbbbbbbbbbbb
           -} Natural
         = {- ddddddddddddddddd -} 2

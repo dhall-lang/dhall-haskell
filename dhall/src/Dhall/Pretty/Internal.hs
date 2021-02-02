@@ -768,7 +768,7 @@ prettyPrinters characterSet =
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
                 keyword "let" <> space
             <>  Pretty.align
-                (   renderSrc stripSpaces src0
+                (   comment src0
                 <>  prettyLabel c <> Pretty.hardline <> renderSrc stripNewline src1 -- TODO
                 <>  colon <> space <> comment src3
                 <>  prettyExpression d <> Pretty.hardline
