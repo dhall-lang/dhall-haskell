@@ -770,7 +770,7 @@ prettyPrinters characterSet =
             <>  Pretty.align
                 (   renderSrc stripSpaces src0
                 <>  prettyLabel c <> Pretty.hardline <> renderSrc stripNewline src1 -- TODO
-                <>  colon <> space <> renderSrc stripSpaces src3 -- TODO
+                <>  colon <> space <> comment src3
                 <>  prettyExpression d <> Pretty.hardline
                 <>  equals <> space <> comment src2
                 <>  prettyExpression e

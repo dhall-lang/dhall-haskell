@@ -3,7 +3,7 @@ let x = 1
 in  let {- aaaaaaaaaaaaaaaaaaa
         -}y
         : {- bbbbbbbbbbbbbbbbbbbbb
-          -}Natural
+          -} Natural
         = {- ddddddddddddddddd -} 2
 
     in  x
