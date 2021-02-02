@@ -213,16 +213,11 @@ renderSrc _ _ =
 -}
 renderComment :: Text -> Doc Ann
 renderComment text =
-    Pretty.align (Pretty.concatWith f newLines <> suffix)
+    Pretty.align (Pretty.concatWith f newLines)
   where
     horizontalSpace c = c == ' ' || c == '\t'
 
-    suffix =
-        if Text.null text || Text.last text == '\n'
-        then mempty
-        else " "
-
-    oldLines = Text.splitOn "\n" text
+    oldLines = map Text.stripEnd (Text.splitOn "\n" text)
 
     spacePrefix = Text.takeWhile horizontalSpace
 
@@ -750,28 +745,34 @@ prettyPrinters characterSet =
                 _ -> t'
           where t' = stripSpaces t
 
+        comment src =
+            case renderSrcMaybe src of
+                Nothing -> mempty
+                Just doc -> doc <> space
+
         docA (Binding src0 c src1 Nothing src2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
             long =  keyword "let" <> space
                 <>  Pretty.align
                     (   renderSrc stripSpaces src0
-                    <>  prettyLabel c <> space <> renderSrc stripSpaces src1
+                    <>  prettyLabel c <> space <> comment src1
                     <>  equals <> Pretty.hardline <> renderSrc stripNewline src2
                     <>  "  " <> prettyExpression e
                     )
 
             short = keyword "let" <> space <> renderSrc stripSpaces src0
-                <>  prettyLabel c <> space <> renderSrc stripSpaces src1
-                <>  equals <> space <> renderSrc stripSpaces src2
+                <>  prettyLabel c <> space <> comment src1
+                <>  equals <> space <> comment src2
                 <>  prettyExpression e
         docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
                 keyword "let" <> space
             <>  Pretty.align
                 (   renderSrc stripSpaces src0
-                <>  prettyLabel c <> Pretty.hardline <> renderSrc stripNewline src1
-                <>  colon <> space <> renderSrc stripSpaces src3 <> prettyExpression d <> Pretty.hardline
-                <>  equals <> space <> renderSrc stripSpaces src2
+                <>  prettyLabel c <> Pretty.hardline <> renderSrc stripNewline src1 -- TODO
+                <>  colon <> space <> renderSrc stripSpaces src3 -- TODO
+                <>  prettyExpression d <> Pretty.hardline
+                <>  equals <> space <> comment src2
                 <>  prettyExpression e
                 )
 
@@ -1787,11 +1788,8 @@ prettyToStrictText = docToStrictText . Pretty.pretty
 -- | Layout using 'layoutOpts'
 --
 -- Tries hard to fit the document into 80 columns.
---
--- This also removes trailing space characters (@' '@) /unless/
--- they are enclosed in an annotation.
 layout :: Pretty.Doc ann -> Pretty.SimpleDocStream ann
-layout = Pretty.removeTrailingWhitespace . Pretty.layoutSmart layoutOpts
+layout = Pretty.layoutSmart layoutOpts
 
 -- | Default layout options
 layoutOpts :: Pretty.LayoutOptions

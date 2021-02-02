@@ -1,5 +1,5 @@
 let x
-    {- foo                                        -} : {- bar                                           -} Bool
+    {- foo                                        -}: {- bar                                           -}Bool
     = {- bla                      -} True
 
 in  x
