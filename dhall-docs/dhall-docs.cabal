@@ -22,6 +22,7 @@ Description:
 Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
+    README.md
     tasty/data/package/*.dhall
     tasty/data/package/a/*.dhall
     tasty/data/package/a/b/*.dhall
