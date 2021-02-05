@@ -30,7 +30,7 @@ Library
         base                      >= 4.11.0.0 && < 5   ,
         containers                               < 0.7 ,
         data-fix                                 < 0.4 ,
-        dhall                     >= 1.36     && < 1.39,
+        dhall                     >= 1.38     && < 1.39,
         hnix                      >= 0.7      && < 0.13,
         lens-family-core          >= 1.0.0    && < 2.2 ,
         neat-interpolation                       < 0.6 ,
