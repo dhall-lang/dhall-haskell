@@ -705,7 +705,7 @@ Test-Suite doctest
         directory                     ,
         filepath                < 1.5 ,
         mockery                 < 0.4 ,
-        doctest   >= 0.7.0   && < 0.18
+        doctest   >= 0.7.0   && < 0.19
     Default-Language: Haskell2010
 
 Benchmark dhall-parser
