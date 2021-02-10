@@ -120,7 +120,7 @@ Test-Suite doctest
         base                           ,
         directory,
         filepath                 < 1.5 ,
-        doctest    >= 0.7.0   && < 0.18
+        doctest    >= 0.7.0   && < 0.19
     Other-Extensions: OverloadedStrings RecordWildCards
     Default-Language: Haskell2010
 
