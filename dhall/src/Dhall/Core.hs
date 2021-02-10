@@ -56,6 +56,7 @@ module Dhall.Core (
 
     -- * Optics
     , subExpressions
+    , subExpressionsWith
     , chunkExprs
     , bindingExprs
     , recordFieldExprs
