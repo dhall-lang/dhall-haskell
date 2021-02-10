@@ -65,7 +65,7 @@ Library
         containers                                 ,
         cryptonite                           < 0.29,
         directory            >= 1.3.0.0   && < 1.4 ,
-        dhall                >= 1.35.0    && < 1.39,
+        dhall                >= 1.38.0    && < 1.39,
         file-embed           >= 0.0.10.0           ,
         filepath             >= 1.4       && < 1.5 ,
         lens-family-core     >= 1.0.0     && < 2.2 ,
@@ -120,7 +120,7 @@ Test-Suite doctest
         base                           ,
         directory,
         filepath                 < 1.5 ,
-        doctest    >= 0.7.0   && < 0.18
+        doctest    >= 0.7.0   && < 0.19
     Other-Extensions: OverloadedStrings RecordWildCards
     Default-Language: Haskell2010
 
