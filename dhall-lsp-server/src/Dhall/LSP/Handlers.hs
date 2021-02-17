@@ -72,11 +72,9 @@ import qualified Data.HashMap.Strict             as HashMap
 import qualified Data.Map.Strict                 as Map
 import qualified Data.Rope.UTF16                 as Rope
 import qualified Data.Text                       as Text
-import qualified Language.Haskell.LSP.Core       as LSP
-import qualified Language.Haskell.LSP.Messages   as LSP
-import qualified Language.Haskell.LSP.Types      as J
-import qualified Language.Haskell.LSP.Types.Lens as J
-import qualified Language.Haskell.LSP.VFS        as LSP
+import qualified Language.LSP.Types      as J
+import qualified Language.LSP.Types.Lens as J
+import qualified Language.LSP.VFS        as LSP
 import qualified Network.URI                     as URI
 import qualified Network.URI.Encode              as URI
 
@@ -557,9 +555,7 @@ completionHandler request = do
        where
         _label = completeText
         _kind = Nothing
-#if MIN_VERSION_haskell_lsp(0,21,0)
         _tags = mempty
-#endif
         _detail = fmap pretty completeType
         _documentation = Nothing
         _deprecated = Nothing

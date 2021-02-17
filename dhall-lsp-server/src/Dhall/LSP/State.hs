@@ -21,9 +21,7 @@ import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
 import Dhall.Pretty                     (CharacterSet)
 import Lens.Family                      (LensLike')
 
-import qualified Language.Haskell.LSP.Core     as LSP
-import qualified Language.Haskell.LSP.Messages as LSP
-import qualified Language.Haskell.LSP.Types    as J
+import qualified Language.LSP.Types    as J
 
 
 -- Inside a handler we have access to the ServerState. The exception layer

@@ -3,8 +3,8 @@
 
 import Control.Monad.IO.Class     (liftIO)
 import Data.Maybe                 (fromJust)
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
+import Language.LSP.Test
+import Language.LSP.Types
     ( CompletionItem (..)
     , Diagnostic (..)
     , DiagnosticSeverity (..)
