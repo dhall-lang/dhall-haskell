@@ -61,6 +61,7 @@ import qualified Data.ByteString
 import qualified Data.List
 import qualified Data.List.NonEmpty         as NonEmpty
 import qualified Data.Map.Strict            as Map
+import qualified Data.Map.Merge.Strict      as Map.Merge
 import qualified Data.Maybe
 import qualified Data.Maybe                 as Maybe
 import qualified Data.Text
@@ -80,6 +81,7 @@ import qualified Text.Megaparsec
 
 -- | The result of the doc-generator pure component
 data GeneratedDocs a = GeneratedDocs [DocsGenWarning] a
+    deriving (Show)
 
 instance Functor GeneratedDocs where
     fmap f (GeneratedDocs w a) = GeneratedDocs w (f a)
@@ -140,7 +142,7 @@ instance Show DocsGenWarning where
 -- | Extracted text from from Dhall file's comments
 newtype FileComments = FileComments
     { headerComment :: Maybe DhallDocsText -- ^ 'Nothing' if no comment or if invalid
-    }
+    } deriving (Show)
 
 -- | Represents a Dhall file that can be rendered as documentation.
 --   If you'd like to improve or add features to a .dhall documentation page,
@@ -154,7 +156,7 @@ data DhallFile = DhallFile
     , examples :: [Expr Void Import]    -- ^ Examples extracted from assertions
                                         --   in the file
     , fileComments :: FileComments
-    }
+    } deriving (Show)
 
 {-| Takes a list of files paths with their contents and returns the list of
     valid `DhallFile`s.
@@ -332,11 +334,11 @@ makeHtml packageName characterSet DhallFile {..} = do
     `a/b/`, but yes on `a/b/c/` in the last one there is the @b.dhall@ file
 -}
 createIndexes :: Text -> CharacterSet -> [DhallFile] -> [(Path Rel File, Text)]
-createIndexes packageName characterSet files = map toIndex dirToDirsAndFilesMapAssocs
+createIndexes packageName characterSet dhallFiles = map toIndex dirToDirsAndFilesMapAssocs
   where
     -- Files grouped by their directory
     dirToFilesMap :: Map (Path Rel Dir) [DhallFile]
-    dirToFilesMap = Map.unionsWith (<>) $ map toMap $ Data.List.sortBy (compare `on` path) files
+    dirToFilesMap = Map.unionsWith (<>) $ map toMap $ Data.List.sortBy (compare `on` path) dhallFiles
       where
         toMap :: DhallFile -> Map (Path Rel Dir) [DhallFile]
         toMap dhallFile = Map.singleton (Path.parent $ path dhallFile) [dhallFile]
@@ -346,43 +348,34 @@ createIndexes packageName characterSet files = map toIndex dirToDirsAndFilesMapA
         documentation to get more information.
     -}
     dirToDirsMap :: Map (Path Rel Dir) [Path Rel Dir]
-    dirToDirsMap = Map.map removeHereDir $ foldr go initialMap dirs
+    dirToDirsMap = foldr cons Map.empty dirs
       where
-        -- > removeHeredir [$(mkRelDir "a"), $(mkRelDir ".")]
-        --   [$(mkRelDir "a")]
-        removeHereDir :: [Path Rel Dir] -> [Path Rel Dir]
-        removeHereDir = filter f
+        dirs = filter keep (Map.keys dirToFilesMap)
           where
-            f :: Path Rel Dir -> Bool
-            f reldir = Path.parent reldir /= reldir
+            keep reldir = Path.parent reldir /= reldir
 
-        dirs :: [Path Rel Dir]
-        dirs = Map.keys dirToFilesMap
-
-        initialMap :: Map (Path Rel Dir) [Path Rel Dir]
-        initialMap = Map.fromList $ map (,[]) dirs
-
-        go :: Path Rel Dir -> Map (Path Rel Dir) [Path Rel Dir] -> Map (Path Rel Dir) [Path Rel Dir]
-        go d dirMap = Map.adjust ([d] <>) (key $ Path.parent d) dirMap
-          where
-            key :: Path Rel Dir -> Path Rel Dir
-            key dir = if dir `Map.member` dirMap then dir else key $ Path.parent dir
+        cons d = Map.insertWith (<>) (Path.parent d) [d]
 
     dirToDirsAndFilesMapAssocs :: [(Path Rel Dir, ([DhallFile], [Path Rel Dir]))]
-    dirToDirsAndFilesMapAssocs = Map.assocs $ Map.mapWithKey f dirToFilesMap
+    dirToDirsAndFilesMapAssocs = Map.assocs $
+        Map.Merge.merge
+            (Map.Merge.mapMissing onlyFiles)
+            (Map.Merge.mapMissing onlyDirectories)
+            (Map.Merge.zipWithMatched both)
+            dirToFilesMap
+            dirToDirsMap
       where
-        f :: Path Rel Dir -> [DhallFile] -> ([DhallFile], [Path Rel Dir])
-        f dir dhallFiles = case dirToDirsMap Map.!? dir of
-            Nothing -> fileAnIssue "dirToDirsAndFilesMapAssocs"
-            Just dirs -> (dhallFiles, dirs)
+        onlyFiles       _ files             = (files, []         )
+        onlyDirectories _       directories = ([]   , directories)
+        both            _ files directories = (files, directories)
 
     toIndex :: (Path Rel Dir, ([DhallFile], [Path Rel Dir])) -> (Path Rel File, Text)
-    toIndex (indexDir, (dhallFiles, dirs)) =
+    toIndex (indexDir, (files, dirs)) =
         (indexDir </> $(Path.mkRelFile "index.html"), Text.Lazy.toStrict $ Lucid.renderText html)
       where
         html = indexToHtml
             indexDir
-            (map (\DhallFile{..} -> (stripPrefix $ addHtmlExt path, mType)) dhallFiles)
+            (map (\DhallFile{..} -> (stripPrefix $ addHtmlExt path, mType)) files)
             (map stripPrefix dirs)
             DocParams { relativeResourcesPath = resolveRelativePath indexDir, packageName, characterSet }
 
