@@ -880,7 +880,8 @@ dhallFromJSON (Conversion {..}) expressionType =
                   , ("mapValue", val)
                   ]
 
-          let records = (fmap f . Seq.fromList . HM.toList) keyExprMap
+          let records =
+                (fmap f . Seq.fromList . List.sort . HM.toList) keyExprMap
 
           let typeAnn = if HM.null o then Just t else Nothing
 
