@@ -195,7 +195,7 @@ import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
 import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.HashSet
-import qualified Data.List
+import qualified Data.List                        as List
 import qualified Data.List.NonEmpty
 import qualified Data.Map
 import qualified Data.Maybe
@@ -1183,7 +1183,7 @@ setHelper size toSet (Decoder extractIn expectedIn) = Decoder extractOut expecte
             vList = Data.Foldable.toList vSeq
             vSet = toSet vList
             sameSize = size vSet == Data.Sequence.length vSeq
-            duplicates = vList Data.List.\\ Data.Foldable.toList vSet
+            duplicates = vList List.\\ Data.Foldable.toList vSet
             err | length duplicates == 1 =
                      "One duplicate element in the list: "
                      <> (Data.Text.pack $ show $ head duplicates)
@@ -1216,10 +1216,10 @@ map k v = fmap Data.Map.fromList (list (pairFromMapEntry k v))
 
 {-| Decode a `HashMap` from a @toMap@ expression or generally a @Prelude.Map.Type@
 
->>> input (Dhall.hashMap strictText bool) "toMap { a = True, b = False }"
-fromList [("a",True),("b",False)]
->>> input (Dhall.hashMap strictText bool) "[ { mapKey = \"foo\", mapValue = True } ]"
-fromList [("foo",True)]
+>>> fmap (List.sort . HashMap.toList) (input (Dhall.hashMap strictText bool) "toMap { a = True, b = False }")
+[("a",True),("b",False)]
+>>> fmap (List.sort . HashMap.toList) (input (Dhall.hashMap strictText bool) "[ { mapKey = \"foo\", mapValue = True } ]")
+[("foo",True)]
 
 If there are duplicate @mapKey@s, later @mapValue@s take precedence:
 
@@ -2198,13 +2198,7 @@ instance ToDhall a => ToDhall (Vector a) where
 instance ToDhall a => ToDhall (Data.Set.Set a) where
     injectWith = fmap (contramap Data.Set.toAscList) injectWith
 
-{-| Note that the output list may not be sorted
-
->>> let x = Data.HashSet.fromList ["hi", "mom" :: Text]
->>> prettyExpr $ embed inject x
-[ "mom", "hi" ]
-
--}
+-- | Note that the output list may not be sorted
 instance ToDhall a => ToDhall (Data.HashSet.HashSet a) where
     injectWith = fmap (contramap Data.HashSet.toList) injectWith
 
