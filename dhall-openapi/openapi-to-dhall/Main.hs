@@ -31,7 +31,7 @@ import Dhall.Kubernetes.Types
     , Prefix
     , Swagger (..)
     )
-import System.FilePath                  (FilePath, (</>))
+import System.FilePath                  ((</>))
 
 import qualified Data.List                             as List
 import qualified Data.Map.Strict                       as Data.Map
