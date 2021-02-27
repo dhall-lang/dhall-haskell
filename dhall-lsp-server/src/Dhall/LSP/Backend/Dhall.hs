@@ -22,12 +22,12 @@ import Dhall.Core   (Expr)
 import Dhall.Parser (Src)
 
 import Control.Exception                (SomeException, catch)
+import Control.Lens                     (set, view)
 import Control.Monad.Trans.State.Strict (runStateT)
 import Data.Bifunctor                   (first)
 import Data.List.NonEmpty               (NonEmpty ((:|)))
 import Data.Text                        (Text)
 import Data.Void                        (Void)
-import Lens.Family                      (set, view)
 import Network.URI                      (URI)
 import System.FilePath
     ( splitDirectories
