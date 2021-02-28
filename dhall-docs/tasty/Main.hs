@@ -28,8 +28,6 @@ import qualified Test.Tasty.HUnit              as Tasty.HUnit
 import qualified Test.Tasty.Silver             as Silver
 import qualified Test.Tasty.Silver.Interactive as Silver
 import qualified Text.PrettyPrint              as Pretty
-import qualified Text.XML.HaXml.Html.Parse     as HaXml
-import qualified Text.XML.HaXml.Pretty         as HaXml
 import qualified Turtle
 
 main :: IO ()
@@ -70,12 +68,11 @@ docGenerationTests docsMap =
       where
         goldenFilePath = Path.fromRelFile $ goldenDir </> testFile
         testName = Path.fromRelFile testFile
-        action = return prettyHtmlDoc
+        action = (return . Data.Text.unpack . prettyHtml) text
         converter = Data.Text.pack
 
-        prettyHtmlDoc = Pretty.render
-            $ HaXml.document
-            $ HaXml.htmlParse testName (Data.Text.unpack text)
+        -- Simply add some line breaks so the result is easier to read.
+        prettyHtml = Data.Text.replace "><" ">\n<"
 
 getCommentTests :: IO TestTree
 getCommentTests = do
