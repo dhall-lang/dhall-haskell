@@ -137,7 +137,6 @@ Test-Suite tasty
         dhall                             ,
         dhall-docs                        ,
         foldl        < 1.5                ,
-        HaXml        >= 1.25.5            ,
         path                              ,
         path-io                           ,
         pretty       >= 1.1.1.1           ,
