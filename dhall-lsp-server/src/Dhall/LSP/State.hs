@@ -4,6 +4,7 @@
 module Dhall.LSP.State where
 
 import Control.Lens.TH                  (makeLenses)
+import Control.Lens.Type                (LensLike')
 import Control.Monad.Trans.Except       (ExceptT)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson
@@ -19,7 +20,6 @@ import Data.Map.Strict                  (Map, empty)
 import Data.Text                        (Text)
 import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
 import Dhall.Pretty                     (CharacterSet)
-import Lens.Family                      (LensLike')
 
 import qualified Language.Haskell.LSP.Core     as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
