@@ -890,6 +890,7 @@ recordFieldExprs f (RecordField s0 e s1 s2) =
         <*> f e
         <*> pure s1
         <*> pure s2
+{-# INLINABLE recordFieldExprs #-}
 
 {-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
 -}
@@ -904,6 +905,7 @@ functionBindingExprs f (FunctionBinding s0 label s1 s2 type_) =
         <*> pure s1
         <*> pure s2
         <*> f type_
+{-# INLINABLE functionBindingExprs #-}
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs

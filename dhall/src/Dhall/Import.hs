@@ -1254,6 +1254,7 @@ instance Show ImportResolutionDisabled where
 assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src Void)
 assertNoImports expression =
     Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
+{-# INLINABLE assertNoImports #-}
 
 {-| This function is used by the @--transitive@ option of the
     @dhall {freeze,format,lint}@ subcommands to determine which dependencies

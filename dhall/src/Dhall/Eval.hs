@@ -1025,6 +1025,7 @@ conv !env t0 t0' =
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
 judgmentallyEqual (Syntax.denote -> t) (Syntax.denote -> u) =
     conv Empty (eval Empty t) (eval Empty u)
+{-# INLINABLE judgmentallyEqual #-}
 
 data Names
   = EmptyNames
@@ -1226,6 +1227,7 @@ nf !env = Syntax.renote . quote (envNames env) . eval env . Syntax.denote
 
 normalize :: Eq a => Expr s a -> Expr t a
 normalize = nf Empty
+{-# INLINABLE normalize #-}
 
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize = goEnv EmptyNames
