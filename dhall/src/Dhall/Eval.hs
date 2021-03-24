@@ -144,6 +144,7 @@ toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
 toVHPi (VPi a b@(Closure x _ _)) = Just (x, a, instantiate b)
 toVHPi (VHPi x a b             ) = Just (x, a, b)
 toVHPi  _                        = Nothing
+{-# INLINABLE toVHPi #-}
 
 data Val a
     = VConst !Const
