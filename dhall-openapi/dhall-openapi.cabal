@@ -1,4 +1,4 @@
-cabal-version:  >=0.10
+cabal-version:  >=1.10
 name:           dhall-openapi
 version:        1.0.0
 homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi#dhall-openapi
