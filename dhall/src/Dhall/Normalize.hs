@@ -160,6 +160,7 @@ normalize = Eval.normalize
 normalizeWith :: Eq a => Maybe (ReifiedNormalizer a) -> Expr s a -> Expr t a
 normalizeWith (Just ctx) t = runIdentity (normalizeWithM (getReifiedNormalizer ctx) t)
 normalizeWith _          t = Eval.normalize t
+{-# INLINABLE normalizeWith #-}
 
 {-| This function generalizes `normalizeWith` by allowing the custom normalizer
     to use an arbitrary `Monad`
@@ -940,6 +941,7 @@ variable@(V var i) `freeIn` expression =
     denote' = Syntax.denote
 
     strippedExpression = denote' expression
+{-# INLINABLE freeIn #-}
 
 {- $setup
 >>> import Dhall.Syntax (Const(..))
