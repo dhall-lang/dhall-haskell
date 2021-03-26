@@ -142,6 +142,7 @@ censorSrc (Src { srcText = oldText, .. }) = Src { srcText = newText, .. }
 throws :: (Exception e, MonadIO io) => Either e a -> io a
 throws (Left  e) = liftIO (Control.Exception.throwIO e)
 throws (Right r) = return r
+{-# INLINABLE throws #-}
 
 {- $setup
 >>> import qualified Codec.Serialise
