@@ -1,5 +1,5 @@
 name:           dhall-lsp-server
-Version:        1.0.13
+Version:        1.0.14
 cabal-version:  1.12
 synopsis:       Language Server Protocol (LSP) server for Dhall
 homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server#readme
@@ -12,7 +12,6 @@ license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
     README.md
-    ChangeLog.md
     tests/fixtures/completion/*.dhall
     tests/fixtures/diagnostics/*.dhall
     tests/fixtures/linting/*.dhall
