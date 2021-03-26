@@ -1,5 +1,7 @@
 1.38.1
 
+* [Add `INLINABLE` annotations in more places](https://github.com/dhall-lang/dhall-haskell/pull/2164)
+    * This may improve performance by enabling more specializations
 * [Fix `hashable`-related test failures](https://github.com/dhall-lang/dhall-haskell/pull/2152)
 * [Fix support for GHC 8.4.4](https://github.com/dhall-lang/dhall-haskell/pull/2143)
     * … by using `GeneralizedNewtypeDeriving` (with a `z`)
