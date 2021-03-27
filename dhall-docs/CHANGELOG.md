@@ -1,3 +1,14 @@
+1.0.5
+
+* [BUG FIX: Fix index generation](https://github.com/dhall-lang/dhall-haskell/pull/2150)
+    * Indices are now created for intermediate directories without `.dhall` files
+    * `dhall-docs` no longer hangs when the top-level directory has no `.dhall` files
+* [Fix lower bound on `dhall`](https://github.com/dhall-lang/dhall-haskell/pull/2147/)
+* [Allow doctest-0.18](https://github.com/dhall-lang/dhall-haskell/pull/2148)
+* [Allow bytestring-0.11](https://github.com/dhall-lang/dhall-haskell/pull/2144)
+* [Add `README` to tarball](https://github.com/dhall-lang/dhall-haskell/pull/2145)
+* [Remove test dependency on HaXml](https://github.com/dhall-lang/dhall-haskell/pull/2156)
+
 1.0.4
 
 * Build against `dhall-1.38.0`, `tasty-1.4`, `tasty-silver-3.2`, and

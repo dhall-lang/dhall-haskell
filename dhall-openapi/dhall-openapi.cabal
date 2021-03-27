@@ -1,10 +1,9 @@
 cabal-version:  >=1.10
 name:           dhall-openapi
-version:        0.1.2
-category:       Code Generation
-homepage:       https://github.com/dhall-lang/dhall-haskell
+version:        1.0.0
+homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi#dhall-openapi
 author:         Fabrizio Ferrai
-maintainer:     fabrizio@ferrai.io
+maintainer:     Gabriel439@gmail.com
 copyright:      2019 Fabrizio Ferrai
 license:        BSD3
 build-type:     Simple
@@ -17,7 +16,17 @@ executable openapi-to-dhall
   main-is: Main.hs
   hs-source-dirs:
       openapi-to-dhall
-  default-extensions: DuplicateRecordFields GeneralizedNewtypeDeriving LambdaCase RecordWildCards ScopedTypeVariables OverloadedStrings FlexibleInstances ConstraintKinds ApplicativeDo TupleSections
+  default-extensions:
+    DuplicateRecordFields
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    RecordWildCards
+    ScopedTypeVariables
+    OverloadedStrings
+    FlexibleInstances
+    ConstraintKinds
+    ApplicativeDo
+    TupleSections
   ghc-options: -Wall
   build-depends:
     base                                           ,
@@ -43,7 +52,20 @@ library
       Dhall.Kubernetes.Types
   hs-source-dirs:
       src
-  default-extensions: DeriveDataTypeable DeriveGeneric DerivingStrategies DuplicateRecordFields GeneralizedNewtypeDeriving LambdaCase RecordWildCards ScopedTypeVariables OverloadedStrings FlexibleInstances ConstraintKinds ApplicativeDo TupleSections
+  default-extensions:
+    DeriveDataTypeable
+    DeriveGeneric
+    DerivingStrategies
+    DuplicateRecordFields
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    RecordWildCards
+    ScopedTypeVariables
+    OverloadedStrings
+    FlexibleInstances
+    ConstraintKinds
+    ApplicativeDo
+    TupleSections
   ghc-options: -Wall
   build-depends:
     base                    >= 4.11.0.0  && < 5    ,

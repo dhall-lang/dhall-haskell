@@ -1,3 +1,13 @@
+1.38.1
+
+* [Add `INLINABLE` annotations in more places](https://github.com/dhall-lang/dhall-haskell/pull/2164)
+    * This may improve performance by enabling more specializations
+* [Fix `hashable`-related test failures](https://github.com/dhall-lang/dhall-haskell/pull/2152)
+* [Fix support for GHC 8.4.4](https://github.com/dhall-lang/dhall-haskell/pull/2143)
+    * … by using `GeneralizedNewtypeDeriving` (with a `z`)
+* [Allow doctest-0.18](https://github.com/dhall-lang/dhall-haskell/pull/2148)
+* [Allow bytestring-0.11](https://github.com/dhall-lang/dhall-haskell/pull/2144)
+
 1.38.0
 
 * [BREAKING CHANGE: Detect preferred character set from input](https://github.com/dhall-lang/dhall-haskell/pull/2108)
