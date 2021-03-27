@@ -9,6 +9,7 @@ License:        BSD3
 License-File:   LICENSE
 Build-Type:     Simple
 Category:       Compiler
+Synopsis:       Convert an OpenAPI specification to a Dhall package
 Description:
     This package provides an `openapi-to-dhall` program that converts an
     OpenAPI specification to a Dhall package containing types, defaults, and
