@@ -140,7 +140,7 @@ throws (Right r) = return r
 data Censor = NoCensor | Censor
 
 -- | Path to input
-data Input = StandardInput | InputFile FilePath
+data Input = StandardInput | InputFile FilePath deriving (Eq)
 
 -- | Path to input or raw input text, necessary since we can't read STDIN twice
 data InputOrTextFromStdin = Input_ Input | StdinText Text

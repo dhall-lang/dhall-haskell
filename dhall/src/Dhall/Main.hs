@@ -25,7 +25,7 @@ import Control.Applicative       (optional, (<|>))
 import Control.Exception         (Handler (..), SomeException)
 import Data.Foldable             (for_)
 import Data.Maybe                (fromMaybe)
-import Data.List.NonEmpty        (NonEmpty (..))
+import Data.List.NonEmpty        (NonEmpty (..), nonEmpty)
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void                 (Void)
@@ -351,8 +351,12 @@ parseMode =
 
     parseFiles = fmap f (Options.Applicative.many p)
       where
-        f []           = StandardInput :| []
-        f (file:files) = InputFile <$> (file :| files)
+        -- Parse explicit stdin in the input filepaths
+        parseStdin inputs
+            | any (== InputFile "-") inputs = StandardInput : filter (/= InputFile "-") inputs
+            | otherwise = inputs
+
+        f = fromMaybe (pure StandardInput) . nonEmpty . parseStdin . fmap InputFile
 
         p = Options.Applicative.strArgument
                 (   Options.Applicative.help "Read expression from files instead of standard input"
