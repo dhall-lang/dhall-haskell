@@ -26,6 +26,7 @@ import Dhall.Util
     , Input (..)
     , OutputMode (..)
     , Transitivity (..)
+    , mapMThrowCheckFailed
     )
 
 import qualified Control.Exception
@@ -53,7 +54,7 @@ data Format = Format
 -- | Implementation of the @dhall format@ subcommand
 format :: Format -> IO ()
 format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
-    mapM_ go inputs0
+    mapMThrowCheckFailed go inputs0
   where
     go input = do
         let directory = case input of

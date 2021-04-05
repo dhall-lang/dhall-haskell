@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 -- | Shared utility functions
 
@@ -18,11 +19,15 @@ module Dhall.Util
     , getExpressionAndHeaderFromStdinText
     , Header(..)
     , CheckFailed(..)
+    , mapMThrowCheckFailed
     ) where
 
 import Control.Exception         (Exception (..))
 import Control.Monad.IO.Class    (MonadIO (..))
 import Data.Bifunctor            (first)
+import Data.Either               (lefts)
+import Data.Foldable             (toList)
+import Data.List.NonEmpty        (NonEmpty (..))
 import Data.String               (IsString)
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
@@ -182,6 +187,26 @@ instance Show CheckFailed where
         input_ = case input of
             StandardInput -> "(stdin)"
             InputFile file -> "\"" <> file <> "\""
+
+-- | Exception thrown when the @--check@ flag to a command-line subcommand fails
+newtype MultipleCheckFailed = MultipleCheckFailed (NonEmpty CheckFailed)
+
+instance Exception MultipleCheckFailed
+
+instance Show MultipleCheckFailed where
+    show (MultipleCheckFailed cfs) = unlines . map show $ toList cfs
+
+-- | Helper function similar to mapM_ to run multiple IO but only fail on CheckFailed after all IO is done
+mapMThrowCheckFailed :: (Foldable t, Traversable t) => (a -> IO ()) -> t a -> IO ()
+mapMThrowCheckFailed f xs = post =<< mapM (Control.Exception.tryJust match . f) xs
+  where
+    -- Handle CheckFailed exceptions only
+    match = Just @CheckFailed
+
+    post results =
+        case lefts (toList results) of
+            [] -> pure ()
+            cf:cfs -> Control.Exception.throwIO (MultipleCheckFailed (cf:|cfs))
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)

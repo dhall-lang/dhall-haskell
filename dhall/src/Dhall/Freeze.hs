@@ -38,6 +38,7 @@ import Dhall.Util
     , Input (..)
     , OutputMode (..)
     , Transitivity (..)
+    , mapMThrowCheckFailed
     )
 import System.Console.ANSI (hSupportsANSI)
 
@@ -162,7 +163,7 @@ freezeWithManager
     -> Censor
     -> IO ()
 freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
-    mapM_ go inputs
+    mapMThrowCheckFailed go inputs
   where
     go input = do
         let directory = case input of
