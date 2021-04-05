@@ -75,10 +75,9 @@ writeDhall path expr = do
 
   let outputMode = Dhall.Util.Write
 
-  let input =
-        Dhall.Util.PossiblyTransitiveInputFile
-            path
-            Dhall.Util.NonTransitive
+  let inputs = pure (Dhall.Util.InputFile path)
+
+  let transitivity = Dhall.Util.NonTransitive
 
   let formatOptions = Dhall.Format.Format{..}
 
