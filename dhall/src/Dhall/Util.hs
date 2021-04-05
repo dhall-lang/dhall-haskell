@@ -10,7 +10,6 @@ module Dhall.Util
     , _ERROR
     , Censor(..)
     , Input(..)
-    , PossiblyTransitiveInput(..)
     , Transitivity(..)
     , OutputMode(..)
     , Output(..)
@@ -144,13 +143,6 @@ data Input = StandardInput | InputFile FilePath deriving (Eq)
 
 -- | Path to input or raw input text, necessary since we can't read STDIN twice
 data InputOrTextFromStdin = Input_ Input | StdinText Text
-
-{-| For utilities that may want to process transitive dependencies, like
-    @dhall freeze@
--}
-data PossiblyTransitiveInput
-    = NonTransitiveStandardInput
-    | PossiblyTransitiveInputFile FilePath Transitivity
 
 {-| Specifies whether or not an input's transitive dependencies should also be
     processed.  Transitive dependencies are restricted to relative file imports.

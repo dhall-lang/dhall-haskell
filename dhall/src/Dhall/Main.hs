@@ -65,7 +65,6 @@ import Dhall.Util
     , Input (..)
     , Output (..)
     , OutputMode (..)
-    , PossiblyTransitiveInput (..)
     , Transitivity (..)
     )
 
@@ -448,18 +447,6 @@ parseMode =
     parseInplaceNonTransitive =
             fmap InputFile parseInplace
         <|> pure StandardInput
-
-    parseInplaceTransitive =
-            fmap (\f -> PossiblyTransitiveInputFile f NonTransitive) parseInplace
-        <|> fmap (\f -> PossiblyTransitiveInputFile f    Transitive) parseTransitive
-        <|> pure NonTransitiveStandardInput
-      where
-        parseTransitive = Options.Applicative.strOption
-            (   Options.Applicative.long "transitive"
-            <>  Options.Applicative.help "Modify the specified file and its transitive relative imports in-place"
-            <>  Options.Applicative.metavar "FILE"
-            <>  Options.Applicative.action "file"
-            )
 
     parseInput = fmap f (optional p)
       where
