@@ -22,6 +22,7 @@ module Dhall.Freeze
     ) where
 
 import Data.Foldable       (for_)
+import Data.List.NonEmpty  (NonEmpty)
 import Data.Maybe          (fromMaybe)
 import Dhall.Pretty        (CharacterSet, detectCharacterSet)
 import Dhall.Syntax
@@ -34,8 +35,8 @@ import Dhall.Util
     ( Censor
     , CheckFailed (..)
     , Header (..)
+    , Input (..)
     , OutputMode (..)
-    , PossiblyTransitiveInput (..)
     , Transitivity (..)
     )
 import System.Console.ANSI (hSupportsANSI)
@@ -140,7 +141,8 @@ data Intent
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
     :: OutputMode
-    -> PossiblyTransitiveInput
+    -> Transitivity
+    -> NonEmpty Input
     -> Scope
     -> Intent
     -> Maybe CharacterSet
@@ -152,30 +154,32 @@ freeze = freezeWithManager Dhall.Import.defaultNewManager
 freezeWithManager
     :: IO Dhall.Import.Manager
     -> OutputMode
-    -> PossiblyTransitiveInput
+    -> Transitivity
+    -> NonEmpty Input
     -> Scope
     -> Intent
     -> Maybe CharacterSet
     -> Censor
     -> IO ()
-freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet censor = go input0
+freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
+    mapM_ go inputs
   where
     go input = do
         let directory = case input of
-                NonTransitiveStandardInput ->
+                StandardInput ->
                     "."
-                PossiblyTransitiveInputFile file _ ->
+                InputFile file ->
                     System.FilePath.takeDirectory file
 
         let status = Dhall.Import.emptyStatusWithManager newManager directory
 
         (originalText, transitivity) <- case input of
-            PossiblyTransitiveInputFile file transitivity -> do
+            InputFile file -> do
                 text <- Text.IO.readFile file
 
-                return (text, transitivity)
+                return (text, transitivity0)
 
-            NonTransitiveStandardInput -> do
+            StandardInput -> do
                 text <- Text.IO.getContents
 
                 return (text, NonTransitive)
@@ -190,7 +194,7 @@ freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet c
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                     for_ maybeFilepath $ \filepath ->
-                        go (PossiblyTransitiveInputFile filepath Transitive)
+                        go (InputFile filepath)
 
             NonTransitive ->
                 return ()
@@ -210,7 +214,7 @@ freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet c
                 let unAnnotated = Pretty.unAnnotateS stream
 
                 case input of
-                    PossiblyTransitiveInputFile file _ ->
+                    InputFile file ->
                         if originalText == modifiedText
                             then return ()
                             else
@@ -218,7 +222,7 @@ freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet c
                                     file
                                     (Pretty.Text.renderLazy unAnnotated)
 
-                    NonTransitiveStandardInput -> do
+                    StandardInput -> do
                         supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
                         if supportsANSI
                            then

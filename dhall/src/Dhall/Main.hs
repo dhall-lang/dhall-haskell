@@ -144,7 +144,7 @@ data Mode
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
     | Format { transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
-    | Freeze { possiblyTransitiveInput :: PossiblyTransitiveInput, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
+    | Freeze { transitivity :: Transitivity, all_ :: Bool, cache :: Bool, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Hash { file :: Input, cache :: Bool }
     | Diff { expr1 :: Text, expr2 :: Text }
     | Lint { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
@@ -247,7 +247,7 @@ parseMode =
             Manipulate
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseInplaceTransitive <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen")
+            (Freeze <$> parseTransitiveSwitch <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen" <*> parseFiles)
     <|> subcommand
             Manipulate
             "lint"
@@ -818,7 +818,7 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode possiblyTransitiveInput scope intent chosenCharacterSet censor
+            Dhall.Freeze.freeze outputMode transitivity inputs scope intent chosenCharacterSet censor
 
         Hash {..} -> do
             expression <- getExpression file
