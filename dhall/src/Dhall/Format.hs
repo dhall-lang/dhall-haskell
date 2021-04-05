@@ -11,15 +11,20 @@ module Dhall.Format
     , format
     ) where
 
-import Data.Foldable (for_)
-import Data.Maybe    (fromMaybe)
-import Dhall.Pretty  (CharacterSet, annToAnsiStyle, detectCharacterSet)
+import Data.Foldable      (for_)
+import Data.List.NonEmpty (NonEmpty)
+import Data.Maybe         (fromMaybe)
+import Dhall.Pretty
+    ( CharacterSet
+    , annToAnsiStyle
+    , detectCharacterSet
+    )
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
     , Header (..)
+    , Input (..)
     , OutputMode (..)
-    , PossiblyTransitiveInput (..)
     , Transitivity (..)
     )
 
@@ -40,19 +45,21 @@ import qualified System.IO
 data Format = Format
     { chosenCharacterSet :: Maybe CharacterSet
     , censor             :: Censor
-    , input              :: PossiblyTransitiveInput
+    , transitivity       :: Transitivity
+    , inputs             :: NonEmpty Input
     , outputMode         :: OutputMode
     }
 
 -- | Implementation of the @dhall format@ subcommand
 format :: Format -> IO ()
-format (Format { input = input0, ..}) = go input0
+format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
+    mapM_ go inputs0
   where
     go input = do
         let directory = case input of
-                NonTransitiveStandardInput ->
+                StandardInput ->
                     "."
-                PossiblyTransitiveInputFile file _ ->
+                InputFile file ->
                     System.FilePath.takeDirectory file
 
         let status = Dhall.Import.emptyStatus directory
@@ -66,15 +73,15 @@ format (Format { input = input0, ..}) = go input0
                     <>  "\n")
 
         (originalText, transitivity) <- case input of
-            PossiblyTransitiveInputFile file transitivity -> do
+            InputFile file -> do
                 text <- Data.Text.IO.readFile file
 
-                return (text, transitivity)
-
-            NonTransitiveStandardInput -> do
+                return (text, transitivity0)
+            StandardInput -> do
                 text <- Data.Text.IO.getContents
 
                 return (text, NonTransitive)
+
 
         headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
 
@@ -84,7 +91,7 @@ format (Format { input = input0, ..}) = go input0
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                     for_ maybeFilepath $ \filepath ->
-                        go (PossiblyTransitiveInputFile filepath Transitive)
+                        go (InputFile filepath)
 
             NonTransitive ->
                 return ()
@@ -96,14 +103,14 @@ format (Format { input = input0, ..}) = go input0
         case outputMode of
             Write ->
                 case input of
-                    PossiblyTransitiveInputFile file _ ->
+                    InputFile file ->
                         if originalText == formattedText
                             then return ()
                             else AtomicWrite.LazyText.atomicWriteFile
                                     file
                                     (Pretty.Text.renderLazy docStream)
 
-                    NonTransitiveStandardInput -> do
+                    StandardInput -> do
                         supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
 
                         Pretty.Terminal.renderIO

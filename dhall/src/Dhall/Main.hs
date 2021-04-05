@@ -143,7 +143,7 @@ data Mode
           }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
-    | Format { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
+    | Format { transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Freeze { possiblyTransitiveInput :: PossiblyTransitiveInput, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
     | Hash { file :: Input, cache :: Bool }
     | Diff { expr1 :: Text, expr2 :: Text }
@@ -242,7 +242,7 @@ parseMode =
             Manipulate
             "format"
             "Standard code formatter for the Dhall language"
-            (Format <$> parseInplaceTransitive <*> parseCheck "formatted")
+            (Format <$> parseTransitiveSwitch <*> parseCheck "formatted" <*> parseFiles)
     <|> subcommand
             Manipulate
             "freeze"
@@ -349,6 +349,17 @@ parseMode =
                 <>  Options.Applicative.action "file"
                 )
 
+    parseFiles = fmap f (Options.Applicative.many p)
+      where
+        f []           = StandardInput :| []
+        f (file:files) = InputFile <$> (file :| files)
+
+        p = Options.Applicative.strArgument
+                (   Options.Applicative.help "Read expression from files instead of standard input"
+                <>  Options.Applicative.metavar "FILES"
+                <>  Options.Applicative.action "file"
+                )
+
     parseOutput = fmap f (optional p)
       where
         f Nothing = StandardOutput
@@ -421,6 +432,14 @@ parseMode =
             <>  Options.Applicative.metavar "FILE"
             <>  Options.Applicative.action "file"
             )
+
+    parseTransitiveSwitch = fmap f (Options.Applicative.switch
+        (   Options.Applicative.long "transitive"
+        <>  Options.Applicative.help "Modify the input and its transitive relative imports in-place"
+        ))
+        where
+            f False = NonTransitive
+            f True = Transitive
 
     parseInplaceNonTransitive =
             fmap InputFile parseInplace
@@ -788,8 +807,7 @@ command (Options {..}) = do
                 else Exit.exitFailure
 
         Format {..} ->
-            Dhall.Format.format
-                Dhall.Format.Format{ input = possiblyTransitiveInput, ..}
+            Dhall.Format.format Dhall.Format.Format{..}
 
         Freeze {..} -> do
             let scope = if all_ then AllImports else OnlyRemoteImports
