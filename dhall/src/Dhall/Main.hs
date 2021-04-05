@@ -147,7 +147,7 @@ data Mode
     | Freeze { transitivity :: Transitivity, all_ :: Bool, cache :: Bool, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Hash { file :: Input, cache :: Bool }
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
+    | Lint { transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Tags
           { input :: Input
           , output :: Output
@@ -252,7 +252,7 @@ parseMode =
             Manipulate
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseInplaceTransitive <*> parseCheck "linted")
+            (Lint <$> parseTransitiveSwitch <*> parseCheck "linted" <*> parseFiles)
     <|> subcommand
             Manipulate
             "rewrite-with-schemas"
@@ -837,21 +837,21 @@ command (Options {..}) = do
 
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
-        Lint { possiblyTransitiveInput = input0, ..} -> go input0
+        Lint { transitivity = transitivity0, ..} -> mapM_ go inputs
           where
             go input = do
                 let directory = case input of
-                        NonTransitiveStandardInput         -> "."
-                        PossiblyTransitiveInputFile file _ -> System.FilePath.takeDirectory file
+                        StandardInput  -> "."
+                        InputFile file -> System.FilePath.takeDirectory file
 
                 let status = Dhall.Import.emptyStatus directory
 
                 (originalText, transitivity) <- case input of
-                    PossiblyTransitiveInputFile file transitivity -> do
+                    InputFile file -> do
                         text <- Data.Text.IO.readFile file
 
-                        return (text, transitivity)
-                    NonTransitiveStandardInput -> do
+                        return (text, transitivity0)
+                    StandardInput -> do
                         text <- Data.Text.IO.getContents
 
                         return (text, NonTransitive)
@@ -867,7 +867,7 @@ command (Options {..}) = do
                             maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                             for_ maybeFilepath $ \filepath ->
-                                go (PossiblyTransitiveInputFile filepath Transitive)
+                                go (InputFile filepath)
 
                     NonTransitive ->
                         return ()
@@ -884,12 +884,12 @@ command (Options {..}) = do
                 case outputMode of
                     Write ->
                         case input of
-                            PossiblyTransitiveInputFile file _ ->
+                            InputFile file ->
                                 if originalText == modifiedText
                                     then return ()
                                     else writeDocToFile file doc
 
-                            NonTransitiveStandardInput ->
+                            StandardInput ->
                                 renderDoc System.IO.stdout doc
 
                     Check ->
