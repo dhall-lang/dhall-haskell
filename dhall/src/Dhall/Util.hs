@@ -163,13 +163,13 @@ data Output = StandardOutput | OutputFile FilePath
 data OutputMode = Write | Check
 
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
-data CheckFailed = CheckFailed { command :: Text, modified :: Text }
+data CheckFailed = CheckFailed { command :: Text, modified :: Text, input :: Input }
 
 instance Exception CheckFailed
 
 instance Show CheckFailed where
     show CheckFailed{..} =
-         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed\n\
+         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed on " <> input_ <> "\n\
         \\n\
         \You ran ❰dhall " <> command_ <> " --check❱, but the input appears to have not\n\
         \been " <> modified_ <> " before, or was changed since the last time the input\n\
@@ -178,6 +178,10 @@ instance Show CheckFailed where
         modified_ = Data.Text.unpack modified
 
         command_ = Data.Text.unpack command
+
+        input_ = case input of
+            StandardInput -> "(stdin)"
+            InputFile file -> "\"" <> file <> "\""
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)
