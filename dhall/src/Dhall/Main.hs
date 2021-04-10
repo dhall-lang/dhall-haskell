@@ -66,6 +66,7 @@ import Dhall.Util
     , Output (..)
     , OutputMode (..)
     , Transitivity (..)
+    , handleMultipleChecksFailed
     )
 
 import qualified Codec.CBOR.JSON
@@ -821,7 +822,8 @@ command (Options {..}) = do
 
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
-        Lint { transitivity = transitivity0, ..} -> mapM_ go inputs
+        Lint { transitivity = transitivity0, ..} ->
+            handleMultipleChecksFailed "lint" "linted" go inputs
           where
             go input = do
                 let directory = case input of
@@ -866,7 +868,7 @@ command (Options {..}) = do
                 let modifiedText = Pretty.Text.renderStrict stream <> "\n"
 
                 case outputMode of
-                    Write ->
+                    Write -> do
                         case input of
                             InputFile file ->
                                 if originalText == modifiedText
@@ -876,13 +878,13 @@ command (Options {..}) = do
                             StandardInput ->
                                 renderDoc System.IO.stdout doc
 
-                    Check ->
-                        if originalText == modifiedText
-                            then return ()
-                            else do
-                                let modified = "linted"
+                        return (Right ())
 
-                                Control.Exception.throwIO CheckFailed{ command = "lint", ..}
+                    Check ->
+                        return $
+                            if originalText == modifiedText
+                                then Right ()
+                                else Left CheckFailed{..}
 
         Encode {..} -> do
             expression <- getExpression file

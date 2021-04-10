@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeApplications  #-}
@@ -19,7 +20,8 @@ module Dhall.Util
     , getExpressionAndHeaderFromStdinText
     , Header(..)
     , CheckFailed(..)
-    , mapMThrowCheckFailed
+    , MultipleCheckFailed(..)
+    , handleMultipleChecksFailed
     ) where
 
 import Control.Exception         (Exception (..))
@@ -167,15 +169,22 @@ data Output = StandardOutput | OutputFile FilePath
 -}
 data OutputMode = Write | Check
 
+newtype CheckFailed = CheckFailed { input :: Input }
+
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
-data CheckFailed = CheckFailed { command :: Text, modified :: Text, input :: Input }
+data MultipleCheckFailed = MultipleCheckFailed
+  { command :: Text
+  , modified :: Text
+  , inputs :: NonEmpty Input
+  }
 
-instance Exception CheckFailed
+instance Exception MultipleCheckFailed
 
-instance Show CheckFailed where
-    show CheckFailed{..} =
-         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed on " <> input_ <> "\n\
-        \\n\
+instance Show MultipleCheckFailed where
+    show MultipleCheckFailed{..} =
+         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed on:\n\
+        \\n" <> files <>
+        "\n\
         \You ran ❰dhall " <> command_ <> " --check❱, but the input appears to have not\n\
         \been " <> modified_ <> " before, or was changed since the last time the input\n\
         \was " <> modified_ <> ".\n"
@@ -184,29 +193,31 @@ instance Show CheckFailed where
 
         command_ = Data.Text.unpack command
 
-        input_ = case input of
-            StandardInput -> "(input)"
-            InputFile file -> "\"" <> file <> "\""
+        files = unlines . map format $ toList inputs
 
--- | Exception thrown when the @--check@ flag to a command-line subcommand fails
-newtype MultipleCheckFailed = MultipleCheckFailed (NonEmpty CheckFailed)
+        format input = case input of
+            StandardInput -> "↳ (stdin)"
+            InputFile file -> "↳ " <> file
 
-instance Exception MultipleCheckFailed
-
-instance Show MultipleCheckFailed where
-    show (MultipleCheckFailed cfs) = unlines . map show $ toList cfs
-
--- | Helper function similar to mapM_ to run multiple IO but only fail on CheckFailed after all IO is done
-mapMThrowCheckFailed :: (Foldable t, Traversable t) => (a -> IO ()) -> t a -> IO ()
-mapMThrowCheckFailed f xs = post =<< mapM (Control.Exception.tryJust match . f) xs
+-- | Run IO for multiple inputs, then collate all the check failures before
+-- throwing if there was any failure
+handleMultipleChecksFailed
+    :: (Foldable t, Traversable t)
+    => Text
+    -> Text
+    -> (a -> IO (Either CheckFailed ()))
+    -> t a
+    -> IO ()
+handleMultipleChecksFailed command modified f xs = post =<< mapM f xs
   where
-    -- Handle CheckFailed exceptions only
-    match = Just @CheckFailed
-
     post results =
         case lefts (toList results) of
             [] -> pure ()
-            cf:cfs -> Control.Exception.throwIO (MultipleCheckFailed (cf:|cfs))
+            cf:cfs -> Control.Exception.throwIO $ MultipleCheckFailed
+                { command
+                , modified
+                , inputs = fmap input (cf:|cfs)
+                }
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)

@@ -26,10 +26,9 @@ import Dhall.Util
     , Input (..)
     , OutputMode (..)
     , Transitivity (..)
-    , mapMThrowCheckFailed
+    , handleMultipleChecksFailed
     )
 
-import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
@@ -54,7 +53,7 @@ data Format = Format
 -- | Implementation of the @dhall format@ subcommand
 format :: Format -> IO ()
 format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
-    mapMThrowCheckFailed go inputs0
+    handleMultipleChecksFailed "format" "formatted" go inputs0
   where
     go input = do
         let directory = case input of
@@ -102,7 +101,7 @@ format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
         let formattedText = Pretty.Text.renderStrict docStream
 
         case outputMode of
-            Write ->
+            Write -> do
                 case input of
                     InputFile file ->
                         if originalText == formattedText
@@ -120,12 +119,10 @@ format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
                                 then (fmap annToAnsiStyle docStream)
                                 else (Pretty.unAnnotateS docStream))
 
+                return (Right ())
+
             Check ->
-                if originalText == formattedText
-                    then return ()
-                    else do
-                        let command = "format"
-
-                        let modified = "formatted"
-
-                        Control.Exception.throwIO CheckFailed{..}
+                return $
+                    if originalText == formattedText
+                        then Right ()
+                        else Left CheckFailed{..}

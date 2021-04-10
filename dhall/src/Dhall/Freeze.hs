@@ -38,7 +38,7 @@ import Dhall.Util
     , Input (..)
     , OutputMode (..)
     , Transitivity (..)
-    , mapMThrowCheckFailed
+    , handleMultipleChecksFailed
     )
 import System.Console.ANSI (hSupportsANSI)
 
@@ -163,7 +163,7 @@ freezeWithManager
     -> Censor
     -> IO ()
 freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
-    mapMThrowCheckFailed go inputs
+    handleMultipleChecksFailed "freeze" "frozen" go inputs
   where
     go input = do
         let directory = case input of
@@ -231,15 +231,13 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
                            else
                              Pretty.renderIO System.IO.stdout unAnnotated
 
+                return (Right ())
+
             Check ->
-                if originalText == modifiedText
-                    then return ()
-                    else do
-                        let command = "freeze"
-
-                        let modified = "frozen"
-
-                        Exception.throwIO CheckFailed{..}
+                return $
+                    if originalText == modifiedText
+                        then Right ()
+                        else Left CheckFailed{..}
 
 {-| Slightly more pure version of the `freeze` function
 
