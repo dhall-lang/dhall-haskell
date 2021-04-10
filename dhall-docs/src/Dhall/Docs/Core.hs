@@ -4,6 +4,7 @@
     To do so, just wrap your function in `IO` if you need to do I/O operations,
     and make pure functions receive that IO result as an input
 -}
+{-# LANGUAGE BlockArguments        #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
@@ -27,8 +28,8 @@ module Dhall.Docs.Core
 import Control.Applicative        (Alternative (..))
 import Control.Monad.Writer.Class (MonadWriter)
 import Data.ByteString            (ByteString)
-import Data.Function              (on)
 import Data.Map.Strict            (Map)
+import Data.Ord                   (comparing)
 import Data.Text                  (Text)
 import Data.Void                  (Void)
 import Dhall.Core
@@ -55,7 +56,7 @@ import Path                       (Abs, Dir, File, Path, Rel, (</>))
 import Text.Megaparsec            (ParseErrorBundle (..))
 
 import qualified Control.Applicative        as Applicative
-import qualified Control.Monad
+import qualified Control.Monad              as Monad
 import qualified Control.Monad.Writer.Class as Writer
 import qualified Data.ByteString
 import qualified Data.List
@@ -315,55 +316,42 @@ makeHtml packageName characterSet DhallFile {..} = do
 
     return htmlAsText
 
+grouped :: Ord k => [(k, v)] -> Map k [v]
+grouped = Map.unionsWith (<>) . map adapt
+  where
+    adapt (k, v) = Map.singleton k [v]
+
 {-| Create an @index.html@ file on each available folder in the input.
 
-    Each @index.html@ lists the files and directories of its directory. Listed
-    directories will be compacted as much as it cans to improve readability.
-
-    For example, take the following directory-tree structure
-
-    > .
-    > ├── a
-    > │   └── b
-    > │       └── c
-    > │           └── b.dhall
-    > └── a.dhall
-
-    To improve navigation, the index at @./index.html@ should list
-    @a/b/c@ and no @index.html@ should be generated inside of `a/` or
-    `a/b/`, but yes on `a/b/c/` in the last one there is the @b.dhall@ file
+    Each @index.html@ lists the files and directories of its directory.
 -}
 createIndexes :: Text -> CharacterSet -> [DhallFile] -> [(Path Rel File, Text)]
-createIndexes packageName characterSet dhallFiles = map toIndex dirToDirsAndFilesMapAssocs
+createIndexes packageName characterSet dhallFiles =
+    map toIndex (Map.assocs dirToDirsAndFiles)
   where
-    -- Files grouped by their directory
-    dirToFilesMap :: Map (Path Rel Dir) [DhallFile]
-    dirToFilesMap = Map.unionsWith (<>) $ map toMap $ Data.List.sortBy (compare `on` path) dhallFiles
-      where
-        toMap :: DhallFile -> Map (Path Rel Dir) [DhallFile]
-        toMap dhallFile = Map.singleton (Path.parent $ path dhallFile) [dhallFile]
+    dirToFiles :: Map (Path Rel Dir) [DhallFile]
+    dirToFiles = grouped do
+        dhallFile <- Data.List.sortBy (comparing path) dhallFiles
 
-    {-  This is used to compute the list of exported packages on each folder.
-        We try to compress the folders as much as we can. See `createIndexes`
-        documentation to get more information.
-    -}
-    dirToDirsMap :: Map (Path Rel Dir) [Path Rel Dir]
-    dirToDirsMap = foldr cons Map.empty dirs
-      where
-        dirs = filter keep (Map.keys dirToFilesMap)
-          where
-            keep reldir = Path.parent reldir /= reldir
+        return (Path.parent (path dhallFile), dhallFile)
 
-        cons d = Map.insertWith (<>) (Path.parent d) [d]
+    -- This is used to compute the list of exported packages on each folder.
+    dirToDirs :: Map (Path Rel Dir) [Path Rel Dir]
+    dirToDirs = grouped do
+        directory <- Map.keys dirToFiles
 
-    dirToDirsAndFilesMapAssocs :: [(Path Rel Dir, ([DhallFile], [Path Rel Dir]))]
-    dirToDirsAndFilesMapAssocs = Map.assocs $
+        Monad.guard (Path.parent directory /= directory)
+
+        return (Path.parent directory, directory)
+
+    dirToDirsAndFiles :: Map (Path Rel Dir) ([DhallFile], [Path Rel Dir])
+    dirToDirsAndFiles =
         Map.Merge.merge
             (Map.Merge.mapMissing onlyFiles)
             (Map.Merge.mapMissing onlyDirectories)
             (Map.Merge.zipWithMatched both)
-            dirToFilesMap
-            dirToDirsMap
+            dirToFiles
+            dirToDirs
       where
         onlyFiles       _ files             = (files, []         )
         onlyDirectories _       directories = ([]   , directories)
@@ -371,13 +359,22 @@ createIndexes packageName characterSet dhallFiles = map toIndex dirToDirsAndFile
 
     toIndex :: (Path Rel Dir, ([DhallFile], [Path Rel Dir])) -> (Path Rel File, Text)
     toIndex (indexDir, (files, dirs)) =
-        (indexDir </> $(Path.mkRelFile "index.html"), Text.Lazy.toStrict $ Lucid.renderText html)
+        (indexDir </> $(Path.mkRelFile "index.html"), Text.Lazy.toStrict (Lucid.renderText html))
       where
         html = indexToHtml
             indexDir
-            (map (\DhallFile{..} -> (stripPrefix $ addHtmlExt path, mType)) files)
+            (map (\DhallFile{..} -> (stripPrefix $ addHtmlExt path, mType)) filteredFiles)
             (map stripPrefix dirs)
             DocParams { relativeResourcesPath = resolveRelativePath indexDir, packageName, characterSet }
+
+        filteredFiles = do
+            file@DhallFile{..} <- files
+
+            let FileComments{..} = fileComments
+
+            case headerComment of
+                Nothing -> empty
+                Just _  -> return file
 
         stripPrefix :: Path Rel a -> Path Rel a
         stripPrefix relpath =
@@ -450,7 +447,7 @@ generateDocs inputDir outLink packageName characterSet = do
     copyDataDir :: Path Abs Dir -> IO ()
     copyDataDir outDir = do
         dataDir <- getDataDir
-        Control.Monad.forM_ dataDir $ \(filename, contents) -> do
+        Monad.forM_ dataDir $ \(filename, contents) -> do
             let finalPath = Path.fromAbsFile $ outDir </> filename
             Data.ByteString.writeFile finalPath contents
 
