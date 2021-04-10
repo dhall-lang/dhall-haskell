@@ -436,13 +436,10 @@ parseMode =
             <>  Options.Applicative.action "file"
             )
 
-    parseTransitiveSwitch = fmap f (Options.Applicative.switch
+    parseTransitiveSwitch = Options.Applicative.flag NonTransitive Transitive
         (   Options.Applicative.long "transitive"
         <>  Options.Applicative.help "Modify the input and its transitive relative imports in-place"
-        ))
-        where
-            f False = NonTransitive
-            f True = Transitive
+        )
 
     parseInplaceNonTransitive =
             fmap InputFile parseInplace

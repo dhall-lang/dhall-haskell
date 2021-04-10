@@ -185,7 +185,7 @@ instance Show CheckFailed where
         command_ = Data.Text.unpack command
 
         input_ = case input of
-            StandardInput -> "(stdin)"
+            StandardInput -> "(input)"
             InputFile file -> "\"" <> file <> "\""
 
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
