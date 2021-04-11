@@ -169,6 +169,9 @@ data Output = StandardOutput | OutputFile FilePath
 -}
 data OutputMode = Write | Check
 
+-- | A check failure corresponding to a single input.
+-- This type is intended to be used with 'MultipleCheckFailed' for error
+-- reporting.
 newtype CheckFailed = CheckFailed { input :: Input }
 
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
