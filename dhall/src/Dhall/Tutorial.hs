@@ -1619,7 +1619,7 @@ import Dhall
 -- > let replicate = https://prelude.dhall-lang.org/List/replicate
 -- > in  replicate 5
 -- > $
--- > $ dhall freeze --inplace ./foo.dhall
+-- > $ dhall freeze ./foo.dhall
 -- > $ cat ./foo.dhall
 -- > let replicate =
 -- >       https://prelude.dhall-lang.org/List/replicate sha256:d4250b45278f2d692302489ac3e78280acb238d27541c837ce46911ff3baa347
@@ -1744,10 +1744,9 @@ import Dhall
 -- >       (List (List Natural))
 -- >       (replicate 5 (List Natural) (replicate 5 Natural 1))
 --
--- You can also use the formatter to modify files in place using the
--- @--inplace@ flag (i.e. for formatting source code):
+-- You can also use the formatter to modify files in place:
 --
--- > $ dhall format --inplace ./unformatted
+-- > $ dhall format ./unformatted
 --
 -- Carefully note that the code formatter does not preserve all comments.
 -- Currently, the formatter only preserves two types of comments:
