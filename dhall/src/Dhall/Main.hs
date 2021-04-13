@@ -23,6 +23,7 @@ module Dhall.Main
 
 import Control.Applicative       (optional, (<|>))
 import Control.Exception         (Handler (..), SomeException)
+import Control.Monad             (when)
 import Data.Foldable             (for_)
 import Data.Maybe                (fromMaybe)
 import Data.List.NonEmpty        (NonEmpty (..), nonEmpty)
@@ -143,11 +144,11 @@ data Mode
           }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
-    | Format { transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
-    | Freeze { transitivity :: Transitivity, all_ :: Bool, cache :: Bool, outputMode :: OutputMode, inputs :: NonEmpty Input }
+    | Format { deprecatedInPlace :: Bool, transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
+    | Freeze { deprecatedInPlace :: Bool, transitivity :: Transitivity, all_ :: Bool, cache :: Bool, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Hash { file :: Input, cache :: Bool }
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
+    | Lint { deprecatedInPlace :: Bool, transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Tags
           { input :: Input
           , output :: Output
@@ -242,17 +243,17 @@ parseMode =
             Manipulate
             "format"
             "Standard code formatter for the Dhall language"
-            (Format <$> parseTransitiveSwitch <*> parseCheck "formatted" <*> parseFiles)
+            (Format <$> deprecatedInPlace <*> parseTransitiveSwitch <*> parseCheck "formatted" <*> parseFiles)
     <|> subcommand
             Manipulate
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseTransitiveSwitch <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen" <*> parseFiles)
+            (Freeze <$> deprecatedInPlace <*> parseTransitiveSwitch <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen" <*> parseFiles)
     <|> subcommand
             Manipulate
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseTransitiveSwitch <*> parseCheck "linted" <*> parseFiles)
+            (Lint <$> deprecatedInPlace <*> parseTransitiveSwitch <*> parseCheck "linted" <*> parseFiles)
     <|> subcommand
             Manipulate
             "rewrite-with-schemas"
@@ -332,6 +333,12 @@ parseMode =
         <*> parseVersion
         )
   where
+    deprecatedInPlace =
+        Options.Applicative.switch
+            (   Options.Applicative.long "inplace"
+            <>  Options.Applicative.internal -- completely hidden from help
+            )
+
     argument =
             fmap Data.Text.pack
         .   Options.Applicative.strArgument
@@ -795,10 +802,16 @@ command (Options {..}) = do
                 then return ()
                 else Exit.exitFailure
 
-        Format {..} ->
+        Format {..} -> do
+            when deprecatedInPlace $
+                System.IO.hPutStrLn System.IO.stderr "Warning: the flag \"--inplace\" is deprecated"
+
             Dhall.Format.format Dhall.Format.Format{..}
 
         Freeze {..} -> do
+            when deprecatedInPlace $
+                System.IO.hPutStrLn System.IO.stderr "Warning: the flag \"--inplace\" is deprecated"
+
             let scope = if all_ then AllImports else OnlyRemoteImports
 
             let intent = if cache then Cache else Secure
@@ -822,7 +835,10 @@ command (Options {..}) = do
 
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
-        Lint { transitivity = transitivity0, ..} ->
+        Lint { transitivity = transitivity0, ..} -> do
+            when deprecatedInPlace $
+                System.IO.hPutStrLn System.IO.stderr "Warning: the flag \"--inplace\" is deprecated"
+
             handleMultipleChecksFailed "lint" "linted" go inputs
           where
             go input = do
