@@ -7,6 +7,9 @@
 
 module Dhall.Parser.Combinators
     ( Parser(..)
+    , runParser
+    , CommentControl(..)
+    , askCommentControl
     , SourcedException(..)
     , laxSrcEq
     , count
@@ -22,17 +25,18 @@ module Dhall.Parser.Combinators
     ) where
 
 
-import Control.Applicative       (Alternative (..), liftA2)
-import Control.Exception         (Exception)
-import Control.Monad             (MonadPlus (..))
-import Data.String               (IsString (..))
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Pretty (..))
-import Data.Void                 (Void)
-import Dhall.Map                 (Map)
-import Dhall.Src                 (Src (..))
-import Text.Parser.Combinators   (try, (<?>))
-import Text.Parser.Token         (TokenParsing (..))
+import Control.Applicative        (Alternative (..), liftA2)
+import Control.Exception          (Exception)
+import Control.Monad              (MonadPlus (..))
+import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Data.String                (IsString (..))
+import Data.Text                  (Text)
+import Data.Text.Prettyprint.Doc  (Pretty (..))
+import Data.Void                  (Void)
+import Dhall.Map                  (Map)
+import Dhall.Src                  (Src (..))
+import Text.Parser.Combinators    (try, (<?>))
+import Text.Parser.Token          (TokenParsing (..))
 
 import qualified Control.Monad.Fail
 import qualified Data.Char
@@ -69,11 +73,38 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p p' && eq q q'
         a == a' && b == b'
 {-# INLINE laxSrcEq #-}
 
+-- | A way to control how comments get parsed
+--
+-- Parsing comment as whitespace is fast and convenient when we don't care
+-- about the comments. We often need to keep comments thoughout
+-- transformations.
+data CommentControl
+  = CommentIsWhitespace
+  | CommentIsNeeded
+  deriving Eq
+
 {-| A `Parser` that is almost identical to
-    @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except treating Haskell-style
-    comments as whitespace
+    @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except optionally treating
+    Haskell-style comments as whitespace
 -}
-newtype Parser a = Parser { unParser :: Text.Megaparsec.Parsec Void Text a }
+newtype Parser a = Parser {unParser :: ReaderT CommentControl (Text.Megaparsec.Parsec Void Text) a }
+
+-- | Get the current CommentControl comment from the scope
+askCommentControl :: Parser CommentControl
+askCommentControl = Parser ask
+
+-- | Run a 'Parser' on some input with control over how comments get parsed
+runParser
+    :: Parser a
+    -> CommentControl
+    -- ^ Control if comments are considered whitespace
+    -> String
+    -- ^ User-friendly name describing the input expression,
+    --   used in parsing error messages
+    -> Text
+    -- ^ Input expression to parse
+    -> Either (Text.Megaparsec.ParseErrorBundle Text Void) a
+runParser (Parser parser) commentControl = Text.Megaparsec.parse (runReaderT parser commentControl)
 
 instance Functor Parser where
     fmap f (Parser x) = Parser (fmap f x)

@@ -325,13 +325,16 @@ identifier = do
     return (V x n)
 
 whitespaceChunk :: Parser ()
-whitespaceChunk =
-    choice
-        [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
-        , void (Text.Parser.Char.text "\r\n" <?> "newline")
-        , void lineComment
-        , void blockComment
-        ] <?> "whitespace"
+whitespaceChunk = do
+    commentControl <- askCommentControl
+
+    choice (concat
+        [ [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
+          , void (Text.Parser.Char.text "\r\n" <?> "newline")
+          ]
+        , [ void lineComment | commentControl == CommentIsWhitespace ]
+        , [ void blockComment | commentControl == CommentIsWhitespace ]
+        ]) <?> "whitespace"
   where
     predicate c = c == ' ' || c == '\t' || c == '\n'
 

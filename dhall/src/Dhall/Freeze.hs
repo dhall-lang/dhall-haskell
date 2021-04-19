@@ -147,6 +147,7 @@ freeze
     -> Scope
     -> Intent
     -> Maybe CharacterSet
+    -> Util.CommentControl
     -> Censor
     -> IO ()
 freeze = freezeWithManager Dhall.Import.defaultNewManager
@@ -160,9 +161,10 @@ freezeWithManager
     -> Scope
     -> Intent
     -> Maybe CharacterSet
+    -> Util.CommentControl
     -> Censor
     -> IO ()
-freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
+freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet commentControl censor =
     handleMultipleChecksFailed "freeze" "frozen" go inputs
   where
     go input = do
@@ -185,7 +187,7 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
 
                 return (text, NonTransitive)
 
-        (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+        (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText commentControl censor originalText
 
         let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 

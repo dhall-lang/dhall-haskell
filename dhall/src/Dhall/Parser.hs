@@ -19,6 +19,8 @@ module Dhall.Parser (
     , SourcedException(..)
     , ParseError(..)
     , Parser(..)
+    , runParser
+    , CommentControl (..)
     ) where
 
 import Control.Exception (Exception)
@@ -82,7 +84,7 @@ exprFromText
             --   used in parsing error messages
   -> Text   -- ^ Input expression to parse
   -> Either ParseError (Expr Src Import)
-exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
+exprFromText delta text = fmap snd (exprAndHeaderFromText CommentIsWhitespace delta text)
 
 -- | A header corresponds to the leading comment at the top of a Dhall file.
 --
@@ -114,11 +116,13 @@ createHeader text = Header (prefix <> newSuffix)
 --
 -- This is used by @dhall-format@ to preserve leading comments and whitespace
 exprAndHeaderFromText
-    :: String -- ^ User-friendly name describing the input expression,
+    :: CommentControl
+    -- ^ Control if comments are considered whitespace
+    -> String -- ^ User-friendly name describing the input expression,
               --   used in parsing error messages
     -> Text   -- ^ Input expression to parse
     -> Either ParseError (Header, Expr Src Import)
-exprAndHeaderFromText delta text = case result of
+exprAndHeaderFromText commentControl delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
     Right (txt, r) -> Right (createHeader txt, r)
   where
@@ -128,4 +132,4 @@ exprAndHeaderFromText delta text = case result of
         Text.Megaparsec.eof
         return (bytes, r)
 
-    result = Text.Megaparsec.parse (unParser parser) delta text
+    result = runParser parser commentControl delta text

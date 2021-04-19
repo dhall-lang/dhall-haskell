@@ -44,6 +44,7 @@ import qualified System.IO
 -- | Arguments to the `format` subcommand
 data Format = Format
     { chosenCharacterSet :: Maybe CharacterSet
+    , commentControl     :: Dhall.Util.CommentControl
     , censor             :: Censor
     , transitivity       :: Transitivity
     , inputs             :: NonEmpty Input
@@ -82,8 +83,7 @@ format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
 
                 return (text, NonTransitive)
 
-
-        headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+        headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText commentControl censor originalText
 
         case transitivity of
             Transitive ->

@@ -62,6 +62,7 @@ import Dhall.Core
 import Dhall.Util
     ( Censor (..)
     , CheckFailed (..)
+    , CommentControl (..)
     , Header (..)
     , Input (..)
     , Output (..)
@@ -118,6 +119,7 @@ data Options = Options
     , explain            :: Bool
     , plain              :: Bool
     , chosenCharacterSet :: Maybe CharacterSet
+    , commentControl     :: CommentControl
     , censor             :: Censor
     }
 
@@ -197,6 +199,7 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> parseCharacterSet
+    <*> parseCommentControl
     <*> parseCensor
   where
     switch name description =
@@ -204,6 +207,13 @@ parseOptions =
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
             )
+
+    parseCommentControl = fmap f $ switch
+        "strict-comment-parsing"
+        "Parse comments strictly to ensure no comment is dropped on format"
+      where
+        f True  = CommentIsNeeded
+        f False = CommentIsWhitespace
 
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where
@@ -816,7 +826,7 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode transitivity inputs scope intent chosenCharacterSet censor
+            Dhall.Freeze.freeze outputMode transitivity inputs scope intent chosenCharacterSet commentControl censor
 
         Hash {..} -> do
             expression <- getExpression file
@@ -859,7 +869,7 @@ command (Options {..}) = do
                         return (text, NonTransitive)
 
                 (Header header, parsedExpression) <-
-                    Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+                    Dhall.Util.getExpressionAndHeaderFromStdinText commentControl censor originalText
 
                 let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 
