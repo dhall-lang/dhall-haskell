@@ -4,6 +4,7 @@
 module Main (main) where
 
 import Control.Applicative.Combinators (option, sepBy1)
+import Control.Monad.Trans.Reader      (ReaderT (runReaderT))
 import Data.Aeson                      (decodeFileStrict, eitherDecodeFileStrict)
 import Data.Bifunctor                  (bimap)
 import Data.Foldable                   (for_)
@@ -70,6 +71,8 @@ writeDhall path expr = do
   Text.writeFile path $ pretty expr <> "\n"
 
   let chosenCharacterSet = Nothing -- Infer from input
+
+  let commentControl = Dhall.Util.CommentIsWhitespace
 
   let censor = Dhall.Util.NoCensor
 
@@ -182,7 +185,10 @@ parsePrefixMap =
       e <- Dhall.Parser.expr
       imp <- parseImport prefix e
       return (pack prefix, imp)
-    result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "MAPPING"
+
+    parser' = runReaderT (Dhall.Parser.unParser parser) Dhall.Util.CommentIsWhitespace
+
+    result = parse ((parser' `sepBy1` char ',') <* eof) "MAPPING"
 
 parseSplits :: Options.Applicative.ReadM (Data.Map.Map ModelHierarchy (Maybe ModelName))
 parseSplits =
@@ -198,7 +204,10 @@ parseSplits =
         mo <- parseModel
         return mo
       return (path, model)
-    result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "MAPPING"
+
+    parser' = runReaderT (Dhall.Parser.unParser parser) Dhall.Util.CommentIsWhitespace
+
+    result = parse ((parser' `sepBy1` char ',') <* eof) "MAPPING"
 
 
 parseOptions :: Options.Applicative.Parser Options
