@@ -19,7 +19,7 @@ import Data.Functor        (void)
 import Data.List.NonEmpty  (NonEmpty (..), (<|))
 import Data.Text           (Text)
 import Dhall.Docs.Util
-import Dhall.Parser        (Parser (..))
+import Dhall.Parser        (Parser (..), runParser, CommentControl (CommentIsWhitespace))
 import Text.Megaparsec     (SourcePos, (<?>))
 
 import qualified Data.Either
@@ -126,7 +126,7 @@ parseComments delta text = case result of
         Text.Megaparsec.eof
         pure $ concatMap NonEmpty.toList comments
 
-    result = Text.Megaparsec.parse (unParser parser) delta text
+    result = runParser parser CommentIsWhitespace delta text
 
 data CommentParseError
     = MissingNewlineOnBlockComment
