@@ -12,6 +12,7 @@ module Dhall.LSP.Backend.Parsing
 where
 
 import Control.Applicative     (optional, (<|>))
+import Data.Either             (fromRight)
 import Data.Functor            (void)
 import Data.Text               (Text)
 import Dhall.Core
@@ -41,11 +42,15 @@ import Text.Megaparsec         (SourcePos (..))
 
 import qualified Text.Megaparsec as Megaparsec
 
+eitherToMaybe :: Either e a -> Maybe a
+eitherToMaybe = either (const Nothing) Just
+
 -- | Parse the outermost binding in a Src descriptor of a let-block and return
 --   the rest. Ex. on input `let a = 0 let b = a in b` parses `let a = 0 ` and
 --   returns the Src descriptor containing `let b = a in b`.
 getLetInner :: Src -> Maybe Src
-getLetInner (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetInnerOffset) text
+getLetInner (Src left _ text) = eitherToMaybe $
+    runParser parseLetInnerOffset CommentIsWhitespace "(input)" text
  where parseLetInnerOffset = do
           setSourcePos left
           _let
@@ -72,7 +77,8 @@ getLetInner (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetInnerOff
 --   annotation. If the let expression does not have a type annotation return
 --   a 0-length Src where we can insert one.
 getLetAnnot :: Src -> Maybe Src
-getLetAnnot (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetAnnot) text
+getLetAnnot (Src left _ text) = eitherToMaybe $
+    runParser parseLetAnnot CommentIsWhitespace "(input)" text
   where parseLetAnnot = do
           setSourcePos left
           _let
@@ -93,10 +99,8 @@ getLetAnnot (Src left _ text) = Megaparsec.parseMaybe (unParser parseLetAnnot) t
 --   identifier, i.e. given `let x = ... in ...` return the Src descriptor
 --   containing `x`. Returns the original Src if something goes wrong.
 getLetIdentifier :: Src -> Src
-getLetIdentifier src@(Src left _ text) =
-  case Megaparsec.parseMaybe (unParser parseLetIdentifier) text of
-    Nothing -> src
-    Just e -> e
+getLetIdentifier src@(Src left _ text) = fromRight src $
+    runParser parseLetIdentifier CommentIsWhitespace "(input)" text
   where parseLetIdentifier = do
           setSourcePos left
           _let
@@ -109,9 +113,9 @@ getLetIdentifier src@(Src left _ text) =
 
 -- | Cf. `getLetIdentifier`.
 getLamIdentifier :: Src -> Maybe Src
-getLamIdentifier (Src left _ text) =
-  Megaparsec.parseMaybe (unParser parseLetIdentifier) text
-  where parseLetIdentifier = do
+getLamIdentifier (Src left _ text) = eitherToMaybe $
+    runParser parseLamIdentifier CommentIsWhitespace "(input)" text
+  where parseLamIdentifier = do
           setSourcePos left
           _ <- _lambda
           whitespace
@@ -125,9 +129,9 @@ getLamIdentifier (Src left _ text) =
 
 -- | Cf. `getLetIdentifier`.
 getForallIdentifier :: Src -> Maybe Src
-getForallIdentifier (Src left _ text) =
-  Megaparsec.parseMaybe (unParser parseLetIdentifier) text
-  where parseLetIdentifier = do
+getForallIdentifier (Src left _ text) = eitherToMaybe $
+    runParser parseForallIdentifier CommentIsWhitespace "(input)" text
+  where parseForallIdentifier = do
           setSourcePos left
           _ <- _forall
           whitespace
@@ -143,8 +147,8 @@ getForallIdentifier (Src left _ text) =
 --   annotation. If the import does not have a hash annotation return a 0-length
 --   Src where we can insert one.
 getImportHash :: Src -> Maybe Src
-getImportHash (Src left _ text) =
-  Megaparsec.parseMaybe (unParser parseImportHashPosition) text
+getImportHash (Src left _ text) = eitherToMaybe $
+    runParser parseImportHashPosition CommentIsWhitespace "(input)" text
   where parseImportHashPosition = do
           setSourcePos left
           _ <- importType_
@@ -162,10 +166,8 @@ setSourcePos src =
     in state { Megaparsec.statePosState = posState }
 
 getImportLink :: Src -> Src
-getImportLink src@(Src left _ text) =
-  case Megaparsec.parseMaybe (unParser parseImportLink) text of
-    Just v -> v
-    Nothing -> src
+getImportLink src@(Src left _ text) = fromRight src $
+    runParser parseImportLink CommentIsWhitespace "(input)" text
  where
   parseImportLink = do
     setSourcePos left
@@ -186,10 +188,8 @@ holeExpr = Var (V "" 0)
 -- | Approximate the type-checking context at the end of the input. Tries to
 -- parse as many binders as possible. Very messy!
 binderExprFromText :: Text -> Expr Src Import
-binderExprFromText txt =
-  case Megaparsec.parseMaybe (unParser parseBinderExpr) (txt <> " ") of
-    Nothing -> holeExpr
-    Just s -> s
+binderExprFromText text = fromRight holeExpr $
+    runParser parseBinderExpr CommentIsWhitespace "(input)" text
   where
     -- marks the beginning of the next binder
     boundary = _let <|> void _forall <|> void _lambda
