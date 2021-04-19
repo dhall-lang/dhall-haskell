@@ -704,7 +704,7 @@ idempotenceTest :: CharacterSet -> Header -> Expr Src Import -> Property
 idempotenceTest characterSet header expr =
         not (any hasHttpHeaders expr)
     ==> let once = format characterSet (header, expr)
-        in case Parser.exprAndHeaderFromText mempty once of
+        in case Parser.exprAndHeaderFromText Parser.CommentIsWhitespace mempty once of
             Right (format characterSet -> twice) -> once === twice
             Left _ -> Test.QuickCheck.discard
   where

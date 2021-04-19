@@ -61,7 +61,7 @@ formatTest characterSet prefix =
         action = do
             inputText <- Text.IO.readFile inputFile
 
-            headerAndExpr <- Core.throws (Parser.exprAndHeaderFromText mempty inputText)
+            headerAndExpr <- Core.throws (Parser.exprAndHeaderFromText Parser.CommentIsWhitespace mempty inputText)
 
             return (format characterSet headerAndExpr)
     in
