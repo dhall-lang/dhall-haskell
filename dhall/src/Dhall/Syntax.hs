@@ -55,6 +55,10 @@ module Dhall.Syntax (
     , renote
     , shallowDenote
 
+    -- ** Handling comments
+    , MultiComment(..)
+    , Comment(..)
+
     -- * 'Import'
     , Directory(..)
     , File(..)
@@ -187,6 +191,20 @@ instance IsString Var where
 
 instance Pretty Var where
     pretty = Pretty.unAnnotate . prettyVar
+
+-- | Keep track of potential multiple comments as part of Dhall syntax. This is
+-- useful for source preserving transformations such as `format`.
+newtype MultiComment = MultiComment { getMultiComment :: NonEmpty Comment }
+
+-- | Keep track of a comment as part of Dhall syntax. This is useful for source
+-- preserving transformations such as `format`.
+data Comment
+  = LineComment Text
+  -- ^ Corresponds to a single line comment: `--<text>$` where <text> does not
+  -- contain newline characters
+  | BlockComment Text
+  -- ^ Corresponds to a multi line comment: `{-<text>-}` where <text> can
+  -- contain newline characters
 
 -- | Record the binding part of a @let@ expression.
 --

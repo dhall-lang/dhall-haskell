@@ -963,6 +963,14 @@ parsers embedded = Parsers {..}
 
             nonEmptyListLiteral <|> emptyListLiteral) <?> "literal"
 
+-- | Parse a single comment
+comment :: Parser Comment
+comment = LineComment <$> lineComment <|> BlockComment <$> blockComment
+
+-- | Parse a multi comment (which contains at least one comment)
+multiComment :: Parser MultiComment
+multiComment = MultiComment <$> Combinators.NonEmpty.sepBy1 comment whitespace
+
 {-| Parse an environment variable import
 
     This corresponds to the @env@ rule from the official grammar
