@@ -27,7 +27,7 @@ import Dhall.Src           (Src)
 import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
     ( Censor (..)
-    , CheckFailed (..)
+    , MultipleCheckFailed (..)
     , Header (..)
     , Input (..)
     , OutputMode (..)
@@ -115,7 +115,9 @@ schemasCommand Schemas{..} = do
 
                     let modified = "rewritten"
 
-                    Exception.throwIO CheckFailed{..}
+                    let inputs = pure input
+
+                    Exception.throwIO MultipleCheckFailed{..}
 
 decodeSchema :: Expr s Void -> Maybe (Expr s Void, Map Text (Expr s Void))
 decodeSchema (RecordLit m)
