@@ -195,6 +195,8 @@ instance Pretty Var where
 -- | Keep track of potential multiple comments as part of Dhall syntax. This is
 -- useful for source preserving transformations such as `format`.
 newtype MultiComment = MultiComment { getMultiComment :: NonEmpty Comment }
+  deriving stock (Data, Generic, Eq, Ord, Show, Lift)
+  deriving anyclass NFData
 
 -- | Keep track of a comment as part of Dhall syntax. This is useful for source
 -- preserving transformations such as `format`.
@@ -205,6 +207,7 @@ data Comment
   | BlockComment Text
   -- ^ Corresponds to a multi line comment: `{-<text>-}` where <text> can
   -- contain newline characters
+  deriving (Data, Generic, Eq, Ord, Show, Lift, NFData)
 
 -- | Record the binding part of a @let@ expression.
 --

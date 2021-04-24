@@ -10,6 +10,7 @@ module Dhall.Parser.Combinators
     , runParser
     , CommentControl(..)
     , askCommentControl
+    , setCommentControl
     , SourcedException(..)
     , laxSrcEq
     , count
@@ -28,7 +29,7 @@ module Dhall.Parser.Combinators
 import Control.Applicative        (Alternative (..), liftA2)
 import Control.Exception          (Exception)
 import Control.Monad              (MonadPlus (..))
-import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, local)
 import Data.String                (IsString (..))
 import Data.Text                  (Text)
 import Data.Text.Prettyprint.Doc  (Pretty (..))
@@ -89,9 +90,13 @@ data CommentControl
 -}
 newtype Parser a = Parser {unParser :: ReaderT CommentControl (Text.Megaparsec.Parsec Void Text) a }
 
--- | Get the current CommentControl comment from the scope
+-- | Get the current CommentControl from the scope
 askCommentControl :: Parser CommentControl
 askCommentControl = Parser ask
+
+-- | Set the CommentControl for the parser
+setCommentControl :: CommentControl -> Parser a -> Parser a
+setCommentControl commentControl (Parser a) = Parser (local (const commentControl) a)
 
 -- | Run a 'Parser' on some input with control over how comments get parsed
 runParser

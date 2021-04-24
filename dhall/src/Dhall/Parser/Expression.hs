@@ -965,11 +965,23 @@ parsers embedded = Parsers {..}
 
 -- | Parse a single comment
 comment :: Parser Comment
-comment = LineComment <$> lineComment <|> BlockComment <$> blockComment
+comment = LineComment <$> lineComment <|> BlockComment <$> blockComment <?> "comment"
 
 -- | Parse a multi comment (which contains at least one comment)
 multiComment :: Parser MultiComment
-multiComment = MultiComment <$> Combinators.NonEmpty.sepBy1 comment whitespace
+multiComment = setCommentControl CommentIsNeeded $ -- Strict whitespace
+    MultiComment <$> Combinators.NonEmpty.sepEndBy1 comment whitespace
+
+-- | Parse a multi comment or whitespace
+commentOrWhitespace :: Parser (Maybe MultiComment)
+commentOrWhitespace = setCommentControl CommentIsNeeded $ -- Strict whitespace
+    do whitespace; optional multiComment
+
+-- | Parse a multi comment or non-empty whitespace
+commentOrNonEmptyWhitespace :: Parser (Maybe MultiComment)
+commentOrNonEmptyWhitespace = setCommentControl CommentIsNeeded $ -- Strict whitespace
+        try (Just <$ whitespace <*> multiComment)
+    <|> (Nothing <$ nonemptyWhitespace)
 
 {-| Parse an environment variable import
 
