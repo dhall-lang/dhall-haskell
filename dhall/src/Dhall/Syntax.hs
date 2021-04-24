@@ -217,26 +217,26 @@ data Comment
 --
 -- … will be instantiated as follows:
 --
--- * @bindingSrc0@ corresponds to the @A@ comment.
+-- * @bindingComment0@ corresponds to the @A@ comment.
 -- * @variable@ is @"x"@
--- * @bindingSrc1@ corresponds to the @B@ comment.
+-- * @bindingComment1@ corresponds to the @B@ comment.
 -- * @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
--- * @bindingSrc2@ corresponds to the @D@ comment.
+-- * @bindingComment2@ corresponds to the @D@ comment.
 -- * @value@ corresponds to @True@.
 data Binding s a = Binding
-    { bindingSrc0 :: Maybe s
-    , variable    :: Text
-    , bindingSrc1 :: Maybe s
-    , annotation  :: Maybe (Maybe s, Expr s a)
-    , bindingSrc2 :: Maybe s
-    , value       :: Expr s a
+    { bindingComment0 :: Maybe MultiComment
+    , variable        :: Text
+    , bindingComment1 :: Maybe MultiComment
+    , annotation      :: Maybe (Maybe MultiComment, Expr s a)
+    , bindingComment2 :: Maybe MultiComment
+    , value           :: Expr s a
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 instance Bifunctor Binding where
-    first k (Binding src0 a src1 b src2 c) =
-        Binding (fmap k src0) a (fmap k src1) (fmap adapt0 b) (fmap k src2) (first k c)
+    first k (Binding comment0 a comment1 b comment2 c) =
+        Binding comment0 a comment1 (fmap adapt0 b) comment2 (first k c)
       where
-        adapt0 (src3, d) = (fmap k src3, first k d)
+        adapt0 (comment3, d) = (comment3, first k d)
 
     second = fmap
 

@@ -179,31 +179,6 @@ isWhitespace c =
         '\r' -> True
         _    -> False
 
-{-| Used to render inline `Src` spans preserved by the syntax tree
-
-    >>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
-    >>> let nonEmptySrc = Src unusedSourcePos unusedSourcePos "-- Documentation for x\n"
-    >>> "let" <> " " <> renderSrc id (Just nonEmptySrc) <> "x = 1 in x"
-    let -- Documentation for x
-        x = 1 in x
-    >>> let emptySrc = Src unusedSourcePos unusedSourcePos "      "
-    >>> "let" <> " " <> renderSrc id (Just emptySrc) <> "x = 1 in x"
-    let x = 1 in x
-    >>> "let" <> " " <> renderSrc id Nothing <> "x = 1 in x"
-    let x = 1 in x
--}
-renderSrc
-    :: (Text -> Text)
-    -- ^ Used to preprocess the comment string (e.g. to strip whitespace)
-    -> Maybe Src
-    -- ^ Source span to render (if present)
-    -> Doc Ann
-renderSrc strip (Just (Src {..}))
-    | not (Text.all isWhitespace srcText) =
-        renderComment (strip srcText)
-renderSrc _ _ =
-    mempty
-
 {-| Render a comment.
 
     Any preprocessing, such as whitespace stripping, needs to be handled by the
@@ -211,8 +186,8 @@ renderSrc _ _ =
 
     See the documentation for 'renderSrc' for examples.
 -}
-renderComment :: Text -> Doc Ann
-renderComment text =
+renderComment' :: Text -> Doc Ann
+renderComment' text =
     Pretty.align (Pretty.concatWith f newLines <> suffix)
   where
     horizontalSpace c = c == ' ' || c == '\t'
@@ -252,6 +227,54 @@ renderComment text =
 
     f x y = x <> Pretty.hardline <> y
 
+normalizeMultiComment :: MultiComment -> (Bool, [Text])
+normalizeMultiComment (MultiComment comments) =
+    (any isBlockComment comments, concatMap toLines comments)
+  where
+    isBlockComment = \case
+        BlockComment _ -> True
+        LineComment _ -> False
+
+    toLines = \case
+        BlockComment txt
+          | Just rest <- Text.stripPrefix "{-" txt
+          , Just body <- Text.stripSuffix "-}" rest
+          -> Text.strip <$> Text.lines body
+        LineComment txt
+          | Just body <- Text.stripPrefix "--" txt
+          -> [ Text.strip body ]
+        _ -> error "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
+
+renderComment :: Maybe MultiComment -> Doc Ann
+renderComment Nothing = mempty
+renderComment (Just multiComment)
+    -- Keep an empty block comment as a single line
+    | isBlockComment
+    , [] <- commentLines
+    = "{--}" <> space
+
+    -- Keep a single line block comment as a single line
+    | isBlockComment
+    , [singleLine] <- commentLines
+    = "{- " <> Pretty.pretty singleLine <> " -}" <> space
+
+    -- Otherwise format a block comment over multiple lines
+    | isBlockComment
+    = Pretty.align
+        ("{- "<> Pretty.align (Pretty.concatWith f newLines) <> Pretty.hardline <> "-}")
+      <> Pretty.hardline
+
+    | otherwise
+    = Pretty.align (Pretty.concatWith f newLines)
+  where
+    (isBlockComment, commentLines) = normalizeMultiComment multiComment
+
+    newLines
+        | isBlockComment = Pretty.pretty <$> commentLines
+        | otherwise = ("-- " <>) . Pretty.pretty <$> commentLines
+
+    f x y= x <> Pretty.hardline <> y
+
 {-| This is a variant of 'renderSrc' with the following differences:
 
       * The 'srcText' is stripped of all whitespace at the start and the end.
@@ -261,7 +284,7 @@ renderSrcMaybe :: Maybe Src -> Maybe (Doc Ann)
 renderSrcMaybe (Just Src{..}) =
     case Text.dropAround isWhitespace srcText of
         "" -> Nothing
-        t  -> Just (renderComment t)
+        t  -> Just (renderComment' t)
 renderSrcMaybe _ = Nothing
 
 {-| @
@@ -735,43 +758,28 @@ prettyPrinters characterSet =
       where
         MultiLet as b = multiLet a0 b0
 
-        isSpace c = c == ' ' || c == '\t'
-        stripSpaces =
-            Text.dropAround isSpace
-          . Text.intercalate "\n"
-          . map (Text.dropWhileEnd isSpace)
-          . Text.splitOn "\n"
-
-        -- Strip a single newline character. Needed to ensure idempotency in
-        -- cases where we add hard line breaks.
-        stripNewline t =
-            case Text.uncons t' of
-                Just ('\n', t'') -> stripSpaces t''
-                _ -> t'
-          where t' = stripSpaces t
-
-        docA (Binding src0 c src1 Nothing src2 e) =
+        docA (Binding comment0 c comment1 Nothing comment2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
             long =  keyword "let" <> space
                 <>  Pretty.align
-                    (   renderSrc stripSpaces src0
-                    <>  prettyLabel c <> space <> renderSrc stripSpaces src1
-                    <>  equals <> Pretty.hardline <> renderSrc stripNewline src2
+                    (   renderComment comment0
+                    <>  prettyLabel c <> space <> renderComment comment1
+                    <>  equals <> Pretty.hardline <> renderComment comment2
                     <>  "  " <> prettyExpression e
                     )
 
-            short = keyword "let" <> space <> renderSrc stripSpaces src0
-                <>  prettyLabel c <> space <> renderSrc stripSpaces src1
-                <>  equals <> space <> renderSrc stripSpaces src2
+            short = keyword "let" <> space <> renderComment comment0
+                <>  prettyLabel c <> space <> renderComment comment1
+                <>  equals <> space <> renderComment comment2
                 <>  prettyExpression e
-        docA (Binding src0 c src1 (Just (src3, d)) src2 e) =
+        docA (Binding comment0 c comment1 (Just (comment3, d)) comment2 e) =
                 keyword "let" <> space
             <>  Pretty.align
-                (   renderSrc stripSpaces src0
-                <>  prettyLabel c <> Pretty.hardline <> renderSrc stripNewline src1
-                <>  colon <> space <> renderSrc stripSpaces src3 <> prettyExpression d <> Pretty.hardline
-                <>  equals <> space <> renderSrc stripSpaces src2
+                (   renderComment comment0
+                <>  prettyLabel c <> Pretty.hardline <> renderComment comment1
+                <>  colon <> space <> renderComment comment3 <> prettyExpression d <> Pretty.hardline
+                <>  equals <> space <> renderComment comment2
                 <>  prettyExpression e
                 )
 

@@ -167,32 +167,32 @@ parsers embedded = Parsers {..}
 
         alternative2 = do
             let binding = do
-                    src0 <- try (_let *> src nonemptyWhitespace)
+                    comment0 <- try (_let *> commentOrNonEmptyWhitespace)
 
                     c <- label
 
-                    src1 <- src whitespace
+                    comment1 <- commentOrWhitespace
 
                     d <- optional (do
                         _colon
 
-                        src2 <- src nonemptyWhitespace
+                        comment3 <- commentOrNonEmptyWhitespace
 
                         e <- expression
 
                         whitespace
 
-                        return (Just src2, e) )
+                        return (comment3, e) )
 
                     _equal
 
-                    src3 <- src whitespace
+                    comment2 <- commentOrWhitespace
 
                     f <- expression
 
                     whitespace
 
-                    return (Binding (Just src0) c (Just src1) d (Just src3) f)
+                    return (Binding comment0 c comment1 d comment2 f)
 
             as <- NonEmpty.some1 binding
 
