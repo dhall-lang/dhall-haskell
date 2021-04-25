@@ -229,11 +229,27 @@ renderComment' text =
 
 normalizeMultiComment :: MultiComment -> (Bool, [Text])
 normalizeMultiComment (MultiComment comments) =
-    (any isBlockComment comments, concatMap toLines comments)
+    ( any isBlockComment comments
+    , atLeastOneLine . stripEmptyLines $ concatMap toLines comments
+    )
   where
     isBlockComment = \case
         BlockComment _ -> True
         LineComment _ -> False
+
+    stripStartEmptyLines = dropWhile Text.null
+
+    -- Remove leading and terminating empty lines
+    stripEmptyLines = 
+          reverse
+        . stripStartEmptyLines
+        . reverse
+        . stripStartEmptyLines
+
+    -- When comment is empty, keep exactly 1 empty line
+    atLeastOneLine = \case
+        [] -> [ "" ]
+        xs -> xs
 
     toLines = \case
         BlockComment txt
@@ -265,7 +281,7 @@ renderComment (Just multiComment)
       <> Pretty.hardline
 
     | otherwise
-    = Pretty.align (Pretty.concatWith f newLines)
+    = Pretty.align (Pretty.concatWith f newLines) <> Pretty.hardline
   where
     (isBlockComment, commentLines) = normalizeMultiComment multiComment
 

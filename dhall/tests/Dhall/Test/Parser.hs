@@ -85,7 +85,7 @@ notesInLetInLet =
                     (Binding
                       Nothing
                       "x"
-                      Nothing
+                      (Just "x")
                       Nothing
                       Nothing
                       Nothing
@@ -96,7 +96,7 @@ notesInLetInLet =
                       (Binding
                         Nothing
                         "y"
-                        Nothing
+                        (Just "y")
                         Nothing
                         Nothing
                         Nothing
@@ -107,7 +107,7 @@ notesInLetInLet =
                           (Binding
                             Nothing
                             "z"
-                            Nothing
+                            (Just "z")
                             Nothing
                             Nothing
                             Nothing
