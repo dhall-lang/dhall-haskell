@@ -169,7 +169,7 @@ parsers embedded = Parsers {..}
             let binding = do
                     comment0 <- try (_let *> commentOrNonEmptyWhitespace)
 
-                    c <- label
+                    (s, c) <- srcAnd label
 
                     comment1 <- commentOrWhitespace
 
@@ -192,7 +192,7 @@ parsers embedded = Parsers {..}
 
                     whitespace
 
-                    return (Binding comment0 c comment1 d comment2 f)
+                    return (Binding comment0 c (Just s) comment1 d comment2 f)
 
             as <- NonEmpty.some1 binding
 

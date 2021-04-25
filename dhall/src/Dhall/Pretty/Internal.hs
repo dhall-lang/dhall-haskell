@@ -758,7 +758,7 @@ prettyPrinters characterSet =
       where
         MultiLet as b = multiLet a0 b0
 
-        docA (Binding comment0 c comment1 Nothing comment2 e) =
+        docA (Binding comment0 c _ comment1 Nothing comment2 e) =
             Pretty.group (Pretty.flatAlt long short)
           where
             long =  keyword "let" <> space
@@ -773,7 +773,7 @@ prettyPrinters characterSet =
                 <>  prettyLabel c <> space <> renderComment comment1
                 <>  equals <> space <> renderComment comment2
                 <>  prettyExpression e
-        docA (Binding comment0 c comment1 (Just (comment3, d)) comment2 e) =
+        docA (Binding comment0 c _ comment1 (Just (comment3, d)) comment2 e) =
                 keyword "let" <> space
             <>  Pretty.align
                 (   renderComment comment0

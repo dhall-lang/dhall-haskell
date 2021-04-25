@@ -77,8 +77,8 @@ subst (V x n) e (Pi cs y _A _B) = Pi cs y _A' _B'
     _B' = subst (V x n') (Syntax.shift 1 (V y 0) e) _B
     n'  = if x == y then n + 1 else n
 subst v e (Var v') = if v == v' then e else Var v'
-subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
-    Let (Binding src0 f src1 mt' src2 r') b'
+subst (V x n) e (Let (Binding comment0 f src comment1 mt comment2 r) b) =
+    Let (Binding comment0 f src comment1 mt' comment2 r') b'
   where
     b' = subst (V x n') (Syntax.shift 1 (V f 0) e) b
       where
@@ -381,7 +381,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-    Let (Binding _ f _ _ _ r) b -> loop b''
+    Let (Binding _ f _ _ _ _ r) b -> loop b''
       where
         r'  = Syntax.shift   1  (V f 0) r
         b'  = subst (V f 0) r' b

@@ -431,7 +431,7 @@ eval !env t0 =
             VPi (eval env a) (Closure x env b)
         App t u ->
             vApp (eval env t) (eval env u)
-        Let (Binding _ x _ _mA _ a) b ->
+        Let (Binding _ x _ _ _mA _ a) b ->
             let !env' = Extend env x (eval env a)
             in  eval env' b
         Annot t _ ->
@@ -1254,8 +1254,8 @@ alphaNormalize = goEnv EmptyNames
                 Pi cs "_" (go a) (goBind x b)
             App t u ->
                 App (go t) (go u)
-            Let (Binding src0 x src1 mA src2 a) b ->
-                Let (Binding src0 "_" src1 (fmap (fmap go) mA) src2 (go a)) (goBind x b)
+            Let (Binding comment0 x src comment1 mA comment2 a) b ->
+                Let (Binding comment0 "_" src comment1 (fmap (fmap go) mA) comment2 (go a)) (goBind x b)
             Annot t u ->
                 Annot (go t) (go u)
             Bool ->

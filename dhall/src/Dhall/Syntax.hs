@@ -226,6 +226,7 @@ data Comment
 data Binding s a = Binding
     { bindingComment0 :: Maybe MultiComment
     , variable        :: Text
+    , variableSrc     :: Maybe s
     , bindingComment1 :: Maybe MultiComment
     , annotation      :: Maybe (Maybe MultiComment, Expr s a)
     , bindingComment2 :: Maybe MultiComment
@@ -233,8 +234,8 @@ data Binding s a = Binding
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 instance Bifunctor Binding where
-    first k (Binding comment0 a comment1 b comment2 c) =
-        Binding comment0 a comment1 (fmap adapt0 b) comment2 (first k c)
+    first k (Binding comment0 a aSrc comment1 b comment2 c) =
+        Binding comment0 a (fmap k aSrc) comment1 (fmap adapt0 b) comment2 (first k c)
       where
         adapt0 (comment3, d) = (comment3, first k d)
 
@@ -243,7 +244,7 @@ instance Bifunctor Binding where
 {-| Construct a 'Binding' with no source information and no type annotation.
 -}
 makeBinding :: Text -> Expr s a -> Binding s a
-makeBinding name = Binding Nothing name Nothing Nothing Nothing
+makeBinding name = Binding Nothing name Nothing Nothing Nothing Nothing
 
 -- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
 -- defined via the binary encoding of Dhall @Double@s.
@@ -698,8 +699,8 @@ instance Monad (Expr s) where
         bindRecordKeyValues (RecordField s0 e s1 s2) =
             RecordField s0 (e >>= k) s1 s2
 
-        adaptBinding (Binding src0 c src1 d src2 e) =
-            Binding src0 c src1 (fmap adaptBindingAnnotation d) src2 (e >>= k)
+        adaptBinding (Binding comment0 c src comment1 d comment2 e) =
+            Binding comment0 c src comment1 (fmap adaptBindingAnnotation d) comment2 (e >>= k)
 
         adaptFunctionBinding (FunctionBinding src0 label src1 src2 type_) =
             FunctionBinding src0 label src1 src2 (type_ >>= k)
@@ -889,13 +890,14 @@ bindingExprs
   :: (Applicative f)
   => (Expr s a -> f (Expr s b))
   -> Binding s a -> f (Binding s b)
-bindingExprs f (Binding s0 n s1 t s2 v) =
+bindingExprs f (Binding c0 n s c1 t c2 v) =
   Binding
-    <$> pure s0
+    <$> pure c0
     <*> pure n
-    <*> pure s1
+    <*> pure s
+    <*> pure c1
     <*> traverse (traverse f) t
-    <*> pure s2
+    <*> pure c2
     <*> f v
 {-# INLINABLE bindingExprs #-}
 
@@ -1162,8 +1164,8 @@ denote = \case
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing
-    denoteBinding (Binding _ c _ d _ e) =
-        Binding Nothing c Nothing (fmap denoteBindingAnnotation d) Nothing (denote e)
+    denoteBinding (Binding _ c _ _ d _ e) =
+        Binding Nothing c Nothing Nothing (fmap denoteBindingAnnotation d) Nothing (denote e)
 
     denoteBindingAnnotation (_, f) = (Nothing, denote f)
 
@@ -1421,8 +1423,8 @@ shift d (V x n) (Pi cs x' _A _B) = Pi cs x' _A' _B'
     _B' = shift d (V x n') _B
       where
         n' = if x == x' then n + 1 else n
-shift d (V x n) (Let (Binding src0 f src1 mt src2 r) e) =
-    Let (Binding src0 f src1 mt' src2 r') e'
+shift d (V x n) (Let (Binding comment0 f src comment1 mt comment2 r) e) =
+    Let (Binding comment0 f src comment1 mt' comment2 r') e'
   where
     e' = shift d (V x n') e
       where

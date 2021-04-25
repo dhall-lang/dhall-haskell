@@ -201,7 +201,7 @@ applyContext context expression =
     definitions = reverse $ Dhall.Context.toList context
 
     convertBinding (variable, Binding expr _) =
-        Dhall.Core.Binding Nothing variable Nothing Nothing Nothing expr
+        Dhall.Core.Binding Nothing variable Nothing Nothing Nothing Nothing expr
 
     bindings = fmap convertBinding definitions
 

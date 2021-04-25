@@ -233,6 +233,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Binding s a) where
 
         variable <- Test.QuickCheck.oneof [ pure "_", label ]
 
+        let variableSrc = Nothing
+
         bindingComment1 <- arbitrary
 
         annotation <- arbitrary

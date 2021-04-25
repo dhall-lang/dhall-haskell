@@ -88,6 +88,7 @@ notesInLetInLet =
                       Nothing
                       Nothing
                       Nothing
+                      Nothing
                       (Note "0 " (Note "0" (NaturalLit 0)))
                     )
                     -- This 'Let' isn't wrapped in a 'Note'!
@@ -98,6 +99,7 @@ notesInLetInLet =
                         Nothing
                         Nothing
                         Nothing
+                        Nothing
                         (Note "1 " (Note "1" (NaturalLit 1)))
                       )
                       (Note "let z = 2 in x"
@@ -105,6 +107,7 @@ notesInLetInLet =
                           (Binding
                             Nothing
                             "z"
+                            Nothing
                             Nothing
                             Nothing
                             Nothing
