@@ -33,6 +33,7 @@ import Dhall
 import Dhall.Core
     ( Binding (..)
     , Chunks (..)
+    , Comment (..)
     , Const (..)
     , DhallDouble (..)
     , Directory (..)
@@ -45,6 +46,7 @@ import Dhall.Core
     , ImportHashed (..)
     , ImportMode (..)
     , ImportType (..)
+    , MultiComment (..)
     , PreferAnnotation (..)
     , RecordField (..)
     , Scheme (..)
@@ -168,7 +170,11 @@ integer =
         ]
 
 whitespace :: Gen Text
-whitespace = do
+whitespace =
+    Text.concat <$> Test.QuickCheck.listOf (Test.QuickCheck.elements [" ", "\t", "\n", "\r\n"])
+
+comment :: Gen Comment
+comment = do
       let commentChar =
               Test.QuickCheck.frequency
                   [ (20, Test.QuickCheck.elements [' ' .. '\DEL'])
@@ -183,26 +189,19 @@ whitespace = do
                   (Text.pack <$> Test.QuickCheck.listOf commentChar)
                   noInteriorBlockComments
 
-          multiline = do
+          blockComment = do
               txt <- commentText
-              pure $ "{-" <> txt <> "-}"
+              pure . BlockComment $ "{-" <> txt <> "-}"
 
-          singleline = do
+          lineComment = do
               txt <- commentText `suchThat` (not . Text.isInfixOf "\n")
               endOfLine <- Test.QuickCheck.elements ["\n", "\r\n"]
-              pure $ "--" <> txt <> endOfLine
+              pure . LineComment $ "--" <> txt <> endOfLine
 
-          newlines = Text.concat <$> Test.QuickCheck.listOf (pure "\n")
-
-      comments <- do
-          n <- Test.QuickCheck.choose (0, 2)
-          Test.QuickCheck.vectorOf n $ Test.QuickCheck.oneof
-              [ multiline
-              , singleline
-              , newlines
-              ]
-
-      pure $ Text.unlines comments
+      Test.QuickCheck.oneof
+          [ blockComment
+          , lineComment
+          ]
 
 shrinkWhitespace :: Text -> [Text]
 shrinkWhitespace "" = []
@@ -230,15 +229,15 @@ instance (Arbitrary v) => Arbitrary (Map Text v) where
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Binding s a) where
     arbitrary = do
-        bindingSrc0 <- arbitrary
+        bindingComment0 <- arbitrary
 
         variable <- Test.QuickCheck.oneof [ pure "_", label ]
 
-        bindingSrc1 <- arbitrary
+        bindingComment1 <- arbitrary
 
         annotation <- arbitrary
 
-        bindingSrc2 <- arbitrary
+        bindingComment2 <- arbitrary
 
         value <- arbitrary
 
@@ -454,6 +453,12 @@ instance Arbitrary FilePrefix where
     arbitrary = Test.QuickCheck.oneof [ pure Absolute, pure Here, pure Home ]
 
     shrink = genericShrink
+
+instance Arbitrary Comment where
+    arbitrary = comment
+
+instance Arbitrary MultiComment where
+    arbitrary = MultiComment <$> arbitrary
 
 instance Arbitrary Src where
     arbitrary = do
