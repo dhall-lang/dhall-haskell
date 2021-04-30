@@ -1147,7 +1147,7 @@ pathCharacter c =
 
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
 --
--- This also remove CharacterSet annotations.
+-- This also remove CharacterSet annotations as well as Comments
 denote :: Expr s a -> Expr t a
 denote = \case
     Note _ b -> denote b

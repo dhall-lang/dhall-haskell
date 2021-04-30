@@ -282,7 +282,7 @@ binderExprFromText text = fromRight holeExpr $
       value <- try (do _equal; whitespace; expr <* whitespace)
           <|> (do skipManyTill anySingle (lookAhead boundary <|> _in); return holeExpr)
       inner <- parseBinderExpr
-      return (Let (Binding Nothing name Nothing mType Nothing value) inner)
+      return (Let (Binding Nothing name Nothing Nothing mType Nothing value) inner)
 
     forallBinder = do
       cs <- _forall
