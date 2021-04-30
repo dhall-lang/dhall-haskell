@@ -209,11 +209,11 @@ parseOptions =
             )
 
     parseCommentControl = fmap f $ switch
-        "strict-comment-parsing"
-        "Parse comments strictly to ensure no comment is dropped on format"
+        "loose-comment-parsing"
+        "Ignore parse error for unhandled comments, but they will get dropped (please submit an issue for such cases)"
       where
-        f True  = CommentIsNeeded
-        f False = CommentIsWhitespace
+        f True  = CommentIsWhitespace
+        f False = CommentIsNeeded
 
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where
