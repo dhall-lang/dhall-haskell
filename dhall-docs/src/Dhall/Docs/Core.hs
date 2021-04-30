@@ -223,7 +223,7 @@ getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles []
 
         fromLetBindingAnnotation = do
             V name index <- maybeNameInLet expr
-            (Binding _ _ _ (Just (_, exprType)) _ _) <-
+            (Binding _ _ _ _ (Just (_, exprType)) _ _) <-
                 getLetBindingWithIndex index $ getLetBindingsWithName name
             return exprType
 
@@ -253,7 +253,7 @@ getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles []
         getLetBindingsWithName :: Text -> [Binding Void Import]
         getLetBindingsWithName name = filter bindName $ reverse $ bindings expr
           where
-            bindName (Binding _ x _ _ _ _) = x == name
+            bindName (Binding _ x _ _ _ _ _) = x == name
 
 
         getLetBindingWithIndex :: Int -> [Binding Void Import] -> Maybe (Binding Void Import)

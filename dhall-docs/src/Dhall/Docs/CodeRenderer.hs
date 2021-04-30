@@ -177,9 +177,10 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
         -- are not able to generate the 'SourceCodeFragment's in lexicographical
         -- without calling 'Data.List.sortBy' after
         Let (Binding
-                (Just Src { srcEnd = srcEnd0 })
+                _
                 name
-                (Just Src { srcStart = srcStart1 })
+                (Just Src { srcStart, srcEnd })
+                _
                 annotation
                 _
                 value) expr' -> do
@@ -193,7 +194,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
 
             bindingJtdInfo <- infer context value
 
-            let nameSrc = makeSrcForLabel srcEnd0 srcStart1 name
+            let nameSrc = makeSrcForLabel srcStart srcEnd name
             let nameDecl = NameDecl nameSrc name bindingJtdInfo
 
             Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]

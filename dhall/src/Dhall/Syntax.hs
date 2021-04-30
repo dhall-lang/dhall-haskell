@@ -469,8 +469,8 @@ data Expr s a
     | Pi  (Maybe CharacterSet) Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
-    -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
-    --   > Let (Binding _ x _ (Just t ) _ r) e      ~  let x : t = r in e
+    -- | > Let (Binding _ x _ _  Nothing  _ r) e      ~  let x     = r in e
+    --   > Let (Binding _ x _ _ (Just t ) _ r) e      ~  let x : t = r in e
     --
     -- The difference between
     --
