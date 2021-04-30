@@ -179,13 +179,7 @@ isWhitespace c =
         '\r' -> True
         _    -> False
 
-{-| Render a comment.
-
-    Any preprocessing, such as whitespace stripping, needs to be handled by the
-    caller, see e.g. 'renderSrc'.
-
-    See the documentation for 'renderSrc' for examples.
--}
+-- | Render a comment.
 renderComment' :: Text -> Doc Ann
 renderComment' text =
     Pretty.align (Pretty.concatWith f newLines <> suffix)
@@ -291,7 +285,7 @@ renderComment (Just multiComment)
 
     f x y= x <> Pretty.hardline <> y
 
-{-| This is a variant of 'renderSrc' with the following differences:
+{-| Used to render inline `Src` spans preserved by the syntax tree
 
       * The 'srcText' is stripped of all whitespace at the start and the end.
       * When the stripped 'srcText' is empty, the result is 'Nothing'.
