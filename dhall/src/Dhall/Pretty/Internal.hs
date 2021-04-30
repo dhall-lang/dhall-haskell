@@ -240,7 +240,7 @@ normalizeMultiComment (MultiComment comments) =
     stripStartEmptyLines = dropWhile Text.null
 
     -- Remove leading and terminating empty lines
-    stripEmptyLines = 
+    stripEmptyLines =
           reverse
         . stripStartEmptyLines
         . reverse
@@ -651,10 +651,11 @@ escapeEnvironmentVariable t
 'prettyCharacterSet' largely ignores 'Note's. 'Note's do however matter for
 the layout of let-blocks:
 
->>> let inner = Let (Binding Nothing "x" Nothing Nothing Nothing (NaturalLit 1)) (Var (V "x" 0)) :: Expr Src ()
->>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) inner)
+>>> let inner = Let (Binding Nothing "x" Nothing Nothing Nothing Nothing (NaturalLit 1)) (Var (V "x" 0)) :: Expr Src ()
+>>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing Nothing (NaturalLit 2)) inner)
 let y = 2 let x = 1 in x
->>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing (NaturalLit 2)) (Note (Src unusedSourcePos unusedSourcePos "") inner))
+>>> let unusedSourcePos = Text.Megaparsec.SourcePos "" (Text.Megaparsec.mkPos 1) (Text.Megaparsec.mkPos 1)
+>>> prettyCharacterSet ASCII (Let (Binding Nothing "y" Nothing Nothing Nothing Nothing (NaturalLit 2)) (Note (Src unusedSourcePos unusedSourcePos "") inner))
 let y = 2 in let x = 1 in x
 
 This means the structure of parsed let-blocks is preserved.
