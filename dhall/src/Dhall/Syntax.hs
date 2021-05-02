@@ -219,6 +219,7 @@ data Comment
 --
 -- * @bindingComment0@ corresponds to the @A@ comment.
 -- * @variable@ is @"x"@
+-- * @variableSrc@ corresponds to the source span for the variable @"x"@
 -- * @bindingComment1@ corresponds to the @B@ comment.
 -- * @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
 -- * @bindingComment2@ corresponds to the @D@ comment.
