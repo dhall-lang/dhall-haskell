@@ -7,6 +7,7 @@ module Dhall.Parser.Token (
     endOfLine,
     validCodepoint,
     whitespace,
+    whitespaceChunk,
     lineComment,
     blockComment,
     nonemptyWhitespace,

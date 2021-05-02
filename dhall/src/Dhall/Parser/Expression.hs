@@ -979,9 +979,12 @@ commentOrWhitespace = setCommentControl CommentIsNeeded $ -- Strict whitespace
 
 -- | Parse a multi comment or non-empty whitespace
 commentOrNonEmptyWhitespace :: Parser (Maybe MultiComment)
-commentOrNonEmptyWhitespace = setCommentControl CommentIsNeeded $ -- Strict whitespace
-        try (Just <$ whitespace <*> multiComment)
-    <|> (Nothing <$ nonemptyWhitespace)
+commentOrNonEmptyWhitespace = setCommentControl CommentIsNeeded $ do -- Strict whitespace
+    m <- optional whitespaceChunk
+
+    case m of
+        Nothing -> Just <$> multiComment
+        Just () -> whitespace *> optional multiComment
 
 {-| Parse an environment variable import
 
