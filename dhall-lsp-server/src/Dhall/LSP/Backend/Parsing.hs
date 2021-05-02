@@ -42,14 +42,15 @@ import Text.Megaparsec         (SourcePos (..))
 
 import qualified Text.Megaparsec as Megaparsec
 
-eitherToMaybe :: Either e a -> Maybe a
-eitherToMaybe = either (const Nothing) Just
+-- | Ignore the error from Either
+hush :: Either e a -> Maybe a
+hush = either (const Nothing) Just
 
 -- | Parse the outermost binding in a Src descriptor of a let-block and return
 --   the rest. Ex. on input `let a = 0 let b = a in b` parses `let a = 0 ` and
 --   returns the Src descriptor containing `let b = a in b`.
 getLetInner :: Src -> Maybe Src
-getLetInner (Src left _ text) = eitherToMaybe $
+getLetInner (Src left _ text) = hush $
     runParser parseLetInnerOffset CommentIsWhitespace "(input)" text
  where parseLetInnerOffset = do
           setSourcePos left
@@ -77,7 +78,7 @@ getLetInner (Src left _ text) = eitherToMaybe $
 --   annotation. If the let expression does not have a type annotation return
 --   a 0-length Src where we can insert one.
 getLetAnnot :: Src -> Maybe Src
-getLetAnnot (Src left _ text) = eitherToMaybe $
+getLetAnnot (Src left _ text) = hush $
     runParser parseLetAnnot CommentIsWhitespace "(input)" text
   where parseLetAnnot = do
           setSourcePos left
@@ -113,7 +114,7 @@ getLetIdentifier src@(Src left _ text) = fromRight src $
 
 -- | Cf. `getLetIdentifier`.
 getLamIdentifier :: Src -> Maybe Src
-getLamIdentifier (Src left _ text) = eitherToMaybe $
+getLamIdentifier (Src left _ text) = hush $
     runParser parseLamIdentifier CommentIsWhitespace "(input)" text
   where parseLamIdentifier = do
           setSourcePos left
@@ -129,7 +130,7 @@ getLamIdentifier (Src left _ text) = eitherToMaybe $
 
 -- | Cf. `getLetIdentifier`.
 getForallIdentifier :: Src -> Maybe Src
-getForallIdentifier (Src left _ text) = eitherToMaybe $
+getForallIdentifier (Src left _ text) = hush $
     runParser parseForallIdentifier CommentIsWhitespace "(input)" text
   where parseForallIdentifier = do
           setSourcePos left
@@ -147,7 +148,7 @@ getForallIdentifier (Src left _ text) = eitherToMaybe $
 --   annotation. If the import does not have a hash annotation return a 0-length
 --   Src where we can insert one.
 getImportHash :: Src -> Maybe Src
-getImportHash (Src left _ text) = eitherToMaybe $
+getImportHash (Src left _ text) = hush $
     runParser parseImportHashPosition CommentIsWhitespace "(input)" text
   where parseImportHashPosition = do
           setSourcePos left
