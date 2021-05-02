@@ -328,13 +328,17 @@ whitespaceChunk :: Parser ()
 whitespaceChunk = do
     commentControl <- askCommentControl
 
+    let descriptor = case commentControl of
+            CommentIsWhitespace -> "whitespace"
+            CommentIsNeeded     -> "comment-free whitespace"
+
     choice (concat
         [ [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
           , void (Text.Parser.Char.text "\r\n" <?> "newline")
           ]
         , [ void lineComment | commentControl == CommentIsWhitespace ]
         , [ void blockComment | commentControl == CommentIsWhitespace ]
-        ]) <?> "whitespace"
+        ]) <?> descriptor
   where
     predicate c = c == ' ' || c == '\t' || c == '\n'
 
