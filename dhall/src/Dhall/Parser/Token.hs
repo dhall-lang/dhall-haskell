@@ -325,6 +325,11 @@ identifier = do
     n <- indexed <|> pure 0
     return (V x n)
 
+{- | Parse a single whitespace chunk
+
+     Depending on the 'CommentControl' that is set as part of the 'Parser',
+     it will also parse a comment as a whitespace chunk
+-}
 whitespaceChunk :: Parser ()
 whitespaceChunk = do
     commentControl <- askCommentControl
