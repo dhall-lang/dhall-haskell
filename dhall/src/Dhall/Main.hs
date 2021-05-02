@@ -856,7 +856,8 @@ command (Options {..}) = do
                         StandardInput  -> "."
                         InputFile file -> System.FilePath.takeDirectory file
 
-                let status = Dhall.Import.emptyStatus directory
+                let status = (Dhall.Import.emptyStatus directory)
+                        { Dhall.Import._commentControl = commentControl }
 
                 (originalText, transitivity) <- case input of
                     InputFile file -> do

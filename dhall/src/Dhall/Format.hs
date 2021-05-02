@@ -63,7 +63,8 @@ format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
                 InputFile file ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatus directory
+        let status = (Dhall.Import.emptyStatus directory)
+                { Dhall.Import._commentControl = commentControl }
 
         let layoutHeaderAndExpr (Header header, expr) =
                 let characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet

@@ -195,7 +195,6 @@ import Dhall.Import.Types
 import Dhall.Parser
     ( ParseError (..)
     , runParser
-    , CommentControl (CommentIsWhitespace)
     , SourcedException (..)
     , Src (..)
     )
@@ -639,8 +638,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             Text.Parser.Combinators.eof
             return r
 
-    -- TODO: Should CommentControl be propagated?
-    parsedImport <- case runParser parser CommentIsWhitespace path text of
+    parsedImport <- case runParser parser _commentControl path text of
         Left  errInfo ->
             throwMissingImport (Imported _stack (ParseError errInfo text))
         Right expr    -> return expr

@@ -62,6 +62,7 @@ import qualified System.IO
 freezeImport
     :: FilePath
     -- ^ Current working directory
+    -> Util.CommentControl
     -> Import
     -> IO Import
 freezeImport = freezeImportWithManager Dhall.Import.defaultNewManager
@@ -70,9 +71,10 @@ freezeImport = freezeImportWithManager Dhall.Import.defaultNewManager
 freezeImportWithManager
     :: IO Dhall.Import.Manager
     -> FilePath
+    -> Util.CommentControl
     -> Import
     -> IO Import
-freezeImportWithManager newManager directory import_ = do
+freezeImportWithManager newManager directory commentControl import_ = do
     let unprotectedImport =
             import_
                 { importHashed =
@@ -81,7 +83,8 @@ freezeImportWithManager newManager directory import_ = do
                         }
                 }
 
-    let status = Dhall.Import.emptyStatusWithManager newManager directory
+    let status = (Dhall.Import.emptyStatusWithManager newManager directory)
+            { Dhall.Import._commentControl = commentControl }
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
@@ -106,6 +109,7 @@ freezeImportWithManager newManager directory import_ = do
 freezeRemoteImport
     :: FilePath
     -- ^ Current working directory
+    -> Util.CommentControl
     -> Import
     -> IO Import
 freezeRemoteImport = freezeRemoteImportWithManager Dhall.Import.defaultNewManager
@@ -114,11 +118,12 @@ freezeRemoteImport = freezeRemoteImportWithManager Dhall.Import.defaultNewManage
 freezeRemoteImportWithManager
     :: IO Dhall.Import.Manager
     -> FilePath
+    -> Util.CommentControl
     -> Import
     -> IO Import
-freezeRemoteImportWithManager newManager directory import_ =
+freezeRemoteImportWithManager newManager directory commentControl import_ =
     case importType (importHashed import_) of
-        Remote {} -> freezeImportWithManager newManager directory import_
+        Remote {} -> freezeImportWithManager newManager directory commentControl import_
         _         -> return import_
 
 -- | Specifies which imports to freeze
@@ -174,7 +179,8 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
                 InputFile file ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatusWithManager newManager directory
+        let status = (Dhall.Import.emptyStatusWithManager newManager directory)
+                { Dhall.Import._commentControl = commentControl }
 
         (originalText, transitivity) <- case input of
             InputFile file -> do
@@ -202,7 +208,7 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
             NonTransitive ->
                 return ()
 
-        frozenExpression <- freezeExpressionWithManager newManager directory scope intent parsedExpression
+        frozenExpression <- freezeExpressionWithManager newManager directory commentControl scope intent parsedExpression
 
         let doc =  Pretty.pretty header
                 <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
@@ -249,6 +255,7 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
 freezeExpression
     :: FilePath
     -- ^ Starting directory
+    -> Util.CommentControl
     -> Scope
     -> Intent
     -> Expr s Import
@@ -259,17 +266,18 @@ freezeExpression = freezeExpressionWithManager Dhall.Import.defaultNewManager
 freezeExpressionWithManager
     :: IO Dhall.Import.Manager
     -> FilePath
+    -> Util.CommentControl
     -> Scope
     -> Intent
     -> Expr s Import
     -> IO (Expr s Import)
-freezeExpressionWithManager newManager directory scope intent expression = do
+freezeExpressionWithManager newManager directory commentControl scope intent expression = do
     let freezeScope =
             case scope of
                 AllImports        -> freezeImportWithManager
                 OnlyRemoteImports -> freezeRemoteImportWithManager
 
-    let freezeFunction = freezeScope newManager directory
+    let freezeFunction = freezeScope newManager directory commentControl
 
     let cache
             -- This case is necessary because `transformOf` is a bottom-up
