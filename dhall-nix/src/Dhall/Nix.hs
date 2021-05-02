@@ -642,7 +642,7 @@ dhallToNix e =
         Left CannotProjectByType
     loop (Assert _) =
         return untranslatable
-    loop (Equivalent _ _) =
+    loop (Equivalent _ _ _) =
         return untranslatable
     loop a@With{} =
         loop (Dhall.Core.desugarWith a)

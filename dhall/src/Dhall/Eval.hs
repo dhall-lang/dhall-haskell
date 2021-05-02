@@ -787,7 +787,7 @@ eval !env t0 =
                     VProject (eval env t) (Right e')
         Assert t ->
             VAssert (eval env t)
-        Equivalent t u ->
+        Equivalent _ t u ->
             VEquivalent (eval env t) (eval env u)
         With e₀ ks v ->
             vWith (eval env e₀) ks (eval env v)
@@ -1188,7 +1188,7 @@ quote !env !t0 =
         VAssert t ->
             Assert (quote env t)
         VEquivalent t u ->
-            Equivalent (quote env t) (quote env u)
+            Equivalent mempty (quote env t) (quote env u)
         VWith e ks v ->
             With (quote env e) ks (quote env v)
         VInject m k Nothing ->
@@ -1374,8 +1374,8 @@ alphaNormalize = goEnv EmptyNames
                 Project (go t) (fmap go ks)
             Assert t ->
                 Assert (go t)
-            Equivalent t u ->
-                Equivalent (go t) (go u)
+            Equivalent cs t u ->
+                Equivalent cs (go t) (go u)
             With e k v ->
                 With (go e) k (go v)
             Note s e ->
