@@ -533,7 +533,7 @@ Library
     else
       Hs-Source-Dirs: ghc-src
       Build-Depends:
-        cryptonite                  >= 0.23     && < 1.0
+        cryptonite                  >= 0.23     && < 0.30
       if flag(with-http)
         Build-Depends:
           http-types                  >= 0.7.0    && < 0.13,
