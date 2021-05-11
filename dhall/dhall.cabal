@@ -496,7 +496,7 @@ Library
         hashable                    >= 1.2      && < 1.4 ,
         lens-family-core            >= 1.0.0    && < 2.2 ,
         megaparsec                  >= 7        && < 9.1 ,
-        memory                      >= 0.14     && < 0.16,
+        memory                      >= 0.14     && < 0.17,
         mmorph                                     < 1.2 ,
         mtl                         >= 2.2.1    && < 2.3 ,
         network-uri                 >= 2.6      && < 2.7 ,

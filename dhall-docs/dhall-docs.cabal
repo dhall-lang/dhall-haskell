@@ -74,7 +74,7 @@ Library
         lucid                >= 2.9.12    && < 2.10,
         mmark                >= 0.0.7.0   && < 0.8 ,
         megaparsec           >= 7         && < 9.1 ,
-        memory                               < 0.16,
+        memory                               < 0.17,
         path                 >= 0.7.0     && < 0.9 ,
         path-io              >= 1.6.0     && < 1.7 ,
         prettyprinter        >= 1.5.1     && < 1.8 ,
