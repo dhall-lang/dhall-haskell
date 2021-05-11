@@ -134,6 +134,8 @@ data HLamInfo a
   -- ^ The original function was a @Natural/subtract 0@.  We need to preserve
   --   this information in case the @Natural/subtract@ ends up not being fully
   --   saturated, in which case we need to recover the unsaturated built-in
+  | TextReplaceEmpty
+  -- ^ The original function was a @Text/replace ""@
 
 deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 
@@ -603,33 +605,38 @@ eval !env t0 =
                 t                       -> VTextShow t
         TextReplace ->
             VPrim $ \needle ->
-            VPrim $ \replacement ->
-            VPrim $ \haystack ->
-                case needle of
-                    VTextLit (VChunks [] "") ->
-                        haystack
-                    VTextLit (VChunks [] needleText) ->
-                        case haystack of
-                            VTextLit (VChunks [] haystackText) ->
-                                case replacement of
-                                    VTextLit (VChunks [] replacementText) ->
-                                        VTextLit $ VChunks []
-                                            (Text.replace
-                                                needleText
-                                                replacementText
-                                                haystackText
-                                            )
+                let hLamInfo = case needle of
+                        VTextLit (VChunks [] "") -> TextReplaceEmpty
+                        _                        -> Prim
+
+                in  VHLam hLamInfo $ \replacement ->
+                    VHLam Prim     $ \haystack ->
+                        case needle of
+                            VTextLit (VChunks [] "") ->
+                                haystack
+
+                            VTextLit (VChunks [] needleText) ->
+                                case haystack of
+                                    VTextLit (VChunks [] haystackText) ->
+                                        case replacement of
+                                            VTextLit (VChunks [] replacementText) ->
+                                                VTextLit $ VChunks []
+                                                    (Text.replace
+                                                        needleText
+                                                        replacementText
+                                                        haystackText
+                                                    )
+                                            _ ->
+                                                VTextLit
+                                                    (vTextReplace
+                                                        needleText
+                                                        replacement
+                                                        haystackText
+                                                    )
                                     _ ->
-                                        VTextLit
-                                            (vTextReplace
-                                                needleText
-                                                replacement
-                                                haystackText
-                                            )
+                                        VTextReplace needle replacement haystack
                             _ ->
                                 VTextReplace needle replacement haystack
-                    _ ->
-                        VTextReplace needle replacement haystack
         List ->
             VPrim VList
         ListLit ma ts ->
@@ -1068,6 +1075,7 @@ quote !env !t0 =
                         (quoteBind x (t v))
                 Prim                      -> quote env (t VPrimVar)
                 NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
+                TextReplaceEmpty          -> App TextReplace (TextLit (Chunks [] ""))
 
         VPi a (freshClosure -> (x, v, b)) ->
             Pi mempty x (quote env a) (quoteBind x (instantiate b v))
