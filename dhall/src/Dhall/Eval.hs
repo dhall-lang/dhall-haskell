@@ -134,6 +134,10 @@ data HLamInfo a
   -- ^ The original function was a @Natural/subtract 0@.  We need to preserve
   --   this information in case the @Natural/subtract@ ends up not being fully
   --   saturated, in which case we need to recover the unsaturated built-in
+  | TextReplaceEmpty
+  -- ^ The original function was a @Text/replace ""@
+  | TextReplaceEmptyArgument (Val a)
+  -- ^ The original function was a @Text/replace "" replacement@
 
 deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 
@@ -603,33 +607,43 @@ eval !env t0 =
                 t                       -> VTextShow t
         TextReplace ->
             VPrim $ \needle ->
-            VPrim $ \replacement ->
-            VPrim $ \haystack ->
-                case needle of
+            let hLamInfo0 = case needle of
+                    VTextLit (VChunks [] "") -> TextReplaceEmpty
+                    _                        -> Prim
+
+            in  VHLam hLamInfo0 $ \replacement ->
+            let hLamInfo1 = case needle of
                     VTextLit (VChunks [] "") ->
-                        haystack
-                    VTextLit (VChunks [] needleText) ->
-                        case haystack of
-                            VTextLit (VChunks [] haystackText) ->
-                                case replacement of
-                                    VTextLit (VChunks [] replacementText) ->
-                                        VTextLit $ VChunks []
-                                            (Text.replace
-                                                needleText
-                                                replacementText
-                                                haystackText
-                                            )
-                                    _ ->
-                                        VTextLit
-                                            (vTextReplace
-                                                needleText
-                                                replacement
-                                                haystackText
-                                            )
-                            _ ->
-                                VTextReplace needle replacement haystack
+                        TextReplaceEmptyArgument replacement
                     _ ->
-                        VTextReplace needle replacement haystack
+                        Prim
+            in  VHLam hLamInfo1 $ \haystack ->
+                    case needle of
+                        VTextLit (VChunks [] "") ->
+                            haystack
+
+                        VTextLit (VChunks [] needleText) ->
+                            case haystack of
+                                VTextLit (VChunks [] haystackText) ->
+                                    case replacement of
+                                        VTextLit (VChunks [] replacementText) ->
+                                            VTextLit $ VChunks []
+                                                (Text.replace
+                                                    needleText
+                                                    replacementText
+                                                    haystackText
+                                                )
+                                        _ ->
+                                            VTextLit
+                                                (vTextReplace
+                                                    needleText
+                                                    replacement
+                                                    haystackText
+                                                )
+                                _ ->
+                                    VTextReplace needle replacement haystack
+                        _ ->
+                            VTextReplace needle replacement haystack
         List ->
             VPrim VList
         ListLit ma ts ->
@@ -1062,12 +1076,18 @@ quote !env !t0 =
         VHLam i t ->
             case i of
                 Typed (fresh -> (x, v)) a ->
-                    Lam
-                        mempty
+                    Lam mempty
                         (Syntax.makeFunctionBinding x (quote env a))
                         (quoteBind x (t v))
-                Prim                      -> quote env (t VPrimVar)
-                NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
+                Prim ->
+                    quote env (t VPrimVar)
+                NaturalSubtractZero ->
+                    App NaturalSubtract (NaturalLit 0)
+                TextReplaceEmpty ->
+                    App TextReplace (TextLit (Chunks [] ""))
+                TextReplaceEmptyArgument replacement ->
+                    App (App TextReplace (TextLit (Chunks [] "")))
+                        (quote env replacement)
 
         VPi a (freshClosure -> (x, v, b)) ->
             Pi mempty x (quote env a) (quoteBind x (instantiate b v))

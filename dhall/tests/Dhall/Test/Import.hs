@@ -1,11 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
 import Data.Text         (Text)
-import Dhall.Import      (MissingImports (..))
-import Dhall.Parser      (SourcedException (..))
 import Prelude           hiding (FilePath)
 import Test.Tasty        (TestTree)
 import Turtle            (FilePath, (</>))
@@ -69,7 +68,13 @@ successTest path = do
 
     let directoryString = FilePath.takeDirectory pathString
 
-    let expectedFailures = []
+    let expectedFailures =
+            [ importDirectory </> "success/unit/cors/TwoHopsA.dhall"
+            , importDirectory </> "success/unit/cors/SelfImportAbsoluteA.dhall"
+            , importDirectory </> "success/unit/cors/AllowedAllA.dhall"
+            , importDirectory </> "success/unit/cors/SelfImportRelativeA.dhall"
+            , importDirectory </> "success/unit/cors/OnlyGithubA.dhall"
+            ]
 
     Test.Util.testCase path expectedFailures (do
 
@@ -130,8 +135,12 @@ failureTest path = do
 
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
 
-        Exception.catch
+        succeeded <- Exception.catch @SomeException
           (do _ <- Test.Util.load actualExpr
+              return True
+          )
+          (\_ -> return False)
 
-              fail "Import should have failed, but it succeeds")
-          (\(SourcedException _ (MissingImports _)) -> pure ()) )
+        if succeeded
+            then fail "Import should have failed, but it succeeds"
+            else return () )
