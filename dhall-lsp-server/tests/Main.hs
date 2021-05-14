@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
@@ -16,6 +17,10 @@ import Language.Haskell.LSP.Types
     )
 import Test.Tasty
 import Test.Tasty.Hspec
+
+#if MIN_VERSION_tasty_hspec(1,1,7)
+import Test.Hspec
+#endif
 
 import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
