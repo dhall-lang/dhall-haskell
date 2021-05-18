@@ -196,6 +196,7 @@ instance Pretty Var where
 -- useful for source preserving transformations such as /format/.
 newtype MultiComment = MultiComment { getMultiComment :: NonEmpty Comment }
   deriving stock (Data, Generic, Eq, Ord, Show, Lift)
+  deriving newtype (Semigroup)
   deriving anyclass NFData
 
 -- | Keep track of a comment as part of Dhall syntax. This is useful for source
@@ -326,25 +327,25 @@ instance Bifunctor PreferAnnotation where
 --
 -- will be instantiated as follows:
 --
--- * @recordFieldSrc0@ corresponds to the @A@ comment.
+-- * @recordFieldComment0@ corresponds to the @A@ comment.
 -- * @recordFieldValue@ is @"T"@
--- * @recordFieldSrc1@ corresponds to the @B@ comment.
--- * @recordFieldSrc2@ corresponds to the @C@ comment.
+-- * @recordFieldComment1@ corresponds to the @B@ comment.
+-- * @recordFieldComment2@ corresponds to the @C@ comment.
 --
 -- Although the @A@ comment isn't annotating the @"T"@ Record Field,
 -- this is the best place to keep these comments.
 --
--- Note that @recordFieldSrc2@ is always 'Nothing' when the 'RecordField' is for
+-- Note that @recordFieldComment2@ is always 'Nothing' when the 'RecordField' is for
 -- a punned entry, because there is no @=@ sign. For example,
 --
 -- > { {- A -} x {- B -} }
 --
 -- will be instantiated as follows:
 --
--- * @recordFieldSrc0@ corresponds to the @A@ comment.
+-- * @recordFieldComment0@ corresponds to the @A@ comment.
 -- * @recordFieldValue@ corresponds to @(Var "x")@
--- * @recordFieldSrc1@ corresponds to the @B@ comment.
--- * @recordFieldSrc2@ will be 'Nothing'
+-- * @recordFieldComment1@ corresponds to the @B@ comment.
+-- * @recordFieldComment2@ will be 'Nothing'
 --
 -- The labels involved in a record using dot-syntax like in this example:
 --
@@ -354,25 +355,24 @@ instance Bifunctor PreferAnnotation where
 --
 -- * For both the @a@ and @b@ field, @recordfieldSrc2@ is 'Nothing'
 -- * For the @a@ field:
---   * @recordFieldSrc0@ corresponds to the @A@ comment
---   * @recordFieldSrc1@ corresponds to the @B@ comment
+--   * @recordFieldComment0@ corresponds to the @A@ comment
+--   * @recordFieldComment1@ corresponds to the @B@ comment
 -- * For the @b@ field:
---   * @recordFieldSrc0@ corresponds to the @C@ comment
---   * @recordFieldSrc1@ corresponds to the @D@ comment
+--   * @recordFieldComment0@ corresponds to the @C@ comment
+--   * @recordFieldComment1@ corresponds to the @D@ comment
 -- * For the @c@ field:
---   * @recordFieldSrc0@ corresponds to the @E@ comment
---   * @recordFieldSrc1@ corresponds to the @F@ comment
---   * @recordFieldSrc2@ corresponds to the @G@ comment
+--   * @recordFieldComment0@ corresponds to the @E@ comment
+--   * @recordFieldComment1@ corresponds to the @F@ comment
+--   * @recordFieldComment2@ corresponds to the @G@ comment
 --
 -- That is, for every label except the last one the semantics of
--- @recordFieldSrc0@ and @recordFieldSrc1@ are the same from a regular record
--- label but @recordFieldSrc2@ is always 'Nothing'. For the last keyword, all
--- srcs are 'Just'
+-- @recordFieldComment0@ and @recordFieldComment1@ are the same from a regular record
+-- label but @recordFieldComment2@ is always 'Nothing'.
 data RecordField s a = RecordField
-    { recordFieldSrc0  :: Maybe s
-    , recordFieldValue :: Expr s a
-    , recordFieldSrc1  :: Maybe s
-    , recordFieldSrc2  :: Maybe s
+    { recordFieldComment0 :: Maybe MultiComment
+    , recordFieldValue    :: Expr s a
+    , recordFieldComment1 :: Maybe MultiComment
+    , recordFieldComment2 :: Maybe MultiComment
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 -- | Construct a 'RecordField' with no src information
@@ -381,8 +381,8 @@ makeRecordField e = RecordField Nothing e Nothing Nothing
 
 
 instance Bifunctor RecordField where
-    first k (RecordField s0 value s1 s2) =
-        RecordField (k <$> s0) (first k value) (k <$> s1) (k <$> s2)
+    first k (RecordField c0 value c1 c2) =
+        RecordField c0 (first k value) c1 c2
     second = fmap
 
 {-| Record the label of a function or a function-type expression
