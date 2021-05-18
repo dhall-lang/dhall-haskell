@@ -1442,11 +1442,12 @@ prettyPrinters characterSet =
         | otherwise =
             braceStyle (map prettyRecordEntry (consolidateRecordLiteral a))
       where
-        prettyRecordEntry kv@(KeyValue keys _ val) =
+        prettyRecordEntry kv@(KeyValue keys comment2 val) =
             case keys of
-                (_, key, Nothing) :| []
+                (_, key, _) :| []
                     | Var (V key' 0) <- Dhall.Syntax.shallowDenote val
-                    , key == key' ->
+                    , key == key'
+                    , Nothing <- comment2 ->
                         duplicate (prettyAnyLabels keys)
                 _ ->
                     prettyKeyValue prettyExpression equals kv
