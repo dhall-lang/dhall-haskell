@@ -280,22 +280,28 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (PreferAnnotation s a) where
             ]
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (RecordField s a) where
-    arbitrary = lift5 RecordField
+    arbitrary =
+        RecordField <$> arbitrary <*> pure Nothing <*> arbitrary <*> arbitrary <*> arbitrary
 
     shrink = genericShrink
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
     arbitrary = do
+        c0 <- arbitrary
         l <- label
+        c1 <- arbitrary
+        c2 <- arbitrary
         type_ <- arbitrary
-        return $ FunctionBinding Nothing l Nothing Nothing Nothing type_
+        return $ FunctionBinding c0 l Nothing c1 c2 type_
 
     shrink = genericShrink
 
 instance Arbitrary s => Arbitrary (FieldSelection s) where
     arbitrary = do
-      l <- label
-      pure $ FieldSelection Nothing Nothing l Nothing
+        c0 <- arbitrary
+        c1 <- arbitrary
+        l <- label
+        pure $ FieldSelection c0 c1 l Nothing
     shrink = genericShrink
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
