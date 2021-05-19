@@ -453,19 +453,14 @@ parsers embedded = Parsers {..}
             let projectByExpression xs e = Project e (Right xs)
 
             let alternatives = do
-                    src0 <- src whitespace
+                    c0 <- commentOrWhitespace
 
                     let fieldSelection = do
-                            l <- anyLabel
+                            (s, l) <- srcAnd anyLabel
 
-                            pos <- Text.Megaparsec.getSourcePos
+                            c1 <- commentOrWhitespace
 
-                            -- FIXME: Suffix whitespace can't be parsed given our limitation
-                            -- about whitespace treatment, but for @dhall-docs@ this
-                            -- is enough
-                            let src1 = Src pos pos ""
-
-                            return (FieldSelection (Just src0) l (Just src1))
+                            return (FieldSelection c0 l (Just s) c1)
 
                     let result =
                                 fmap field               fieldSelection

@@ -222,14 +222,14 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
             infer (Context.insert name nameDecl context) expr
 
-        Field e (FieldSelection (Just Src{srcEnd=posStart}) label (Just Src{srcStart=posEnd})) -> do
+        Field e (FieldSelection _ label (Just Src{srcStart, srcEnd}) _) -> do
             fields <- do
                 dhallType <- infer context e
                 case dhallType of
                     NoInfo -> return mempty
                     RecordFields s -> return $ Set.toList s
 
-            let src = makeSrcForLabel posStart posEnd label
+            let src = makeSrcForLabel srcStart srcEnd label
             let match (NameDecl _ l _) = l == label
             case filter match fields of
                 x@(NameDecl _ _ t) : _ -> do

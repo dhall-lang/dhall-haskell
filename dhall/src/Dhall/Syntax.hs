@@ -432,24 +432,20 @@ instance Bifunctor FunctionBinding where
 --
 -- … will be instantiated as follows:
 --
--- * @fieldSelectionSrc0@ corresponds to the @A@ comment
+-- * @fieldSelectionComment0@ corresponds to the @A@ comment
 -- * @fieldSelectionLabel@ corresponds to @x@
--- * @fieldSelectionSrc1@ corresponds to the @B@ comment
---
--- Given our limitation that not all expressions recover their whitespaces, the
--- purpose of @fieldSelectionSrc1@ is to save the 'Text.Megaparsec.SourcePos'
--- where the @fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src'
--- (@s = 'Src'@) to be consistent with similar data types such as 'Binding', for
--- example.
+-- * @fieldSelectionLabelSrc@ corresponds to the source span for @"x"@
+-- * @fieldSelectionComment1@ corresponds to the @B@ comment
 data FieldSelection s = FieldSelection
-    { fieldSelectionSrc0 :: Maybe s
+    { fieldSelectionComment0 :: Maybe MultiComment
     , fieldSelectionLabel :: !Text
-    , fieldSelectionSrc1 :: Maybe s
+    , fieldSelectionLabelSrc :: Maybe s
+    , fieldSelectionComment1 :: Maybe MultiComment
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 -- | Smart constructor for 'FieldSelection' with no src information
 makeFieldSelection :: Text -> FieldSelection s
-makeFieldSelection t = FieldSelection Nothing t Nothing
+makeFieldSelection t = FieldSelection Nothing t Nothing Nothing
 
 {-| Syntax tree for expressions
 
@@ -1171,7 +1167,7 @@ denote = \case
     RecordLit a -> RecordLit $ denoteRecordField <$> a
     Lam _ a b -> Lam Nothing (denoteFunctionBinding a) (denote b)
     Pi _ t a b -> Pi Nothing t (denote a) (denote b)
-    Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
+    Field a (FieldSelection _ b _ _) -> Field (denote a) (FieldSelection Nothing b Nothing Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ _ e _ _) = RecordField Nothing Nothing (denote e) Nothing Nothing
@@ -1463,7 +1459,7 @@ desugarWith = Optics.rewriteOf subExpressions rewrite
                 (makeBinding "_" record)
                 (Prefer mempty (PreferFromWith e) "_"
                     (RecordLit
-                        [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing key0 Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
+                        [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing key0 Nothing Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
                     )
                 )
             )
