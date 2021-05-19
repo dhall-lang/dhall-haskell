@@ -1040,8 +1040,8 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = loop a
 
-        Core.Equivalent a b ->
-            Core.Equivalent a' b'
+        Core.Equivalent cs a b ->
+            Core.Equivalent cs a' b'
           where
             a' = loop a
             b' = loop b

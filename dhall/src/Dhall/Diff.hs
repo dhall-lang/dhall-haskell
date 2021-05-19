@@ -992,7 +992,7 @@ diffEquivalentExpression
 diffEquivalentExpression l@(Equivalent {}) r@(Equivalent {}) =
     enclosed' "  " (operator "≡" <> " ") (docs l r)
   where
-    docs (Equivalent aL bL) (Equivalent aR bR) =
+    docs (Equivalent _ aL bL) (Equivalent _ aR bR) =
         Data.List.NonEmpty.cons (diffApplicationExpression aL aR) (docs bL bR)
     docs aL aR =
         pure (diffApplicationExpression aL aR)

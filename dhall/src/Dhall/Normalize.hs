@@ -668,11 +668,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         t' <- loop t
 
         pure (Assert t')
-    Equivalent l r -> do
+    Equivalent cs l r -> do
         l' <- loop l
         r' <- loop r
 
-        pure (Equivalent l' r')
+        pure (Equivalent cs l' r')
     With e ks v -> do
         e' <- loop e
         v' <- loop v
@@ -917,7 +917,7 @@ isNormalized e0 = loop (Syntax.denote e0)
                   Record _ -> False
                   _ -> loop e'
       Assert t -> loop t
-      Equivalent l r -> loop l && loop r
+      Equivalent _ l r -> loop l && loop r
       With{} -> False
       Note _ e' -> loop e'
       ImportAlt _ _ -> False

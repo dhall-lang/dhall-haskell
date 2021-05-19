@@ -153,6 +153,7 @@ detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
         Combine (Just Unicode) _ _ _ -> Unicode
         CombineTypes (Just Unicode) _ _ -> Unicode
         Prefer (Just Unicode) _ _ _ -> Unicode
+        Equivalent (Just Unicode) _ _ -> Unicode
         _ -> mempty
 
 -- | Pretty print an expression
@@ -882,10 +883,10 @@ prettyPrinters characterSet =
         spacer = if Text.length op == 1 then " "  else "  "
 
     prettyEquivalentExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettyEquivalentExpression a0@(Equivalent _ _) =
+    prettyEquivalentExpression a0@(Equivalent _ _ _) =
         prettyOperator (equivalent characterSet) (docs a0)
       where
-        docs (Equivalent a b) = prettyImportAltExpression b : docs a
+        docs (Equivalent _ a b) = prettyImportAltExpression b : docs a
         docs a
             | Just doc <- preserveSource a =
                 [ doc ]

@@ -1220,8 +1220,10 @@ _at :: Parser ()
 _at = reservedChar '@' <?> "\"@\""
 
 -- | Parse the equivalence symbol (@===@ or @≡@)
-_equivalent :: Parser ()
-_equivalent = (void (char '≡' <?> "\"≡\"") <|> void (text "===")) <?> "operator"
+_equivalent :: Parser CharacterSet
+_equivalent =
+        (Unicode <$ char '≡' <?> "\"≡\"")
+    <|> (ASCII <$ text "===" <?> "===")
 
 -- | Parse the @missing@ keyword
 _missing :: Parser ()

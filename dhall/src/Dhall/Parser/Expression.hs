@@ -350,7 +350,7 @@ parsers embedded = Parsers {..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ Equivalent                  <$ _equivalent    <* whitespace
+        [ Equivalent . Just           <$> _equivalent   <* whitespace
         , ImportAlt                   <$ _importAlt     <* nonemptyWhitespace
         , BoolOr                      <$ _or            <* whitespace
         , NaturalPlus                 <$ _plus          <* nonemptyWhitespace
@@ -359,7 +359,7 @@ parsers embedded = Parsers {..}
         , BoolAnd                     <$ _and           <* whitespace
         , (\cs -> Combine (Just cs) Nothing)         <$> _combine <* whitespace
         , (\cs -> Prefer (Just cs) PreferFromSource) <$> _prefer  <* whitespace
-        , (CombineTypes . Just)       <$> _combineTypes <* whitespace
+        , CombineTypes . Just         <$> _combineTypes <* whitespace
         , NaturalTimes                <$ _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
         , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace

@@ -319,7 +319,7 @@ decodeExpressionInternal decodeEmbed = go
                                     9  -> return (Prefer mempty PreferFromSource)
                                     10 -> return (CombineTypes mempty)
                                     11 -> return ImportAlt
-                                    12 -> return Equivalent
+                                    12 -> return (Equivalent mempty)
                                     13 -> return RecordCompletion
                                     _  -> die ("Unrecognized operator code: " <> show opcode)
 
@@ -792,7 +792,7 @@ encodeExpressionInternal encodeEmbed = go
         ImportAlt l r ->
             encodeOperator 11 l r
 
-        Equivalent l r ->
+        Equivalent _ l r ->
             encodeOperator 12 l r
 
         RecordCompletion l r ->
