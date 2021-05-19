@@ -288,7 +288,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
     arbitrary = do
         l <- label
         type_ <- arbitrary
-        return $ FunctionBinding Nothing l Nothing Nothing type_
+        return $ FunctionBinding Nothing l Nothing Nothing Nothing type_
 
     shrink = genericShrink
 

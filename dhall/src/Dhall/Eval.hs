@@ -1248,8 +1248,8 @@ alphaNormalize = goEnv EmptyNames
                 Const k
             Var (V x i) ->
                 goVar e0 x i
-            Lam cs (FunctionBinding src0 x src1 src2 t) u ->
-                Lam cs (FunctionBinding src0 "_" src1 src2 (go t)) (goBind x u)
+            Lam cs (FunctionBinding c0 x s c1 c2 t) u ->
+                Lam cs (FunctionBinding c0 "_" s c1 c2 (go t)) (goBind x u)
             Pi cs x a b ->
                 Pi cs "_" (go a) (goBind x b)
             App t u ->

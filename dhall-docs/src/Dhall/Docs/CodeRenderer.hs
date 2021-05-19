@@ -208,14 +208,15 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
                     return t
 
         Lam _ (FunctionBinding
-                (Just Src{srcEnd = srcEnd0})
+                _
                 name
-                (Just Src{srcStart = srcStart1})
+                (Just Src{srcStart, srcEnd})
+                _
                 _
                 t) expr -> do
             dhallType <- infer context t
 
-            let nameSrc = makeSrcForLabel srcEnd0 srcStart1 name
+            let nameSrc = makeSrcForLabel srcStart srcEnd name
             let nameDecl = NameDecl nameSrc name dhallType
 
             Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]

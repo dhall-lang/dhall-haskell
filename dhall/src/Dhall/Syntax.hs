@@ -328,7 +328,7 @@ instance Bifunctor PreferAnnotation where
 -- will be instantiated as follows:
 --
 -- * @recordFieldComment0@ corresponds to the @A@ comment.
--- * @recordFieldKeySrc@ corresponds to the Src of "x".
+-- * @recordFieldKeySrc@ corresponds to the source span for @"x"@.
 -- * @recordFieldValue@ is @"T"@
 -- * @recordFieldComment1@ corresponds to the @B@ comment.
 -- * @recordFieldComment2@ corresponds to the @C@ comment.
@@ -344,7 +344,7 @@ instance Bifunctor PreferAnnotation where
 -- will be instantiated as follows:
 --
 -- * @recordFieldComment0@ corresponds to the @A@ comment.
--- * @recordFieldKeySrc@ corresponds to the Src of "x".
+-- * @recordFieldKeySrc@ corresponds to the source span for @"x"@.
 -- * @recordFieldValue@ corresponds to @(Var "x")@
 -- * @recordFieldComment1@ corresponds to the @B@ comment.
 -- * @recordFieldComment2@ will be 'Nothing'
@@ -358,15 +358,15 @@ instance Bifunctor PreferAnnotation where
 -- * For both the @a@ and @b@ field, @recordFieldComment2@ is 'Nothing'
 -- * For the @a@ field:
 --   * @recordFieldComment0@ corresponds to the @A@ comment
---   * @recordFieldKeySrc@ corresponds to the Src of "a"
+--   * @recordFieldKeySrc@ corresponds to the source span for @"a"@.
 --   * @recordFieldComment1@ corresponds to the @B@ comment
 -- * For the @b@ field:
 --   * @recordFieldComment0@ corresponds to the @C@ comment
---   * @recordFieldKeySrc@ corresponds to the Src of "b"
+--   * @recordFieldKeySrc@ corresponds to the source span for @"b"@.
 --   * @recordFieldComment1@ corresponds to the @D@ comment
 -- * For the @c@ field:
 --   * @recordFieldComment0@ corresponds to the @E@ comment
---   * @recordFieldKeySrc@ corresponds to the Src of "c"
+--   * @recordFieldKeySrc@ corresponds to the source span for @"c"@.
 --   * @recordFieldComment1@ corresponds to the @F@ comment
 --   * @recordFieldComment2@ corresponds to the @G@ comment
 --
@@ -398,27 +398,29 @@ For example,
 > λ({- A -} a {- B -} : {- C -} T) -> e
 
 will be instantiated as follows:
-* @functionBindingSrc0@ corresponds to the @A@ comment
+* @functionBindingComment0@ corresponds to the @A@ comment
 * @functionBindingVariable@ is @a@
-* @functionBindingSrc1@ corresponds to the @B@ comment
-* @functionBindingSrc2@ corresponds to the @C@ comment
+* @functionBindingVariableSrc@ corresponds to the source span for @"a"@
+* @functionBindingComment1@ corresponds to the @B@ comment
+* @functionBindingComment2@ corresponds to the @C@ comment
 * @functionBindingAnnotation@ is @T@
 -}
 data FunctionBinding s a = FunctionBinding
-    { functionBindingSrc0 :: Maybe s
+    { functionBindingComment0 :: Maybe MultiComment
     , functionBindingVariable :: Text
-    , functionBindingSrc1 :: Maybe s
-    , functionBindingSrc2 :: Maybe s
+    , functionBindingVariableSrc :: Maybe s
+    , functionBindingComment1 :: Maybe MultiComment
+    , functionBindingComment2 :: Maybe MultiComment
     , functionBindingAnnotation :: Expr s a
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 -- | Smart constructor for 'FunctionBinding' with no src information
 makeFunctionBinding :: Text -> Expr s a -> FunctionBinding s a
-makeFunctionBinding l t = FunctionBinding Nothing l Nothing Nothing t
+makeFunctionBinding l t = FunctionBinding Nothing l Nothing Nothing Nothing t
 
 instance Bifunctor FunctionBinding where
-    first k (FunctionBinding src0 label src1 src2 type_) =
-        FunctionBinding (k <$> src0) label (k <$> src1) (k <$> src2) (first k type_)
+    first k (FunctionBinding c0 label s c1 c2 type_) =
+        FunctionBinding c0 label (k <$> s) c1 c2 (first k type_)
 
     second = fmap
 
@@ -709,8 +711,8 @@ instance Monad (Expr s) where
         adaptBinding (Binding comment0 c src comment1 d comment2 e) =
             Binding comment0 c src comment1 (fmap adaptBindingAnnotation d) comment2 (e >>= k)
 
-        adaptFunctionBinding (FunctionBinding src0 label src1 src2 type_) =
-            FunctionBinding src0 label src1 src2 (type_ >>= k)
+        adaptFunctionBinding (FunctionBinding c0 label s c1 c2 type_) =
+            FunctionBinding c0 label s c1 c2 (type_ >>= k)
 
         adaptBindingAnnotation (src3, f) = (src3, f >>= k)
 
@@ -929,12 +931,13 @@ functionBindingExprs
     :: Applicative f
     => (Expr s a -> f (Expr s b))
     -> FunctionBinding s a -> f (FunctionBinding s b)
-functionBindingExprs f (FunctionBinding s0 label s1 s2 type_) =
+functionBindingExprs f (FunctionBinding c0 label s c1 c2 type_) =
     FunctionBinding
-        <$> pure s0
+        <$> pure c0
         <*> pure label
-        <*> pure s1
-        <*> pure s2
+        <*> pure s
+        <*> pure c1
+        <*> pure c2
         <*> f type_
 {-# INLINABLE functionBindingExprs #-}
 
@@ -1177,8 +1180,8 @@ denote = \case
 
     denoteBindingAnnotation (_, f) = (Nothing, denote f)
 
-    denoteFunctionBinding (FunctionBinding _ l _ _ t) =
-        FunctionBinding Nothing l Nothing Nothing (denote t)
+    denoteFunctionBinding (FunctionBinding _ l _ _ _ t) =
+        FunctionBinding Nothing l Nothing Nothing Nothing (denote t)
 
 -- | The \"opposite\" of `denote`, like @first absurd@ but faster
 renote :: Expr Void a -> Expr s a
@@ -1418,8 +1421,8 @@ shift :: Int -> Var -> Expr s a -> Expr s a
 shift d (V x n) (Var (V x' n')) = Var (V x' n'')
   where
     n'' = if x == x' && n <= n' then n' + d else n'
-shift d (V x n) (Lam cs (FunctionBinding src0 x' src1 src2 _A) b) =
-    Lam cs (FunctionBinding src0 x' src1 src2 _A') b'
+shift d (V x n) (Lam cs (FunctionBinding c0 x' s c1 c2 _A) b) =
+    Lam cs (FunctionBinding c0 x' s c1 c2 _A') b'
   where
     _A' = shift d (V x n ) _A
     b'  = shift d (V x n') b

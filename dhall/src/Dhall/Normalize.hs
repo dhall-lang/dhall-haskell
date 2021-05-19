@@ -65,8 +65,8 @@ judgmentallyEqual = Eval.judgmentallyEqual
 -}
 subst :: Var -> Expr s a -> Expr s a -> Expr s a
 subst _ _ (Const a) = Const a
-subst (V x n) e (Lam cs (FunctionBinding src0 y src1 src2 _A) b) =
-    Lam cs (FunctionBinding src0 y src1 src2 _A') b'
+subst (V x n) e (Lam cs (FunctionBinding c0 y s c1 c2 _A) b) =
+    Lam cs (FunctionBinding c0 y s c1 c2 _A') b'
   where
     _A' = subst (V x n )                         e  _A
     b'  = subst (V x n') (Syntax.shift 1 (V y 0) e)  b
@@ -115,7 +115,7 @@ boundedType _                = False
 
 >>> mfb = Syntax.makeFunctionBinding
 >>> alphaNormalize (Lam mempty (mfb "a" (Const Type)) (Lam mempty (mfb "b" (Const Type)) (Lam mempty (mfb "x" "a") (Lam mempty (mfb "y" "b") "x"))))
-Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
+Lam Nothing (FunctionBinding {functionBindingComment0 = Nothing, functionBindingVariable = "_", functionBindingVariableSrc = Nothing, functionBindingComment1 = Nothing, functionBindingComment2 = Nothing, functionBindingAnnotation = Const Type}) (Lam Nothing (FunctionBinding {functionBindingComment0 = Nothing, functionBindingVariable = "_", functionBindingVariableSrc = Nothing, functionBindingComment1 = Nothing, functionBindingComment2 = Nothing, functionBindingAnnotation = Const Type}) (Lam Nothing (FunctionBinding {functionBindingComment0 = Nothing, functionBindingVariable = "_", functionBindingVariableSrc = Nothing, functionBindingComment1 = Nothing, functionBindingComment2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Lam Nothing (FunctionBinding {functionBindingComment0 = Nothing, functionBindingVariable = "_", functionBindingVariableSrc = Nothing, functionBindingComment1 = Nothing, functionBindingComment2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
 
     α-normalization does not affect free variables:
 
@@ -192,7 +192,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
               f' <- loop f
               a' <- loop a
               case f' of
-                Lam _ (FunctionBinding _ x _ _ _A) b₀ -> do
+                Lam _ (FunctionBinding _ x _ _ _ _A) b₀ -> do
 
                     let a₂ = Syntax.shift 1 (V x 0) a'
                     let b₁ = subst (V x 0) a₂ b₀
@@ -732,7 +732,7 @@ isNormalized e0 = loop (Syntax.denote e0)
     loop e = case e of
       Const _ -> True
       Var _ -> True
-      Lam _ (FunctionBinding Nothing _ Nothing Nothing a) b -> loop a && loop b
+      Lam _ (FunctionBinding Nothing _ Nothing Nothing Nothing a) b -> loop a && loop b
       Lam _ _ _ -> False
       Pi _ _ a b -> loop a && loop b
       App f a -> loop f && loop a && case App f a of
