@@ -1198,8 +1198,21 @@ prettyPrinters characterSet =
             prettySelectorExpression a
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
-    prettySelectorExpression (Field a (Dhall.Syntax.fieldSelectionLabel -> b)) =
-        prettySelectorExpression a <> dot <> prettyAnyLabel b
+    prettySelectorExpression (Field a (FieldSelection c0 c1 l _)) =
+      Pretty.group (Pretty.flatAlt long short)
+      where
+        selector = mconcat
+            [ renderMaybeComment c0
+            , dot
+            , renderMaybeComment c1
+            , prettyAnyLabel l
+            ]
+
+        short = prettySelectorExpression a <> selector
+
+        long =
+            prettySelectorExpression a <> Pretty.hardline <> Pretty.indent 2 selector
+
     prettySelectorExpression (Project a (Left b)) =
         prettySelectorExpression a <> dot <> prettyLabels b
     prettySelectorExpression (Project a (Right b)) =
