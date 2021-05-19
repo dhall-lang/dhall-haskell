@@ -295,7 +295,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
 instance Arbitrary s => Arbitrary (FieldSelection s) where
     arbitrary = do
       l <- label
-      pure $ FieldSelection Nothing l Nothing Nothing
+      pure $ FieldSelection Nothing Nothing l Nothing
     shrink = genericShrink
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where

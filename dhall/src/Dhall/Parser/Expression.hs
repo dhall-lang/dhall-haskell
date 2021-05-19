@@ -455,12 +455,14 @@ parsers embedded = Parsers {..}
             let alternatives = do
                     c0 <- commentOrWhitespace
 
-                    let fieldSelection = do
-                            (s, l) <- srcAnd anyLabel
+                    _dot
 
+                    let fieldSelection = do
                             c1 <- commentOrWhitespace
 
-                            return (FieldSelection c0 l (Just s) c1)
+                            (s, l) <- srcAnd anyLabel
+
+                            return (FieldSelection c0 c1 l (Just s))
 
                     let result =
                                 fmap field               fieldSelection
@@ -469,7 +471,7 @@ parsers embedded = Parsers {..}
 
                     result
 
-            b <- Text.Megaparsec.many (try (whitespace *> _dot *> alternatives))
+            b <- Text.Megaparsec.many (try alternatives)
 
             return (foldl' (\e k -> k e) a b) )
 

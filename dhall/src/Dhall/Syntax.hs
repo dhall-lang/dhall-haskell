@@ -428,24 +428,24 @@ instance Bifunctor FunctionBinding where
 --
 -- For example,
 --
--- > e . {- A -} x {- B -}
+-- > e {- A -} . {- B -} x
 --
 -- … will be instantiated as follows:
 --
 -- * @fieldSelectionComment0@ corresponds to the @A@ comment
+-- * @fieldSelectionComment1@ corresponds to the @B@ comment
 -- * @fieldSelectionLabel@ corresponds to @x@
 -- * @fieldSelectionLabelSrc@ corresponds to the source span for @"x"@
--- * @fieldSelectionComment1@ corresponds to the @B@ comment
 data FieldSelection s = FieldSelection
     { fieldSelectionComment0 :: Maybe MultiComment
+    , fieldSelectionComment1 :: Maybe MultiComment
     , fieldSelectionLabel :: !Text
     , fieldSelectionLabelSrc :: Maybe s
-    , fieldSelectionComment1 :: Maybe MultiComment
     } deriving (Data, Eq, Foldable, Functor, Generic, Lift, NFData, Ord, Show, Traversable)
 
 -- | Smart constructor for 'FieldSelection' with no src information
 makeFieldSelection :: Text -> FieldSelection s
-makeFieldSelection t = FieldSelection Nothing t Nothing Nothing
+makeFieldSelection t = FieldSelection Nothing Nothing t Nothing
 
 {-| Syntax tree for expressions
 
@@ -1167,7 +1167,7 @@ denote = \case
     RecordLit a -> RecordLit $ denoteRecordField <$> a
     Lam _ a b -> Lam Nothing (denoteFunctionBinding a) (denote b)
     Pi _ t a b -> Pi Nothing t (denote a) (denote b)
-    Field a (FieldSelection _ b _ _) -> Field (denote a) (FieldSelection Nothing b Nothing Nothing)
+    Field a (FieldSelection _ _ b _) -> Field (denote a) (FieldSelection Nothing Nothing b Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ _ e _ _) = RecordField Nothing Nothing (denote e) Nothing Nothing
@@ -1459,7 +1459,7 @@ desugarWith = Optics.rewriteOf subExpressions rewrite
                 (makeBinding "_" record)
                 (Prefer mempty (PreferFromWith e) "_"
                     (RecordLit
-                        [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing key0 Nothing Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
+                        [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing Nothing key0 Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
                     )
                 )
             )

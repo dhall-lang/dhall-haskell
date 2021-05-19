@@ -222,7 +222,7 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
             infer (Context.insert name nameDecl context) expr
 
-        Field e (FieldSelection _ label (Just Src{srcStart, srcEnd}) _) -> do
+        Field e (FieldSelection _ _ label (Just Src{srcStart, srcEnd})) -> do
             fields <- do
                 dhallType <- infer context e
                 case dhallType of

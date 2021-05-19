@@ -897,7 +897,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
-      Field r (FieldSelection Nothing k Nothing Nothing) -> case r of
+      Field r (FieldSelection Nothing Nothing k Nothing) -> case r of
           RecordLit _ -> False
           Project _ _ -> False
           Prefer _ _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
