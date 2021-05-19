@@ -248,9 +248,9 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
       where
         handleRecordLike l = RecordFields . Set.fromList <$> mapM f l
           where
-            f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
+            f (key, RecordField _ (Just Src{ srcStart, srcEnd }) val _ _) = do
                 dhallType <- infer context val
-                let nameSrc = makeSrcForLabel startPos endPos key
+                let nameSrc = makeSrcForLabel srcStart srcEnd key
                 let nameDecl = NameDecl nameSrc key dhallType
                 Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
                 return nameDecl

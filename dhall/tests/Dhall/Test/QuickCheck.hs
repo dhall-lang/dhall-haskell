@@ -280,7 +280,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (PreferAnnotation s a) where
             ]
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (RecordField s a) where
-    arbitrary = lift4 RecordField
+    arbitrary = lift5 RecordField
 
     shrink = genericShrink
 

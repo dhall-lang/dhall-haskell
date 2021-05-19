@@ -328,6 +328,7 @@ instance Bifunctor PreferAnnotation where
 -- will be instantiated as follows:
 --
 -- * @recordFieldComment0@ corresponds to the @A@ comment.
+-- * @recordFieldKeySrc@ corresponds to the Src of "x".
 -- * @recordFieldValue@ is @"T"@
 -- * @recordFieldComment1@ corresponds to the @B@ comment.
 -- * @recordFieldComment2@ corresponds to the @C@ comment.
@@ -343,6 +344,7 @@ instance Bifunctor PreferAnnotation where
 -- will be instantiated as follows:
 --
 -- * @recordFieldComment0@ corresponds to the @A@ comment.
+-- * @recordFieldKeySrc@ corresponds to the Src of "x".
 -- * @recordFieldValue@ corresponds to @(Var "x")@
 -- * @recordFieldComment1@ corresponds to the @B@ comment.
 -- * @recordFieldComment2@ will be 'Nothing'
@@ -353,15 +355,18 @@ instance Bifunctor PreferAnnotation where
 --
 -- will be instantiated as follows:
 --
--- * For both the @a@ and @b@ field, @recordfieldSrc2@ is 'Nothing'
+-- * For both the @a@ and @b@ field, @recordFieldComment2@ is 'Nothing'
 -- * For the @a@ field:
 --   * @recordFieldComment0@ corresponds to the @A@ comment
+--   * @recordFieldKeySrc@ corresponds to the Src of "a"
 --   * @recordFieldComment1@ corresponds to the @B@ comment
 -- * For the @b@ field:
 --   * @recordFieldComment0@ corresponds to the @C@ comment
+--   * @recordFieldKeySrc@ corresponds to the Src of "b"
 --   * @recordFieldComment1@ corresponds to the @D@ comment
 -- * For the @c@ field:
 --   * @recordFieldComment0@ corresponds to the @E@ comment
+--   * @recordFieldKeySrc@ corresponds to the Src of "c"
 --   * @recordFieldComment1@ corresponds to the @F@ comment
 --   * @recordFieldComment2@ corresponds to the @G@ comment
 --
@@ -370,6 +375,7 @@ instance Bifunctor PreferAnnotation where
 -- label but @recordFieldComment2@ is always 'Nothing'.
 data RecordField s a = RecordField
     { recordFieldComment0 :: Maybe MultiComment
+    , recordFieldKeySrc   :: Maybe s
     , recordFieldValue    :: Expr s a
     , recordFieldComment1 :: Maybe MultiComment
     , recordFieldComment2 :: Maybe MultiComment
@@ -377,12 +383,12 @@ data RecordField s a = RecordField
 
 -- | Construct a 'RecordField' with no src information
 makeRecordField :: Expr s a -> RecordField s a
-makeRecordField e = RecordField Nothing e Nothing Nothing
+makeRecordField e = RecordField Nothing Nothing e Nothing Nothing
 
 
 instance Bifunctor RecordField where
-    first k (RecordField c0 value c1 c2) =
-        RecordField c0 (first k value) c1 c2
+    first k (RecordField c0 s value c1 c2) =
+        RecordField c0 (k <$> s) (first k value) c1 c2
     second = fmap
 
 {-| Record the label of a function or a function-type expression
@@ -697,8 +703,8 @@ instance Monad (Expr s) where
         Field a b   -> Field (a >>= k) b
         _ -> Lens.over unsafeSubExpressions (>>= k) expression
       where
-        bindRecordKeyValues (RecordField s0 e s1 s2) =
-            RecordField s0 (e >>= k) s1 s2
+        bindRecordKeyValues (RecordField c0 s e c1 c2) =
+            RecordField c0 s (e >>= k) c1 c2
 
         adaptBinding (Binding comment0 c src comment1 d comment2 e) =
             Binding comment0 c src comment1 (fmap adaptBindingAnnotation d) comment2 (e >>= k)
@@ -908,12 +914,13 @@ recordFieldExprs
     :: Applicative f
     => (Expr s a -> f (Expr s b))
     -> RecordField s a -> f (RecordField s b)
-recordFieldExprs f (RecordField s0 e s1 s2) =
+recordFieldExprs f (RecordField c0 s e c1 c2) =
     RecordField
-        <$> pure s0
+        <$> pure c0
+        <*> pure s
         <*> f e
-        <*> pure s1
-        <*> pure s2
+        <*> pure c1
+        <*> pure c2
 {-# INLINABLE recordFieldExprs #-}
 
 {-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
@@ -1164,7 +1171,7 @@ denote = \case
     Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
-    denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing
+    denoteRecordField (RecordField _ _ e _ _) = RecordField Nothing Nothing (denote e) Nothing Nothing
     denoteBinding (Binding _ c _ _ d _ e) =
         Binding Nothing c Nothing Nothing (fmap denoteBindingAnnotation d) Nothing (denote e)
 

@@ -1423,7 +1423,7 @@ prettyPrinters characterSet =
         . map (prettyKeyValue prettyExpression colon . adapt)
         . Map.toList
       where
-        adapt (key, RecordField mComment0 val mComment1 mComment2) = KeyValue (pure (mComment0, key, mComment1)) mComment2 val
+        adapt (key, RecordField mComment0 _ val mComment1 mComment2) = KeyValue (pure (mComment0, key, mComment1)) mComment2 val
 
     prettyRecordLit :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecordLit = prettyRecordLike braces
@@ -1670,7 +1670,7 @@ consolidateRecordLiteral :: Map Text (RecordField s a) -> [KeyValue s a]
 consolidateRecordLiteral = concatMap adapt . Map.toList
   where
     adapt :: (Text, RecordField s a) -> [KeyValue s a]
-    adapt (key, RecordField mComment0 val mComment1 mComment2)
+    adapt (key, RecordField mComment0 _ val mComment1 mComment2)
         | Nothing <- mComment2
         , RecordLit m <- e
         , [ KeyValue keys mComment2' val' ] <- concatMap adapt (Map.toList m) =

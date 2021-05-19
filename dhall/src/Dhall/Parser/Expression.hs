@@ -810,22 +810,22 @@ parsers embedded = Parsers {..}
 
     nonEmptyRecordTypeOrLiteral firstComment0 = do
             let nonEmptyRecordType = do
-                    (firstKeyComment1, a) <- try $ do
-                        a <- anyLabelOrSome
+                    (firstKeyComment1, a, s) <- try $ do
+                        (s, a) <- srcAnd anyLabelOrSome
                         c <- commentOrWhitespace
                         _colon
-                        return (c, a)
+                        return (c, a, s)
 
                     firstKeyComment2 <- commentOrNonEmptyWhitespace
 
                     b <- expression
 
                     e <- Text.Megaparsec.many $ do
-                        (comment0', c) <- try $ do
+                        (comment0', c, s') <- try $ do
                             _comma
                             comment0' <- commentOrWhitespace
-                            c <- anyLabelOrSome
-                            return (comment0', c)
+                            (s', c) <- srcAnd anyLabelOrSome
+                            return (comment0', c, s')
 
                         comment1 <- commentOrWhitespace
 
@@ -837,12 +837,12 @@ parsers embedded = Parsers {..}
 
                         whitespace
 
-                        return (c, RecordField comment0' d comment1 comment2)
+                        return (c, RecordField comment0' (Just s') d comment1 comment2)
 
                     _ <- optional (whitespace *> _comma)
                     whitespace
 
-                    m <- toMap ((a, RecordField firstComment0 b firstKeyComment1 firstKeyComment2) : e)
+                    m <- toMap ((a, RecordField firstComment0 (Just s) b firstKeyComment1 firstKeyComment2) : e)
 
                     return (Record m)
 
@@ -851,18 +851,18 @@ parsers embedded = Parsers {..}
                         c <- commentOrWhitespace
                         pure (maybeComment <> c)
 
-                    firstLabel <- anyLabelOrSome
+                    (s, firstLabel) <- srcAnd anyLabelOrSome
                     firstComment1 <- commentOrWhitespace
 
                     let parseLabelWithWhsp = try $ do
                             _dot
                             comment0 <- commentOrWhitespace
-                            l <- anyLabelOrSome
+                            (s', l) <- srcAnd anyLabelOrSome
                             comment1 <- commentOrWhitespace
-                            return (comment0, l, comment1)
+                            return (comment0, l, s', comment1)
 
                     restKeys <- Combinators.many parseLabelWithWhsp
-                    let keys = (firstComment0', firstLabel, firstComment1) :| restKeys
+                    let keys = (firstComment0', firstLabel, s, firstComment1) :| restKeys
 
                     let normalRecordEntry = do
                             try _equal
@@ -871,17 +871,17 @@ parsers embedded = Parsers {..}
 
                             value <- expression
 
-                            let cons (c0, key, c1) (key', values) =
-                                    (key, RecordField c0 (RecordLit [ (key', values) ]) c1 Nothing)
+                            let cons (c0, key, s', c1) (key', values) =
+                                    (key, RecordField c0 (Just s') (RecordLit [ (key', values) ]) c1 Nothing)
 
-                            let (lastComment0, lastLabel, lastComment1) = NonEmpty.last keys
-                            let nil = (lastLabel, RecordField lastComment0 value lastComment1 lastComment2)
+                            let (lastComment0, lastLabel, lastS, lastComment1) = NonEmpty.last keys
+                            let nil = (lastLabel, RecordField lastComment0 (Just lastS) value lastComment1 lastComment2)
 
                             return (foldr cons nil (NonEmpty.init keys))
 
                     let punnedEntry =
                             case keys of
-                                (c0, x, c1) :| [] -> return (x, RecordField c0 (Var (V x 0)) c1 Nothing)
+                                (c0, x, s', c1) :| [] -> return (x, RecordField c0 (Just s') (Var (V x 0)) c1 Nothing)
                                 _       -> empty
 
                     (normalRecordEntry <|> punnedEntry) <* whitespace

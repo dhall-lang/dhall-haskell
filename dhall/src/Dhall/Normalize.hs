@@ -507,11 +507,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
     None -> pure None
     Record kts -> Record . Dhall.Map.sort <$> kts'
       where
-        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
+        f (RecordField c0 s expr c1 c2) = (\e -> RecordField c0 s e c1 c2) <$> loop expr
         kts' = traverse f kts
     RecordLit kvs -> RecordLit . Dhall.Map.sort <$> kvs'
       where
-        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
+        f (RecordField c0 s expr c1 c2) = (\e -> RecordField c0 s e c1 c2) <$> loop expr
         kvs' = traverse f kvs
     Union kts -> Union . Dhall.Map.sort <$> kts'
       where
@@ -525,7 +525,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (RecordLit m) (RecordLit n) =
             RecordLit (Dhall.Map.unionWith f m n)
           where
-            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
+            f (RecordField _ _ expr _ _) (RecordField _ _ expr' _ _) =
               Syntax.makeRecordField $ decide expr expr'
         decide l r =
             Combine cs mk l r
@@ -538,7 +538,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (Record m) (Record n) =
             Record (Dhall.Map.unionWith f m n)
           where
-            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
+            f (RecordField _ _ expr _ _) (RecordField _ _ expr' _ _) =
               Syntax.makeRecordField $ decide expr expr'
         decide l r =
             CombineTypes cs l r
@@ -860,11 +860,11 @@ isNormalized e0 = loop (Syntax.denote e0)
       None -> True
       Record kts -> Dhall.Map.isSorted kts && all decide kts
         where
-          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
+          decide (RecordField Nothing Nothing exp' Nothing Nothing) = loop exp'
           decide _ = False
       RecordLit kvs -> Dhall.Map.isSorted kvs && all decide kvs
         where
-          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
+          decide (RecordField Nothing Nothing exp' Nothing Nothing) = loop exp'
           decide _ = False
       Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
       Combine _ _ x y -> loop x && loop y && decide x y
