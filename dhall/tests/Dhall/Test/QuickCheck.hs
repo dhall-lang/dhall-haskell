@@ -728,6 +728,30 @@ idempotenceTest characterSet header expr =
         Import (ImportHashed _ (Remote (URL { headers = Just _ }))) _ -> True
         _                                                             -> False
 
+commentAsWhitespace :: CharacterSet -> Expr Src Import -> Property
+commentAsWhitespace characterSet expr =
+        not (any hasHttpHeaders expr)
+    ==> let addComments =
+                  Text.replace " " "{--}"
+                . Text.replace "\n" "--\n"
+
+            txt = addComments (format characterSet (Header mempty, expr))
+
+            denote :: Expr Src Import -> Expr Void Import
+            denote = Dhall.Core.denote
+
+            report = "\nText input was:\n\n" <> show txt <> "\n"
+
+        in Test.QuickCheck.counterexample report $
+            case Parser.exprAndHeaderFromText Parser.CommentIsNeeded mempty txt of
+              Right (_, expr') -> denote expr === denote expr'
+              Left e -> error (show e)
+  where
+    -- Workaround for https://github.com/dhall-lang/dhall-haskell/issues/1925.
+    hasHttpHeaders = \case
+        Import (ImportHashed _ (Remote (URL { headers = Just _ }))) _ -> True
+        _                                                             -> False
+
 tests :: TestTree
 tests =
     testProperties'
@@ -777,6 +801,17 @@ tests =
         , ( "Formatting should be idempotent"
           , Test.QuickCheck.property idempotenceTest
           , adjustQuickCheckTests 10000
+          )
+        , ( "Any whitespace could be a comment and still parse"
+          , Test.QuickCheck.property commentAsWhitespace
+          , -- adjustQuickCheckTests 10000
+
+            -- Currently this test is disabled as it doesn't hold yet
+            --
+            -- To quickly test it from the CLI:
+            --
+            -- $ cabal test tasty --test-option=--quickcheck-tests=10 --test-option=--pattern='Any whitespace'
+            Test.Tasty.adjustOption (\n -> if n == 100 then QuickCheckTests 0 else n)
           )
         ]
 
