@@ -510,7 +510,7 @@ Library
         repline                     >= 0.4.0.0  && < 0.5 ,
         serialise                   >= 0.2.0.0  && < 0.3 ,
         scientific                  >= 0.3.0.0  && < 0.4 ,
-        template-haskell            >= 2.13.0.0 && < 2.17,
+        template-haskell            >= 2.13.0.0 && < 2.18,
         text                        >= 0.11.1.0 && < 1.3 ,
         text-manipulate             >= 0.2.0.1  && < 0.4 ,
         th-lift-instances           >= 0.1.13   && < 0.2 ,
@@ -533,7 +533,7 @@ Library
     else
       Hs-Source-Dirs: ghc-src
       Build-Depends:
-        cryptonite                  >= 0.23     && < 1.0
+        cryptonite                  >= 0.23     && < 0.30
       if flag(with-http)
         Build-Depends:
           http-types                  >= 0.7.0    && < 0.13,
@@ -667,7 +667,7 @@ Test-Suite tasty
         either                                         ,
         filepath                                       ,
         foldl                                    < 1.5 ,
-        generic-random            >= 1.3.0.0  && < 1.4 ,
+        generic-random            >= 1.3.0.0  && < 1.5 ,
         http-client                                    ,
         http-client-tls                                ,
         lens-family-core                               ,
