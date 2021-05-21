@@ -1,3 +1,3 @@
-{ -- | a comment for y
+{ --| a comment for y
   y = 42
 }
