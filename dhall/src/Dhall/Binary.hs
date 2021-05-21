@@ -13,15 +13,11 @@
 -}
 
 module Dhall.Binary
-    ( -- * Standard versions
-      StandardVersion(..)
-    , renderStandardVersion
-
-    -- * Encoding and decoding
-    , encodeExpression
+    ( -- * Encoding and decoding
+      encodeExpression
     , decodeExpression
 
-    -- * Exceptions
+      -- * Exceptions
     , DecodingFailure(..)
     ) where
 
@@ -54,7 +50,6 @@ import Dhall.Syntax
     )
 
 import Data.Foldable (toList)
-import Data.Text     (Text)
 import Data.Void     (Void, absurd)
 import GHC.Float     (double2Float, float2Double)
 import Numeric.Half  (fromHalf, toHalf)
@@ -75,35 +70,6 @@ import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Syntax          as Syntax
 import qualified Text.Printf           as Printf
-
-{-| Supported version strings
-
-    This exists primarily for backwards compatibility for expressions encoded
-    before Dhall removed version tags from the binary encoding
--}
-data StandardVersion
-    = NoVersion
-    -- ^ No version string
-    | V_5_0_0
-    -- ^ Version "5.0.0"
-    | V_4_0_0
-    -- ^ Version "4.0.0"
-    | V_3_0_0
-    -- ^ Version "3.0.0"
-    | V_2_0_0
-    -- ^ Version "2.0.0"
-    | V_1_0_0
-    -- ^ Version "1.0.0"
-    deriving (Enum, Bounded)
-
--- | Render a `StandardVersion` as `Data.Text.Text`
-renderStandardVersion :: StandardVersion -> Text
-renderStandardVersion NoVersion = "none"
-renderStandardVersion V_1_0_0   = "1.0.0"
-renderStandardVersion V_2_0_0   = "2.0.0"
-renderStandardVersion V_3_0_0   = "3.0.0"
-renderStandardVersion V_4_0_0   = "4.0.0"
-renderStandardVersion V_5_0_0   = "5.0.0"
 
 {-| Convert a function applied to multiple arguments to the base function and
     the list of arguments

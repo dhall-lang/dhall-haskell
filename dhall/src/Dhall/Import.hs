@@ -167,7 +167,6 @@ import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Text                        (Text)
 import Data.Typeable                    (Typeable)
 import Data.Void                        (Void, absurd)
-import Dhall.Binary                     (StandardVersion (..))
 
 import Dhall.Syntax
     ( Chunks (..)
@@ -200,7 +199,6 @@ import Dhall.Parser
     )
 import Lens.Family.State.Strict (zoom)
 
-import qualified Codec.CBOR.Encoding                         as Encoding
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
 import qualified Control.Monad.State.Strict                  as State
@@ -565,19 +563,24 @@ loadImportWithSemanticCache
         Nothing -> fetch
     where
         fetch = do
-            ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
+            ImportSemantics{ importSemantics } <- loadImportWithSemisemanticCache import_
 
-            let variants = map (\version -> encodeExpression version (Core.alphaNormalize importSemantics))
-                                [ minBound .. maxBound ]
-            case Data.Foldable.find ((== semanticHash). Dhall.Crypto.sha256Hash) variants of
-                Just bytes -> zoom cacheWarning (writeToSemanticCache semanticHash bytes)
-                Nothing -> do
-                    let expectedHash = semanticHash
-                    Status { _stack } <- State.get
-                    let actualHash = hashExpression (Core.alphaNormalize importSemantics)
-                    throwMissingImport (Imported _stack (HashMismatch {..}))
+            let bytes = encodeExpression (Core.alphaNormalize importSemantics)
 
-            return (ImportSemantics {..})
+            let actualHash = Dhall.Crypto.sha256Hash bytes
+
+            let expectedHash = semanticHash
+
+            if actualHash == expectedHash
+                then do
+                    zoom cacheWarning (writeToSemanticCache semanticHash bytes)
+
+                else do
+                    Status{ _stack } <- State.get
+
+                    throwMissingImport (Imported _stack HashMismatch{..})
+
+            return ImportSemantics{..}
 
 
 
@@ -599,7 +602,8 @@ writeExpressionToSemanticCache expression =
     -- with the old behavior
     State.evalStateT (writeToSemanticCache hash bytes) CacheWarned
   where
-    bytes = encodeExpression NoVersion expression
+    bytes = encodeExpression expression
+
     hash = Dhall.Crypto.sha256Hash bytes
 
 writeToSemanticCache
@@ -681,7 +685,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                     let betaNormal =
                             Core.normalizeWith _normalizer substitutedExpr
 
-                    let bytes = encodeExpression NoVersion betaNormal
+                    let bytes = encodeExpression betaNormal
 
                     zoom cacheWarning (writeToSemisemanticCache semisemanticHash bytes)
 
@@ -1205,33 +1209,19 @@ loadRelativeToWithManager newManager rootDirectory semanticCacheMode expression 
         (loadWith expression)
         (emptyStatusWithManager newManager rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
-encodeExpression
-    :: StandardVersion
-    -- ^ `NoVersion` means to encode without the version tag
-    -> Expr Void Void
-    -> Data.ByteString.ByteString
-encodeExpression _standardVersion expression = bytesStrict
+encodeExpression :: Expr Void Void -> Data.ByteString.ByteString
+encodeExpression expression = bytesStrict
   where
     intermediateExpression :: Expr Void Import
     intermediateExpression = fmap absurd expression
 
-    encoding =
-        case _standardVersion of
-            NoVersion ->
-                Codec.Serialise.encode intermediateExpression
-            s ->
-                    Encoding.encodeListLen 2
-                <>  Encoding.encodeString v
-                <>  Codec.Serialise.encode intermediateExpression
-              where
-                v = Dhall.Binary.renderStandardVersion s
+    encoding = Codec.Serialise.encode intermediateExpression
 
     bytesStrict = Write.toStrictByteString encoding
 
 -- | Hash a fully resolved expression
 hashExpression :: Expr Void Void -> Dhall.Crypto.SHA256Digest
-hashExpression expression =
-    Dhall.Crypto.sha256Hash (encodeExpression NoVersion expression)
+hashExpression = Dhall.Crypto.sha256Hash . encodeExpression
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
