@@ -804,9 +804,7 @@ tests =
           )
         , ( "Any whitespace could be a comment and still parse"
           , Test.QuickCheck.property commentAsWhitespace
-          , -- adjustQuickCheckTests 10000
-
-            -- Currently this test is disabled as it doesn't hold yet
+          , -- Currently this test is disabled as it doesn't hold yet
             --
             -- To quickly test it from the CLI:
             --
