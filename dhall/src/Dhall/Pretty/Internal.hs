@@ -181,14 +181,10 @@ normalizeMultiComment (MultiComment comments) =
         BlockComment _ -> True
         LineComment _ -> False
 
-    stripStartEmptyLines = dropWhile Text.null
-
     -- Remove leading and terminating empty lines
     stripEmptyLines =
-          reverse
-        . stripStartEmptyLines
-        . reverse
-        . stripStartEmptyLines
+          Data.List.dropWhileEnd Text.null
+        . Data.List.dropWhile Text.null
 
     -- When comment is empty, keep exactly 1 empty line
     atLeastOneLine = \case
@@ -203,7 +199,7 @@ normalizeMultiComment (MultiComment comments) =
         LineComment txt
           | Just body <- Text.stripPrefix "--" txt
           -> [ Text.strip body ]
-        _ -> error "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
+        _ -> internalError "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
 
 renderMaybeComment :: Maybe MultiComment -> Doc Ann
 renderMaybeComment Nothing = mempty
