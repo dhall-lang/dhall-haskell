@@ -240,7 +240,7 @@ renderComment trailingWhitespace multiComment
         | isBlockComment = Pretty.pretty <$> commentLines
         | otherwise = ("-- " <>) . Pretty.pretty <$> commentLines
 
-    f x y= x <> Pretty.hardline <> y
+    f x y = x <> Pretty.hardline <> y
 
 -- Annotation helpers
 keyword, syntax, label, literal, builtin, operator :: Doc Ann -> Doc Ann

@@ -209,8 +209,8 @@ parseOptions =
             )
 
     parseCommentControl = fmap f $ switch
-        "loose-comment-parsing"
-        "Ignore parse error for unhandled comments, but they will get dropped (please submit an issue for such cases)"
+        "discard-unsupported-comments"
+        "Discard comments that cannot be auto-formatted instead of failing (but continue to submit issues for any comments the auto-formatter rejects)"
       where
         f True  = CommentIsWhitespace
         f False = CommentIsNeeded

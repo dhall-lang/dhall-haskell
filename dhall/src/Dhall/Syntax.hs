@@ -203,10 +203,10 @@ newtype MultiComment = MultiComment { getMultiComment :: NonEmpty Comment }
 -- preserving transformations such as /format/.
 data Comment
   = LineComment Text
-  -- ^ Corresponds to a single line comment: `--<text>$` where <text> does not
+  -- ^ Corresponds to a single line comment: @--<text>$@ where @<text>@ does not
   -- contain newline characters
   | BlockComment Text
-  -- ^ Corresponds to a multi line comment: `{-<text>-}` where <text> can
+  -- ^ Corresponds to a multi line comment: @{-<text>-}@ where <text> can
   -- contain newline characters
   deriving (Data, Generic, Eq, Ord, Show, Lift, NFData)
 
