@@ -4,7 +4,6 @@
 module Main (main) where
 
 import Control.Applicative.Combinators (option, sepBy1)
-import Control.Monad.Trans.Reader      (ReaderT (runReaderT))
 import Data.Aeson                      (decodeFileStrict, eitherDecodeFileStrict)
 import Data.Bifunctor                  (bimap)
 import Data.Foldable                   (for_)
@@ -16,7 +15,6 @@ import Numeric.Natural                 (Natural)
 import Text.Megaparsec
     ( Parsec
     , errorBundlePretty
-    , parse
     , some
     , optional
     , (<|>)
@@ -186,9 +184,11 @@ parsePrefixMap =
       imp <- parseImport prefix e
       return (pack prefix, imp)
 
-    parser' = runReaderT (Dhall.Parser.unParser parser) Dhall.Util.CommentIsWhitespace
-
-    result = parse ((parser' `sepBy1` char ',') <* eof) "MAPPING"
+    result =
+        Dhall.Parser.runParser
+            ((parser `sepBy1` char ',') <* eof)
+            Dhall.Util.CommentIsWhitespace
+            "MAPPING"
 
 parseSplits :: Options.Applicative.ReadM (Data.Map.Map ModelHierarchy (Maybe ModelName))
 parseSplits =
@@ -205,9 +205,11 @@ parseSplits =
         return mo
       return (path, model)
 
-    parser' = runReaderT (Dhall.Parser.unParser parser) Dhall.Util.CommentIsWhitespace
-
-    result = parse ((parser' `sepBy1` char ',') <* eof) "MAPPING"
+    result =
+        Dhall.Parser.runParser
+            ((parser `sepBy1` char ',') <* eof)
+            Dhall.Util.CommentIsWhitespace
+            "MAPPING"
 
 
 parseOptions :: Options.Applicative.Parser Options
