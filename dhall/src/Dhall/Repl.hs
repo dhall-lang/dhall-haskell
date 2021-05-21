@@ -236,7 +236,7 @@ parseAssignment str
 
 addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => Either String (String, String) -> m ()
 addBinding (Right (k, src)) = do
-  varName <- case Dhall.runParser Parser.Token.label Dhall.CommentIsNeeded "(input)" (Text.pack k) of
+  varName <- case Dhall.runParser Parser.Token.label Dhall.UnsupportedCommentsForbidden "(input)" (Text.pack k) of
       Left   _      -> Fail.fail "Invalid variable name"
       Right varName -> return varName
 

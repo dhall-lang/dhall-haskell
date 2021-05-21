@@ -59,7 +59,7 @@ import qualified System.IO                                 as IO
 -- | Arguments to the @rewrite-with-schemas@ subcommand
 data Schemas = Schemas
     { chosenCharacterSet :: Maybe CharacterSet
-    , commentControl     :: Util.CommentControl
+    , commentControl     :: Util.WhitespaceControl
     , censor             :: Censor
     , input              :: Input
     , outputMode         :: OutputMode

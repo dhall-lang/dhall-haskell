@@ -20,7 +20,7 @@ module Dhall.Parser (
     , ParseError(..)
     , Parser(..)
     , runParser
-    , CommentControl (..)
+    , WhitespaceControl (..)
     ) where
 
 import Control.Exception (Exception)
@@ -84,7 +84,7 @@ exprFromText
             --   used in parsing error messages
   -> Text   -- ^ Input expression to parse
   -> Either ParseError (Expr Src Import)
-exprFromText delta text = fmap snd (exprAndHeaderFromText CommentIsWhitespace delta text)
+exprFromText delta text = fmap snd (exprAndHeaderFromText UnsupportedCommentsPermitted delta text)
 
 -- | A header corresponds to the leading comment at the top of a Dhall file.
 --
@@ -116,7 +116,7 @@ createHeader text = Header (prefix <> newSuffix)
 --
 -- This is used by @dhall-format@ to preserve leading comments and whitespace
 exprAndHeaderFromText
-    :: CommentControl
+    :: WhitespaceControl
     -- ^ Control if comments are considered whitespace
     -> String -- ^ User-friendly name describing the input expression,
               --   used in parsing error messages

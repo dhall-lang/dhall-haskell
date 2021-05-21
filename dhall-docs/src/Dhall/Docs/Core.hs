@@ -47,7 +47,7 @@ import Dhall.Docs.Store
 import Dhall.Parser
     ( Header (..)
     , ParseError (..)
-    , CommentControl (CommentIsWhitespace)
+    , WhitespaceControl (UnsupportedCommentsPermitted)
     , exprAndHeaderFromText
     )
 import Dhall.Pretty               (CharacterSet)
@@ -182,7 +182,7 @@ getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles []
 
     toDhallFile :: (Path Rel File, Text) -> GeneratedDocs (Maybe DhallFile)
     toDhallFile (relFile, contents) =
-        case exprAndHeaderFromText CommentIsWhitespace (Path.fromRelFile relFile) contents of
+        case exprAndHeaderFromText UnsupportedCommentsPermitted (Path.fromRelFile relFile) contents of
             Right (Header header, expr) -> do
                 let denoted = denote expr :: Expr Void Import
 

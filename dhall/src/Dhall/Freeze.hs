@@ -62,7 +62,7 @@ import qualified System.IO
 freezeImport
     :: FilePath
     -- ^ Current working directory
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Import
     -> IO Import
 freezeImport = freezeImportWithManager Dhall.Import.defaultNewManager
@@ -71,7 +71,7 @@ freezeImport = freezeImportWithManager Dhall.Import.defaultNewManager
 freezeImportWithManager
     :: IO Dhall.Import.Manager
     -> FilePath
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Import
     -> IO Import
 freezeImportWithManager newManager directory commentControl import_ = do
@@ -109,7 +109,7 @@ freezeImportWithManager newManager directory commentControl import_ = do
 freezeRemoteImport
     :: FilePath
     -- ^ Current working directory
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Import
     -> IO Import
 freezeRemoteImport = freezeRemoteImportWithManager Dhall.Import.defaultNewManager
@@ -118,7 +118,7 @@ freezeRemoteImport = freezeRemoteImportWithManager Dhall.Import.defaultNewManage
 freezeRemoteImportWithManager
     :: IO Dhall.Import.Manager
     -> FilePath
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Import
     -> IO Import
 freezeRemoteImportWithManager newManager directory commentControl import_ =
@@ -152,7 +152,7 @@ freeze
     -> Scope
     -> Intent
     -> Maybe CharacterSet
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Censor
     -> IO ()
 freeze = freezeWithManager Dhall.Import.defaultNewManager
@@ -166,7 +166,7 @@ freezeWithManager
     -> Scope
     -> Intent
     -> Maybe CharacterSet
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Censor
     -> IO ()
 freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet commentControl censor =
@@ -255,7 +255,7 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
 freezeExpression
     :: FilePath
     -- ^ Starting directory
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Scope
     -> Intent
     -> Expr s Import
@@ -266,7 +266,7 @@ freezeExpression = freezeExpressionWithManager Dhall.Import.defaultNewManager
 freezeExpressionWithManager
     :: IO Dhall.Import.Manager
     -> FilePath
-    -> Util.CommentControl
+    -> Util.WhitespaceControl
     -> Scope
     -> Intent
     -> Expr s Import

@@ -51,7 +51,7 @@ hush = either (const Nothing) Just
 --   returns the Src descriptor containing `let b = a in b`.
 getLetInner :: Src -> Maybe Src
 getLetInner (Src left _ text) = hush $
-    runParser parseLetInnerOffset CommentIsWhitespace "(input)" text
+    runParser parseLetInnerOffset UnsupportedCommentsPermitted "(input)" text
  where parseLetInnerOffset = do
           setSourcePos left
           _let
@@ -79,7 +79,7 @@ getLetInner (Src left _ text) = hush $
 --   a 0-length Src where we can insert one.
 getLetAnnot :: Src -> Maybe Src
 getLetAnnot (Src left _ text) = hush $
-    runParser parseLetAnnot CommentIsWhitespace "(input)" text
+    runParser parseLetAnnot UnsupportedCommentsPermitted "(input)" text
   where parseLetAnnot = do
           setSourcePos left
           _let
@@ -101,7 +101,7 @@ getLetAnnot (Src left _ text) = hush $
 --   containing `x`. Returns the original Src if something goes wrong.
 getLetIdentifier :: Src -> Src
 getLetIdentifier src@(Src left _ text) = fromRight src $
-    runParser parseLetIdentifier CommentIsWhitespace "(input)" text
+    runParser parseLetIdentifier UnsupportedCommentsPermitted "(input)" text
   where parseLetIdentifier = do
           setSourcePos left
           _let
@@ -115,7 +115,7 @@ getLetIdentifier src@(Src left _ text) = fromRight src $
 -- | Cf. `getLetIdentifier`.
 getLamIdentifier :: Src -> Maybe Src
 getLamIdentifier (Src left _ text) = hush $
-    runParser parseLamIdentifier CommentIsWhitespace "(input)" text
+    runParser parseLamIdentifier UnsupportedCommentsPermitted "(input)" text
   where parseLamIdentifier = do
           setSourcePos left
           _ <- _lambda
@@ -131,7 +131,7 @@ getLamIdentifier (Src left _ text) = hush $
 -- | Cf. `getLetIdentifier`.
 getForallIdentifier :: Src -> Maybe Src
 getForallIdentifier (Src left _ text) = hush $
-    runParser parseForallIdentifier CommentIsWhitespace "(input)" text
+    runParser parseForallIdentifier UnsupportedCommentsPermitted "(input)" text
   where parseForallIdentifier = do
           setSourcePos left
           _ <- _forall
@@ -149,7 +149,7 @@ getForallIdentifier (Src left _ text) = hush $
 --   Src where we can insert one.
 getImportHash :: Src -> Maybe Src
 getImportHash (Src left _ text) = hush $
-    runParser parseImportHashPosition CommentIsWhitespace "(input)" text
+    runParser parseImportHashPosition UnsupportedCommentsPermitted "(input)" text
   where parseImportHashPosition = do
           setSourcePos left
           _ <- importType_
@@ -168,7 +168,7 @@ setSourcePos src =
 
 getImportLink :: Src -> Src
 getImportLink src@(Src left _ text) = fromRight src $
-    runParser parseImportLink CommentIsWhitespace "(input)" text
+    runParser parseImportLink UnsupportedCommentsPermitted "(input)" text
  where
   parseImportLink = do
     setSourcePos left
@@ -190,7 +190,7 @@ holeExpr = Var (V "" 0)
 -- parse as many binders as possible. Very messy!
 binderExprFromText :: Text -> Expr Src Import
 binderExprFromText text = fromRight holeExpr $
-    runParser parseBinderExpr CommentIsWhitespace "(input)" text
+    runParser parseBinderExpr UnsupportedCommentsPermitted "(input)" text
   where
     -- marks the beginning of the next binder
     boundary = _let <|> void _forall <|> void _lambda

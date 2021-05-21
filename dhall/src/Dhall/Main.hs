@@ -62,7 +62,7 @@ import Dhall.Core
 import Dhall.Util
     ( Censor (..)
     , CheckFailed (..)
-    , CommentControl (..)
+    , WhitespaceControl (..)
     , Header (..)
     , Input (..)
     , Output (..)
@@ -119,7 +119,7 @@ data Options = Options
     , explain            :: Bool
     , plain              :: Bool
     , chosenCharacterSet :: Maybe CharacterSet
-    , commentControl     :: CommentControl
+    , commentControl     :: WhitespaceControl
     , censor             :: Censor
     }
 
@@ -199,7 +199,7 @@ parseOptions =
     <*> switch "explain" "Explain error messages in more detail"
     <*> switch "plain" "Disable syntax highlighting"
     <*> parseCharacterSet
-    <*> parseCommentControl
+    <*> parseWhitespaceControl
     <*> parseCensor
   where
     switch name description =
@@ -208,12 +208,12 @@ parseOptions =
             <>  Options.Applicative.help description
             )
 
-    parseCommentControl = fmap f $ switch
+    parseWhitespaceControl = fmap f $ switch
         "discard-unsupported-comments"
         "Discard comments that cannot be auto-formatted instead of failing (but continue to submit issues for any comments the auto-formatter rejects)"
       where
-        f True  = CommentIsWhitespace
-        f False = CommentIsNeeded
+        f True  = UnsupportedCommentsPermitted
+        f False = UnsupportedCommentsForbidden
 
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where

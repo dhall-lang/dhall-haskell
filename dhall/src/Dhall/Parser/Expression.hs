@@ -969,17 +969,17 @@ comment = LineComment <$> lineComment <|> BlockComment <$> blockComment <?> "com
 
 -- | Parse a multi comment (which contains at least one comment)
 multiComment :: Parser MultiComment
-multiComment = setCommentControl CommentIsNeeded $
+multiComment = setWhitespaceControl UnsupportedCommentsForbidden $
     MultiComment <$> Combinators.NonEmpty.sepEndBy1 comment whitespace
 
 -- | Parse a multi comment or whitespace
 commentOrWhitespace :: Parser (Maybe MultiComment)
-commentOrWhitespace = setCommentControl CommentIsNeeded $
+commentOrWhitespace = setWhitespaceControl UnsupportedCommentsForbidden $
     do whitespace; optional multiComment
 
 -- | Parse a multi comment or non-empty whitespace
 commentOrNonEmptyWhitespace :: Parser (Maybe MultiComment)
-commentOrNonEmptyWhitespace = setCommentControl CommentIsNeeded $ do
+commentOrNonEmptyWhitespace = setWhitespaceControl UnsupportedCommentsForbidden $ do
     m <- optional whitespaceChunk
 
     case m of

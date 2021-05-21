@@ -70,7 +70,7 @@ writeDhall path expr = do
 
   let chosenCharacterSet = Nothing -- Infer from input
 
-  let commentControl = Dhall.Util.CommentIsWhitespace
+  let commentControl = Dhall.Util.UnsupportedCommentsPermitted
 
   let censor = Dhall.Util.NoCensor
 
@@ -187,7 +187,7 @@ parsePrefixMap =
     result =
         Dhall.Parser.runParser
             ((parser `sepBy1` char ',') <* eof)
-            Dhall.Util.CommentIsWhitespace
+            Dhall.Util.UnsupportedCommentsPermitted
             "MAPPING"
 
 parseSplits :: Options.Applicative.ReadM (Data.Map.Map ModelHierarchy (Maybe ModelName))
@@ -208,7 +208,7 @@ parseSplits =
     result =
         Dhall.Parser.runParser
             ((parser `sepBy1` char ',') <* eof)
-            Dhall.Util.CommentIsWhitespace
+            Dhall.Util.UnsupportedCommentsPermitted
             "MAPPING"
 
 

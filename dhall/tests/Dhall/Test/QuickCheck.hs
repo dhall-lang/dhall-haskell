@@ -719,7 +719,7 @@ idempotenceTest :: CharacterSet -> Header -> Expr Src Import -> Property
 idempotenceTest characterSet header expr =
         not (any hasHttpHeaders expr)
     ==> let once = format characterSet (header, expr)
-        in case Parser.exprAndHeaderFromText Parser.CommentIsWhitespace mempty once of
+        in case Parser.exprAndHeaderFromText Parser.UnsupportedCommentsPermitted mempty once of
             Right (format characterSet -> twice) -> once === twice
             Left _ -> Test.QuickCheck.discard
   where
@@ -743,7 +743,7 @@ commentAsWhitespace characterSet expr =
             report = "\nText input was:\n\n" <> show txt <> "\n"
 
         in Test.QuickCheck.counterexample report $
-            case Parser.exprAndHeaderFromText Parser.CommentIsNeeded mempty txt of
+            case Parser.exprAndHeaderFromText Parser.UnsupportedCommentsForbidden mempty txt of
               Right (_, expr') -> denote expr === denote expr'
               Left e -> error (show e)
   where

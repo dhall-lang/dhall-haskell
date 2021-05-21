@@ -8,9 +8,9 @@
 module Dhall.Parser.Combinators
     ( Parser(..)
     , runParser
-    , CommentControl(..)
-    , askCommentControl
-    , setCommentControl
+    , WhitespaceControl(..)
+    , askWhitespaceControl
+    , setWhitespaceControl
     , SourcedException(..)
     , laxSrcEq
     , count
@@ -74,34 +74,35 @@ laxSrcEq (Src p q _) (Src p' q' _) = eq p p' && eq q q'
         a == a' && b == b'
 {-# INLINE laxSrcEq #-}
 
--- | A way to control how comments get parsed
---
--- Parsing comment as whitespace is fast and convenient when we don't care
--- about the comments. We often need to keep comments thoughout
--- transformations.
-data CommentControl
-  = CommentIsWhitespace
-  | CommentIsNeeded
+-- | Control how @whitespace@ is parsed
+data WhitespaceControl
+  = UnsupportedCommentsForbidden
+  -- ^ The @whitespace@ parser rejects comments, meaning that comments need to be
+  -- parsed explicitly in order to avoid parse errors.  We use this to detect comments that are
+  -- not yet preserved and formatted.
+  | UnsupportedCommentsPermitted
+  -- ^ The @whitespace@ parser accepts comments, meaning that comments are accepted
+  -- anywhere within the source code, even if they are not preserved or formatted.
   deriving Eq
 
 {-| A `Parser` that is almost identical to
     @"Text.Megaparsec".`Text.Megaparsec.Parsec`@ except optionally treating
     Haskell-style comments as whitespace
 -}
-newtype Parser a = Parser {unParser :: ReaderT CommentControl (Text.Megaparsec.Parsec Void Text) a }
+newtype Parser a = Parser {unParser :: ReaderT WhitespaceControl (Text.Megaparsec.Parsec Void Text) a }
 
--- | Get the current CommentControl from the scope
-askCommentControl :: Parser CommentControl
-askCommentControl = Parser ask
+-- | Get the current WhitespaceControl from the scope
+askWhitespaceControl :: Parser WhitespaceControl
+askWhitespaceControl = Parser ask
 
--- | Set the CommentControl for the parser
-setCommentControl :: CommentControl -> Parser a -> Parser a
-setCommentControl commentControl (Parser a) = Parser (local (const commentControl) a)
+-- | Set the WhitespaceControl for the parser
+setWhitespaceControl :: WhitespaceControl -> Parser a -> Parser a
+setWhitespaceControl commentControl (Parser a) = Parser (local (const commentControl) a)
 
 -- | Run a 'Parser' on some input with control over how comments get parsed
 runParser
     :: Parser a
-    -> CommentControl
+    -> WhitespaceControl
     -- ^ Control if comments are considered whitespace
     -> String
     -- ^ User-friendly name describing the input expression,

@@ -44,7 +44,7 @@ import qualified System.IO
 -- | Arguments to the `format` subcommand
 data Format = Format
     { chosenCharacterSet :: Maybe CharacterSet
-    , commentControl     :: Dhall.Util.CommentControl
+    , commentControl     :: Dhall.Util.WhitespaceControl
     , censor             :: Censor
     , transitivity       :: Transitivity
     , inputs             :: NonEmpty Input

@@ -327,23 +327,23 @@ identifier = do
 
 {- | Parse a single whitespace chunk
 
-     Depending on the 'CommentControl' that is set as part of the 'Parser',
+     Depending on the 'WhitespaceControl' that is set as part of the 'Parser',
      it will also parse a comment as a whitespace chunk
 -}
 whitespaceChunk :: Parser ()
 whitespaceChunk = do
-    commentControl <- askCommentControl
+    commentControl <- askWhitespaceControl
 
     let descriptor = case commentControl of
-            CommentIsWhitespace -> "whitespace"
-            CommentIsNeeded     -> "comment-free whitespace"
+            UnsupportedCommentsPermitted -> "whitespace"
+            UnsupportedCommentsForbidden     -> "comment-free whitespace"
 
     choice (concat
         [ [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
           , void (Text.Parser.Char.text "\r\n" <?> "newline")
           ]
-        , [ void lineComment | commentControl == CommentIsWhitespace ]
-        , [ void blockComment | commentControl == CommentIsWhitespace ]
+        , [ void lineComment | commentControl == UnsupportedCommentsPermitted ]
+        , [ void blockComment | commentControl == UnsupportedCommentsPermitted ]
         ]) <?> descriptor
   where
     predicate c = c == ' ' || c == '\t' || c == '\n'
