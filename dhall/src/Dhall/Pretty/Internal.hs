@@ -195,10 +195,10 @@ normalizeMultiComment (MultiComment comments) =
         BlockComment txt
           | Just rest <- Text.stripPrefix "{-" txt
           , Just body <- Text.stripSuffix "-}" rest
-          -> Text.strip <$> Text.lines body
+          -> Text.lines body
         LineComment txt
           | Just body <- Text.stripPrefix "--" txt
-          -> [ Text.strip body ]
+          -> [ body ]
         _ -> internalError "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
 
 renderMaybeComment :: Maybe MultiComment -> Doc Ann
