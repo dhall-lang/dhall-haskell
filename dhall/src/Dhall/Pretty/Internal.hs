@@ -195,10 +195,10 @@ normalizeMultiComment (MultiComment comments) =
         BlockComment txt
           | Just rest <- Text.stripPrefix "{-" txt
           , Just body <- Text.stripSuffix "-}" rest
-          -> Text.lines body
+          -> Text.stripEnd <$> Text.lines body
         LineComment txt
           | Just body <- Text.stripPrefix "--" txt
-          -> [ body ]
+          -> [ Text.stripEnd body ]
         _ -> internalError "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
 
 renderMaybeComment :: Maybe MultiComment -> Doc Ann
@@ -214,8 +214,7 @@ renderComment trailingWhitespace multiComment
                 "{-"
             <>  startSpace singleLine
             <>  Pretty.pretty singleLine
-            <>  endSpace singleLine
-            <>  "-}"
+            <>  " -}"
             <>  applyTrailing space
 
         -- Otherwise format a block comment over multiple lines
@@ -223,7 +222,7 @@ renderComment trailingWhitespace multiComment
             Pretty.align
                 ( Pretty.nesting (\n ->
                     -- Here we unindent in order to conserve the original
-                    -- whitespace the block comment had.
+                    -- leading whitespace the block comment had.
                     Pretty.nest (-n)
                         (    "{-"
                         <>   startSpace firstLine
@@ -247,14 +246,6 @@ renderComment trailingWhitespace multiComment
         | Just (c, _) <- Text.uncons firstLine
         , c /= '|' -- Line not a doc comment
         , c /= ' ' -- Line not already starting with a space
-        = " "
-
-        | otherwise
-        = mempty
-
-    endSpace lastLine
-        | Just (_, c) <- Text.unsnoc lastLine
-        , c /= ' ' -- Line not already terminating with a space
         = " "
 
         | otherwise
