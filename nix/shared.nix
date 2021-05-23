@@ -182,12 +182,13 @@ let
                       );
 
                     dhall =
-                      applyCoverage
-                        (haskellPackagesNew.callCabal2nix
-                          "dhall"
-                          (pkgsNew.sdist ../dhall)
-                          { }
-                        );
+                        (applyCoverage
+                          (haskellPackagesNew.callCabal2nix
+                            "dhall"
+                            (pkgsNew.sdist ../dhall)
+                            { }
+                          )
+                        ).overrideAttrs (old: { XDG_CACHE_HOME=".cache"; });
 
                     dhall-no-http =
                       # The import tests fail with HTTP support compiled out
