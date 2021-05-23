@@ -68,6 +68,9 @@ module Dhall.Pretty.Internal (
     , rbrace
     , rbracket
     , rparen
+
+    , renderComment
+    , renderMaybeComment
     ) where
 
 import Control.DeepSeq            (NFData)
@@ -171,6 +174,9 @@ prettySrcExpr = prettyCharacterSet Unicode
 duplicate :: a -> (a, a)
 duplicate x = (x, x)
 
+-- | Normalize a MultiComment down to a Bool if it is a BlockComment and a
+-- non-empty list of lines of comment. The Text does not include comment
+-- characters.
 normalizeMultiComment :: MultiComment -> (Bool, NonEmpty Text)
 normalizeMultiComment (MultiComment comments) =
     ( any isBlockComment comments
@@ -201,10 +207,12 @@ normalizeMultiComment (MultiComment comments) =
           -> [ Text.stripEnd body ]
         _ -> internalError "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
 
+-- | Helper function to render a MultiComment if present
 renderMaybeComment :: Maybe MultiComment -> Doc Ann
 renderMaybeComment Nothing = mempty
 renderMaybeComment (Just c) = renderComment True c
 
+-- | Render a MultiComment after normalizing it
 renderComment :: Bool -> MultiComment -> Doc Ann
 renderComment trailingWhitespace multiComment
     | isBlockComment

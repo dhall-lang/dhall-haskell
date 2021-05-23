@@ -30,13 +30,15 @@ import Dhall.Src         (Src (..))
 import Dhall.Syntax
 import Text.Megaparsec   (ParseErrorBundle (..), PosState (..))
 
-import qualified Data.Text       as Text
-import qualified Dhall.Core      as Core
+import qualified Data.Text.Prettyprint.Doc             as Pretty
+import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
+import qualified Dhall.Core                            as Core
+import qualified Dhall.Pretty
 import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Expression
-import Dhall.Parser.Token       hiding (text)
+import Dhall.Pretty.Internal    (renderComment)
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
@@ -93,16 +95,10 @@ exprFromText delta text = fmap snd (exprAndHeaderFromText UnsupportedCommentsPer
 newtype Header = Header Text deriving Show
 
 -- | Create a header with stripped leading spaces and trailing newlines
-createHeader :: Text -> Header
-createHeader text = Header (prefix <> newSuffix)
-  where
-    isWhitespace c = c == ' ' || c == '\n' || c == '\r' || c == '\t'
-
-    prefix = Text.dropAround isWhitespace text
-
-    newSuffix
-        | Text.null prefix = ""
-        | otherwise        = "\n"
+createHeader :: Maybe MultiComment -> Header
+createHeader Nothing = Header ""
+createHeader (Just mc) = Header . Pretty.renderStrict . Dhall.Pretty.layout $
+    renderComment False mc <> Pretty.hardline
 
 -- | Like `exprFromText` but also returns the leading comments and whitespace
 -- (i.e. header) up to the last newline before the code begins
@@ -124,12 +120,12 @@ exprAndHeaderFromText
     -> Either ParseError (Header, Expr Src Import)
 exprAndHeaderFromText commentControl delta text = case result of
     Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
-    Right (txt, r) -> Right (createHeader txt, r)
+    Right (mComment, r) -> Right (createHeader mComment, r)
   where
     parser = do
-        (bytes, _) <- Text.Megaparsec.match whitespace
+        headerComment <- commentOrWhitespace
         r <- expr
         Text.Megaparsec.eof
-        return (bytes, r)
+        return (headerComment, r)
 
     result = runParser parser commentControl delta text

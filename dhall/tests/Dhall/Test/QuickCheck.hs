@@ -211,9 +211,7 @@ instance Arbitrary CharacterSet where
     arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
 
 instance Arbitrary Header where
-    arbitrary = createHeader <$> whitespace
-
-    shrink (Header text) = Header <$> shrinkWhitespace text
+    arbitrary = createHeader <$> arbitrary
 
 instance (Arbitrary v) => Arbitrary (Map Text v) where
     arbitrary = do
