@@ -169,6 +169,9 @@ import qualified Dhall.Util
 import Dhall.Marshal.Encode
 import Dhall.Marshal.Internal
 
+-- $setup
+-- >>> import Dhall (input)
+
 {-| A @(Decoder a)@ represents a way to marshal a value of type @\'a\'@ from Dhall
     into Haskell.
 

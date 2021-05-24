@@ -64,12 +64,6 @@ import qualified Data.Text
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Map
 
--- $setup
--- >>> :set -XOverloadedStrings
--- >>> :set -XRecordWildCards
--- >>> import Data.Word (Word8, Word16, Word32, Word64)
--- >>> import Dhall.Pretty.Internal (prettyExpr)
-
 {-| This type is exactly the same as `Data.Fix.Fix` except with a different
     `FromDhall` instance.  This intermediate type simplifies the implementation
     of the inner loop for the `FromDhall` instance for `Fix`

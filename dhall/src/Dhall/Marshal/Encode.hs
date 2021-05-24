@@ -89,6 +89,10 @@ import qualified Dhall.Map
 
 import Dhall.Marshal.Internal
 
+-- $setup
+-- >>> :set -XRecordWildCards
+-- >>> import Dhall.Pretty.Internal (prettyExpr)
+
 {-| An @(Encoder a)@ represents a way to marshal a value of type @\'a\'@ from
     Haskell into Dhall.
 -}

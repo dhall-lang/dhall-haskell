@@ -86,12 +86,6 @@ import qualified Lens.Family
 import Dhall.Marshal.Decode
 import Dhall.Marshal.Encode
 
--- $setup
--- >>> :set -XOverloadedStrings
--- >>> :set -XRecordWildCards
--- >>> import Data.Word (Word8, Word16, Word32, Word64)
--- >>> import Dhall.Pretty.Internal (prettyExpr)
-
 -- | @since 1.16
 data InputSettings = InputSettings
   { _rootDirectory :: FilePath
