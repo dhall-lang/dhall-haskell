@@ -74,7 +74,7 @@ import Prelude                              hiding (maybe, sequence)
 
 import qualified Control.Applicative
 import qualified Data.Functor.Product
-import qualified Data.HashMap.Strict              as HashMap
+import qualified Data.HashMap.Strict  as HashMap
 import qualified Data.HashSet
 import qualified Data.Map
 import qualified Data.Scientific
@@ -84,7 +84,7 @@ import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Vector
 import qualified Data.Void
-import qualified Dhall.Core                       as Core
+import qualified Dhall.Core           as Core
 import qualified Dhall.Map
 
 import Dhall.Marshal.Internal

@@ -55,21 +55,17 @@ module Dhall
     , rawInput
     ) where
 
-import Control.Applicative                  (Alternative, empty)
-import Data.Either.Validation
-    ( Validation (..)
-    )
-import Data.Void                            (Void)
-import Dhall.Import                         (Imported (..))
-import Dhall.Parser                         (Src (..))
-import Dhall.Syntax
-    ( Expr (..)
-    )
-import Dhall.TypeCheck                      (DetailedTypeError (..), TypeError)
+import Control.Applicative    (Alternative, empty)
+import Data.Either.Validation (Validation (..))
+import Data.Void              (Void)
+import Dhall.Import           (Imported (..))
+import Dhall.Parser           (Src (..))
+import Dhall.Syntax           (Expr (..))
+import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
-import Lens.Family                          (LensLike', view)
-import Prelude                              hiding (maybe, sequence)
-import System.FilePath                      (takeDirectory)
+import Lens.Family            (LensLike', view)
+import Prelude                hiding (maybe, sequence)
+import System.FilePath        (takeDirectory)
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State

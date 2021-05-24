@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| Please read the "Dhall.Tutorial" module, which contains a tutorial explaining
     how to use the language, the compiler, and this library
@@ -42,26 +42,23 @@ module Dhall.Marshal.Internal
     ) where
 
 import Control.Monad.Trans.State.Strict
-import Data.Fix                             (Fix (..))
-import Data.HashMap.Strict                  (HashMap)
-import Data.Map                             (Map)
-import Data.Scientific                      (Scientific)
-import Data.Sequence                        (Seq)
-import Data.Text                            (Text)
-import Data.Vector                          (Vector)
-import Data.Void                            (Void)
-import Data.Word                            (Word8, Word16, Word32, Word64)
-import Dhall.Parser                         (Src (..))
-import Dhall.Syntax
-    ( Expr (..)
-    , RecordField (..)
-    )
+import Data.Fix                         (Fix (..))
+import Data.HashMap.Strict              (HashMap)
+import Data.Map                         (Map)
+import Data.Scientific                  (Scientific)
+import Data.Sequence                    (Seq)
+import Data.Text                        (Text)
+import Data.Vector                      (Vector)
+import Data.Void                        (Void)
+import Data.Word                        (Word16, Word32, Word64, Word8)
+import Dhall.Parser                     (Src (..))
+import Dhall.Syntax                     (Expr (..), RecordField (..))
 import GHC.Generics
-import Numeric.Natural                      (Natural)
-import Prelude                              hiding (maybe, sequence)
+import Numeric.Natural                  (Natural)
+import Prelude                          hiding (maybe, sequence)
 
 import qualified Data.Text
-import qualified Dhall.Core                       as Core
+import qualified Dhall.Core as Core
 import qualified Dhall.Map
 
 {-| This type is exactly the same as `Data.Fix.Fix` except with a different
