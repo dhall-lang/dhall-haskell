@@ -46,102 +46,13 @@ module Dhall
     , detailed
 
     -- * Decoders
-    , Decoder (..)
-    , RecordDecoder(..)
-    , UnionDecoder(..)
-    , Encoder(..)
-    , FromDhall(..)
-    , Interpret
-    , InvalidDecoder(..)
-    , ExtractErrors
-    , ExtractError(..)
-    , Extractor
-    , MonadicExtractor
-    , typeError
-    , extractError
-    , toMonadic
-    , fromMonadic
-    , ExpectedTypeErrors
-    , ExpectedTypeError(..)
-    , Expector
-    , auto
-    , genericAuto
-    , genericAutoWith
-    , InterpretOptions(..)
-    , InputNormalizer(..)
-    , defaultInputNormalizer
-    , SingletonConstructors(..)
-    , defaultInterpretOptions
-    , bool
-    , natural
-    , integer
-    , word
-    , word8
-    , word16
-    , word32
-    , word64
-    , int
-    , int8
-    , int16
-    , int32
-    , int64
-    , scientific
-    , double
-    , lazyText
-    , strictText
-    , maybe
-    , sequence
-    , list
-    , vector
-    , function
-    , functionWith
-    , setFromDistinctList
-    , setIgnoringDuplicates
-    , hashSetFromDistinctList
-    , hashSetIgnoringDuplicates
-    , Dhall.Marshal.Decode.map
-    , hashMap
-    , pairFromMapEntry
-    , unit
-    , void
-    , string
-    , pair
-    , record
-    , field
-    , union
-    , constructor
-    , GenericFromDhall(..)
-    , GenericFromDhallUnion(..)
-    , ToDhall(..)
-    , Inject
-    , inject
-    , genericToDhall
-    , genericToDhallWith
-    , RecordEncoder(..)
-    , encodeFieldWith
-    , encodeField
-    , recordEncoder
-    , UnionEncoder(..)
-    , encodeConstructorWith
-    , encodeConstructor
-    , unionEncoder
-    , (>|<)
-    , GenericToDhall(..)
+    , module Dhall.Marshal.Decode
+
+    -- * Encoders
+    , module Dhall.Marshal.Encode
 
     -- * Miscellaneous
-    , DhallErrors(..)
-    , showDhallErrors
     , rawInput
-    , (>$<)
-    , (>*<)
-    , Result
-
-    -- * Re-exports
-    , Natural
-    , Seq
-    , Text
-    , Vector
-    , Generic
     ) where
 
 import Control.Applicative                  (Alternative, empty)
