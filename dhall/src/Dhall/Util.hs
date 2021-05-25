@@ -152,7 +152,7 @@ data Input = StandardInput | InputFile FilePath deriving (Eq)
 data InputOrTextFromStdin
     = Input_ Input
     | StdinText String Text
-    -- ^ StdinText name text where name is a use-friendly name describing the
+    -- ^ @StdinText name text@ where name is a user-friendly name describing the
     -- input expression, used in parsing error messages
 
 {-| Specifies whether or not an input's transitive dependencies should also be
