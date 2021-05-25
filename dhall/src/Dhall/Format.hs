@@ -72,18 +72,18 @@ format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
                     <>  Dhall.Pretty.prettyCharacterSet characterSet expr
                     <>  "\n")
 
-        (originalText, transitivity) <- case input of
+        (inputName, originalText, transitivity) <- case input of
             InputFile file -> do
                 text <- Data.Text.IO.readFile file
 
-                return (text, transitivity0)
+                return (file, text, transitivity0)
             StandardInput -> do
                 text <- Data.Text.IO.getContents
 
-                return (text, NonTransitive)
+                return ("(input)", text, NonTransitive)
 
 
-        headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+        headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
         case transitivity of
             Transitive ->
