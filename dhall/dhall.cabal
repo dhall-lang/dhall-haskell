@@ -583,6 +583,8 @@ Library
         Dhall.Import
         Dhall.Lint
         Dhall.Main
+        Dhall.Marshal.Decode
+        Dhall.Marshal.Encode
         Dhall.Map
         Dhall.Optics
         Dhall.Parser
@@ -608,6 +610,7 @@ Library
     Other-Modules:
         Dhall.Eval
         Dhall.Import.Types
+        Dhall.Marshal.Internal
         Dhall.Normalize
         Dhall.Parser.Combinators
         Dhall.Pretty.Internal
