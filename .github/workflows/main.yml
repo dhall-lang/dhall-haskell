@@ -14,7 +14,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v1.2.1
+      - id: setup-haskell-cabal
+        uses: haskell/actions/setup@v1.2.1
         with:
           enable-stack: true
       - run: stack build
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+            .stack-work
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-
