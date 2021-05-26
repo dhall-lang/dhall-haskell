@@ -19,7 +19,7 @@ import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall                     (FromDhall, ToDhall)
 import Dhall.Syntax              (Expr (..))
 import GHC.Generics              (Generic)
-import Language.Haskell.TH.Quote (QuasiQuoter(..), dataToExpQ)
+import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
 
 import Language.Haskell.TH.Syntax
     ( Bang (..)
