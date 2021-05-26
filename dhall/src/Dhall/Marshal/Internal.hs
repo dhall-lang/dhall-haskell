@@ -62,13 +62,14 @@ import qualified Dhall.Core as Core
 import qualified Dhall.Map
 
 {-| This type is exactly the same as `Data.Fix.Fix` except with a different
-    `FromDhall` instance.  This intermediate type simplifies the implementation
-    of the inner loop for the `FromDhall` instance for `Fix`
+    `Dhall.Marshal.Decode.FromDhall` instance.  This intermediate type
+    simplifies the implementation of the inner loop for the
+    `Dhall.Marshal.Decode.FromDhall` instance for `Fix`.
 -}
 newtype Result f = Result { _unResult :: f (Result f) }
 
 {-| Use these options to tweak how Dhall derives a generic implementation of
-    `FromDhall`
+    `Dhall.Marshal.Decode.FromDhall`.
 -}
 data InterpretOptions = InterpretOptions
     { fieldModifier       :: Text -> Text
@@ -82,9 +83,10 @@ data InterpretOptions = InterpretOptions
     --   `Smart`
     }
 
--- | This is only used by the `FromDhall` instance for functions in order
---   to normalize the function input before marshaling the input into a
---   Dhall expression
+{-| This is only used by the `Dhall.Marshal.Decode.FromDhall` instance for
+    functions in order to normalize the function input before marshaling the
+    input into a Dhall expression.
+-}
 newtype InputNormalizer = InputNormalizer
   { getInputNormalizer :: Core.ReifiedNormalizer Void }
 

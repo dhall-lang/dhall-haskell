@@ -185,7 +185,7 @@ import Dhall.Marshal.Internal
 > example :: Decoder (Vector Text)
 > example = auto
 
-    You can consume `Decoder`s using the `input` function:
+    You can consume `Decoder`s using the `Dhall.input` function:
 
 > input :: Decoder a -> Text -> IO a
 -}
@@ -198,7 +198,7 @@ data Decoder a = Decoder
     deriving (Functor)
 
 {-| Any value that implements `FromDhall` can be automatically decoded based on
-    the inferred return type of `input`.
+    the inferred return type of `Dhall.input`.
 
 >>> input auto "[1, 2, 3]" :: IO (Vector Natural)
 [1,2,3]
@@ -1156,7 +1156,7 @@ unit = Decoder {..}
 
 {-| Decode 'Void' from an empty union.
 
-Since @<>@ is uninhabited, @'input' 'void'@ will always fail.
+Since @<>@ is uninhabited, @'Dhall.input' 'void'@ will always fail.
 -}
 void :: Decoder Void
 void = union mempty

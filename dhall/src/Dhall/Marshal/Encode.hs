@@ -108,7 +108,7 @@ instance Contravariant Encoder where
       where
         embed' x = embed (f x)
 
-{-| This class is used by `FromDhall` instance for functions:
+{-| This class is used by `Dhall.Marshal.Decode.FromDhall` instance for functions:
 
 > instance (ToDhall a, FromDhall b) => FromDhall (a -> b)
 
@@ -416,7 +416,7 @@ fixToResult (Fix x) = Result (fmap fixToResult x)
 
 
 
-{-| This is the underlying class that powers the `FromDhall` class's support
+{-| This is the underlying class that powers the `Dhall.Marshal.Decode.FromDhall` class's support
     for automatically deriving a generic implementation.
 -}
 class GenericToDhall f where
