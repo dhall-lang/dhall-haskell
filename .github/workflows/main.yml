@@ -33,6 +33,7 @@ jobs:
       - if: ${{ matrix.os == 'macOS-latest' }}
         run: |
           ls -al
+          ls -al bin
           get_cabal_version() {
             grep '^Version: ' < "$1/$1.cabal" | sed -e 's/^Version:  *//g';
           }
