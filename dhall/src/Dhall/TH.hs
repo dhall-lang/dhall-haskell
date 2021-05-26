@@ -8,6 +8,7 @@
 module Dhall.TH
     ( -- * Template Haskell
       staticDhallExpression
+    , dhall
     , makeHaskellTypeFromUnion
     , makeHaskellTypes
     , HaskellType(..)
@@ -18,7 +19,7 @@ import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall                     (FromDhall, ToDhall)
 import Dhall.Syntax              (Expr (..))
 import GHC.Generics              (Generic)
-import Language.Haskell.TH.Quote (dataToExpQ)
+import Language.Haskell.TH.Quote (QuasiQuoter(..), dataToExpQ)
 
 import Language.Haskell.TH.Syntax
     ( Bang (..)
@@ -82,6 +83,23 @@ staticDhallExpression text = do
     -- A workaround for a problem in TemplateHaskell (see
     -- https://stackoverflow.com/questions/38143464/cant-find-inerface-file-declaration-for-variable)
     liftText = fmap (AppE (VarE 'Text.pack)) . Syntax.lift . Text.unpack
+
+{-| A quasi-quoter for Dhall expressions.
+
+    This quoter is build on top of 'staticDhallExpression'. Therefore consult the
+    documentation of that function for further information.
+
+    This quoter is meant to be used in expression context only; Other contexts
+    like pattern contexts or declaration contexts are not supported and will
+    result in an error.
+-}
+dhall :: QuasiQuoter
+dhall = QuasiQuoter
+    { quoteExp = staticDhallExpression . Text.pack
+    , quotePat = const $ error "dhall quasi-quoter: Quoting pattern is not supported !"
+    , quoteType = const $ error "dhall quasi-quoter: Quoting types is not supported !"
+    , quoteDec = const $ error "dhall quasi-quoter: Quoting declarations is not supported !"
+    }
 
 {-| Convert a Dhall type to a Haskell type that does not require any new
     data declarations beyond the data declarations supplied as the first
