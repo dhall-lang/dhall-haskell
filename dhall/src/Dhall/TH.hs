@@ -96,9 +96,9 @@ staticDhallExpression text = do
 dhall :: QuasiQuoter
 dhall = QuasiQuoter
     { quoteExp = staticDhallExpression . Text.pack
-    , quotePat = const $ error "dhall quasi-quoter: Quoting pattern is not supported !"
-    , quoteType = const $ error "dhall quasi-quoter: Quoting types is not supported !"
-    , quoteDec = const $ error "dhall quasi-quoter: Quoting declarations is not supported !"
+    , quotePat = const $ error "dhall quasi-quoter: Quoting patterns is not supported!"
+    , quoteType = const $ error "dhall quasi-quoter: Quoting types is not supported!"
+    , quoteDec = const $ error "dhall quasi-quoter: Quoting declarations is not supported!"
     }
 
 {-| Convert a Dhall type to a Haskell type that does not require any new
