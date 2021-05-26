@@ -32,7 +32,12 @@ jobs:
       - run: stack build --copy-bins --local-bin-path ./bin
       - if: ${{ matrix.os == 'macOS-latest' }}
         run: |
-          source .travis_functions.sh
+          get_cabal_version() {
+            grep '^Version: ' < "$1/$1.cabal" | sed -e 's/^Version:  *//g';
+          }
+          mk_release_name() {
+            printf "$1-$(get_cabal_version "$1")-x86_64-macos.tar.bz2";
+          }
           mkdir -p uploads
           mkdir -p share/man/man1
           # Package dhall
