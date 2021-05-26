@@ -1,4 +1,4 @@
-name: action
+name: main
 on: [push]
 #on:
 #  push:
