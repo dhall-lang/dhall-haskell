@@ -26,6 +26,7 @@ addons:
   homebrew:
     packages:
     - libsodium
+    update: true
 
 before_install:
   # Using compiler above sets CC to an invalid value, so unset it
