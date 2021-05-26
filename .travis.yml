@@ -22,6 +22,10 @@ branches:
   - master
   - /^\d+\.\d+\.\d+(\.\d+)?$/
 
+addons:
+  homebrew:
+    packages:
+    - libsodium
 
 before_install:
   # Using compiler above sets CC to an invalid value, so unset it
