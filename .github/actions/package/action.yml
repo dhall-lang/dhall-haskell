@@ -60,6 +60,7 @@ runs:
     - id: get-package-file
       shell: bash
       run: |
+        get_cabal_version() { grep '^Version: ' < "$1/$1.cabal" | sed -e 's/^Version:  *//g'; }
         value="${{ inputs.cabal-name }}-$(get_cabal_version "${{ inputs.cabal-name }}")-${{ steps.get-architecture.outputs.value }}-${{ steps.get-os.outputs.value }}.${{ inputs.file-extension }}"
         if [[ -n "${{ inputs.package-file }}" ]]; then
           value="${{ inputs.package-file }}"
