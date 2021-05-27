@@ -14,17 +14,17 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
-      benchmarks:
-        - dhall
-      tests:
-        - dhall-bash
-        #- dhall-docs
-        - dhall-json
-        - dhall-lsp-server
-        - dhall-openapi
-        - dhall-yaml
-      tests_utf8:
-        - dhall
+      benchmarks: >
+        dhall
+      #  dhall-docs
+      tests: >
+        dhall-bash
+        dhall-json
+        dhall-lsp-server
+        dhall-openapi
+        dhall-yaml
+      tests_utf8: >
+        dhall
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v2
@@ -63,11 +63,11 @@ jobs:
         name: "Run tests (Windows)"
         run: |
           chcp
-          chcp 65001 && stack test ${{ join(env.tests_utf8, ' ') }}
-          stack test ${{ join(env.tests, ' ') }}
+          chcp 65001 && stack test ${{ env.tests_utf8 }}
+          stack test ${{ env.tests }}
       - if: ${{ matrix.os != 'windows-latest' }}
         name: "Run tests (Not Windows)"
-        run: stack test ${{ format('{0} {1}', join(env.tests, ' '), join(env.tests_utf8, ' ')) }}
+        run: stack test ${{ env.tests }} ${{ env.tests_utf8 }}
       - name: "Run benchmarks"
         run: stack bench ${{ env.benchmarks }} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
       - name: "Upload executables"
