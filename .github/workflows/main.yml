@@ -12,6 +12,17 @@ jobs:
         os: [macOS-latest, ubuntu-latest, windows-latest]
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      benchmarks: >
+        dhall
+      #  dhall-docs
+      tests: >
+        dhall
+        dhall-bash
+        dhall-json
+        dhall-lsp-server
+        dhall-openapi
+        dhall-yaml
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v2
@@ -25,53 +36,26 @@ jobs:
       - name: "Restore/Update cache"
         uses: actions/cache@v2
         with:
-          path: |
-            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
-            .stack-work
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-v2
           restore-keys: |
             ${{ runner.os }}-
+          path: |
+            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
       - name: "Build"
         run: stack build --copy-bins --local-bin-path ./bin --test --bench --no-run-tests --no-run-benchmarks
+      - if: ${{ matrix.os == 'windows-latest' }}
+        name: "Run tests"
+        run: chcp 65001 && stack test ${{ env.tests }}
+      - if: ${{ matrix.os != 'windows-latest' }}
+        name: "Run tests"
+        run: stack test ${{ env.tests }}
+      - name: "Run benchmarks"
+        run: stack bench ${{ env.benchmarks }} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
       - name: "Upload executables"
         uses: actions/upload-artifact@v2
         with:
           name: executables-${{ matrix.os }}
           path: 'bin/*'
-  test:
-    strategy:
-      matrix:
-        os: [macOS-latest, ubuntu-latest, windows-latest]
-        cabal-name:
-          - dhall
-          - dhall-bash
-          #- dhall-docs
-          - dhall-json
-          - dhall-lsp-server
-          - dhall-openapi
-          - dhall-yaml
-    name: Test ${{ matrix.cabal-name }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    needs: [build]
-    steps:
-      # chcp 65001 (utf-8) needed to make doctest work
-      #- if: ${{ matrix.os == 'windows-latest' }}
-      #  run: chcp 65001 && stack test
-      #- if: ${{ matrix.os != 'windows-latest' }}
-      #  run: stack test
-      - if: ${{ matrix.os == 'windows-latest' }}
-        run: chcp 65001 && stack test ${{ matrix.cabal-name }}
-      - if: ${{ matrix.os != 'windows-latest' }}
-        run: stack test ${{ matrix.cabal-name }}
-      #- run: stack test dhall-bash
-      #- run: stack test dhall-json
-      #- run: stack test dhall-lsp-server
-      #- run: stack test dhall-openapi
-      #- run: stack test dhall-yaml
-      ## Enable when issue with path-separators tests on windows is resolved
-      ## - stack test dhall-docs
-      - if: ${{ matrix.cabal-name == 'dhall' }}
-        run: stack bench dhall --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
 
   package:
     strategy:
