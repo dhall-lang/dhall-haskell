@@ -32,8 +32,6 @@ jobs:
       - run: stack build --copy-bins --local-bin-path ./bin
       - if: ${{ matrix.os == 'macOS-latest' }}
         run: |
-          ls -al
-          ls -al bin
           get_cabal_version() {
             grep '^Version: ' < "$1/$1.cabal" | sed -e 's/^Version:  *//g';
           }
@@ -46,7 +44,7 @@ jobs:
           cp dhall/man/dhall.1 share/man/man1/
           tar -jcvf "uploads/$(mk_release_name dhall)" bin/dhall share/man/man1/dhall.1
           # Package dhall-bash
-          tar -jcvf "uploads/$(mk_release_name dhall-bash)" bin/dhall-bash
+          tar -jcvf "uploads/$(mk_release_name dhall-bash)" bin/dhall-to-bash
           # Package dhall-docs
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
           tar -jcvf "uploads/$(mk_release_name dhall-docs)" bin/dhall-docs share/man/man1/dhall-docs.1
