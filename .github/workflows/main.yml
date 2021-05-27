@@ -30,16 +30,15 @@ jobs:
             ${{ runner.os }}-
       - run: stack build
       - run: stack build --copy-bins --local-bin-path ./bin
+      - run: mkdir -p uploads share/man/man1
       - if: ${{ matrix.os == 'macOS-latest' }}
         run: |
           get_cabal_version() {
             grep '^Version: ' < "$1/$1.cabal" | sed -e 's/^Version:  *//g';
           }
           mk_release_name() {
-            printf "$1-$(get_cabal_version "$1")-x86_64-macos.tar.bz2";
+            printf "$1-$(get_cabal_version "$1")-$(uname -m)-macos.tar.bz2";
           }
-          mkdir -p uploads
-          mkdir -p share/man/man1
           # Package dhall
           cp dhall/man/dhall.1 share/man/man1/
           tar -jcvf "uploads/$(mk_release_name dhall)" bin/dhall share/man/man1/dhall.1
@@ -58,3 +57,7 @@ jobs:
           tar -jcvf "uploads/$(mk_release_name dhall-openapi)" bin/openapi-to-dhall
           # Package dhall-yaml
           tar -jcvf "uploads/$(mk_release_name dhall-yaml)" bin/dhall-to-yaml-ng bin/yaml-to-dhall
+      - uses: actions/upload-artifact@v2
+        with:
+          name: packages
+          path: uploads/*.tar.bz2
