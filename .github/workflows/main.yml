@@ -6,11 +6,11 @@ on: [push]
 #      - '[0-9]+.[0-9]+.[0-9]+'
 #      - '[0-9]+.[0-9]+.[0-9]+[0-9]+'
 jobs:
-  deploy:
+  build:
     strategy:
       matrix:
         os: [macOS-latest, ubuntu-latest, windows-latest]
-    name: Deploy ${{ matrix.os }} executable
+    name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Checkout repository"
@@ -33,130 +33,70 @@ jobs:
             ${{ runner.os }}-
       - name: "Build"
         run: stack build --copy-bins --local-bin-path ./bin
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Prepare packaging"
+      - name: "Upload executables"
+        uses: actions/upload-artifact@v2
+        with:
+          name: executables-${{ matrix.os }}
+          path: 'bin/*'
+  package:
+    strategy:
+      matrix:
+        include:
+          - cabal-name: dhall
+            assets: >
+              bin/dhall
+              share/man/man1/dhall.1
+          - cabal-name: dhall-bash
+            assets: >
+              bin/dhall-to-bash
+          - cabal-name: dhall-docs
+            assets: >
+              bin/dhall-docs
+              share/man/man1/dhall-docs.1
+          - cabal-name: dhall-json
+            assets: >
+              bin/dhall-to-json
+              bin/dhall-to-yaml
+              bin/json-to-dhall
+          - cabal-name: dhall-lsp-server
+            assets: >
+              bin/dhall-lsp-server
+          - cabal-name: dhall-nix
+            assets: >
+              bin/dhall-to-nix
+          - cabal-name: dhall-openapi
+            assets: >
+              bin/openapi-to-dhall
+          - cabal-name: dhall-yaml
+            assets: >
+              bin/dhall-to-yaml-ng
+              bin/yaml-to-dhall
+    name: Package ${{ matrix.cabal-name }}
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: "Downloading executables for macOS-latest"
+        uses: actions/download-artifact@v2
+        with:
+          name: executables-macOS-latest
+      - name: "Prepare packaging"
         run: |
           mkdir -p share/man/man1
           cp dhall/man/dhall.1 share/man/man1/
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall
-        name: "Package dhall"
+      - id: package
+        name: "Package ${{ matrix.cabal-name }}"
         uses: ./.github/actions/package
         with:
-          cabal-name: dhall
+          cabal-name: ${{ matrix.cabal-name }}
           os: macos
-          assets: >
-            bin/dhall
-            share/man/man1/dhall.1
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall"
+          assets: ${{ matrix.assets }}
+      - name: "Upload ${{ matrix.cabal-name }}"
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ steps.package-dhall.outputs.package-file }}
-          path: ${{ steps.package-dhall.outputs.package-file }}
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall-bash
-        name: "Package dhall-bash"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: dhall-bash
-          os: macos
-          assets: bin/dhall-to-bash
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall-bash"
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ steps.package-dhall-bash.outputs.package-file }}
-          path: ${{ steps.package-dhall-bash.outputs.package-file }}
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall-docs
-        name: "Package dhall-docs"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: dhall-docs
-          os: macos
-          assets: >
-            bin/dhall-docs
-            share/man/man1/dhall-docs.1
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall-docs"
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ steps.package-dhall-docs.outputs.package-file }}
-          path: ${{ steps.package-dhall-docs.outputs.package-file }}
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall-json
-        name: "Package dhall-json"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: dhall-json
-          os: macos
-          assets: >
-            bin/dhall-to-json
-            bin/dhall-to-yaml
-            bin/json-to-dhall
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall-json"
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ steps.package-dhall-json.outputs.package-file }}
-          path: ${{ steps.package-dhall-json.outputs.package-file }}
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall-lsp-server
-        name: "Package dhall-lsp-server"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: dhall-lsp-server
-          os: macos
-          assets: bin/dhall-lsp-server
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall-lsp-server"
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ steps.package-dhall-lsp-server.outputs.package-file }}
-          path: ${{ steps.package-dhall-lsp-server.outputs.package-file }}
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall-nix
-        name: "Package dhall-nix"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: dhall-nix
-          os: macos
-          assets: bin/dhall-to-nix
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall-nix"
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ steps.package-dhall-nix.outputs.package-file }}
-          path: ${{ steps.package-dhall-nix.outputs.package-file }}
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall-openapi
-        name: "Package dhall-openapi"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: dhall-openapi
-          os: macos
-          assets: bin/openapi-to-dhall
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall-openapi"
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ steps.package-dhall-openapi.outputs.package-file }}
-          path: ${{ steps.package-dhall-openapi.outputs.package-file }}
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        id: package-dhall-yaml
-        name: "Package dhall-yaml"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: dhall-yaml
-          os: macos
-          assets: >
-            bin/dhall-to-yaml-ng
-            bin/yaml-to-dhall
-      - if: ${{ matrix.os == 'macOS-latest' }}
-        name: "Upload dhall-yaml"
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ steps.package-dhall-yaml.outputs.package-file }}
-          path: ${{ steps.package-dhall-yaml.outputs.package-file }}
+          name: ${{ steps.package.outputs.package-file }}
+          path: ${{ steps.package.outputs.package-file }}
