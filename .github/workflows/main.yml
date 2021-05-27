@@ -40,7 +40,7 @@ jobs:
       - name: "Cache compiler"
         uses: actions/cache@v2
         with:
-          key: ${{ runner.os }}-${{ step.compiler-version.outputs.version }}
+          key: ${{ runner.os }}-${{ steps.compiler-version.outputs.version }}
           restore-keys: |
             ${{ runner.os }}-
           path: |
