@@ -83,6 +83,7 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: executables-macOS-latest
+          path: bin
       - name: "Prepare packaging"
         run: |
           mkdir -p share/man/man1
