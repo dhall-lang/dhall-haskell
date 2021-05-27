@@ -23,8 +23,7 @@ jobs:
         dhall-json
         dhall-openapi
         dhall-yaml
-      tests_utf8: >
-        dhall
+      tests_utf8: dhall
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v2
