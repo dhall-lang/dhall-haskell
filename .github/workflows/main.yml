@@ -17,10 +17,10 @@ jobs:
       benchmarks: >
         dhall
       #  dhall-docs
+      # dhall-lsp-server
       tests: >
         dhall-bash
         dhall-json
-        dhall-lsp-server
         dhall-openapi
         dhall-yaml
       tests_utf8: >
