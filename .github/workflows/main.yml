@@ -13,14 +13,17 @@ jobs:
     name: Deploy ${{ matrix.os }} executable
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
+      - name: "Checkout repository"
+        uses: actions/checkout@v2
         with:
           submodules: true
       - id: setup-haskell-cabal
+        name: "Setup Haskell environment"
         uses: haskell/actions/setup@v1.2.1
         with:
           enable-stack: true
-      - uses: actions/cache@v2
+      - name: "Restore/Update cache"
+        uses: actions/cache@v2
         with:
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
@@ -28,14 +31,16 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
             ${{ runner.os }}-
-      - run: stack build
-      - run: stack build --copy-bins --local-bin-path ./bin
+      - name: "Build"
+        run: stack build --copy-bins --local-bin-path ./bin
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Prepare packaging"
         run: |
           mkdir -p share/man/man1
           cp dhall/man/dhall.1 share/man/man1/
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall
@@ -44,12 +49,14 @@ jobs:
             bin/dhall
             share/man/man1/dhall.1
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall-bash"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall-bash
           os: macos
           assets: bin/dhall-to-bash
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall-docs"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall-docs
@@ -58,6 +65,7 @@ jobs:
             bin/dhall-docs
             share/man/man1/dhall-docs.1
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall-json"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall-json
@@ -67,24 +75,28 @@ jobs:
             bin/dhall-to-yaml
             bin/json-to-dhall
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall-lsp-server"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall-lsp-server
           os: macos
           assets: bin/dhall-lsp-server
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall-nix"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall-nix
           os: macos
           assets: bin/dhall-to-nix
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall-openapi"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall-openapi
           os: macos
           assets: bin/openapi-to-dhall
       - if: ${{ matrix.os == 'macOS-latest' }}
+        name: "Package dhall-yaml"
         uses: ./.github/actions/package
         with:
           cabal-name: dhall-yaml
