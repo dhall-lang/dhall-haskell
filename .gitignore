@@ -22,6 +22,7 @@ cabal.project.local~
 .ghc.environment.*
 .cache
 .history
+stack*.yaml.lock
 .vscode
 docs
 result
