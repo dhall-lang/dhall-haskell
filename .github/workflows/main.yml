@@ -30,34 +30,65 @@ jobs:
             ${{ runner.os }}-
       - run: stack build
       - run: stack build --copy-bins --local-bin-path ./bin
-      - run: mkdir -p uploads share/man/man1
       - if: ${{ matrix.os == 'macOS-latest' }}
         run: |
-          get_cabal_version() {
-            grep '^Version: ' < "$1/$1.cabal" | sed -e 's/^Version:  *//g';
-          }
-          mk_release_name() {
-            printf "$1-$(get_cabal_version "$1")-$(uname -m)-macos.tar.bz2";
-          }
-          # Package dhall
+          mkdir -p share/man/man1
           cp dhall/man/dhall.1 share/man/man1/
-          tar -jcvf "uploads/$(mk_release_name dhall)" bin/dhall share/man/man1/dhall.1
-          # Package dhall-bash
-          tar -jcvf "uploads/$(mk_release_name dhall-bash)" bin/dhall-to-bash
-          # Package dhall-docs
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
-          tar -jcvf "uploads/$(mk_release_name dhall-docs)" bin/dhall-docs share/man/man1/dhall-docs.1
-          # Package dhall-json
-          tar -jcvf "uploads/$(mk_release_name dhall-json)" bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall
-          # Package dhall-lsp-server
-          tar -jcvf "uploads/$(mk_release_name dhall-lsp-server)" bin/dhall-lsp-server
-          # Package dhall-nix
-          tar -jcvf "uploads/$(mk_release_name dhall-nix)" bin/dhall-to-nix
-          # Package dhall-openapi
-          tar -jcvf "uploads/$(mk_release_name dhall-openapi)" bin/openapi-to-dhall
-          # Package dhall-yaml
-          tar -jcvf "uploads/$(mk_release_name dhall-yaml)" bin/dhall-to-yaml-ng bin/yaml-to-dhall
-      - uses: actions/upload-artifact@v2
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
         with:
-          name: packages
-          path: uploads/*.tar.bz2
+          cabal-name: dhall
+          os: macos
+          assets: >
+            bin/dhall
+            share/man/man1/dhall.1
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
+        with:
+          cabal-name: dhall-bash
+          os: macos
+          assets: bin/dhall-to-bash
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
+        with:
+          cabal-name: dhall-docs
+          os: macos
+          assets: >
+            bin/dhall-docs
+            share/man/man1/dhall-docs.1
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
+        with:
+          cabal-name: dhall-json
+          os: macos
+          assets: >
+            bin/dhall-to-json
+            bin/dhall-to-yaml
+            bin/json-to-dhall
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
+        with:
+          cabal-name: dhall-lsp-server
+          os: macos
+          assets: bin/dhall-lsp-server
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
+        with:
+          cabal-name: dhall-nix
+          os: macos
+          assets: bin/dhall-to-nix
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
+        with:
+          cabal-name: dhall-openapi
+          os: macos
+          assets: bin/openapi-to-dhall
+      - if: ${{ matrix.os == 'macOS-latest' }}
+        uses: ./.github/actions/package
+        with:
+          cabal-name: dhall-yaml
+          os: macos
+          assets: >
+            bin/dhall-to-yaml-ng
+            bin/yaml-to-dhall

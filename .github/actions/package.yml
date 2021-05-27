@@ -1,0 +1,69 @@
+name: 'Package and upload'
+description: 'Package assets for a Cabal package (TAR version)'
+inputs:
+  cabal-name:
+    description: 'Name of the Cabal package'
+    required: true
+  package-file:
+    description: 'Override the filename of the GitHub package'
+    required: false
+    default: ''
+  architecture:
+    description: 'Override architecture'
+    required: false
+    default: ''
+  os:
+    description: 'Override OS'
+    required: false
+    default: ''
+  compression:
+    description: 'Override the compression algorithm to be used'
+    required: false
+    default: 'bz2'
+  assets:
+    description: 'Files to include in the package'
+    required: false
+    default: ''
+outputs:
+  package-file:
+    description: "Output path of the package"
+    value: ${{ steps.get-package-file.outputs.value }}
+  architecture:
+    description: "Architecture used for packaging"
+    value: ${{ steps.get-architecture.outputs.value }}
+  os:
+    description: "OS used for packaging"
+    value: ${{ steps.get-os.outputs.value }}
+runs:
+  using: "composite"
+  steps:
+    - id: get-architecture
+      shell: bash
+      run: |
+        value="$(uname -m)"
+        if [[ -n "${{ inputs.architecture }}" ]]; then
+          value="${{ inputs.architecture }}"
+        fi
+        echo "::set-output name=value::${value}"
+    - id: get-os
+      shell: bash
+      run: |
+        value="${{ runner.os }}"
+        if [[ -n "${{ inputs.os }}" ]]; then
+          value="${{ inputs.os }}"
+        fi
+        echo "::set-output name=value::${value}"
+    - id: get-package-file
+      shell: bash
+      run: |
+        value="${{ inputs.cabal-name }}-$(get_cabal_version "${{ inputs.cabal-name }}")-${{ steps.get-architecture.outputs.value }}-${{ steps.get-os.outputs.value }}.tar.${{ inputs.compression }}"
+        if [[ -n "${{ inputs.package-file }}" ]]; then
+          value="${{ inputs.package-file }}"
+        fi
+        echo "::set-output name=value::${value}"
+    - shell: bash
+    - run: tar -acvf "${{ steps.get-package-file.outputs.value }}" ${{ inputs.assets }}
+    - uses: actions/upload-artifact@v2
+      with:
+        name: ${{ steps.get-package-file.outputs.value }}
+        path: ${{ steps.get-pacakge-file.outputs.value }}
