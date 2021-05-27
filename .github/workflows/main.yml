@@ -35,24 +35,10 @@ jobs:
         uses: haskell/actions/setup@v1.2.1
         with:
           enable-stack: true
-      - name: "Cache compiler"
+      - name: "Cache"
         uses: actions/cache@v2
         with:
           key: ${{ runner.os }}-${{ hashFiles('stack.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-
-          path: |
-            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
-      - name: "Update package index"
-        run: stack update --verbosity warn
-      - name: "Setup compiler"
-        run: stack setup --verbosity warn
-      - name: "Generate stack.yaml.lock"
-        run: stack build --verbosity warn --dry-run
-      - name: "Cache stack root"
-        uses: actions/cache@v2
-        with:
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}-v2
           restore-keys: |
             ${{ runner.os }}-
           path: |
