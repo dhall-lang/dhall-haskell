@@ -45,7 +45,7 @@ jobs:
       - name: "Update package index"
         run: stack update --verbosity warn
       - name: "Setup compiler"
-        run: stack setup
+        run: stack setup --verbosity warn
       - name: "Generate stack.yaml.lock"
         run: stack build --verbosity warn --dry-run
       - name: "Cache stack root"
