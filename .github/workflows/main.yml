@@ -46,6 +46,12 @@ jobs:
             assets: >
               bin/dhall-to-yaml-ng
               bin/yaml-to-dhall
+      exclude:
+        - os: windows-latest
+          package:
+            name: dhall-nix
+            assets: >
+              bin/dhall-to-nix
       fail-fast: false
     name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
