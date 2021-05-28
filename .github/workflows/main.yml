@@ -14,8 +14,8 @@ jobs:
             package: macos
           - runner: ubuntu-latest
             package: null
-          #- runner: windows-latest
-          #  package: windows
+          - runner: windows-latest
+            package: windows
         package:
           - name: dhall
             assets: >
