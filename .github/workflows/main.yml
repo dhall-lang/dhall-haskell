@@ -1,0 +1,121 @@
+name: main
+on: [push]
+#on:
+#  push:
+#    tags:
+#      - '[0-9]+.[0-9]+.[0-9]+'
+#      - '[0-9]+.[0-9]+.[0-9]+[0-9]+'
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - runner: macOS-latest
+            package: macos
+          - runner: ubuntu-latest
+            package: null
+          - runner: windows-latest
+            package: windows
+        package:
+          - name: dhall
+            assets: >
+              bin/dhall
+              share/man/man1/dhall.1
+          - name: dhall-bash
+            assets: >
+              bin/dhall-to-bash
+          - name: dhall-docs
+            assets: >
+              bin/dhall-docs
+              share/man/man1/dhall-docs.1
+          - name: dhall-json
+            assets: >
+              bin/dhall-to-json
+              bin/dhall-to-yaml
+              bin/json-to-dhall
+          - name: dhall-lsp-server
+            assets: >
+              bin/dhall-lsp-server
+          - name: dhall-nix
+            assets: >
+              bin/dhall-to-nix
+          - name: dhall-openapi
+            assets: >
+              bin/openapi-to-dhall
+          - name: dhall-yaml
+            assets: >
+              bin/dhall-to-yaml-ng
+              bin/yaml-to-dhall
+        exclude:
+          - os:
+              runner: windows-latest
+              package: windows
+            package:
+              name: dhall-nix
+              assets: >
+                bin/dhall-to-nix
+      fail-fast: false
+    name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
+    runs-on: ${{ matrix.os.runner }}
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - id: setup-haskell-cabal
+        name: "Setup Haskell environment"
+        uses: haskell/actions/setup@v1.2.1
+        with:
+          enable-stack: true
+      - name: "Cache"
+        uses: actions/cache@v2
+        with:
+          key: ${{ matrix.package.name }}-${{ matrix.os.runner }}-${{ hashFiles('stack.yaml') }}
+          restore-keys: |
+            ${{ matrix.package.name }}${{ matrix.os.runner }}-
+          path: |
+            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      - name: "Build"
+        run: >
+          stack build
+          --copy-bins --local-bin-path ./bin
+          ${{ matrix.package.name }}
+      - name: "Run tests"
+        run: |
+          ${{ runner.os == 'Windows' && matrix.package.name == 'dhall' }} && chcp 65001
+          stack test ${{ matrix.package.name }}
+      #- if: ${{ matrix.os == 'windows-latest' }}
+      #  name: "Run tests (Windows)"
+      #  run: |
+      #    codepage="$(chcp)"
+      #    chcp 65001 && stack test ${TESTS_UTF8%%[[:space:]]}
+      #    chcp "${codepage}" && stack test ${TESTS%%[[:space:]]}
+      #- if: ${{ matrix.os != 'windows-latest' }}
+      #  name: "Run tests (Not Windows)"
+      #  run: |
+      #    printf '<%s>\n' "${TESTS}" "${TESTS_UTF8}"
+      #    printf '<%s>\n' "${TESTS%%[[:space:]]}" "${TESTS_UTF8%%[[:space:]]}"
+      #    printf '<%s>\n' ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
+      #    stack test ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
+      #  #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
+      #- name: "Run benchmarks"
+      #  run: stack bench ${BENCHMARKS%%[[:space:]]} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
+      - name: "Prepare packaging"
+        run: |
+          mkdir -p share/man/man1
+          cp dhall/man/dhall.1 share/man/man1/
+          cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
+      - if: ${{ matrix.os.package != null }}
+        id: package
+        name: "Create package"
+        uses: ./.github/actions/package
+        with:
+          cabal-name: ${{ matrix.package.name }}
+          os: ${{ matrix.os.package }}
+          assets: ${{ matrix.package.assets }}
+      - if: ${{ matrix.os.package != null }}
+        name: "Upload package"
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ steps.package.outputs.package-file }}
+          path: ${{ steps.package.outputs.package-file }}
