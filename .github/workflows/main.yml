@@ -48,8 +48,7 @@ jobs:
               bin/yaml-to-dhall
         exclude:
           - os: windows-latest
-            package:
-              name: dhall-nix
+            package: dhall-nix
       fail-fast: false
     name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
