@@ -87,7 +87,7 @@ jobs:
       - name: "Build"
         run: stack build --copy-bins --local-bin-path ./bin --test ${{ matrix.cabal-name }}
       - name: "Run tests"
-        run: stack test ${{ os.cabal-name }}
+        run: stack test ${{ matrix.cabal-name }}
       #- if: ${{ matrix.os == 'windows-latest' }}
       #  name: "Run tests (Windows)"
       #  run: |
