@@ -14,16 +14,16 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
-      benchmarks: >
+      BENCHMARKS: >
         dhall
       #  dhall-docs
       # dhall-lsp-server
-      tests: >
+      TESTS: >
         dhall-bash
         dhall-json
         dhall-openapi
         dhall-yaml
-      tests_utf8: >
+      TESTS_UTF8: >
         dhall
     steps:
       - name: "Checkout repository"
@@ -48,16 +48,15 @@ jobs:
       - if: ${{ matrix.os == 'windows-latest' }}
         name: "Run tests (Windows)"
         run: |
-          chcp 65001 && stack test ${{ env.tests_utf8 }}
-          stack test ${{ env.tests }}
+          codepage="$(chcp)"
+          chcp 65001 && stack test ${TESTS_UTF8:0:-1}
+          chcp "${codepage}" && stack test ${TESTS:0:-1}
       - if: ${{ matrix.os != 'windows-latest' }}
         name: "Run tests (Not Windows)"
-        run: |
-          printf '<%s>\n' '${{ env.tests }}' '${{ env.tests_utf8 }}'
-          printf '<%s>\n' "${tests}" "${tests_utf8}"
-          stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
+        run: stack test ${TESTS:0:-1} ${TESTS_UTF8:0:-1}
+        #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
       - name: "Run benchmarks"
-        run: stack bench ${{ env.benchmarks }} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
+        run: stack bench ${BENCHMARKS:0:-1} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
       - name: "Upload executables"
         uses: actions/upload-artifact@v2
         with:
