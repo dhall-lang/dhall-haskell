@@ -82,7 +82,7 @@ jobs:
               bin/dhall-to-yaml-ng
               bin/yaml-to-dhall
       fail-fast: false
-    name: Build ${{ matrix.cabal-name }} on ${{ matrix.os }}
+    name: Build ${{ matrix.package.cabal-name }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     needs: [prepare]
     steps:
