@@ -54,7 +54,7 @@ jobs:
         name: "Run tests (Not Windows)"
         run: |
           printf '<%s>\n' '${{ env.tests }}' '${{ env.tests_utf8 }}'
-          printf '<%s>\n' '${tests}' '${tests_utf8}'
+          printf '<%s>\n' "${tests}" "${tests_utf8}"
           stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
       - name: "Run benchmarks"
         run: stack bench ${{ env.benchmarks }} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
