@@ -54,6 +54,8 @@ jobs:
       - if: ${{ matrix.os != 'windows-latest' }}
         name: "Run tests (Not Windows)"
         run: |
+          printf '<%s>\n' "${TESTS}" "${TESTS_UTF8}"
+          printf '<%s>\n' "${TESTS%%[[:space:]]}" "${TESTS_UTF8%%[[:space:]]}"
           printf '<%s>\n' ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
           stack test ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
         #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
