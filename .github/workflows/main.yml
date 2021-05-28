@@ -59,6 +59,7 @@ jobs:
       fail-fast: false
     name: Build ${{ matrix.cabal-name }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    needs: [prepare]
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v2
@@ -84,7 +85,7 @@ jobs:
       - name: "Unpack stack working directory"
         run: 7z x 'stack-work-${{ matrix.os }}.7z'
       - name: "Build"
-        run: stack build --copy-bins --local-bin-path ./bin --test ${{ os.cabal-name }}
+        run: stack build --copy-bins --local-bin-path ./bin --test ${{ matrix.cabal-name }}
       - name: "Run tests"
         run: stack test ${{ os.cabal-name }}
       #- if: ${{ matrix.os == 'windows-latest' }}
