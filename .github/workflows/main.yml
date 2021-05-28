@@ -81,7 +81,9 @@ jobs:
           --copy-bins --local-bin-path ./bin
           ${{ matrix.package.name }}
       - name: "Run tests"
-        run: stack test ${{ matrix.package.name }}
+        run: |
+          ${{ runner.os == 'Windows' && matrix.package.name == 'dhall' }} && chcp 65001
+          stack test ${{ matrix.package.name }}
       #- if: ${{ matrix.os == 'windows-latest' }}
       #  name: "Run tests (Windows)"
       #  run: |
