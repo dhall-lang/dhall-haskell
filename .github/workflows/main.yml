@@ -6,25 +6,14 @@ on: [push]
 #      - '[0-9]+.[0-9]+.[0-9]+'
 #      - '[0-9]+.[0-9]+.[0-9]+[0-9]+'
 jobs:
-  build:
+  prepare:
     strategy:
       matrix:
         os: [macOS-latest, ubuntu-latest]
         #os: [macOS-latest, ubuntu-latest, windows-latest]
-    name: Build on ${{ matrix.os }}
+      fail-fast: false
+    name: Prepare build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    env:
-      BENCHMARKS: >
-        dhall
-      #  dhall-docs
-      # dhall-lsp-server
-      TESTS: >
-        dhall-bash
-        dhall-json
-        dhall-openapi
-        dhall-yaml
-      TESTS_UTF8: >
-        dhall
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v2
@@ -43,31 +32,84 @@ jobs:
             ${{ runner.os }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      - name: "Build dependencies"
+        run: stack build --test --bench --only-dependencies
+      - name: "Build dhall unconditionally"
+        run: stack build dhall
+      - name: "Pack stack working directory"
+        run: 7z a 'stack-work-${{ matrix.os }}.7z' .stack-work dhall/.stack-work
+      - name: "Upload stack working directory"
+        uses: actions/upload-artifact@v2
+        with:
+          name: stack-work-${{ matrix.os }}.7z
+          path: stack-work-${{ matrix.os }}.7z
+
+  build:
+    strategy:
+      matrix:
+        os: [macOS-latest, ubuntu-latest]
+        #os: [macOS-latest, ubuntu-latest, windows-latest]
+        cabal-name:
+          - dhall
+          - dhall-bash
+          - dhall-json
+          - dhall-lsp-server
+          - dhall-openapi
+          - dhall-yaml
+      fail-fast: false
+    name: Build ${{ matrix.cabal-name }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - id: setup-haskell-cabal
+        name: "Setup Haskell environment"
+        uses: haskell/actions/setup@v1.2.1
+        with:
+          enable-stack: true
+      - name: "Cache"
+        uses: actions/cache@v2
+        with:
+          key: ${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-
+          path: |
+            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      - name: "Download stack working directory"
+        uses: actions/download-artifact@v2
+        with:
+          name: stack-work-${{ matrix.os }}.7z
+      - name: "Unpack stack working directory"
+        run: 7z x 'stack-work-${{ matrix.os }}.7z'
       - name: "Build"
-        run: stack build --copy-bins --local-bin-path ./bin --test --bench --no-run-tests --no-run-benchmarks
-      - if: ${{ matrix.os == 'windows-latest' }}
-        name: "Run tests (Windows)"
-        run: |
-          codepage="$(chcp)"
-          chcp 65001 && stack test ${TESTS_UTF8%%[[:space:]]}
-          chcp "${codepage}" && stack test ${TESTS%%[[:space:]]}
-      - if: ${{ matrix.os != 'windows-latest' }}
-        name: "Run tests (Not Windows)"
-        run: |
-          printf '<%s>\n' "${TESTS}" "${TESTS_UTF8}"
-          printf '<%s>\n' "${TESTS%%[[:space:]]}" "${TESTS_UTF8%%[[:space:]]}"
-          printf '<%s>\n' ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
-          stack test ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
-        #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
-      - name: "Run benchmarks"
-        run: stack bench ${BENCHMARKS%%[[:space:]]} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
+        run: stack build --copy-bins --local-bin-path ./bin --test ${{ os.cabal-name }}
+      - name: "Run tests"
+        run: stack test ${{ os.cabal-name }}
+      #- if: ${{ matrix.os == 'windows-latest' }}
+      #  name: "Run tests (Windows)"
+      #  run: |
+      #    codepage="$(chcp)"
+      #    chcp 65001 && stack test ${TESTS_UTF8%%[[:space:]]}
+      #    chcp "${codepage}" && stack test ${TESTS%%[[:space:]]}
+      #- if: ${{ matrix.os != 'windows-latest' }}
+      #  name: "Run tests (Not Windows)"
+      #  run: |
+      #    printf '<%s>\n' "${TESTS}" "${TESTS_UTF8}"
+      #    printf '<%s>\n' "${TESTS%%[[:space:]]}" "${TESTS_UTF8%%[[:space:]]}"
+      #    printf '<%s>\n' ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
+      #    stack test ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
+      #  #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
+      #- name: "Run benchmarks"
+      #  run: stack bench ${BENCHMARKS%%[[:space:]]} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
       - name: "Upload executables"
         uses: actions/upload-artifact@v2
         with:
-          name: executables-${{ matrix.os }}
+          name: executables-${{ matrix.cabal-name }}-${{ matrix.os }}
           path: 'bin/*'
 
-  package:
+  package-macos:
     strategy:
       matrix:
         include:
@@ -108,10 +150,10 @@ jobs:
         uses: actions/checkout@v2
         with:
           submodules: true
-      - name: "Downloading executables for macOS-latest"
+      - name: "Downloading executables"
         uses: actions/download-artifact@v2
         with:
-          name: executables-macOS-latest
+          name: executables-${{ matrix.cabal-name }}-macOS-latest
           path: bin
       - name: "Prepare packaging"
         run: |
