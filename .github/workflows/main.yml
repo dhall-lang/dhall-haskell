@@ -51,7 +51,7 @@ jobs:
       matrix:
         os: [macOS-latest, ubuntu-latest]
         #os: [macOS-latest, ubuntu-latest, windows-latest]
-        packages:
+        package:
           - cabal-name: dhall
             assets: >
               bin/dhall
