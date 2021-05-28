@@ -53,7 +53,9 @@ jobs:
           chcp "${codepage}" && stack test ${TESTS%%[[:space:]]}
       - if: ${{ matrix.os != 'windows-latest' }}
         name: "Run tests (Not Windows)"
-        run: stack test ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
+        run: |
+          printf '<%s>\n' ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
+          stack test ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
         #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
       - name: "Run benchmarks"
         run: stack bench ${BENCHMARKS%%[[:space:]]} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
