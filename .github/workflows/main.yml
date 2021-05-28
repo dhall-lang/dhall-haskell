@@ -103,7 +103,8 @@ jobs:
           cabal-name: ${{ matrix.package.name }}
           os: ${{ matrix.os.package }}
           assets: ${{ matrix.package.assets }}
-      - name: "Upload package"
+      - if: ${{ matrix.os.package != null }}
+        name: "Upload package"
         uses: actions/upload-artifact@v2
         with:
           name: ${{ steps.package.outputs.package-file }}
