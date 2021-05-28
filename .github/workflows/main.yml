@@ -6,85 +6,49 @@ on: [push]
 #      - '[0-9]+.[0-9]+.[0-9]+'
 #      - '[0-9]+.[0-9]+.[0-9]+[0-9]+'
 jobs:
-  prepare:
-    strategy:
-      matrix:
-        os:
-          - macOS-latest
-          - ubuntu-latest
-          #- windows-latest
-      fail-fast: false
-    name: Prepare build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: "Checkout repository"
-        uses: actions/checkout@v2
-        with:
-          submodules: true
-      - id: setup-haskell-cabal
-        name: "Setup Haskell environment"
-        uses: haskell/actions/setup@v1.2.1
-        with:
-          enable-stack: true
-      - name: "Cache"
-        uses: actions/cache@v2
-        with:
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-
-          path: |
-            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
-      - name: "Build dependencies"
-        run: stack build --test --bench --only-dependencies
-      - name: "Build dhall unconditionally"
-        run: stack build dhall
-      - name: "Pack stack working directory"
-        run: 7z a 'stack-work-${{ matrix.os }}.7z' .stack-work dhall/.stack-work
-      - name: "Upload stack working directory"
-        uses: actions/upload-artifact@v2
-        with:
-          name: stack-work-${{ matrix.os }}.7z
-          path: stack-work-${{ matrix.os }}.7z
-
   build:
     strategy:
       matrix:
-        os: [macOS-latest, ubuntu-latest]
-        #os: [macOS-latest, ubuntu-latest, windows-latest]
+        os:
+          - runner: macOS-latest
+            package: macos
+          - runner: ubuntu-latest
+            package: null
+          #- runner: windows-latest
+          #  package: windows
         package:
-          - cabal-name: dhall
+          - name: dhall
             assets: >
               bin/dhall
               share/man/man1/dhall.1
-          - cabal-name: dhall-bash
+          - name: dhall-bash
             assets: >
               bin/dhall-to-bash
-          - cabal-name: dhall-docs
+          - name: dhall-docs
             assets: >
               bin/dhall-docs
               share/man/man1/dhall-docs.1
-          - cabal-name: dhall-json
+          - name: dhall-json
             assets: >
               bin/dhall-to-json
               bin/dhall-to-yaml
               bin/json-to-dhall
-          - cabal-name: dhall-lsp-server
+          - name: dhall-lsp-server
             assets: >
               bin/dhall-lsp-server
-          - cabal-name: dhall-nix
+          - name: dhall-nix
             assets: >
               bin/dhall-to-nix
-          - cabal-name: dhall-openapi
+          - name: dhall-openapi
             assets: >
               bin/openapi-to-dhall
-          - cabal-name: dhall-yaml
+          - name: dhall-yaml
             assets: >
               bin/dhall-to-yaml-ng
               bin/yaml-to-dhall
       fail-fast: false
-    name: Build ${{ matrix.package.cabal-name }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    needs: [prepare]
+    name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
+    runs-on: ${{ matrix.os.runner }}
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v2
@@ -98,21 +62,18 @@ jobs:
       - name: "Cache"
         uses: actions/cache@v2
         with:
-          key: ${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+          key: ${{ matrix.package.name }}-${{ matrix.os.runner }}-${{ hashFiles('stack.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-
+            ${{ matrix.package.name }}${{ matrix.os.runner }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
-      - name: "Download stack working directory"
-        uses: actions/download-artifact@v2
-        with:
-          name: stack-work-${{ matrix.os }}.7z
-      - name: "Unpack stack working directory"
-        run: 7z x 'stack-work-${{ matrix.os }}.7z'
       - name: "Build"
-        run: stack build --copy-bins --local-bin-path ./bin ${{ matrix.cabal-name }}
+        run: >
+          stack build
+          --copy-bins --local-bin-path ./bin
+          ${{ matrix.package.name }}
       - name: "Run tests"
-        run: stack test ${{ matrix.cabal-name }}
+        run: stack test ${{ matrix.package.name }}
       #- if: ${{ matrix.os == 'windows-latest' }}
       #  name: "Run tests (Windows)"
       #  run: |
@@ -129,71 +90,20 @@ jobs:
       #  #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
       #- name: "Run benchmarks"
       #  run: stack bench ${BENCHMARKS%%[[:space:]]} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
-      - name: "Upload executables"
-        uses: actions/upload-artifact@v2
-        with:
-          name: executables-${{ matrix.cabal-name }}-${{ matrix.os }}
-          path: 'bin/*'
-
-  package-macos:
-    strategy:
-      matrix:
-        include:
-          - cabal-name: dhall
-            assets: >
-              bin/dhall
-              share/man/man1/dhall.1
-          - cabal-name: dhall-bash
-            assets: >
-              bin/dhall-to-bash
-          - cabal-name: dhall-docs
-            assets: >
-              bin/dhall-docs
-              share/man/man1/dhall-docs.1
-          - cabal-name: dhall-json
-            assets: >
-              bin/dhall-to-json
-              bin/dhall-to-yaml
-              bin/json-to-dhall
-          - cabal-name: dhall-lsp-server
-            assets: >
-              bin/dhall-lsp-server
-          - cabal-name: dhall-nix
-            assets: >
-              bin/dhall-to-nix
-          - cabal-name: dhall-openapi
-            assets: >
-              bin/openapi-to-dhall
-          - cabal-name: dhall-yaml
-            assets: >
-              bin/dhall-to-yaml-ng
-              bin/yaml-to-dhall
-    name: Package ${{ matrix.cabal-name }} for macos
-    runs-on: ubuntu-latest
-    needs: [build]
-    steps:
-      - name: "Checkout repository"
-        uses: actions/checkout@v2
-        with:
-          submodules: true
-      - name: "Downloading executables"
-        uses: actions/download-artifact@v2
-        with:
-          name: executables-${{ matrix.cabal-name }}-macOS-latest
-          path: bin
       - name: "Prepare packaging"
         run: |
           mkdir -p share/man/man1
           cp dhall/man/dhall.1 share/man/man1/
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
-      - id: package
-        name: "Package ${{ matrix.cabal-name }}"
+      - if: ${{ matrix.os.package != null }}
+        id: package
+        name: "Create package"
         uses: ./.github/actions/package
         with:
-          cabal-name: ${{ matrix.cabal-name }}
-          os: macos
-          assets: ${{ matrix.assets }}
-      - name: "Upload ${{ matrix.cabal-name }}"
+          cabal-name: ${{ matrix.package.name }}
+          os: ${{ matrix.os.package }}
+          assets: ${{ matrix.package.assets }}
+      - name: "Upload package"
         uses: actions/upload-artifact@v2
         with:
           name: ${{ steps.package.outputs.package-file }}
