@@ -84,22 +84,6 @@ jobs:
         run: |
           ${{ runner.os == 'Windows' && matrix.package.name == 'dhall' }} && chcp 65001
           stack test ${{ matrix.package.name }}
-      #- if: ${{ matrix.os == 'windows-latest' }}
-      #  name: "Run tests (Windows)"
-      #  run: |
-      #    codepage="$(chcp)"
-      #    chcp 65001 && stack test ${TESTS_UTF8%%[[:space:]]}
-      #    chcp "${codepage}" && stack test ${TESTS%%[[:space:]]}
-      #- if: ${{ matrix.os != 'windows-latest' }}
-      #  name: "Run tests (Not Windows)"
-      #  run: |
-      #    printf '<%s>\n' "${TESTS}" "${TESTS_UTF8}"
-      #    printf '<%s>\n' "${TESTS%%[[:space:]]}" "${TESTS_UTF8%%[[:space:]]}"
-      #    printf '<%s>\n' ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
-      #    stack test ${TESTS%%[[:space:]]} ${TESTS_UTF8%%[[:space:]]}
-      #  #run: stack test ${{ format('{0} {1}', env.tests, env.tests_utf8) }}
-      #- name: "Run benchmarks"
-      #  run: stack bench ${BENCHMARKS%%[[:space:]]} --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
       - name: "Prepare packaging"
         run: |
           mkdir -p share/man/man1
