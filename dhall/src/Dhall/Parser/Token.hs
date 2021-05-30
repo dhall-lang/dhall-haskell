@@ -336,7 +336,7 @@ whitespaceChunk = do
 
     let descriptor = case commentControl of
             UnsupportedCommentsPermitted -> "whitespace"
-            UnsupportedCommentsForbidden     -> "comment-free whitespace"
+            UnsupportedCommentsForbidden -> "comment-free whitespace"
 
     choice (concat
         [ [ void (Dhall.Parser.Combinators.takeWhile1 predicate)

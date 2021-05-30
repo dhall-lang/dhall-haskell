@@ -965,7 +965,15 @@ parsers embedded = Parsers {..}
 
 -- | Parse a single comment
 comment :: Parser Comment
-comment = LineComment <$> lineComment <|> BlockComment <$> blockComment <?> "comment"
+comment = LineComment <$> lineComments <|> BlockComment <$> blockComment <?> "comment"
+  where
+    -- Note: using sepBy1 here instead fails consumes too much input
+    lineComments = do
+        a <- lineComment
+        bs <- many (try (spaceOrTab >> lineComment))
+        pure (a :| bs)
+
+    spaceOrTab = Dhall.Parser.Combinators.takeWhile (\c -> c == ' ' || c == '\t')
 
 -- | Parse a multi comment (which contains at least one comment)
 multiComment :: Parser MultiComment

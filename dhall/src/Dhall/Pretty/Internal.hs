@@ -203,8 +203,8 @@ normalizeMultiComment (MultiComment comments) =
           , Just body <- Text.stripSuffix "-}" rest
           -> Text.stripEnd <$> Text.lines body
         LineComment txt
-          | Just body <- Text.stripPrefix "--" txt
-          -> [ Text.stripEnd body ]
+          | Just body <- traverse (Text.stripPrefix "--") txt
+          -> Text.stripEnd <$> toList body
         _ -> internalError "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
 
 -- | Helper function to render a MultiComment if present

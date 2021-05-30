@@ -202,9 +202,9 @@ newtype MultiComment = MultiComment { getMultiComment :: NonEmpty Comment }
 -- | Keep track of a comment as part of Dhall syntax. This is useful for source
 -- preserving transformations such as /format/.
 data Comment
-  = LineComment Text
-  -- ^ Corresponds to a single line comment: @--<text>$@ where @<text>@ does not
-  -- contain newline characters
+  = LineComment (NonEmpty Text)
+  -- ^ Corresponds to possibly multiple consecutive lines of single line comments:
+  -- @--<text>$@ where @<text>@ does not contain newline characters
   | BlockComment Text
   -- ^ Corresponds to a multi line comment: @{-<text>-}@ where <text> can
   -- contain newline characters

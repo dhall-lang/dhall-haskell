@@ -87,6 +87,7 @@ import qualified Data.Foldable         as Foldable
 import qualified Data.HashMap.Strict   as HashMap
 import qualified Data.HashSet
 import qualified Data.List
+import qualified Data.List.NonEmpty
 import qualified Data.Map
 import qualified Data.Sequence
 import qualified Data.Set
@@ -194,9 +195,11 @@ comment = do
               pure . BlockComment $ "{-" <> txt <> "-}"
 
           lineComment = do
-              txt <- commentText `suchThat` (not . Text.isInfixOf "\n")
-              endOfLine <- Test.QuickCheck.elements ["\n", "\r\n"]
-              pure . LineComment $ "--" <> txt <> endOfLine
+              lineComments <- Test.QuickCheck.listOf1 $ do
+                  txt <- commentText `suchThat` (not . Text.isInfixOf "\n")
+                  endOfLine <- Test.QuickCheck.elements ["\n", "\r\n"]
+                  pure ("--" <> txt <> endOfLine)
+              pure . LineComment . Data.List.NonEmpty.fromList $ lineComments
 
       Test.QuickCheck.oneof
           [ blockComment
