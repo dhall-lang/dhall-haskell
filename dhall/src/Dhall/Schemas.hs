@@ -69,11 +69,11 @@ data Schemas = Schemas
 -- | Implementation of the @dhall rewrite-with-schemas@ subcommand
 schemasCommand :: Schemas -> IO ()
 schemasCommand Schemas{..} = do
-    originalText <- case input of
-        InputFile file -> Text.IO.readFile file
-        StandardInput  -> Text.IO.getContents
+    (inputName, originalText) <- case input of
+        InputFile file -> (,) file <$> Text.IO.readFile file
+        StandardInput  -> (,) "(input)" <$> Text.IO.getContents
 
-    (Header header, expression) <- Util.getExpressionAndHeaderFromStdinText commentControl censor originalText
+    (Header header, expression) <- Util.getExpressionAndHeaderFromStdinText commentControl censor inputName originalText
 
     let characterSet = fromMaybe (detectCharacterSet expression) chosenCharacterSet
 

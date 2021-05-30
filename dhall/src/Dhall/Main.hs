@@ -859,18 +859,18 @@ command (Options {..}) = do
                 let status = (Dhall.Import.emptyStatus directory)
                         { Dhall.Import._commentControl = commentControl }
 
-                (originalText, transitivity) <- case input of
+                (inputName, originalText, transitivity) <- case input of
                     InputFile file -> do
                         text <- Data.Text.IO.readFile file
 
-                        return (text, transitivity0)
+                        return (file, text, transitivity0)
                     StandardInput -> do
                         text <- Data.Text.IO.getContents
 
-                        return (text, NonTransitive)
+                        return ("(input)", text, NonTransitive)
 
                 (Header header, parsedExpression) <-
-                    Dhall.Util.getExpressionAndHeaderFromStdinText commentControl censor originalText
+                    Dhall.Util.getExpressionAndHeaderFromStdinText commentControl censor inputName originalText
 
                 let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 

@@ -119,13 +119,13 @@ get parser censor input = do
         case input of
             Input_ (InputFile file) -> Data.Text.IO.readFile file
             Input_ StandardInput    -> Data.Text.IO.getContents
-            StdinText text          -> pure text
+            StdinText _ text        -> pure text
 
     let name =
             case input of
                 Input_ (InputFile file) -> file
                 Input_ StandardInput    -> "(input)"
-                StdinText _             -> "(input)"
+                StdinText inputName _   -> inputName
 
     let result = parser name inText
 
@@ -150,7 +150,11 @@ data Censor = NoCensor | Censor
 data Input = StandardInput | InputFile FilePath deriving (Eq)
 
 -- | Path to input or raw input text, necessary since we can't read STDIN twice
-data InputOrTextFromStdin = Input_ Input | StdinText Text
+data InputOrTextFromStdin
+    = Input_ Input
+    | StdinText String Text
+    -- ^ @StdinText name text@ where name is a user-friendly name describing the
+    -- input expression, used in parsing error messages
 
 {-| Specifies whether or not an input's transitive dependencies should also be
     processed.  Transitive dependencies are restricted to relative file imports.
@@ -235,6 +239,6 @@ getExpressionAndHeader commentControl censor =
 -- | Convenient utility for retrieving an expression along with its header from
 -- | text already read from STDIN (so it's not re-read)
 getExpressionAndHeaderFromStdinText
-    :: WhitespaceControl -> Censor -> Text -> IO (Header, Expr Src Import)
-getExpressionAndHeaderFromStdinText commentControl censor =
-    get (Dhall.Parser.exprAndHeaderFromText commentControl) censor . StdinText
+    :: WhitespaceControl -> Censor -> String -> Text -> IO (Header, Expr Src Import)
+getExpressionAndHeaderFromStdinText commentControl censor inputName =
+    get (Dhall.Parser.exprAndHeaderFromText commentControl) censor . StdinText inputName

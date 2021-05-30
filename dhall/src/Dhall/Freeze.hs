@@ -182,18 +182,18 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
         let status = (Dhall.Import.emptyStatusWithManager newManager directory)
                 { Dhall.Import._commentControl = commentControl }
 
-        (originalText, transitivity) <- case input of
+        (inputName, originalText, transitivity) <- case input of
             InputFile file -> do
                 text <- Text.IO.readFile file
 
-                return (text, transitivity0)
+                return (file, text, transitivity0)
 
             StandardInput -> do
                 text <- Text.IO.getContents
 
-                return (text, NonTransitive)
+                return ("(input)", text, NonTransitive)
 
-        (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText commentControl censor originalText
+        (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText commentControl censor inputName originalText
 
         let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 
