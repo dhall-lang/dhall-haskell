@@ -52,7 +52,16 @@ getTests = do
 
         return path )
 
-    failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest (Turtle.lstree (importDirectory </> "failure"))
+    failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest (do
+        path <- Turtle.lstree (importDirectory </> "failure")
+
+        let expectedSuccesses =
+                [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
+                , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
+                ]
+
+        Monad.guard (path `notElem` expectedSuccesses)
+        return path )
 
     let testTree =
             Tasty.testGroup "import tests"
