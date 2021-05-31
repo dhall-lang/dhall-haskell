@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
 {-# OPTIONS_GHC -Wall #-}
@@ -167,6 +169,7 @@ import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Text                        (Text)
 import Data.Typeable                    (Typeable)
 import Data.Void                        (Void, absurd)
+import Dhall.TypeCheck                  (TypeError)
 
 import Dhall.Syntax
     ( Chunks (..)
@@ -201,6 +204,7 @@ import Lens.Family.State.Strict (zoom)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
+import qualified Control.Exception                           as Exception
 import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
@@ -1157,11 +1161,27 @@ loadWith expr₀ = case expr₀ of
 
   ImportAlt a b -> loadWith a `catch` handler₀
     where
-      handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =
-          loadWith b `catch` handler₁
+      is :: forall e . Exception e => SomeException -> Bool
+      is exception =
+          not (null (Exception.fromException @e exception))
+
+      isNotResolutionError exception =
+              is @(Imported (TypeError Src Void)) exception
+          ||  is @(Imported  Cycle              ) exception
+          ||  is @(Imported  HashMismatch       ) exception
+          ||  is @(Imported  ParseError         ) exception
+
+      handler₀ exception₀@(SourcedException (Src begin _ text₀) (MissingImports es₀))
+          | any isNotResolutionError es₀ =
+              throwM exception₀
+          | otherwise = do
+              loadWith b `catch` handler₁
         where
-          handler₁ (SourcedException (Src _ end text₁) (MissingImports es₁)) =
-              throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
+          handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
+              | any isNotResolutionError es₁ =
+                  throwM exception₁
+              | otherwise =
+                  throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
             where
               text₂ = text₀ <> " ? " <> text₁
 
