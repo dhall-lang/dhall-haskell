@@ -93,10 +93,6 @@ successTest path = do
 
         let originalCache = "dhall-lang/tests/import/cache"
 
-        let setCache = Turtle.export "XDG_CACHE_HOME"
-
-        let unsetCache = Turtle.unset "XDG_CACHE_HOME"
-
         let httpManager =
                 HTTP.newManager
                     HTTP.tlsManagerSettings
@@ -108,24 +104,42 @@ successTest path = do
 
         let usesCache = [ "hashFromCacheA.dhall"
                         , "unit/asLocation/HashA.dhall"
-                        , "unit/IgnorePoisonedCacheA.dhall"]
+                        , "unit/IgnorePoisonedCacheA.dhall"
+                        , "unit/DontCacheIfHashA.dhall"
+                        ]
 
         let endsIn path' = not $ null $ Turtle.match (Turtle.ends path') path
 
         let buildNewCache = do
-                                tempdir <- Turtle.mktempdir "/tmp" "dhall-cache"
-                                Turtle.liftIO $ Turtle.cptree originalCache tempdir
-                                return tempdir
+                tempdir <- Turtle.mktempdir "/tmp" "dhall-cache"
+                Turtle.liftIO (Turtle.cptree originalCache tempdir)
+                return tempdir
 
         let runTest =
                 if any endsIn usesCache
                     then Turtle.runManaged $ do
                         cacheDir <- buildNewCache
-                        setCache $ Turtle.format Turtle.fp cacheDir
+
+                        let set = do
+                                m <- Turtle.need "XDG_CACHE_HOME"
+
+                                Turtle.export "XDG_CACHE_HOME" (Turtle.format Turtle.fp cacheDir)
+
+                                return m
+
+                        let reset Nothing = do
+                                Turtle.unset "XDG_CACHE_HOME"
+                            reset (Just x) = do
+                                Turtle.export "XDG_CACHE_HOME" x
+
+                        _ <- Turtle.managed (Exception.bracket set reset)
+
                         _ <- Turtle.liftIO load
-                        unsetCache
+
+                        return ()
                     else do
                         _ <- load
+
                         return ()
 
         let handler :: SomeException -> IO ()
