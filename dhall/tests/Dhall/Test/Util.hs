@@ -215,7 +215,7 @@ discover pattern buildTest paths = do
 
 testCase :: Text -> [ FilePath ] -> Assertion -> TestTree
 testCase prefix expectedFailures assertion =
-    if prefix `elem` map (Turtle.format fp) expectedFailures
+    if prefix `elem` map (toDhallPath . Turtle.format fp) expectedFailures
     then Tasty.ExpectedFailure.expectFail test
     else test
   where

@@ -108,7 +108,8 @@ successTest path = do
                         , "unit/DontCacheIfHashA.dhall"
                         ]
 
-        let endsIn path' = not $ null $ Turtle.match (Turtle.ends path') path
+        let endsIn path' =
+                not (null (Turtle.match (Turtle.ends path') (Test.Util.toDhallPath path)))
 
         let buildNewCache = do
                 tempdir <- Turtle.mktempdir "/tmp" "dhall-cache"
