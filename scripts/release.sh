@@ -12,7 +12,7 @@ function release {
   VERSION="$(get_cabal_version "${NAME}")"
 
   pushd "${NAME}"
-  nix-shell --run 'cabal configure --disable-tests --disable-benchmarks && cabal sdist'
+  nix-shell --run 'cabal sdist'
   cabal upload --publish "../dist-newstyle/sdist/${NAME}-${VERSION}.tar.gz"
   git clean --force -d -x .
   popd
