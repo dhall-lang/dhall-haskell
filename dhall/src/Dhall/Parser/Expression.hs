@@ -113,7 +113,7 @@ parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
     completeExpression_ =
-        optional shebang *> whitespace *> expression <* whitespace
+        many shebang *> whitespace *> expression <* whitespace
 
     shebang = do
         _ <- text "#!"
