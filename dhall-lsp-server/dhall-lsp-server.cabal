@@ -107,7 +107,7 @@ Test-Suite tests
         hspec             >= 2.7     && < 2.9  ,
         lsp-test          >= 0.9     && < 0.13 ,
         tasty             >= 0.11.2  && < 1.5  ,
-        tasty-hspec       >= 1.1     && < 1.2  ,
+        tasty-hspec       >= 1.1     && < 1.3  ,
         text              >= 0.11    && < 1.3
     Build-Tool-Depends: dhall-lsp-server:dhall-lsp-server
     Default-Language: Haskell2010
