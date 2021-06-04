@@ -21,6 +21,7 @@ import qualified Dhall.Test.Util                  as Test.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.FilePath                  as FilePath
+import qualified System.IO.Temp                   as Temp
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
@@ -112,7 +113,7 @@ successTest path = do
                 not (null (Turtle.match (Turtle.ends path') (Test.Util.toDhallPath path)))
 
         let buildNewCache = do
-                tempdir <- Turtle.mktempdir "/tmp" "dhall-cache"
+                tempdir <- fmap Turtle.decodeString (Turtle.managed (Temp.withSystemTempDirectory "dhall-cache"))
                 Turtle.liftIO (Turtle.cptree originalCache tempdir)
                 return tempdir
 
