@@ -12,14 +12,8 @@ function release {
   VERSION="$(get_cabal_version "${NAME}")"
 
   pushd "${NAME}"
-  cabal v1-configure --disable-tests --disable-benchmarks
-  cabal v1-sdist
-  cabal upload --publish "dist/${NAME}-${VERSION}.tar.gz"
-  if [ "${NAME}" = "dhall-nix" ]
-  then
-    cabal v1-haddock --builddir=docs --for-hackage --haddock-options="--hyperlinked-source --quickjump"
-    cabal upload --documentation --publish "docs/${NAME}-${VERSION}-docs.tar.gz"
-  fi
+  nix-shell --run 'cabal configure --disable-tests --disable-benchmarks && cabal sdist'
+  cabal upload --publish "../dist-newstyle/sdist/${NAME}-${VERSION}.tar.gz"
   git clean --force -d -x .
   popd
 
@@ -33,9 +27,9 @@ function release {
 
   curl --location --remote-name "https://hydra.dhall-lang.org/job/dhall-haskell/${JOBSET}/image-${NAME}/latest/download/1/${DOCKER_ARCHIVE}"
 
-  skopeo copy --dest-creds="gabriel439:$(< dockerPassword.txt)" "docker-archive:${DOCKER_ARCHIVE}" "docker://dhallhaskell/${NAME}"
+  skopeo copy --insecure-policy --dest-creds="gabriel439:$(< dockerPassword.txt)" "docker-archive:${DOCKER_ARCHIVE}" "docker://dhallhaskell/${NAME}"
 
-  skopeo copy --dest-creds="gabriel439:$(< dockerPassword.txt)" "docker-archive:${DOCKER_ARCHIVE}" "docker://dhallhaskell/${NAME}:${VERSION}"
+  skopeo copy --insecure-policy --dest-creds="gabriel439:$(< dockerPassword.txt)" "docker-archive:${DOCKER_ARCHIVE}" "docker://dhallhaskell/${NAME}:${VERSION}"
 
   rm "${DOCKER_ARCHIVE}"
 }
