@@ -965,13 +965,14 @@ parsers embedded = Parsers {..}
 
 -- | Parse a single comment
 comment :: Parser Comment
-comment = LineComment <$> lineComments <|> BlockComment <$> blockComment <?> "comment"
+comment = lineComments <|> uncurry BlockComment <$> blockComment <?> "comment"
   where
     -- Note: using sepBy1 here instead fails consumes too much input
     lineComments = do
-        a <- lineComment
-        bs <- many (try (spaceOrTab >> lineComment))
-        pure (a :| bs)
+        (commentType, a) <- lineComment
+        -- Ignore comment type for subsequent comment lines
+        bs <- many (try (spaceOrTab >> snd <$> lineComment))
+        pure $ LineComment commentType (a :| bs)
 
     spaceOrTab = Dhall.Parser.Combinators.takeWhile (\c -> c == ' ' || c == '\t')
 

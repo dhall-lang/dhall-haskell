@@ -58,6 +58,7 @@ module Dhall.Syntax (
     -- ** Handling comments
     , MultiComment(..)
     , Comment(..)
+    , CommentType(..)
 
     -- * 'Import'
     , Directory(..)
@@ -199,13 +200,20 @@ newtype MultiComment = MultiComment { getMultiComment :: NonEmpty Comment }
   deriving newtype (Eq, Ord, Semigroup)
   deriving anyclass NFData
 
+-- | A comment starting with @|@ is a Doc comment, in some places in the AST
+-- @dhall-docs@ will be able to use such a comment to render documentation for
+-- the associated expression/declaration.
+data CommentType = DocComment | RawComment
+  deriving stock (Eq, Ord, Data, Generic, Show, Lift)
+  deriving anyclass NFData
+
 -- | Keep track of a comment as part of Dhall syntax. This is useful for source
 -- preserving transformations such as /format/.
 data Comment
-  = LineComment (NonEmpty Text)
+  = LineComment CommentType (NonEmpty Text)
   -- ^ Corresponds to possibly multiple consecutive lines of single line comments:
   -- @--<text>$@ where @<text>@ does not contain newline characters
-  | BlockComment Text
+  | BlockComment CommentType Text
   -- ^ Corresponds to a multi line comment: @{-<text>-}@ where <text> can
   -- contain newline characters
   deriving (Data, Generic, Eq, Ord, Show, Lift, NFData)

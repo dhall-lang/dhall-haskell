@@ -184,8 +184,8 @@ normalizeMultiComment (MultiComment comments) =
     )
   where
     isBlockComment = \case
-        BlockComment _ -> True
-        LineComment _ -> False
+        BlockComment _ _ -> True
+        LineComment _ _ -> False
 
     -- Remove leading and terminating empty lines
     stripEmptyLines =
@@ -198,11 +198,11 @@ normalizeMultiComment (MultiComment comments) =
         x:xs -> x :| xs
 
     toLines = \case
-        BlockComment txt
+        BlockComment _ txt
           | Just rest <- Text.stripPrefix "{-" txt
           , Just body <- Text.stripSuffix "-}" rest
           -> Text.stripEnd <$> Text.lines body
-        LineComment txt
+        LineComment _ txt
           | Just body <- traverse (Text.stripPrefix "--") txt
           -> Text.stripEnd <$> toList body
         _ -> internalError "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"

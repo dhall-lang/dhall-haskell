@@ -372,9 +372,11 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
 
 -- | Parse a Dhall's single-line comment, starting from `--` and until the
 --   last character of the line /before/ the end-of-line character
-lineComment :: Parser Text
+lineComment :: Parser (Dhall.Syntax.CommentType, Text)
 lineComment = do
-    _ <- text "--"
+    (commentType, prefix) <-
+             (,) Dhall.Syntax.DocComment <$> text "--|"
+        <|>  (,) Dhall.Syntax.RawComment <$> text "--"
 
     let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
@@ -382,19 +384,21 @@ lineComment = do
 
     _ <- endOfLine
 
-    return ("--" <> commentText)
+    return (commentType, prefix <> commentText)
 
 -- | Parsed text doesn't include opening braces
-blockComment :: Parser Text
+blockComment :: Parser (Dhall.Syntax.CommentType, Text)
 blockComment = do
-    _ <- text "{-"
+    (commentType, prefix) <-
+             (,) Dhall.Syntax.DocComment <$> text "{-|"
+        <|>  (,) Dhall.Syntax.RawComment <$> text "{-"
     c <- blockCommentContinue
-    pure ("{-" <> c <> "-}")
+    pure (commentType, prefix <> c <> "-}")
 
 blockCommentChunk :: Parser Text
 blockCommentChunk =
     choice
-        [ blockComment  -- Nested block comment
+        [ snd <$> blockComment  -- Nested block comment
         , characters
         , character
         , endOfLine
