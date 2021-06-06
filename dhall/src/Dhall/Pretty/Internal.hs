@@ -174,15 +174,22 @@ prettySrcExpr = prettyCharacterSet Unicode
 duplicate :: a -> (a, a)
 duplicate x = (x, x)
 
--- | Normalize a MultiComment down to a Bool if it is a BlockComment and a
--- non-empty list of lines of comment. The Text does not include comment
--- characters.
-normalizeMultiComment :: MultiComment -> (Bool, NonEmpty Text)
-normalizeMultiComment (MultiComment comments) =
-    ( any isBlockComment comments
-    , atLeastOneLine . stripEmptyLines $ concatMap toLines comments
-    )
+-- | Normalize a MultiComment.
+--
+-- * Successive comments of the same type (doc or raw comments) are merged.
+-- * When at least 1 of the comments to be merged is a block comment, it makes
+--   it a block comment.
+-- * The lines of Text do not include comment opening (and closing) characters.
+-- * End of lines are stripped.
+-- * Empty leading and terminating lines are removed.
+normalizeMultiComment :: MultiComment -> NonEmpty (Bool, CommentType, NonEmpty Text)
+normalizeMultiComment (MultiComment cs) =
+    normalizeOne <$> NonEmpty.groupWith1 getCommentType cs
   where
+    getCommentType = \case
+        BlockComment commentType _ -> commentType
+        LineComment commentType _ -> commentType
+
     isBlockComment = \case
         BlockComment _ _ -> True
         LineComment _ _ -> False
@@ -197,15 +204,26 @@ normalizeMultiComment (MultiComment comments) =
         [] -> "" :| []
         x:xs -> x :| xs
 
+    stripDoc DocComment = Text.stripPrefix "|"
+    stripDoc _          = Just
+
     toLines = \case
-        BlockComment _ txt
-          | Just rest <- Text.stripPrefix "{-" txt
-          , Just body <- Text.stripSuffix "-}" rest
-          -> Text.stripEnd <$> Text.lines body
-        LineComment _ txt
-          | Just body <- traverse (Text.stripPrefix "--") txt
-          -> Text.stripEnd <$> toList body
-        _ -> internalError "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment"
+        BlockComment commentType txt
+            | Just rest <- Text.stripPrefix "{-" txt
+            , Just rest' <- stripDoc commentType rest
+            , Just body <- Text.stripSuffix "-}" rest'
+            -> Text.stripEnd <$> Text.lines body
+        LineComment commentType txt
+            | Just (firstLine:|rest) <- traverse (Text.stripPrefix "--") txt
+            , Just firstLine' <- stripDoc commentType firstLine
+            -> Text.stripEnd <$> firstLine' : rest
+        c -> internalError $ "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment\n" <> Text.pack (show c)
+
+    normalizeOne comments =
+        ( any isBlockComment comments
+        , getCommentType $ NonEmpty.head comments
+        , atLeastOneLine . stripEmptyLines $ concatMap toLines comments
+        )
 
 -- | Helper function to render a MultiComment if present
 renderMaybeComment :: Maybe MultiComment -> Doc Ann
@@ -214,41 +232,11 @@ renderMaybeComment (Just c) = renderComment True c
 
 -- | Render a MultiComment after normalizing it
 renderComment :: Bool -> MultiComment -> Doc Ann
-renderComment trailingWhitespace multiComment
-    | isBlockComment
-    = case commentLines of
-        -- Keep a single line block comment as a single line
-        singleLine :| [] ->
-                "{-"
-            <>  startSpace singleLine
-            <>  Pretty.pretty singleLine
-            <>  " -}"
-            <>  applyTrailing space
-
-        -- Otherwise format a block comment over multiple lines
-        firstLine :| _ ->
-            Pretty.align
-                ( Pretty.nesting (\n ->
-                    -- Here we unindent in order to conserve the original
-                    -- leading whitespace the block comment had.
-                    Pretty.nest (-n)
-                        (    "{-"
-                        <>   startSpace firstLine
-                        <>   prettyLines commentLines
-                        )
-                    )
-                <>  Pretty.hardline
-                <>  "-}"
-                )
-            <> applyTrailing Pretty.hardline
-
-    | otherwise
-    = Pretty.align (prettyLines ((\l -> "--" <> startSpace l <> l) <$> commentLines))
-      <> applyTrailing Pretty.hardline
+renderComment trailingWhitespace multiComment =
+    go (normalizeMultiComment multiComment)
   where
-    applyTrailing w
-        | trailingWhitespace = w
-        | otherwise = mempty
+    go (c :| []) = renderOne trailingWhitespace c
+    go (c :| (x:xs)) = renderOne True c <> go (x :| xs)
 
     startSpace firstLine
         | Just (c, _) <- Text.uncons firstLine
@@ -259,11 +247,51 @@ renderComment trailingWhitespace multiComment
         | otherwise
         = mempty
 
-    (isBlockComment, commentLines) = normalizeMultiComment multiComment
-
     prettyLines = Pretty.concatWith f . fmap Pretty.pretty
 
     f x y = x <> Pretty.hardline <> y
+
+    renderDoc DocComment = "|"
+    renderDoc _          = mempty
+
+    renderOne trailingWhitespace' (isBlockComment, commentType, commentLines)
+        | isBlockComment
+        = case commentLines of
+            -- Keep a single line block comment as a single line
+            singleLine :| [] ->
+                    "{-"
+                <>  renderDoc commentType
+                <>  startSpace singleLine
+                <>  Pretty.pretty singleLine
+                <>  " -}"
+                <>  applyTrailing space
+
+            -- Otherwise format a block comment over multiple lines
+            firstLine :| _ ->
+                Pretty.align
+                    ( Pretty.nesting (\n ->
+                        -- Here we unindent in order to conserve the original
+                        -- leading whitespace the block comment had.
+                        Pretty.nest (-n)
+                            (   "{-"
+                            <>  renderDoc commentType
+                            <>  startSpace firstLine
+                            <>  prettyLines commentLines
+                            )
+                        )
+                    <>  Pretty.hardline
+                    <>  "-}"
+                    )
+                <> applyTrailing Pretty.hardline
+
+        | otherwise
+        = Pretty.align (prettyLines ((\l ->
+            "--" <> renderDoc commentType <> startSpace l <> l) <$> commentLines))
+          <> applyTrailing Pretty.hardline
+      where
+        applyTrailing w
+            | trailingWhitespace' = w
+            | otherwise = mempty
 
 -- Annotation helpers
 keyword, syntax, label, literal, builtin, operator :: Doc Ann -> Doc Ann

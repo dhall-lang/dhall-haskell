@@ -34,6 +34,7 @@ module Dhall.Core (
     , Expr(..)
     , MultiComment(..)
     , Comment(..)
+    , CommentType(..)
 
     -- * Normalization
     , alphaNormalize
