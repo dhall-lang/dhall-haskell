@@ -238,7 +238,11 @@ renderComment trailingWhitespace multiComment =
     go (normalizeMultiComment multiComment)
   where
     go (c :| []) = renderOne trailingWhitespace c
-    go (c :| (x:xs)) = renderOne True c <> go (x :| xs)
+    go (c@(True, _, _) :| (x:xs)) = renderOne True c <> go (x :| xs)
+    go (c@(False, _, _) :| (x:xs)) =
+      -- We need an extra hardline after a group of line comments so that it
+      -- they don't merge with the next comment
+      renderOne True c <> Pretty.hardline <> go (x :| xs)
 
     startSpace firstLine
         | Just (c, _) <- Text.uncons firstLine
