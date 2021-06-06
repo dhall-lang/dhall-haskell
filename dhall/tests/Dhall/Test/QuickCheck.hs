@@ -34,6 +34,7 @@ import Dhall.Core
     ( Binding (..)
     , Chunks (..)
     , Comment (..)
+    , CommentType (..)
     , Const (..)
     , DhallDouble (..)
     , Directory (..)
@@ -176,39 +177,58 @@ whitespace =
 
 comment :: Gen Comment
 comment = do
-      let commentChar =
-              Test.QuickCheck.frequency
-                  [ (20, Test.QuickCheck.elements [' ' .. '\DEL'])
-                  , ( 1, arbitrary)
-                  ]
+    let commentChar =
+            Test.QuickCheck.frequency
+                [ (20, Test.QuickCheck.elements [' ' .. '\DEL'])
+                , ( 1, arbitrary)
+                ]
 
-          noInteriorBlockComments text =
-              not (Text.isInfixOf "{-" text || Text.isInfixOf "-}" text)
+        noInteriorBlockComments text =
+            not (Text.isInfixOf "{-" text || Text.isInfixOf "-}" text)
 
-          commentText =
-              suchThat
-                  (Text.pack <$> Test.QuickCheck.listOf commentChar)
-                  noInteriorBlockComments
+        commentText =
+            suchThat
+                (Text.pack <$> Test.QuickCheck.listOf commentChar)
+                noInteriorBlockComments
 
-          blockComment = do
-              txt <- commentText
-              pure . BlockComment $ "{-" <> txt <> "-}"
+        renderDoc DocComment = "|"
+        renderDoc _          = mempty
 
-          lineComment = do
-              lineComments <- Test.QuickCheck.listOf1 $ do
-                  txt <- commentText `suchThat` (not . Text.isInfixOf "\n")
-                  endOfLine <- Test.QuickCheck.elements ["\n", "\r\n"]
-                  pure ("--" <> txt <> endOfLine)
-              pure . LineComment . Data.List.NonEmpty.fromList $ lineComments
+        blockComment = do
+            commentType <- arbitrary
+            txt <- commentText
+            pure . BlockComment commentType $ "{-" <> renderDoc commentType <> txt <> "-}"
 
-      Test.QuickCheck.oneof
-          [ blockComment
-          , lineComment
-          ]
+        rawLineComment = do
+            txt <- commentText `suchThat` (not . Text.isInfixOf "\n")
+            endOfLine <- Test.QuickCheck.elements ["\n", "\r\n"]
+            pure (txt <> endOfLine)
+
+        lineComment = do
+            commentType <- arbitrary
+
+            firstLineComment <- do
+                l <- rawLineComment
+                pure ("--" <> renderDoc commentType <> l)
+
+            lineComments <- Test.QuickCheck.listOf $ do
+                l <- rawLineComment
+                pure ("--" <> l)
+
+            pure . LineComment commentType $
+                firstLineComment Data.List.NonEmpty.:| lineComments
+
+    Test.QuickCheck.oneof
+        [ blockComment
+        , lineComment
+        ]
 
 shrinkWhitespace :: Text -> [Text]
 shrinkWhitespace "" = []
 shrinkWhitespace _  = [""]
+
+instance Arbitrary CommentType where
+    arbitrary = Test.QuickCheck.elements [ DocComment, RawComment ]
 
 instance Arbitrary CharacterSet where
     arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
