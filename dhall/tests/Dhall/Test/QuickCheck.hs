@@ -177,18 +177,21 @@ whitespace =
 
 comment :: Gen Comment
 comment = do
-    let commentChar =
-            Test.QuickCheck.frequency
+    let validNonAsciiOrTab c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
+
+        commentChar multiLine =
+            Test.QuickCheck.frequency $
                 [ (20, Test.QuickCheck.elements [' ' .. '\DEL'])
-                , ( 1, arbitrary)
-                ]
+                , ( 1, arbitrary `suchThat` validNonAsciiOrTab)
+                ] ++
+                [ (1, pure '\n') | multiLine ]
 
         noInteriorBlockComments text =
             not (Text.isInfixOf "{-" text || Text.isInfixOf "-}" text)
 
-        commentText =
+        commentText multiLine =
             suchThat
-                (Text.pack <$> Test.QuickCheck.listOf commentChar)
+                (Text.pack <$> Test.QuickCheck.listOf (commentChar multiLine))
                 noInteriorBlockComments
 
         renderDoc DocComment = "|"
@@ -196,11 +199,11 @@ comment = do
 
         blockComment = do
             commentType <- arbitrary
-            txt <- commentText
+            txt <- commentText True
             pure . BlockComment commentType $ "{-" <> renderDoc commentType <> txt <> "-}"
 
         rawLineComment = do
-            txt <- commentText `suchThat` (not . Text.isInfixOf "\n")
+            txt <- commentText False
             endOfLine <- Test.QuickCheck.elements ["\n", "\r\n"]
             pure (txt <> endOfLine)
 
