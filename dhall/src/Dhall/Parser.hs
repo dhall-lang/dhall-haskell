@@ -102,15 +102,6 @@ createHeader (Just mc) = Header . Pretty.renderStrict . Dhall.Pretty.layout $
 
 -- | Like `exprFromText` but also returns the leading comments and whitespace
 -- (i.e. header) up to the last newline before the code begins
---
--- In other words, if you have a Dhall file of the form:
---
--- > -- Comment 1
--- > {- Comment -} 2
---
--- Then this will preserve @Comment 1@, but not @Comment 2@
---
--- This is used by @dhall-format@ to preserve leading comments and whitespace
 exprAndHeaderFromText
     :: WhitespaceControl
     -- ^ Control if comments are considered whitespace

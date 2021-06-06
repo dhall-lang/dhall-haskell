@@ -970,8 +970,12 @@ comment = lineComments <|> uncurry BlockComment <$> blockComment <?> "comment"
     -- Note: using sepBy1 here instead fails consumes too much input
     lineComments = do
         (commentType, a) <- lineComment
-        -- Ignore comment type for subsequent comment lines
-        bs <- many (try (spaceOrTab >> snd <$> lineComment))
+        bs <- many . try $ do
+          _ <- spaceOrTab
+          -- Require raw comment type for subsequent comment lines
+          (RawComment, l) <- lineComment
+          pure l
+
         pure $ LineComment commentType (a :| bs)
 
     spaceOrTab = Dhall.Parser.Combinators.takeWhile (\c -> c == ' ' || c == '\t')

@@ -213,11 +213,13 @@ normalizeMultiComment (MultiComment cs) =
             , Just rest' <- stripDoc commentType rest
             , Just body <- Text.stripSuffix "-}" rest'
             -> Text.stripEnd <$> Text.lines body
-        LineComment commentType txt
-            | Just (firstLine:|rest) <- traverse (Text.stripPrefix "--") txt
+        LineComment commentType txts
+            | Just (firstLine:|rest) <- traverse (Text.stripPrefix "--") txts
             , Just firstLine' <- stripDoc commentType firstLine
             -> Text.stripEnd <$> firstLine' : rest
-        c -> internalError $ "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment\n" <> Text.pack (show c)
+        c -> internalError $
+            "Dhall.Pretty.Internal.normalizeMultiComment: Unexpected comment\n"
+            <> Text.pack (show c)
 
     normalizeOne comments =
         ( any isBlockComment comments
@@ -240,7 +242,6 @@ renderComment trailingWhitespace multiComment =
 
     startSpace firstLine
         | Just (c, _) <- Text.uncons firstLine
-        , c /= '|' -- Line not a doc comment
         , c /= ' ' -- Line not already starting with a space
         = " "
 
@@ -254,11 +255,10 @@ renderComment trailingWhitespace multiComment =
     renderDoc DocComment = "|"
     renderDoc _          = mempty
 
-    renderOne trailingWhitespace' (isBlockComment, commentType, commentLines)
-        | isBlockComment
-        = case commentLines of
+    renderOne trailingWhitespace' (isBlockComment, commentType, commentLines) =
+        case commentLines of
             -- Keep a single line block comment as a single line
-            singleLine :| [] ->
+            singleLine :| [] | isBlockComment ->
                     "{-"
                 <>  renderDoc commentType
                 <>  startSpace singleLine
@@ -267,7 +267,7 @@ renderComment trailingWhitespace multiComment =
                 <>  applyTrailing space
 
             -- Otherwise format a block comment over multiple lines
-            firstLine :| _ ->
+            firstLine :| _ | isBlockComment ->
                 Pretty.align
                     ( Pretty.nesting (\n ->
                         -- Here we unindent in order to conserve the original
@@ -284,10 +284,12 @@ renderComment trailingWhitespace multiComment =
                     )
                 <> applyTrailing Pretty.hardline
 
-        | otherwise
-        = Pretty.align (prettyLines ((\l ->
-            "--" <> renderDoc commentType <> startSpace l <> l) <$> commentLines))
-          <> applyTrailing Pretty.hardline
+            -- Format multiple line comments
+            firstLine :| otherLines ->
+                Pretty.align (prettyLines (
+                    ("--" <> renderDoc commentType <> startSpace firstLine <> firstLine)
+                    :| fmap (\l -> "--" <> startSpace l <> l) otherLines))
+                <> applyTrailing Pretty.hardline
       where
         applyTrailing w
             | trailingWhitespace' = w
