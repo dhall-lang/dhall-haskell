@@ -253,7 +253,7 @@ parsers embedded = Parsers {..}
                         _          -> empty
 
                     bs <- some (do
-                        try (whitespace *> _with *> nonemptyWhitespace)
+                        try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
 
                         keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
 
