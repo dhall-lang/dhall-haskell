@@ -1,3 +1,7 @@
+1.0.6
+
+* Build against `dhall-1.39.0`
+
 1.0.5
 
 * [BUG FIX: Fix index generation](https://github.com/dhall-lang/dhall-haskell/pull/2150)
