@@ -1181,6 +1181,9 @@ loadWith expr₀ = case expr₀ of
               | any isNotResolutionError es₁ =
                   throwM exception₁
               | otherwise =
+                  -- Fix the source span for the error message to encompass both
+                  -- alternatives, since both are equally to blame for the
+                  -- failure if neither succeeds.
                   throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
             where
               text₂ = text₀ <> " ? " <> text₁
