@@ -212,6 +212,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty                          as NonEmpty
+import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
@@ -1162,8 +1163,7 @@ loadWith expr₀ = case expr₀ of
   ImportAlt a b -> loadWith a `catch` handler₀
     where
       is :: forall e . Exception e => SomeException -> Bool
-      is exception =
-          not (null (Exception.fromException @e exception))
+      is exception = Maybe.isJust (Exception.fromException @e exception)
 
       isNotResolutionError exception =
               is @(Imported (TypeError Src Void)) exception
