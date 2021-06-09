@@ -1,0 +1,63 @@
+Name: dhall-csv
+Version: 0.0.1
+Cabal-Version: >=1.10
+Build-Type: Simple
+Tested-With: GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.1
+License: BSD3
+License-File: LICENSE
+Copyright: 2021 Marcos Lerones
+Author: Marcos Lerones
+Maintainer: Gabriel439@gmail.com
+Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
+Synopsis: Convert bidirectionally between Dhall and CSV files.
+Description:
+    Use this package if you want to convert between Dhall expressions and CSV. 
+    You can use this package as a library or an executable:
+    .
+    * See the "Dhall.CSV" or "Dhall.CSVToDhall" modules if you want to use
+      this package as a library
+    .
+    * Use the @dhall-to-csv@ or @csv-to-dhall@ programs from
+      this package if you want an executable
+    .
+    The "Dhall.CSV" and "Dhall.CSVToDhall" modules also contains instructions
+    for how to use this package
+Category: Compiler
+Extra-Source-Files:
+    CHANGELOG.md
+Source-Repository head
+    Type: git
+    Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-csv
+
+Library
+    Hs-Source-Dirs: src
+    Build-Depends:
+        base                      >= 4.8.0.0  && < 5
+    Exposed-Modules:
+        Dhall.CSV
+        Dhall.CSVToDhall
+    Other-Modules:
+    GHC-Options: -Wall
+    Default-Language: Haskell2010
+
+Executable dhall-to-csv
+    Hs-Source-Dirs: dhall-to-csv
+    Main-Is: Main.hs
+    Build-Depends:
+        base,
+        dhall-csv
+    Other-Modules:
+        Paths_dhall_csv
+    GHC-Options: -Wall
+    Default-Language: Haskell2010
+
+Executable csv-to-dhall
+    Hs-Source-Dirs: csv-to-dhall
+    Main-Is: Main.hs
+    Build-Depends:
+        base,
+        dhall-csv
+    Other-Modules:
+        Paths_dhall_csv
+    GHC-Options: -Wall
+    Default-Language: Haskell2010
