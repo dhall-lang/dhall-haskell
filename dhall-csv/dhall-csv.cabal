@@ -11,7 +11,7 @@ Maintainer: Gabriel439@gmail.com
 Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
 Synopsis: Convert bidirectionally between Dhall and CSV files.
 Description:
-    Use this package if you want to convert between Dhall expressions and CSV. 
+    Use this package if you want to convert between Dhall expressions and CSV.
     You can use this package as a library or an executable:
     .
     * See the "Dhall.CSV" or "Dhall.CSVToDhall" modules if you want to use

@@ -7,4 +7,4 @@ For installation or development instructions, see:
 ## Introduction
 
 This `dhall-csv` package provides two executables to convert bidirectionally 
-between Dhall and CSV files. 
+between Dhall and CSV files.  
