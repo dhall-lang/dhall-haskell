@@ -26,6 +26,7 @@ in
 
           shared.tarball-dhall
           shared.tarball-dhall-bash
+          shared.tarball-dhall-csv
           shared.tarball-dhall-docs
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
@@ -55,6 +56,7 @@ in
     inherit (shared)
       tarball-dhall
       tarball-dhall-bash
+      tarball-dhall-csv
       tarball-dhall-docs
       tarball-dhall-json
       tarball-dhall-lsp-server
@@ -70,6 +72,7 @@ in
 
     linux-dhall            = shared_linux.dhall;
     linux-dhall-bash       = shared_linux.possibly-static.dhall-bash;
+    linux-dhall-csv        = shared_linux.possibly-static.dhall-csv;
     linux-dhall-docs       = shared_linux.possibly-static.dhall-docs;
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
@@ -81,6 +84,7 @@ in
     inherit (shared_linux)
       image-dhall
       image-dhall-bash
+      image-dhall-csv
       image-dhall-docs
       image-dhall-json
       image-dhall-lsp-server
