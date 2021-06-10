@@ -1,6 +1,6 @@
 module Main where
 
-import qualified Dhall.CSVToDhall
+import qualified Dhall.CsvToDhall
 
 main :: IO ()
-main = putStrLn Dhall.CSVToDhall.hello
+main = putStrLn Dhall.CsvToDhall.hello
