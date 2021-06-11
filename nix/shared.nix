@@ -15,6 +15,7 @@ let
   allDhallPackages = [
     "dhall"
     "dhall-bash"
+    "dhall-csv"
     "dhall-docs"
     "dhall-json"
     "dhall-lsp-server"
@@ -136,6 +137,7 @@ let
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
+                          "dhall-csv"
                           "dhall-docs"
                           # The test suite fails due to a relative reference
                           # to ../dhall/dhall-lang/
@@ -159,6 +161,7 @@ let
                   mass failOnAllWarnings [
                     "dhall"
                     "dhall-bash"
+                    "dhall-csv"
                     "dhall-docs"
                     "dhall-json"
                     "dhall-lsp-server"
@@ -182,12 +185,13 @@ let
                       );
 
                     dhall =
-                      applyCoverage
-                        (haskellPackagesNew.callCabal2nix
-                          "dhall"
-                          (pkgsNew.sdist ../dhall)
-                          { }
-                        );
+                        (applyCoverage
+                          (haskellPackagesNew.callCabal2nix
+                            "dhall"
+                            (pkgsNew.sdist ../dhall)
+                            { }
+                          )
+                        ).overrideAttrs (old: { XDG_CACHE_HOME=".cache"; });
 
                     dhall-no-http =
                       # The import tests fail with HTTP support compiled out
@@ -201,6 +205,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-bash"
                         (pkgsNew.sdist ../dhall-bash)
+                        { };
+
+                    dhall-csv =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-cvs"
+                        (pkgsNew.sdist ../dhall-csv)
                         { };
 
                     dhall-docs =
@@ -342,6 +352,9 @@ let
                     dhall-bash-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-bash;
 
+                    dhall-csv-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-csv;
+
                     dhall-docs-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-docs;
 
@@ -407,6 +420,7 @@ let
   possibly-static = {
     dhall            = makeStaticIfPossible "dhall"           ;
     dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
+    dhall-csv        = makeStaticIfPossible "dhall-csv"       ;
     dhall-docs       = makeStaticIfPossible "dhall-docs"      ;
     dhall-json       = makeStaticIfPossible "dhall-json"      ;
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
@@ -438,6 +452,7 @@ in
 
     tarball-dhall            = makeTarball "dhall"            ../dhall/man;
     tarball-dhall-bash       = makeTarball "dhall-bash"       null;
+    tarball-dhall-csv        = makeTarball "dhall-csv"        null;
     tarball-dhall-docs       = makeTarball "dhall-docs"       ../dhall-docs/src/Dhall/data/man;
     tarball-dhall-json       = makeTarball "dhall-json"       null;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server" null;
@@ -452,6 +467,7 @@ in
       dhall
       dhall-no-http
       dhall-bash
+      dhall-csv
       dhall-docs
       dhall-json
       dhall-lsp-server
@@ -466,6 +482,7 @@ in
 
     shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
     shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
+    shell-dhall-csv        = pkgs.haskell.packages."${compiler}".dhall-csv.env       ;
     shell-dhall-docs       = pkgs.haskell.packages."${compiler}".dhall-docs.env      ;
     shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
@@ -477,6 +494,7 @@ in
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;
+    image-dhall-csv        = toDockerImage "dhall-csv"       ;
     image-dhall-docs       = toDockerImage "dhall-docs"      ;
     image-dhall-json       = toDockerImage "dhall-json"      ;
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";

@@ -1,3 +1,7 @@
+1.7.7
+
+* Build against `dhall-1.39.0`
+
 1.7.6
 
 * [Fix `hashable`-related test failures](https://github.com/dhall-lang/dhall-haskell/pull/2152)
