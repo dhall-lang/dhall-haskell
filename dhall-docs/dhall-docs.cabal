@@ -2,7 +2,6 @@ Name: dhall-docs
 Version: 1.0.6
 Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 8.6.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2020 Germán Robayo
