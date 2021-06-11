@@ -17,6 +17,7 @@ module Dhall.Docs.Html
     , DocParams(..)
     ) where
 
+import Data.Foldable           (fold)
 import Data.Text               (Text)
 import Data.Void               (Void)
 import Dhall.Core              (Expr, Import)
@@ -42,6 +43,8 @@ data DocParams = DocParams
                                         --   front-end files
     , packageName :: Text               -- ^ Name of the package
     , characterSet :: CharacterSet      -- ^ Render code as `ASCII` or `Unicode`
+    , baseImportUrl :: Maybe Text       -- ^ Address that the root of the
+                                        --   documentation is hosted on
     }
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
@@ -60,7 +63,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
             navBar params
             mainContainer $ do
                 setPageTitle params NotIndex breadcrumb
-                copyToClipboardButton htmlTitle
+                copyToClipboardButton clipboardText
                 br_ []
                 div_ [class_ "doc-contents"] header
                 Control.Monad.unless (null examples) $ do
@@ -72,6 +75,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
+    clipboardText = fold baseImportUrl <> htmlTitle
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
@@ -86,7 +90,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         navBar params
         mainContainer $ do
             setPageTitle params Index breadcrumbs
-            copyToClipboardButton htmlTitle
+            copyToClipboardButton clipboardText
             br_ []
             Control.Monad.unless (null files) $ do
                 h3_ "Exported files: "
@@ -121,6 +125,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     breadcrumbs = relPathToBreadcrumb indexDir
     htmlTitle = breadCrumbsToText breadcrumbs
+    clipboardText = fold baseImportUrl <> htmlTitle
 
 copyToClipboardButton :: Text -> Html ()
 copyToClipboardButton filePath =
