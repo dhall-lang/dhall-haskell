@@ -1,4 +1,4 @@
-module Dhall.TOML (someFunc) where
+module Dhall.Toml (someFunc) where
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"

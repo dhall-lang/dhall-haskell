@@ -2,7 +2,6 @@ Name:               dhall-toml
 Version:            0.1.0
 Cabal-Version:      >=1.10
 Build-Type:         Simple
-Tested-With:        GHC == 8.4.3, GHC == 8.6.1
 License:            BSD3
 License-File:       LICENSE
 Copyright:          2021 ear7h
@@ -35,12 +34,10 @@ Source-Repository head
 Library
     Hs-Source-Dirs:   src
     Build-Depends:
-        base  >= 4.14   && < 4.15 ,
+        base  >= 4.12   && < 5    ,
         dhall >= 1.39.0 && < 1.40
     Exposed-Modules:
-        Dhall.TOML
-    Other-Modules:
-        Dhall.TOML.Util
+        Dhall.Toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
 
@@ -49,7 +46,6 @@ Executable dhall-to-toml
     Main-Is:          Main.hs
     Build-Depends:
         base       ,
-        dhall      ,
         dhall-toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
@@ -59,7 +55,6 @@ Executable toml-to-dhall
     Main-Is:          Main.hs
     Build-Depends:
         base       ,
-        dhall      ,
         dhall-toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
