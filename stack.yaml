@@ -9,6 +9,7 @@ packages:
   - dhall-docs
   - dhall-openapi
   - dhall-csv
+  - dhall-toml
 extra-deps:
   - aeson-yaml-1.1.0.0
   - data-fix-0.3.0
