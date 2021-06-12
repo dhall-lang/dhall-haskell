@@ -43,8 +43,7 @@ data DocParams = DocParams
                                         --   front-end files
     , packageName :: Text               -- ^ Name of the package
     , characterSet :: CharacterSet      -- ^ Render code as `ASCII` or `Unicode`
-    , baseImportUrl :: Maybe Text       -- ^ Address that the root of the
-                                        --   documentation is hosted on
+    , baseImportUrl :: Maybe Text       -- ^ Base import URL
     }
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
