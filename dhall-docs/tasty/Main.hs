@@ -35,7 +35,8 @@ main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
     input <- getPackageContents
-    let GeneratedDocs _ docs = generateDocsPure "test-package" Unicode input
+    let GeneratedDocs _ docs =
+            generateDocsPure Nothing "test-package" Unicode input
     let docsMap = Map.fromList docs
     commentTests <- getCommentTests
     let testTree = Test.Tasty.testGroup "dhall-docs"
