@@ -99,8 +99,8 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
   where
     listFile :: (Path Rel File, Maybe (Expr Void Import)) -> Html ()
     listFile (file, maybeType) =
-        let fileRef = Data.Text.pack $ Path.fromRelFile file
-            itemText = Data.Text.pack $ tryToTakeExt file
+        let fileRef = toUnixPath $ Path.fromRelFile file
+            itemText = toUnixPath $ tryToTakeExt file
         in li_ $ do
             a_ [href_ fileRef] $ toHtml itemText
             Data.Foldable.forM_ maybeType $ \typeExpr -> do
@@ -110,7 +110,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     listDir :: Path Rel Dir -> Html ()
     listDir dir =
-        let dirPath = Data.Text.pack $ Path.fromRelDir dir in
+        let dirPath = toUnixPath $ Path.fromRelDir dir in
         li_ $ a_ [href_ (dirPath <> "index.html")] $ toHtml dirPath
 
     tryToTakeExt :: Path Rel File -> FilePath
@@ -244,3 +244,6 @@ script relativeResourcesPath =
         [ type_ "text/javascript"
         , src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
         ("" :: Text)
+
+toUnixPath :: String -> Text
+toUnixPath = Data.Text.replace "\\" "/" . Data.Text.pack

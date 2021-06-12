@@ -3,5 +3,5 @@
 *B.dhall binary
 *B.txt binary
 *.golden binary
-dhall-docs/tasty/data/golden/*.html binary
+dhall-docs/tasty/data/golden/**/*.html binary
 dhall-yaml/tasty/data/* binary
