@@ -7,6 +7,7 @@ in
   { inherit (shared.possibly-static)
       dhall
       dhall-bash
+      dhall-csv
       dhall-docs
       dhall-json
       dhall-lsp-server
