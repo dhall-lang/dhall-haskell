@@ -13,12 +13,12 @@ Description:
     Use this package if you want to convert between dhall expressions and TOML.
     You can use this package as a library or an executable:
     .
-    * See "Dhall.TOML" or "Dhall.TOMLToDhall" modules if you want to use this
+    * See "Dhall.Toml" or "Dhall.TomlToDhall" modules if you want to use this
       package as a library
     * Use @dhall-to-toml@, @toml-to-dhall@ programs from this package if you
       want an executable.
     .
-    The "Dhall.TOML" and "Dhall.TOMLToDhall" modules also contains instructions
+    The "Dhall.Toml" and "Dhall.TomlToDhall" modules also contains instructions
     for how to use this package
 Category:           Compiler
 Extra-Source-Files:

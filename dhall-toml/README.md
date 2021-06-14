@@ -9,7 +9,7 @@ For installation or development instructions, see:
 
 Full documentation here:
 
-* [`dhall-toml` instructions](https://hackage.haskell.org/package/dhall-toml/docs/Dhall-TOML.html)
+* [`dhall-toml` instructions](https://hackage.haskell.org/package/dhall-toml/docs/Dhall-Toml.html)
 
 ## Introduction
 
