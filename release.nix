@@ -33,6 +33,7 @@ in
           shared.tarball-dhall-nix
           shared.tarball-dhall-nixpkgs
           shared.tarball-dhall-openapi
+          shared.tarball-dhall-toml
           shared.tarball-dhall-yaml
 
           # These are the only `dhall` builds that run the test suite in CI
@@ -63,6 +64,7 @@ in
       tarball-dhall-nix
       tarball-dhall-nixpkgs
       tarball-dhall-openapi
+      tarball-dhall-toml
       tarball-dhall-yaml
 
       prelude-dhall-docs
@@ -79,6 +81,7 @@ in
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
     linux-dhall-nixpkgs    = shared_linux.possibly-static.dhall-nixpkgs;
     linux-dhall-openapi    = shared_linux.possibly-static.dhall-openapi;
+    linux-dhall-toml       = shared_linux.possibly-static.dhall-toml;
     linux-dhall-yaml       = shared_linux.possibly-static.dhall-yaml;
 
     inherit (shared_linux)
@@ -91,6 +94,7 @@ in
       image-dhall-nix
       image-dhall-nixpkgs
       image-dhall-openapi
+      image-dhall-toml
       image-dhall-yaml
     ;
   }

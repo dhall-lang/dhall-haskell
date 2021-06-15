@@ -1,0 +1,73 @@
+Name:               dhall-toml
+Version:            0.1.0
+Cabal-Version:      >=1.10
+Build-Type:         Simple
+License:            BSD3
+License-File:       LICENSE
+Copyright:          2021 ear7h
+Author:             ear7h
+Maintainer:         Gabriel439@gmail.com
+Bug-Reports:        https://github.com/dhall-lang/dhall-haskell/issues
+Synopsis:           Convert between Dhall and TOML
+Description:
+    Use this package if you want to convert between dhall expressions and TOML.
+    You can use this package as a library or an executable:
+    .
+    * See "Dhall.Toml" or "Dhall.TomlToDhall" modules if you want to use this
+      package as a library
+    * Use @dhall-to-toml@, @toml-to-dhall@ programs from this package if you
+      want an executable.
+    .
+    The "Dhall.Toml" and "Dhall.TomlToDhall" modules also contains instructions
+    for how to use this package
+Category:           Compiler
+Extra-Source-Files:
+    README.md
+    CHANGELOG.md
+    tasty/data/*.dhall
+    tasty/data/*.toml
+
+Source-Repository head
+    Type: git
+    Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-toml
+
+Library
+    Hs-Source-Dirs:   src
+    Build-Depends:
+        base  >= 4.12   && < 5    ,
+        dhall >= 1.39.0 && < 1.40
+    Exposed-Modules:
+        Dhall.Toml
+    GHC-Options:      -Wall
+    Default-Language: Haskell2010
+
+Executable dhall-to-toml
+    Hs-Source-Dirs:   dhall-to-toml
+    Main-Is:          Main.hs
+    Build-Depends:
+        base       ,
+        dhall-toml
+    GHC-Options:      -Wall
+    Default-Language: Haskell2010
+
+Executable toml-to-dhall
+    Hs-Source-Dirs:   toml-to-dhall
+    Main-Is:          Main.hs
+    Build-Depends:
+        base       ,
+        dhall-toml
+    GHC-Options:      -Wall
+    Default-Language: Haskell2010
+
+Test-Suite dhall-toml-test
+    Type:             exitcode-stdio-1.0
+    Hs-Source-Dirs:   tasty
+    Main-Is:          Main.hs
+    Build-Depends:
+        base               ,
+        dhall              ,
+        dhall-toml         ,
+        tasty       <  1.5 ,
+        tasty-hunit >= 0.2
+    GHC-Options:      -Wall
+    Default-Language: Haskell2010
