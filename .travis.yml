@@ -60,6 +60,7 @@ script:
   - tar -jcvf $(mk_release_name dhall-openapi) bin/openapi-to-dhall
   - tar -jcvf $(mk_release_name dhall-yaml) bin/dhall-to-yaml-ng bin/yaml-to-dhall
   - tar -jcvf $(mk_release_name dhall-docs) bin/dhall-docs bin/dhall-docs share/man/man1/dhall-docs.1
+  - tar -jcvf $(mk_release_name dhall-csv) bin/dhall-to-csv bin/csv-to-dhall
   - mkdir -p uploads
   - mv *.tar.bz2 uploads/
 

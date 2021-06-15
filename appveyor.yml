@@ -48,6 +48,8 @@ build_script:
   - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-yaml-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-to-yaml-ng.exe")
   - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-yaml-%DEPLOY_TAG%" "%DEPLOY_DIR%\yaml-to-dhall.exe")
   - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-docs-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-docs.exe")
+  - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-csv-%DEPLOY_TAG%" "%DEPLOY_DIR%\dhall-to-csv.exe")
+  - if /I "%DEPLOY_TAG%" NEQ "" (7z a "bin\dhall-csv-%DEPLOY_TAG%" "%DEPLOY_DIR%\csv-to-dhall.exe")
 
 test_script:
   # chcp 65001 (utf-8) needed to make doctest work
@@ -57,6 +59,7 @@ test_script:
   - stack test dhall-bash
   - stack test dhall-lsp-server
   - stack test dhall-openapi
+  - stack test dhall-csv
   # Enable when issue with path-separators tests on windows is resolved
   # - stack test dhall-docs
   - stack bench dhall --benchmark-arguments "--quick --min-duration=0 --include-first-iter"
@@ -76,12 +79,14 @@ artifacts:
     name: dhall-openapi
   - path: bin\dhall-docs-%DEPLOY_TAG%
     name: dhall-docs
+  - path: bin\dhall-csv-%DEPLOY_TAG%
+    name: dhall-csv
 
 deploy:
   - provider: GitHub
     auth_token:
       secure: Gs/tiz6Jtg/Zjd4zGHDhuSv4Y9a+zJ574LWwzOe2bvZNGX/M8XupkxdGmBpDlnOf
-    artifact: dhall, dhall-json, dhall-yaml, dhall-bash, dhall-lsp-server, dhall-openapi, dhall-docs
+    artifact: dhall, dhall-json, dhall-yaml, dhall-bash, dhall-lsp-server, dhall-openapi, dhall-docs, dhall-csv
     on:
       APPVEYOR_REPO_TAG: true
       STACK_YAML: stack.yaml
