@@ -33,7 +33,8 @@ Source-Repository head
 Library
     Hs-Source-Dirs: src
     Build-Depends:
-        base                      >= 4.12.0.0  && < 5
+        base                 >= 4.12.0.0  && < 5   ,
+        bytestring                           < 0.12
     Exposed-Modules:
         Dhall.Csv
         Dhall.CsvToDhall
@@ -61,4 +62,21 @@ Executable csv-to-dhall
     Other-Modules:
         Paths_dhall_csv
     GHC-Options: -Wall
+    Default-Language: Haskell2010
+
+Test-Suite tasty
+    Type:             exitcode-stdio-1.0
+    Hs-Source-Dirs:   tasty
+    Main-Is:          Main.hs
+    Build-Depends:
+        base                ,
+        bytestring          ,
+        dhall               ,
+        dhall-csv           ,
+        filepath            ,
+        tasty        <  1.5 ,
+        tasty-silver <  3.3 ,
+        tasty-hunit  >= 0.2 ,
+        text
+    GHC-Options:      -Wall
     Default-Language: Haskell2010
