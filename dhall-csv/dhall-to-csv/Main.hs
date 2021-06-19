@@ -22,5 +22,3 @@ main = do
             (m:_) -> Data.Vector.fromList $ Data.HashMap.Strict.keys m
 
     Data.ByteString.Lazy.putStr $ Data.Csv.encodeByName header csv
-
-    return ()

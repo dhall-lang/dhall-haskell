@@ -1,8 +1,7 @@
 {-#LANGUAGE OverloadedStrings#-}
 
 module Dhall.Csv (
-      hello
-    , dhallToCsv
+      dhallToCsv
     , codeToValue
     ) where
 
@@ -50,9 +49,6 @@ _ERROR = Dhall.Util._ERROR
 
 insert :: Pretty a => a -> Text
 insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
-
-hello :: String
-hello = "Hello Dhall to CSV!"
 
 dhallToCsv
     :: Expr s Void
