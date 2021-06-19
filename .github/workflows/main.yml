@@ -24,6 +24,10 @@ jobs:
           - name: dhall-bash
             assets: >
               bin/dhall-to-bash
+          - name: dhall-csv
+            assets: >
+              bin/csv-to-dhall
+              bin/dhall-to-csv
           - name: dhall-docs
             assets: >
               bin/dhall-docs
@@ -42,6 +46,10 @@ jobs:
           - name: dhall-openapi
             assets: >
               bin/openapi-to-dhall
+          - name: dhall-toml
+            assets: >
+              bin/dhall-to-toml
+              bin/toml-to-dhall
           - name: dhall-yaml
             assets: >
               bin/dhall-to-yaml-ng
