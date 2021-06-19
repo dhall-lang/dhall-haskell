@@ -2,11 +2,18 @@
 
 module Main (main) where
 
+import Data.Text            (Text)
 import Test.Tasty           (TestTree)
 import Test.Tasty.Silver    (findByExtension)
 import System.FilePath      (takeBaseName, replaceExtension)
 
+import qualified Data.ByteString.Lazy
+import qualified Data.Csv
+import qualified Data.HashMap.Strict
 import qualified Data.Text.IO
+import qualified Data.Text.Encoding
+import qualified Data.Vector
+import qualified Dhall.Csv
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.Silver as Silver
@@ -35,8 +42,8 @@ dhallToCsvGolden = do
         [ Silver.goldenVsAction
             (takeBaseName dhallFile)
             csvFile
-            (Data.Text.IO.readFile dhallFile)
-            id
+            (Dhall.Csv.codeToValue Nothing =<< Data.Text.IO.readFile dhallFile)
+            encodeCsvDefault
         | dhallFile <- dhallFiles
         , let csvFile = replaceExtension dhallFile ".csv"
         ]
@@ -53,3 +60,10 @@ csvToDhallGolden = do
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
         ]
+
+encodeCsvDefault :: [Data.Csv.NamedRecord] -> Text
+encodeCsvDefault csv = Data.Text.Encoding.decodeUtf8 $ Data.ByteString.Lazy.toStrict $ Data.Csv.encodeByName header csv
+  where
+    header = case csv of
+        [] -> Data.Vector.empty
+        (m:_) -> Data.Vector.fromList $ Data.HashMap.Strict.keys m
