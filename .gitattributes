@@ -3,5 +3,6 @@
 *B.dhall binary
 *B.txt binary
 *.golden binary
+dhall-csv/tasty/data/* binary
 dhall-docs/tasty/data/golden/**/*.html binary
 dhall-yaml/tasty/data/* binary
