@@ -2,7 +2,6 @@ Name: dhall-nix
 Version: 1.1.21
 Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 8.0.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez

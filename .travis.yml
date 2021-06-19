@@ -54,12 +54,14 @@ script:
   - cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
   - tar -jcvf $(mk_release_name dhall) bin/dhall share/man/man1/dhall.1
   - tar -jcvf $(mk_release_name dhall-json) bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall
+  - tar -jcvf $(mk_release_name dhall-toml) bin/dhall-to-toml bin/toml-to-dhall
   - tar -jcvf $(mk_release_name dhall-bash) bin/dhall-to-bash
   - tar -jcvf $(mk_release_name dhall-lsp-server) bin/dhall-lsp-server
   - tar -jcvf $(mk_release_name dhall-nix) bin/dhall-to-nix
   - tar -jcvf $(mk_release_name dhall-openapi) bin/openapi-to-dhall
   - tar -jcvf $(mk_release_name dhall-yaml) bin/dhall-to-yaml-ng bin/yaml-to-dhall
   - tar -jcvf $(mk_release_name dhall-docs) bin/dhall-docs bin/dhall-docs share/man/man1/dhall-docs.1
+  - tar -jcvf $(mk_release_name dhall-csv) bin/dhall-to-csv bin/csv-to-dhall
   - mkdir -p uploads
   - mv *.tar.bz2 uploads/
 
