@@ -1,2 +1,2 @@
-*.csv       -text
-*.dhall     -text
+*.csv       binary
+*.dhall     binary
