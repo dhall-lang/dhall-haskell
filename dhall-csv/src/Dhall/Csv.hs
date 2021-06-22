@@ -14,6 +14,7 @@ import Data.Text.Prettyprint.Doc    (Pretty)
 import Data.Void                    (Void)
 import Dhall.Core                   (Expr, DhallDouble (..))
 import Dhall.Import                 (SemanticCacheMode (..))
+import Dhall.Util                   (_ERROR)
 
 import qualified Data.Csv
 import qualified Data.Foldable
@@ -43,9 +44,6 @@ instance Show CompileError where
             \" <> insert e
 
 instance Exception CompileError
-
-_ERROR :: Text
-_ERROR = Dhall.Util._ERROR
 
 insert :: Pretty a => a -> Text
 insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
