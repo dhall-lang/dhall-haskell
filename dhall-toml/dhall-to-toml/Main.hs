@@ -1,8 +1,6 @@
 module Main where
 
-import qualified Dhall.Toml (someFunc)
+import Dhall.Toml (dhallToToml)
 
 main :: IO ()
-main = do
-  putStrLn "Hello, Haskell!"
-  Dhall.Toml.someFunc
+main = dhallToToml

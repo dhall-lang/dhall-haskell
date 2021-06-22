@@ -14,6 +14,7 @@ in
       dhall-openapi
       dhall-nix
       dhall-nixpkgs
+      dhall-toml
       dhall-yaml
     ;
 
