@@ -51,7 +51,7 @@ insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
 dhallToCsv
     :: Expr s Void
     -> Either CompileError (Seq Data.Csv.NamedRecord)
-dhallToCsv e0 = listConvert $ Core.alphaNormalize $ Core.normalize e0
+dhallToCsv e0 = listConvert $ Core.normalize e0
   where
     listConvert :: Expr Void Void -> Either CompileError (Seq Data.Csv.NamedRecord)
     listConvert (Core.ListLit _ a) = traverse recordConvert a
