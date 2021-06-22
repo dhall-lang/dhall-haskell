@@ -6,7 +6,8 @@ import Test.Tasty           (TestTree)
 import Test.Tasty.Silver    (findByExtension)
 import System.FilePath      (takeBaseName, replaceExtension)
 
-import qualified Data.Text.IO
+import qualified Data.ByteString
+import qualified Data.Text.Encoding
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.Silver as Silver
@@ -35,8 +36,8 @@ dhallToCsvGolden = do
         [ Silver.goldenVsAction
             (takeBaseName dhallFile)
             csvFile
-            (Data.Text.IO.readFile dhallFile)
-            id
+            (Data.ByteString.readFile dhallFile)
+            Data.Text.Encoding.decodeUtf8
         | dhallFile <- dhallFiles
         , let csvFile = replaceExtension dhallFile ".csv"
         ]
@@ -48,8 +49,8 @@ csvToDhallGolden = do
         [ Silver.goldenVsAction
             (takeBaseName csvFile)
             dhallFile
-            (Data.Text.IO.readFile dhallFile)
-            id
+            (Data.ByteString.readFile dhallFile)
+            Data.Text.Encoding.decodeUtf8
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
         ]
