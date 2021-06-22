@@ -41,10 +41,13 @@ Library
         dhall                >= 1.39.0    && < 1.40,
         filepath                             < 1.5 ,
         prettyprinter        >= 1.5.1     && < 1.8 ,
-        text                 >= 0.11.1.0  && < 1.3
+        text                 >= 0.11.1.0  && < 1.3 ,
+        unordered-containers                 < 0.3 ,
+        vector               >= 0.12      && < 0.13
     Exposed-Modules:
         Dhall.Csv
         Dhall.CsvToDhall
+        Dhall.Csv.Util
     Other-Modules:
     GHC-Options: -Wall
     Default-Language: Haskell2010
