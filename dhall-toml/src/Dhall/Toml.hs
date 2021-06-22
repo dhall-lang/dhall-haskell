@@ -1,3 +1,5 @@
+
+-- TODO: split module into Dhall.DhallToToml and Dhall.TomlToDhall modules
 module Dhall.Toml
     ( tomlToDhallMain
     , tomlToDhall
