@@ -54,9 +54,7 @@ dhallToCsv
 dhallToCsv e0 = listConvert $ Core.alphaNormalize $ Core.normalize e0
   where
     listConvert :: Expr Void Void -> Either CompileError (Seq Data.Csv.NamedRecord)
-    listConvert (Core.ListLit _ a) = do
-        a' <- traverse recordConvert a
-        return a'
+    listConvert (Core.ListLit _ a) = traverse recordConvert a
     listConvert e = Left $ Unsupported e
     recordConvert :: Expr Void Void -> Either CompileError Data.Csv.NamedRecord
     recordConvert (Core.RecordLit a) = do
