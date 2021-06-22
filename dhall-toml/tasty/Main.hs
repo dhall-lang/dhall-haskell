@@ -22,7 +22,7 @@ main = do
 
 testTree :: TestTree
 testTree =
-    Test.Tasty.testGroup "dhall-toml" [] -- dhallToTomlTests
+    Test.Tasty.testGroup "dhall-toml" dhallToTomlTests
     where
         dhallToTomlTests = map testDhallToToml
             [ "./tasty/data/empty"
