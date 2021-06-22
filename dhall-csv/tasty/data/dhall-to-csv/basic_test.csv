@@ -1,0 +1,5 @@
+testText,testDouble,testNatural
+text,3.14,42
+dummy,1.0e-4,4
+test,NaN,2
+dhall,0.0,10
