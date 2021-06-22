@@ -6,6 +6,7 @@ import Test.Tasty           (TestTree)
 import Test.Tasty.Silver    (findByExtension)
 import System.FilePath      (takeBaseName, replaceExtension)
 
+import qualified Data.ByteString
 import qualified Data.Text.IO
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
@@ -15,6 +16,11 @@ import qualified Test.Tasty.Silver as Silver
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
+
+    Data.ByteString.readFile "./tasty/data/dhall-to-csv/dummy.csv" >>= print
+    Data.Text.IO.readFile "./tasty/data/dhall-to-csv/dummy.csv" >>= Data.Text.IO.putStrLn
+    Data.ByteString.readFile "./tasty/data/dhall-to-csv/dummy.dhall" >>= print
+    Data.Text.IO.readFile "./tasty/data/dhall-to-csv/dummy.dhall" >>= Data.Text.IO.putStrLn
 
     testTree <- goldenTests
     Test.Tasty.defaultMain testTree
