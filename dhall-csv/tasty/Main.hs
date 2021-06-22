@@ -7,6 +7,7 @@ import Test.Tasty.Silver    (findByExtension)
 import System.FilePath      (takeBaseName, replaceExtension)
 
 import qualified Data.ByteString
+import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
@@ -18,9 +19,9 @@ main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
 
     Data.ByteString.readFile "./tasty/data/dhall-to-csv/dummy.csv" >>= print
-    Data.Text.IO.readFile "./tasty/data/dhall-to-csv/dummy.csv" >>= Data.Text.IO.putStrLn
+    Data.Text.IO.readFile "./tasty/data/dhall-to-csv/dummy.csv" >>= print
     Data.ByteString.readFile "./tasty/data/dhall-to-csv/dummy.dhall" >>= print
-    Data.Text.IO.readFile "./tasty/data/dhall-to-csv/dummy.dhall" >>= Data.Text.IO.putStrLn
+    Data.Text.IO.readFile "./tasty/data/dhall-to-csv/dummy.dhall" >>= print
 
     testTree <- goldenTests
     Test.Tasty.defaultMain testTree
@@ -41,8 +42,8 @@ dhallToCsvGolden = do
         [ Silver.goldenVsAction
             (takeBaseName dhallFile)
             csvFile
-            (Data.Text.IO.readFile dhallFile)
-            id
+            (Data.ByteString.readFile dhallFile)
+            Data.Text.Encoding.decodeUtf8
         | dhallFile <- dhallFiles
         , let csvFile = replaceExtension dhallFile ".csv"
         ]
