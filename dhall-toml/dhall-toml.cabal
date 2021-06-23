@@ -70,6 +70,8 @@ Test-Suite dhall-toml-test
         dhall              ,
         dhall-toml         ,
         tasty       <  1.5 ,
-        tasty-hunit >= 0.2
+        tasty-hunit >= 0.2 ,
+        text               ,
+        tomland
     GHC-Options:      -Wall
     Default-Language: Haskell2010

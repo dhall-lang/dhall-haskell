@@ -1,35 +1,40 @@
-{-# LANGUAGE OverloadedStrings #-}
 
+-- TODO: split module into Dhall.DhallToToml and Dhall.TomlToDhall modules
 module Dhall.Toml
-    ( tomlToDhall
+    ( tomlToDhallMain
+    , tomlToDhall
+    , dhallToTomlMain
     , dhallToToml
     ) where
 
-import Prelude hiding (putStr, putStrLn)
 
-import Data.Text
-import Data.Text.IO (putStrLn)
-import Toml (TomlCodec, (.=))
-import qualified Toml
+import Control.Exception (Exception)
+import Data.Void         (Void)
+import Dhall.Core        (Expr)
+import Dhall.Parser      (Src)
+import Toml.Type.TOML    (TOML)
 
-data SomeTable = SomeTable
-    { boolItem :: Bool
-    , textItem  :: Text
-    }
 
-someTableCodec :: TomlCodec SomeTable
-someTableCodec = SomeTable
-    <$> Toml.bool "bool-item" .= boolItem
-    <*> Toml.text "text-item" .= textItem
+-- TODO: populate with actual errors
+data CompileError
+    = CompileError String
 
-dhallToToml :: IO ()
-dhallToToml = putStrLn $ Toml.encode
-    someTableCodec
-    (SomeTable
-        { boolItem = True
-        , textItem = "hello"
-        })
+instance Show CompileError where
+    show (CompileError s) = "compile error: " ++ s
 
-tomlToDhall :: IO ()
-tomlToDhall = putStrLn "not implemented"
+instance Exception CompileError
+
+dhallToToml :: Expr s Void -> Either CompileError TOML
+dhallToToml _ = Left $ CompileError  "not implemented"
+
+type ExprX = Expr Src Void
+
+tomlToDhall :: ExprX -> TOML -> Either CompileError ExprX
+tomlToDhall _ _ = Left $ CompileError "not implemented"
+
+dhallToTomlMain :: IO ()
+dhallToTomlMain = putStrLn "not implemented"
+
+tomlToDhallMain :: IO ()
+tomlToDhallMain = putStrLn "not implemented"
 
