@@ -9,6 +9,8 @@ import System.FilePath      (takeBaseName, replaceExtension)
 import qualified Data.Text.IO
 import qualified Dhall.Csv
 import qualified Dhall.Csv.Util
+import qualified Data.ByteString
+import qualified Data.Text.Encoding
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.Silver as Silver
@@ -50,8 +52,8 @@ csvToDhallGolden = do
         [ Silver.goldenVsAction
             (takeBaseName csvFile)
             dhallFile
-            (Data.Text.IO.readFile dhallFile)
-            id
+            (Data.ByteString.readFile dhallFile)
+            Data.Text.Encoding.decodeUtf8
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
         ]
