@@ -359,19 +359,17 @@ filter predicate (Map m ks) = Map m' ks'
 
 {-| Split the map into values that do and don't satisfay the predicate
 
-
 >>> partition even (fromList [("C",3),("B",2),("A",1)])
-(fromList [("B",2)], fromList [("C", 3), ("A", 1)])
->>> filter odd (fromList [("C",3),("B",2),("A",1)])
-(fromList [("C",3),("A",1)], fromList [("B", 2)])
+(fromList [("B",2)],fromList [("C",3),("A",1)])
+>>> partition odd (fromList [("C",3),("B",2),("A",1)])
+(fromList [("C",3),("A",1)],fromList [("B",2)])
 -}
 partition :: Ord k => (a -> Bool) -> Map k a -> (Map k a, Map k a)
 partition predicate (Map m ks) = (Map mpass kpass, Map mfail kfail)
   where
     (mpass, mfail) = Data.Map.partition predicate m
-    filterKeys' m' = filterKeys (\k -> Data.Map.member k m') ks
 
-    (kpass, kfail) = (filterKeys' mpass, filterKeys' mfail)
+    (kpass, kfail) = partitionKeys (\k -> Data.Map.member k mpass) ks
 {-# INLINABLE partition #-}
 
 {-| Restrict a 'Map' to only those keys found in a @"Data.Set".'Data.Set.Set'@.
@@ -710,6 +708,13 @@ filterKeys :: (a -> Bool) -> Keys a -> Keys a
 filterKeys _ Sorted        = Sorted
 filterKeys f (Original ks) = Original (Prelude.filter f ks)
 {-# INLINABLE filterKeys #-}
+
+partitionKeys :: (a -> Bool) -> Keys a -> (Keys a, Keys a)
+partitionKeys _ Sorted        = (Sorted, Sorted)
+partitionKeys f (Original ks) =
+    let (kpass, kfail) = Data.List.partition f ks
+    in (Original kpass, Original kfail)
+{-# INLINABLE partitionKeys #-}
 
 {- $setup
 >>> import Test.QuickCheck (Arbitrary(..), oneof)
