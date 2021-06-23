@@ -1225,7 +1225,7 @@ infer typer = loop
                 _ ->
                     die (NotAnEquivalence _T)
 
-        Equivalent x y -> do
+        Equivalent _ x y -> do
             _A₀' <- loop ctx x
 
             let _A₀'' = quote names _A₀'

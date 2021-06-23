@@ -1,11 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
 import Data.Text         (Text)
-import Dhall.Import      (MissingImports (..))
-import Dhall.Parser      (SourcedException (..))
 import Prelude           hiding (FilePath)
 import Test.Tasty        (TestTree)
 import Turtle            (FilePath, (</>))
@@ -22,6 +21,7 @@ import qualified Dhall.Test.Util                  as Test.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.FilePath                  as FilePath
+import qualified System.IO.Temp                   as Temp
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
@@ -53,7 +53,16 @@ getTests = do
 
         return path )
 
-    failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest (Turtle.lstree (importDirectory </> "failure"))
+    failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest (do
+        path <- Turtle.lstree (importDirectory </> "failure")
+
+        let expectedSuccesses =
+                [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
+                , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
+                ]
+
+        Monad.guard (path `notElem` expectedSuccesses)
+        return path )
 
     let testTree =
             Tasty.testGroup "import tests"
@@ -69,7 +78,13 @@ successTest path = do
 
     let directoryString = FilePath.takeDirectory pathString
 
-    let expectedFailures = []
+    let expectedFailures =
+            [ importDirectory </> "success/unit/cors/TwoHopsA.dhall"
+            , importDirectory </> "success/unit/cors/SelfImportAbsoluteA.dhall"
+            , importDirectory </> "success/unit/cors/AllowedAllA.dhall"
+            , importDirectory </> "success/unit/cors/SelfImportRelativeA.dhall"
+            , importDirectory </> "success/unit/cors/OnlyGithubA.dhall"
+            ]
 
     Test.Util.testCase path expectedFailures (do
 
@@ -78,10 +93,6 @@ successTest path = do
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
 
         let originalCache = "dhall-lang/tests/import/cache"
-
-        let setCache = Turtle.export "XDG_CACHE_HOME"
-
-        let unsetCache = Turtle.unset "XDG_CACHE_HOME"
 
         let httpManager =
                 HTTP.newManager
@@ -94,24 +105,43 @@ successTest path = do
 
         let usesCache = [ "hashFromCacheA.dhall"
                         , "unit/asLocation/HashA.dhall"
-                        , "unit/IgnorePoisonedCacheA.dhall"]
+                        , "unit/IgnorePoisonedCacheA.dhall"
+                        , "unit/DontCacheIfHashA.dhall"
+                        ]
 
-        let endsIn path' = not $ null $ Turtle.match (Turtle.ends path') path
+        let endsIn path' =
+                not (null (Turtle.match (Turtle.ends path') (Test.Util.toDhallPath path)))
 
         let buildNewCache = do
-                                tempdir <- Turtle.mktempdir "/tmp" "dhall-cache"
-                                Turtle.liftIO $ Turtle.cptree originalCache tempdir
-                                return tempdir
+                tempdir <- fmap Turtle.decodeString (Turtle.managed (Temp.withSystemTempDirectory "dhall-cache"))
+                Turtle.liftIO (Turtle.cptree originalCache tempdir)
+                return tempdir
 
         let runTest =
                 if any endsIn usesCache
                     then Turtle.runManaged $ do
                         cacheDir <- buildNewCache
-                        setCache $ Turtle.format Turtle.fp cacheDir
+
+                        let set = do
+                                m <- Turtle.need "XDG_CACHE_HOME"
+
+                                Turtle.export "XDG_CACHE_HOME" (Turtle.format Turtle.fp cacheDir)
+
+                                return m
+
+                        let reset Nothing = do
+                                Turtle.unset "XDG_CACHE_HOME"
+                            reset (Just x) = do
+                                Turtle.export "XDG_CACHE_HOME" x
+
+                        _ <- Turtle.managed (Exception.bracket set reset)
+
                         _ <- Turtle.liftIO load
-                        unsetCache
+
+                        return ()
                     else do
                         _ <- load
+
                         return ()
 
         let handler :: SomeException -> IO ()
@@ -126,12 +156,15 @@ failureTest path = do
     let pathString = Text.unpack path
 
     Tasty.HUnit.testCase pathString (do
-        text <- Text.IO.readFile pathString
+        actualExpr <- do
+          Core.throws (Parser.exprFromText mempty (Test.Util.toDhallPath path))
 
-        actualExpr <- Core.throws (Parser.exprFromText mempty text)
-
-        Exception.catch
+        succeeded <- Exception.catch @SomeException
           (do _ <- Test.Util.load actualExpr
+              return True
+          )
+          (\_ -> return False)
 
-              fail "Import should have failed, but it succeeds")
-          (\(SourcedException _ (MissingImports _)) -> pure ()) )
+        if succeeded
+            then fail "Import should have failed, but it succeeds"
+            else return () )

@@ -26,12 +26,14 @@ in
 
           shared.tarball-dhall
           shared.tarball-dhall-bash
+          shared.tarball-dhall-csv
           shared.tarball-dhall-docs
           shared.tarball-dhall-json
           shared.tarball-dhall-lsp-server
           shared.tarball-dhall-nix
           shared.tarball-dhall-nixpkgs
           shared.tarball-dhall-openapi
+          shared.tarball-dhall-toml
           shared.tarball-dhall-yaml
 
           # These are the only `dhall` builds that run the test suite in CI
@@ -55,12 +57,14 @@ in
     inherit (shared)
       tarball-dhall
       tarball-dhall-bash
+      tarball-dhall-csv
       tarball-dhall-docs
       tarball-dhall-json
       tarball-dhall-lsp-server
       tarball-dhall-nix
       tarball-dhall-nixpkgs
       tarball-dhall-openapi
+      tarball-dhall-toml
       tarball-dhall-yaml
 
       prelude-dhall-docs
@@ -70,23 +74,27 @@ in
 
     linux-dhall            = shared_linux.dhall;
     linux-dhall-bash       = shared_linux.possibly-static.dhall-bash;
+    linux-dhall-csv        = shared_linux.possibly-static.dhall-csv;
     linux-dhall-docs       = shared_linux.possibly-static.dhall-docs;
     linux-dhall-json       = shared_linux.possibly-static.dhall-json;
     linux-dhall-lsp-server = shared_linux.possibly-static.dhall-lsp-server;
     linux-dhall-nix        = shared_linux.possibly-static.dhall-nix;
     linux-dhall-nixpkgs    = shared_linux.possibly-static.dhall-nixpkgs;
     linux-dhall-openapi    = shared_linux.possibly-static.dhall-openapi;
+    linux-dhall-toml       = shared_linux.possibly-static.dhall-toml;
     linux-dhall-yaml       = shared_linux.possibly-static.dhall-yaml;
 
     inherit (shared_linux)
       image-dhall
       image-dhall-bash
+      image-dhall-csv
       image-dhall-docs
       image-dhall-json
       image-dhall-lsp-server
       image-dhall-nix
       image-dhall-nixpkgs
       image-dhall-openapi
+      image-dhall-toml
       image-dhall-yaml
     ;
   }

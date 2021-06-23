@@ -134,6 +134,10 @@ data HLamInfo a
   -- ^ The original function was a @Natural/subtract 0@.  We need to preserve
   --   this information in case the @Natural/subtract@ ends up not being fully
   --   saturated, in which case we need to recover the unsaturated built-in
+  | TextReplaceEmpty
+  -- ^ The original function was a @Text/replace ""@
+  | TextReplaceEmptyArgument (Val a)
+  -- ^ The original function was a @Text/replace "" replacement@
 
 deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 
@@ -144,6 +148,7 @@ toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
 toVHPi (VPi a b@(Closure x _ _)) = Just (x, a, instantiate b)
 toVHPi (VHPi x a b             ) = Just (x, a, b)
 toVHPi  _                        = Nothing
+{-# INLINABLE toVHPi #-}
 
 data Val a
     = VConst !Const
@@ -602,33 +607,43 @@ eval !env t0 =
                 t                       -> VTextShow t
         TextReplace ->
             VPrim $ \needle ->
-            VPrim $ \replacement ->
-            VPrim $ \haystack ->
-                case needle of
+            let hLamInfo0 = case needle of
+                    VTextLit (VChunks [] "") -> TextReplaceEmpty
+                    _                        -> Prim
+
+            in  VHLam hLamInfo0 $ \replacement ->
+            let hLamInfo1 = case needle of
                     VTextLit (VChunks [] "") ->
-                        haystack
-                    VTextLit (VChunks [] needleText) ->
-                        case haystack of
-                            VTextLit (VChunks [] haystackText) ->
-                                case replacement of
-                                    VTextLit (VChunks [] replacementText) ->
-                                        VTextLit $ VChunks []
-                                            (Text.replace
-                                                needleText
-                                                replacementText
-                                                haystackText
-                                            )
-                                    _ ->
-                                        VTextLit
-                                            (vTextReplace
-                                                needleText
-                                                replacement
-                                                haystackText
-                                            )
-                            _ ->
-                                VTextReplace needle replacement haystack
+                        TextReplaceEmptyArgument replacement
                     _ ->
-                        VTextReplace needle replacement haystack
+                        Prim
+            in  VHLam hLamInfo1 $ \haystack ->
+                    case needle of
+                        VTextLit (VChunks [] "") ->
+                            haystack
+
+                        VTextLit (VChunks [] needleText) ->
+                            case haystack of
+                                VTextLit (VChunks [] haystackText) ->
+                                    case replacement of
+                                        VTextLit (VChunks [] replacementText) ->
+                                            VTextLit $ VChunks []
+                                                (Text.replace
+                                                    needleText
+                                                    replacementText
+                                                    haystackText
+                                                )
+                                        _ ->
+                                            VTextLit
+                                                (vTextReplace
+                                                    needleText
+                                                    replacement
+                                                    haystackText
+                                                )
+                                _ ->
+                                    VTextReplace needle replacement haystack
+                        _ ->
+                            VTextReplace needle replacement haystack
         List ->
             VPrim VList
         ListLit ma ts ->
@@ -786,7 +801,7 @@ eval !env t0 =
                     VProject (eval env t) (Right e')
         Assert t ->
             VAssert (eval env t)
-        Equivalent t u ->
+        Equivalent _ t u ->
             VEquivalent (eval env t) (eval env u)
         With e₀ ks v ->
             vWith (eval env e₀) ks (eval env v)
@@ -1025,6 +1040,7 @@ conv !env t0 t0' =
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
 judgmentallyEqual (Syntax.denote -> t) (Syntax.denote -> u) =
     conv Empty (eval Empty t) (eval Empty u)
+{-# INLINABLE judgmentallyEqual #-}
 
 data Names
   = EmptyNames
@@ -1060,12 +1076,18 @@ quote !env !t0 =
         VHLam i t ->
             case i of
                 Typed (fresh -> (x, v)) a ->
-                    Lam
-                        mempty
+                    Lam mempty
                         (Syntax.makeFunctionBinding x (quote env a))
                         (quoteBind x (t v))
-                Prim                      -> quote env (t VPrimVar)
-                NaturalSubtractZero       -> App NaturalSubtract (NaturalLit 0)
+                Prim ->
+                    quote env (t VPrimVar)
+                NaturalSubtractZero ->
+                    App NaturalSubtract (NaturalLit 0)
+                TextReplaceEmpty ->
+                    App TextReplace (TextLit (Chunks [] ""))
+                TextReplaceEmptyArgument replacement ->
+                    App (App TextReplace (TextLit (Chunks [] "")))
+                        (quote env replacement)
 
         VPi a (freshClosure -> (x, v, b)) ->
             Pi mempty x (quote env a) (quoteBind x (instantiate b v))
@@ -1186,7 +1208,7 @@ quote !env !t0 =
         VAssert t ->
             Assert (quote env t)
         VEquivalent t u ->
-            Equivalent (quote env t) (quote env u)
+            Equivalent mempty (quote env t) (quote env u)
         VWith e ks v ->
             With (quote env e) ks (quote env v)
         VInject m k Nothing ->
@@ -1226,6 +1248,7 @@ nf !env = Syntax.renote . quote (envNames env) . eval env . Syntax.denote
 
 normalize :: Eq a => Expr s a -> Expr t a
 normalize = nf Empty
+{-# INLINABLE normalize #-}
 
 alphaNormalize :: Expr s a -> Expr s a
 alphaNormalize = goEnv EmptyNames
@@ -1371,8 +1394,8 @@ alphaNormalize = goEnv EmptyNames
                 Project (go t) (fmap go ks)
             Assert t ->
                 Assert (go t)
-            Equivalent t u ->
-                Equivalent (go t) (go u)
+            Equivalent cs t u ->
+                Equivalent cs (go t) (go u)
             With e k v ->
                 With (go e) k (go v)
             Note s e ->

@@ -445,7 +445,7 @@ parseUnion =
   where
     uFirst  =  O.flag' UFirst
             (  O.long "unions-first"
-            <> O.help "The first value with the matching type (succefully parsed all the way down the tree) is accepted, even if not the only posible match. (DEFAULT)"
+            <> O.help "The first value with the matching type (successfully parsed all the way down the tree) is accepted, even if not the only possible match. (DEFAULT)"
             )
     uNone   =  O.flag' UNone
             (  O.long "unions-none"
@@ -880,7 +880,8 @@ dhallFromJSON (Conversion {..}) expressionType =
                   , ("mapValue", val)
                   ]
 
-          let records = (fmap f . Seq.fromList . HM.toList) keyExprMap
+          let records =
+                (fmap f . Seq.fromList . List.sort . HM.toList) keyExprMap
 
           let typeAnn = if HM.null o then Just t else Nothing
 

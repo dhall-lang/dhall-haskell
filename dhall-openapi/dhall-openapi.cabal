@@ -1,25 +1,41 @@
-cabal-version:  >=1.10
-name:           dhall-openapi
-version:        0.1.2
-category:       Code Generation
-homepage:       https://github.com/dhall-lang/dhall-haskell
-author:         Fabrizio Ferrai
-maintainer:     fabrizio@ferrai.io
-copyright:      2019 Fabrizio Ferrai
-license:        BSD3
-build-type:     Simple
+Cabal-Version:  >=1.10
+Name:           dhall-openapi
+Version:        1.0.1
+Homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi#dhall-openapi
+Author:         Fabrizio Ferrai
+Maintainer:     Gabriel439@gmail.com
+Copyright:      2019 Fabrizio Ferrai
+License:        BSD3
+License-File:   LICENSE
+Build-Type:     Simple
+Category:       Compiler
+Synopsis:       Convert an OpenAPI specification to a Dhall package
+Description:
+    This package provides an `openapi-to-dhall` program that converts an
+    OpenAPI specification to a Dhall package containing types, defaults, and
+    schemas for that API.
 
-source-repository head
-  type: git
-  location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi
+Source-Repository head
+  Type: git
+  Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi
 
-executable openapi-to-dhall
-  main-is: Main.hs
-  hs-source-dirs:
+Executable openapi-to-dhall
+  Main-Is: Main.hs
+  Hs-Source-Dirs:
       openapi-to-dhall
-  default-extensions: DuplicateRecordFields GeneralizedNewtypeDeriving LambdaCase RecordWildCards ScopedTypeVariables OverloadedStrings FlexibleInstances ConstraintKinds ApplicativeDo TupleSections
-  ghc-options: -Wall
-  build-depends:
+  Default-Extensions:
+    DuplicateRecordFields
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    RecordWildCards
+    ScopedTypeVariables
+    OverloadedStrings
+    FlexibleInstances
+    ConstraintKinds
+    ApplicativeDo
+    TupleSections
+  Ghc-Options: -Wall
+  Build-Depends:
     base                                           ,
     aeson                                          ,
     containers                                     ,
@@ -34,25 +50,38 @@ executable openapi-to-dhall
     sort                                           ,
     text                                           ,
     vector
-  default-language: Haskell2010
+  Default-Language: Haskell2010
 
-library
-  exposed-Modules:
+Library
+  Exposed-Modules:
       Dhall.Kubernetes.Convert
       Dhall.Kubernetes.Data
       Dhall.Kubernetes.Types
-  hs-source-dirs:
+  Hs-Source-Dirs:
       src
-  default-extensions: DeriveDataTypeable DeriveGeneric DerivingStrategies DuplicateRecordFields GeneralizedNewtypeDeriving LambdaCase RecordWildCards ScopedTypeVariables OverloadedStrings FlexibleInstances ConstraintKinds ApplicativeDo TupleSections
-  ghc-options: -Wall
-  build-depends:
+  Default-Extensions:
+    DeriveDataTypeable
+    DeriveGeneric
+    DerivingStrategies
+    DuplicateRecordFields
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    RecordWildCards
+    ScopedTypeVariables
+    OverloadedStrings
+    FlexibleInstances
+    ConstraintKinds
+    ApplicativeDo
+    TupleSections
+  Ghc-Options: -Wall
+  Build-Depends:
     base                    >= 4.11.0.0  && < 5    ,
     aeson                   >= 1.0.0.0   && < 1.6  ,
     containers              >= 0.5.8.0   && < 0.7  ,
-    dhall                   >= 1.38.0    && < 1.39 ,
+    dhall                   >= 1.38.0    && < 1.40 ,
     prettyprinter           >= 1.7.0     && < 1.8  ,
     scientific              >= 0.3.0.0   && < 0.4  ,
     sort                    >= 1.0       && < 1.1  ,
     text                    >= 0.11.1.0  && < 1.3  ,
     vector                  >= 0.11.0.0  && < 0.13
-  default-language: Haskell2010
+  Default-Language: Haskell2010

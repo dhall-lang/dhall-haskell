@@ -1,3 +1,11 @@
+1.2.7
+
+* Build against `dhall-1.39.0`
+
+1.2.6
+
+* [Allow bytestring-0.11](https://github.com/dhall-lang/dhall-haskell/pull/2144)
+
 1.2.5
 
 * Build against `dhall-1.38.0`, `tasty-1.4`, and `tasty-silver-3.2`

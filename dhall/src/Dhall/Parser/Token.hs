@@ -4,6 +4,7 @@
 -- | Parse Dhall tokens. Even though we don't have a tokenizer per-se this
 ---  module is useful for keeping some small parsing utilities.
 module Dhall.Parser.Token (
+    endOfLine,
     validCodepoint,
     whitespace,
     lineComment,
@@ -135,6 +136,12 @@ import qualified Text.Parser.Token
 
 import Numeric.Natural (Natural)
 
+-- | Match an end-of-line character sequence
+endOfLine :: Parser Text
+endOfLine =
+    (   Text.Parser.Char.text "\n"  
+    <|> Text.Parser.Char.text "\r\n"
+    ) <?> "newline"
 
 -- | Returns `True` if the given `Int` is a valid Unicode codepoint
 validCodepoint :: Int -> Bool
@@ -360,14 +367,9 @@ lineComment = do
 
     commentText <- Dhall.Parser.Combinators.takeWhile predicate
 
-    endOfLine
+    _ <- endOfLine
 
     return ("--" <> commentText)
-  where
-    endOfLine =
-        (   void (Text.Parser.Char.char '\n'  )
-        <|> void (Text.Parser.Char.text "\r\n")
-        ) <?> "newline"
 
 -- | Parsed text doesn't include opening braces
 blockComment :: Parser Text
@@ -395,8 +397,6 @@ blockCommentChunk =
     character = (Dhall.Parser.Combinators.satisfy predicate)
       where
         predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
-
-    endOfLine = (Text.Parser.Char.text "\r\n" <?> "newline")
 
 blockCommentContinue :: Parser Text
 blockCommentContinue = endOfComment <|> continue
@@ -1207,8 +1207,10 @@ _at :: Parser ()
 _at = reservedChar '@' <?> "\"@\""
 
 -- | Parse the equivalence symbol (@===@ or @≡@)
-_equivalent :: Parser ()
-_equivalent = (void (char '≡' <?> "\"≡\"") <|> void (text "===")) <?> "operator"
+_equivalent :: Parser CharacterSet
+_equivalent =
+        (Unicode <$ char '≡' <?> "\"≡\"")
+    <|> (ASCII <$ text "===" <?> "===")
 
 -- | Parse the @missing@ keyword
 _missing :: Parser ()

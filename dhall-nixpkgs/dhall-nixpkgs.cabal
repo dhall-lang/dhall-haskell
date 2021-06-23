@@ -1,4 +1,4 @@
-Version:             1.0.4
+Version:             1.0.5
 Cabal-Version:       >=1.10
 Name:                dhall-nixpkgs
 Synopsis:            Convert Dhall projects to Nix packages
@@ -19,9 +19,9 @@ Executable dhall-to-nixpkgs
   Build-Depends:       base                 >= 4.11     && < 5
                      , aeson                >= 1.0.0.0  && < 1.6
                      , data-fix
-                     , dhall                >= 1.32.0   && < 1.39
+                     , dhall                >= 1.32.0   && < 1.40
                      , foldl                               < 1.5
-                     , hnix                 >= 0.10.1   && < 0.13
+                     , hnix                 >= 0.10.1   && < 0.14
                      , lens-family-core     >= 1.0.0    && < 2.2
                      , megaparsec           >= 7.0.0    && < 9.1
                      , mmorph                              < 1.2

@@ -1,3 +1,47 @@
+1.39.0
+
+* [Supports version 20.2.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v20.2.0)
+    * [Add support for Unix shebangs](https://github.com/dhall-lang/dhall-haskell/pull/2175)
+* [BREAKING CHANGE TO THE API: `dhall {format,freeze,lint}` now accept multiple
+  files](https://github.com/dhall-lang/dhall-haskell/pull/2169)
+    * The `--inplace` flag is no longer necessary and you can now specify
+      multiple files to update in place on the command line, like
+      `dhall format foo.dhall bar.dhall`
+    * The `--inplace` flag is still accepted, but does nothing, and will emit a
+      warning
+    * This is a breaking change to the API for formatting/freezing/linting files
+      because now you can specify multiple inputs instead of one input
+* [BREAKING CHANGE: Pre-6.0.0 hashes are no longer supported](https://github.com/dhall-lang/dhall-haskell/pull/2190)
+    * The interpreter no longer provides backwards compatibility for integrity
+      checks computed before standard version 6.0.0
+    * This is a breaking change to the API of the `Dhall.Binary` module, where
+      certain utilities are no longer parameterized on a `StandardVersion`
+    * This is also a breaking change to any Dhall code that depended on these
+      really old integrity checks
+* [BUG FIX: Formatting `≡` now correctly preserves the original character set](https://github.com/dhall-lang/dhall-haskell/pull/2176)
+* [BUG FIX: Don't panic on `Text/replace ""`](https://github.com/dhall-lang/dhall-haskell/pull/2184)
+* [Quasiquotation support for Dhall](https://github.com/dhall-lang/dhall-haskell/pull/2198)
+    * You can now convert a Dhall expression to the corresponding syntax tree
+      using a quasiquoter like this: `[dhall| \x -> x + 2 ]`
+* [New `Dhall.Marshal.{Encode,Decode}` modules](https://github.com/dhall-lang/dhall-haskell/pull/2193)
+    * These modules split up the `Dhall` module into two smaller modules for
+      encoding and decoding logic, respectively
+    * The `Dhall` module still re-exports the same functionality as before, so
+      this is not a breaking change
+* [Support GHC 9.0.1](https://github.com/dhall-lang/dhall-haskell/pull/2154)
+* Fixes and improvements to code formatting
+    * [Improve pretty-printing of `sha256`](https://github.com/dhall-lang/dhall-haskell/pull/2189)
+
+1.38.1
+
+* [Add `INLINABLE` annotations in more places](https://github.com/dhall-lang/dhall-haskell/pull/2164)
+    * This may improve performance by enabling more specializations
+* [Fix `hashable`-related test failures](https://github.com/dhall-lang/dhall-haskell/pull/2152)
+* [Fix support for GHC 8.4.4](https://github.com/dhall-lang/dhall-haskell/pull/2143)
+    * … by using `GeneralizedNewtypeDeriving` (with a `z`)
+* [Allow doctest-0.18](https://github.com/dhall-lang/dhall-haskell/pull/2148)
+* [Allow bytestring-0.11](https://github.com/dhall-lang/dhall-haskell/pull/2144)
+
 1.38.0
 
 * [BREAKING CHANGE: Detect preferred character set from input](https://github.com/dhall-lang/dhall-haskell/pull/2108)

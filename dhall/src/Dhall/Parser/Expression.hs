@@ -10,7 +10,6 @@ module Dhall.Parser.Expression where
 import Control.Applicative     (Alternative (..), liftA2, optional)
 import Data.ByteArray.Encoding (Base (..))
 import Data.Foldable           (foldl')
-import Data.Functor            (void)
 import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
 import Dhall.Src               (Src (..))
@@ -113,7 +112,17 @@ data Parsers a = Parsers
 parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers {..}
   where
-    completeExpression_ = whitespace *> expression <* whitespace
+    completeExpression_ =
+        many shebang *> whitespace *> expression <* whitespace
+
+    shebang = do
+        _ <- text "#!"
+
+        let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
+
+        _ <- Dhall.Parser.Combinators.takeWhile predicate
+
+        endOfLine
 
     expression =
         noted
@@ -244,7 +253,7 @@ parsers embedded = Parsers {..}
                         _          -> empty
 
                     bs <- some (do
-                        try (whitespace *> _with *> nonemptyWhitespace)
+                        try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
 
                         keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
 
@@ -341,7 +350,7 @@ parsers embedded = Parsers {..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ Equivalent                  <$ _equivalent    <* whitespace
+        [ Equivalent . Just           <$> _equivalent   <* whitespace
         , ImportAlt                   <$ _importAlt     <* nonemptyWhitespace
         , BoolOr                      <$ _or            <* whitespace
         , NaturalPlus                 <$ _plus          <* nonemptyWhitespace
@@ -350,7 +359,7 @@ parsers embedded = Parsers {..}
         , BoolAnd                     <$ _and           <* whitespace
         , (\cs -> Combine (Just cs) Nothing)         <$> _combine <* whitespace
         , (\cs -> Prefer (Just cs) PreferFromSource) <$> _prefer  <* whitespace
-        , (CombineTypes . Just)       <$> _combineTypes <* whitespace
+        , CombineTypes . Just         <$> _combineTypes <* whitespace
         , NaturalTimes                <$ _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
         , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace
@@ -718,7 +727,7 @@ parsers embedded = Parsers {..}
                 , unescapedCharacterFast
                 , unescapedCharacterSlow
                 , tab
-                , endOfLine
+                , endOfLine_
                 ]
           where
                 escapeSingleQuotes = do
@@ -757,7 +766,7 @@ parsers embedded = Parsers {..}
                   where
                     predicate c = c == '$' || c == '\''
 
-                endOfLine = do
+                endOfLine_ = do
                     a <- "\n" <|> "\r\n"
                     b <- singleQuoteContinue
                     return (Chunks [] a <> b)
@@ -769,12 +778,12 @@ parsers embedded = Parsers {..}
 
     singleQuoteLiteral = do
             _ <- text "''"
+
             _ <- endOfLine
+
             a <- singleQuoteContinue
 
             return (Dhall.Syntax.toDoubleQuoted a)
-          where
-            endOfLine = (void (char '\n') <|> void (text "\r\n")) <?> "newline"
 
     textLiteral = (do
             literal <- doubleQuotedLiteral <|> singleQuoteLiteral

@@ -441,10 +441,10 @@ data Expr s a
     -- | > Var (V x 0)                              ~  x
     --   > Var (V x n)                              ~  x@n
     | Var Var
-    -- | > Lam (FunctionBinding _ "x" _ _ A) b      ~  λ(x : A) -> b
+    -- | > Lam _ (FunctionBinding _ "x" _ _ A) b    ~  λ(x : A) -> b
     | Lam (Maybe CharacterSet) (FunctionBinding s a) (Expr s a)
-    -- | > Pi "_" A B                               ~        A  -> B
-    --   > Pi x   A B                               ~  ∀(x : A) -> B
+    -- | > Pi _ "_" A B                               ~        A  -> B
+    --   > Pi _ x   A B                               ~  ∀(x : A) -> B
     | Pi  (Maybe CharacterSet) Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
@@ -582,7 +582,7 @@ data Expr s a
     | RecordLit (Map Text (RecordField s a))
     -- | > Union        [(k1, Just t1), (k2, Nothing)] ~  < k1 : t1 | k2 >
     | Union     (Map Text (Maybe (Expr s a)))
-    -- | > Combine Nothing x y                      ~  x ∧ y
+    -- | > Combine _ Nothing x y                    ~  x ∧ y
     --
     -- The first field is a `Just` when the `Combine` operator is introduced
     -- as a result of desugaring duplicate record fields:
@@ -593,9 +593,9 @@ data Expr s a
     --   >              (Combine (Just k) x y)
     --   >            )]
     | Combine (Maybe CharacterSet) (Maybe Text) (Expr s a) (Expr s a)
-    -- | > CombineTypes x y                         ~  x ⩓ y
+    -- | > CombineTypes _ x y                       ~  x ⩓ y
     | CombineTypes (Maybe CharacterSet) (Expr s a) (Expr s a)
-    -- | > Prefer False x y                         ~  x ⫽ y
+    -- | > Prefer _ False x y                       ~  x ⫽ y
     --
     -- The first field is a `True` when the `Prefer` operator is introduced as a
     -- result of desugaring a @with@ expression
@@ -615,8 +615,8 @@ data Expr s a
     | Project (Expr s a) (Either [Text] (Expr s a))
     -- | > Assert e                                 ~  assert : e
     | Assert (Expr s a)
-    -- | > Equivalent x y                           ~  x ≡ y
-    | Equivalent (Expr s a) (Expr s a)
+    -- | > Equivalent _ x y                           ~  x ≡ y
+    | Equivalent (Maybe CharacterSet) (Expr s a) (Expr s a)
     -- | > With x y e                               ~  x with y = e
     | With (Expr s a) (NonEmpty Text) (Expr s a)
     -- | > Note s x                                 ~  e
@@ -851,7 +851,7 @@ unsafeSubExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 unsafeSubExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 unsafeSubExpressions f (Project a b) = Project <$> f a <*> traverse f b
 unsafeSubExpressions f (Assert a) = Assert <$> f a
-unsafeSubExpressions f (Equivalent a b) = Equivalent <$> f a <*> f b
+unsafeSubExpressions f (Equivalent cs a b) = Equivalent cs <$> f a <*> f b
 unsafeSubExpressions f (With a b c) = With <$> f a <*> pure b <*> f c
 unsafeSubExpressions f (ImportAlt l r) = ImportAlt <$> f l <*> f r
 unsafeSubExpressions _ (Let {}) = unhandledConstructor "Let"
@@ -899,6 +899,7 @@ recordFieldExprs f (RecordField s0 e s1 s2) =
         <*> f e
         <*> pure s1
         <*> pure s2
+{-# INLINABLE recordFieldExprs #-}
 
 {-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
 -}
@@ -913,6 +914,7 @@ functionBindingExprs f (FunctionBinding s0 label s1 s2 type_) =
         <*> pure s1
         <*> pure s2
         <*> f type_
+{-# INLINABLE functionBindingExprs #-}
 
 -- | A traversal over the immediate sub-expressions in 'Chunks'.
 chunkExprs
@@ -1090,7 +1092,15 @@ instance Pretty ImportHashed where
     pretty (ImportHashed  Nothing p) =
       Pretty.pretty p
     pretty (ImportHashed (Just h) p) =
-      Pretty.pretty p <> " sha256:" <> Pretty.pretty (show h)
+      Pretty.group (Pretty.flatAlt long short)
+      where
+        long =
+            Pretty.align
+                (   Pretty.pretty p <> Pretty.hardline
+                <>  "  sha256:" <> Pretty.pretty (show h)
+                )
+
+        short = Pretty.pretty p <> " sha256:" <> Pretty.pretty (show h)
 
 -- | Reference to an external resource
 data Import = Import
@@ -1145,6 +1155,7 @@ denote = \case
     Lam _ a b -> Lam Nothing (denoteFunctionBinding a) (denote b)
     Pi _ t a b -> Pi Nothing t (denote a) (denote b)
     Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
+    Equivalent _ a b -> Equivalent Nothing (denote a) (denote b)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing

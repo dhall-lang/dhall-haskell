@@ -1,80 +1,48 @@
 <!DOCTYPE HTML>
-<html
-  ><head
-    ><title
-    >/JumpToRecordFieldWhenVarIsOfRecordTypeTransitivity.dhall</title
-    ><link href="index.css" type="text/css" rel="stylesheet"
-    /><link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap"
-            type="text/css" rel="stylesheet"
-    /><script src="index.js" type="text/javascript"
-    /><meta charset="UTF-8"/></head
-  ><body
-    ><div class="nav-bar"
-      ><img src="dhall-icon.svg" class="dhall-icon"
-      /><p class="package-title"
-      >test-package</p
-      ><div class="nav-bar-content-divider"
-      /><a id="switch-light-dark-mode" class="nav-option"
-      >Switch Light/Dark Mode</a></div
-    ><div class="main-container"
-      ><h2 class="doc-title"
-        ><span class="crumb-divider"
-        >/</span
-        ><a href="index.html"
-        >test-package</a
-        ><span class="crumb-divider"
-        >/</span
-        ><span href="index.html" class="title-crumb"
-        >JumpToRecordFieldWhenVarIsOfRecordTypeTransitivity.dhall</span></h2
-      ><a data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeTransitivity.dhall"
-          class="copy-to-clipboard"
-        ><i
-          ><small
-          >Copy path to clipboard</small></i></a
-      ><br
-      /><div class="doc-contents"
-        ><p
-          >On this example, <code
-          >dhall-docs</code
-          > will detect that the variable <code
-          >b</code
-          > is bounded
-to the value of <code
-          >a</code
-          >, and the later is bounded to a record-literal. All selector
-expressions over <code
-          >b</code
-          > will interact with the record-literal assigned to <code
-          >a</code>, since
+<html>
+<head>
+<title>/JumpToRecordFieldWhenVarIsOfRecordTypeTransitivity.dhall</title>
+<link href="index.css" type="text/css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" type="text/css" rel="stylesheet">
+<script src="index.js" type="text/javascript">
+</script>
+<meta charset="UTF-8">
+</head>
+<body>
+<div class="nav-bar">
+<img src="dhall-icon.svg" class="dhall-icon">
+<p class="package-title">test-package</p>
+<div class="nav-bar-content-divider">
+</div>
+<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
+</div>
+<div class="main-container">
+<h2 class="doc-title">
+<span class="crumb-divider">/</span>
+<a href="index.html">test-package</a>
+<span class="crumb-divider">/</span>
+<span href="index.html" class="title-crumb">JumpToRecordFieldWhenVarIsOfRecordTypeTransitivity.dhall</span>
+</h2>
+<a data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeTransitivity.dhall" class="copy-to-clipboard">
+<i>
+<small>Copy path to clipboard</small>
+</i>
+</a>
+<br>
+<div class="doc-contents">
+<p>On this example, <code>dhall-docs</code> will detect that the variable <code>b</code> is bounded
+to the value of <code>a</code>, and the later is bounded to a record-literal. All selector
+expressions over <code>b</code> will interact with the record-literal assigned to <code>a</code>, since
 that is the actual definition of the fields.</p>
-</div
-      ><h3
-      >Source</h3
-      ><div class="source-code"
-        ><pre
-          >{-|<br
-          />On this example, `dhall-docs` will detect that the variable `b` is bounded<br
-          />to the value of `a`, and the later is bounded to a record-literal. All selector<br
-          />expressions over `b` will interact with the record-literal assigned to `a`, since<br
-          />that is the actual definition of the fields.<br
-          />-}<br
-          />let <span data-name="var7-5" id="var7-5" class="name-decl"
-          >a</span
-          > = { <span data-name="var7-11" id="var7-11" class="name-decl"
-          >x</span
-          > = 1 }<br
-          />let <span data-name="var8-5" id="var8-5" class="name-decl"
-          >b</span
-          > = <a href="#var7-5" data-name="var7-5" class="name-use"
-          >a</a
-          ><br
-          /><br
-          />in <a href="#var7-5" data-name="var7-5" class="name-use"
-          >a</a
-          >.<a href="#var7-11" data-name="var7-11" class="name-use"
-          >x</a
-          > + <a href="#var8-5" data-name="var8-5" class="name-use"
-          >b</a
-          >.<a href="#var7-11" data-name="var7-11" class="name-use"
-          >x</a
-          ><br/></pre></div></div></body></html>
+</div>
+<h3>Source</h3>
+<div class="source-code">
+<pre>{-|<br>On this example, `dhall-docs` will detect that the variable `b` is bounded<br>to the value of `a`, and the later is bounded to a record-literal. All selector<br>expressions over `b` will interact with the record-literal assigned to `a`, since<br>that is the actual definition of the fields.<br>-}<br>let <span data-name="var7-5" id="var7-5" class="name-decl">a</span> = { <span data-name="var7-11" id="var7-11" class="name-decl">x</span> = 1 }<br>let <span data-name="var8-5" id="var8-5" class="name-decl">b</span> = <a href="#var7-5" data-name="var7-5" class="name-use">a</a>
+<br>
+<br>in <a href="#var7-5" data-name="var7-5" class="name-use">a</a>.<a href="#var7-11" data-name="var7-11" class="name-use">x</a> + <a href="#var8-5" data-name="var8-5" class="name-use">b</a>.<a href="#var7-11" data-name="var7-11" class="name-use">x</a>
+<br>
+</pre>
+</div>
+</div>
+</body>
+</html>

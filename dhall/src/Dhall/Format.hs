@@ -11,19 +11,24 @@ module Dhall.Format
     , format
     ) where
 
-import Data.Foldable (for_)
-import Data.Maybe    (fromMaybe)
-import Dhall.Pretty  (CharacterSet, annToAnsiStyle, detectCharacterSet)
+import Data.Foldable      (for_)
+import Data.List.NonEmpty (NonEmpty)
+import Data.Maybe         (fromMaybe)
+import Dhall.Pretty
+    ( CharacterSet
+    , annToAnsiStyle
+    , detectCharacterSet
+    )
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
     , Header (..)
+    , Input (..)
     , OutputMode (..)
-    , PossiblyTransitiveInput (..)
     , Transitivity (..)
+    , handleMultipleChecksFailed
     )
 
-import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Data.Text.Prettyprint.Doc                 as Pretty
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
@@ -40,19 +45,21 @@ import qualified System.IO
 data Format = Format
     { chosenCharacterSet :: Maybe CharacterSet
     , censor             :: Censor
-    , input              :: PossiblyTransitiveInput
+    , transitivity       :: Transitivity
+    , inputs             :: NonEmpty Input
     , outputMode         :: OutputMode
     }
 
 -- | Implementation of the @dhall format@ subcommand
 format :: Format -> IO ()
-format (Format { input = input0, ..}) = go input0
+format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
+    handleMultipleChecksFailed "format" "formatted" go inputs0
   where
     go input = do
         let directory = case input of
-                NonTransitiveStandardInput ->
+                StandardInput ->
                     "."
-                PossiblyTransitiveInputFile file _ ->
+                InputFile file ->
                     System.FilePath.takeDirectory file
 
         let status = Dhall.Import.emptyStatus directory
@@ -65,18 +72,18 @@ format (Format { input = input0, ..}) = go input0
                     <>  Dhall.Pretty.prettyCharacterSet characterSet expr
                     <>  "\n")
 
-        (originalText, transitivity) <- case input of
-            PossiblyTransitiveInputFile file transitivity -> do
+        (inputName, originalText, transitivity) <- case input of
+            InputFile file -> do
                 text <- Data.Text.IO.readFile file
 
-                return (text, transitivity)
-
-            NonTransitiveStandardInput -> do
+                return (file, text, transitivity0)
+            StandardInput -> do
                 text <- Data.Text.IO.getContents
 
-                return (text, NonTransitive)
+                return ("(input)", text, NonTransitive)
 
-        headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+
+        headerAndExpr@(_, parsedExpression) <- Dhall.Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
         case transitivity of
             Transitive ->
@@ -84,7 +91,7 @@ format (Format { input = input0, ..}) = go input0
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                     for_ maybeFilepath $ \filepath ->
-                        go (PossiblyTransitiveInputFile filepath Transitive)
+                        go (InputFile filepath)
 
             NonTransitive ->
                 return ()
@@ -94,16 +101,16 @@ format (Format { input = input0, ..}) = go input0
         let formattedText = Pretty.Text.renderStrict docStream
 
         case outputMode of
-            Write ->
+            Write -> do
                 case input of
-                    PossiblyTransitiveInputFile file _ ->
+                    InputFile file ->
                         if originalText == formattedText
                             then return ()
                             else AtomicWrite.LazyText.atomicWriteFile
                                     file
                                     (Pretty.Text.renderLazy docStream)
 
-                    NonTransitiveStandardInput -> do
+                    StandardInput -> do
                         supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
 
                         Pretty.Terminal.renderIO
@@ -112,12 +119,10 @@ format (Format { input = input0, ..}) = go input0
                                 then (fmap annToAnsiStyle docStream)
                                 else (Pretty.unAnnotateS docStream))
 
+                return (Right ())
+
             Check ->
-                if originalText == formattedText
-                    then return ()
-                    else do
-                        let command = "format"
-
-                        let modified = "formatted"
-
-                        Control.Exception.throwIO CheckFailed{..}
+                return $
+                    if originalText == formattedText
+                        then Right ()
+                        else Left CheckFailed{..}

@@ -1,5 +1,7 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 -- | Shared utility functions
 
@@ -10,7 +12,6 @@ module Dhall.Util
     , _ERROR
     , Censor(..)
     , Input(..)
-    , PossiblyTransitiveInput(..)
     , Transitivity(..)
     , OutputMode(..)
     , Output(..)
@@ -19,11 +20,16 @@ module Dhall.Util
     , getExpressionAndHeaderFromStdinText
     , Header(..)
     , CheckFailed(..)
+    , MultipleCheckFailed(..)
+    , handleMultipleChecksFailed
     ) where
 
 import Control.Exception         (Exception (..))
 import Control.Monad.IO.Class    (MonadIO (..))
 import Data.Bifunctor            (first)
+import Data.Either               (lefts)
+import Data.Foldable             (toList)
+import Data.List.NonEmpty        (NonEmpty (..))
 import Data.String               (IsString)
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
@@ -112,13 +118,13 @@ get parser censor input = do
         case input of
             Input_ (InputFile file) -> Data.Text.IO.readFile file
             Input_ StandardInput    -> Data.Text.IO.getContents
-            StdinText text          -> pure text
+            StdinText _ text        -> pure text
 
     let name =
             case input of
                 Input_ (InputFile file) -> file
                 Input_ StandardInput    -> "(input)"
-                StdinText _             -> "(input)"
+                StdinText inputName _   -> inputName
 
     let result = parser name inText
 
@@ -140,17 +146,14 @@ throws (Right r) = return r
 data Censor = NoCensor | Censor
 
 -- | Path to input
-data Input = StandardInput | InputFile FilePath
+data Input = StandardInput | InputFile FilePath deriving (Eq)
 
 -- | Path to input or raw input text, necessary since we can't read STDIN twice
-data InputOrTextFromStdin = Input_ Input | StdinText Text
-
-{-| For utilities that may want to process transitive dependencies, like
-    @dhall freeze@
--}
-data PossiblyTransitiveInput
-    = NonTransitiveStandardInput
-    | PossiblyTransitiveInputFile FilePath Transitivity
+data InputOrTextFromStdin
+    = Input_ Input
+    | StdinText String Text
+    -- ^ @StdinText name text@ where name is a user-friendly name describing the
+    -- input expression, used in parsing error messages
 
 {-| Specifies whether or not an input's transitive dependencies should also be
     processed.  Transitive dependencies are restricted to relative file imports.
@@ -170,15 +173,25 @@ data Output = StandardOutput | OutputFile FilePath
 -}
 data OutputMode = Write | Check
 
+-- | A check failure corresponding to a single input.
+-- This type is intended to be used with 'MultipleCheckFailed' for error
+-- reporting.
+newtype CheckFailed = CheckFailed { input :: Input }
+
 -- | Exception thrown when the @--check@ flag to a command-line subcommand fails
-data CheckFailed = CheckFailed { command :: Text, modified :: Text }
+data MultipleCheckFailed = MultipleCheckFailed
+  { command :: Text
+  , modified :: Text
+  , inputs :: NonEmpty Input
+  }
 
-instance Exception CheckFailed
+instance Exception MultipleCheckFailed
 
-instance Show CheckFailed where
-    show CheckFailed{..} =
-         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed\n\
-        \\n\
+instance Show MultipleCheckFailed where
+    show MultipleCheckFailed{..} =
+         _ERROR <> ": ❰dhall " <> command_ <> " --check❱ failed on:\n\
+        \\n" <> files <>
+        "\n\
         \You ran ❰dhall " <> command_ <> " --check❱, but the input appears to have not\n\
         \been " <> modified_ <> " before, or was changed since the last time the input\n\
         \was " <> modified_ <> ".\n"
@@ -186,6 +199,32 @@ instance Show CheckFailed where
         modified_ = Data.Text.unpack modified
 
         command_ = Data.Text.unpack command
+
+        files = unlines . map format $ toList inputs
+
+        format input = case input of
+            StandardInput -> "↳ (stdin)"
+            InputFile file -> "↳ " <> file
+
+-- | Run IO for multiple inputs, then collate all the check failures before
+-- throwing if there was any failure
+handleMultipleChecksFailed
+    :: (Foldable t, Traversable t)
+    => Text
+    -> Text
+    -> (a -> IO (Either CheckFailed ()))
+    -> t a
+    -> IO ()
+handleMultipleChecksFailed command modified f xs = post =<< mapM f xs
+  where
+    post results =
+        case lefts (toList results) of
+            [] -> pure ()
+            cf:cfs -> Control.Exception.throwIO $ MultipleCheckFailed
+                { command
+                , modified
+                , inputs = fmap input (cf:|cfs)
+                }
 
 -- | Convenient utility for retrieving an expression
 getExpression :: Censor -> Input -> IO (Expr Src Import)
@@ -199,6 +238,6 @@ getExpressionAndHeader censor =
 -- | Convenient utility for retrieving an expression along with its header from
 -- | text already read from STDIN (so it's not re-read)
 getExpressionAndHeaderFromStdinText
-    :: Censor -> Text -> IO (Header, Expr Src Import)
-getExpressionAndHeaderFromStdinText censor =
-    get Dhall.Parser.exprAndHeaderFromText censor . StdinText
+    :: Censor -> String -> Text -> IO (Header, Expr Src Import)
+getExpressionAndHeaderFromStdinText censor inputName =
+    get Dhall.Parser.exprAndHeaderFromText censor . StdinText inputName

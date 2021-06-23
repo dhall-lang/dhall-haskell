@@ -1,8 +1,7 @@
 Name: dhall-json
-Version: 1.7.5
+Version: 1.7.7
 Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez
@@ -42,9 +41,9 @@ Library
         aeson                     >= 1.4.6.0   && < 1.6 ,
         aeson-pretty                              < 0.9 ,
         aeson-yaml                >= 1.1.0     && < 1.2 ,
-        bytestring                                < 0.11,
+        bytestring                                < 0.12,
         containers                >= 0.5.9     && < 0.7 ,
-        dhall                     >= 1.38.0    && < 1.39,
+        dhall                     >= 1.39.0    && < 1.40,
         exceptions                >= 0.8.3     && < 0.11,
         filepath                                  < 1.5 ,
         lens-family-core          >= 1.0.0     && < 2.2 ,
@@ -71,7 +70,7 @@ Executable dhall-to-json
         base                                   ,
         aeson                                  ,
         aeson-pretty         >= 0.8.5 && < 0.9 ,
-        bytestring                       < 0.11,
+        bytestring                             ,
         dhall                                  ,
         dhall-json                             ,
         optparse-applicative                   ,
@@ -99,7 +98,7 @@ Executable json-to-dhall
         base                                             ,
         aeson                                            ,
         ansi-terminal               >= 0.6.3.1  && < 0.12,
-        bytestring                                 < 0.11,
+        bytestring                                       ,
         dhall                                            ,
         dhall-json                                       ,
         exceptions                  >= 0.8.3    && < 0.11,

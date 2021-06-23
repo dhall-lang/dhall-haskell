@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
 {-# OPTIONS_GHC -Wall #-}
@@ -167,7 +169,7 @@ import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Text                        (Text)
 import Data.Typeable                    (Typeable)
 import Data.Void                        (Void, absurd)
-import Dhall.Binary                     (StandardVersion (..))
+import Dhall.TypeCheck                  (TypeError)
 
 import Dhall.Syntax
     ( Chunks (..)
@@ -200,9 +202,9 @@ import Dhall.Parser
     )
 import Lens.Family.State.Strict (zoom)
 
-import qualified Codec.CBOR.Encoding                         as Encoding
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
+import qualified Control.Exception                           as Exception
 import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
@@ -210,6 +212,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
 import qualified Data.List.NonEmpty                          as NonEmpty
+import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.IO
@@ -566,19 +569,24 @@ loadImportWithSemanticCache
         Nothing -> fetch
     where
         fetch = do
-            ImportSemantics { importSemantics } <- loadImportWithSemisemanticCache import_
+            ImportSemantics{ importSemantics } <- loadImportWithSemisemanticCache import_
 
-            let variants = map (\version -> encodeExpression version (Core.alphaNormalize importSemantics))
-                                [ minBound .. maxBound ]
-            case Data.Foldable.find ((== semanticHash). Dhall.Crypto.sha256Hash) variants of
-                Just bytes -> zoom cacheWarning (writeToSemanticCache semanticHash bytes)
-                Nothing -> do
-                    let expectedHash = semanticHash
-                    Status { _stack } <- State.get
-                    let actualHash = hashExpression (Core.alphaNormalize importSemantics)
-                    throwMissingImport (Imported _stack (HashMismatch {..}))
+            let bytes = encodeExpression (Core.alphaNormalize importSemantics)
 
-            return (ImportSemantics {..})
+            let actualHash = Dhall.Crypto.sha256Hash bytes
+
+            let expectedHash = semanticHash
+
+            if actualHash == expectedHash
+                then do
+                    zoom cacheWarning (writeToSemanticCache semanticHash bytes)
+
+                else do
+                    Status{ _stack } <- State.get
+
+                    throwMissingImport (Imported _stack HashMismatch{..})
+
+            return ImportSemantics{..}
 
 
 
@@ -600,7 +608,8 @@ writeExpressionToSemanticCache expression =
     -- with the old behavior
     State.evalStateT (writeToSemanticCache hash bytes) CacheWarned
   where
-    bytes = encodeExpression NoVersion expression
+    bytes = encodeExpression expression
+
     hash = Dhall.Crypto.sha256Hash bytes
 
 writeToSemanticCache
@@ -682,7 +691,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                     let betaNormal =
                             Core.normalizeWith _normalizer substitutedExpr
 
-                    let bytes = encodeExpression NoVersion betaNormal
+                    let bytes = encodeExpression betaNormal
 
                     zoom cacheWarning (writeToSemisemanticCache semisemanticHash bytes)
 
@@ -1153,11 +1162,29 @@ loadWith expr₀ = case expr₀ of
 
   ImportAlt a b -> loadWith a `catch` handler₀
     where
-      handler₀ (SourcedException (Src begin _ text₀) (MissingImports es₀)) =
-          loadWith b `catch` handler₁
+      is :: forall e . Exception e => SomeException -> Bool
+      is exception = Maybe.isJust (Exception.fromException @e exception)
+
+      isNotResolutionError exception =
+              is @(Imported (TypeError Src Void)) exception
+          ||  is @(Imported  Cycle              ) exception
+          ||  is @(Imported  HashMismatch       ) exception
+          ||  is @(Imported  ParseError         ) exception
+
+      handler₀ exception₀@(SourcedException (Src begin _ text₀) (MissingImports es₀))
+          | any isNotResolutionError es₀ =
+              throwM exception₀
+          | otherwise = do
+              loadWith b `catch` handler₁
         where
-          handler₁ (SourcedException (Src _ end text₁) (MissingImports es₁)) =
-              throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
+          handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
+              | any isNotResolutionError es₁ =
+                  throwM exception₁
+              | otherwise =
+                  -- Fix the source span for the error message to encompass both
+                  -- alternatives, since both are equally to blame for the
+                  -- failure if neither succeeds.
+                  throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
             where
               text₂ = text₀ <> " ? " <> text₁
 
@@ -1206,33 +1233,19 @@ loadRelativeToWithManager newManager rootDirectory semanticCacheMode expression 
         (loadWith expression)
         (emptyStatusWithManager newManager rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
-encodeExpression
-    :: StandardVersion
-    -- ^ `NoVersion` means to encode without the version tag
-    -> Expr Void Void
-    -> Data.ByteString.ByteString
-encodeExpression _standardVersion expression = bytesStrict
+encodeExpression :: Expr Void Void -> Data.ByteString.ByteString
+encodeExpression expression = bytesStrict
   where
     intermediateExpression :: Expr Void Import
     intermediateExpression = fmap absurd expression
 
-    encoding =
-        case _standardVersion of
-            NoVersion ->
-                Codec.Serialise.encode intermediateExpression
-            s ->
-                    Encoding.encodeListLen 2
-                <>  Encoding.encodeString v
-                <>  Codec.Serialise.encode intermediateExpression
-              where
-                v = Dhall.Binary.renderStandardVersion s
+    encoding = Codec.Serialise.encode intermediateExpression
 
     bytesStrict = Write.toStrictByteString encoding
 
 -- | Hash a fully resolved expression
 hashExpression :: Expr Void Void -> Dhall.Crypto.SHA256Digest
-hashExpression expression =
-    Dhall.Crypto.sha256Hash (encodeExpression NoVersion expression)
+hashExpression = Dhall.Crypto.sha256Hash . encodeExpression
 
 {-| Convenience utility to hash a fully resolved expression and return the
     base-16 encoded hash with the @sha256:@ prefix
@@ -1254,6 +1267,7 @@ instance Show ImportResolutionDisabled where
 assertNoImports :: MonadIO io => Expr Src Import -> io (Expr Src Void)
 assertNoImports expression =
     Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
+{-# INLINABLE assertNoImports #-}
 
 {-| This function is used by the @--transitive@ option of the
     @dhall {freeze,format,lint}@ subcommands to determine which dependencies

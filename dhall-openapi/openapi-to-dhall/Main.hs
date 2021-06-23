@@ -31,7 +31,7 @@ import Dhall.Kubernetes.Types
     , Prefix
     , Swagger (..)
     )
-import System.FilePath                  (FilePath, (</>))
+import System.FilePath                  ((</>))
 
 import qualified Data.List                             as List
 import qualified Data.Map.Strict                       as Data.Map
@@ -75,10 +75,9 @@ writeDhall path expr = do
 
   let outputMode = Dhall.Util.Write
 
-  let input =
-        Dhall.Util.PossiblyTransitiveInputFile
-            path
-            Dhall.Util.NonTransitive
+  let inputs = pure (Dhall.Util.InputFile path)
+
+  let transitivity = Dhall.Util.NonTransitive
 
   let formatOptions = Dhall.Format.Format{..}
 

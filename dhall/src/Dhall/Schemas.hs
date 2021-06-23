@@ -27,7 +27,7 @@ import Dhall.Src           (Src)
 import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
     ( Censor (..)
-    , CheckFailed (..)
+    , MultipleCheckFailed (..)
     , Header (..)
     , Input (..)
     , OutputMode (..)
@@ -68,11 +68,11 @@ data Schemas = Schemas
 -- | Implementation of the @dhall rewrite-with-schemas@ subcommand
 schemasCommand :: Schemas -> IO ()
 schemasCommand Schemas{..} = do
-    originalText <- case input of
-        InputFile file -> Text.IO.readFile file
-        StandardInput  -> Text.IO.getContents
+    (inputName, originalText) <- case input of
+        InputFile file -> (,) file <$> Text.IO.readFile file
+        StandardInput  -> (,) "(input)" <$> Text.IO.getContents
 
-    (Header header, expression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+    (Header header, expression) <- Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
     let characterSet = fromMaybe (detectCharacterSet expression) chosenCharacterSet
 
@@ -115,7 +115,9 @@ schemasCommand Schemas{..} = do
 
                     let modified = "rewritten"
 
-                    Exception.throwIO CheckFailed{..}
+                    let inputs = pure input
+
+                    Exception.throwIO MultipleCheckFailed{..}
 
 decodeSchema :: Expr s Void -> Maybe (Expr s Void, Map Text (Expr s Void))
 decodeSchema (RecordLit m)

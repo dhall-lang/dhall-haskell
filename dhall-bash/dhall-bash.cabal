@@ -1,8 +1,7 @@
 Name: dhall-bash
-Version: 1.0.36
+Version: 1.0.37
 Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez
@@ -29,9 +28,9 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
-        bytestring                               < 0.11,
+        bytestring                               < 0.12,
         containers                               < 0.7 ,
-        dhall                     >= 1.36.0   && < 1.39,
+        dhall                     >= 1.36.0   && < 1.40,
         neat-interpolation                       < 0.6 ,
         shell-escape                             < 0.3 ,
         text                      >= 0.2      && < 1.3

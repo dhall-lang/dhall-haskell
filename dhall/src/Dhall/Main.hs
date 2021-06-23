@@ -23,9 +23,10 @@ module Dhall.Main
 
 import Control.Applicative       (optional, (<|>))
 import Control.Exception         (Handler (..), SomeException)
+import Control.Monad             (when)
 import Data.Foldable             (for_)
 import Data.Maybe                (fromMaybe)
-import Data.List.NonEmpty        (NonEmpty (..))
+import Data.List.NonEmpty        (NonEmpty (..), nonEmpty)
 import Data.Text                 (Text)
 import Data.Text.Prettyprint.Doc (Doc, Pretty)
 import Data.Void                 (Void)
@@ -65,8 +66,8 @@ import Dhall.Util
     , Input (..)
     , Output (..)
     , OutputMode (..)
-    , PossiblyTransitiveInput (..)
     , Transitivity (..)
+    , handleMultipleChecksFailed
     )
 
 import qualified Codec.CBOR.JSON
@@ -143,11 +144,11 @@ data Mode
           }
     | Normalize { file :: Input , alpha :: Bool }
     | Repl
-    | Format { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
-    | Freeze { possiblyTransitiveInput :: PossiblyTransitiveInput, all_ :: Bool, cache :: Bool, outputMode :: OutputMode }
+    | Format { deprecatedInPlace :: Bool, transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
+    | Freeze { deprecatedInPlace :: Bool, transitivity :: Transitivity, all_ :: Bool, cache :: Bool, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Hash { file :: Input, cache :: Bool }
     | Diff { expr1 :: Text, expr2 :: Text }
-    | Lint { possiblyTransitiveInput :: PossiblyTransitiveInput, outputMode :: OutputMode }
+    | Lint { deprecatedInPlace :: Bool, transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Tags
           { input :: Input
           , output :: Output
@@ -242,17 +243,17 @@ parseMode =
             Manipulate
             "format"
             "Standard code formatter for the Dhall language"
-            (Format <$> parseInplaceTransitive <*> parseCheck "formatted")
+            (Format <$> deprecatedInPlace <*> parseTransitiveSwitch <*> parseCheck "formatted" <*> parseFiles)
     <|> subcommand
             Manipulate
             "freeze"
             "Add integrity checks to remote import statements of an expression"
-            (Freeze <$> parseInplaceTransitive <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen")
+            (Freeze <$> deprecatedInPlace <*> parseTransitiveSwitch <*> parseAllFlag <*> parseCacheFlag <*> parseCheck "frozen" <*> parseFiles)
     <|> subcommand
             Manipulate
             "lint"
             "Improve Dhall code by using newer language features and removing dead code"
-            (Lint <$> parseInplaceTransitive <*> parseCheck "linted")
+            (Lint <$> deprecatedInPlace <*> parseTransitiveSwitch <*> parseCheck "linted" <*> parseFiles)
     <|> subcommand
             Manipulate
             "rewrite-with-schemas"
@@ -332,6 +333,12 @@ parseMode =
         <*> parseVersion
         )
   where
+    deprecatedInPlace =
+        Options.Applicative.switch
+            (   Options.Applicative.long "inplace"
+            <>  Options.Applicative.internal -- completely hidden from help
+            )
+
     argument =
             fmap Data.Text.pack
         .   Options.Applicative.strArgument
@@ -346,6 +353,21 @@ parseMode =
                 (   Options.Applicative.long "file"
                 <>  Options.Applicative.help "Read expression from a file instead of standard input"
                 <>  Options.Applicative.metavar "FILE"
+                <>  Options.Applicative.action "file"
+                )
+
+    parseFiles = fmap f (Options.Applicative.many p)
+      where
+        -- Parse explicit stdin in the input filepaths
+        parseStdin inputs
+            | any (== InputFile "-") inputs = StandardInput : filter (/= InputFile "-") inputs
+            | otherwise = inputs
+
+        f = fromMaybe (pure StandardInput) . nonEmpty . parseStdin . fmap InputFile
+
+        p = Options.Applicative.strArgument
+                (   Options.Applicative.help "Read expression from files instead of standard input"
+                <>  Options.Applicative.metavar "FILES"
                 <>  Options.Applicative.action "file"
                 )
 
@@ -422,21 +444,14 @@ parseMode =
             <>  Options.Applicative.action "file"
             )
 
+    parseTransitiveSwitch = Options.Applicative.flag NonTransitive Transitive
+        (   Options.Applicative.long "transitive"
+        <>  Options.Applicative.help "Modify the input and its transitive relative imports in-place"
+        )
+
     parseInplaceNonTransitive =
             fmap InputFile parseInplace
         <|> pure StandardInput
-
-    parseInplaceTransitive =
-            fmap (\f -> PossiblyTransitiveInputFile f NonTransitive) parseInplace
-        <|> fmap (\f -> PossiblyTransitiveInputFile f    Transitive) parseTransitive
-        <|> pure NonTransitiveStandardInput
-      where
-        parseTransitive = Options.Applicative.strOption
-            (   Options.Applicative.long "transitive"
-            <>  Options.Applicative.help "Modify the specified file and its transitive relative imports in-place"
-            <>  Options.Applicative.metavar "FILE"
-            <>  Options.Applicative.action "file"
-            )
 
     parseInput = fmap f (optional p)
       where
@@ -787,16 +802,21 @@ command (Options {..}) = do
                 then return ()
                 else Exit.exitFailure
 
-        Format {..} ->
-            Dhall.Format.format
-                Dhall.Format.Format{ input = possiblyTransitiveInput, ..}
+        Format {..} -> do
+            when deprecatedInPlace $
+                System.IO.hPutStrLn System.IO.stderr "Warning: the flag \"--inplace\" is deprecated"
+
+            Dhall.Format.format Dhall.Format.Format{..}
 
         Freeze {..} -> do
+            when deprecatedInPlace $
+                System.IO.hPutStrLn System.IO.stderr "Warning: the flag \"--inplace\" is deprecated"
+
             let scope = if all_ then AllImports else OnlyRemoteImports
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode possiblyTransitiveInput scope intent chosenCharacterSet censor
+            Dhall.Freeze.freeze outputMode transitivity inputs scope intent chosenCharacterSet censor
 
         Hash {..} -> do
             expression <- getExpression file
@@ -815,27 +835,31 @@ command (Options {..}) = do
 
             Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
 
-        Lint { possiblyTransitiveInput = input0, ..} -> go input0
+        Lint { transitivity = transitivity0, ..} -> do
+            when deprecatedInPlace $
+                System.IO.hPutStrLn System.IO.stderr "Warning: the flag \"--inplace\" is deprecated"
+
+            handleMultipleChecksFailed "lint" "linted" go inputs
           where
             go input = do
                 let directory = case input of
-                        NonTransitiveStandardInput         -> "."
-                        PossiblyTransitiveInputFile file _ -> System.FilePath.takeDirectory file
+                        StandardInput  -> "."
+                        InputFile file -> System.FilePath.takeDirectory file
 
                 let status = Dhall.Import.emptyStatus directory
 
-                (originalText, transitivity) <- case input of
-                    PossiblyTransitiveInputFile file transitivity -> do
+                (inputName, originalText, transitivity) <- case input of
+                    InputFile file -> do
                         text <- Data.Text.IO.readFile file
 
-                        return (text, transitivity)
-                    NonTransitiveStandardInput -> do
+                        return (file, text, transitivity0)
+                    StandardInput -> do
                         text <- Data.Text.IO.getContents
 
-                        return (text, NonTransitive)
+                        return ("(input)", text, NonTransitive)
 
                 (Header header, parsedExpression) <-
-                    Dhall.Util.getExpressionAndHeaderFromStdinText censor originalText
+                    Dhall.Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
                 let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 
@@ -845,7 +869,7 @@ command (Options {..}) = do
                             maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                             for_ maybeFilepath $ \filepath ->
-                                go (PossiblyTransitiveInputFile filepath Transitive)
+                                go (InputFile filepath)
 
                     NonTransitive ->
                         return ()
@@ -860,23 +884,23 @@ command (Options {..}) = do
                 let modifiedText = Pretty.Text.renderStrict stream <> "\n"
 
                 case outputMode of
-                    Write ->
+                    Write -> do
                         case input of
-                            PossiblyTransitiveInputFile file _ ->
+                            InputFile file ->
                                 if originalText == modifiedText
                                     then return ()
                                     else writeDocToFile file doc
 
-                            NonTransitiveStandardInput ->
+                            StandardInput ->
                                 renderDoc System.IO.stdout doc
 
-                    Check ->
-                        if originalText == modifiedText
-                            then return ()
-                            else do
-                                let modified = "linted"
+                        return (Right ())
 
-                                Control.Exception.throwIO CheckFailed{ command = "lint", ..}
+                    Check ->
+                        return $
+                            if originalText == modifiedText
+                                then Right ()
+                                else Left CheckFailed{..}
 
         Encode {..} -> do
             expression <- getExpression file

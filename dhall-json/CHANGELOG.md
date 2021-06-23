@@ -1,3 +1,14 @@
+1.7.7
+
+* Build against `dhall-1.39.0`
+
+1.7.6
+
+* [Fix `hashable`-related test failures](https://github.com/dhall-lang/dhall-haskell/pull/2152)
+* [Fix lower bound on `dhall`](https://github.com/dhall-lang/dhall-haskell/pull/2147)
+* [Allow bytestring-0.11](https://github.com/dhall-lang/dhall-haskell/pull/2144)
+* [Fix typos in `json-to-dhall --help` output](https://github.com/dhall-lang/dhall-haskell/pull/2160)
+
 1.7.5
 
 * Build against `dhall-1.38.0`, `tasty-1.4`, and `tasty-silver-3.2`

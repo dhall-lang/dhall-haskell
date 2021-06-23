@@ -22,6 +22,7 @@ module Dhall.Freeze
     ) where
 
 import Data.Foldable       (for_)
+import Data.List.NonEmpty  (NonEmpty)
 import Data.Maybe          (fromMaybe)
 import Dhall.Pretty        (CharacterSet, detectCharacterSet)
 import Dhall.Syntax
@@ -34,9 +35,10 @@ import Dhall.Util
     ( Censor
     , CheckFailed (..)
     , Header (..)
+    , Input (..)
     , OutputMode (..)
-    , PossiblyTransitiveInput (..)
     , Transitivity (..)
+    , handleMultipleChecksFailed
     )
 import System.Console.ANSI (hSupportsANSI)
 
@@ -140,7 +142,8 @@ data Intent
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
     :: OutputMode
-    -> PossiblyTransitiveInput
+    -> Transitivity
+    -> NonEmpty Input
     -> Scope
     -> Intent
     -> Maybe CharacterSet
@@ -152,35 +155,37 @@ freeze = freezeWithManager Dhall.Import.defaultNewManager
 freezeWithManager
     :: IO Dhall.Import.Manager
     -> OutputMode
-    -> PossiblyTransitiveInput
+    -> Transitivity
+    -> NonEmpty Input
     -> Scope
     -> Intent
     -> Maybe CharacterSet
     -> Censor
     -> IO ()
-freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet censor = go input0
+freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
+    handleMultipleChecksFailed "freeze" "frozen" go inputs
   where
     go input = do
         let directory = case input of
-                NonTransitiveStandardInput ->
+                StandardInput ->
                     "."
-                PossiblyTransitiveInputFile file _ ->
+                InputFile file ->
                     System.FilePath.takeDirectory file
 
         let status = Dhall.Import.emptyStatusWithManager newManager directory
 
-        (originalText, transitivity) <- case input of
-            PossiblyTransitiveInputFile file transitivity -> do
+        (inputName, originalText, transitivity) <- case input of
+            InputFile file -> do
                 text <- Text.IO.readFile file
 
-                return (text, transitivity)
+                return (file, text, transitivity0)
 
-            NonTransitiveStandardInput -> do
+            StandardInput -> do
                 text <- Text.IO.getContents
 
-                return (text, NonTransitive)
+                return ("(input)", text, NonTransitive)
 
-        (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor originalText
+        (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
         let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
 
@@ -190,7 +195,7 @@ freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet c
                     maybeFilepath <- Dhall.Import.dependencyToFile status import_
 
                     for_ maybeFilepath $ \filepath ->
-                        go (PossiblyTransitiveInputFile filepath Transitive)
+                        go (InputFile filepath)
 
             NonTransitive ->
                 return ()
@@ -210,7 +215,7 @@ freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet c
                 let unAnnotated = Pretty.unAnnotateS stream
 
                 case input of
-                    PossiblyTransitiveInputFile file _ ->
+                    InputFile file ->
                         if originalText == modifiedText
                             then return ()
                             else
@@ -218,7 +223,7 @@ freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet c
                                     file
                                     (Pretty.Text.renderLazy unAnnotated)
 
-                    NonTransitiveStandardInput -> do
+                    StandardInput -> do
                         supportsANSI <- System.Console.ANSI.hSupportsANSI System.IO.stdout
                         if supportsANSI
                            then
@@ -226,15 +231,13 @@ freezeWithManager newManager outputMode input0 scope intent chosenCharacterSet c
                            else
                              Pretty.renderIO System.IO.stdout unAnnotated
 
+                return (Right ())
+
             Check ->
-                if originalText == modifiedText
-                    then return ()
-                    else do
-                        let command = "freeze"
-
-                        let modified = "frozen"
-
-                        Exception.throwIO CheckFailed{..}
+                return $
+                    if originalText == modifiedText
+                        then Right ()
+                        else Left CheckFailed{..}
 
 {-| Slightly more pure version of the `freeze` function
 
