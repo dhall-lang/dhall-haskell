@@ -2,14 +2,14 @@ resolver: lts-18.0
 packages:
   - dhall
   - dhall-bash
-  - dhall-json
-  - dhall-nix
-  - dhall-lsp-server
-  - dhall-yaml
-  - dhall-docs
-  - dhall-openapi
   - dhall-csv
+  - dhall-docs
+  - dhall-json
+  - dhall-lsp-server
+  - dhall-nix
+  - dhall-openapi
   - dhall-toml
+  - dhall-yaml
 extra-deps:
   - haskell-lsp-0.23.0.0@sha256:b782cb24ca62510f4eb698f778f7e6dac6419a5ac8fb8dc67bdffe4ae04ae42d,5315
   - haskell-lsp-types-0.23.0.0@sha256:b15d9c2aff8b8145797f5fa6771910b986d2456eccb30c3de69b75d4768cd12d,3027
