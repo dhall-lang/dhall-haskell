@@ -1,6 +1,11 @@
 module Main where
 
-import Test.Tasty (TestTree)
+import Control.Monad       (unless)
+import Data.Text           (unpack)
+import Test.Tasty          (TestTree)
+import Test.Tasty.HUnit    (HasCallStack, Assertion, assertFailure)
+import Toml.Type.TOML      (TOML, tomlDiff)
+import Toml.Type.Printer   (pretty)
 
 import qualified Toml.Parser
 import qualified Data.Text.IO
@@ -27,6 +32,10 @@ testTree =
         dhallToTomlTests = map testDhallToToml
             [ "./tasty/data/empty"
             , "./tasty/data/natural"
+            , "./tasty/data/float"
+            , "./tasty/data/multiple-fields"
+            , "./tasty/data/nested-tables"
+            , "./tasty/data/adjacent-tables"
             ]
 
 testDhallToToml :: String -> TestTree
@@ -45,5 +54,15 @@ testDhallToToml prefix = Test.Tasty.HUnit.testCase prefix $ do
         Left tomlErr -> fail $ show tomlErr
         Right expectedValue -> return expectedValue
     let message = "Conversion to TOML did not generate the expected output"
-    Test.Tasty.HUnit.assertEqual message expectedValue actualValue
+    assertTomlEq message expectedValue actualValue
+
+assertTomlEq :: HasCallStack => String -> TOML -> TOML -> Assertion
+assertTomlEq prefix expected actual  = unless (expected == actual) (assertFailure msg)
+    where
+        pretty' = unpack . pretty
+        msg = prefix ++ "\nExpected:\n" ++ pretty' expected ++ "\nActual:\n" ++ pretty' actual ++
+            "Diff:\nMissing:\n" ++ pretty' (tomlDiff expected actual) ++
+            "\nExtra:\n" ++ pretty' (tomlDiff actual expected) ++
+            "AST:\nExpected:\n" ++ show expected ++ "\nActual:\n" ++ show actual
+
 

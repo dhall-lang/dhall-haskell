@@ -33,6 +33,7 @@ module Dhall.Map
       -- * Deletion/Update
     , delete
     , filter
+    , partition
     , restrictKeys
     , withoutKeys
     , mapMaybe
@@ -355,6 +356,23 @@ filter predicate (Map m ks) = Map m' ks'
 
     ks' = filterKeys (\k -> Data.Map.member k m') ks
 {-# INLINABLE filter #-}
+
+{-| Split the map into values that do and don't satisfay the predicate
+
+
+>>> partition even (fromList [("C",3),("B",2),("A",1)])
+(fromList [("B",2)], fromList [("C", 3), ("A", 1)])
+>>> filter odd (fromList [("C",3),("B",2),("A",1)])
+(fromList [("C",3),("A",1)], fromList [("B", 2)])
+-}
+partition :: Ord k => (a -> Bool) -> Map k a -> (Map k a, Map k a)
+partition predicate (Map m ks) = (Map mpass kpass, Map mfail kfail)
+  where
+    (mpass, mfail) = Data.Map.partition predicate m
+    filterKeys' m' = filterKeys (\k -> Data.Map.member k m') ks
+
+    (kpass, kfail) = (filterKeys' mpass, filterKeys' mfail)
+{-# INLINABLE partition #-}
 
 {-| Restrict a 'Map' to only those keys found in a @"Data.Set".'Data.Set.Set'@.
 
