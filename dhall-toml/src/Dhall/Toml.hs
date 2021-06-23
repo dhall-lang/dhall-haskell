@@ -9,10 +9,8 @@ module Dhall.Toml
 
 import Control.Monad     (foldM)
 import Control.Exception (Exception)
-import Data.Foldable     (foldl')
-import Data.Text         (Text, unpack)
+import Data.Text         (unpack)
 import Data.Void         (Void)
-import Dhall.Map         (Map)
 import Dhall.Core        (Expr, DhallDouble(..))
 import Dhall.Parser      (Src)
 import Toml.Type.TOML    (TOML)
