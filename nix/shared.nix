@@ -1,6 +1,6 @@
 let
   pinned = import ./pinnedNixpkgs.nix;
-  
+
   defaultCompiler = "ghc865";
 
 in
@@ -15,12 +15,14 @@ let
   allDhallPackages = [
     "dhall"
     "dhall-bash"
+    "dhall-csv"
     "dhall-docs"
     "dhall-json"
     "dhall-lsp-server"
     "dhall-nix"
     "dhall-nixpkgs"
     "dhall-openapi"
+    "dhall-toml"
     "dhall-yaml"
   ];
 
@@ -136,6 +138,7 @@ let
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
                     (   [ "dhall-bash"
+                          "dhall-csv"
                           "dhall-docs"
                           # The test suite fails due to a relative reference
                           # to ../dhall/dhall-lang/
@@ -143,6 +146,7 @@ let
                           "dhall-nix"
                           "dhall-nixpkgs"
                           "dhall-openapi"
+                          "dhall-toml"
                           "dhall-yaml"
                         ]
                         # Test suite doesn't work on GHCJS
@@ -159,12 +163,14 @@ let
                   mass failOnAllWarnings [
                     "dhall"
                     "dhall-bash"
+                    "dhall-csv"
                     "dhall-docs"
                     "dhall-json"
                     "dhall-lsp-server"
                     "dhall-nix"
                     "dhall-nixpkgs"
                     "dhall-openapi"
+                    "dhall-toml"
                     "dhall-yaml"
                   ];
 
@@ -204,6 +210,12 @@ let
                         (pkgsNew.sdist ../dhall-bash)
                         { };
 
+                    dhall-csv =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-cvs"
+                        (pkgsNew.sdist ../dhall-csv)
+                        { };
+
                     dhall-docs =
                       haskellPackagesNew.callCabal2nix
                         "dhall-docs"
@@ -238,6 +250,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-lsp-server"
                         (pkgsNew.sdist ../dhall-lsp-server)
+                        { };
+
+                    dhall-toml =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-toml"
+                        (pkgsNew.sdist ../dhall-toml)
                         { };
 
                     dhall-yaml =
@@ -360,6 +378,9 @@ let
                     dhall-bash-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-bash;
 
+                    dhall-csv-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-csv;
+
                     dhall-docs-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-docs;
 
@@ -377,6 +398,9 @@ let
 
                     dhall-openapi-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-openapi;
+
+                    dhall-toml-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-toml;
 
                     dhall-yaml-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-yaml;
@@ -425,12 +449,14 @@ let
   possibly-static = {
     dhall            = makeStaticIfPossible "dhall"           ;
     dhall-bash       = makeStaticIfPossible "dhall-bash"      ;
+    dhall-csv        = makeStaticIfPossible "dhall-csv"       ;
     dhall-docs       = makeStaticIfPossible "dhall-docs"      ;
     dhall-json       = makeStaticIfPossible "dhall-json"      ;
     dhall-lsp-server = makeStaticIfPossible "dhall-lsp-server";
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
     dhall-nixpkgs    = makeStaticIfPossible "dhall-nixpkgs"   ;
     dhall-openapi    = makeStaticIfPossible "dhall-openapi"   ;
+    dhall-toml       = makeStaticIfPossible "dhall-toml"      ;
     dhall-yaml       = makeStaticIfPossible "dhall-yaml"      ;
   };
 
@@ -456,12 +482,14 @@ in
 
     tarball-dhall            = makeTarball "dhall"            ../dhall/man;
     tarball-dhall-bash       = makeTarball "dhall-bash"       null;
+    tarball-dhall-csv        = makeTarball "dhall-csv"        null;
     tarball-dhall-docs       = makeTarball "dhall-docs"       ../dhall-docs/src/Dhall/data/man;
     tarball-dhall-json       = makeTarball "dhall-json"       null;
     tarball-dhall-lsp-server = makeTarball "dhall-lsp-server" null;
     tarball-dhall-nix        = makeTarball "dhall-nix"        null;
     tarball-dhall-nixpkgs    = makeTarball "dhall-nixpkgs"    null;
     tarball-dhall-openapi    = makeTarball "dhall-openapi"    null;
+    tarball-dhall-toml       = makeTarball "dhall-toml"       null;
     tarball-dhall-yaml       = makeTarball "dhall-yaml"       null;
 
     inherit (pkgs) tarball-website website;
@@ -470,12 +498,14 @@ in
       dhall
       dhall-no-http
       dhall-bash
+      dhall-csv
       dhall-docs
       dhall-json
       dhall-lsp-server
       dhall-nix
       dhall-nixpkgs
       dhall-openapi
+      dhall-toml
       dhall-try
       dhall-yaml
     ;
@@ -484,23 +514,27 @@ in
 
     shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
     shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
+    shell-dhall-csv        = pkgs.haskell.packages."${compiler}".dhall-csv.env       ;
     shell-dhall-docs       = pkgs.haskell.packages."${compiler}".dhall-docs.env      ;
     shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
     shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
     shell-dhall-nixpkgs    = pkgs.haskell.packages."${compiler}".dhall-nixpkgs.env   ;
     shell-dhall-openapi    = pkgs.haskell.packages."${compiler}".dhall-openapi.env   ;
+    shell-dhall-toml       = pkgs.haskell.packages."${compiler}".dhall-toml.env      ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
     shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;
+    image-dhall-csv        = toDockerImage "dhall-csv"       ;
     image-dhall-docs       = toDockerImage "dhall-docs"      ;
     image-dhall-json       = toDockerImage "dhall-json"      ;
     image-dhall-lsp-server = toDockerImage "dhall-lsp-server";
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
     image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
     image-dhall-openapi    = toDockerImage "dhall-openapi"   ;
+    image-dhall-toml       = toDockerImage "dhall-toml"      ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
     prelude-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
