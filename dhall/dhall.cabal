@@ -2,7 +2,6 @@ Name: dhall
 Version: 1.39.0
 Cabal-Version: 2.0
 Build-Type: Simple
-Tested-With: GHC == 8.4.3, GHC == 8.6.1
 License: BSD3
 License-File: LICENSE
 Copyright: 2017 Gabriel Gonzalez
@@ -159,6 +158,7 @@ Extra-Source-Files:
     dhall-lang/Prelude/Natural/toDouble
     dhall-lang/Prelude/Natural/toInteger
     dhall-lang/Prelude/Natural/*.dhall
+    dhall-lang/Prelude/NonEmpty/*.dhall
     dhall-lang/Prelude/Operator/package.dhall
     dhall-lang/Prelude/Optional/all
     dhall-lang/Prelude/Optional/any

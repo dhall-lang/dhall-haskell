@@ -341,9 +341,16 @@ renderSourceCodeFragment (SourceCodeFragment Src{..} (NameUse nameDecl)) =
 --   to render the source code with the same structure (whitespaces, comments,
 --   language elements) as the source file
 renderCodeWithHyperLinks :: Text -> Expr Src Import -> Html ()
-renderCodeWithHyperLinks contents expr = pre_ $ go (1, 1) (Text.lines contents) imports
+renderCodeWithHyperLinks contents expr = pre_ $ go (1, 1) lines_ imports
   where
     imports = fragments expr
+
+    lines_ = map fixWindows (Text.lines contents)
+
+    fixWindows line
+        | Text.null line         = line
+        | Text.last line == '\r' = Text.init line
+        | otherwise              = line
 
     -- we keep the current line, column and consumed text as part of function argument
     go :: (Int, Int) -> [Text] -> [SourceCodeFragment] -> Html ()

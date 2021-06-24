@@ -16,7 +16,7 @@ module Dhall.Docs
     , defaultMain
     ) where
 
-import Control.Applicative ((<|>))
+import Control.Applicative (optional, (<|>))
 import Data.Text           (Text)
 import Data.Version        (showVersion)
 import Dhall.Pretty        (CharacterSet(..))
@@ -39,10 +39,13 @@ import qualified System.IO
 -- | Command line options
 data Options
     = Options
-        { packageDir :: FilePath         -- ^ Directory where your package resides
-        , docLink :: FilePath            -- ^ Link to the generated documentation
+        { packageDir :: FilePath
+          -- ^ Directory where your package resides
+        , docLink :: FilePath
+          -- ^ Link to the generated documentation
         , resolvePackageName :: Path Abs Dir -> Text
         , characterSet :: CharacterSet
+        , baseImportUrl :: Maybe Text
         }
     | Version
 
@@ -51,24 +54,36 @@ parseOptions :: Parser Options
 parseOptions =
     (   Options
     <$> Options.Applicative.strOption
-        ( Options.Applicative.long "input"
-       <> Options.Applicative.metavar "INPUT"
-       <> Options.Applicative.help "Directory of your dhall package"
-       <> Options.Applicative.action "directory"
-       )
+          ( Options.Applicative.long "input"
+          <> Options.Applicative.metavar "INPUT"
+          <> Options.Applicative.help "Directory of your dhall package"
+          <> Options.Applicative.action "directory"
+          )
     <*> Options.Applicative.strOption
-        ( Options.Applicative.long "output-link"
-       <> Options.Applicative.metavar "OUTPUT-LINK"
-       <> Options.Applicative.help
-            ( "Path to the link targeting the directory with the generated "
-           <> "documentation. The path needs to not exist or to be a symlink, "
-           <> "otherwise the tool won't generate any docs at all"
-            )
-       <> Options.Applicative.value "./docs"
-       <> Options.Applicative.action "directory"
-       )
+          ( Options.Applicative.long "output-link"
+          <> Options.Applicative.metavar "OUTPUT-LINK"
+          <> Options.Applicative.help
+               ( "Path to the link targeting the directory with the generated "
+               <> "documentation. The path needs to not exist or to be a "
+               <> "symlink, otherwise the tool won't generate any docs at all"
+                )
+          <> Options.Applicative.value "./docs"
+          <> Options.Applicative.action "directory"
+          )
     <*> parsePackageNameResolver
     <*> parseAscii
+    <*> optional
+          (Options.Applicative.strOption
+            (  Options.Applicative.long "base-import-url"
+            <> Options.Applicative.metavar "URL"
+            <> Options.Applicative.help
+                 (   "Base URL for importing the package.  This is used by "
+                 <>  "the 'Copy path to clipboard' feature to prepend the "
+                 <>  "specified URL to all copied paths so that they can be "
+                 <>  "pasted as valid imports for Dhall code"
+                 )
+            )
+          )
     ) <|> parseVersion
   where
     switch name description =
@@ -134,7 +149,7 @@ defaultMain = \case
 
         resolvedDocLink <- Path.IO.resolveDir' docLink
         let packageName = resolvePackageName resolvedPackageDir
-        generateDocs resolvedPackageDir resolvedDocLink packageName characterSet
+        generateDocs resolvedPackageDir resolvedDocLink baseImportUrl packageName characterSet
     Version ->
         putStrLn (showVersion Meta.version)
 

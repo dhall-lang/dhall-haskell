@@ -156,9 +156,8 @@ failureTest path = do
     let pathString = Text.unpack path
 
     Tasty.HUnit.testCase pathString (do
-        text <- Text.IO.readFile pathString
-
-        actualExpr <- Core.throws (Parser.exprFromText mempty text)
+        actualExpr <- do
+          Core.throws (Parser.exprFromText mempty (Test.Util.toDhallPath path))
 
         succeeded <- Exception.catch @SomeException
           (do _ <- Test.Util.load actualExpr

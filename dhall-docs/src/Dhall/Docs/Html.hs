@@ -17,6 +17,7 @@ module Dhall.Docs.Html
     , DocParams(..)
     ) where
 
+import Data.Foldable           (fold)
 import Data.Text               (Text)
 import Data.Void               (Void)
 import Dhall.Core              (Expr, Import)
@@ -42,6 +43,7 @@ data DocParams = DocParams
                                         --   front-end files
     , packageName :: Text               -- ^ Name of the package
     , characterSet :: CharacterSet      -- ^ Render code as `ASCII` or `Unicode`
+    , baseImportUrl :: Maybe Text       -- ^ Base import URL
     }
 
 -- | Generates an @`Html` ()@ with all the information about a dhall file
@@ -60,7 +62,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
             navBar params
             mainContainer $ do
                 setPageTitle params NotIndex breadcrumb
-                copyToClipboardButton htmlTitle
+                copyToClipboardButton clipboardText
                 br_ []
                 div_ [class_ "doc-contents"] header
                 Control.Monad.unless (null examples) $ do
@@ -72,6 +74,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
+    clipboardText = fold baseImportUrl <> htmlTitle
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
@@ -86,7 +89,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
         navBar params
         mainContainer $ do
             setPageTitle params Index breadcrumbs
-            copyToClipboardButton htmlTitle
+            copyToClipboardButton clipboardText
             br_ []
             Control.Monad.unless (null files) $ do
                 h3_ "Exported files: "
@@ -99,8 +102,8 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
   where
     listFile :: (Path Rel File, Maybe (Expr Void Import)) -> Html ()
     listFile (file, maybeType) =
-        let fileRef = Data.Text.pack $ Path.fromRelFile file
-            itemText = Data.Text.pack $ tryToTakeExt file
+        let fileRef = toUnixPath $ Path.fromRelFile file
+            itemText = toUnixPath $ tryToTakeExt file
         in li_ $ do
             a_ [href_ fileRef] $ toHtml itemText
             Data.Foldable.forM_ maybeType $ \typeExpr -> do
@@ -110,7 +113,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     listDir :: Path Rel Dir -> Html ()
     listDir dir =
-        let dirPath = Data.Text.pack $ Path.fromRelDir dir in
+        let dirPath = toUnixPath $ Path.fromRelDir dir in
         li_ $ a_ [href_ (dirPath <> "index.html")] $ toHtml dirPath
 
     tryToTakeExt :: Path Rel File -> FilePath
@@ -121,6 +124,7 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
 
     breadcrumbs = relPathToBreadcrumb indexDir
     htmlTitle = breadCrumbsToText breadcrumbs
+    clipboardText = fold baseImportUrl <> htmlTitle
 
 copyToClipboardButton :: Text -> Html ()
 copyToClipboardButton filePath =
@@ -244,3 +248,6 @@ script relativeResourcesPath =
         [ type_ "text/javascript"
         , src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
         ("" :: Text)
+
+toUnixPath :: String -> Text
+toUnixPath = Data.Text.replace "\\" "/" . Data.Text.pack

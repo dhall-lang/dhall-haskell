@@ -22,6 +22,7 @@ let
     "dhall-nix"
     "dhall-nixpkgs"
     "dhall-openapi"
+    "dhall-toml"
     "dhall-yaml"
   ];
 
@@ -145,6 +146,7 @@ let
                           "dhall-nix"
                           "dhall-nixpkgs"
                           "dhall-openapi"
+                          "dhall-toml"
                           "dhall-yaml"
                         ]
                         # Test suite doesn't work on GHCJS
@@ -168,6 +170,7 @@ let
                     "dhall-nix"
                     "dhall-nixpkgs"
                     "dhall-openapi"
+                    "dhall-toml"
                     "dhall-yaml"
                   ];
 
@@ -247,6 +250,12 @@ let
                       haskellPackagesNew.callCabal2nix
                         "dhall-lsp-server"
                         (pkgsNew.sdist ../dhall-lsp-server)
+                        { };
+
+                    dhall-toml =
+                      haskellPackagesNew.callCabal2nix
+                        "dhall-toml"
+                        (pkgsNew.sdist ../dhall-toml)
                         { };
 
                     dhall-yaml =
@@ -373,6 +382,9 @@ let
                     dhall-openapi-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-openapi;
 
+                    dhall-toml-static =
+                        pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-toml;
+
                     dhall-yaml-static =
                         pkgsNew.haskell.lib.statify haskellPackagesOld.dhall-yaml;
                   };
@@ -427,6 +439,7 @@ let
     dhall-nix        = makeStaticIfPossible "dhall-nix"       ;
     dhall-nixpkgs    = makeStaticIfPossible "dhall-nixpkgs"   ;
     dhall-openapi    = makeStaticIfPossible "dhall-openapi"   ;
+    dhall-toml       = makeStaticIfPossible "dhall-toml"      ;
     dhall-yaml       = makeStaticIfPossible "dhall-yaml"      ;
   };
 
@@ -459,6 +472,7 @@ in
     tarball-dhall-nix        = makeTarball "dhall-nix"        null;
     tarball-dhall-nixpkgs    = makeTarball "dhall-nixpkgs"    null;
     tarball-dhall-openapi    = makeTarball "dhall-openapi"    null;
+    tarball-dhall-toml       = makeTarball "dhall-toml"       null;
     tarball-dhall-yaml       = makeTarball "dhall-yaml"       null;
 
     inherit (pkgs) tarball-website website;
@@ -474,6 +488,7 @@ in
       dhall-nix
       dhall-nixpkgs
       dhall-openapi
+      dhall-toml
       dhall-try
       dhall-yaml
     ;
@@ -489,6 +504,7 @@ in
     shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
     shell-dhall-nixpkgs    = pkgs.haskell.packages."${compiler}".dhall-nixpkgs.env   ;
     shell-dhall-openapi    = pkgs.haskell.packages."${compiler}".dhall-openapi.env   ;
+    shell-dhall-toml       = pkgs.haskell.packages."${compiler}".dhall-toml.env      ;
     shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
     shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
 
@@ -501,6 +517,7 @@ in
     image-dhall-nix        = toDockerImage "dhall-nix"       ;
     image-dhall-nixpkgs    = toDockerImage "dhall-nixpkgs"   ;
     image-dhall-openapi    = toDockerImage "dhall-openapi"   ;
+    image-dhall-toml       = toDockerImage "dhall-toml"      ;
     image-dhall-yaml       = toDockerImage "dhall-yaml"      ;
 
     prelude-dhall-docs = pkgs.callPackage ./dhall-docs-generator.nix {
