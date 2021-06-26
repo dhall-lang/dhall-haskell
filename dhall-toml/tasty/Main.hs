@@ -36,6 +36,8 @@ testTree =
             , "./tasty/data/multiple-fields"
             , "./tasty/data/nested-tables"
             , "./tasty/data/adjacent-tables"
+            , "./tasty/data/inline-list"
+            , "./tasty/data/record-list"
             ]
 
 testDhallToToml :: String -> TestTree

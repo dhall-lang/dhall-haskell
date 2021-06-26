@@ -1,0 +1,10 @@
+nats = [1, 2, 3]
+bools = [true, false, false, false, true, false, true]
+lists = [[1, 2], [3, 4], []]
+
+[nested]
+floats = [1.1, 2.2]
+moreLists = [[1, 2], [3, 4], []]
+
+[nested1]
+evenMoreLists = [[1, 2], [3, 4], []]
