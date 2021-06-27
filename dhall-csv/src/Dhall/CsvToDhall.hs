@@ -1,5 +1,6 @@
 module Dhall.CsvToDhall (dhallFromCsv) where
 
+import Data.Bifunctor       (bimap)
 import Data.Text.Encoding   (decodeUtf8)
 import Data.Void            (Void)
 import Dhall.Core           (Expr, RecordField)
@@ -17,8 +18,6 @@ dhallFromCsv csv = Core.ListLit Nothing $ Sequence.fromList $ map convertRecord 
     convertRecord :: Data.Csv.NamedRecord -> Expr Src Void
     convertRecord recordCsv = Core.RecordLit dhallMap
       where
-        recordTextKeys = HashMap.mapKeys decodeUtf8 recordCsv
-        recordDhallFields = HashMap.map convertField recordTextKeys
-        dhallMap = Dhall.Map.fromList $ HashMap.toList recordDhallFields
+        dhallMap = Dhall.Map.fromList $ map (bimap decodeUtf8 convertField) $ HashMap.toList recordCsv
     convertField :: Data.Csv.Field -> RecordField Src Void
     convertField = Core.makeRecordField . Core.TextLit . (Core.Chunks []) . decodeUtf8
