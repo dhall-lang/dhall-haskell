@@ -58,6 +58,15 @@ jobs:
               bin/dhall-to-yaml-ng
               bin/yaml-to-dhall
         exclude:
+          # Temporarily exclude dhall-nix on Ubuntu due to build failure
+          # See: https://github.com/dhall-lang/dhall-haskell/runs/2920388542
+          - os:
+              runner: ubuntu-latest
+              package: null
+            package:
+              name: dhall-nix
+              assets: >
+                bin/dhall-to-nix
           - os:
               runner: windows-latest
               package: windows
