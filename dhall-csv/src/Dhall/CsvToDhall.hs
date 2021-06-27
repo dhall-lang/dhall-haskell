@@ -13,8 +13,12 @@ import qualified Dhall.Core             as Core
 import qualified Dhall.Map
 
 dhallFromCsv :: [Data.Csv.NamedRecord] -> Expr Src Void
-dhallFromCsv csv = Core.ListLit Nothing $ Sequence.fromList $ map convertRecord csv
+dhallFromCsv csv = Core.ListLit mType $ Sequence.fromList $ map convertRecord csv
   where
+    mType :: Maybe (Expr Src Void)
+    mType = case csv of
+        [] -> Just $ Core.App Core.List $ Core.Record $ Dhall.Map.fromList []
+        _ -> Nothing
     convertRecord :: Data.Csv.NamedRecord -> Expr Src Void
     convertRecord recordCsv = Core.RecordLit dhallMap
       where
