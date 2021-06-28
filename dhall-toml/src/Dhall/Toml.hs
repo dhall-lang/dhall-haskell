@@ -115,9 +115,6 @@ toToml toml key expr  = case expr of
                 return $ Toml.TOML.insertTable key nestedPairs toml
     _ -> Left $ Unsupported expr
     where
-        -- insert a value at the current key to the TOML, note that
-        -- the current key cannot be empty. This is true assuming
-        -- the root call to toToml is always called with a RecordLit
         insertPrim :: Toml.Value.Value a -> TOML
         insertPrim val = Toml.TOML.insertKeyVal key val toml
 
