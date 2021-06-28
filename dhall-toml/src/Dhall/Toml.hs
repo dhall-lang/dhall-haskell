@@ -20,7 +20,6 @@ import Toml.Type.Key      (Piece(Piece), Key(Key, unKey))
 import Toml.Type.Printer  (pretty)
 
 import qualified Data.Bifunctor     as Bifunctor
-import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Sequence      as Seq
 import qualified Data.Text.IO       as Text.IO
 import qualified Dhall.Map          as Map
@@ -70,7 +69,10 @@ toTomlTable r = foldM (toTomlRecordFold []) (mempty :: TOML) (Map.toList r)
 
 toTomlRecordFold :: [Piece] -> TOML -> (Text, Core.RecordField Void Void) -> Either CompileError TOML
 toTomlRecordFold curKey toml' (key', val) = toToml toml' newKey (Core.recordFieldValue val)
-    where newKey = Key $ NonEmpty.fromList $ curKey ++ [Piece key']
+    where
+        append []     y = y :| []
+        append (x:xs) y = x :| xs ++ [y]
+        newKey = Key $ append curKey $ Piece key'
 
 -- | A helper function for dhallToToml. It recursively adds the values in
 --   the Expr to the TOML. It has an invariant that key can be null iff
