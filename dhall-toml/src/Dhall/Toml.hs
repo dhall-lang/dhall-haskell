@@ -7,16 +7,19 @@ module Dhall.Toml
     , dhallToToml
     ) where
 
-import Control.Monad     (foldM)
-import Control.Exception (Exception, throwIO)
-import Data.Foldable     (toList)
-import Data.Void         (Void)
-import Dhall.Core        (Expr, DhallDouble(..))
-import Dhall.Parser      (Src)
-import Toml.Type.TOML    (TOML)
-import Toml.Type.Key     (Piece(Piece), Key(Key))
-import Toml.Type.Printer (pretty)
+import Control.Monad      (foldM, (<=<))
+import Control.Exception  (Exception, throwIO)
+import Data.Foldable      (toList)
+import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Text          (Text)
+import Data.Void          (Void)
+import Dhall.Core         (Expr, DhallDouble(..))
+import Dhall.Parser       (Src)
+import Toml.Type.TOML     (TOML)
+import Toml.Type.Key      (Piece(Piece), Key(Key, unKey))
+import Toml.Type.Printer  (pretty)
 
+import qualified Data.Bifunctor     as Bifunctor
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Sequence      as Seq
 import qualified Data.Text.IO       as Text.IO
@@ -54,72 +57,70 @@ instance Exception CompileError
 dhallToToml :: Expr s Void -> Either CompileError TOML
 dhallToToml e0 = do
     let norm = Core.normalize e0
-    _ <- assertRecordLit norm
-    toToml (mempty :: TOML) [] norm
-    where
-        assertRecordLit (Core.RecordLit r) = Right r
-        assertRecordLit e                  = Left $ NotARecord e
+    r <- assertRecordLit norm
+    toTomlTable r
+    -- foldM (toTomlRecordFold []) (mempty :: TOML) (Map.toList r)
 
-mapLeft :: (a -> b) -> Either a c -> Either b c
-mapLeft f (Left a) = Left $ f a
-mapLeft _ (Right c) = Right c
+assertRecordLit :: Expr Void Void -> Either CompileError (Map.Map Text (Core.RecordField Void Void))
+assertRecordLit (Core.RecordLit r) = Right r
+assertRecordLit e                  = Left $ NotARecord e
+
+toTomlTable :: Map.Map Text (Core.RecordField Void Void) -> Either CompileError TOML
+toTomlTable r = foldM (toTomlRecordFold []) (mempty :: TOML) (Map.toList r)
+
+toTomlRecordFold :: [Piece] -> TOML -> (Text, Core.RecordField Void Void) -> Either CompileError TOML
+toTomlRecordFold curKey toml' (key', val) = toToml toml' newKey (Core.recordFieldValue val)
+    where newKey = Key $ NonEmpty.fromList $ curKey ++ [Piece key']
 
 -- | A helper function for dhallToToml. It recursively adds the values in
 --   the Expr to the TOML. It has an invariant that key can be null iff
 --   Expr is a RecordLit. This aligns with how a TOML document must be a table,
 --   and bare values cannot be represented
-toToml :: TOML -> [Piece] -> Expr Void Void -> Either CompileError TOML
+toToml :: TOML -> Key -> Expr Void Void -> Either CompileError TOML
 toToml toml key expr  = case expr of
     Core.BoolLit a -> return $ insertPrim (Toml.Value.Bool a)
     Core.NaturalLit a -> return $ insertPrim (Toml.Value.Integer $ toInteger a)
     Core.DoubleLit (DhallDouble a) -> return $ insertPrim (Toml.Value.Double a)
     Core.TextLit (Core.Chunks [] a) -> return $ insertPrim (Toml.Value.Text a)
-    Core.ListLit _ a -> case Seq.lookup 0 a of
+    Core.ListLit _ a -> case toList a of-- Seq.lookup 0 a of
         -- empty array
-        Nothing -> return $ insertPrim (Toml.Value.Array [])
+        [] -> return $ insertPrim (Toml.Value.Array [])
         -- array of table
-        Just (Core.RecordLit _) -> do
-            tables <- mapM (toToml mempty []) $ toList a
-            let tables' = NonEmpty.fromList tables
-            let key' = Key $ NonEmpty.fromList key
-            return $ Toml.TOML.insertTableArrays key' tables' toml
+        record@(Core.RecordLit _) : records -> do
+            tables <- mapM (toTomlTable <=< assertRecordLit) (record :| records)
+            return $ Toml.TOML.insertTableArrays key tables toml
         -- inline array
-        Just _ -> do
+        _ -> do
             anyList <- mapM toAny $ toList a
             let arrayEither = Toml.AnyValue.toMArray anyList
-            array <- mapLeft (const $ HeterogeneousArray expr) arrayEither
+            array <- Bifunctor.first (const $ HeterogeneousArray expr) arrayEither
             return $ insertPrim array
     Core.RecordLit r ->
         let
-            f curKey toml' (key', val) = toToml toml' (curKey ++ [Piece key']) (Core.recordFieldValue val)
+            (inline, nested) = Map.partition (isInline . Core.recordFieldValue) r
         in
-            if null key -- at the top level, we can't have a table
-            then foldM (f []) toml (Map.toList r)
-            else let
-                (inline, nested) = Map.partition (isInline . Core.recordFieldValue) r
-            in
-                if null inline
-                -- if the table doesn't have inline elements, don't register
-                -- the table, only its non-inlined children. Ex:
-                -- [a] # bad
-                --   [b]
-                --     c = 1
-                -- [a.b] # good
-                --   c = 1
-                then foldM (f key) toml (Map.toList nested)
-                else do
-                    -- the order here is important, at least for testing, because
-                    -- the PrefixMap inside TOML is dependent on insert order
-                    inlinePairs <- foldM (f []) mempty      (Map.toList inline)
-                    nestedPairs <- foldM (f []) inlinePairs (Map.toList nested)
-                    return $ Toml.TOML.insertTable (Key $ NonEmpty.fromList key) nestedPairs toml
+            if null inline
+            -- if the table doesn't have inline elements, don't register
+            -- the table, only its non-inlined children. Ex:
+            -- [a] # bad
+            --   [b]
+            --     c = 1
+            -- [a.b] # good
+            --   c = 1
+            then foldM (toTomlRecordFold $ toList $ unKey key) toml (Map.toList nested)
+            else do
+                -- the order here is important, at least for testing, because
+                -- the PrefixMap inside TOML is dependent on insert order
+                inlinePairs <- foldM (toTomlRecordFold []) mempty      (Map.toList inline)
+                nestedPairs <- foldM (toTomlRecordFold []) inlinePairs (Map.toList nested)
+                return $ Toml.TOML.insertTable key nestedPairs toml
     _ -> Left $ Unsupported expr
     where
         -- insert a value at the current key to the TOML, note that
         -- the current key cannot be empty. This is true assuming
         -- the root call to toToml is always called with a RecordLit
         insertPrim :: Toml.Value.Value a -> TOML
-        insertPrim val = Toml.TOML.insertKeyVal (Key $ NonEmpty.fromList key) val toml
+        insertPrim val = Toml.TOML.insertKeyVal key val toml
 
         -- checks if the value should be represented as an inline key/value
         -- pair. Elements that are inlined are those that do not have a
