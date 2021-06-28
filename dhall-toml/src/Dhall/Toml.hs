@@ -7,7 +7,7 @@ module Dhall.Toml
     , dhallToToml
     ) where
 
-import Control.Monad      (foldM, (<=<))
+import Control.Monad      (foldM)
 import Control.Exception  (Exception, throwIO)
 import Data.Foldable      (toList)
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -55,10 +55,8 @@ instance Exception CompileError
 
 dhallToToml :: Expr s Void -> Either CompileError TOML
 dhallToToml e0 = do
-    let norm = Core.normalize e0
-    r <- assertRecordLit norm
+    r <- assertRecordLit (Core.normalize e0)
     toTomlTable r
-    -- foldM (toTomlRecordFold []) (mempty :: TOML) (Map.toList r)
 
 assertRecordLit :: Expr Void Void -> Either CompileError (Map.Map Text (Core.RecordField Void Void))
 assertRecordLit (Core.RecordLit r) = Right r
@@ -74,10 +72,6 @@ toTomlRecordFold curKey toml' (key', val) = toToml toml' newKey (Core.recordFiel
         append (x:xs) y = x :| xs ++ [y]
         newKey = Key $ append curKey $ Piece key'
 
--- | A helper function for dhallToToml. It recursively adds the values in
---   the Expr to the TOML. It has an invariant that key can be null iff
---   Expr is a RecordLit. This aligns with how a TOML document must be a table,
---   and bare values cannot be represented
 toToml :: TOML -> Key -> Expr Void Void -> Either CompileError TOML
 toToml toml key expr  = case expr of
     Core.BoolLit a -> return $ insertPrim (Toml.Value.Bool a)
@@ -89,8 +83,11 @@ toToml toml key expr  = case expr of
         [] -> return $ insertPrim (Toml.Value.Array [])
         -- array of table
         record@(Core.RecordLit _) : records -> do
-            tables <- mapM (toTomlTable <=< assertRecordLit) (record :| records)
-            return $ Toml.TOML.insertTableArrays key tables toml
+            tables' <- case mapM assertRecordLit (record :| records)  of
+                Right x -> mapM toTomlTable x
+                Left (NotARecord e) -> Left (HeterogeneousArray e)
+                Left x -> Left x
+            return $ Toml.TOML.insertTableArrays key tables' toml
         -- inline array
         _ -> do
             anyList <- mapM toAny $ toList a
