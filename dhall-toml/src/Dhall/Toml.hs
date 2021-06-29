@@ -35,13 +35,13 @@ import qualified Toml.Type.AnyValue as Toml.AnyValue
 data CompileError
     = Unimplemented String
     | Unsupported (Expr Void Void)
-    -- tomland does not support records in multi-dimensional arrays, though it
-    -- is alloed by the spec
+    -- | tomland does not support records in multi-dimensional arrays, though it
+    --   is allowed by the spec
     | UnsupportedArray (Expr Void Void)
     | NotARecord (Expr Void Void)
-    -- the latest TOML spec, v1.0.0 allows this but tomland has not
-    -- implemented it yet
-    -- NOTE: the only way to get this error is through enums
+    -- | the latest TOML spec, v1.0.0 allows this but tomland has not
+    --   implemented it yet
+    --   NOTE: the only way to get this error is through unions
     | HeterogeneousArray (Expr Void Void)
 
 instance Show CompileError where
@@ -68,6 +68,7 @@ toTomlTable r = foldM (toTomlRecordFold []) (mempty :: TOML) (Map.toList r)
 toTomlRecordFold :: [Piece] -> TOML -> (Text, Core.RecordField Void Void) -> Either CompileError TOML
 toTomlRecordFold curKey toml' (key', val) = toToml toml' newKey (Core.recordFieldValue val)
     where
+        append :: [Piece] -> Piece -> NonEmpty Piece
         append []     y = y :| []
         append (x:xs) y = x :| xs ++ [y]
         newKey = Key $ append curKey $ Piece key'
@@ -78,7 +79,7 @@ toToml toml key expr  = case expr of
     Core.NaturalLit a -> return $ insertPrim (Toml.Value.Integer $ toInteger a)
     Core.DoubleLit (DhallDouble a) -> return $ insertPrim (Toml.Value.Double a)
     Core.TextLit (Core.Chunks [] a) -> return $ insertPrim (Toml.Value.Text a)
-    Core.ListLit _ a -> case toList a of-- Seq.lookup 0 a of
+    Core.ListLit _ a -> case toList a of
         -- empty array
         [] -> return $ insertPrim (Toml.Value.Array [])
         -- array of table
@@ -89,8 +90,8 @@ toToml toml key expr  = case expr of
                 Left x -> Left x
             return $ Toml.TOML.insertTableArrays key tables' toml
         -- inline array
-        _ -> do
-            anyList <- mapM toAny $ toList a
+        a' -> do
+            anyList <- mapM toAny a'
             let arrayEither = Toml.AnyValue.toMArray anyList
             array <- Bifunctor.first (const $ HeterogeneousArray expr) arrayEither
             return $ insertPrim array
