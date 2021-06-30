@@ -11,7 +11,6 @@ import Control.Exception   (SomeException, throwIO)
 import Data.Text           (Text)
 import Data.Version        (showVersion)
 import Dhall.JSONToDhall
-import Dhall.Util          (renderExpression)
 import Dhall.Pretty        (CharacterSet (..))
 import Options.Applicative (Parser, ParserInfo)
 
@@ -19,6 +18,7 @@ import qualified Control.Exception
 import qualified Data.Aeson                                as Aeson
 import qualified Data.ByteString.Lazy.Char8                as ByteString
 import qualified Dhall.Core
+import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
 import qualified Paths_dhall_json                          as Meta
@@ -170,7 +170,7 @@ main = do
 
                 expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
 
-                renderExpression characterSet plain output expression
+                Dhall.Util.renderExpression characterSet plain output expression
 
         Type{..} -> do
             let characterSet = toCharacterSet ascii
@@ -180,7 +180,7 @@ main = do
 
                 finalSchema <- toSchema Nothing value
 
-                renderExpression characterSet plain output finalSchema
+                Dhall.Util.renderExpression characterSet plain output finalSchema
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

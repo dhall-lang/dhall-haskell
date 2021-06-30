@@ -12,13 +12,13 @@ import Data.Text           (Text)
 import Data.Version        (showVersion)
 import Dhall.JSONToDhall   (Conversion, parseConversion)
 import Dhall.Pretty        (CharacterSet (..))
-import Dhall.Util          (renderExpression)
 import Dhall.YamlToDhall   (Options (..), dhallFromYaml)
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
 import qualified Data.ByteString.Char8                     as BSL8
 import qualified Dhall.YamlToDhall                         as YamlToDhall
+import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
 import qualified Paths_dhall_yaml                          as Meta
@@ -153,7 +153,7 @@ main = do
 
                 expression <- dhallFromYaml (Options schema conversion) yaml
 
-                renderExpression characterSet plain output expression
+                Dhall.Util.renderExpression characterSet plain output expression
 
         Type{..} -> do
             let characterSet = toCharacterSet ascii
@@ -163,7 +163,7 @@ main = do
 
                 schema <- YamlToDhall.schemaFromYaml yaml
 
-                renderExpression characterSet plain output schema
+                Dhall.Util.renderExpression characterSet plain output schema
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler
