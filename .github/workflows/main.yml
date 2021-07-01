@@ -101,6 +101,7 @@ jobs:
           --copy-bins --local-bin-path ./bin
           ${{ matrix.package.name }}
       - name: "Run tests"
+        timeout-minutes: 20
         run: |
           ${{ runner.os == 'Windows' && matrix.package.name == 'dhall' }} && chcp 65001
           stack test ${{ matrix.package.name }} --test-suite-timeout 600
