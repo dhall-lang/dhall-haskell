@@ -246,7 +246,9 @@ getExpressionAndHeaderFromStdinText
 getExpressionAndHeaderFromStdinText censor inputName =
     get Dhall.Parser.exprAndHeaderFromText censor . StdinText inputName
 
-
+{-| Convenient utility to output an expression either to a file
+    or to stdout.
+-}
 renderExpression :: Pretty a => CharacterSet -> Bool -> Maybe FilePath -> Expr Src a -> IO ()
 renderExpression characterSet plain output expression = do
     let document = Dhall.Pretty.prettyCharacterSet characterSet expression
