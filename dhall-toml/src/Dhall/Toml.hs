@@ -79,6 +79,10 @@ toToml toml key expr  = case expr of
     Core.NaturalLit a -> return $ insertPrim (Toml.Value.Integer $ toInteger a)
     Core.DoubleLit (DhallDouble a) -> return $ insertPrim (Toml.Value.Double a)
     Core.TextLit (Core.Chunks [] a) -> return $ insertPrim (Toml.Value.Text a)
+    -- empty union alternative like < A | B >.A
+    Core.Field (Core.Union _) (Core.FieldSelection _ a _) -> return $ insertPrim (Toml.Value.Text a)
+    -- union alternative with type like < A : Natural | B>.A 1
+    Core.App (Core.Field (Core.Union _) _) a -> toToml toml key a
     Core.ListLit _ a -> case toList a of
         -- empty array
         [] -> return $ insertPrim (Toml.Value.Array [])
