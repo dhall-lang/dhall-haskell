@@ -1,0 +1,17 @@
+[[records]]
+    a = 1
+
+[[records]]
+    a = 2
+
+[[records]]
+    a = 3
+
+[[nested.records]]
+    a = 1
+
+[[nested.records]]
+    a = 2
+
+[[nested.records]]
+    a = 3
