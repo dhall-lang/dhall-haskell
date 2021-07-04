@@ -17,16 +17,11 @@ import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
 import qualified Data.ByteString.Char8                     as BSL8
-import qualified Data.Text.IO                              as Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
-import qualified Dhall.Pretty
 import qualified Dhall.YamlToDhall                         as YamlToDhall
+import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
 import qualified Paths_dhall_yaml                          as Meta
-import qualified System.Console.ANSI                       as ANSI
 import qualified System.Exit
 import qualified System.IO                                 as IO
 
@@ -146,30 +141,6 @@ main = do
             Nothing   -> BSL8.getContents
             Just path -> BSL8.readFile path
 
-    let renderExpression characterSet plain output expression = do
-            let document = Dhall.Pretty.prettyCharacterSet characterSet expression
-
-            let stream = Dhall.Pretty.layout document
-
-            case output of
-                Nothing -> do
-                    supportsANSI <- ANSI.hSupportsANSI IO.stdout
-
-                    let ansiStream =
-                            if supportsANSI && not plain
-                            then fmap Dhall.Pretty.annToAnsiStyle stream
-                            else Pretty.unAnnotateS stream
-
-                    Pretty.Terminal.renderIO IO.stdout ansiStream
-
-                    Text.IO.putStrLn ""
-
-                Just file_ ->
-                    IO.withFile file_ IO.WriteMode $ \h -> do
-                        Pretty.Text.renderIO h stream
-
-                        Text.IO.hPutStrLn h ""
-
     case options of
         Version ->
             putStrLn (showVersion Meta.version)
@@ -182,7 +153,7 @@ main = do
 
                 expression <- dhallFromYaml (Options schema conversion) yaml
 
-                renderExpression characterSet plain output expression
+                Dhall.Util.renderExpression characterSet plain output expression
 
         Type{..} -> do
             let characterSet = toCharacterSet ascii
@@ -192,7 +163,7 @@ main = do
 
                 schema <- YamlToDhall.schemaFromYaml yaml
 
-                renderExpression characterSet plain output schema
+                Dhall.Util.renderExpression characterSet plain output schema
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler
