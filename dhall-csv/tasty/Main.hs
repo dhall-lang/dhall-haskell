@@ -2,18 +2,20 @@
 
 module Main (main) where
 
+import Data.Text            (Text)
 import Test.Tasty           (TestTree)
 import Test.Tasty.Silver    (findByExtension)
 import System.FilePath      (takeBaseName, replaceExtension)
 
+import qualified Data.Csv
 import qualified Data.Text.IO
+import qualified Dhall.Core         as D
 import qualified Dhall.Csv
+import qualified Dhall.CsvToDhall
 import qualified Dhall.Csv.Util
-import qualified Data.ByteString
-import qualified Data.Text.Encoding
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
-import qualified Test.Tasty.Silver as Silver
+import qualified Test.Tasty.Silver  as Silver
 
 
 main :: IO ()
@@ -52,8 +54,15 @@ csvToDhallGolden = do
         [ Silver.goldenVsAction
             (takeBaseName csvFile)
             dhallFile
-            (Data.ByteString.readFile dhallFile)
-            Data.Text.Encoding.decodeUtf8
+            (textToCsv =<< Data.Text.IO.readFile csvFile)
+            (D.pretty . Dhall.CsvToDhall.dhallFromCsv)
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
         ]
+
+textToCsv :: Text -> IO [Data.Csv.NamedRecord]
+textToCsv txt =
+    case Dhall.Csv.Util.decodeCsvDefault txt of
+        Left err -> error err
+        Right csv -> return csv
+
