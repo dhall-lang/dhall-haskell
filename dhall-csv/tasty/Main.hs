@@ -63,6 +63,5 @@ csvToDhallGolden = do
 textToCsv :: Text -> IO [Data.Csv.NamedRecord]
 textToCsv txt =
     case Dhall.Csv.Util.decodeCsvDefault txt of
-        Left err -> error err
+        Left err -> fail err
         Right csv -> return csv
-
