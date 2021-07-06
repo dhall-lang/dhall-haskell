@@ -2,7 +2,7 @@
 
 module Main where
 
-import Control.Exception    (SomeException, throwIO)
+import Control.Exception    (SomeException)
 import Dhall.CsvToDhall     (dhallFromCsv)
 import Dhall.Pretty         (CharacterSet (..))
 
