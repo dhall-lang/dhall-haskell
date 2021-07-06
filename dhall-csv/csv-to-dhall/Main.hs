@@ -24,7 +24,7 @@ main = do
                     Just path -> Text.IO.readFile path
 
             case Dhall.Csv.Util.decodeCsvDefault text of
-                Left err -> throwIO (userError err)
+                Left err -> fail err
                 Right csv -> pure csv
 
     handle $ do
