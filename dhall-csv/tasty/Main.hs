@@ -55,7 +55,7 @@ csvToDhallGolden = do
             (takeBaseName csvFile)
             dhallFile
             (textToCsv =<< Data.Text.IO.readFile csvFile)
-            (D.pretty . Dhall.CsvToDhall.dhallFromCsv)
+            ((\txt -> txt <> "\n") . D.pretty . Dhall.CsvToDhall.dhallFromCsv)
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
         ]
