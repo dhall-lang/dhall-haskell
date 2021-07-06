@@ -5,7 +5,7 @@
 module Main where
 
 import Control.Applicative  (optional, (<|>))
-import Control.Exception    (SomeException, throwIO)
+import Control.Exception    (SomeException)
 import Data.Version         (showVersion)
 import Dhall.CsvToDhall     (dhallFromCsv)
 import Dhall.Pretty         (CharacterSet (..))
@@ -131,7 +131,7 @@ main = do
                     Just path -> Text.IO.readFile path
 
             case Dhall.Csv.Util.decodeCsvDefault text of
-                Left err -> throwIO (userError err)
+                Left err -> fail err
                 Right csv -> pure csv
 
     case options of
