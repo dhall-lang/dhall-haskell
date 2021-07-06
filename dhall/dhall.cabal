@@ -699,19 +699,6 @@ Test-Suite tasty
         -DWITH_HTTP
     Default-Language: Haskell2010
 
-Test-Suite doctest
-    Type: exitcode-stdio-1.0
-    Hs-Source-Dirs: doctest
-    Main-Is: Main.hs
-    GHC-Options: -Wall
-    Build-Depends:
-        base                          ,
-        directory                     ,
-        filepath                < 1.5 ,
-        mockery                 < 0.4 ,
-        doctest   >= 0.7.0   && < 0.19
-    Default-Language: Haskell2010
-
 Benchmark dhall-parser
     Type: exitcode-stdio-1.0
     Hs-Source-Dirs: benchmark/parser
