@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
-{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -1382,7 +1381,8 @@ data TypeMessage s a
     deriving (Show)
 
 formatHints :: [Doc Ann] -> Doc Ann
-formatHints hints = vsep (map format hints) where
+formatHints hints = vsep (map format hints)
+  where
     format hint = "\n\n\ESC[1;33mHint\ESC[0m: " <> hint
 
 shortTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
@@ -2633,7 +2633,7 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         txt1 = insert expr1
 
 prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {..}
- where
+  where
     short = "The completion schema must be a record"
 
     hints = []
@@ -2659,7 +2659,7 @@ prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {.
         txt1 = insert expr1
 
 prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..}
- where
+  where
     short = "Completion schema is missing a field: " <> pretty fieldName
 
     hints = []
