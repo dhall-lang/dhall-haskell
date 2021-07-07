@@ -774,7 +774,7 @@ infer typer = loop
 
             _R' <- loop ctx r
 
-            let r'' = quote names (eval values l)
+            let r'' = quote names (eval values r)
 
             xLs' <- case _L' of
                 VRecord xLs' ->
