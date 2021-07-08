@@ -55,12 +55,17 @@ Executable dhall-to-csv
     Hs-Source-Dirs: dhall-to-csv
     Main-Is: Main.hs
     Build-Depends:
-        base                    ,
-        bytestring              ,
-        cassava                 ,
-        dhall-csv               ,
-        unordered-containers    ,
-        vector                  ,
+        ansi-terminal                                       ,
+        base                                                ,
+        bytestring                                          ,
+        cassava                                             ,
+        dhall                                               ,
+        dhall-csv                                           ,
+        optparse-applicative                                ,
+        prettyprinter                                       ,
+        prettyprinter-ansi-terminal    >= 1.1.1    && < 1.2 ,
+        unordered-containers                                ,
+        vector                                              ,
         text
     Other-Modules:
         Paths_dhall_csv
@@ -71,12 +76,17 @@ Executable csv-to-dhall
     Hs-Source-Dirs: csv-to-dhall
     Main-Is: Main.hs
     Build-Depends:
-        base                    ,
-        bytestring              ,
-        cassava                 ,
-        dhall-csv               ,
-        unordered-containers    ,
-        vector                  ,
+        ansi-terminal                                       ,
+        base                                                ,
+        bytestring                                          ,
+        cassava                                             ,
+        dhall                                               ,
+        dhall-csv                                           ,
+        optparse-applicative                                ,
+        prettyprinter                                       ,
+        prettyprinter-ansi-terminal    >= 1.1.1    && < 1.2 ,
+        unordered-containers                                ,
+        vector                                              ,
         text
     Other-Modules:
         Paths_dhall_csv
