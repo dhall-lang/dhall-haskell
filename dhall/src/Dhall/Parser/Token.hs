@@ -198,6 +198,7 @@ hexdig c =
     ||  ('A' <= c && c <= 'F')
     ||  ('a' <= c && c <= 'f')
 
+-- | Parse a leading @+@ or @-@ sign
 signPrefix :: Num a => Parser (a -> a)
 signPrefix = (do
     let positive = fmap (\_ -> id    ) (char '+')
@@ -316,12 +317,20 @@ naturalLiteral = (do
           where
             step acc x = acc * 10 + x
 
+{-| Parse a 4-digit year
+
+    This corresponds to the @date-fullyear@ rule from the official grammar
+-}
 dateFullYear :: Parser Integer
 dateFullYear = do
     digits <- Monad.replicateM 4 (Text.Parser.Char.satisfy digit)
 
     return (digits `base` 10)
 
+{-| Parse a 2-digit month
+
+    This corresponds to the @date-month@ rule from the official grammar
+-}
 dateMonth :: Parser Int
 dateMonth = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
@@ -332,6 +341,10 @@ dateMonth = do
         then return month
         else fail "Invalid month"
 
+{-| Parse a 2-digit day of the month
+
+    This corresponds to the @date-mday@ rule from the official grammar
+-}
 dateMday :: Parser Int
 dateMday = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
@@ -342,6 +355,10 @@ dateMday = do
         then return day
         else fail "Invalid day"
 
+{-| Parse a 2-digit hour
+
+    This corresponds to the @time-hour@ rule from the official grammar
+-}
 timeHour :: Parser Int
 timeHour = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
@@ -352,6 +369,10 @@ timeHour = do
         then return hour
         else fail "Invalid hour"
 
+{-| Parse a 2-digit minute
+
+    This corresponds to the @time-minute@ rule from the official grammar
+-}
 timeMinute :: Parser Int
 timeMinute = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
@@ -362,6 +383,10 @@ timeMinute = do
         then return minute
         else fail "Invalid minute"
 
+{-| Parse a 2-digit second
+
+    This corresponds to the @time-second@ rule from the official grammar
+-}
 timeSecond :: Parser Pico
 timeSecond = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
@@ -372,6 +397,10 @@ timeSecond = do
         then return second
         else fail "Invalid second"
 
+{-| Parse the fractional component of a second
+
+    This corresponds to the @time-secfrac@ rule from the official grammar
+-}
 timeSecFrac :: Parser (Pico, Word)
 timeSecFrac = do
     _ <- Text.Parser.Char.text "."
