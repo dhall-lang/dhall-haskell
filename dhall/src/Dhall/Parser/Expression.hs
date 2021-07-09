@@ -123,14 +123,6 @@ timeNumOffset = do
 
     return (TimeZoneLiteral (Time.TimeZone minutes Prelude.False ""))
 
-timeOffset :: Parser (Expr s a)
-timeOffset =
-        (do _ <- text "Z"
-
-            return (TimeZoneLiteral (Time.TimeZone 0 Prelude.False ""))
-        )
-    <|> timeNumOffset
-
 partialTime :: Parser (Expr s a)
 partialTime = do
     hour <- timeHour
@@ -174,7 +166,7 @@ temporalLiteral =
 
             time <- partialTime
 
-            timeZone <- timeOffset
+            timeZone <- timeNumOffset
 
             return
                 (RecordLit
@@ -201,7 +193,7 @@ temporalLiteral =
     <|> try (do
             time <- partialTime
 
-            timeZone <- timeOffset
+            timeZone <- timeNumOffset
 
             return
                 (RecordLit
@@ -212,7 +204,7 @@ temporalLiteral =
         )
     <|> try fullDate
     <|> try partialTime
-    <|> try timeOffset
+    <|> try timeNumOffset
 
 -- | Given a parser for imports,
 parsers :: forall a. Parser a -> Parsers a
