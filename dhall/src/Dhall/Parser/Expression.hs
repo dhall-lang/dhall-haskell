@@ -109,6 +109,10 @@ data Parsers a = Parsers
     , importExpression_   :: Parser (Expr Src a)
     }
 
+{-| Parse a numeric `TimeZone`
+
+    This corresponds to the @time-numoffset@ rule from the official grammar
+-}
 timeNumOffset :: Parser (Expr s a)
 timeNumOffset = do
     s <- signPrefix
@@ -123,6 +127,10 @@ timeNumOffset = do
 
     return (TimeZoneLiteral (Time.TimeZone minutes Prelude.False ""))
 
+{-| Parse a numeric `TimeZone` or a @Z@
+
+    This corresponds to the @time-offset@ rule from the official grammar
+-}
 timeOffset :: Parser (Expr s a)
 timeOffset =
         (do _ <- text "Z"
@@ -131,6 +139,10 @@ timeOffset =
         )
     <|> timeNumOffset
 
+{-| Parse a `Time`
+
+    This corresponds to the @partial-time@ rule from the official grammar
+-}
 partialTime :: Parser (Expr s a)
 partialTime = do
     hour <- timeHour
@@ -149,6 +161,10 @@ partialTime = do
 
     return (TimeLiteral time precision)
 
+{-| Parse a `Date`
+
+    This corresponds to the @full-date@ rule from the official grammar
+-}
 fullDate :: Parser (Expr s a)
 fullDate = do
     year <- dateFullYear
@@ -165,6 +181,11 @@ fullDate = do
         Nothing -> fail "Invalid calendar day"
         Just d  -> return (DateLiteral d)
 
+{-| Parse a `Date`, `Time`, `TimeZone` or any valid permutation of them as a
+    record
+
+    This corresponds to the @temporal-literal@ rule from the official grammar
+-}
 temporalLiteral :: Parser (Expr s a)
 temporalLiteral =
         try (do
