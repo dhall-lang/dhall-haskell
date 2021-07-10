@@ -1035,12 +1035,20 @@ encodeExpressionInternal encodeEmbed = go
                 (   Encoding.encodeTag 4
                 <>  encodeList2
                         (Encoding.encodeInt exponent)
-                        (Encoding.encodeInt mantissa)
+                        encodedMantissa
                 )
           where
             exponent = negate (fromIntegral precision)
 
+            mantissa :: Integer
             mantissa = truncate (ss * 10 ^ precision)
+
+            encodedMantissa
+                |  fromIntegral (minBound :: Int) <= mantissa
+                && mantissa <= fromIntegral (maxBound :: Int) =
+                    Encoding.encodeInt (fromInteger mantissa)
+                | otherwise =
+                    Encoding.encodeInteger mantissa
 
         TimeZoneLiteral (Time.TimeZone minutes _ _) ->
             encodeList4

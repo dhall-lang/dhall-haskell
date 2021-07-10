@@ -1272,7 +1272,6 @@ reservedIdentifiers = reservedKeywords <>
         , "Type"
         , "Kind"
         , "Sort"
-        , "Z"  -- Valid `TimeZone` literal
         ]
 
 -- | Same as @Data.Text.splitOn@, except always returning a `NonEmpty` result

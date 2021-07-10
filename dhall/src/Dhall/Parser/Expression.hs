@@ -212,7 +212,7 @@ temporalLiteral =
         )
     <|> try fullDate
     <|> try partialTime
-    <|> try timeOffset
+    <|> try timeNumOffset
 
 -- | Given a parser for imports,
 parsers :: forall a. Parser a -> Parsers a
