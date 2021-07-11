@@ -670,7 +670,7 @@ Test-Suite tasty
         either                                         ,
         filepath                                       ,
         foldl                                    < 1.5 ,
-        generic-random            >= 1.3.0.0  && < 1.5 ,
+        generic-random            >= 1.3.0.0  && < 1.6 ,
         http-client                                    ,
         http-client-tls                                ,
         lens-family-core                               ,
