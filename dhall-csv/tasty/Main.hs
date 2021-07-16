@@ -29,9 +29,11 @@ goldenTests :: IO TestTree
 goldenTests = do
     dhallToCsvTree <- dhallToCsvGolden
     csvToDhallTree <- csvToDhallGolden
+    noHeaderCsvToDhallTree <- noHeaderCsvToDhallGolden
     return $ Test.Tasty.testGroup "dhall-csv"
         [ dhallToCsvTree
         , csvToDhallTree
+        , noHeaderCsvToDhallTree
         ]
 
 dhallToCsvGolden :: IO TestTree
@@ -54,14 +56,27 @@ csvToDhallGolden = do
         [ Silver.goldenVsAction
             (takeBaseName csvFile)
             dhallFile
-            (textToCsv =<< Data.Text.IO.readFile csvFile)
-            ((\txt -> txt <> "\n") . D.pretty . Dhall.CsvToDhall.dhallFromCsv)
+            ((textToCsv True) =<< Data.Text.IO.readFile csvFile)
+            ((<> "\n") . D.pretty . Dhall.CsvToDhall.dhallFromCsv)
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
         ]
 
-textToCsv :: Text -> IO [Data.Csv.NamedRecord]
-textToCsv txt =
-    case Dhall.Csv.Util.decodeCsvDefault txt of
+noHeaderCsvToDhallGolden :: IO TestTree
+noHeaderCsvToDhallGolden = do
+    csvFiles <- findByExtension [".csv"] "./tasty/data/no-header-csv-to-dhall"
+    return $ Test.Tasty.testGroup "csv-to-dhall"
+        [ Silver.goldenVsAction
+            (takeBaseName csvFile)
+            dhallFile
+            ((textToCsv False) =<< Data.Text.IO.readFile csvFile)
+            ((<> "\n") . D.pretty . Dhall.CsvToDhall.dhallFromCsv)
+        | csvFile <- csvFiles
+        , let dhallFile = replaceExtension csvFile ".dhall"
+        ]
+
+textToCsv :: Bool -> Text -> IO [Data.Csv.NamedRecord]
+textToCsv hasHeader txt =
+    case Dhall.Csv.Util.decodeCsvDefault hasHeader txt of
         Left err -> fail err
         Right csv -> return csv
