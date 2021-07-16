@@ -202,12 +202,12 @@ tomlValueToDhall exprType v = case (exprType, v) of
         return $ Core.ListLit Nothing (Seq.fromList l)
     _ -> Left $ Incompatible exprType (Prim (AnyValue v))
 
--- TODO: keep track of the path for more helpful error mesasges
+-- TODO: keep track of the path for more helpful error messages
 toDhall :: Expr Src Void -> Object -> Either CompileError (Expr Src Void)
 toDhall exprType value = case (exprType, value) of
     (_,                    Invalid)  -> Left $ InternalError "invalid object"
 
-    -- TODO: allow different types of matching
+    -- TODO: allow different types of matching (ex. first, strict, none)
     (Core.Union m        , _)        -> let
         f key maybeType = case maybeType of
             Just ty -> do
@@ -244,9 +244,9 @@ toDhall exprType value = case (exprType, value) of
 
 
 -- | An intermediate object created from a 'TOML' before an 'Expr'.
--- | It does two things, firstly joining the tomlPairs, tomlTables,
--- | and tomlTableArrays parts of the TOML. Second, it turns the dense
--- | paths (ex. a.b.c = 1) into sparse paths (ex. a = { b = { c = 1 }}).
+--   It does two things, firstly joining the tomlPairs, tomlTables,
+--   and tomlTableArrays parts of the TOML. Second, it turns the dense
+--   paths (ex. a.b.c = 1) into sparse paths (ex. a = { b = { c = 1 }}).
 data Object
     = Prim Toml.AnyValue.AnyValue
     | Array [Object]
@@ -270,7 +270,7 @@ pairsToObject :: HashMap.HashMap Key Toml.AnyValue.AnyValue -> Object
 pairsToObject pairs
     = foldl' (<>) (Table HashMap.empty)
     $ HashMap.mapWithKey sparseObject
-    $ (fmap Prim pairs)
+    $ fmap Prim pairs
 
 tablesToObject :: Toml.PrefixTree.PrefixMap TOML -> Object
 tablesToObject tables
