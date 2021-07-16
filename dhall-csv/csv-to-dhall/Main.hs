@@ -36,12 +36,14 @@ data Options
         , output     :: Maybe FilePath
         , ascii      :: Bool
         , plain      :: Bool
+        , noHeader   :: Bool
         }
     | Type
         { file       :: Maybe FilePath
         , output     :: Maybe FilePath
         , ascii      :: Bool
         , plain      :: Bool
+        , noHeader   :: Bool
         }
     | Version
     deriving Show
@@ -55,6 +57,7 @@ parseOptions =
         <*> optional parseOutput
         <*> parseASCII
         <*> parsePlain
+        <*> parseNoHeader
         )
     <|> parseVersion
   where
@@ -71,6 +74,7 @@ parseOptions =
             <*> optional parseOutput
             <*> parseASCII
             <*> parsePlain
+            <*> parseNoHeader
 
     parseSchema =
         Options.strArgument
@@ -114,6 +118,12 @@ parseOptions =
             <>  Options.help "Disable syntax highlighting"
             )
 
+    parseNoHeader =
+        Options.switch
+            (   Options.long "no-header"
+            <>  Options.help "Convert CSV with no header"
+            )
+
 
 main :: IO ()
 main = do
@@ -125,12 +135,12 @@ main = do
             True  -> ASCII
             False -> Unicode
 
-    let toCsv file = do
+    let toCsv hasHeader file = do
             text <- case file of
                     Nothing -> Text.IO.getContents
                     Just path -> Text.IO.readFile path
 
-            case Dhall.Csv.Util.decodeCsvDefault text of
+            case Dhall.Csv.Util.decodeCsvDefault hasHeader text of
                 Left err -> fail err
                 Right csv -> pure csv
 
@@ -142,7 +152,7 @@ main = do
             handle $ do
                 let characterSet = toCharacterSet ascii
 
-                csv <- toCsv file
+                csv <- toCsv (not noHeader) file
 
                 let expression = dhallFromCsv csv
 
