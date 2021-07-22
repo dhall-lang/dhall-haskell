@@ -39,6 +39,7 @@ Library
         containers           >= 0.5.9     && < 0.7 ,
         dhall                >= 1.39.0    && < 1.40,
         filepath                             < 1.5 ,
+        optparse-applicative                       ,
         prettyprinter        >= 1.5.1     && < 1.8 ,
         text                 >= 0.11.1.0  && < 1.3 ,
         unordered-containers                 < 0.3 ,
