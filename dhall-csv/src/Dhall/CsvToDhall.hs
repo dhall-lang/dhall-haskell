@@ -2,14 +2,21 @@
 {-# LANGUAGE RecordWildCards     #-}
 
 module Dhall.CsvToDhall (
+    -- * CSV to Dhall
       dhallFromCsv
     , parseConversion
     , defaultConversion
-    , CompileError(..)
+    , resolveSchemaExpr
+    , typeCheckSchemaExpr
     , Conversion(..)
+
+    -- * Exceptions
+    , CompileError(..)
     ) where
 
 import Control.Applicative      ((<|>))
+import Control.Exception        (Exception, throwIO)
+import Control.Monad.Catch      (MonadCatch, throwM)
 import Data.Either              (rights)
 import Data.Foldable            (toList)
 import Data.List                ((\\))
@@ -26,7 +33,10 @@ import qualified Data.Csv
 import qualified Data.HashMap.Strict         as HashMap
 import qualified Data.Sequence               as Sequence
 import qualified Dhall.Core                  as Core
+import qualified Dhall.Import
 import qualified Dhall.Map                   as Map
+import qualified Dhall.Parser
+import qualified Dhall.TypeCheck             as TypeCheck
 import qualified Options.Applicative         as O
 
 -- ----------
@@ -92,22 +102,25 @@ parseUnion =
 
 type ExprX = Expr Src Void
 
-data CompileError
-    = Unsupported ExprX
-    | MissingKey Text
-    | UnhandledKeys [Text] -- Keys in CSV but not in schema
-    | Mismatch
-        ExprX           -- Expected Dhall Type
-        Data.Csv.Field  -- Actual field
-        Text            -- Record key
-    | ContainsUnion ExprX
-    | UndecidableUnion
-        ExprX           -- Expected Type
-        Data.Csv.Field  -- CSV Field
-        [ExprX]         -- Multiple conversions
-    | UndecidableMissingUnion
-        ExprX           -- Expected Type
-        [ExprX]         -- Multiple Conversions
+-- | Parse schema code and resolve imports
+resolveSchemaExpr :: Text  -- ^ type code (schema)
+                  -> IO ExprX
+resolveSchemaExpr code = do
+    parsedExpression <-
+      case Dhall.Parser.exprFromText "\n\ESC[1;31mSCHEMA\ESC[0m" code of
+        Left  err              -> throwIO err
+        Right parsedExpression -> return parsedExpression
+    Dhall.Import.load parsedExpression
+
+typeCheckSchemaExpr :: (Exception e, MonadCatch m)
+                    => (CompileError -> e) -> ExprX -> m ExprX
+typeCheckSchemaExpr compileException expr =
+  case TypeCheck.typeOf expr of -- check if the expression has type
+    Left  err -> throwM . compileException $ TypeError err
+    Right t   -> case t of -- check if the expression has type Type
+      Core.Const Core.Type -> return expr
+      _              -> throwM . compileException $ BadDhallType t expr
+
 
 dhallFromCsv :: Conversion -> ExprX -> [Data.Csv.NamedRecord] -> Either CompileError ExprX
 dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
@@ -164,25 +177,25 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
 
     -- Bools
     fieldConvert key Core.Bool (Just field) =
-        case readMaybe (show field) :: Maybe Bool of
+        case readMaybe (init $ tail $ show field) :: Maybe Bool of
             Nothing -> Left $ Mismatch Core.Bool field key
             Just v  -> Right $ Core.BoolLit v
 
     -- Naturals
     fieldConvert key Core.Natural (Just field) =
-        case readMaybe (show field) :: Maybe Natural of
+        case readMaybe (init $ tail $ show field) :: Maybe Natural of
             Nothing -> Left $ Mismatch Core.Natural field key
             Just v  -> Right $ Core.NaturalLit v
 
     -- Integers
     fieldConvert key Core.Integer (Just field) =
-        case readMaybe (show field) :: Maybe Integer of
+        case readMaybe (init $ tail $ show field) :: Maybe Integer of
             Nothing -> Left $ Mismatch Core.Integer field key
             Just v  -> Right $ Core.IntegerLit v
 
     -- Doubles
     fieldConvert key Core.Double (Just field) =
-        case readMaybe (show field) :: Maybe Double of
+        case readMaybe (init $ tail $ show field) :: Maybe Double of
             Nothing -> Left $ Mismatch Core.Double field key
             Just v  -> Right $ Core.DoubleLit $ Core.DhallDouble v
 
@@ -196,3 +209,27 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
         return $ Core.Some expression
 
     fieldConvert _ t _ = Left $ Unsupported t
+
+data CompileError
+    = Unsupported ExprX
+    | TypeError (TypeCheck.TypeError Src Void)
+    | BadDhallType
+        ExprX -- Expression type
+        ExprX -- Whole expression
+    | MissingKey Text
+    | UnhandledKeys [Text] -- Keys in CSV but not in schema
+    | Mismatch
+        ExprX           -- Expected Dhall Type
+        Data.Csv.Field  -- Actual field
+        Text            -- Record key
+    | ContainsUnion ExprX
+    | UndecidableUnion
+        ExprX           -- Expected Type
+        Data.Csv.Field  -- CSV Field
+        [ExprX]         -- Multiple conversions
+    | UndecidableMissingUnion
+        ExprX           -- Expected Type
+        [ExprX]         -- Multiple Conversions
+    deriving Show
+
+instance Exception CompileError
