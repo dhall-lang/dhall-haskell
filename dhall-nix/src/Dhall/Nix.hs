@@ -482,6 +482,18 @@ dhallToNix e =
         let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
 
         return ("t" ==> quoted)
+    loop Date = return untranslatable
+    loop date@DateLiteral{} = do
+        let rendered = Dhall.Core.pretty date
+        loop (TextLit (Chunks [] rendered))
+    loop Time = return untranslatable
+    loop time@TimeLiteral{} = do
+        let rendered = Dhall.Core.pretty time
+        loop (TextLit (Chunks [] rendered))
+    loop TimeZone = return untranslatable
+    loop timeZone@TimeZoneLiteral{} = do
+        let rendered = Dhall.Core.pretty timeZone
+        loop (TextLit (Chunks [] rendered))
     loop List = return (Fix (NAbs "t" untranslatable))
     loop (ListAppend a b) = do
         a' <- loop a
