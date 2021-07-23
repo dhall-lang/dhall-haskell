@@ -882,6 +882,24 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.TextShow ->
             Core.TextShow
 
+        Core.Date ->
+            Core.Date
+
+        Core.DateLiteral d ->
+            Core.DateLiteral d
+
+        Core.Time ->
+            Core.Time
+
+        Core.TimeLiteral t p ->
+            Core.TimeLiteral t p
+
+        Core.TimeZone ->
+            Core.TimeZone
+
+        Core.TimeZoneLiteral z ->
+            Core.TimeZoneLiteral z
+
         Core.List ->
             Core.List
 
