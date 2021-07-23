@@ -68,6 +68,8 @@ module Dhall.Pretty.Internal (
     , rbrace
     , rbracket
     , rparen
+
+    , temporalToText
     ) where
 
 import Control.DeepSeq            (NFData)
@@ -1874,6 +1876,33 @@ layoutOpts :: Pretty.LayoutOptions
 layoutOpts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
+
+{-| Convert an expression representing a temporal value to `Text`, if possible
+
+    This is used by downstream integrations (e.g. `dhall-json` for treating
+    temporal values as strings
+-}
+temporalToText :: Pretty a => Expr s a -> Maybe Text
+temporalToText e = case e of
+    RecordLit m
+        | [ ("date"    , field -> DateLiteral{})
+          , ("time"    , field -> TimeLiteral{})
+          , ("timeZone", field -> TimeZoneLiteral{})
+          ] <- List.sortOn fst (Map.toList m) -> rendered
+        | [ ("date"    , field -> DateLiteral{})
+          , ("time"    , field -> TimeLiteral{})
+          ] <- List.sortOn fst (Map.toList m) -> rendered
+        | [ ("time"    , field -> TimeLiteral{})
+          , ("timeZone", field -> TimeZoneLiteral{})
+          ] <- List.sortOn fst (Map.toList m) -> rendered
+    DateLiteral{} -> rendered
+    TimeLiteral{} -> rendered
+    TimeZoneLiteral{} -> rendered
+    _ -> Nothing
+  where
+    field = Dhall.Syntax.shallowDenote . recordFieldValue
+
+    rendered = Just (prettyToStrictText e)
 
 {- $setup
 >>> import Test.QuickCheck (Fun(..))

@@ -430,6 +430,8 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
         --
         -- See: https://github.com/dhall-lang/dhall-lang/issues/492
         Core.None -> Left BareNone
+        _ | Just text <- Dhall.Pretty.temporalToText e ->
+            loop (Core.TextLit (Core.Chunks [] text))
         Core.RecordLit a ->
             case toOrderedList a of
                 [   (   "contents"

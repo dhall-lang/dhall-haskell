@@ -16,6 +16,8 @@ module Dhall.Pretty
 
     , escapeEnvironmentVariable
     , escapeLabel
+
+    , temporalToText
     ) where
 
 import Dhall.Pretty.Internal
