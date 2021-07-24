@@ -113,6 +113,7 @@ import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Core
 import qualified Dhall.Map
+import qualified Dhall.Pretty
 import qualified NeatInterpolation
 import qualified Text.ShellEscape
 
@@ -250,6 +251,9 @@ dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
         return bytes
     go (Some b) = go b
     go (App None _) = return ("unset " <> var)
+    go e
+        | Just text <- Dhall.Pretty.temporalToText e =
+            go (TextLit (Chunks [] text))
     go (RecordLit a) = do
         let process (k, v) = do
                 v' <- dhallToExpression v
@@ -372,4 +376,7 @@ dhallToExpression expr0 = go (Dhall.Core.normalize expr0)
         case Dhall.Map.lookup k m of
             Just Nothing -> go (TextLit (Chunks [] k))
             _            -> Left (UnsupportedExpression e)
+    go e
+        | Just text <- Dhall.Pretty.temporalToText e =
+            go (TextLit (Chunks [] text))
     go e = Left (UnsupportedExpression e)
