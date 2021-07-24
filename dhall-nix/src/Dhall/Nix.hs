@@ -130,6 +130,7 @@ import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Optics
+import qualified Dhall.Pretty
 import qualified NeatInterpolation
 import qualified Nix
 
@@ -482,6 +483,9 @@ dhallToNix e =
         let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
 
         return ("t" ==> quoted)
+    loop Date = return untranslatable
+    loop Time = return untranslatable
+    loop TimeZone = return untranslatable
     loop List = return (Fix (NAbs "t" untranslatable))
     loop (ListAppend a b) = do
         a' <- loop a
@@ -537,6 +541,14 @@ dhallToNix e =
     loop Optional = return (Fix (NAbs "t" untranslatable))
     loop (Some a) = loop a
     loop None = return (Fix (NConstant NNull))
+    loop t
+        | Just text <- Dhall.Pretty.temporalToText t = do
+            loop (Dhall.Core.TextLit (Dhall.Core.Chunks [] text))
+    -- The next three cases are not necessary, because they are handled by the
+    -- previous case
+    loop DateLiteral{} = undefined
+    loop TimeLiteral{} = undefined
+    loop TimeZoneLiteral{} = undefined
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse (loop . Dhall.Core.recordFieldValue) a
