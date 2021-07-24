@@ -177,9 +177,10 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
 
     -- Bools
     fieldConvert key Core.Bool (Just field) =
-        case readMaybe (init $ tail $ show field) :: Maybe Bool of
-            Nothing -> Left $ Mismatch Core.Bool field key
-            Just v  -> Right $ Core.BoolLit v
+        case field of
+            "true"  -> Right (Core.BoolLit True)
+            "false" -> Right (Core.BoolLit False)
+            _ -> Left $ Mismatch Core.Bool field key
 
     -- Naturals
     fieldConvert key Core.Natural (Just field) =
