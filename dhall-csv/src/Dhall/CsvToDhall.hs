@@ -17,18 +17,18 @@ module Dhall.CsvToDhall (
 import Control.Applicative      ((<|>))
 import Control.Exception        (Exception, throwIO)
 import Control.Monad.Catch      (MonadCatch, throwM)
-import Data.Either              (rights)
+import Data.Either              (lefts, rights)
 import Data.Either.Combinators  (mapRight)
 import Data.Foldable            (toList)
 import Data.List                ((\\))
 import Data.Text                (Text)
-import Data.Text.Encoding       (decodeUtf8, encodeUtf8)
+import Data.Text.Encoding       (decodeUtf8, decodeUtf8', encodeUtf8)
+import Data.Text.Encoding.Error (UnicodeException)
+import Data.Text.Read           (decimal, double)
 import Data.Void                (Void)
 import Dhall.Core               (Expr)
 import Dhall.Src                (Src)
-import Numeric.Natural          (Natural)
 import Options.Applicative      (Parser)
-import Text.Read                (readMaybe)
 
 import qualified Data.Csv
 import qualified Data.HashMap.Strict         as HashMap
@@ -136,6 +136,9 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
 
     recordConvert :: ExprX -> Data.Csv.NamedRecord -> Either CompileError ExprX
     recordConvert (Core.Record record) csvRecord
+        | badKeys <- lefts (map decodeUtf8' (HashMap.keys csvRecord))
+        , not (null badKeys)
+        = Left $ UnicodeError (head badKeys) -- Only report first key that failed to be decoded
         | extraKeys <- (map decodeUtf8 $ HashMap.keys csvRecord) \\ Map.keys record
         , strictRecs && not (null extraKeys)
         = Left $ UnhandledKeys extraKeys
@@ -153,9 +156,12 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
                 case maybeField of
                     Nothing -> Left $ MissingKey recordKey
                     Just field ->
-                        if decodeUtf8 field == unionKey
-                        then Right $ Core.Field t $ Core.makeFieldSelection unionKey
-                        else Left $ Mismatch t field recordKey
+                        case decodeUtf8' field of
+                            Left err -> Left $ UnicodeError err
+                            Right _field ->
+                                if _field == unionKey
+                                then Right $ Core.Field t $ Core.makeFieldSelection unionKey
+                                else Left $ Mismatch t field recordKey
             f unionKey (Just _type) = do
                 expression <- fieldConvert recordKey _type maybeField
                 return (Core.App (Core.Field t $ Core.makeFieldSelection unionKey) expression)
@@ -184,25 +190,35 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
 
     -- Naturals
     fieldConvert key Core.Natural (Just field) =
-        case readMaybe (init $ tail $ show field) :: Maybe Natural of
-            Nothing -> Left $ Mismatch Core.Natural field key
-            Just v  -> Right $ Core.NaturalLit v
+        case decodeUtf8' field of
+            Left err -> Left $ UnicodeError err
+            Right _field ->
+                case decimal _field of
+                    Left _ -> Left $ Mismatch Core.Natural field key
+                    Right (v, _) -> Right $ Core.NaturalLit v           -- What to do when there is more text left to read?
 
     -- Integers
     fieldConvert key Core.Integer (Just field) =
-        case readMaybe (init $ tail $ show field) :: Maybe Integer of
-            Nothing -> Left $ Mismatch Core.Integer field key
-            Just v  -> Right $ Core.IntegerLit v
-
+        case decodeUtf8' field of
+            Left err -> Left $ UnicodeError err
+            Right _field ->
+                case decimal _field of
+                    Left _ -> Left $ Mismatch Core.Integer field key
+                    Right (v, _) -> Right $ Core.IntegerLit v           -- What to do when there is more text left to read?
     -- Doubles
     fieldConvert key Core.Double (Just field) =
-        case readMaybe (init $ tail $ show field) :: Maybe Double of
-            Nothing -> Left $ Mismatch Core.Double field key
-            Just v  -> Right $ Core.DoubleLit $ Core.DhallDouble v
+        case decodeUtf8' field of
+            Left err -> Left $ UnicodeError err
+            Right _field ->
+                case double _field of
+                    Left _ -> Left $ Mismatch Core.Integer field key
+                    Right (v, _) -> Right $ Core.DoubleLit $ Core.DhallDouble v           -- What to do when there is more text left to read?
 
     -- Text
     fieldConvert _ Core.Text (Just field) =
-        return $ Core.TextLit $ Core.Chunks [] $ decodeUtf8 field
+        case decodeUtf8' field of
+            Left err -> Left $ UnicodeError err
+            Right _field -> return $ Core.TextLit $ Core.Chunks [] $ _field
 
     -- Optionals
     fieldConvert key (Core.App Core.Optional t) maybeField = do
@@ -231,6 +247,7 @@ data CompileError
     | UndecidableMissingUnion
         ExprX           -- Expected Type
         [ExprX]         -- Multiple Conversions
+    | UnicodeError UnicodeException
     deriving Show
 
 instance Exception CompileError
