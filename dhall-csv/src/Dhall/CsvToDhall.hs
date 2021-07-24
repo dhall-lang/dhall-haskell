@@ -205,13 +205,14 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
                 case decimal _field of
                     Left _ -> Left $ Mismatch Core.Integer field key
                     Right (v, _) -> Right $ Core.IntegerLit v           -- What to do when there is more text left to read?
+
     -- Doubles
-    fieldConvert key Core.Double (Just field) =
+    fieldConvert _ Core.Double (Just field) =
         case decodeUtf8' field of
             Left err -> Left $ UnicodeError err
             Right _field ->
                 case double _field of
-                    Left _ -> Left $ Mismatch Core.Integer field key
+                    Left _ -> Right $ Core.DoubleLit $ Core.DhallDouble (read "NaN")      -- Add options to handle special doubles
                     Right (v, _) -> Right $ Core.DoubleLit $ Core.DhallDouble v           -- What to do when there is more text left to read?
 
     -- Text
