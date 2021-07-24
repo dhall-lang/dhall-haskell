@@ -1,18 +1,20 @@
 {-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE NamedFieldPuns       #-}
 
 module Dhall.Import.UserHeaders
     (
       UserHeaders
     , Headers
     , defaultNewUserHeaders
+    , noopUserHeaders
     , withUserHeaders
     ) where
 
-import Data.Aeson (eitherDecodeStrict')
 import Data.HashMap.Strict (HashMap)
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import qualified Data.Text.IO as IO
+import Data.Text.Encoding (decodeUtf8)
 import Network.HTTP.Types (Header)
 import System.Directory (getXdgDirectory, XdgDirectory(XdgConfig))
 import System.Environment (lookupEnv)
@@ -20,48 +22,76 @@ import System.FilePath ((</>))
 import Data.Either.Combinators (rightToMaybe)
 import Control.Exception (tryJust)
 import Control.Monad (guard)
+import Control.Monad.Catch              (throwM)
 import System.IO.Error (isDoesNotExistError)
-import qualified Data.ByteString as B
-import qualified Data.CaseInsensitive as CI
+import Dhall.Core (Expr, Import)
+import Dhall.Parser (Src)
+import Dhall.Import.Headers (SiteHeaders)
+import qualified Dhall.Parser as Parser
 import qualified Data.HashMap.Strict  as HashMap
 import qualified Data.Text as Text
 import qualified Network.HTTP.Client as HTTP
 
--- todo StateT?
-type UserHeaders = ()
+-- TODO StateT?
+data UserHeaders = UserHeaders {
+  -- This loading function needs to be injected, because
+  -- it would be circular for this module to depend on Import
+  loadRelativeTo :: FilePath -> Expr Src Import -> IO SiteHeaders,
+
+  -- Injected in order for tests to use a no-op implementation
+  resolveHeaderExpression :: IO (Maybe (FilePath, Text))
+}
 
 type Headers = [Header]
 
-defaultNewUserHeaders :: UserHeaders
-defaultNewUserHeaders = ()
+noopResolveHeaderExpression :: IO (Maybe (FilePath, Text))
+noopResolveHeaderExpression = return Nothing
 
-loadAllHeaders :: IO (HashMap.HashMap Text Headers)
--- TODO load dhall, not JSON...
-loadAllHeaders = getExpr >>= \case
-  Just expr -> case eitherDecodeStrict' expr of
-    Left err -> fail err
-    Right result -> pure $ convert $ result
+{-| Resolve the raw dhall text for user headers,
+    along with the directory containing it
+    (which is `.` if loaded from $DHALL_HEADERS)
+ -}
+defaultResolveHeaderExpression :: IO (Maybe (FilePath, Text))
+defaultResolveHeaderExpression =
+  lookupEnv "DHALL_HEADERS" >>= \case
+    Just expr -> return $ Just (".", Text.pack expr)
+    Nothing -> loadConfigFile
+
+    where
+
+      loadConfigFile = do
+        directory <- getXdgDirectory XdgConfig "dhall"
+        fileContents <- tryReadFile (directory </> "headers.dhall")
+        let withDirectory text = (directory, text)
+        return $ fmap withDirectory fileContents
+
+      tryReadFile path = rightToMaybe <$>
+        tryJust (guard . isDoesNotExistError) (IO.readFile path)
+
+defaultNewUserHeaders :: (FilePath -> Expr Src Import -> IO SiteHeaders) -> UserHeaders
+defaultNewUserHeaders loadRelativeTo = UserHeaders
+  { loadRelativeTo
+  , resolveHeaderExpression = defaultResolveHeaderExpression
+  }
+
+noopUserHeaders :: UserHeaders
+noopUserHeaders = UserHeaders
+  { resolveHeaderExpression = noopResolveHeaderExpression
+  , loadRelativeTo = const $ fail "impossible"
+  }
+
+loadHeaderExpr :: UserHeaders -> FilePath -> Text -> IO SiteHeaders
+loadHeaderExpr UserHeaders { loadRelativeTo } directory text = do
+  -- TODO surely there's a helper for this
+  expr <- case Parser.exprFromText mempty text of
+    Left exn -> throwM exn
+    Right expr -> pure expr
+  loadRelativeTo directory expr
+
+loadAllHeaders :: UserHeaders -> IO SiteHeaders
+loadAllHeaders userHeaders = resolveHeaderExpression userHeaders >>= \case
   Nothing -> pure HashMap.empty
-  where
-    convert :: HashMap.HashMap Text (HashMap.HashMap Text Text) -> HashMap Text Headers
-    convert = HashMap.map toHeaders
-
-    toHeaders :: HashMap.HashMap Text Text -> Headers
-    toHeaders hmap = map toHeader (HashMap.toList hmap)
-
-    toHeader :: (Text, Text) -> Header
-    toHeader (k, v) = (CI.mk (encodeUtf8 k), encodeUtf8 v)
-
-    getExpr :: IO (Maybe B.ByteString)
-    getExpr = lookupEnv "DHALL_HEADERS" >>= \case
-      Just expr -> pure $ Just $ encodeUtf8 $ Text.pack expr
-      Nothing -> loadConfigFile
-
-    configSuffix = "dhall" </> "headers.dhall"
-    loadConfigFile = getXdgDirectory XdgConfig configSuffix >>= tryReadFile
-
-    tryReadFile path = rightToMaybe <$>
-      tryJust (guard . isDoesNotExistError) (B.readFile path)
+  Just (directory, text) -> loadHeaderExpr userHeaders directory text
 
 addUserHeaders :: HTTP.Request -> HashMap Text Headers -> HTTP.Request
 addUserHeaders request config = addHeaders $ HashMap.lookupDefault [] origin config where
@@ -78,4 +108,4 @@ addUserHeaders request config = addHeaders $ HashMap.lookupDefault [] origin con
 
 -- TODO make this lazy / load only once (see ./HTTP newManager)
 withUserHeaders :: UserHeaders -> HTTP.Request -> IO HTTP.Request
-withUserHeaders () request = addUserHeaders request <$> loadAllHeaders
+withUserHeaders userHeaders request = addUserHeaders request <$> (loadAllHeaders userHeaders)

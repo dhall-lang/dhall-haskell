@@ -9,6 +9,7 @@ import Data.Void         (Void)
 import Prelude           hiding (FilePath)
 import Test.Tasty        (TestTree)
 import Turtle            (FilePath, (</>))
+import Dhall.Import.Manager (Manager(..))
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad                    as Monad
@@ -17,6 +18,7 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
+import qualified Dhall.Import.UserHeaders as UserHeaders
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
 import qualified Network.HTTP.Client              as HTTP
@@ -101,14 +103,22 @@ successTest prefix = do
 
         let originalCache = "dhall-lang/tests/import/cache"
 
-        let httpManager =
+        let newHttpManager =
                 HTTP.newManager
                     HTTP.tlsManagerSettings
                         { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
+
+        let newManager = do
+                http <- newHttpManager
+                return Manager {
+                    httpManager = http,
+                    headersManager = UserHeaders.noopUserHeaders
+                }
+
         let load =
                 State.evalStateT
                     (Test.Util.loadWith actualExpr)
-                    (Import.emptyStatusWithManager httpManager directoryString)
+                    (Import.emptyStatusWithManager newManager directoryString)
 
         let usesCache = [ "hashFromCache"
                         , "unit/asLocation/Hash"

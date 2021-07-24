@@ -610,6 +610,7 @@ Library
     Other-Modules:
         Dhall.Eval
         Dhall.Import.Types
+        Dhall.Import.Headers
         Dhall.Marshal.Internal
         Dhall.Normalize
         Dhall.Parser.Combinators
@@ -620,10 +621,11 @@ Library
     Autogen-Modules:
         Paths_dhall
     if flag(with-http)
-      Other-Modules:
-        Dhall.Import.HTTP
+      Exposed-Modules:
         Dhall.Import.Manager
         Dhall.Import.UserHeaders
+      Other-Modules:
+        Dhall.Import.HTTP
 
     GHC-Options: -Wall -fwarn-incomplete-uni-patterns
     Default-Language: Haskell2010

@@ -68,15 +68,6 @@ type Manager =
     ()
 #endif
 
--- | The default HTTP 'Manager'
-defaultNewManager :: IO Manager
-defaultNewManager =
-#ifdef WITH_HTTP
-  Dhall.Import.Manager.defaultNewManager
-#else
-  pure ()
-#endif
-
 {-| Used internally to track whether or not we've already warned the user about
     caching issues
 -}

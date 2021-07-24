@@ -152,7 +152,7 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative              (Alternative (..), liftA2)
+import Control.Applicative              (Alternative (..))
 import Control.Exception
     ( Exception
     , IOException
@@ -164,7 +164,6 @@ import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Morph              (hoist)
 import Control.Monad.State.Strict       (MonadState, StateT)
 import Data.ByteString                  (ByteString)
-import Data.CaseInsensitive             (CI)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Text                        (Text)
 import Data.Typeable                    (Typeable)
@@ -191,7 +190,15 @@ import System.FilePath ((</>))
 
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
+import qualified Dhall.Import.Manager as Manager
 #endif
+import Dhall.Import.Headers
+    ( HTTPHeader
+    , SiteHeaders
+    , toHeaders
+    , toSiteHeaders
+    , normalizeHeaders
+    )
 import Dhall.Import.Types
 
 import Dhall.Parser
@@ -209,12 +216,9 @@ import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
-import qualified Data.CaseInsensitive
-import qualified Data.Foldable
 import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
-import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core                                  as Core
@@ -354,9 +358,6 @@ instance Show MissingImports where
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
-
--- | HTTP headers
-type HTTPHeader = (CI ByteString, ByteString)
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -501,7 +502,7 @@ chainedChangeMode mode (Chained (Import importHashed _)) =
 -- | Chain imports, also typecheck and normalize headers if applicable.
 chainImport :: Chained -> Import -> StateT Status IO Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
-    url' <- normalizeHeaders url
+    url' <- normalizeHeadersIn url
     let child' = child { importHashed = importHashed { importType = Remote url' } }
     return (Chained (canonicalize (parent <> child')))
 
@@ -805,29 +806,6 @@ fetchRemote url = do
         fetchFromHttpUrl url' maybeHeaders
 #endif
 
--- | Given a well-typed (of type `List { header : Text, value Text }` or
--- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
--- construct the corresponding binary http headers; otherwise return the empty
--- list.
-toHeaders :: Expr s a -> [HTTPHeader]
-toHeaders (ListLit _ hs) = Data.Foldable.toList (Data.Foldable.fold maybeHeaders)
-  where
-      maybeHeaders = mapM toHeader hs
-toHeaders _ = []
-
-toHeader :: Expr s a -> Maybe HTTPHeader
-toHeader (RecordLit m) = do
-    (Core.recordFieldValue -> TextLit (Chunks [] keyText), Core.recordFieldValue -> TextLit (Chunks [] valueText))
-        <- lookupHeader <|> lookupMapKey
-    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
-    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
-    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-      where
-        lookupHeader = liftA2 (,) (Dhall.Map.lookup "header" m) (Dhall.Map.lookup "value" m)
-        lookupMapKey = liftA2 (,) (Dhall.Map.lookup "mapKey" m) (Dhall.Map.lookup "mapValue" m)
-toHeader _ =
-    empty
-
 getCacheFile
     :: (MonadCatch m, Alternative m, MonadState CacheWarning m, MonadIO m)
     => FilePath -> Dhall.Crypto.SHA256Digest -> m FilePath
@@ -1019,53 +997,38 @@ getCacheBaseDirectory = alternative₀ <|> alternative₁ <|> alternative₂
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.
-normalizeHeaders :: URL -> StateT Status IO URL
-normalizeHeaders url@URL { headers = Just headersExpression } = do
+normalizeHeadersIn :: URL -> StateT Status IO URL
+normalizeHeadersIn url@URL { headers = Just headersExpression } = do
     Status { _stack } <- State.get
     loadedExpr <- loadWith headersExpression
+    let handler (e :: SomeException) = throwMissingImport (Imported _stack e)
+    normalized <- liftIO $ handle handler (normalizeHeaders loadedExpr)
+    return url { headers = Just (fmap absurd normalized) }
 
-    let go key₀ key₁ = do
-            let expected :: Expr Src Void
-                expected =
-                    App List
-                        ( Record $ Core.makeRecordField <$>
-                            Dhall.Map.fromList
-                                [ (key₀, Text)
-                                , (key₁, Text)
-                                ]
-                        )
+normalizeHeadersIn url = return url
 
-            let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-            let annot = case loadedExpr of
-                    Note (Src begin end bytes) _ ->
-                        Note (Src begin end bytes') (Annot loadedExpr expected)
-                      where
-                        bytes' = bytes <> " : " <> suffix_
-                    _ ->
-                        Annot loadedExpr expected
+-- TODO better error reporting
+remoteDisabledNewManager :: IO Manager
+remoteDisabledNewManager = fail "manager disabled"
 
-            _ <- case (Dhall.TypeCheck.typeOf annot) of
-                Left err -> throwMissingImport (Imported _stack err)
-                Right _  -> return ()
+-- Injected into Manager for loading header expressions
+-- TODO are we representing the source (DHALL_HEADERS / headers.dhall)
+-- properly in errors?
+loadHeaderExpression :: FilePath -> Expr Src Import -> IO SiteHeaders
+loadHeaderExpression directory contents = do
+    expr <- loadRelativeToWithManager
+        remoteDisabledNewManager
+        directory
+        UseSemanticCache
+        contents
+    toSiteHeaders expr
 
-            return (Core.normalize loadedExpr)
-
-    let handler₀ (e :: SomeException) = do
-            {- Try to typecheck using the preferred @mapKey@/@mapValue@ fields
-               and fall back to @header@/@value@ if that fails. However, if
-               @header@/@value@ still fails then re-throw the original exception
-               for @mapKey@ / @mapValue@. -}
-            let handler₁ (_ :: SomeException) =
-                    throwMissingImport (Imported _stack e)
-
-            handle handler₁ (go "header" "value")
-
-    headersExpression' <-
-        handle handler₀ (go "mapKey" "mapValue")
-
-    return url { headers = Just (fmap absurd headersExpression') }
-
-normalizeHeaders url = return url
+defaultNewManager :: IO Manager
+#ifndef WITH_HTTP
+defaultNewManager = pure ()
+#else
+defaultNewManager = Manager.makeDefaultNewManager loadHeaderExpression
+#endif
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status

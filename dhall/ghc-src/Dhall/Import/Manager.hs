@@ -15,11 +15,15 @@
 module Dhall.Import.Manager
     ( -- * Manager
       Manager(..)
-    , defaultNewManager
+    , makeDefaultNewManager
     ) where
 
 import qualified Network.HTTP.Client as Client
 import qualified Network.HTTP.Client as HTTP
+
+import Dhall.Core (Expr, Import)
+import Dhall.Parser (Src)
+import Dhall.Import.Headers (SiteHeaders)
 import Dhall.Import.UserHeaders (UserHeaders, defaultNewUserHeaders)
 
 #ifdef USE_HTTP_CLIENT_TLS
@@ -28,8 +32,8 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 
 data Manager = Manager { httpManager :: Client.Manager, headersManager :: UserHeaders }
 
-defaultNewManager :: IO Manager
-defaultNewManager =
+makeDefaultNewManager :: (FilePath -> Expr Src Import -> IO SiteHeaders) -> IO Manager
+makeDefaultNewManager loadHeaderExpression =
   build <$> (Client.newManager
 #ifdef USE_HTTP_CLIENT_TLS
     tlsManagerSettings
@@ -38,4 +42,7 @@ defaultNewManager =
 #endif
     { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (30 * 1000 * 1000) }  -- 30 seconds
   ) where
-    build httpManager = Manager { httpManager, headersManager = defaultNewUserHeaders }
+    build httpManager = Manager {
+      httpManager,
+      headersManager = defaultNewUserHeaders loadHeaderExpression
+    }
