@@ -140,7 +140,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
         = Left $ UnhandledKeys extraKeys
         | otherwise
         = do
-            let f = (\k v -> fieldConvert k (Core.recordFieldValue v) (HashMap.lookup (encodeUtf8 k) csvRecord))
+            let f k v = fieldConvert k (Core.recordFieldValue v) (HashMap.lookup (encodeUtf8 k) csvRecord)
             a <- Map.traverseWithKey f record
             let a' = Map.mapWithKey (\_ e -> Core.makeRecordField e) a
             return $ Core.RecordLit a'
