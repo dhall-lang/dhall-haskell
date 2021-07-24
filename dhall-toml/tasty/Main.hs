@@ -44,6 +44,7 @@ testTree =
             , "./tasty/data/record-list"
             , "./tasty/data/union-empty"
             , "./tasty/data/union-typed"
+            , "./tasty/data/optional"
             ]
         tomlToDhallTests = map testTomlToDhall
             [ "./tasty/data/empty"
@@ -56,6 +57,7 @@ testTree =
             , "./tasty/data/record-list"
             , "./tasty/data/union-empty"
             , "./tasty/data/union-typed"
+            , "./tasty/data/optional"
             ]
 
 testDhallToToml :: String -> TestTree

@@ -65,6 +65,9 @@ tomlValueToDhall exprType v = case (exprType, v) of
     (_                        , Value.Local _  ) -> Left $ Unimplemented "toml time values"
     (_                        , Value.Day _    ) -> Left $ Unimplemented "toml time values"
     (t@(Core.App Core.List _) , Value.Array [] ) -> Right $ Core.ListLit (Just t) []
+    (Core.App Core.Optional t , a              ) -> do
+        o <- tomlValueToDhall t a
+        return $ Core.Some o
     (Core.App Core.List t     , Value.Array a  ) -> do
         l <- mapM (tomlValueToDhall t) a
         return $ Core.ListLit Nothing (Seq.fromList l)
