@@ -18,15 +18,13 @@ import Control.Exception
     , displayException
     , throwIO
     )
-import Control.Monad              (forM_)
+import Control.Monad                       (forM_)
 #if !(MIN_VERSION_base(4,13,0))
-import Control.Monad.Fail         (MonadFail)
+import Control.Monad.Fail                  (MonadFail)
 #endif
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Control.Monad.State.Class  (MonadState, get, modify)
-import Control.Monad.State.Strict (evalStateT)
--- For the MonadFail instance for StateT.
-import Control.Monad.Trans.Instances       ()
+import Control.Monad.IO.Class              (MonadIO, liftIO)
+import Control.Monad.State.Class           (MonadState, get, modify)
+import Control.Monad.State.Strict          (evalStateT)
 import Data.Char                           (isSpace)
 import Data.List
     ( dropWhileEnd
