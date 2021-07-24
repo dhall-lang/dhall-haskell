@@ -18,6 +18,7 @@ import Control.Applicative      ((<|>))
 import Control.Exception        (Exception, throwIO)
 import Control.Monad.Catch      (MonadCatch, throwM)
 import Data.Either              (rights)
+import Data.Either.Combinators  (mapRight)
 import Data.Foldable            (toList)
 import Data.List                ((\\))
 import Data.Text                (Text)
@@ -141,7 +142,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
         | otherwise
         = do
             let f k v = fieldConvert k (Core.recordFieldValue v) (HashMap.lookup (encodeUtf8 k) csvRecord)
-            a <- Map.traverseWithKey (\k v -> Core.makeRecordField (f k v)) record
+            a <- Map.traverseWithKey (\k v -> mapRight Core.makeRecordField (f k v)) record
             return $ Core.RecordLit a
     recordConvert e _ = Left $ Unsupported e
 
