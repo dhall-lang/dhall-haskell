@@ -141,9 +141,8 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
         | otherwise
         = do
             let f k v = fieldConvert k (Core.recordFieldValue v) (HashMap.lookup (encodeUtf8 k) csvRecord)
-            a <- Map.traverseWithKey f record
-            let a' = Map.mapWithKey (\_ e -> Core.makeRecordField e) a
-            return $ Core.RecordLit a'
+            a <- Map.traverseWithKey (\k v -> Core.makeRecordField (f k v)) record
+            return $ Core.RecordLit a
     recordConvert e _ = Left $ Unsupported e
 
     fieldConvert :: Text -> ExprX -> Maybe Data.Csv.Field -> Either CompileError ExprX
