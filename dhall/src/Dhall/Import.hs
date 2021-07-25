@@ -117,6 +117,7 @@ module Dhall.Import (
     , assertNoImports
     , Manager
     , defaultNewManager
+    , loadSiteHeaders
     , CacheWarning(..)
     , Status(..)
     , SemanticCacheMode(..)
@@ -1014,8 +1015,8 @@ remoteDisabledNewManager = fail "manager disabled"
 -- Injected into Manager for loading header expressions
 -- TODO are we representing the source (DHALL_HEADERS / headers.dhall)
 -- properly in errors?
-loadHeaderExpression :: FilePath -> Expr Src Import -> IO SiteHeaders
-loadHeaderExpression directory contents = do
+loadSiteHeaders :: FilePath -> Expr Src Import -> IO SiteHeaders
+loadSiteHeaders directory contents = do
     expr <- loadRelativeToWithManager
         remoteDisabledNewManager
         directory
@@ -1027,7 +1028,7 @@ defaultNewManager :: IO Manager
 #ifndef WITH_HTTP
 defaultNewManager = pure ()
 #else
-defaultNewManager = Manager.makeDefaultNewManager loadHeaderExpression
+defaultNewManager = Manager.makeDefaultNewManager loadSiteHeaders
 #endif
 
 -- | Default starting `Status`, importing relative to the given directory.

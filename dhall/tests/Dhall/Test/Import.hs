@@ -112,7 +112,7 @@ successTest prefix = do
                 http <- newHttpManager
                 return Manager {
                     httpManager = http,
-                    headersManager = UserHeaders.noopUserHeaders
+                    headersManager = UserHeaders.envOnlyNewUserHeaders Import.loadSiteHeaders
                 }
 
         let load =

@@ -7,6 +7,7 @@ module Dhall.Import.UserHeaders
       UserHeaders
     , Headers
     , defaultNewUserHeaders
+    , envOnlyNewUserHeaders
     , noopUserHeaders
     , withUserHeaders
     ) where
@@ -47,14 +48,23 @@ type Headers = [Header]
 noopResolveHeaderExpression :: IO (Maybe (FilePath, Text))
 noopResolveHeaderExpression = return Nothing
 
+{-| Resolve the raw dhall text for user headers
+    only from $DHALL_HEADERS, not the filesystem
+ -}
+envOnlyResolveHeaderExpression :: IO (Maybe (FilePath, Text))
+envOnlyResolveHeaderExpression =
+  fmap (fmap fromEnv) (lookupEnv "DHALL_HEADERS")
+    where
+      fromEnv expr = (".", Text.pack expr)
+
 {-| Resolve the raw dhall text for user headers,
     along with the directory containing it
     (which is `.` if loaded from $DHALL_HEADERS)
  -}
 defaultResolveHeaderExpression :: IO (Maybe (FilePath, Text))
 defaultResolveHeaderExpression =
-  lookupEnv "DHALL_HEADERS" >>= \case
-    Just expr -> return $ Just (".", Text.pack expr)
+  envOnlyResolveHeaderExpression >>= \case
+    Just pair -> return (Just pair)
     Nothing -> loadConfigFile
 
     where
@@ -72,6 +82,12 @@ defaultNewUserHeaders :: (FilePath -> Expr Src Import -> IO SiteHeaders) -> User
 defaultNewUserHeaders loadRelativeTo = UserHeaders
   { loadRelativeTo
   , resolveHeaderExpression = defaultResolveHeaderExpression
+  }
+
+envOnlyNewUserHeaders :: (FilePath -> Expr Src Import -> IO SiteHeaders) -> UserHeaders
+envOnlyNewUserHeaders loadRelativeTo = UserHeaders
+  { loadRelativeTo
+  , resolveHeaderExpression = envOnlyResolveHeaderExpression
   }
 
 noopUserHeaders :: UserHeaders
