@@ -14,6 +14,8 @@ module Dhall.Import.UserHeaders
 
 import Data.HashMap.Strict (HashMap)
 import Data.Text (Text)
+import Data.ByteString                  (ByteString)
+import Data.CaseInsensitive             (CI)
 import qualified Data.Text.IO as IO
 import Data.Text.Encoding (decodeUtf8)
 import Network.HTTP.Types (Header)
@@ -23,9 +25,8 @@ import System.FilePath ((</>))
 import Data.Either.Combinators (rightToMaybe)
 import Control.Exception (tryJust)
 import Control.Monad (guard)
-import Control.Monad.Catch              (throwM)
 import System.IO.Error (isDoesNotExistError)
-import Dhall.Core (Expr, Import)
+import Dhall.Core (Expr, Import, throws)
 import Dhall.Parser (Src)
 import Dhall.Import.Headers (SiteHeaders)
 import qualified Dhall.Parser as Parser
@@ -98,10 +99,7 @@ noopUserHeaders = UserHeaders
 
 loadHeaderExpr :: UserHeaders -> FilePath -> Text -> IO SiteHeaders
 loadHeaderExpr UserHeaders { loadRelativeTo } directory text = do
-  -- TODO surely there's a helper for this
-  expr <- case Parser.exprFromText mempty text of
-    Left exn -> throwM exn
-    Right expr -> pure expr
+  expr <- throws (Parser.exprFromText mempty text)
   loadRelativeTo directory expr
 
 loadAllHeaders :: UserHeaders -> IO SiteHeaders
@@ -113,14 +111,18 @@ addUserHeaders :: HTTP.Request -> HashMap Text Headers -> HTTP.Request
 addUserHeaders request config = addHeaders $ HashMap.lookupDefault [] origin config where
   origin = decodeUtf8 (HTTP.host request) <> ":" <> Text.pack (show (HTTP.port request))
 
-  -- TODO how should we combine user / explicit headers?
-  -- I think for forwards compat we should override mheaders (if any)
-  -- with userHeaders.
-  -- TODO check how library deals with multiple conflicting headers
-  -- in the list
-  addHeaders newHeaders = request {
-    HTTP.requestHeaders = (HTTP.requestHeaders request) <> newHeaders
-  }
+  addHeaders newHeaders =
+    request {
+      HTTP.requestHeaders = originalHeaders  <> newHeaders
+    }
+      where
+        originalHeaders = filter (not . overridden) (HTTP.requestHeaders request)
+
+        overridden :: Header -> Bool
+        overridden (key, _value) = any (matchesKey key) newHeaders
+
+        matchesKey :: CI ByteString -> Header -> Bool
+        matchesKey key (candidate, _value) = key == candidate
 
 -- TODO make this lazy / load only once (see ./HTTP newManager)
 withUserHeaders :: UserHeaders -> HTTP.Request -> IO HTTP.Request
