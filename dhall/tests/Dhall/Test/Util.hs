@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Dhall.Test.Util
     ( code
@@ -19,15 +20,20 @@ module Dhall.Test.Util
     , discover
     , Dhall.Test.Util.testCase
     , toDhallPath
+    , managedTestEnvironment
     ) where
 
 import Control.Monad.Trans.State.Strict (StateT)
+import Control.Applicative ((<|>), liftA2)
+import Control.Exception (tryJust)
+import Control.Monad     (guard)
 import Data.Bifunctor                   (first)
 import Data.Text                        (Text)
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
-    ( Expr
+    ( Chunks(..)
+    , Expr(..)
     , Import
     , Normalizer
     , ReifiedNormalizer (..)
@@ -35,6 +41,7 @@ import Dhall.Core
 import Dhall.Import                     (SemanticCacheMode (..), Status (..))
 import Dhall.Parser                     (Src)
 import Prelude                          hiding (FilePath)
+import System.IO.Error                  (isDoesNotExistError)
 import Test.Tasty                       (TestTree)
 import Test.Tasty.HUnit
 import Turtle                           (FilePath, Pattern, Shell, fp)
@@ -42,11 +49,14 @@ import Turtle                           (FilePath, Pattern, Shell, fp)
 import qualified Control.Exception
 import qualified Control.Foldl                    as Foldl
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Foldable
 import qualified Data.Functor
 import qualified Data.Text                        as Text
+import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Import
+import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified System.FilePath                  as FilePath
@@ -156,6 +166,58 @@ mockRemote url = do
     fail ("(mock http) Url does not match any of the hard-coded rules: "
         <> urlString)
 #endif
+
+{- Given a test prefix, returns a managed resource
+   which sets / reverts relevant environment variables based
+   on `prefix <> "ENV.dhall"` (if present)
+ -}
+managedTestEnvironment :: Text -> Turtle.Managed [(Text, Maybe Text)]
+managedTestEnvironment prefix = Turtle.managed (Control.Exception.bracket setup cleanup)
+  where
+    envPath = Text.unpack (prefix <> "ENV.dhall")
+
+    setup :: IO [(Text, Maybe Text)]
+    setup = do
+        envFileContents <-
+            tryJust (guard . isDoesNotExistError) (Text.IO.readFile envPath)
+
+        testEnv <- case envFileContents of
+            Right contents -> do
+                resolved <- code contents
+                return (convertEnvExpr (Dhall.Core.normalize resolved))
+            Left _ -> return []
+
+        traverse setEnv testEnv
+
+    cleanup :: [(Text, Maybe Text)] -> IO ()
+    cleanup = Data.Foldable.traverse_ restoreEnv
+
+    convertEnvExpr :: Expr Src Void -> [(Text, Text)]
+    convertEnvExpr (ListLit _ hs) = Data.Foldable.toList (Data.Foldable.fold maybePairs)
+      where
+          maybePairs = mapM toPair hs
+
+          toPair :: Expr s a -> Maybe (Text, Text)
+          toPair (RecordLit m) = do
+              (Dhall.Core.recordFieldValue -> TextLit (Chunks [] key), Dhall.Core.recordFieldValue -> TextLit (Chunks [] value))
+                  <- lookupHeader <|> lookupMapKey
+              return (key, value)
+                where
+                  lookupHeader = liftA2 (,) (Dhall.Map.lookup "header" m) (Dhall.Map.lookup "value" m)
+                  lookupMapKey = liftA2 (,) (Dhall.Map.lookup "mapKey" m) (Dhall.Map.lookup "mapValue" m)
+          toPair _ = Nothing
+    convertEnvExpr _ = []
+
+    setEnv :: (Text, Text) -> IO (Text, Maybe Text)
+    setEnv (k, v) = do
+        old <- Turtle.need k
+        _ <- putStrLn $ Text.unpack $ "Setting env: "<>k <> "="<>v
+        Turtle.export k v
+        return (k, old)
+
+    restoreEnv :: (Text, Maybe Text) -> IO ()
+    restoreEnv (k, Just old) = Turtle.export k old
+    restoreEnv (k, Nothing) = Turtle.unset k
 
 equivalent :: Text -> Text -> IO ()
 equivalent text0 text1 = do

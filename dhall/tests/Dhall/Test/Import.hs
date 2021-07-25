@@ -124,7 +124,7 @@ successTest prefix = do
                 Turtle.liftIO (Turtle.cptree originalCache tempdir)
                 return tempdir
 
-        let setup =
+        let cacheSetup =
                 if any endsIn usesCache
                     then do
                         cacheDir <- buildNewCache
@@ -144,6 +144,8 @@ successTest prefix = do
                         _ <- Turtle.managed (Exception.bracket set reset)
                         return ()
                 else pure ()
+
+        let setup = cacheSetup >> Test.Util.managedTestEnvironment prefix
 
         let resolve = Turtle.with setup (const load)
 
