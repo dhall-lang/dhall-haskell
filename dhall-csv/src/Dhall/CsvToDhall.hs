@@ -46,8 +46,8 @@ import qualified Options.Applicative         as O
 
 -- | JSON-to-dhall translation options
 data Conversion = Conversion
-    { strictRecs     :: Bool
-    , unions         :: UnionConv
+    { strictRecs :: Bool
+    , unions     :: UnionConv
     } deriving Show
 
 data UnionConv = UFirst | UNone | UStrict deriving (Show, Read, Eq)
