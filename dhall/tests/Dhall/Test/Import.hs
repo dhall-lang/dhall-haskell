@@ -5,6 +5,7 @@ module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
 import Data.Text         (Text)
+import Data.Void         (Void)
 import Prelude           hiding (FilePath)
 import Test.Tasty        (TestTree)
 import Turtle            (FilePath, (</>))
@@ -14,7 +15,6 @@ import qualified Control.Monad                    as Monad
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
-import Data.Void                                  (Void)
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
@@ -136,7 +136,7 @@ successTest prefix = do
 
                                 return m
 
-                            reset Nothing = do
+                        let reset Nothing = do
                                 Turtle.unset "XDG_CACHE_HOME"
                             reset (Just x) = do
                                 Turtle.export "XDG_CACHE_HOME" x
