@@ -194,8 +194,8 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
             Left err -> Left $ UnicodeError err
             Right _field ->
                 case decimal _field of
-                    Left _ -> Left $ Mismatch Core.Natural field key
-                    Right (v, _) -> Right $ Core.NaturalLit v           -- What to do when there is more text left to read?
+                    Right (v, "") -> Right $ Core.NaturalLit v           -- What to do when there is more text left to read?
+                    _ -> Left $ Mismatch Core.Natural field key
 
     -- Integers
     fieldConvert key Core.Integer (Just field) =
@@ -203,8 +203,8 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
             Left err -> Left $ UnicodeError err
             Right _field ->
                 case decimal _field of
-                    Left _ -> Left $ Mismatch Core.Integer field key
-                    Right (v, _) -> Right $ Core.IntegerLit v           -- What to do when there is more text left to read?
+                    Right (v, "") -> Right $ Core.IntegerLit v           -- What to do when there is more text left to read?
+                    _ -> Left $ Mismatch Core.Integer field key
 
     -- Doubles
     fieldConvert _ Core.Double (Just field) =
@@ -212,8 +212,8 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
             Left err -> Left $ UnicodeError err
             Right _field ->
                 case double _field of
-                    Left _ -> Right $ Core.DoubleLit $ Core.DhallDouble (read "NaN")      -- Add options to handle special doubles
-                    Right (v, _) -> Right $ Core.DoubleLit $ Core.DhallDouble v           -- What to do when there is more text left to read?
+                    Right (v, "") -> Right $ Core.DoubleLit $ Core.DhallDouble v
+                    _ -> Right $ Core.DoubleLit $ Core.DhallDouble (read "NaN")
 
     -- Text
     fieldConvert _ Core.Text (Just field) =
