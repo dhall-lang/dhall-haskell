@@ -74,16 +74,6 @@ jobs:
               name: dhall-nix
               assets: >
                 bin/dhall-to-nix
-          # Temporarily exclude dhall on Windows due to
-          # https://github.com/dhall-lang/dhall-haskell/issues/2237
-          - os:
-              runner: windows-latest
-              package: windows
-            package:
-              name: dhall
-              assets: >
-                bin/dhall
-                share/man/man1/dhall.1
       fail-fast: false
     name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
