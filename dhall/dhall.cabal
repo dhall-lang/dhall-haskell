@@ -711,6 +711,9 @@ Test-Suite doctest
         filepath                < 1.5 ,
         mockery                 < 0.4 ,
         doctest   >= 0.7.0   && < 0.19
+    if os(windows)
+      -- https://github.com/dhall-lang/dhall-haskell/issues/2237
+      Buildable: False
     Default-Language: Haskell2010
 
 Benchmark dhall-parser
