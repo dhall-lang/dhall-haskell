@@ -77,8 +77,8 @@ type HTTPHeader = (CI ByteString, ByteString)
 -- | A map of site origin -> HTTP headers
 type SiteHeaders = HashMap Data.Text.Text [HTTPHeader]
 
--- SiteHeadersFile is the raw (unresolved) expression
--- used to build SiteHeaders
+-- SiteHeadersFile is the raw (unresolved)
+-- configuration used to build SiteHeaders
 data SiteHeadersFile = SiteHeadersFile {
     parentDirectory :: FilePath,
     expr :: Expr Src Import

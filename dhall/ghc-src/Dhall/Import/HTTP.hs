@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE NamedFieldPuns    #-}
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
@@ -12,7 +11,6 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
 import Data.Dynamic                     (toDyn)
-import Data.HashMap.Strict              (HashMap)
 import Data.List.NonEmpty               (NonEmpty(..))
 import Data.Text.Encoding               (decodeUtf8)
 import Dhall.Core
@@ -22,8 +20,7 @@ import Dhall.Core
     , Scheme (..)
     , URL (..)
     )
-import Dhall.Import.Types hiding (Manager)
-import Dhall.Import.Manager (Manager(..))
+import Dhall.Import.Types
 import Dhall.URL                        (renderURL)
 
 
@@ -272,7 +269,7 @@ addHeaders siteHeaders urlHeaders request =
         originHeaders = HashMap.lookupDefault [] origin siteHeaders
 
         filterHeaders Nothing = []
-        filterHeaders (Just urlHeaders) = filter (not . overridden) urlHeaders
+        filterHeaders (Just headers) = filter (not . overridden) headers
 
         overridden :: HTTPHeader -> Bool
         overridden (key, _value) = any (matchesKey key) originHeaders

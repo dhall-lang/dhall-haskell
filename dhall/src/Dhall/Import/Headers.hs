@@ -26,8 +26,6 @@ import qualified Dhall.Map
 import qualified Dhall.TypeCheck
 import qualified Dhall.Pretty.Internal
 
-
-
 -- | Given a well-typed (of type `List { header : Text, value Text }` or
 -- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
 -- construct the corresponding binary http headers; otherwise return the empty
@@ -51,7 +49,7 @@ toHeader (RecordLit m) = do
 toHeader _ =
     empty
 
--- | Normalize, typecheck and return the SiteHeaders from a given expression.
+-- | Normalize, typecheck and return SiteHeaders from a given expression.
 toSiteHeaders :: Expr Src Void -> IO SiteHeaders
 toSiteHeaders expr = fmap convert (normalizeSiteHeaders expr)
   where

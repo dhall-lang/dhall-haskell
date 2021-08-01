@@ -109,7 +109,7 @@ module Dhall.Import (
       load
     , loadWithManager
     , loadRelativeTo
-    , loadRelativeToWithStatus
+    , loadWithStatus
     , loadWith
     , localToPath
     , hashExpression
@@ -1029,15 +1029,15 @@ normalizeHeadersIn url = return url
 noopUserHeaders :: IO (Maybe SiteHeadersFile)
 noopUserHeaders = return Nothing
 
--- Given a SiteHeadersFile loader, return a SiteHeaders loader.
+-- | Given a SiteHeadersFile loader, return a SiteHeaders loader.
 siteHeadersLoader :: IO (Maybe SiteHeadersFile) -> IO SiteHeaders
-siteHeadersLoader loadSideHeadersFile = do
+siteHeadersLoader loadSideHeadersFile =
     loadSideHeadersFile >>= \case
         Nothing -> return mempty
         Just (SiteHeadersFile { parentDirectory, expr }) -> do
             -- TODO are we representing the source (DHALL_HEADERS / headers.dhall)
             -- properly in errors?
-            loaded <- loadRelativeToWithStatus
+            loaded <- loadWithStatus
                 (makeEmptyStatus
                     defaultNewManager
                     noopUserHeaders
@@ -1198,7 +1198,7 @@ load = loadWithManager defaultNewManager
 -- | See 'load'.
 loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
 loadWithManager newManager =
-    loadRelativeToWithStatus
+    loadWithStatus
         (makeEmptyStatus newManager defaultUserHeaders defaultFetchRemote ".")
         UseSemanticCache
 
@@ -1214,16 +1214,16 @@ printWarning message = do
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
-loadRelativeTo parentDirectory = loadRelativeToWithStatus
+loadRelativeTo parentDirectory = loadWithStatus
     (makeEmptyStatus defaultNewManager defaultUserHeaders defaultFetchRemote parentDirectory)
 
 -- | See 'loadRelativeTo'.
-loadRelativeToWithStatus
+loadWithStatus
     :: Status
     -> SemanticCacheMode
     -> Expr Src Import
     -> IO (Expr Src Void)
-loadRelativeToWithStatus status semanticCacheMode expression =
+loadWithStatus status semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
         status { _semanticCacheMode = semanticCacheMode }
