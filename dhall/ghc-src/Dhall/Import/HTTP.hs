@@ -12,7 +12,9 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
 import Data.Dynamic                     (toDyn)
+import Data.HashMap.Strict              (HashMap)
 import Data.List.NonEmpty               (NonEmpty(..))
+import Data.Text.Encoding               (decodeUtf8)
 import Dhall.Core
     ( Import (..)
     , ImportHashed (..)
@@ -22,7 +24,6 @@ import Dhall.Core
     )
 import Dhall.Import.Types hiding (Manager)
 import Dhall.Import.Manager (Manager(..))
-import Dhall.Import.UserHeaders (withUserHeaders)
 import Dhall.URL                        (renderURL)
 
 
@@ -33,6 +34,7 @@ import Network.HTTP.Client
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
@@ -169,6 +171,21 @@ newManager = do
         Just manager ->
             return manager
 
+getSiteHeaders :: StateT Status IO SiteHeaders
+getSiteHeaders = do
+    Status { _siteHeaders = oldSiteHeaders, ..} <- State.get
+
+    case oldSiteHeaders of
+        Nothing -> do
+            siteHeaders <- liftIO _loadSiteHeaders
+
+            State.put (Status { _siteHeaders = Just siteHeaders , ..})
+
+            return siteHeaders
+
+        Just siteHeaders ->
+            return siteHeaders
+
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
     , actualOrigin    :: ByteString
@@ -244,24 +261,38 @@ corsCompliant (Remote parentURL) childURL responseHeaders = liftIO $ do
                 Control.Exception.throwIO (NotCORSCompliant {..})
 corsCompliant _ _ _ = return ()
 
-type HTTPHeader = Network.HTTP.Types.Header
+-- type HTTPHeader = Network.HTTP.Types.Header
+
+addHeaders :: SiteHeaders -> Maybe [HTTPHeader] -> HTTP.Request -> HTTP.Request
+addHeaders siteHeaders urlHeaders request =
+    request { HTTP.requestHeaders = (filterHeaders urlHeaders) <> originHeaders }
+      where
+        origin = decodeUtf8 (HTTP.host request) <> ":" <> Text.pack (show (HTTP.port request))
+      
+        originHeaders = HashMap.lookupDefault [] origin siteHeaders
+
+        filterHeaders Nothing = []
+        filterHeaders (Just urlHeaders) = filter (not . overridden) urlHeaders
+
+        overridden :: HTTPHeader -> Bool
+        overridden (key, _value) = any (matchesKey key) originHeaders
+
+        matchesKey :: CI ByteString -> HTTPHeader -> Bool
+        matchesKey key (candidate, _value) = key == candidate
 
 fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
 fetchFromHttpUrl childURL mheaders = do
-    Manager { httpManager, headersManager } <- newManager
+    siteHeaders <- getSiteHeaders
+
+    manager <- newManager
 
     let childURLString = Text.unpack (renderURL childURL)
 
-    request <- liftIO (HTTP.parseUrlThrow childURLString)
+    baseRequest <- liftIO (HTTP.parseUrlThrow childURLString)
 
-    let baseRequest =
-            case mheaders of
-              Nothing      -> request
-              Just headers -> request { HTTP.requestHeaders = headers }
+    let requestWithHeaders = addHeaders siteHeaders mheaders baseRequest
 
-    requestWithHeaders <- liftIO (withUserHeaders headersManager baseRequest)
-
-    let io = HTTP.httpLbs requestWithHeaders httpManager
+    let io = HTTP.httpLbs requestWithHeaders manager
 
     let handler e = do
             let _ = e :: HttpException

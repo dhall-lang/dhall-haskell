@@ -8,7 +8,10 @@ module Dhall.Import.Types where
 
 import Control.Exception                (Exception)
 import Control.Monad.Trans.State.Strict (StateT)
+import Data.ByteString                  (ByteString)
+import Data.CaseInsensitive             (CI)
 import Data.Dynamic
+import Data.HashMap.Strict              (HashMap)
 import Data.List.NonEmpty               (NonEmpty)
 import Data.Text.Prettyprint.Doc        (Pretty (..))
 import Data.Void                        (Void)
@@ -68,6 +71,19 @@ type Manager =
     ()
 #endif
 
+-- | HTTP headers
+type HTTPHeader = (CI ByteString, ByteString)
+
+-- | A map of site origin -> HTTP headers
+type SiteHeaders = HashMap Data.Text.Text [HTTPHeader]
+
+-- SiteHeadersFile is the raw (unresolved) expression
+-- used to build SiteHeaders
+data SiteHeadersFile = SiteHeadersFile {
+    parentDirectory :: FilePath,
+    expr :: Expr Src Import
+}
+
 {-| Used internally to track whether or not we've already warned the user about
     caching issues
 -}
@@ -92,6 +108,10 @@ data Status = Status
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
     -- requests
 
+    , _loadSiteHeaders :: IO SiteHeaders
+    , _siteHeaders :: Maybe SiteHeaders
+    -- ^ Used to cache the user's custom headers for all remote imports
+
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
 
@@ -108,14 +128,16 @@ data Status = Status
     --   cache directory
     }
 
--- | Initial `Status`, parameterised over the HTTP 'Manager' and the remote
---   resolver, importing relative to the given root import.
+-- | Initial `Status`, parameterised over the HTTP 'Manager',
+--   the user headers and the remote resolver,
+--   importing relative to the given root import.
 emptyStatusWith
     :: IO Manager
+    -> IO SiteHeaders
     -> (URL -> StateT Status IO Data.Text.Text)
     -> Import
     -> Status
-emptyStatusWith _newManager _remote rootImport = Status {..}
+emptyStatusWith _newManager _loadSiteHeaders _remote rootImport = Status {..}
   where
     _stack = pure (Chained rootImport)
 
@@ -124,6 +146,8 @@ emptyStatusWith _newManager _remote rootImport = Status {..}
     _cache = Map.empty
 
     _manager = Nothing
+
+    _siteHeaders = Nothing
 
     _substitutions = Dhall.Substitution.empty
 

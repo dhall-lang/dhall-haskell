@@ -2,56 +2,31 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Dhall.Import.Headers (
-      HTTPHeader
-    , SiteHeaders
-    , toHeaders
+module Dhall.Import.Headers
+    ( toHeaders
     , toSiteHeaders
     , normalizeHeaders
     ) where
 
-import Control.Applicative              (Alternative (..), liftA2)
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HashMap
-import Data.ByteString                  (ByteString)
-import Data.CaseInsensitive             (CI)
-import Data.Text                        (Text)
-import Data.Void                        (Void, absurd)
-import Control.Monad.Catch              (MonadCatch (catch), handle, throwM)
-
-import Dhall.Syntax
-    ( Chunks (..)
-    , Expr (..)
-    )
-
-import Dhall.Parser
-    ( ParseError (..)
-    , Parser (..)
-    , SourcedException (..)
-    , Src (..)
-    )
-
-import Control.Exception
-    ( Exception
-    , IOException
-    , SomeException
-    , toException
-    )
+import Control.Applicative     (Alternative (..), liftA2)
+import Control.Exception       (SomeException)
+import Control.Monad.Catch     (handle, throwM)
+import Data.Text               (Text)
+import Data.Void               (Void)
+import Dhall.Import.Types      (HTTPHeader , SiteHeaders)
+import Dhall.Parser            (Src (..))
+import Dhall.Syntax            (Chunks (..), Expr (..))
 
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
+import qualified Data.HashMap.Strict    as HashMap
 import qualified Data.Text.Encoding
-import qualified Dhall.Core                                  as Core
+import qualified Dhall.Core             as Core
 import qualified Dhall.Map
 import qualified Dhall.TypeCheck
 import qualified Dhall.Pretty.Internal
 
 
--- | HTTP headers
-type HTTPHeader = (CI ByteString, ByteString)
-
--- | A map of site origin -> HTTP headers
-type SiteHeaders = HashMap Text [HTTPHeader]
 
 -- | Given a well-typed (of type `List { header : Text, value Text }` or
 -- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form

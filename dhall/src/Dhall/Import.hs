@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -108,7 +109,7 @@ module Dhall.Import (
       load
     , loadWithManager
     , loadRelativeTo
-    , loadRelativeToWithManager
+    , loadRelativeToWithStatus
     , loadWith
     , localToPath
     , hashExpression
@@ -117,7 +118,6 @@ module Dhall.Import (
     , assertNoImports
     , Manager
     , defaultNewManager
-    , loadSiteHeaders
     , CacheWarning(..)
     , Status(..)
     , SemanticCacheMode(..)
@@ -127,8 +127,10 @@ module Dhall.Import (
     , chainedChangeMode
     , emptyStatus
     , emptyStatusWithManager
+    , makeEmptyStatus
     , remoteStatus
     , remoteStatusWithManager
+    , defaultFetchRemote
     , stack
     , cache
     , Depends(..)
@@ -191,16 +193,15 @@ import System.FilePath ((</>))
 
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
-import qualified Dhall.Import.Manager as Manager
 #endif
 import Dhall.Import.Headers
-    ( HTTPHeader
-    , SiteHeaders
-    , toHeaders
+    ( toHeaders
     , toSiteHeaders
     , normalizeHeaders
     )
+import Dhall.Import.Manager (defaultNewManager)
 import Dhall.Import.Types
+import Dhall.Import.UserHeaders (defaultUserHeaders)
 
 import Dhall.Parser
     ( ParseError (..)
@@ -380,6 +381,17 @@ instance Show CannotImportHTTPURL where
         <>  "The requested URL was: "
         <>  url
         <>  "\n"
+
+data CannotImportFromHeadersFile =
+    CannotImportFromHeadersFile
+    deriving (Typeable)
+
+instance Exception CannotImportFromHeadersFile
+
+instance Show CannotImportFromHeadersFile where
+    show CannotImportFromHeadersFile =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Cannot import a remote URL from the headers configuration expression.\n"
 
 {-|
 > canonicalize . canonicalize = canonicalize
@@ -788,16 +800,20 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
+fetchDisabledForHeaders :: URL -> StateT Status IO Data.Text.Text
+fetchDisabledForHeaders _url = do
+    Status { _stack } <- State.get
+    throwMissingImport (Imported _stack CannotImportFromHeadersFile)
 
-fetchRemote :: URL -> StateT Status IO Data.Text.Text
+defaultFetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
-fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
+defaultFetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Core.pretty url)
     Status { _stack } <- State.get
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
-fetchRemote url = do
+defaultFetchRemote url = do
     zoom remote (State.put fetchFromHTTP)
     fetchFromHTTP url
   where
@@ -1008,37 +1024,49 @@ normalizeHeadersIn url@URL { headers = Just headersExpression } = do
 
 normalizeHeadersIn url = return url
 
--- TODO better error reporting
-remoteDisabledNewManager :: IO Manager
-remoteDisabledNewManager = fail "manager disabled"
+-- | A no-op user headers loader used for remote contexts
+--   (and loading user headers themselves)
+noopUserHeaders :: IO (Maybe SiteHeadersFile)
+noopUserHeaders = return Nothing
 
--- Injected into Manager for loading header expressions
--- TODO are we representing the source (DHALL_HEADERS / headers.dhall)
--- properly in errors?
-loadSiteHeaders :: FilePath -> Expr Src Import -> IO SiteHeaders
-loadSiteHeaders directory contents = do
-    expr <- loadRelativeToWithManager
-        remoteDisabledNewManager
-        directory
-        UseSemanticCache
-        contents
-    toSiteHeaders expr
+-- Given a SiteHeadersFile loader, return a SiteHeaders loader.
+siteHeadersLoader :: IO (Maybe SiteHeadersFile) -> IO SiteHeaders
+siteHeadersLoader loadSideHeadersFile = do
+    loadSideHeadersFile >>= \case
+        Nothing -> return mempty
+        Just (SiteHeadersFile { parentDirectory, expr }) -> do
+            -- TODO are we representing the source (DHALL_HEADERS / headers.dhall)
+            -- properly in errors?
+            loaded <- loadRelativeToWithStatus
+                (makeEmptyStatus
+                    defaultNewManager
+                    noopUserHeaders
+                    fetchDisabledForHeaders
+                    parentDirectory)
+                IgnoreSemanticCache
+                expr
 
-defaultNewManager :: IO Manager
-#ifndef WITH_HTTP
-defaultNewManager = pure ()
-#else
-defaultNewManager = Manager.makeDefaultNewManager loadSiteHeaders
-#endif
+            toSiteHeaders loaded
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus = emptyStatusWithManager defaultNewManager
+emptyStatus = makeEmptyStatus defaultNewManager defaultUserHeaders defaultFetchRemote
+
+emptyStatusWithManager
+    :: IO Manager
+    -> FilePath
+    -> Status
+emptyStatusWithManager newManager = makeEmptyStatus newManager defaultUserHeaders defaultFetchRemote
 
 -- | See 'emptyStatus'.
-emptyStatusWithManager :: IO Manager -> FilePath -> Status
-emptyStatusWithManager newManager rootDirectory =
-    emptyStatusWith newManager fetchRemote rootImport
+makeEmptyStatus
+    :: IO Manager
+    -> IO (Maybe SiteHeadersFile)
+    -> (URL -> StateT Status IO Data.Text.Text)
+    -> FilePath
+    -> Status
+makeEmptyStatus newManager loadSiteHeadersFile fetchRemote rootDirectory =
+    emptyStatusWith newManager (siteHeadersLoader loadSiteHeadersFile) fetchRemote rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1071,7 +1099,7 @@ remoteStatus = remoteStatusWithManager defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager fetchRemote rootImport
+    emptyStatusWith newManager (siteHeadersLoader noopUserHeaders) defaultFetchRemote rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1169,7 +1197,10 @@ load = loadWithManager defaultNewManager
 
 -- | See 'load'.
 loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
-loadWithManager newManager = loadRelativeToWithManager newManager "." UseSemanticCache
+loadWithManager newManager =
+    loadRelativeToWithStatus
+        (makeEmptyStatus newManager defaultUserHeaders defaultFetchRemote ".")
+        UseSemanticCache
 
 printWarning :: (MonadIO m) => String -> m ()
 printWarning message = do
@@ -1183,19 +1214,19 @@ printWarning message = do
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
-loadRelativeTo = loadRelativeToWithManager defaultNewManager
+loadRelativeTo parentDirectory = loadRelativeToWithStatus
+    (makeEmptyStatus defaultNewManager defaultUserHeaders defaultFetchRemote parentDirectory)
 
 -- | See 'loadRelativeTo'.
-loadRelativeToWithManager
-    :: IO Manager
-    -> FilePath
+loadRelativeToWithStatus
+    :: Status
     -> SemanticCacheMode
     -> Expr Src Import
     -> IO (Expr Src Void)
-loadRelativeToWithManager newManager rootDirectory semanticCacheMode expression =
+loadRelativeToWithStatus status semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
-        (emptyStatusWithManager newManager rootDirectory) { _semanticCacheMode = semanticCacheMode }
+        status { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression :: Expr Void Void -> Data.ByteString.ByteString
 encodeExpression expression = bytesStrict
