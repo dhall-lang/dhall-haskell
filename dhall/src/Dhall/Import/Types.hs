@@ -72,6 +72,15 @@ type Manager =
     ()
 #endif
 
+-- | The default HTTP 'Manager'
+defaultNewManager :: IO Manager
+defaultNewManager =
+#ifdef WITH_HTTP
+  Dhall.Import.Manager.defaultNewManager
+#else
+  pure ()
+#endif
+
 -- | HTTP headers
 type HTTPHeader = (CI ByteString, ByteString)
 

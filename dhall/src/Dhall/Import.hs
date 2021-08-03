@@ -200,7 +200,6 @@ import Dhall.Import.Headers
     , toSiteHeaders
     , normalizeHeaders
     )
-import Dhall.Import.Manager (defaultNewManager)
 import Dhall.Import.Types
 import Dhall.Import.UserHeaders (defaultUserHeaders)
 
