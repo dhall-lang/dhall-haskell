@@ -19,6 +19,7 @@ import Dhall.Context                    (Context)
 import Dhall.Core
     ( Expr
     , Import (..)
+    , ImportType
     , ReifiedNormalizer (..)
     , URL
     )
@@ -77,13 +78,6 @@ type HTTPHeader = (CI ByteString, ByteString)
 -- | A map of site origin -> HTTP headers
 type SiteHeaders = HashMap Data.Text.Text [HTTPHeader]
 
--- SiteHeadersFile is the raw (unresolved)
--- configuration used to build SiteHeaders
-data SiteHeadersFile = SiteHeadersFile {
-    parentDirectory :: FilePath,
-    expr :: Expr Src Import
-}
-
 {-| Used internally to track whether or not we've already warned the user about
     caching issues
 -}
@@ -108,7 +102,7 @@ data Status = Status
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
     -- requests
 
-    , _loadSiteHeaders :: IO SiteHeaders
+    , _loadSiteHeaders :: NonEmpty Chained -> IO SiteHeaders
     , _siteHeaders :: Maybe SiteHeaders
     -- ^ Used to cache the user's custom headers for all remote imports
 
@@ -133,7 +127,7 @@ data Status = Status
 --   importing relative to the given root import.
 emptyStatusWith
     :: IO Manager
-    -> IO SiteHeaders
+    -> (NonEmpty Chained -> IO SiteHeaders)
     -> (URL -> StateT Status IO Data.Text.Text)
     -> Import
     -> Status

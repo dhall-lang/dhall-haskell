@@ -195,7 +195,8 @@ import System.FilePath ((</>))
 import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Headers
-    ( toHeaders
+    ( SiteHeadersFile(..)
+    , toHeaders
     , toSiteHeaders
     , normalizeHeaders
     )
@@ -1030,23 +1031,39 @@ noopUserHeaders :: IO (Maybe SiteHeadersFile)
 noopUserHeaders = return Nothing
 
 -- | Given a SiteHeadersFile loader, return a SiteHeaders loader.
-siteHeadersLoader :: IO (Maybe SiteHeadersFile) -> IO SiteHeaders
-siteHeadersLoader loadSideHeadersFile =
-    loadSideHeadersFile >>= \case
-        Nothing -> return mempty
-        Just (SiteHeadersFile { parentDirectory, expr }) -> do
-            -- TODO are we representing the source (DHALL_HEADERS / headers.dhall)
-            -- properly in errors?
-            loaded <- loadWithStatus
-                (makeEmptyStatus
-                    defaultNewManager
-                    noopUserHeaders
-                    fetchDisabledForHeaders
-                    parentDirectory)
-                IgnoreSemanticCache
-                expr
+--   The loader uses the caller's import stack, despite not using the
+--   same status (in particular, remote imports are disallowed)
+siteHeadersLoader :: IO (Maybe SiteHeadersFile) -> NonEmpty Chained -> IO SiteHeaders
+siteHeadersLoader loadSideHeadersFile importStack = loadSideHeadersFile >>= \case
+    Nothing -> return mempty
+    Just (SiteHeadersFile { parentDirectory, fileContents, source }) ->
+        loadFile source parentDirectory fileContents
+  where
+    sourceChained :: ImportType -> Chained
+    sourceChained source = Chained (Import (ImportHashed Nothing source) Code )
 
-            toSiteHeaders loaded
+    extendStack :: NonEmpty Chained -> ImportType -> NonEmpty Chained
+    extendStack existing source = pure (sourceChained source) <> existing
+
+    loadFile source parentDirectory fileContents = do
+        let fullStack = extendStack importStack source
+
+        expr <- case Dhall.Parser.exprFromText mempty fileContents of
+            Left err -> throwMissingImport (Imported fullStack err)
+            Right expr -> return expr
+
+        loaded <- loadWithStatus
+            (makeEmptyStatus
+                defaultNewManager
+                noopUserHeaders
+                fetchDisabledForHeaders
+                parentDirectory) {
+                    _stack = fullStack
+                }
+            IgnoreSemanticCache
+            expr
+
+        toSiteHeaders loaded
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status

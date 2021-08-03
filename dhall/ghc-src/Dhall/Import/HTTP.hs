@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -170,11 +171,11 @@ newManager = do
 
 getSiteHeaders :: StateT Status IO SiteHeaders
 getSiteHeaders = do
-    Status { _siteHeaders = oldSiteHeaders, ..} <- State.get
+    Status { _siteHeaders = oldSiteHeaders, _stack, ..} <- State.get
 
     case oldSiteHeaders of
         Nothing -> do
-            siteHeaders <- liftIO _loadSiteHeaders
+            siteHeaders <- liftIO (_loadSiteHeaders _stack)
 
             State.put (Status { _siteHeaders = Just siteHeaders , ..})
 
@@ -257,8 +258,6 @@ corsCompliant (Remote parentURL) childURL responseHeaders = liftIO $ do
             | otherwise ->
                 Control.Exception.throwIO (NotCORSCompliant {..})
 corsCompliant _ _ _ = return ()
-
--- type HTTPHeader = Network.HTTP.Types.Header
 
 addHeaders :: SiteHeaders -> Maybe [HTTPHeader] -> HTTP.Request -> HTTP.Request
 addHeaders siteHeaders urlHeaders request =

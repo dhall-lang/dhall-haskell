@@ -3,7 +3,8 @@
 {-# LANGUAGE ViewPatterns        #-}
 
 module Dhall.Import.Headers
-    ( toHeaders
+    ( SiteHeadersFile(..)
+    , toHeaders
     , toSiteHeaders
     , normalizeHeaders
     ) where
@@ -13,9 +14,13 @@ import Control.Exception       (SomeException)
 import Control.Monad.Catch     (handle, throwM)
 import Data.Text               (Text)
 import Data.Void               (Void)
+import Dhall.Core
+    ( Chunks (..)
+    , Expr (..)
+    , ImportType
+    )
 import Dhall.Import.Types      (HTTPHeader , SiteHeaders)
 import Dhall.Parser            (Src (..))
-import Dhall.Syntax            (Chunks (..), Expr (..))
 
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
@@ -25,6 +30,13 @@ import qualified Dhall.Core             as Core
 import qualified Dhall.Map
 import qualified Dhall.TypeCheck
 import qualified Dhall.Pretty.Internal
+
+-- SiteHeadersFile is the raw configuration used to build SiteHeaders
+data SiteHeadersFile = SiteHeadersFile {
+    parentDirectory :: FilePath,
+    source :: ImportType,
+    fileContents :: Data.Text.Text
+}
 
 -- | Given a well-typed (of type `List { header : Text, value Text }` or
 -- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form

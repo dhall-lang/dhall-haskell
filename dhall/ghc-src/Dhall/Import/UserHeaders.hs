@@ -11,48 +11,72 @@ import Control.Exception        (tryJust)
 import Control.Monad            (guard)
 import Data.Either.Combinators  (rightToMaybe)
 import Data.Text                (Text)
-import Dhall.Core               (throws)
-import Dhall.Import.Types       (SiteHeadersFile(..))
+import Dhall.Import.Headers     (SiteHeadersFile(..))
+import Dhall.Core
+    ( Directory(..)
+    , File(..)
+    , FilePrefix(..)
+    , ImportType
+    )
+
 import System.Directory         (getXdgDirectory, XdgDirectory(XdgConfig))
 import System.Environment       (lookupEnv)
-import System.FilePath          ((</>))
+import System.FilePath          ((</>), splitDirectories)
 import System.IO.Error          (isDoesNotExistError)
 
 import qualified Data.Text      as Text
 import qualified Data.Text.IO   as IO
-import qualified Dhall.Parser   as Parser
+import qualified Dhall.Core     as Core
 
-parseFrom :: FilePath -> Text -> IO SiteHeadersFile
-parseFrom parentDirectory text = do
-    expr <- throws (Parser.exprFromText mempty text)
-    return (SiteHeadersFile { parentDirectory , expr })
+siteHeadersFile :: FilePath -> ImportType -> Text -> SiteHeadersFile
+siteHeadersFile parentDirectory source fileContents =
+    SiteHeadersFile { parentDirectory , source, fileContents }
 
--- lift 'parseFrom' to work on IO (Maybe Text)
-parseFrom' :: FilePath -> IO (Maybe Text) -> IO (Maybe SiteHeadersFile)
-parseFrom' parentDirectory getText = do
+-- lift 'siteHeadersFile' to work on IO (Maybe Text)
+siteHeadersFile' :: FilePath -> ImportType -> IO (Maybe Text) -> IO (Maybe SiteHeadersFile)
+siteHeadersFile' parentDirectory source getText = do
     mtext <- getText
-    mapM (parseFrom parentDirectory) mtext
+    return (fmap (siteHeadersFile parentDirectory source) mtext)
 
 {-| Resolve the raw dhall text for user headers
     only from $DHALL_HEADERS, not the filesystem
  -}
 envOnlyUserHeaders :: IO (Maybe SiteHeadersFile)
 envOnlyUserHeaders =
-    parseFrom' "." (fmap (fmap Text.pack) (lookupEnv "DHALL_HEADERS"))
+    siteHeadersFile' "." (Core.Env (Text.pack key)) (fmap (fmap Text.pack) (lookupEnv key))
+      where
+        key = "DHALL_HEADERS"
+
+configFileOnlyUserHeaders :: IO (Maybe SiteHeadersFile)
+configFileOnlyUserHeaders = do
+    directory <- getXdgDirectory XdgConfig "dhall"
+    siteHeadersFile'
+      directory
+      (makeSource directory)
+      (tryReadFile (directory </> (Text.unpack filename)))
+
+      where
+        filename :: Text
+        filename = "headers.dhall"
+
+        makeSource directory =
+            Core.Local Absolute File
+                { directory = Directory
+                    { components = reverse (components directory) }
+                , file = filename
+                }
+ 
+        components directory = map Text.pack (splitDirectories directory)
+
+        tryReadFile path = rightToMaybe <$>
+            tryJust (guard . isDoesNotExistError) (IO.readFile path)
+
 
 {-| Resolve the raw dhall text for user headers,
     along with the directory containing it
     (which is `.` if loaded from $DHALL_HEADERS)
  -}
 defaultUserHeaders :: IO (Maybe SiteHeadersFile)
-defaultUserHeaders =
-    envOnlyUserHeaders >>= \case
-      Just file -> return (Just file)
-      Nothing -> loadConfigFile
-        where
-          loadConfigFile = do
-              directory <- getXdgDirectory XdgConfig "dhall"
-              parseFrom' directory (tryReadFile (directory </> "headers.dhall"))
-
-          tryReadFile path = rightToMaybe <$>
-              tryJust (guard . isDoesNotExistError) (IO.readFile path)
+defaultUserHeaders = envOnlyUserHeaders >>= \case
+    Just file -> return (Just file)
+    Nothing -> configFileOnlyUserHeaders
