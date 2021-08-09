@@ -62,11 +62,14 @@ dhallToCsv e0 = listConvert $ Core.normalize e0
         return $ Data.Csv.toNamedRecord $ Dhall.Map.toMap a'
     recordConvert e = Left $ Unsupported e
     fieldConvert :: Expr Void Void -> Either CompileError Data.Csv.Field
+    fieldConvert (Core.BoolLit True) = return $ toField ("true" :: Text)
+    fieldConvert (Core.BoolLit False) = return $ toField ("false" :: Text)
     fieldConvert (Core.NaturalLit a) = return $ toField a
     fieldConvert (Core.IntegerLit a) = return $ toField a
     fieldConvert (Core.DoubleLit (DhallDouble a)) = return $ toField a
     fieldConvert (Core.TextLit (Core.Chunks [] a)) = return $ toField a
     fieldConvert (Core.App (Core.Field (Core.Union _) _) a) = fieldConvert a
+    fieldConvert (Core.Field (Core.Union _) (Core.FieldSelection _ k _)) = return $ toField k
     fieldConvert e = Left $ Unsupported e
 
 codeToValue
