@@ -221,6 +221,9 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
             Left err -> Left $ UnicodeError err
             Right _field -> return $ Core.TextLit $ Core.Chunks [] $ _field
 
+    -- Optionals null
+    fieldConvert _ (Core.App Core.Optional t) (Just "null") = return $ Core.App Core.None t
+
     -- Optionals
     fieldConvert key (Core.App Core.Optional t) maybeField = do
         expression <- fieldConvert key t maybeField
