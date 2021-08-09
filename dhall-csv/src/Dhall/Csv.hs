@@ -70,6 +70,8 @@ dhallToCsv e0 = listConvert $ Core.normalize e0
     fieldConvert (Core.TextLit (Core.Chunks [] a)) = return $ toField a
     fieldConvert (Core.App (Core.Field (Core.Union _) _) a) = fieldConvert a
     fieldConvert (Core.Field (Core.Union _) (Core.FieldSelection _ k _)) = return $ toField k
+    fieldConvert (Core.Some e) = fieldConvert e
+    fieldConvert (Core.App Core.None _) = return $ toField ("null" :: Text)
     fieldConvert e = Left $ Unsupported e
 
 codeToValue
