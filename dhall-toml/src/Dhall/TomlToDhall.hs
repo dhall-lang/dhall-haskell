@@ -1,6 +1,115 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 
+{-| This module exports the `tomlToDhal` function for translating a
+    TOML syntax tree from @tomland@ to a Dhall syntax tree. For now,
+    this package does not have type inference so a Dhall type is needed.
+
+    For converting source code into a Dhall syntax tree see the @dhall@
+    package, and for converting the TOML syntax tree to source code see
+    the @tomland@ package.
+
+    This module also exports `tomlToDhallMain` which implements the
+    @toml-to-dhall@ command which converts TOML source directly into
+    Dhall source.
+
+    In theory all TOML objects should be converted but there are some known
+    failure cases:
+    * Arrays of arrays of objects - not supported by @tomland@
+    * Arrays of heterogeneous primitive types - not supported by @tomaland@
+        * Arrays of objects are different types are allowed (note that this
+            requires an @enum@)
+
+    TOML bools translate to Dhall @Bool@s:
+
+> $ cat schema.dhall
+> { b : Bool }
+> $ toml-to-dhall schema.dhall <<< 'b = true'
+> { b = True }
+
+    TOML numbers translate to Dhall numbers:
+
+> $ cat schema.dhall
+> { n : Natural, d : Double }
+> $ toml-to-dhall schema.dhall << EOF
+> n = 1
+> d = 3.14
+> EOF
+> { d = 3.14, n = 1}
+
+    TOML text translates to Dhall @Text@:
+
+> $ cat schema.dhall
+> { t : Text }
+> $ toml-to-dhall schema.dhall << EOF
+> t = "Hello!"
+> EOF
+> { t = "Hello!" }
+
+    TOML arrays and table arrays translate to Dhall @List@:
+
+> $ cat schema.dhall
+> { nums : List Natural, tables : List { a : Natural, b : Text } }
+> $ toml-to-dhall schema.dhall << EOF
+> nums = [1, 2, 3]
+>
+> [[tables]]
+> a = 1
+> b = "Hello,"
+> [[tables]]
+> a = 2
+> b = " World!"
+> EOF
+> { nums = [ 1, 2, 3 ]
+> , tables = [ { a = 1, b = "Hello," }, { a = 2, b = " World!" } ]
+> }
+
+    Note, [lists of lists of objects](https://github.com/kowainik/tomland/issues/373)
+    and [heterogeneous lists](https://github.com/kowainik/tomland/issues/373) are not
+    supported by @tomland@ so a parasing error will be returned:
+
+> $ cat schema.dhall
+> { list : List (<a : Natural | b : Bool>) }
+> $ toml-to-dhall schema.dhall << EOF
+> list = [1, true]
+> EOF
+> toml-to-dhall: invalid TOML:
+> 1:12:
+>   |
+> 1 | list = [1, true]
+>   |            ^
+> unexpected 't'
+> expecting ',', ']', or integer
+
+    Because of this, unions have limited use in lists, but can be used fully
+    in tables:
+
+> $ cat schema.dhall
+> { list : List (<a : Natural | b : Bool>), item : <a : Natural | b : Bool> }
+> $ toml-to-dhall schema.dhall << EOF
+> list = [1, 2]
+> item = true
+> EOF
+> { item = < a : Natural | b : Bool >.b True
+> , list = [ < a : Natural | b : Bool >.a 1, < a : Natural | b : Bool >.a 2 ]
+> }
+
+    TOML tables translate to Dhall records:
+
+> $ cat schema.dhall
+> { num : Natural, table : { num1 : Natural, table1 : { num2 : Natural } } }
+> $ toml-to-dhall schema.dhall << EOF
+> num = 0
+>
+> [table]
+> num1 = 1
+>
+> [table.table1]
+> num2 = 2
+> EOF
+> { num = 0, table = { num1 = 1, table1.num2 = 2 } }
+
+-}
 module Dhall.TomlToDhall
     ( tomlToDhall
     , tomlToDhallMain
@@ -46,7 +155,7 @@ data CompileError
 instance Show CompileError where
     show (Unimplemented s) = "unimplemented: " ++ s
     show (Incompatible e toml) = "incompatible: " ++ (show e) ++ " with " ++ (show toml)
-    show (InvalidToml e) = "invalid TOML: " ++ show e
+    show (InvalidToml e) = "invalid TOML:\n" ++ (Data.Text.unpack $ Toml.Parser.unTomlParseError e)
     show (InternalError e) = "internal error: " ++ show e
     show (MissingKey e) = "missing key: " ++ show e
 
@@ -71,6 +180,23 @@ tomlValueToDhall exprType v = case (exprType, v) of
     (Core.App Core.List t     , Value.Array a  ) -> do
         l <- mapM (tomlValueToDhall t) a
         return $ Core.ListLit Nothing (Seq.fromList l)
+
+    -- TODO: allow different types of matching (ex. first, strict, none)
+    -- currently we just pick the first enum that matches
+    (Core.Union m        , _)        -> let
+        f key maybeType = case maybeType of
+            Just ty -> do
+                expr <- tomlValueToDhall ty v
+                return $ Core.App (Core.Field exprType $ Core.makeFieldSelection key) expr
+            Nothing -> case v of
+                Value.Text a | a == key ->
+                    return $ Core.Field exprType (Core.makeFieldSelection a)
+                _ -> Left $ Incompatible exprType (Prim (AnyValue v))
+
+        in case rights (toList (Map.mapWithKey f m)) of
+            []  -> Left $ Incompatible exprType (Prim (AnyValue v))
+            x:_ -> Right $ x
+
     _ -> Left $ Incompatible exprType (Prim (AnyValue v))
 
 -- TODO: keep track of the path for more helpful error messages
@@ -79,6 +205,7 @@ toDhall exprType value = case (exprType, value) of
     (_,                    Invalid)  -> Left $ InternalError "invalid object"
 
     -- TODO: allow different types of matching (ex. first, strict, none)
+    -- currently we just pick the first enum that matches
     (Core.Union m        , _)        -> let
         f key maybeType = case maybeType of
             Just ty -> do

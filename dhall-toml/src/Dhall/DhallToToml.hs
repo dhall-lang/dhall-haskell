@@ -6,7 +6,7 @@
     package, and for converting the TOML syntax tree to source code see
     the @tomland@ package.
 
-    This module also exports `dhallToTomlMain` which implementes the
+    This module also exports `dhallToTomlMain` which implements the
     @dhall-to-toml@ command which converts Dhall source directly into
     TOML source.
 
@@ -26,7 +26,7 @@
     Additionally the Dhall top-level value being converted **must be a record**
     since TOML cannot represent bare values (ex. a single boolean or integer)
 
-    Dhall @Bool@s transalate to TOML bools:
+    Dhall @Bool@s translates to TOML bools:
 
 > $ dhall-to-toml <<< ' { t = True, f = False }'
 > f = false
@@ -86,7 +86,7 @@
 
     Also, all Dhall expressions are normalized before translation:
 
-> $ dhall-to-json <<< ' { b = True == False }'
+> $ dhall-to-toml <<< ' { b = True == False }'
 > b = false
 
 -}
