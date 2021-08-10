@@ -24,7 +24,7 @@ import Data.List                ((\\))
 import Data.Text                (Text)
 import Data.Text.Encoding       (decodeUtf8, decodeUtf8', encodeUtf8)
 import Data.Text.Encoding.Error (UnicodeException)
-import Data.Text.Read           (decimal, double)
+import Data.Text.Read           (decimal, double, signed)
 import Data.Void                (Void)
 import Dhall.Core               (Expr)
 import Dhall.Src                (Src)
@@ -202,7 +202,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
         case decodeUtf8' field of
             Left err -> Left $ UnicodeError err
             Right _field ->
-                case decimal _field of
+                case (signed decimal) _field of
                     Right (v, "") -> Right $ Core.IntegerLit v           -- What to do when there is more text left to read?
                     _ -> Left $ Mismatch Core.Integer field key
 
@@ -220,6 +220,9 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
         case decodeUtf8' field of
             Left err -> Left $ UnicodeError err
             Right _field -> return $ Core.TextLit $ Core.Chunks [] $ _field
+
+    -- Optionals null
+    fieldConvert _ (Core.App Core.Optional t) (Just "") = return $ Core.App Core.None t
 
     -- Optionals
     fieldConvert key (Core.App Core.Optional t) maybeField = do
