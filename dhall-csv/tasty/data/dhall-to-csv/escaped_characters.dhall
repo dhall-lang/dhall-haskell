@@ -5,7 +5,7 @@
 , { escapedText1 = "\$"     , escapedText2 = "\$"     }
 , { escapedText1 = "\b"     , escapedText2 = "\b"     }
 , { escapedText1 = "\f"     , escapedText2 = "\f"     }
-, { escapedText1 = "\r"     , escapedText2 = "\r"     }
+, { escapedText1 = "\r\n"   , escapedText2 = "\r\n"   }
 , { escapedText1 = "\t"     , escapedText2 = "\t"     }
 , { escapedText1 = "\u263A" , escapedText2 = "\u263A" }
 , { escapedText1 = ","      , escapedText2 = ","      }
