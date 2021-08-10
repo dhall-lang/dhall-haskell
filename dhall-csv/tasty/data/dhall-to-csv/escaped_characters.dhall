@@ -1,4 +1,5 @@
-[ { escapedText1 = "\\"     , escapedText2 = "\\"     }
+[ { escapedText1 = "\n"     , escapedText2 = "\n"     }
+, { escapedText1 = "\\"     , escapedText2 = "\\"     }
 , { escapedText1 = "\""     , escapedText2 = "\""     }
 , { escapedText1 = "\/"     , escapedText2 = "\/"     }
 , { escapedText1 = "\$"     , escapedText2 = "\$"     }
