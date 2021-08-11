@@ -130,15 +130,11 @@ data CompileError
     = Unsupported (Expr Void Void)
     -- | tomland does not support records in multi-dimensional arrays, though it
     --   is allowed by the spec
-    --   TODO: add refrence to issue in message:
-    --      https://github.com/kowainik/tomland/issues/385
     | UnsupportedArray (Expr Void Void)
     | NotARecord (Expr Void Void)
     -- | the latest TOML spec, v1.0.0 allows this but tomland has not
     --   implemented it yet
     --   NOTE: the only way to get this error is through unions
-    --   TODO: add reference to issue in message:
-    --      https://github.com/kowainik/tomland/issues/373
     | HeterogeneousArray (Expr Void Void)
 
 instance Show CompileError where
@@ -188,8 +184,8 @@ instance Show CompileError where
     show (HeterogeneousArray e) =
         _ERROR <> ": Heterogeneous arrays are not currently supported                    \n\
         \                                                                                \n\
-        \Explanation: The tomland library cannot handle records in nested arrays. You    \n\
-        \can check the status of this feature at:                                        \n\
+        \Explanation: The tomland library cannot handle arrays with elemets of           \n\
+        \ different types. You can check the status of this feature at:                  \n\
         \   https://github.com/kowainik/tomland/issues/373                               \n\
         \                                                                                \n\
         \For example:                                                                    \n\

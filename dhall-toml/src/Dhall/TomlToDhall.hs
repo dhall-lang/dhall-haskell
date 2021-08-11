@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 
-{-| This module exports the `tomlToDhal` function for translating a
+{-| This module exports the `tomlToDhall` function for translating a
     TOML syntax tree from @tomland@ to a Dhall syntax tree. For now,
     this package does not have type inference so a Dhall type is needed.
 
@@ -16,9 +16,9 @@
     In theory all TOML objects should be converted but there are some known
     failure cases:
     * Arrays of arrays of objects - not supported by @tomland@
-    * Arrays of heterogeneous primitive types - not supported by @tomaland@
-        * Arrays of objects are different types are allowed (note that this
-            requires an @enum@)
+    * Arrays of heterogeneous primitive types - not supported by @tomland@
+        * Arrays of objects of different types are allowed (note that this
+            requires conversion to a Dhall union)
 
     TOML bools translate to Dhall @Bool@s:
 
@@ -66,7 +66,7 @@
 
     Note, [lists of lists of objects](https://github.com/kowainik/tomland/issues/373)
     and [heterogeneous lists](https://github.com/kowainik/tomland/issues/373) are not
-    supported by @tomland@ so a parasing error will be returned:
+    supported by @tomland@ so a paraser error will be returned:
 
 > $ cat schema.dhall
 > { list : List (<a : Natural | b : Bool>) }
