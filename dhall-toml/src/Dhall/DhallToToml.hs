@@ -184,7 +184,7 @@ instance Show CompileError where
     show (HeterogeneousArray e) =
         _ERROR <> ": Heterogeneous arrays are not currently supported                    \n\
         \                                                                                \n\
-        \Explanation: The tomland library cannot handle arrays with elemets of           \n\
+        \Explanation: The tomland library cannot handle arrays with elements of          \n\
         \ different types. You can check the status of this feature at:                  \n\
         \   https://github.com/kowainik/tomland/issues/373                               \n\
         \                                                                                \n\
