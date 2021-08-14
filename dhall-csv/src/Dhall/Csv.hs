@@ -15,8 +15,8 @@
     * @Integer@s
     * @Double@s
     * @Text@ values
-    * @Optional@ values (one of these types)
-    * unions (of these types)
+    * @Optional@ (of valid field types)
+    * unions (of empty alternatives or valid record field types)
 
     Dhall @Bool@s translate to either `"true"` or `"false"` in all lowercase letters:
 
