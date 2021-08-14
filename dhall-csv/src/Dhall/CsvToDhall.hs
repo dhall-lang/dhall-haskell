@@ -540,10 +540,7 @@ instance Show CompileError where
 
     show (UnicodeError e) = show e
 
-    show _ = undefined
-
 instance Exception CompileError
-
 
 insert :: Pretty a => a -> Text
 insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
