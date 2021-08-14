@@ -114,19 +114,80 @@ import qualified System.FilePath
     It contains information on the specific cases that might
     fail to give a better insight.
 -}
-data CompileError = Unsupported (Expr Void Void)
+data CompileError
+    = Unsupported (Expr Void Void)
+    | NotAList (Expr Void Void)
+    | NotARecord (Expr Void Void)
+    | BareNone
 
 instance Show CompileError where
     show (Unsupported e) =
         Data.Text.unpack $
-            _ERROR <> ": Cannot translate to CSV                                             \n\
+            _ERROR <> ": Cannot translate record field to CSV                                \n\
             \                                                                                \n\
-            \Explanation: Only records of primitive values can be                            \n\
-            \translated from Dhall to CSV.                                                   \n\
+            \Explanation: Only the following types of record fields can be converted to CSV: \n\
+            \                                                                                \n\
+            \● ❰Bool❱                                                                        \n\
+            \● ❰Natural❱                                                                     \n\
+            \● ❰Integer❱                                                                     \n\
+            \● ❰Double❱                                                                      \n\
+            \● ❰Text❱                                                                        \n\
+            \● ❰Optional❱ tp (where tp is a valid record field type)                         \n\
+            \● Unions *                                                                      \n\
+            \                                                                                \n\
+            \* Unions can have empty alternatives or alternatives with valid                 \n\
+            \  record field types                                                            \n\
             \                                                                                \n\
             \The following Dhall expression could not be translated to CSV:                  \n\
             \                                                                                \n\
             \" <> insert e
+
+    show (NotAList e) =
+        Data.Text.unpack $
+            _ERROR <> ": Top level object must be of type ❰List❱                             \n\
+            \                                                                                \n\
+            \Explanation: To translate to CSV you must provide a list of records.            \n\
+            \Other types can not be translated directly.                                     \n\
+            \                                                                                \n\
+            \Expected an expression of type List {...} but instead got the following         \n\
+            \expression:                                                                     \n\
+            \                                                                                \n\
+            \" <> insert e
+
+    show (NotARecord e) =
+        Data.Text.unpack $
+            _ERROR <> ": Elements of the top-level list must be records                      \n\
+            \                                                                                \n\
+            \Explanation: To translate to CSV you must provide a list of records.            \n\
+            \Other types can not be translated directly.                                     \n\
+            \                                                                                \n\
+            \Expected a record but instead got the following expression:                     \n\
+            \                                                                                \n\
+            \" <> insert e
+
+    show BareNone =
+       Data.Text.unpack $
+            _ERROR <> ": ❰None❱ is not valid on its own                                      \n\
+            \                                                                                \n\
+            \Explanation: The conversion to JSON/YAML does not accept ❰None❱ in isolation as \n\
+            \a valid way to represent ❰null❱.  In Dhall, ❰None❱ is a function whose input is \n\
+            \a type and whose output is an ❰Optional❱ of that type.                          \n\
+            \                                                                                \n\
+            \For example:                                                                    \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌─────────────────────────────────┐  ❰None❱ is a function whose result is   \n\
+            \    │ None : ∀(a : Type) → Optional a │  an ❰Optional❱ value, but the function  \n\
+            \    └─────────────────────────────────┘  itself is not a valid ❰Optional❱ value \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \    ┌─────────────────────────────────┐  ❰None Natural❱ is a valid ❰Optional❱   \n\
+            \    │ None Natural : Optional Natural │  value (an absent ❰Natural❱ number in   \n\
+            \    └─────────────────────────────────┘  this case)                             \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \                                                                                \n\
+            \The conversion to JSON/YAML only translates the fully applied form to ❰null❱.   "
 
 instance Exception CompileError
 
@@ -143,12 +204,12 @@ dhallToCsv e0 = listConvert $ Core.normalize e0
   where
     listConvert :: Expr Void Void -> Either CompileError (Seq NamedRecord)
     listConvert (Core.ListLit _ a) = traverse recordConvert a
-    listConvert e = Left $ Unsupported e
+    listConvert e = Left $ NotAList e
     recordConvert :: Expr Void Void -> Either CompileError NamedRecord
     recordConvert (Core.RecordLit a) = do
         a' <- traverse (fieldConvert . Core.recordFieldValue) a
         return $ Data.Csv.toNamedRecord $ Dhall.Map.toMap a'
-    recordConvert e = Left $ Unsupported e
+    recordConvert e = Left $ NotARecord e
     fieldConvert :: Expr Void Void -> Either CompileError Data.Csv.Field
     fieldConvert (Core.BoolLit True) = return $ toField ("true" :: Text)
     fieldConvert (Core.BoolLit False) = return $ toField ("false" :: Text)
@@ -160,6 +221,7 @@ dhallToCsv e0 = listConvert $ Core.normalize e0
     fieldConvert (Core.Field (Core.Union _) (Core.FieldSelection _ k _)) = return $ toField k
     fieldConvert (Core.Some e) = fieldConvert e
     fieldConvert (Core.App Core.None _) = return $ toField ("" :: Text)
+    fieldConvert Core.None = Left BareNone
     fieldConvert e = Left $ Unsupported e
 
 {-| Convert a @Text@ with Dhall code to a list of @NamedRecord@s.
