@@ -177,7 +177,6 @@ let
                 failOnMissingHaddocksExtension =
                   mass failOnMissingHaddocks [
                     "dhall"
-                    "dhall-csv"
                   ];
 
                 extension =
