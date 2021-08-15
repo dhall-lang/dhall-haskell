@@ -211,7 +211,6 @@ managedTestEnvironment prefix = Turtle.managed (Control.Exception.bracket setup 
     setEnv :: (Text, Text) -> IO (Text, Maybe Text)
     setEnv (k, v) = do
         old <- Turtle.need k
-        _ <- putStrLn $ Text.unpack $ "Setting env: "<>k <> "="<>v
         Turtle.export k v
         return (k, old)
 
