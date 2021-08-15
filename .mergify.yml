@@ -5,8 +5,37 @@ pull_request_rules:
       method: squash
   name: Automatically merge pull requests
   conditions:
-  - status-success=continuous-integration/appveyor/pr
-  - status-success=hydra
+  - check-success=hydra
+  # Mergify explicitly recommends listing each status check separately:
+  # https://docs.mergify.io/conditions/#validating-all-status-checks
+  - check-success=dhall on macOS-latest
+  - check-success=dhall-bash on macOS-latest
+  - check-success=dhall-csv on macOS-latest
+  - check-success=dhall-docs on macOS-latest
+  - check-success=dhall-json on macOS-latest
+  - check-success=dhall-lsp-server on macOS-latest
+  - check-success=dhall-nix on macOS-latest
+  - check-success=dhall-openapi on macOS-latest
+  - check-success=dhall-toml on macOS-latest
+  - check-success=dhall-yaml on macOS-latest
+  - check-success=dhall on ubuntu-latest
+  - check-success=dhall-bash on ubuntu-latest
+  - check-success=dhall-csv on ubuntu-latest
+  - check-success=dhall-docs on ubuntu-latest
+  - check-success=dhall-json on ubuntu-latest
+  - check-success=dhall-lsp-server on ubuntu-latest
+  - check-success=dhall-openapi on ubuntu-latest
+  - check-success=dhall-toml on ubuntu-latest
+  - check-success=dhall-yaml on ubuntu-latest
+  - check-success=dhall on windows-latest
+  - check-success=dhall-bash on windows-latest
+  - check-success=dhall-csv on windows-latest
+  - check-success=dhall-docs on windows-latest
+  - check-success=dhall-json on windows-latest
+  - check-success=dhall-lsp-server on windows-latest
+  - check-success=dhall-openapi on windows-latest
+  - check-success=dhall-toml on windows-latest
+  - check-success=dhall-yaml on windows-latest
   - label=merge me
   - ! '#approved-reviews-by>=1'
   - ! '#changes-requested-reviews-by=0'

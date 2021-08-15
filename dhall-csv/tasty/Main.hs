@@ -3,15 +3,20 @@
 module Main (main) where
 
 import Data.Text            (Text)
+import Data.Void            (Void)
+import Dhall.CsvToDhall     (defaultConversion, dhallFromCsv, typeCheckSchemaExpr, resolveSchemaExpr)
+import Dhall.Core           (Expr)
+import Dhall.Src            (Src)
 import Test.Tasty           (TestTree)
 import Test.Tasty.Silver    (findByExtension)
-import System.FilePath      (takeBaseName, replaceExtension)
+import System.FilePath      (takeBaseName, replaceExtension, dropExtension)
 
 import qualified Data.Csv
+import qualified Data.Text          as Text
 import qualified Data.Text.IO
 import qualified Dhall.Core         as D
 import qualified Dhall.Csv
-import qualified Dhall.CsvToDhall
+import qualified Dhall.CsvToDhall   as CsvToDhall
 import qualified Dhall.Csv.Util
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
@@ -56,10 +61,11 @@ csvToDhallGolden = do
         [ Silver.goldenVsAction
             (takeBaseName csvFile)
             dhallFile
-            ((textToCsv True) =<< Data.Text.IO.readFile csvFile)
-            ((<> "\n") . D.pretty . Dhall.CsvToDhall.dhallFromCsv)
+            (getSchemaAndCsv csvFile True schema)
+            (showExpressionOrError . (uncurry (dhallFromCsv defaultConversion)))
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
+        , let schema = Text.pack $ (dropExtension csvFile) ++ "_schema.dhall"
         ]
 
 noHeaderCsvToDhallGolden :: IO TestTree
@@ -69,10 +75,11 @@ noHeaderCsvToDhallGolden = do
         [ Silver.goldenVsAction
             (takeBaseName csvFile)
             dhallFile
-            ((textToCsv False) =<< Data.Text.IO.readFile csvFile)
-            ((<> "\n") . D.pretty . Dhall.CsvToDhall.dhallFromCsv)
+            (getSchemaAndCsv csvFile False schema)
+            (showExpressionOrError . (uncurry (dhallFromCsv defaultConversion)))
         | csvFile <- csvFiles
         , let dhallFile = replaceExtension csvFile ".dhall"
+        , let schema = Text.pack $ (dropExtension csvFile) ++ "_schema.dhall"
         ]
 
 textToCsv :: Bool -> Text -> IO [Data.Csv.NamedRecord]
@@ -80,3 +87,13 @@ textToCsv hasHeader txt =
     case Dhall.Csv.Util.decodeCsvDefault hasHeader txt of
         Left err -> fail err
         Right csv -> return csv
+
+getSchemaAndCsv :: FilePath -> Bool -> Text -> IO (Expr Src Void, [Data.Csv.NamedRecord])
+getSchemaAndCsv csvFile hasHeader schema = do
+    finalSchema <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
+    csv <- textToCsv hasHeader =<< Data.Text.IO.readFile csvFile
+    return (finalSchema, csv)
+
+showExpressionOrError :: Either CsvToDhall.CompileError (Expr Src Void) -> Text
+showExpressionOrError (Left err) = Text.pack $ show err
+showExpressionOrError (Right expr) = (D.pretty expr) <> "\n"

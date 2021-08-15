@@ -3,6 +3,9 @@ module Main where
 import Control.Monad       (unless)
 import Data.Text           (unpack)
 import Data.Void           (Void)
+import Dhall.DhallToToml   (dhallToToml)
+import Dhall.TomlToDhall   (tomlToDhall)
+import Dhall.Toml.Utils    (fileToDhall)
 import Dhall.Parser        (Src)
 import Test.Tasty          (TestTree)
 import Test.Tasty.HUnit    (HasCallStack, Assertion, assertFailure)
@@ -12,10 +15,6 @@ import Toml.Type.Printer   (pretty)
 import qualified Toml.Parser
 import qualified Data.Text.IO
 import qualified Dhall.Core      as Core
-import qualified Dhall.Parser
-import qualified Dhall.Import
-import qualified Dhall.Toml
-import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
@@ -45,6 +44,7 @@ testTree =
             , "./tasty/data/record-list"
             , "./tasty/data/union-empty"
             , "./tasty/data/union-typed"
+            , "./tasty/data/optional"
             ]
         tomlToDhallTests = map testTomlToDhall
             [ "./tasty/data/empty"
@@ -57,19 +57,16 @@ testTree =
             , "./tasty/data/record-list"
             , "./tasty/data/union-empty"
             , "./tasty/data/union-typed"
+            , "./tasty/data/optional"
             ]
 
 testDhallToToml :: String -> TestTree
 testDhallToToml prefix = Test.Tasty.HUnit.testCase prefix $ do
     let inputFile = prefix ++ ".dhall"
     let outputFile = prefix ++ ".toml"
-    text <- Data.Text.IO.readFile inputFile
-    parsedExpression <-
-        Core.throws (Dhall.Parser.exprFromText inputFile text)
-    resolvedExpression <- Dhall.Import.load parsedExpression
-    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+    resolvedExpression <- fileToDhall inputFile
     actualValue <-
-        Core.throws (Dhall.Toml.dhallToToml resolvedExpression)
+        Core.throws (dhallToToml resolvedExpression)
     inputText <- Data.Text.IO.readFile outputFile
     expectedValue <- case Toml.Parser.parse inputText of
         Left tomlErr -> fail $ show tomlErr
@@ -77,14 +74,6 @@ testDhallToToml prefix = Test.Tasty.HUnit.testCase prefix $ do
     let message = "Conversion to TOML did not generate the expected output"
     assertTomlEq message expectedValue actualValue
 
-fileToDhall :: String -> IO (Core.Expr Src Void)
-fileToDhall file = do
-    text <- Data.Text.IO.readFile file
-    parsedExpression <-
-        Core.throws (Dhall.Parser.exprFromText file text)
-    resolvedExpression <- Dhall.Import.load parsedExpression
-    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
-    return resolvedExpression
 
 testTomlToDhall :: String -> TestTree
 testTomlToDhall prefix = Test.Tasty.HUnit.testCase prefix $ do
@@ -96,7 +85,7 @@ testTomlToDhall prefix = Test.Tasty.HUnit.testCase prefix $ do
         Left tomlErr -> fail $ show tomlErr
         Right toml -> return toml
     schema <- fileToDhall schemaFile
-    actualValue <- case Dhall.Toml.tomlToDhall schema toml of
+    actualValue <- case tomlToDhall schema toml of
         Left err -> fail $ show err
         Right val -> return val
     expectedValue <- fileToDhall outputFile

@@ -1,0 +1,5 @@
+optDouble,optInteger,optNatural,optText
+2.68,-1,1,Hello World!
+,,,
+1.0e-6,,12,
+,-1,,Hello Dhall!

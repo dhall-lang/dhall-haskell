@@ -7,7 +7,7 @@ module Main where
 import Control.Applicative  (optional, (<|>))
 import Control.Exception    (SomeException)
 import Data.Version         (showVersion)
-import Dhall.CsvToDhall     (dhallFromCsv)
+import Dhall.CsvToDhall
 import Dhall.Pretty         (CharacterSet (..))
 import Data.Text            (Text)
 import Options.Applicative  (Parser, ParserInfo)
@@ -15,6 +15,7 @@ import Options.Applicative  (Parser, ParserInfo)
 import qualified Control.Exception
 import qualified Data.Text.IO                              as Text.IO
 import qualified Dhall.Csv.Util
+import qualified Dhall.Core
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative                       as Options
@@ -32,6 +33,7 @@ parserInfo = Options.info
 data Options
     = Default
         { schema     :: Maybe Text
+        , conversion :: Conversion
         , file       :: Maybe FilePath
         , output     :: Maybe FilePath
         , ascii      :: Bool
@@ -53,6 +55,7 @@ parseOptions =
         typeCommand
     <|> (   Default
         <$> optional parseSchema
+        <*> parseConversion
         <*> optional parseFile
         <*> optional parseOutput
         <*> parseASCII
@@ -144,6 +147,13 @@ main = do
                 Left err -> fail err
                 Right csv -> pure csv
 
+    let toSchema schema = do
+            finalSchema <- case schema of
+                Just text -> resolveSchemaExpr text
+                Nothing   -> fail "Please specify a schema. Type inference has not been implemented"
+
+            typeCheckSchemaExpr id finalSchema
+
     case options of
         Version ->
             putStrLn (showVersion Meta.version)
@@ -154,7 +164,9 @@ main = do
 
                 csv <- toCsv (not noHeader) file
 
-                let expression = dhallFromCsv csv
+                finalSchema <- toSchema schema
+
+                expression <- Dhall.Core.throws $ dhallFromCsv conversion finalSchema csv
 
                 Dhall.Util.renderExpression characterSet plain output expression
 

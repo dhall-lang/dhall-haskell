@@ -1,6 +1,6 @@
 module Main where
 
-import Dhall.Toml (dhallToTomlMain)
+import Dhall.DhallToToml (dhallToTomlMain)
 
 main :: IO ()
 main = dhallToTomlMain
