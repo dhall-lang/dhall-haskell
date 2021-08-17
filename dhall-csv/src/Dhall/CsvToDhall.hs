@@ -139,7 +139,7 @@ module Dhall.CsvToDhall (
     ) where
 
 import Control.Applicative          ((<|>))
-import Control.Exception            (Exception, throwIO)
+import Control.Exception            (Exception, throwIO, displayException)
 import Control.Monad.Catch          (MonadCatch, throwM)
 import Data.Csv                     (NamedRecord)
 import Data.Either                  (lefts, rights)
@@ -170,6 +170,7 @@ import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck                        as TypeCheck
 import qualified Dhall.Util
 import qualified Options.Applicative                    as O
+import Control.Monad.Catch.Pure (Exception(displayException))
 
 -- ----------
 -- Conversion
@@ -401,9 +402,10 @@ data CompileError
         Text            -- Record Key
         [ExprX]         -- Multiple Conversions
     | UnicodeError UnicodeException
+    deriving Show
 
-instance Show CompileError where
-    show (Unsupported e) =
+instance Exception CompileError where
+    displayException (Unsupported e) =
         Data.Text.unpack $
             _ERROR <> ": Invalid record field type                                           \n\
             \                                                                                \n\
@@ -424,7 +426,7 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    show (NotAList e) =
+    displayException (NotAList e) =
         Data.Text.unpack $
             _ERROR <> ": Top level object must be of type ❰List❱                             \n\
             \                                                                                \n\
@@ -435,7 +437,7 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    show (NotARecord e) =
+    displayException (NotARecord e) =
         Data.Text.unpack $
             _ERROR <> ": Elements of the top-level list must be records                      \n\
             \                                                                                \n\
@@ -446,9 +448,9 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    show (TypeError e) = show e
+    displayException (TypeError e) = displayException e
 
-    show (BadDhallType t e) =
+    displayException (BadDhallType t e) =
         Data.Text.unpack $
             _ERROR <> ": Schema expression parsed successfully but has wrong Dhall type.     \n\
             \                                                                                \n\
@@ -461,7 +463,7 @@ instance Show CompileError where
             \Parsed Expression:                                                              \n\
             \" <> insert e
 
-    show (MissingKey key) =
+    displayException (MissingKey key) =
         Data.Text.unpack $
             _ERROR <> ": Missing key: \'" <> key <> "\'.                                     \n\
             \                                                                                \n\
@@ -472,7 +474,7 @@ instance Show CompileError where
             \If working with headerless CSVs, fields in Dhall type should have keys          \n\
             \_1, _2, _3, ... and so forth                                                    "
 
-    show (UnhandledKeys keys) =
+    displayException (UnhandledKeys keys) =
         Data.Text.unpack $
             _ERROR <> ": Following key(s): " <> (Data.Text.intercalate ", " keys) <>        "\n\
             \are not handled.                                                                \n\
@@ -480,7 +482,7 @@ instance Show CompileError where
             \Explanation: Keys present in CSV header are not present in Dhall type.          \n\
             \You may turn off the --strict-recs flag to ignore this error.                   "
 
-    show (Mismatch tp field key) =
+    displayException (Mismatch tp field key) =
         Data.Text.unpack $
             _ERROR <> ": Type mismatch at field: " <> key <>                               "\n\
             \                                                                                \n\
@@ -489,7 +491,7 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert tp
 
-    show (ContainsUnion e) =
+    displayException (ContainsUnion e) =
         Data.Text.unpack $
             _ERROR <> ": Dhall type contains a Union type.                                   \n\
             \                                                                                \n\
@@ -501,7 +503,7 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    show (UndecidableUnion tp field key opts) =
+    displayException (UndecidableUnion tp field key opts) =
         Data.Text.unpack $
             _ERROR <> ": A union typed field can be parsed in more than one way.             \n\
             \                                                                                \n\
@@ -519,7 +521,7 @@ instance Show CompileError where
             "\n------------------------------------------------------------------------------\n"
             (map insert opts)
 
-    show (UndecidableMissingUnion tp key opts) =
+    displayException (UndecidableMissingUnion tp key opts) =
         Data.Text.unpack $
             _ERROR <> ": A union typed field can be parsed in more than one way.             \n\
             \                                                                                \n\
@@ -538,9 +540,7 @@ instance Show CompileError where
             "\n------------------------------------------------------------------------------\n"
             (map insert opts)
 
-    show (UnicodeError e) = show e
-
-instance Exception CompileError
+    displayException (UnicodeError e) = displayException e
 
 insert :: Pretty a => a -> Text
 insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert

@@ -52,7 +52,7 @@
     value otherwise:
 
 > $ dhall-to-csv <<< '[{ exampleOptional = None Natural }]'
-> exampleInt,exampleOptional
+> exampleOptional
 >
 > $ dhall-to-csv <<< '[{ exampleOptional = Some 1 }]'
 > exampleOptional
@@ -83,7 +83,7 @@ module Dhall.Csv (
     , CompileError
     ) where
 
-import Control.Exception            (Exception, throwIO)
+import Control.Exception            (Exception, throwIO, displayException)
 import Data.Csv                     (NamedRecord, ToField (..))
 import Data.Maybe                   (fromMaybe)
 import Data.Sequence                (Seq)
@@ -118,9 +118,10 @@ data CompileError
     | NotAList (Expr Void Void)
     | NotARecord (Expr Void Void)
     | BareNone
+    deriving (Show)
 
-instance Show CompileError where
-    show (Unsupported e) =
+instance Exception CompileError where
+    displayException (Unsupported e) =
         Data.Text.unpack $
             _ERROR <> ": Cannot translate record field to CSV                                \n\
             \                                                                                \n\
@@ -141,7 +142,7 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    show (NotAList e) =
+    displayException (NotAList e) =
         Data.Text.unpack $
             _ERROR <> ": Top level object must be of type ❰List❱                             \n\
             \                                                                                \n\
@@ -153,7 +154,7 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    show (NotARecord e) =
+    displayException (NotARecord e) =
         Data.Text.unpack $
             _ERROR <> ": Elements of the top-level list must be records                      \n\
             \                                                                                \n\
@@ -164,7 +165,7 @@ instance Show CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    show BareNone =
+    displayException BareNone =
        Data.Text.unpack $
             _ERROR <> ": ❰None❱ is not valid on its own                                      \n\
             \                                                                                \n\
@@ -187,8 +188,6 @@ instance Show CompileError where
             \                                                                                \n\
             \                                                                                \n\
             \The conversion to JSON/YAML only translates the fully applied form to ❰null❱.   "
-
-instance Exception CompileError
 
 insert :: Pretty a => a -> Text
 insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
