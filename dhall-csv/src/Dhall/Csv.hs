@@ -85,6 +85,7 @@ module Dhall.Csv (
 
 import Control.Exception            (Exception, throwIO, displayException)
 import Data.Csv                     (NamedRecord, ToField (..))
+import Data.Either                  (fromRight)
 import Data.Maybe                   (fromMaybe)
 import Data.Sequence                (Seq)
 import Data.Text                    (Text)
@@ -103,7 +104,7 @@ import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.TypeCheck
+import qualified Dhall.TypeCheck                       as TypeCheck
 import qualified Dhall.Util
 import qualified System.FilePath
 
@@ -140,7 +141,10 @@ instance Exception CompileError where
             \                                                                                \n\
             \The following Dhall expression could not be translated to CSV:                  \n\
             \                                                                                \n\
-            \" <> insert e
+            \" <> insert e <>                                                               "\n\
+            \because it has type:                                                            \n\
+            \                                                                                \n\
+            \" <> insert (fromRight e (TypeCheck.typeOf e))
 
     displayException (NotAList e) =
         Data.Text.unpack $
@@ -152,7 +156,10 @@ instance Exception CompileError where
             \Expected an expression of type List {...} but instead got the following         \n\
             \expression:                                                                     \n\
             \                                                                                \n\
-            \" <> insert e
+            \" <> insert e <>                                                               "\n\
+            \which has type:                                                                 \n\
+            \                                                                                \n\
+            \" <> insert (fromRight e (TypeCheck.typeOf e))
 
     displayException (NotARecord e) =
         Data.Text.unpack $
@@ -163,7 +170,10 @@ instance Exception CompileError where
             \                                                                                \n\
             \Expected a record but instead got the following expression:                     \n\
             \                                                                                \n\
-            \" <> insert e
+            \" <> insert e <>                                                               "\n\
+            \which has type:                                                                 \n\
+            \                                                                                \n\
+            \" <> insert (fromRight e (TypeCheck.typeOf e))
 
     displayException BareNone =
        Data.Text.unpack $
@@ -237,7 +247,7 @@ codeToValue mFilePath code = do
 
     resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
 
-    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+    _ <- Core.throws (TypeCheck.typeOf resolvedExpression)
 
     case dhallToCsv resolvedExpression of
         Left err -> throwIO err
