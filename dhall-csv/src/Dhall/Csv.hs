@@ -2,9 +2,8 @@
 
 {-| This library exports two functions: `dhallToCsv` and `codeToValue`.
     The former converts a Dhall Expression (with imports resolved already) into a
-    sequence of CSV `NamedRecord` (from the @cassava@ library) while the latter
-    converts a Text containing Dhall code into a list of CSV `NamedRecord` wrapped
-    in the `IO` Monad (because of the import resolution).
+    sequence of CSV `NamedRecord`s (from the @cassava@ library) while the latter
+    converts a `Text` containing Dhall code into a list of CSV `NamedRecord`s.
 
     Not all Dhall expressions can be converted to CSV since CSV is not a
     programming language.  The only things you can convert are @List@s of
