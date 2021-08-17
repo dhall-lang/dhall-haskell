@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 
-{-| Convert CSV data to Dhall providing an expected Dhall Type necessary
+{-| Convert CSV data to Dhall providing an expected Dhall type necessary
     to know which type will be interpreted.
 
     The translation process will produce a Dhall Expression where
