@@ -482,7 +482,7 @@ instance Show CompileError where
 
     show (Mismatch tp field key) =
         Data.Text.unpack $
-            _ERROR <> ": Type Mismtatch with key: " <> key <>                               "\n\
+            _ERROR <> ": Type mismatch at field: " <> key <>                               "\n\
             \                                                                                \n\
             \Explanation: Could not parse CSV field " <> field <>                           "\n\
             \into the expected Dhall type:                                                   \n\
