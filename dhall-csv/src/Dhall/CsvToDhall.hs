@@ -4,7 +4,7 @@
 {-| Convert CSV data to Dhall providing an expected Dhall type necessary
     to know which type will be interpreted.
 
-    The translation process will produce a Dhall Expression where
+    The translation process will produce a Dhall expression where
     its type is a @List@ of records and the type of each field of the
     records is one of the following:
 
@@ -33,7 +33,7 @@
     When using the @csv-to-dhall@ executable you can specify that the CSV
     you want to translate does not have a header with the flag `--no-header`.
     In this case the resulting record fields will be named `_1`, `_2`, ...
-    in the same order they where in the input CSV. You must still provide the
+    in the same order they were in the input CSV. You must still provide the
     expected Dhall type taking this into consideration.
 
 > $ cat no-header-example.csv
@@ -170,7 +170,6 @@ import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck                        as TypeCheck
 import qualified Dhall.Util
 import qualified Options.Applicative                    as O
-import Control.Monad.Catch.Pure (Exception(displayException))
 
 -- ----------
 -- Conversion
@@ -253,7 +252,7 @@ typeCheckSchemaExpr compileException expr =
     Left  err -> throwM . compileException $ TypeError err
     Right t   -> case t of -- check if the expression has type Type
       Core.Const Core.Type -> return expr
-      _              -> throwM . compileException $ BadDhallType t expr
+      _              -> throwM . compileException $ BadSchemaType t expr
 
 
 {-| Convert a list of CSV @NameRecord@ to a Dhall expression given the expected Dhall Type
@@ -277,7 +276,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
         = Left $ UnicodeError (head badKeys) -- Only report first key that failed to be decoded
         | extraKeys <- (map decodeUtf8 $ HashMap.keys csvRecord) \\ Map.keys record
         , strictRecs && not (null extraKeys)
-        = Left $ UnhandledKeys extraKeys
+        = Left $ UnhandledFields extraKeys
         | otherwise
         = do
             let f k v = fieldConvert k (Core.recordFieldValue v) (HashMap.lookup (encodeUtf8 k) csvRecord)
@@ -290,7 +289,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
     fieldConvert recordKey t@(Core.Union tm) maybeField = do
         let f unionKey Nothing =
                 case maybeField of
-                    Nothing -> Left $ MissingKey recordKey
+                    Nothing -> Left $ MissingField recordKey
                     Just field ->
                         case decodeUtf8' field of
                             Left err -> Left $ UnicodeError err
@@ -307,7 +306,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
             (UStrict, xs@(_:_:_), Just field) -> Left $ UndecidableUnion t (decodeUtf8 field) recordKey xs
             (UStrict, xs@(_:_:_), Nothing   ) -> Left $ UndecidableMissingUnion t recordKey xs
             (_      , []        , Just field) -> Left $ Mismatch t (decodeUtf8 field) recordKey
-            (_      , []        , Nothing   ) -> Left $ MissingKey recordKey
+            (_      , []        , Nothing   ) -> Left $ MissingField recordKey
             (UFirst , x:_       , _         ) -> Right $ x
             (UStrict, [x]       , _         ) -> Right $ x
 
@@ -315,7 +314,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
     fieldConvert _ (Core.App Core.Optional t) Nothing = return $ Core.App Core.None t
 
     -- Missing fields
-    fieldConvert key _ Nothing = Left $ MissingKey key
+    fieldConvert key _ Nothing = Left $ MissingField key
 
     -- Bools
     fieldConvert key Core.Bool (Just field) =
@@ -382,11 +381,11 @@ data CompileError
     | NotAList ExprX
     | NotARecord ExprX
     | TypeError (TypeCheck.TypeError Src Void)
-    | BadDhallType
+    | BadSchemaType
         ExprX -- Expression type
         ExprX -- Whole expression
-    | MissingKey Text
-    | UnhandledKeys [Text] -- Keys in CSV but not in schema
+    | MissingField Text
+    | UnhandledFields [Text] -- Keys in CSV but not in schema
     | Mismatch
         ExprX           -- Expected Dhall Type
         Text            -- Actual field
@@ -450,36 +449,36 @@ instance Exception CompileError where
 
     displayException (TypeError e) = displayException e
 
-    displayException (BadDhallType t e) =
+    displayException (BadSchemaType t e) =
         Data.Text.unpack $
             _ERROR <> ": Schema expression parsed successfully but has wrong Dhall type.     \n\
             \                                                                                \n\
-            \Expected Dhall type: Type                                                       \n\
+            \Expected schema type: Type                                                      \n\
             \                                                                                \n\
-            \Actual Dhall type:                                                              \n\
+            \Actual schema type:                                                             \n\
             \" <> insert t <>
             "                                                                                \n\
             \                                                                                \n\
-            \Parsed Expression:                                                              \n\
+            \Schema Expression:                                                              \n\
             \" <> insert e
 
-    displayException (MissingKey key) =
+    displayException (MissingField key) =
         Data.Text.unpack $
-            _ERROR <> ": Missing key: \'" <> key <> "\'.                                     \n\
+            _ERROR <> ": Missing field: \'" <> key <> "\'.                                   \n\
             \                                                                                \n\
-            \Explanation: Key present in Dhall type (and not optional) is not provided       \n\
-            \in CSV. Please make sure every field key (non-optional) in Dhall type is        \n\
+            \Explanation: Field present in Dhall type (and not optional) is not provided     \n\
+            \in CSV. Please make sure every non-optional field of the schema is              \n\
             \present in CSV header.                                                          \n\
             \                                                                                \n\
-            \If working with headerless CSVs, fields in Dhall type should have keys          \n\
+            \If working with headerless CSVs, fields in schema should have the fields        \n\
             \_1, _2, _3, ... and so forth                                                    "
 
-    displayException (UnhandledKeys keys) =
+    displayException (UnhandledFields keys) =
         Data.Text.unpack $
-            _ERROR <> ": Following key(s): " <> (Data.Text.intercalate ", " keys) <>        "\n\
+            _ERROR <> ": Following field(s): " <> (Data.Text.intercalate ", " keys) <>      "\n\
             \are not handled.                                                                \n\
             \                                                                                \n\
-            \Explanation: Keys present in CSV header are not present in Dhall type.          \n\
+            \Explanation: Fields present in CSV header are not present in schema.            \n\
             \You may turn off the --strict-recs flag to ignore this error.                   "
 
     displayException (Mismatch tp field key) =

@@ -187,12 +187,12 @@ instance Exception CompileError where
             \                                                                                \n\
             \                                                                                \n\
             \                                                                                \n\
-            \The conversion to JSON/YAML only translates the fully applied form to ❰null❱.   "
+            \The conversion to CSV only translates the fully applied form to empty string.   "
 
 insert :: Pretty a => a -> Text
 insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
 
-{-| Convert a Dhall Expression (with resolved imports) to an equivalent
+{-| Convert a Dhall expression (with resolved imports) to an
     sequence of CSV @NamedRecord@s.
 -}
 dhallToCsv
