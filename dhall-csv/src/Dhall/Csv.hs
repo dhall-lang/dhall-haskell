@@ -1,7 +1,7 @@
 {-#LANGUAGE OverloadedStrings#-}
 
 {-| This library exports two functions: `dhallToCsv` and `codeToValue`.
-    The former converts a Dhall Expression (with imports resolved already) into a
+    The former converts a Dhall expression (with imports resolved already) into a
     sequence of CSV `NamedRecord`s (from the @cassava@ library) while the latter
     converts a `Text` containing Dhall code into a list of CSV `NamedRecord`s.
 
