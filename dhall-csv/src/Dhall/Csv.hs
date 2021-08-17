@@ -131,7 +131,7 @@ instance Show CompileError where
             \● ❰Integer❱                                                                     \n\
             \● ❰Double❱                                                                      \n\
             \● ❰Text❱                                                                        \n\
-            \● ❰Optional❱ tp (where tp is a valid record field type)                         \n\
+            \● ❰Optional t❱ (where ❰t❱ is a valid record field type)                         \n\
             \● Unions *                                                                      \n\
             \                                                                                \n\
             \* Unions can have empty alternatives or alternatives with valid                 \n\
