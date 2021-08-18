@@ -70,7 +70,7 @@
 
     Also, all Dhall expressions are normalized before translation to CSV:
 
-> $ dhall-to-csv <<< "[{ equailty = True == False }]"
+> $ dhall-to-csv <<< "[{ equality = True == False }]"
 > equality
 > false
 -}
