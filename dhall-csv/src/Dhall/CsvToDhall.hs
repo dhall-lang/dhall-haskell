@@ -481,14 +481,14 @@ instance Exception CompileError where
             \Explanation: Fields present in CSV header are not present in schema.            \n\
             \You may turn off the --strict-recs flag to ignore this error.                   "
 
-    displayException (Mismatch tp field key) =
+    displayException (Mismatch t field key) =
         Data.Text.unpack $
             _ERROR <> ": Type mismatch at field: " <> key <>                               "\n\
             \                                                                                \n\
             \Explanation: Could not parse CSV field " <> field <>                           "\n\
             \into the expected Dhall type:                                                   \n\
             \                                                                                \n\
-            \" <> insert tp
+            \" <> insert t
 
     displayException (ContainsUnion e) =
         Data.Text.unpack $
@@ -502,7 +502,7 @@ instance Exception CompileError where
             \                                                                                \n\
             \" <> insert e
 
-    displayException (UndecidableUnion tp field key opts) =
+    displayException (UndecidableUnion t field key opts) =
         Data.Text.unpack $
             _ERROR <> ": A union typed field can be parsed in more than one way.             \n\
             \                                                                                \n\
@@ -514,13 +514,15 @@ instance Exception CompileError where
             \                                                                                \n\
             \Expected union type:                                                            \n\
             \                                                                                \n\
-            \" <> insert tp <>
-            "\nField can be parsed as the following expressions: \n"
-            <> Data.Text.intercalate
+            \" <> insert t <>                                                              "\n\
+            \                                                                                \n\
+            \... field can be parsed as the following expressions:                           \n\
+            \                                                                                \n\
+            \" <> Data.Text.intercalate
             "\n------------------------------------------------------------------------------\n"
             (map insert opts)
 
-    displayException (UndecidableMissingUnion tp key opts) =
+    displayException (UndecidableMissingUnion t key opts) =
         Data.Text.unpack $
             _ERROR <> ": A union typed field can be parsed in more than one way.             \n\
             \                                                                                \n\
@@ -533,8 +535,10 @@ instance Exception CompileError where
             \                                                                                \n\
             \Expected union type:                                                            \n\
             \                                                                                \n\
-            \" <> insert tp <>
-            "\nMissing field can be parsed as the following expressions:                     \n\
+            \" <> insert t <>                                                              "\n\
+            \                                                                                \n\
+            \... missing field can be parsed as the following expressions:                   \n\
+            \                                                                                \n\
             \" <> Data.Text.intercalate
             "\n------------------------------------------------------------------------------\n"
             (map insert opts)

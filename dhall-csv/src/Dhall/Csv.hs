@@ -142,7 +142,8 @@ instance Exception CompileError where
             \The following Dhall expression could not be translated to CSV:                  \n\
             \                                                                                \n\
             \" <> insert e <>                                                               "\n\
-            \because it has type:                                                            \n\
+            \                                                                                \n\
+            \... because it has type:                                                        \n\
             \                                                                                \n\
             \" <> insert (fromRight e (TypeCheck.typeOf e))
 
@@ -157,7 +158,8 @@ instance Exception CompileError where
             \expression:                                                                     \n\
             \                                                                                \n\
             \" <> insert e <>                                                               "\n\
-            \which has type:                                                                 \n\
+            \                                                                                \n\
+            \... which has type:                                                             \n\
             \                                                                                \n\
             \" <> insert (fromRight e (TypeCheck.typeOf e))
 
@@ -171,7 +173,8 @@ instance Exception CompileError where
             \Expected a record but instead got the following expression:                     \n\
             \                                                                                \n\
             \" <> insert e <>                                                               "\n\
-            \which has type:                                                                 \n\
+            \                                                                                \n\
+            \... which has type:                                                             \n\
             \                                                                                \n\
             \" <> insert (fromRight e (TypeCheck.typeOf e))
 
@@ -179,9 +182,9 @@ instance Exception CompileError where
        Data.Text.unpack $
             _ERROR <> ": ❰None❱ is not valid on its own                                      \n\
             \                                                                                \n\
-            \Explanation: The conversion to JSON/YAML does not accept ❰None❱ in isolation as \n\
-            \a valid way to represent ❰null❱.  In Dhall, ❰None❱ is a function whose input is \n\
-            \a type and whose output is an ❰Optional❱ of that type.                          \n\
+            \Explanation: The conversion to CSV does not accept ❰None❱ in isolation as a     \n\
+            \valid way to represent a null value.  In Dhall, ❰None❱ is a function whose      \n\
+            \input is a type and whose output is an ❰Optional❱ of that type.                 \n\
             \                                                                                \n\
             \For example:                                                                    \n\
             \                                                                                \n\
