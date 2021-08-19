@@ -44,6 +44,7 @@ testTree =
             , "./tasty/data/record-list"
             , "./tasty/data/union-empty"
             , "./tasty/data/union-typed"
+            , "./tasty/data/union-nested"
             , "./tasty/data/optional"
             ]
         tomlToDhallTests = map testTomlToDhall
