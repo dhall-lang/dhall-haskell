@@ -21,8 +21,8 @@ deriving instance Eq   T
 deriving instance Show T
 
 Dhall.TH.makeHaskellTypes
-    [ MultipleConstructors "Department" "./tests/th/Department.dhall"
-    , SingleConstructor "Employee" "MakeEmployee" "./tests/th/Employee.dhall"
+    [ MultipleConstructors "Department" True True "./tests/th/Department.dhall"
+    , SingleConstructor "Employee" "MakeEmployee" True True "./tests/th/Employee.dhall"
     ]
 
 deriving instance Eq   Department
@@ -32,9 +32,9 @@ deriving instance Eq   Employee
 deriving instance Show Employee
 
 Dhall.TH.makeHaskellTypes
-  [ SingleConstructor "Bar" "MakeBar" "(./tests/th/issue2066.dhall).Bar"
-  , SingleConstructor "Foo" "MakeFoo" "(./tests/th/issue2066.dhall).Foo"
-  , MultipleConstructors "Qux" "(./tests/th/issue2066.dhall).Qux"
+  [ SingleConstructor "Bar" "MakeBar" True True "(./tests/th/issue2066.dhall).Bar"
+  , SingleConstructor "Foo" "MakeFoo" True True "(./tests/th/issue2066.dhall).Foo"
+  , MultipleConstructors "Qux" True True "(./tests/th/issue2066.dhall).Qux"
   ]
 
 deriving instance Eq   Bar

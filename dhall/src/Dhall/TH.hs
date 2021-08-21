@@ -179,11 +179,14 @@ toNestedHaskellType haskellTypes = loop
             predicate haskellType =
                 Core.judgmentallyEqual (code haskellType) dhallType
 
-derivingClauses :: [DerivClause]
-derivingClauses =
-    [ DerivClause (Just StockStrategy) [ ConT ''Generic ]
-    , DerivClause (Just AnyclassStrategy) [ ConT ''FromDhall, ConT ''ToDhall ]
-    ]
+derivingGenericClause :: DerivClause
+derivingGenericClause = DerivClause (Just StockStrategy) [ ConT ''Generic ]
+
+derivingFromClause :: DerivClause
+derivingFromClause = DerivClause (Just AnyclassStrategy) [ ConT ''FromDhall ]
+
+derivingToClause :: DerivClause
+derivingToClause = DerivClause (Just AnyclassStrategy) [ ConT ''ToDhall ]
 
 -- | Convert a Dhall type to the corresponding Haskell datatype declaration
 toDeclaration
@@ -195,6 +198,11 @@ toDeclaration haskellTypes MultipleConstructors{..} =
     case code of
         Union kts -> do
             let name = Syntax.mkName (Text.unpack typeName)
+
+            let derivingClauses =
+                    [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ] <>
+                    [ derivingFromClause | generateFromDhallInstance ] <>
+                    [ derivingToClause | generateToDhallInstance ]
 
             constructors <- traverse (toConstructor haskellTypes typeName) (Dhall.Map.toList kts )
 
@@ -244,6 +252,11 @@ toDeclaration haskellTypes MultipleConstructors{..} =
             fail message
 toDeclaration haskellTypes SingleConstructor{..} = do
     let name = Syntax.mkName (Text.unpack typeName)
+
+    let derivingClauses =
+            [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ] <>
+            [ derivingFromClause | generateFromDhallInstance ] <>
+            [ derivingToClause | generateToDhallInstance ]
 
     constructor <- toConstructor haskellTypes typeName (constructorName, Just code)
 
@@ -306,7 +319,9 @@ toConstructor haskellTypes outerTypeName (constructorName, maybeAlternativeType)
 -- This is a special case of `Dhall.TH.makeHaskellTypes`:
 --
 -- > makeHaskellTypeFromUnion typeName code =
--- >     makeHaskellTypes [ MultipleConstructors{..} ]
+-- >    let generateFromDhallInstance = True
+-- >        generateToDhallInstance = True
+-- >    in makeHaskellTypes [ MultipleConstructors{..} ]
 makeHaskellTypeFromUnion
     :: Text
     -- ^ Name of the generated Haskell type
@@ -314,7 +329,9 @@ makeHaskellTypeFromUnion
     -- ^ Dhall code that evaluates to a union type
     -> Q [Dec]
 makeHaskellTypeFromUnion typeName code =
-    makeHaskellTypes [ MultipleConstructors{..} ]
+    let generateFromDhallInstance = True
+        generateToDhallInstance = True
+    in makeHaskellTypes [ MultipleConstructors{..} ]
 
 -- | Used by `makeHaskellTypes` to specify how to generate Haskell types
 data HaskellType code
@@ -323,6 +340,10 @@ data HaskellType code
     = MultipleConstructors
         { typeName :: Text
         -- ^ Name of the generated Haskell type
+        , generateFromDhallInstance :: Bool
+        -- ^ Generate a `FromDhall` instance for the Haskell type
+        , generateToDhallInstance :: Bool
+        -- ^ Generate a `ToDhall` instance for the Haskell type
         , code :: code
         -- ^ Dhall code that evaluates to a union type
         }
@@ -335,6 +356,10 @@ data HaskellType code
         -- ^ Name of the generated Haskell type
         , constructorName :: Text
         -- ^ Name of the constructor
+        , generateFromDhallInstance :: Bool
+        -- ^ Generate a `FromDhall` instance for the Haskell type
+        , generateToDhallInstance :: Bool
+        -- ^ Generate a `ToDhall` instance for the Haskell type
         , code :: code
         -- ^ Dhall code that evaluates to a type
         }
