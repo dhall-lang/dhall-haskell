@@ -1,5 +1,5 @@
 Name: dhall-bash
-Version: 1.0.37
+Version: 1.0.38
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -30,7 +30,7 @@ Library
         base                      >= 4.11.0.0 && < 5   ,
         bytestring                               < 0.12,
         containers                               < 0.7 ,
-        dhall                     >= 1.36.0   && < 1.40,
+        dhall                     >= 1.40.0   && < 1.41,
         neat-interpolation                       < 0.6 ,
         shell-escape                             < 0.3 ,
         text                      >= 0.2      && < 1.3

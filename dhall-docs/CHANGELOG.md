@@ -1,3 +1,9 @@
+1.0.7
+
+* [Add `--base-import-url` flag](https://github.com/dhall-lang/dhall-haskell/pull/2215)
+    * This flag adds a URL prefix to all paths copied to the clipboard for ease
+      of pasting the import in Dhall code
+
 1.0.6
 
 * Build against `dhall-1.39.0`

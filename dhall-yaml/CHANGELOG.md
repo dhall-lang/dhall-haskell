@@ -1,3 +1,7 @@
+1.2.8
+
+* Build against `dhall-1.40.0`
+
 1.2.7
 
 * Build against `dhall-1.39.0`

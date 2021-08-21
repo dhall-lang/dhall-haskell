@@ -1,3 +1,26 @@
+1.40.0
+
+* [Almost supports version 20.2.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v20.2.0)
+    * The main thing that is missing is support for the `headers.dhall` file
+    * [BREAKING CHANGE TO THE LANGUAGE: Add support for `Date` / `Time` / `TimeZone` ](https://github.com/dhall-lang/dhall-haskell/pull/2247)
+        * This is a breaking change because `Date`, `Time`, and `TimeZone` are
+          now reserved identifiers
+    * [Improved fallback behavior for `?`](https://github.com/dhall-lang/dhall-haskell/pull/2203)
+* [BREAKING CHANGE TO THE LANGUAGE: Require whitespace before `with`](https://github.com/dhall-lang/dhall-haskell/pull/2213)
+    * The parser now requires whitespace before the `with` keyword, which brings
+      the Haskell implementation into closer compliance with the standard
+    * In practice this is a technically breaking change which will not affect
+      most programs
+* [New `FromDhall` instances for `Predicate`, `Equivalence`, and `Op`](https://github.com/dhall-lang/dhall-haskell/pull/2278)
+* [`dhall lint` will now sort `let` bindings with imports](https://github.com/dhall-lang/dhall-haskell/pull/2205)
+    * `dhall lint` now reorders `let` bindings to move imports to the top so
+      long as doing so does not change the behavior of the program
+* Fixes and improvements to code formatting
+    * [#2280](https://github.com/dhall-lang/dhall-haskell/pull/2280)
+* Fixes and improvements to error messages
+    * [#2244](https://github.com/dhall-lang/dhall-haskell/pull/2244)
+    * [#2238](https://github.com/dhall-lang/dhall-haskell/pull/2238)
+
 1.39.0
 
 * [Supports version 20.2.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v20.2.0)
