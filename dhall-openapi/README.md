@@ -6,8 +6,8 @@ For installation or development instructions, see:
 
 ## Introduction
 
-This `dhall-openapi` package provides an OpenAPI 2.0 (a.k.a. Swagger) to Dhall
-compiler.
+This `dhall-openapi` package provides a compiler from OpenAPI 2.0 (a.k.a. Swagger)
+to Dhall.
 
 The `openapi-to-dhall` executable generates the Dhall types from an OpenAPI
 specification.
