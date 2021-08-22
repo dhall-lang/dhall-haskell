@@ -371,19 +371,19 @@ instance Bifunctor RecordField where
         RecordField (k <$> s0) (first k value) (k <$> s1) (k <$> s2)
     second = fmap
 
-{-| Record the label of a function or a function-type expression
-
-For example,
-
-> λ({- A -} a {- B -} : {- C -} T) -> e
-
-will be instantiated as follows:
-* @functionBindingSrc0@ corresponds to the @A@ comment
-* @functionBindingVariable@ is @a@
-* @functionBindingSrc1@ corresponds to the @B@ comment
-* @functionBindingSrc2@ corresponds to the @C@ comment
-* @functionBindingAnnotation@ is @T@
--}
+-- | Record the label of a function or a function-type expression
+--
+-- For example,
+--
+-- > λ({- A -} a {- B -} : {- C -} T) -> e
+--
+-- … will be instantiated as follows:
+--
+-- * @functionBindingSrc0@ corresponds to the @A@ comment
+-- * @functionBindingVariable@ is @a@
+-- * @functionBindingSrc1@ corresponds to the @B@ comment
+-- * @functionBindingSrc2@ corresponds to the @C@ comment
+-- * @functionBindingAnnotation@ is @T@
 data FunctionBinding s a = FunctionBinding
     { functionBindingSrc0 :: Maybe s
     , functionBindingVariable :: Text
