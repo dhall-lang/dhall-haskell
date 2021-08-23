@@ -97,6 +97,11 @@ successTest prefix = do
 
         Tasty.HUnit.assertEqual message resolvedExpectedType inferredType
 
+        -- We also add this to exercise the `Dhall.Eval.conv` code path, since
+        -- it's easy to forget to update it when adding new syntax
+        _ <- Core.throws (TypeCheck.typeOf (Core.Annot resolvedExpr resolvedExpectedType))
+        return ()
+
 failureTest :: Text -> TestTree
 failureTest prefix = do
     let expectedFailures =
