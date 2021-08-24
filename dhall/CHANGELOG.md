@@ -1,3 +1,11 @@
+1.40.1
+
+* [BUG FIX: Fix equivalence check for `Date` / `Time` / `TimeZone`](https://github.com/dhall-lang/dhall-haskell/pull/2291)
+    * This fixes a serious bug in the recently introduced support for temporal
+      literals where they would fail to type-check when given a correct type
+      annotation or when they were checked against an existing type
+    * For example, `00:00:00 : Time` was failing to type-check
+
 1.40.0
 
 * [Almost supports version 20.2.0 of the standard](https://github.com/dhall-lang/dhall-lang/releases/tag/v20.2.0)
