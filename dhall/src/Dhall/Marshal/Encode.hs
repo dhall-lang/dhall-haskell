@@ -82,6 +82,7 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
+import qualified Data.Time            as Time
 import qualified Data.Vector
 import qualified Data.Void
 import qualified Dhall.Core           as Core
@@ -310,6 +311,27 @@ instance ToDhall a => ToDhall [a] where
 
 instance ToDhall a => ToDhall (Vector a) where
     injectWith = fmap (contramap Data.Vector.toList) injectWith
+
+instance ToDhall Time.TimeOfDay where
+    injectWith _ = Encoder {..}
+      where
+        embed timeOfDay = TimeLiteral timeOfDay 12
+
+        declared = Time
+
+instance ToDhall Time.Day where
+    injectWith _ = Encoder {..}
+      where
+        embed = DateLiteral
+
+        declared = Date
+
+instance ToDhall Time.TimeZone where
+    injectWith _ = Encoder {..}
+      where
+        embed = TimeZoneLiteral
+
+        declared = TimeZone
 
 {-| Note that the output list will be sorted.
 
