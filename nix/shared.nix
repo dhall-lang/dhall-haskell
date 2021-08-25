@@ -445,7 +445,7 @@ let
     };
 
   toShell = drv: drv.env.overrideAttrs (base: {
-    buildInputs = (base.buildInputs or []) ++ [ pkgs.cabal-install ];
+    nativeBuildInputs = (base.nativeBuildInputs or []) ++ [ pkgs.cabal-install ];
   });
 
   possibly-static = {
