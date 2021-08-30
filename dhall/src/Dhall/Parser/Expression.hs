@@ -107,6 +107,7 @@ importExpression embedded = importExpression_
 data Parsers a = Parsers
     { completeExpression_ :: Parser (Expr Src a)
     , importExpression_   :: Parser (Expr Src a)
+    , letBinding          :: Parser (Binding Src a)
     }
 
 {-| Parse a numeric `TimeZone`
@@ -237,7 +238,7 @@ temporalLiteral =
 
 -- | Given a parser for imports,
 parsers :: forall a. Parser a -> Parsers a
-parsers embedded = Parsers {..}
+parsers embedded = Parsers{..}
   where
     completeExpression_ =
         many shebang *> whitespace *> expression <* whitespace
@@ -250,6 +251,34 @@ parsers embedded = Parsers {..}
         _ <- Dhall.Parser.Combinators.takeWhile predicate
 
         endOfLine
+
+    letBinding = do
+        src0 <- try (_let *> src nonemptyWhitespace)
+
+        c <- label
+
+        src1 <- src whitespace
+
+        d <- optional (do
+            _colon
+
+            src2 <- src nonemptyWhitespace
+
+            e <- expression
+
+            whitespace
+
+            return (Just src2, e) )
+
+        _equal
+
+        src3 <- src whitespace
+
+        f <- expression
+
+        whitespace
+
+        return (Binding (Just src0) c (Just src1) d (Just src3) f)
 
     expression =
         noted
@@ -293,35 +322,7 @@ parsers embedded = Parsers {..}
             return (BoolIf a b c)
 
         alternative2 = do
-            let binding = do
-                    src0 <- try (_let *> src nonemptyWhitespace)
-
-                    c <- label
-
-                    src1 <- src whitespace
-
-                    d <- optional (do
-                        _colon
-
-                        src2 <- src nonemptyWhitespace
-
-                        e <- expression
-
-                        whitespace
-
-                        return (Just src2, e) )
-
-                    _equal
-
-                    src3 <- src whitespace
-
-                    f <- expression
-
-                    whitespace
-
-                    return (Binding (Just src0) c (Just src1) d (Just src3) f)
-
-            as <- NonEmpty.some1 binding
+            as <- NonEmpty.some1 letBinding
 
             try (_in *> nonemptyWhitespace)
 
