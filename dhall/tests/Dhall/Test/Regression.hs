@@ -16,16 +16,16 @@ import Test.Tasty.HUnit       ((@?=))
 import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy.IO
-import qualified Data.Text.Prettyprint.Doc
-import qualified Data.Text.Prettyprint.Doc.Render.Text
 import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.Test.Util                       as Util
+import qualified Dhall.Test.Util           as Util
 import qualified Dhall.TypeCheck
+import qualified Prettyprinter
+import qualified Prettyprinter.Render.Text
 import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
@@ -162,9 +162,9 @@ issue216 = Test.Tasty.HUnit.testCase "Issue #216" (do
     -- Verify that pretty-printing preserves string interpolation
     source <- Data.Text.IO.readFile "./tests/regression/issue216b.dhall"
     e <- Util.code source
-    let doc       = Data.Text.Prettyprint.Doc.pretty e
+    let doc       = Prettyprinter.pretty e
     let docStream = Dhall.Pretty.layout doc
-    let text0 = Data.Text.Prettyprint.Doc.Render.Text.renderLazy docStream
+    let text0 = Prettyprinter.Render.Text.renderLazy docStream
 
     text1 <- Data.Text.Lazy.IO.readFile "./tests/regression/issue216b.dhall"
 

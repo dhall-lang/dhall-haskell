@@ -2,7 +2,7 @@
 module Main (main) where
 
 import Data.Void (Void)
-import Gauge (defaultMain)
+import Gauge     (defaultMain)
 
 import qualified Data.Sequence   as Seq
 import qualified Dhall.Core      as Core

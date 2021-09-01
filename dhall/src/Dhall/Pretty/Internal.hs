@@ -79,7 +79,6 @@ import Data.Data                  (Data)
 import Data.Foldable
 import Data.List.NonEmpty         (NonEmpty (..))
 import Data.Text                  (Text)
-import Data.Text.Prettyprint.Doc  (Doc, Pretty, space)
 import Dhall.Map                  (Map)
 import Dhall.Optics               (cosmosOf, foldOf, to)
 import Dhall.Src                  (Src (..))
@@ -87,20 +86,21 @@ import Dhall.Syntax
 import GHC.Generics               (Generic)
 import Language.Haskell.TH.Syntax (Lift)
 import Numeric.Natural            (Natural)
+import Prettyprinter              (Doc, Pretty, space)
 
 import qualified Data.Char
 import qualified Data.HashSet
-import qualified Data.List                                 as List
-import qualified Data.List.NonEmpty                        as NonEmpty
+import qualified Data.List                     as List
+import qualified Data.List.NonEmpty            as NonEmpty
 import qualified Data.Maybe
-import qualified Data.Text                                 as Text
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.String   as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty
-import qualified Data.Time                                 as Time
-import qualified Dhall.Map                                 as Map
-import qualified Text.Printf                               as Printf
+import qualified Data.Text                     as Text
+import qualified Data.Time                     as Time
+import qualified Dhall.Map                     as Map
+import qualified Prettyprinter                 as Pretty
+import qualified Prettyprinter.Render.String   as Pretty
+import qualified Prettyprinter.Render.Terminal as Terminal
+import qualified Prettyprinter.Render.Text     as Pretty
+import qualified Text.Printf                   as Printf
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes

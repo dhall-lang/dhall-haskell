@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-| Convert CSV data to Dhall providing an expected Dhall type necessary
     to know which type will be interpreted.
@@ -138,38 +138,38 @@ module Dhall.CsvToDhall (
     , CompileError(..)
     ) where
 
-import Control.Applicative          ((<|>))
-import Control.Exception            (Exception, throwIO, displayException)
-import Control.Monad.Catch          (MonadCatch, throwM)
-import Data.Csv                     (NamedRecord)
-import Data.Either                  (lefts, rights)
-import Data.Either.Combinators      (mapRight)
-import Data.Foldable                (toList)
-import Data.List                    ((\\))
-import Data.Text                    (Text)
-import Data.Text.Encoding           (decodeUtf8, decodeUtf8', encodeUtf8)
-import Data.Text.Encoding.Error     (UnicodeException)
-import Data.Text.Prettyprint.Doc    (Pretty)
-import Data.Text.Read               (decimal, double, signed)
-import Data.Void                    (Void)
-import Dhall.Core                   (Expr)
-import Dhall.Src                    (Src)
-import Dhall.Util                   (_ERROR)
-import Options.Applicative          (Parser)
+import Control.Applicative      ((<|>))
+import Control.Exception        (Exception, displayException, throwIO)
+import Control.Monad.Catch      (MonadCatch, throwM)
+import Data.Csv                 (NamedRecord)
+import Data.Either              (lefts, rights)
+import Data.Either.Combinators  (mapRight)
+import Data.Foldable            (toList)
+import Data.List                ((\\))
+import Data.Text                (Text)
+import Data.Text.Encoding       (decodeUtf8, decodeUtf8', encodeUtf8)
+import Data.Text.Encoding.Error (UnicodeException)
+import Data.Text.Read           (decimal, double, signed)
+import Data.Void                (Void)
+import Dhall.Core               (Expr)
+import Dhall.Src                (Src)
+import Dhall.Util               (_ERROR)
+import Options.Applicative      (Parser)
+import Prettyprinter            (Pretty)
 
 import qualified Data.Csv
-import qualified Data.HashMap.Strict                    as HashMap
-import qualified Data.Sequence                          as Sequence
+import qualified Data.HashMap.Strict       as HashMap
+import qualified Data.Sequence             as Sequence
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc.Render.Text  as Pretty
-import qualified Dhall.Core                             as Core
+import qualified Dhall.Core                as Core
 import qualified Dhall.Import
-import qualified Dhall.Map                              as Map
+import qualified Dhall.Map                 as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.TypeCheck                        as TypeCheck
+import qualified Dhall.TypeCheck           as TypeCheck
 import qualified Dhall.Util
-import qualified Options.Applicative                    as O
+import qualified Options.Applicative       as O
+import qualified Prettyprinter.Render.Text as Pretty
 
 -- ----------
 -- Conversion

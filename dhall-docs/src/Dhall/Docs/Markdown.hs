@@ -8,8 +8,8 @@ module Dhall.Docs.Markdown
 import Data.Text       (Text)
 import Lucid
 import Path            (File, Path, Rel)
-import Text.Megaparsec (ParseErrorBundle (..))
 import Text.MMark      (MMarkErr)
+import Text.Megaparsec (ParseErrorBundle (..))
 
 import qualified Path
 import qualified Text.MMark as MMark

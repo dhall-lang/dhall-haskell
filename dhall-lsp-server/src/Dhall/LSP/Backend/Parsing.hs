@@ -22,14 +22,11 @@ import Dhall.Core
     , makeFunctionBinding
     )
 import Dhall.Parser
-import Dhall.Parser.Expression
-    ( importHash_
-    , importType_
-    , localOnly
-    )
+import Dhall.Parser.Expression (importHash_, importType_, localOnly)
 import Dhall.Parser.Token      hiding (text)
 import Text.Megaparsec
-    ( anySingle
+    ( SourcePos (..)
+    , anySingle
     , eof
     , lookAhead
     , notFollowedBy
@@ -37,7 +34,6 @@ import Text.Megaparsec
     , takeRest
     , try
     )
-import Text.Megaparsec         (SourcePos (..))
 
 import qualified Text.Megaparsec as Megaparsec
 

@@ -101,30 +101,30 @@ import Dhall.Core
     , URL (..)
     )
 
-import qualified Control.Foldl                         as Foldl
-import qualified Control.Monad.Trans.State.Strict      as State
-import qualified Data.Aeson                            as Aeson
-import qualified Data.Foldable                         as Foldable
-import qualified Data.List.NonEmpty                    as NonEmpty
-import qualified Data.Text                             as Text
-import qualified Data.Text.Encoding                    as Text.Encoding
-import qualified Data.Text.IO                          as Text.IO
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Prettyprint.Text
+import qualified Control.Foldl                    as Foldl
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Aeson                       as Aeson
+import qualified Data.Foldable                    as Foldable
+import qualified Data.List.NonEmpty               as NonEmpty
+import qualified Data.Text                        as Text
+import qualified Data.Text.Encoding               as Text.Encoding
+import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified GHC.IO.Encoding
 import qualified NeatInterpolation
-import qualified Network.URI                           as URI
-import qualified Nix.Expr.Shorthands                   as Nix
+import qualified Network.URI                      as URI
+import qualified Nix.Expr.Shorthands              as Nix
 import qualified Nix.Pretty
-import qualified Options.Applicative                   as Options
+import qualified Options.Applicative              as Options
+import qualified Prettyprinter.Render.Text        as Prettyprint.Text
 import qualified System.Exit
 import qualified System.IO
-import qualified Text.Megaparsec                       as Megaparsec
-import qualified Text.Megaparsec.Char                  as Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Char.Lexer
+import qualified Text.Megaparsec                  as Megaparsec
+import qualified Text.Megaparsec.Char             as Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer       as Megaparsec.Char.Lexer
 import qualified Turtle
 
 data Options

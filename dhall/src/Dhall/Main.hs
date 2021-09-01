@@ -21,35 +21,36 @@ module Dhall.Main
     , main
     ) where
 
-import Control.Applicative       (optional, (<|>))
-import Control.Exception         (Handler (..), SomeException)
-import Control.Monad             (when)
-import Data.Foldable             (for_)
-import Data.Maybe                (fromMaybe)
-import Data.List.NonEmpty        (NonEmpty (..), nonEmpty)
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Void                 (Void)
-import Dhall.Freeze              (Intent (..), Scope (..))
+import Control.Applicative (optional, (<|>))
+import Control.Exception   (Handler (..), SomeException)
+import Control.Monad       (when)
+import Data.Foldable       (for_)
+import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
+import Data.Maybe          (fromMaybe)
+import Data.Text           (Text)
+import Data.Void           (Void)
+import Dhall.Freeze        (Intent (..), Scope (..))
 import Dhall.Import
     ( Depends (..)
     , Imported (..)
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )
-import Dhall.Parser              (Src)
-import Dhall.Pretty              (Ann, CharacterSet (..), annToAnsiStyle, detectCharacterSet)
-import Dhall.Schemas             (Schemas (..))
-import Dhall.TypeCheck
-    ( Censored (..)
-    , DetailedTypeError (..)
-    , TypeError
+import Dhall.Parser        (Src)
+import Dhall.Pretty
+    ( Ann
+    , CharacterSet (..)
+    , annToAnsiStyle
+    , detectCharacterSet
     )
-import Dhall.Version             (dhallVersionString)
-import Options.Applicative       (Parser, ParserInfo)
-import System.Exit               (ExitCode, exitFailure)
-import System.IO                 (Handle)
-import Text.Dot                  ((.->.))
+import Dhall.Schemas       (Schemas (..))
+import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
+import Dhall.Version       (dhallVersionString)
+import Options.Applicative (Parser, ParserInfo)
+import Prettyprinter       (Doc, Pretty)
+import System.Exit         (ExitCode, exitFailure)
+import System.IO           (Handle)
+import Text.Dot            ((.->.))
 
 import Dhall.Core
     ( Expr (Annot)
@@ -74,7 +75,7 @@ import qualified Codec.CBOR.JSON
 import qualified Codec.CBOR.Read
 import qualified Codec.CBOR.Write
 import qualified Control.Exception
-import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Control.Monad.Trans.State.Strict   as State
 import qualified Data.Aeson
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.ByteString.Lazy
@@ -82,14 +83,11 @@ import qualified Data.ByteString.Lazy.Char8
 import qualified Data.Map
 import qualified Data.Text
 import qualified Data.Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall
 import qualified Dhall.Binary
 import qualified Dhall.Core
 import qualified Dhall.Diff
-import qualified Dhall.DirectoryTree                       as DirectoryTree
+import qualified Dhall.DirectoryTree                as DirectoryTree
 import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Import
@@ -104,9 +102,12 @@ import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
-import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
+import qualified Prettyprinter                      as Pretty
+import qualified Prettyprinter.Render.Terminal      as Pretty
+import qualified Prettyprinter.Render.Text          as Pretty.Text
+import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
 import qualified System.Console.ANSI
-import qualified System.Exit                               as Exit
+import qualified System.Exit                        as Exit
 import qualified System.FilePath
 import qualified System.IO
 import qualified Text.Dot
