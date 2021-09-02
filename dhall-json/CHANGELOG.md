@@ -1,3 +1,7 @@
+1.7.8
+
+* [Add support for `Date` / `Time` / `TimeZone`](https://github.com/dhall-lang/dhall-haskell/pull/2247)
+
 1.7.7
 
 * Build against `dhall-1.39.0`

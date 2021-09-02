@@ -36,6 +36,6 @@ function release {
 
 git submodule update
 
-for package in dhall-lsp-server dhall-openapi dhall-json dhall-yaml dhall-bash dhall-nix dhall-nixpkgs dhall-docs dhall; do
+for package in dhall-lsp-server dhall-openapi dhall-toml dhall-csv dhall-json dhall-yaml dhall-bash dhall-nix dhall-nixpkgs dhall-docs dhall; do
   release "${package}"
 done

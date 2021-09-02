@@ -1,5 +1,5 @@
 Name:               dhall-toml
-Version:            0.1.0
+Version:            1.0.0
 Cabal-Version:      >=1.10
 Build-Type:         Simple
 License:            BSD3
@@ -13,12 +13,12 @@ Description:
     Use this package if you want to convert between dhall expressions and TOML.
     You can use this package as a library or an executable:
     .
-    * See "Dhall.Toml" or "Dhall.TomlToDhall" modules if you want to use this
+    * See "Dhall.DhallToToml" or "Dhall.TomlToDhall" modules if you want to use this
       package as a library
     * Use @dhall-to-toml@, @toml-to-dhall@ programs from this package if you
       want an executable.
     .
-    The "Dhall.Toml" and "Dhall.TomlToDhall" modules also contains instructions
+    The "Dhall.DhallToToml" and "Dhall.TomlToDhall" modules also contains instructions
     for how to use this package
 Category:           Compiler
 Extra-Source-Files:
@@ -35,13 +35,16 @@ Library
     Hs-Source-Dirs:   src
     Build-Depends:
         base                 >= 4.12     && < 5    ,
-        dhall                >= 1.39.0   && < 1.40 ,
+        dhall                >= 1.39.0   && < 1.41 ,
         tomland              >= 1.3.2.0  && < 1.4  ,
         text                 >= 0.11.1.0 && < 1.3  ,
         containers           >= 0.5.9    && < 0.7  ,
-        unordered-containers >= 0.2      && < 0.3
+        unordered-containers >= 0.2      && < 0.3  ,
+        prettyprinter        >= 1.5.1    && < 1.8
     Exposed-Modules:
-        Dhall.Toml
+        Dhall.DhallToToml
+        Dhall.TomlToDhall
+        Dhall.Toml.Utils
     GHC-Options:      -Wall
     Default-Language: Haskell2010
 
@@ -75,5 +78,17 @@ Test-Suite dhall-toml-test
         tasty-hunit >= 0.2 ,
         text               ,
         tomland
+    GHC-Options:      -Wall
+    Default-Language: Haskell2010
+
+Test-Suite doctest
+    Type:             exitcode-stdio-1.0
+    Hs-Source-Dirs:   doctest
+    Main-Is:          Main.hs
+    Build-Depends:
+        base      ,
+        directory ,
+        filepath  ,
+        doctest
     GHC-Options:      -Wall
     Default-Language: Haskell2010

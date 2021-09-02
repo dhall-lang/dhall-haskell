@@ -2,6 +2,7 @@
 {-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -12,6 +13,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -130,6 +132,7 @@ import Data.Either.Validation
     , eitherToValidation
     , validationToEither
     )
+import Data.Functor.Contravariant       (Op(..), Predicate(..), Equivalence(..))
 import Data.Hashable                    (Hashable)
 import Data.Int                         (Int16, Int32, Int64, Int8)
 import Data.List.NonEmpty               (NonEmpty (..))
@@ -337,6 +340,12 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
         extract expr = typeError expected expr
 
         expected = pure "result"
+
+deriving newtype instance (ToDhall x) => FromDhall (Predicate x)
+
+deriving newtype instance (ToDhall x) => FromDhall (Equivalence x)
+
+deriving newtype instance (FromDhall b, ToDhall x) => FromDhall (Op b x)
 
 -- | You can use this instance to marshal recursive types from Dhall to Haskell.
 --

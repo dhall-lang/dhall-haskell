@@ -1028,7 +1028,7 @@ instance Pretty URL where
         <>  foldMap prettyHeaders headers
       where
         prettyHeaders h =
-          " using " <> Pretty.unAnnotate (prettyImportExpression h)
+          " using (" <> Pretty.unAnnotate (Pretty.pretty h) <> ")"
 
         File {..} = path
 
