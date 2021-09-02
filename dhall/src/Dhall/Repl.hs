@@ -62,9 +62,10 @@ import qualified Dhall.Core                          as Expr (Expr (..))
 import qualified Dhall.Import                        as Dhall
 import qualified Dhall.Map                           as Map
 import qualified Dhall.Parser                        as Dhall
-import qualified Dhall.Parser.Token                  as Parser.Token
+import qualified Dhall.Parser.Expression             as Parser.Expression
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Syntax                        as Syntax
 import qualified Dhall.TypeCheck                     as Dhall
 import qualified Dhall.Version                       as Meta
 import qualified Prettyprinter                       as Pretty
@@ -234,31 +235,51 @@ parseAssignment str
   | otherwise
   = Left (trim str)
 
-addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => Either String (String, String) -> m ()
-addBinding (Right (k, src)) = do
-  varName <- case Megaparsec.parse (unParser Parser.Token.label) "(input)" (Text.pack k) of
-      Left   _      -> Fail.fail "Invalid variable name"
-      Right varName -> return varName
+addBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => String -> m ()
+addBinding string = do
+  let parseBinding =
+          Parser.Expression.letBinding
+              (Parser.Expression.parsers
+                  (Megaparsec.try Parser.Expression.import_)
+              )
 
-  loaded <- parseAndLoad src
+  let input = "let " <> Text.pack string
 
-  t <- typeCheck loaded
+  Syntax.Binding{ variable, annotation, value } <- case Megaparsec.parse (unParser parseBinding) "(input)" input of
+      Left  _       -> Fail.fail ":let should be of the form `:let x [: T] = y`"
+      Right binding -> return binding
 
-  expr <- normalize loaded
+  (resolved, bindingType) <- case annotation of
+      Just (_, unresolvedType) -> do
+          let annotated = Syntax.Annot value unresolvedType
+
+          resolved <- liftIO (Dhall.load annotated)
+
+          _ <- typeCheck resolved
+
+          bindingType <- liftIO (Dhall.load unresolvedType)
+
+          return (resolved, bindingType)
+      _ -> do
+          resolved <- liftIO (Dhall.load value)
+
+          bindingType <- typeCheck resolved
+
+          return (resolved, bindingType)
+
+  bindingExpr <- normalize resolved
 
   modify
     ( \e ->
         e { envBindings =
               Dhall.Context.insert
-                varName
-                Binding { bindingType = t, bindingExpr = expr }
+                variable
+                Binding{ bindingType, bindingExpr }
                 ( envBindings e )
           }
     )
 
-  output ( Expr.Annot ( Expr.Var ( Dhall.V varName 0 ) ) t )
-
-addBinding _ = Fail.fail ":let should be of the form `:let x = y`"
+  output (Expr.Annot (Expr.Var (Dhall.V variable 0)) bindingType)
 
 clearBindings :: (MonadFail m, MonadState Env m) => String -> m ()
 clearBindings _ = modify adapt
@@ -476,7 +497,7 @@ helpOptions =
       "let"
       "IDENTIFIER = EXPRESSION"
       "Assign an expression to a variable"
-      (dontCrash . addBinding . parseAssignment)
+      (dontCrash . addBinding)
   , HelpOption
       "clear"
       ""
