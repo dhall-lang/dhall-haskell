@@ -313,6 +313,15 @@ instance FromDhall a => FromDhall [a] where
 instance FromDhall a => FromDhall (Vector a) where
     autoWith opts = vector (autoWith opts)
 
+instance FromDhall Time.TimeOfDay where
+    autoWith _ = timeOfDay
+
+instance FromDhall Time.Day where
+    autoWith _ = day
+
+instance FromDhall Time.TimeZone where
+    autoWith _ = timeZone
+
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
 -}
