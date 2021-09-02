@@ -245,7 +245,7 @@ addBinding string = do
 
   let input = "let " <> Text.pack string
 
-  Syntax.Binding{..} <- case Megaparsec.parse (unParser parseBinding) "(input)" input of
+  Syntax.Binding{ variable, annotation, value } <- case Megaparsec.parse (unParser parseBinding) "(input)" input of
       Left  _       -> Fail.fail ":let should be of the form `:let x [: T] = y`"
       Right binding -> return binding
 
