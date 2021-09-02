@@ -14,10 +14,10 @@ import qualified Dhall
 import qualified Dhall.Csv
 import qualified Dhall.Csv.Util
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative      as Options
-import qualified Paths_dhall_csv          as Meta
-import qualified System.IO
+import qualified Options.Applicative as Options
+import qualified Paths_dhall_csv     as Meta
 import qualified System.Exit
+import qualified System.IO
 
 data Options
     = Options

@@ -18,9 +18,9 @@ import Control.Exception
     , displayException
     , throwIO
     )
-import Control.Monad                       (forM_)
+import Control.Monad     (forM_)
 #if !(MIN_VERSION_base(4,13,0))
-import Control.Monad.Fail                  (MonadFail)
+import Control.Monad.Fail (MonadFail)
 #endif
 import Control.Monad.IO.Class              (MonadIO, liftIO)
 import Control.Monad.State.Class           (MonadState, get, modify)
@@ -45,36 +45,36 @@ import System.Console.Haskeline.Completion (Completion, simpleCompletion)
 import System.Directory                    (getDirectoryContents)
 import System.Environment                  (getEnvironment)
 
-import qualified Control.Monad.Fail                        as Fail
-import qualified Control.Monad.Trans.State.Strict          as State
+import qualified Control.Monad.Fail                  as Fail
+import qualified Control.Monad.Trans.State.Strict    as State
 import qualified Data.HashSet
-import qualified Data.Text                                 as Text
-import qualified Data.Text.IO                              as Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty (renderIO)
+import qualified Data.Text                           as Text
+import qualified Data.Text.IO                        as Text.IO
 import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core
-import qualified Dhall.Core                                as Dhall
+import qualified Dhall.Core                          as Dhall
     ( Expr
     , Var (V)
     , normalize
     )
-import qualified Dhall.Core                                as Expr (Expr (..))
-import qualified Dhall.Import                              as Dhall
-import qualified Dhall.Map                                 as Map
-import qualified Dhall.Parser                              as Dhall
-import qualified Dhall.Parser.Expression                   as Parser.Expression
+import qualified Dhall.Core                          as Expr (Expr (..))
+import qualified Dhall.Import                        as Dhall
+import qualified Dhall.Map                           as Map
+import qualified Dhall.Parser                        as Dhall
+import qualified Dhall.Parser.Expression             as Parser.Expression
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
-import qualified Dhall.Syntax                              as Syntax
-import qualified Dhall.TypeCheck                           as Dhall
-import qualified Dhall.Version                             as Meta
+import qualified Dhall.Syntax                        as Syntax
+import qualified Dhall.TypeCheck                     as Dhall
+import qualified Dhall.Version                       as Meta
+import qualified Prettyprinter                       as Pretty
+import qualified Prettyprinter.Render.Terminal       as Pretty (renderIO)
 import qualified System.Console.ANSI
-import qualified System.Console.Haskeline.Completion       as Haskeline
-import qualified System.Console.Repline                    as Repline
+import qualified System.Console.Haskeline.Completion as Haskeline
+import qualified System.Console.Repline              as Repline
 import qualified System.IO
-import qualified Text.Megaparsec                           as Megaparsec
+import qualified Text.Megaparsec                     as Megaparsec
 
 #if MIN_VERSION_haskeline(0,8,0)
 import qualified Control.Monad.Catch

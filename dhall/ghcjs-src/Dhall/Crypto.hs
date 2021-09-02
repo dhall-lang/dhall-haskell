@@ -1,6 +1,6 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE JavaScriptFFI #-}
+{-# LANGUAGE JavaScriptFFI              #-}
 
 {-| This module provides implementations of cryptographic utilities that only
     work for GHCJS
@@ -12,17 +12,17 @@ module Dhall.Crypto (
     , sha256Hash
     ) where
 
-import Control.DeepSeq (NFData)
-import Data.ByteArray (ByteArrayAccess)
-import Data.ByteArray.Encoding (Base(Base16), convertToBase)
-import Data.ByteString (ByteString)
-import GHC.Generics (Generic)
+import Control.DeepSeq                   (NFData)
+import Data.ByteArray                    (ByteArrayAccess)
+import Data.ByteArray.Encoding           (Base (Base16), convertToBase)
+import Data.ByteString                   (ByteString)
+import GHC.Generics                      (Generic)
 import JavaScript.TypedArray.ArrayBuffer (ArrayBuffer)
-import System.IO.Unsafe (unsafePerformIO)
+import System.IO.Unsafe                  (unsafePerformIO)
 
-import qualified Data.ByteString        as ByteString
-import qualified Data.ByteString.Char8  as ByteString.Char8
-import qualified GHCJS.Buffer           as Buffer
+import qualified Data.ByteString       as ByteString
+import qualified Data.ByteString.Char8 as ByteString.Char8
+import qualified GHCJS.Buffer          as Buffer
 
 -- | A SHA256 digest
 newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }

@@ -3,7 +3,7 @@
 
 module Dhall.URL where
 
-import Data.Text   (Text)
+import Data.Text (Text)
 
 import Dhall.Syntax (Directory (..), File (..), Scheme (..), URL (..))
 

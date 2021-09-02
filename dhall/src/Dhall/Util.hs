@@ -25,30 +25,30 @@ module Dhall.Util
     , renderExpression
     ) where
 
-import Control.Exception         (Exception (..))
-import Control.Monad.IO.Class    (MonadIO (..))
-import Data.Bifunctor            (first)
-import Data.Either               (lefts)
-import Data.Foldable             (toList)
-import Data.List.NonEmpty        (NonEmpty (..))
-import Data.String               (IsString)
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Parser              (Header (..), ParseError)
-import Dhall.Pretty              (Ann, CharacterSet)
-import Dhall.Src                 (Src)
-import Dhall.Syntax              (Expr, Import)
+import Control.Exception      (Exception (..))
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Bifunctor         (first)
+import Data.Either            (lefts)
+import Data.Foldable          (toList)
+import Data.List.NonEmpty     (NonEmpty (..))
+import Data.String            (IsString)
+import Data.Text              (Text)
+import Dhall.Parser           (Header (..), ParseError)
+import Dhall.Pretty           (Ann, CharacterSet)
+import Dhall.Src              (Src)
+import Dhall.Syntax           (Expr, Import)
+import Prettyprinter          (Doc, Pretty)
 
 import qualified Control.Exception
 import qualified Data.Text
 import qualified Data.Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified System.Console.ANSI                       as ANSI
-import qualified System.IO                                 as IO
+import qualified Prettyprinter                 as Pretty
+import qualified Prettyprinter.Render.Terminal as Pretty.Terminal
+import qualified Prettyprinter.Render.Text     as Pretty.Text
+import qualified System.Console.ANSI           as ANSI
+import qualified System.IO                     as IO
 
 -- | Utility function to cut out the interior of a large text block
 snip :: Text -> Text

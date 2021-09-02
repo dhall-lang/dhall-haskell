@@ -101,31 +101,31 @@ module Dhall.DhallToToml
     , CompileError
     ) where
 
-import Control.Monad             (foldM)
-import Control.Exception         (Exception, throwIO)
-import Data.Foldable             (toList)
-import Data.List.NonEmpty        (NonEmpty((:|)))
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Pretty)
-import Data.Void                 (Void)
-import Dhall.Core                (Expr, DhallDouble(..))
-import Dhall.Toml.Utils          (inputToDhall)
-import Toml.Type.TOML            (TOML)
-import Toml.Type.Key             (Piece(Piece), Key(Key, unKey))
-import Toml.Type.Printer         (pretty)
+import Control.Exception  (Exception, throwIO)
+import Control.Monad      (foldM)
+import Data.Foldable      (toList)
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Text          (Text)
+import Data.Void          (Void)
+import Dhall.Core         (DhallDouble (..), Expr)
+import Dhall.Toml.Utils   (inputToDhall)
+import Prettyprinter      (Pretty)
+import Toml.Type.Key      (Key (Key, unKey), Piece (Piece))
+import Toml.Type.Printer  (pretty)
+import Toml.Type.TOML     (TOML)
 
-import qualified Data.Bifunctor                        as Bifunctor
-import qualified Data.Sequence                         as Seq
-import qualified Data.Text                             as Text
-import qualified Data.Text.IO                          as Text.IO
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
-import qualified Dhall.Core                            as Core
-import qualified Dhall.Map                             as Map
+import qualified Data.Bifunctor            as Bifunctor
+import qualified Data.Sequence             as Seq
+import qualified Data.Text                 as Text
+import qualified Data.Text.IO              as Text.IO
+import qualified Dhall.Core                as Core
+import qualified Dhall.Map                 as Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
-import qualified Toml.Type.TOML                        as Toml.TOML
-import qualified Toml.Type.Value                       as Toml.Value
-import qualified Toml.Type.AnyValue                    as Toml.AnyValue
+import qualified Prettyprinter.Render.Text as Pretty
+import qualified Toml.Type.AnyValue        as Toml.AnyValue
+import qualified Toml.Type.TOML            as Toml.TOML
+import qualified Toml.Type.Value           as Toml.Value
 
 
 data CompileError

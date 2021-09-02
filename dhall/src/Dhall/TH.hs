@@ -15,11 +15,11 @@ module Dhall.TH
     ) where
 
 import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Pretty)
 import Dhall                     (FromDhall, ToDhall)
 import Dhall.Syntax              (Expr (..))
 import GHC.Generics              (Generic)
 import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
+import Prettyprinter             (Pretty)
 
 import Language.Haskell.TH.Syntax
     ( Bang (..)
@@ -34,18 +34,18 @@ import Language.Haskell.TH.Syntax
 
 import Language.Haskell.TH.Syntax (DerivClause (..), DerivStrategy (..))
 
-import qualified Data.List                               as List
-import qualified Data.Text                               as Text
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Data.Typeable                           as Typeable
+import qualified Data.List                   as List
+import qualified Data.Text                   as Text
+import qualified Data.Typeable               as Typeable
 import qualified Dhall
-import qualified Dhall.Core                              as Core
+import qualified Dhall.Core                  as Core
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
-import qualified Language.Haskell.TH.Syntax              as Syntax
+import qualified Language.Haskell.TH.Syntax  as Syntax
 import qualified Numeric.Natural
+import qualified Prettyprinter.Render.String as Pretty
 import qualified System.IO
 
 {-| This fully resolves, type checks, and normalizes the expression, so the

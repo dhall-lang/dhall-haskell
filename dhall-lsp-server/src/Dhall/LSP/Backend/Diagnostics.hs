@@ -32,12 +32,12 @@ import Control.Lens               (toListOf)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Text                  (Text)
 
-import qualified Data.List.NonEmpty                    as NonEmpty
-import qualified Data.Text                             as Text
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
+import qualified Data.List.NonEmpty        as NonEmpty
+import qualified Data.Text                 as Text
 import qualified Dhall.Pretty
-import qualified Dhall.TypeCheck                       as TypeCheck
-import qualified Text.Megaparsec                       as Megaparsec
+import qualified Dhall.TypeCheck           as TypeCheck
+import qualified Prettyprinter.Render.Text as Pretty.Text
+import qualified Text.Megaparsec           as Megaparsec
 
 -- | A (line, col) pair representing a position in a source file; 0-based.
 type Position = (Int, Int)

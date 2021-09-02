@@ -16,7 +16,7 @@ module Dhall.Import.Manager
     , defaultNewManager
     ) where
 
-import Network.HTTP.Client (Manager, newManager)
+import           Network.HTTP.Client (Manager, newManager)
 import qualified Network.HTTP.Client as HTTP
 
 #ifdef USE_HTTP_CLIENT_TLS

@@ -78,16 +78,16 @@ module Dhall.Core (
     , Syntax.desugarWith
     ) where
 
-import Control.Exception         (Exception)
-import Control.Monad.IO.Class    (MonadIO (..))
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Pretty)
+import Control.Exception      (Exception)
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Text              (Text)
 import Dhall.Normalize
 import Dhall.Pretty.Internal
-import Dhall.Src                 (Src (..))
+import Dhall.Src              (Src (..))
 import Dhall.Syntax
-import Instances.TH.Lift         ()
-import Lens.Family               (over)
+import Instances.TH.Lift      ()
+import Lens.Family            (over)
+import Prettyprinter          (Pretty)
 
 import qualified Control.Exception
 import qualified Data.Text
