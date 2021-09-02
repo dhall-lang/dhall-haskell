@@ -56,6 +56,10 @@ module Dhall.Marshal.Decode
     , string
     , lazyText
     , strictText
+      -- ** Time
+    , timeOfDay
+    , day
+    , timeZone
       -- ** Containers
     , maybe
     , pair
@@ -168,6 +172,7 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
+import qualified Data.Time            as Time
 import qualified Data.Vector
 import qualified Dhall.Core           as Core
 import qualified Dhall.Map
@@ -311,6 +316,15 @@ instance FromDhall a => FromDhall [a] where
 
 instance FromDhall a => FromDhall (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+instance FromDhall Time.TimeOfDay where
+    autoWith _ = timeOfDay
+
+instance FromDhall Time.Day where
+    autoWith _ = day
+
+instance FromDhall Time.TimeZone where
+    autoWith _ = timeZone
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
@@ -896,6 +910,45 @@ strictText = Decoder {..}
     extract  expr                   = typeError expected expr
 
     expected = pure Text
+
+{-| Decode `Time.TimeOfDay`
+
+>>> input timeOfDay "00:00:00"
+00:00:00
+-}
+timeOfDay :: Decoder Time.TimeOfDay
+timeOfDay = Decoder {..}
+  where
+    extract (TimeLiteral t _) = pure t
+    extract  expr             = typeError expected expr
+
+    expected = pure Time
+
+{-| Decode `Time.Day`
+
+>>> input day "2000-01-01"
+2000-01-01
+-}
+day :: Decoder Time.Day
+day = Decoder {..}
+  where
+    extract (DateLiteral d) = pure d
+    extract  expr           = typeError expected expr
+
+    expected = pure Date
+
+{-| Decode `Time.TimeZone`
+
+>>> input timeZone "+00:00"
++0000
+-}
+timeZone :: Decoder Time.TimeZone
+timeZone = Decoder {..}
+  where
+    extract (TimeZoneLiteral z) = pure z
+    extract  expr               = typeError expected expr
+
+    expected = pure TimeZone
 
 {-| Decode a `Maybe`.
 
