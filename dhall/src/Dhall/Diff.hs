@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE ViewPatterns      #-}
 {-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| This module provides functionality for concisely displaying the difference
     between two expressions
@@ -17,16 +17,15 @@ module Dhall.Diff (
     , diff
     ) where
 
-import Data.Foldable             (fold, toList)
-import Data.List.NonEmpty        (NonEmpty (..))
-import Data.Monoid               (Any (..))
-import Data.Sequence             (Seq)
-import Data.String               (IsString (..))
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Data.Void                 (Void)
-import Dhall.Map                 (Map)
-import Dhall.Pretty.Internal     (Ann)
+import Data.Foldable         (fold, toList)
+import Data.List.NonEmpty    (NonEmpty (..))
+import Data.Monoid           (Any (..))
+import Data.Sequence         (Seq)
+import Data.String           (IsString (..))
+import Data.Text             (Text)
+import Data.Void             (Void)
+import Dhall.Map             (Map)
+import Dhall.Pretty.Internal (Ann)
 import Dhall.Syntax
     ( Binding (..)
     , Chunks (..)
@@ -37,18 +36,19 @@ import Dhall.Syntax
     , RecordField (..)
     , Var (..)
     )
-import Numeric.Natural           (Natural)
+import Numeric.Natural       (Natural)
+import Prettyprinter         (Doc, Pretty)
 
-import qualified Data.Algorithm.Diff       as Algo.Diff
+import qualified Data.Algorithm.Diff   as Algo.Diff
 import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc as Pretty
-import qualified Data.Time                 as Time
+import qualified Data.Time             as Time
 import qualified Dhall.Map
-import qualified Dhall.Normalize           as Normalize
-import qualified Dhall.Pretty.Internal     as Internal
-import qualified Dhall.Syntax              as Syntax
+import qualified Dhall.Normalize       as Normalize
+import qualified Dhall.Pretty.Internal as Internal
+import qualified Dhall.Syntax          as Syntax
+import qualified Prettyprinter         as Pretty
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
     any difference was detected

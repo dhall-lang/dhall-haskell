@@ -15,15 +15,15 @@ import Dhall.Pretty        (CharacterSet (..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
-import qualified Data.Aeson                                as Aeson
-import qualified Data.ByteString.Lazy.Char8                as ByteString
+import qualified Data.Aeson                 as Aeson
+import qualified Data.ByteString.Lazy.Char8 as ByteString
 import qualified Dhall.Core
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative                       as Options
-import qualified Paths_dhall_json                          as Meta
+import qualified Options.Applicative        as Options
+import qualified Paths_dhall_json           as Meta
 import qualified System.Exit
-import qualified System.IO                                 as IO
+import qualified System.IO                  as IO
 
 -- ---------------
 -- Command options

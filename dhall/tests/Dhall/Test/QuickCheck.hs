@@ -62,7 +62,7 @@ import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Test.Format         (format)
 import Dhall.TypeCheck           (TypeError, Typer)
-import Generic.Random            ((:+) (..), ConstrGen (..), W, Weights, (%))
+import Generic.Random            (ConstrGen (..), W, Weights, (%), (:+) (..))
 import Test.QuickCheck
     ( Arbitrary (..)
     , Gen

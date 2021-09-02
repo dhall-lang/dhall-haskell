@@ -11,7 +11,7 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
 import Data.Dynamic                     (toDyn)
-import Data.List.NonEmpty               (NonEmpty(..))
+import Data.List.NonEmpty               (NonEmpty (..))
 import Dhall.Core
     ( Import (..)
     , ImportHashed (..)
@@ -23,10 +23,7 @@ import Dhall.Import.Types
 import Dhall.URL                        (renderURL)
 
 
-import Network.HTTP.Client
-    ( HttpException (..)
-    , HttpExceptionContent (..)
-    )
+import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..))
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State

@@ -10,12 +10,12 @@ import Dhall.Crypto (SHA256Digest (..))
 import Path         (Abs, Dir, Path, Rel, (</>))
 import Path.IO      (XdgDirectory (..))
 
-import qualified Control.Monad           as Monad
-import qualified Crypto.Hash             as Hash
-import qualified Data.ByteArray          as ByteArray
-import qualified Data.ByteString         as ByteString
-import qualified Data.ByteString.Char8   as ByteString.Char8
-import qualified Data.List               as List
+import qualified Control.Monad         as Monad
+import qualified Crypto.Hash           as Hash
+import qualified Data.ByteArray        as ByteArray
+import qualified Data.ByteString       as ByteString
+import qualified Data.ByteString.Char8 as ByteString.Char8
+import qualified Data.List             as List
 import qualified Path
 import qualified Path.IO
 
