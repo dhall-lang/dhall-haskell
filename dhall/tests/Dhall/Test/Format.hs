@@ -7,17 +7,17 @@ import Dhall.Parser (Header (..))
 import Dhall.Pretty (CharacterSet (..))
 import Test.Tasty   (TestTree)
 
-import qualified Control.Monad                         as Monad
-import qualified Data.Text                             as Text
-import qualified Data.Text.IO                          as Text.IO
-import qualified Data.Text.Prettyprint.Doc             as Doc
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Doc.Render.Text
-import qualified Dhall.Core                            as Core
-import qualified Dhall.Parser                          as Parser
-import qualified Dhall.Pretty                          as Pretty
-import qualified Dhall.Test.Util                       as Test.Util
-import qualified Test.Tasty                            as Tasty
-import qualified Test.Tasty.Silver                     as Tasty.Silver
+import qualified Control.Monad             as Monad
+import qualified Data.Text                 as Text
+import qualified Data.Text.IO              as Text.IO
+import qualified Dhall.Core                as Core
+import qualified Dhall.Parser              as Parser
+import qualified Dhall.Pretty              as Pretty
+import qualified Dhall.Test.Util           as Test.Util
+import qualified Prettyprinter             as Doc
+import qualified Prettyprinter.Render.Text as Doc.Render.Text
+import qualified Test.Tasty                as Tasty
+import qualified Test.Tasty.Silver         as Tasty.Silver
 import qualified Turtle
 
 getTests :: IO TestTree

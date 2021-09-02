@@ -14,11 +14,7 @@ module Dhall.Format
 import Data.Foldable      (for_)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe         (fromMaybe)
-import Dhall.Pretty
-    ( CharacterSet
-    , annToAnsiStyle
-    , detectCharacterSet
-    )
+import Dhall.Pretty       (CharacterSet, annToAnsiStyle, detectCharacterSet)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -30,13 +26,13 @@ import Dhall.Util
     )
 
 import qualified Data.Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
 import qualified Dhall.Import
 import qualified Dhall.Pretty
 import qualified Dhall.Util
-import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
+import qualified Prettyprinter                      as Pretty
+import qualified Prettyprinter.Render.Terminal      as Pretty.Terminal
+import qualified Prettyprinter.Render.Text          as Pretty.Text
+import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
 import qualified System.Console.ANSI
 import qualified System.FilePath
 import qualified System.IO

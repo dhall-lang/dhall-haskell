@@ -15,8 +15,8 @@ import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Schemas
 import qualified Dhall.Test.SemanticHash
-import qualified Dhall.Test.Tags
 import qualified Dhall.Test.TH
+import qualified Dhall.Test.Tags
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeInference
 import qualified GHC.IO.Encoding

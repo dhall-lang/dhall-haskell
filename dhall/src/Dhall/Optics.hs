@@ -20,7 +20,7 @@ module Dhall.Optics
 import Control.Applicative        (Const (..), WrappedMonad (..))
 import Data.Functor.Contravariant (Contravariant (contramap))
 import Data.Profunctor            (Profunctor (dimap))
-import Data.Profunctor.Unsafe     (( #. ))
+import Data.Profunctor.Unsafe     ((#.))
 import Lens.Family                (ASetter, LensLike, LensLike', over)
 
 -- | Identical to @"Control.Lens".`Control.Lens.rewriteOf`@

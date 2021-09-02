@@ -4,24 +4,24 @@
 
 module Main where
 
-import Control.Applicative  (optional, (<|>))
-import Control.Exception    (SomeException)
-import Data.Version         (showVersion)
+import Control.Applicative (optional, (<|>))
+import Control.Exception   (SomeException)
+import Data.Text           (Text)
+import Data.Version        (showVersion)
 import Dhall.CsvToDhall
-import Dhall.Pretty         (CharacterSet (..))
-import Data.Text            (Text)
-import Options.Applicative  (Parser, ParserInfo)
+import Dhall.Pretty        (CharacterSet (..))
+import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
-import qualified Data.Text.IO                              as Text.IO
-import qualified Dhall.Csv.Util
+import qualified Data.Text.IO        as Text.IO
 import qualified Dhall.Core
+import qualified Dhall.Csv.Util
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative                       as Options
-import qualified Paths_dhall_csv                           as Meta
-import qualified System.IO as IO
+import qualified Options.Applicative as Options
+import qualified Paths_dhall_csv     as Meta
 import qualified System.Exit
+import qualified System.IO           as IO
 
 parserInfo :: ParserInfo Options
 parserInfo = Options.info

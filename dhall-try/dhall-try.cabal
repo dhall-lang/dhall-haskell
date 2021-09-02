@@ -18,7 +18,7 @@ executable dhall-try
                      , aeson-pretty
                      , dhall
                      , dhall-json
-                     , prettyprinter
+                     , prettyprinter  >= 1.7.0
                      , text
                      , ghcjs-base
   hs-source-dirs:      src

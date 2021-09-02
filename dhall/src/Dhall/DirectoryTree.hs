@@ -16,16 +16,16 @@ import Data.Void           (Void)
 import Dhall.Syntax        (Chunks (..), Expr (..), RecordField (..))
 import System.FilePath     ((</>))
 
-import qualified Control.Exception                       as Exception
-import qualified Data.Foldable                           as Foldable
-import qualified Data.Text                               as Text
-import qualified Data.Text.IO                            as Text.IO
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
-import qualified Dhall.Map                               as Map
+import qualified Control.Exception           as Exception
+import qualified Data.Foldable               as Foldable
+import qualified Data.Text                   as Text
+import qualified Data.Text.IO                as Text.IO
+import qualified Dhall.Map                   as Map
 import qualified Dhall.Pretty
-import qualified Dhall.Util                              as Util
-import qualified System.Directory                        as Directory
-import qualified System.FilePath                         as FilePath
+import qualified Dhall.Util                  as Util
+import qualified Prettyprinter.Render.String as Pretty
+import qualified System.Directory            as Directory
+import qualified System.FilePath             as FilePath
 
 {-| Attempt to transform a Dhall record into a directory tree where:
 

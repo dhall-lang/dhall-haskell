@@ -23,7 +23,7 @@ module Dhall.Normalize (
 import Control.Applicative   (empty)
 import Data.Foldable
 import Data.Functor.Identity (Identity (..))
-import Data.List.NonEmpty    (NonEmpty(..))
+import Data.List.NonEmpty    (NonEmpty (..))
 import Data.Sequence         (ViewL (..), ViewR (..))
 import Data.Traversable
 import Instances.TH.Lift     ()

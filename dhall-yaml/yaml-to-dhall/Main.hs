@@ -16,14 +16,14 @@ import Dhall.YamlToDhall   (Options (..), dhallFromYaml)
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
-import qualified Data.ByteString.Char8                     as BSL8
-import qualified Dhall.YamlToDhall                         as YamlToDhall
+import qualified Data.ByteString.Char8 as BSL8
 import qualified Dhall.Util
+import qualified Dhall.YamlToDhall     as YamlToDhall
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative                       as Options
-import qualified Paths_dhall_yaml                          as Meta
+import qualified Options.Applicative   as Options
+import qualified Paths_dhall_yaml      as Meta
 import qualified System.Exit
-import qualified System.IO                                 as IO
+import qualified System.IO             as IO
 
 -- ---------------
 -- Command options

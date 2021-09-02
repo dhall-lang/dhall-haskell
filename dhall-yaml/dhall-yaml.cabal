@@ -72,7 +72,7 @@ Executable yaml-to-dhall
         dhall-yaml                                       ,
         exceptions                  >= 0.8.3    && < 0.11,
         optparse-applicative                             ,
-        prettyprinter                                    ,
+        prettyprinter               >= 1.7.0             ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         text                                       < 1.3
     Other-Modules:

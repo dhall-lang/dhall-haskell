@@ -2,25 +2,30 @@
 
 module Main (main) where
 
-import Data.Text            (Text)
-import Data.Void            (Void)
-import Dhall.CsvToDhall     (defaultConversion, dhallFromCsv, typeCheckSchemaExpr, resolveSchemaExpr)
-import Dhall.Core           (Expr)
-import Dhall.Src            (Src)
-import Test.Tasty           (TestTree)
-import Test.Tasty.Silver    (findByExtension)
-import System.FilePath      (takeBaseName, replaceExtension, dropExtension)
+import Data.Text         (Text)
+import Data.Void         (Void)
+import Dhall.Core        (Expr)
+import Dhall.CsvToDhall
+    ( defaultConversion
+    , dhallFromCsv
+    , resolveSchemaExpr
+    , typeCheckSchemaExpr
+    )
+import Dhall.Src         (Src)
+import System.FilePath   (dropExtension, replaceExtension, takeBaseName)
+import Test.Tasty        (TestTree)
+import Test.Tasty.Silver (findByExtension)
 
 import qualified Data.Csv
-import qualified Data.Text          as Text
+import qualified Data.Text         as Text
 import qualified Data.Text.IO
-import qualified Dhall.Core         as D
+import qualified Dhall.Core        as D
 import qualified Dhall.Csv
-import qualified Dhall.CsvToDhall   as CsvToDhall
 import qualified Dhall.Csv.Util
+import qualified Dhall.CsvToDhall  as CsvToDhall
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
-import qualified Test.Tasty.Silver  as Silver
+import qualified Test.Tasty.Silver as Silver
 
 
 main :: IO ()

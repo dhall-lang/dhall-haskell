@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs           #-}
 {-# LANGUAGE OverloadedLists #-}
 
 {-| This module exports the `tomlToDhall` function for translating a
@@ -118,32 +118,32 @@ module Dhall.TomlToDhall
 
 import Control.Exception    (Exception, throwIO)
 import Data.Either          (rights)
-import Data.Foldable        (toList, foldl')
-import Data.List.NonEmpty   (NonEmpty((:|)))
+import Data.Foldable        (foldl', toList)
+import Data.List.NonEmpty   (NonEmpty ((:|)))
 import Data.Text            (Text)
 import Data.Void            (Void)
-import Dhall.Core           (Expr, DhallDouble(..))
-import Dhall.Toml.Utils     (fileToDhall)
+import Dhall.Core           (DhallDouble (..), Expr)
 import Dhall.Parser         (Src)
+import Dhall.Toml.Utils     (fileToDhall)
 import Toml.Parser          (TomlParseError)
-import Toml.Type.AnyValue   (AnyValue(AnyValue))
-import Toml.Type.Value      (Value)
-import Toml.Type.TOML       (TOML)
-import Toml.Type.Key        (Piece(Piece), Key(Key))
+import Toml.Type.AnyValue   (AnyValue (AnyValue))
+import Toml.Type.Key        (Key (Key), Piece (Piece))
 import Toml.Type.PrefixTree (PrefixTree)
+import Toml.Type.TOML       (TOML)
+import Toml.Type.Value      (Value)
 
 import qualified Data.HashMap.Strict  as HashMap
 import qualified Data.Sequence        as Seq
 import qualified Data.Text
 import qualified Data.Text.IO         as Text.IO
-import qualified Dhall.Map            as Map
 import qualified Dhall.Core           as Core
-import qualified Toml.Parser
-import qualified Toml.Type.TOML       as Toml.TOML
-import qualified Toml.Type.PrefixTree as Toml.PrefixTree
-import qualified Toml.Type.Value      as Value
-import qualified Toml.Type.AnyValue   as Toml.AnyValue
+import qualified Dhall.Map            as Map
 import qualified System.Environment
+import qualified Toml.Parser
+import qualified Toml.Type.AnyValue   as Toml.AnyValue
+import qualified Toml.Type.PrefixTree as Toml.PrefixTree
+import qualified Toml.Type.TOML       as Toml.TOML
+import qualified Toml.Type.Value      as Value
 
 data CompileError
     = Unimplemented String

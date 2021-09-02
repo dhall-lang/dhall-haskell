@@ -52,7 +52,7 @@ module Dhall.Eval (
 
 import Data.Bifunctor     (first)
 import Data.Foldable      (foldr', toList)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
 import Data.Text          (Text)
 import Data.Void          (Void)

@@ -54,7 +54,7 @@ import Data.Ratio    ((%))
 import Data.Void     (Void, absurd)
 import GHC.Float     (double2Float, float2Double)
 import Numeric.Half  (fromHalf, toHalf)
-import Prelude hiding (exponent)
+import Prelude       hiding (exponent)
 
 import qualified Codec.CBOR.ByteArray
 import qualified Codec.CBOR.Decoding   as Decoding

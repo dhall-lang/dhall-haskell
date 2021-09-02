@@ -136,11 +136,14 @@ import Data.Either.Validation
     , eitherToValidation
     , validationToEither
     )
-import Data.Functor.Contravariant       (Op(..), Predicate(..), Equivalence(..))
+import Data.Functor.Contravariant
+    ( Equivalence (..)
+    , Op (..)
+    , Predicate (..)
+    )
 import Data.Hashable                    (Hashable)
 import Data.Int                         (Int16, Int32, Int64, Int8)
 import Data.List.NonEmpty               (NonEmpty (..))
-import Data.Text.Prettyprint.Doc        (Pretty)
 import Data.Typeable                    (Proxy (..), Typeable)
 import Dhall.Parser                     (Src (..))
 import Dhall.Syntax
@@ -152,6 +155,7 @@ import Dhall.Syntax
     )
 import GHC.Generics
 import Prelude                          hiding (maybe, sequence)
+import Prettyprinter                    (Pretty)
 
 import qualified Control.Applicative
 import qualified Data.Foldable

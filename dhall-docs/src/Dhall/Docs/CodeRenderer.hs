@@ -54,20 +54,20 @@ import Dhall.Src                         (Src (..))
 import Lucid
 import Text.Megaparsec.Pos               (SourcePos (..))
 
-import qualified Control.Monad.Trans.Writer.Strict     as Writer
-import qualified Data.Maybe as Maybe
+import qualified Control.Monad.Trans.Writer.Strict as Writer
 import qualified Data.List
-import qualified Data.Set                              as Set
-import qualified Data.Text                             as Text
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
-import qualified Dhall.Context                         as Context
-import qualified Dhall.Core                            as Core
-import qualified Dhall.Map                             as Map
+import qualified Data.Maybe                        as Maybe
+import qualified Data.Set                          as Set
+import qualified Data.Text                         as Text
+import qualified Dhall.Context                     as Context
+import qualified Dhall.Core                        as Core
+import qualified Dhall.Map                         as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Lens.Family                           as Lens
-import qualified Text.Megaparsec.Pos                   as SourcePos
+import qualified Lens.Family                       as Lens
+import qualified Prettyprinter                     as Pretty
+import qualified Prettyprinter.Render.Text         as Pretty.Text
+import qualified Text.Megaparsec.Pos               as SourcePos
 
 -- $setup
 -- >>> :set -XOverloadedStrings

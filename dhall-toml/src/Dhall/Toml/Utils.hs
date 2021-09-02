@@ -8,12 +8,12 @@ module Dhall.Toml.Utils
     , textToDhall
     ) where
 
-import Data.Text            (Text)
-import Dhall.Parser         (Src)
-import Data.Void            (Void)
+import Data.Text    (Text)
+import Data.Void    (Void)
+import Dhall.Parser (Src)
 
-import qualified Data.Text.IO         as Text.IO
-import qualified Dhall.Core           as Core
+import qualified Data.Text.IO    as Text.IO
+import qualified Dhall.Core      as Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
