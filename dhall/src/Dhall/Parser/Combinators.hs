@@ -23,24 +23,24 @@ module Dhall.Parser.Combinators
     ) where
 
 
-import Control.Applicative       (Alternative (..), liftA2)
-import Control.Exception         (Exception)
-import Control.Monad             (MonadPlus (..))
-import Data.String               (IsString (..))
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Pretty (..))
-import Data.Void                 (Void)
-import Dhall.Map                 (Map)
-import Dhall.Src                 (Src (..))
-import Text.Parser.Combinators   (try, (<?>))
-import Text.Parser.Token         (TokenParsing (..))
+import Control.Applicative     (Alternative (..), liftA2)
+import Control.Exception       (Exception)
+import Control.Monad           (MonadPlus (..))
+import Data.String             (IsString (..))
+import Data.Text               (Text)
+import Data.Void               (Void)
+import Dhall.Map               (Map)
+import Dhall.Src               (Src (..))
+import Prettyprinter           (Pretty (..))
+import Text.Parser.Combinators (try, (<?>))
+import Text.Parser.Token       (TokenParsing (..))
 
 import qualified Control.Monad.Fail
-import qualified Data.Char                               as Char
+import qualified Data.Char                   as Char
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
 import qualified Dhall.Map
 import qualified Dhall.Pretty
+import qualified Prettyprinter.Render.String as Pretty
 import qualified Text.Megaparsec
 import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char

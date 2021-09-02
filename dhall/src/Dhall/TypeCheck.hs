@@ -38,7 +38,6 @@ import Data.Semigroup                    (Max (..))
 import Data.Sequence                     (Seq, ViewL (..))
 import Data.Set                          (Set)
 import Data.Text                         (Text)
-import Data.Text.Prettyprint.Doc         (Doc, Pretty (..), vsep)
 import Data.Typeable                     (Typeable)
 import Data.Void                         (Void, absurd)
 import Dhall.Context                     (Context)
@@ -51,6 +50,7 @@ import Dhall.Eval
 import Dhall.Pretty                      (Ann)
 import Dhall.Src                         (Src)
 import Lens.Family                       (over)
+import Prettyprinter                     (Doc, Pretty (..), vsep)
 
 import Dhall.Syntax
     ( Binding (..)
@@ -63,25 +63,25 @@ import Dhall.Syntax
     , Var (..)
     )
 
-import qualified Data.Foldable                           as Foldable
-import qualified Data.List.NonEmpty                      as NonEmpty
+import qualified Data.Foldable               as Foldable
+import qualified Data.List.NonEmpty          as NonEmpty
 import qualified Data.Map
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text                               as Text
-import qualified Data.Text.Prettyprint.Doc               as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Data.Text                   as Text
 import qualified Data.Traversable
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
-import qualified Dhall.Eval                              as Eval
+import qualified Dhall.Eval                  as Eval
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
-import qualified Dhall.Syntax                            as Syntax
+import qualified Dhall.Syntax                as Syntax
 import qualified Dhall.Util
 import qualified Lens.Family
+import qualified Prettyprinter               as Pretty
+import qualified Prettyprinter.Render.String as Pretty
 
 {-| A type synonym for `Void`
 

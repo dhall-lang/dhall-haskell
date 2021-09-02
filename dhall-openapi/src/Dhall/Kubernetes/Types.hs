@@ -1,19 +1,19 @@
 module Dhall.Kubernetes.Types where
 
-import qualified Data.Text                 as Text
-import qualified Data.Vector               as Vector
-import qualified Dhall.Core                as Dhall
-import qualified Dhall.Parser              as Dhall
+import qualified Data.Text    as Text
+import qualified Data.Vector  as Vector
+import qualified Dhall.Core   as Dhall
+import qualified Dhall.Parser as Dhall
 
-import           Control.Applicative       (optional)
-import           Control.Monad             (join)
-import           Data.Aeson
-import           Data.Map                  (Map)
-import           Data.Scientific           (Scientific)
-import           Data.Set                  (Set)
-import           Data.Text                 (Text)
-import           Data.Text.Prettyprint.Doc (Pretty)
-import           GHC.Generics              (Generic)
+import Control.Applicative (optional)
+import Control.Monad       (join)
+import Data.Aeson
+import Data.Map            (Map)
+import Data.Scientific     (Scientific)
+import Data.Set            (Set)
+import Data.Text           (Text)
+import GHC.Generics        (Generic)
+import Prettyprinter       (Pretty)
 
 
 type Expr = Dhall.Expr Dhall.Src Dhall.Import

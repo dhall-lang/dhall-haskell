@@ -10,7 +10,6 @@ import Control.Exception                (Exception)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Dynamic
 import Data.List.NonEmpty               (NonEmpty)
-import Data.Text.Prettyprint.Doc        (Pretty (..))
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
@@ -22,6 +21,7 @@ import Dhall.Core
 import Dhall.Map                        (Map)
 import Dhall.Parser                     (Src)
 import Lens.Family                      (LensLike')
+import Prettyprinter                    (Pretty (..))
 
 #ifdef WITH_HTTP
 import qualified Dhall.Import.Manager

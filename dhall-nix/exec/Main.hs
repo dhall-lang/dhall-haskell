@@ -8,8 +8,8 @@
 module Main where
 
 import Control.Exception (SomeException)
-import Options.Generic (Generic, ParseRecord, type (<?>)(..))
-import System.Exit (ExitCode(..))
+import Options.Generic   (Generic, ParseRecord, type (<?>) (..))
+import System.Exit       (ExitCode (..))
 
 import qualified Control.Exception
 import qualified Data.Text.IO

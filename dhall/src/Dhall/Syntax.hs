@@ -89,39 +89,39 @@ module Dhall.Syntax (
     , shift
     ) where
 
-import Control.DeepSeq            (NFData)
-import Data.Bifunctor             (Bifunctor (..))
-import Data.Bits                  (xor)
-import Data.Data                  (Data)
-import Data.Foldable
-import Data.HashSet               (HashSet)
-import Data.List.NonEmpty         (NonEmpty (..))
-import Data.Sequence              (Seq)
-import Data.String                (IsString (..))
-import Data.Text                  (Text)
-import Data.Text.Prettyprint.Doc  (Doc, Pretty)
-import Data.Traversable           ()
-import Data.Void                  (Void)
-import Dhall.Map                  (Map)
+import                Control.DeepSeq            (NFData)
+import                Data.Bifunctor             (Bifunctor (..))
+import                Data.Bits                  (xor)
+import                Data.Data                  (Data)
+import                Data.Foldable
+import                Data.HashSet               (HashSet)
+import                Data.List.NonEmpty         (NonEmpty (..))
+import                Data.Sequence              (Seq)
+import                Data.String                (IsString (..))
+import                Data.Text                  (Text)
+import                Data.Traversable           ()
+import                Data.Void                  (Void)
+import                Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import Dhall.Src                  (Src (..))
-import GHC.Generics               (Generic)
-import Instances.TH.Lift          ()
-import Language.Haskell.TH.Syntax (Lift)
-import Numeric.Natural            (Natural)
-import Unsafe.Coerce              (unsafeCoerce)
+import                Dhall.Src                  (Src (..))
+import                GHC.Generics               (Generic)
+import                Instances.TH.Lift          ()
+import                Language.Haskell.TH.Syntax (Lift)
+import                Numeric.Natural            (Natural)
+import                Prettyprinter              (Doc, Pretty)
+import                Unsafe.Coerce              (unsafeCoerce)
 
 import qualified Control.Monad
-import qualified Data.Fixed                as Fixed
+import qualified Data.Fixed         as Fixed
 import qualified Data.HashSet
-import qualified Data.List.NonEmpty        as NonEmpty
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc as Pretty
-import qualified Data.Time                 as Time
+import qualified Data.Time          as Time
 import qualified Dhall.Crypto
-import qualified Dhall.Optics              as Optics
-import qualified Lens.Family               as Lens
-import qualified Network.URI               as URI
+import qualified Dhall.Optics       as Optics
+import qualified Lens.Family        as Lens
+import qualified Network.URI        as URI
+import qualified Prettyprinter      as Pretty
 
 deriving instance Lift Time.Day
 deriving instance Lift Time.TimeOfDay

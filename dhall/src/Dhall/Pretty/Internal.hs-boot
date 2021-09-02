@@ -3,7 +3,7 @@ module Dhall.Pretty.Internal where
 import Control.DeepSeq (NFData)
 import Data.Data (Data)
 import Data.Text (Text)
-import Data.Text.Prettyprint.Doc (Pretty, Doc)
+import Prettyprinter (Pretty, Doc)
 import Dhall.Src (Src)
 import Language.Haskell.TH.Syntax (Lift)
 

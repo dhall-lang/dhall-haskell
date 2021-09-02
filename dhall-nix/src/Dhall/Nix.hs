@@ -122,8 +122,8 @@ import Nix.Expr
     , Params (..)
     , ($+)
     , (==>)
-    , (@@)
     , (@.)
+    , (@@)
     )
 
 import qualified Data.Text

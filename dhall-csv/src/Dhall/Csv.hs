@@ -1,4 +1,4 @@
-{-#LANGUAGE OverloadedStrings#-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-| This library exports two functions: `dhallToCsv` and `codeToValue`.
     The former converts a Dhall expression (with imports resolved already) into a
@@ -83,29 +83,29 @@ module Dhall.Csv (
     , CompileError
     ) where
 
-import Control.Exception            (Exception, throwIO, displayException)
-import Data.Csv                     (NamedRecord, ToField (..))
-import Data.Either                  (fromRight)
-import Data.Maybe                   (fromMaybe)
-import Data.Sequence                (Seq)
-import Data.Text                    (Text)
-import Data.Text.Prettyprint.Doc    (Pretty)
-import Data.Void                    (Void)
-import Dhall.Core                   (Expr, DhallDouble (..))
-import Dhall.Import                 (SemanticCacheMode (..))
-import Dhall.Util                   (_ERROR)
+import Control.Exception (Exception, displayException, throwIO)
+import Data.Csv          (NamedRecord, ToField (..))
+import Data.Either       (fromRight)
+import Data.Maybe        (fromMaybe)
+import Data.Sequence     (Seq)
+import Data.Text         (Text)
+import Data.Void         (Void)
+import Dhall.Core        (DhallDouble (..), Expr)
+import Dhall.Import      (SemanticCacheMode (..))
+import Dhall.Util        (_ERROR)
+import Prettyprinter     (Pretty)
 
 import qualified Data.Csv
 import qualified Data.Foldable
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
-import qualified Dhall.Core                            as Core
+import qualified Dhall.Core                as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.TypeCheck                       as TypeCheck
+import qualified Dhall.TypeCheck           as TypeCheck
 import qualified Dhall.Util
+import qualified Prettyprinter.Render.Text as Pretty
 import qualified System.FilePath
 
 {-| This is the exception type for errors that can arise when converting from

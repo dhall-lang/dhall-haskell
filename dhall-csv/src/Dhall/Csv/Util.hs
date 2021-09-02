@@ -1,10 +1,10 @@
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Dhall.Csv.Util (encodeCsvDefault, decodeCsvDefault) where
 
-import Data.List      (sort)
-import Data.Text      (Text)
-import Data.Csv       (NamedRecord, Record)
+import Data.Csv  (NamedRecord, Record)
+import Data.List (sort)
+import Data.Text (Text)
 
 import qualified Data.ByteString.Lazy       as ByteString
 import qualified Data.ByteString.Lazy.Char8 as ByteString.Char8
