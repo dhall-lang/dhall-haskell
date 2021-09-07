@@ -30,6 +30,7 @@ import Language.Haskell.TH.Syntax
     , Con (..)
     , Dec (..)
     , Exp (..)
+    , Pat
     , Q
     , SourceStrictness (..)
     , SourceUnpackedness (..)
@@ -205,7 +206,7 @@ toDeclaration
     -> [HaskellType (Expr s a)]
     -> HaskellType (Expr s a)
     -> Q [Dec]
-toDeclaration generateOptions@GenerateOptions{..} haskellTypes MultipleConstructors{..} =
+toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ@MultipleConstructors{..} =
     case code of
         Union kts -> do
             let name = Syntax.mkName (Text.unpack typeName)
@@ -213,12 +214,14 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes MultipleConstruct
             let derivingClauses =
                     [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
-            constructors <- traverse (toConstructor haskellTypes typeName) (Dhall.Map.toList kts )
+            constructors <- traverse (toConstructor generateOptions haskellTypes typeName) (Dhall.Map.toList kts)
+
+            let interpretOptions = generateToInterpretOptions generateOptions typ
 
             fmap concat . sequence $
                 [pure [DataD [] name [] Nothing constructors derivingClauses]] <>
-                [ fromDhallInstance name [|Dhall.defaultInterpretOptions|] | generateFromDhallInstance ] <>
-                [ toDhallInstance name [|Dhall.defaultInterpretOptions|] | generateToDhallInstance ]
+                [ fromDhallInstance name interpretOptions | generateFromDhallInstance ] <>
+                [ toDhallInstance name interpretOptions | generateToDhallInstance ]
 
         _ -> do
             let document =
@@ -262,30 +265,33 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes MultipleConstruct
             let message = Pretty.renderString (Dhall.Pretty.layout document)
 
             fail message
-toDeclaration GenerateOptions{..} haskellTypes SingleConstructor{..} = do
+toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ@SingleConstructor{..} = do
     let name = Syntax.mkName (Text.unpack typeName)
 
     let derivingClauses =
             [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
-    constructor <- toConstructor haskellTypes typeName (constructorName, Just code)
+    let interpretOptions = generateToInterpretOptions generateOptions typ
+
+    constructor <- toConstructor generateOptions haskellTypes typeName (constructorName, Just code)
 
     fmap concat . sequence $
         [pure [DataD [] name [] Nothing [constructor] derivingClauses]] <>
-        [ fromDhallInstance name [|Dhall.defaultInterpretOptions|] | generateFromDhallInstance ] <>
-        [ toDhallInstance name [|Dhall.defaultInterpretOptions|] | generateToDhallInstance ]
+        [ fromDhallInstance name interpretOptions | generateFromDhallInstance ] <>
+        [ toDhallInstance name interpretOptions | generateToDhallInstance ]
 
 -- | Convert a Dhall type to the corresponding Haskell constructor
 toConstructor
     :: (Eq a, Pretty a)
-    => [HaskellType (Expr s a)]
+    => GenerateOptions
+    -> [HaskellType (Expr s a)]
     -> Text
     -- ^ typeName
     -> (Text, Maybe (Expr s a))
     -- ^ @(constructorName, fieldType)@
     -> Q Con
-toConstructor haskellTypes outerTypeName (constructorName, maybeAlternativeType) = do
-    let name = Syntax.mkName (Text.unpack constructorName)
+toConstructor GenerateOptions{..} haskellTypes outerTypeName (constructorName, maybeAlternativeType) = do
+    let name = Syntax.mkName (Text.unpack $ constructorModifier constructorName)
 
     let bang = Bang NoSourceUnpackedness NoSourceStrictness
 
@@ -371,8 +377,12 @@ data HaskellType code
 -- how Haskell code is generated. In particular you can
 --
 --   * disable the generation of `FromDhall`/`ToDhall` instances.
+--   * modify how a Dhall union field translates to a Haskell data constructor.
 data GenerateOptions = GenerateOptions
-    { generateFromDhallInstance :: Bool
+    { constructorModifier :: Text -> Text
+    -- ^ How to map a Dhall union field name to a Haskell constructor.
+    -- Note: The `constructorName` of `SingleConstructor` will be passed to this function, too.
+    , generateFromDhallInstance :: Bool
     -- ^ Generate a `FromDhall` instance for the Haskell type
     , generateToDhallInstance :: Bool
     -- ^ Generate a `ToDhall` instance for the Haskell type
@@ -381,12 +391,46 @@ data GenerateOptions = GenerateOptions
 -- | A default set of options used by `makeHaskellTypes`.
 defaultGenerateOptions :: GenerateOptions
 defaultGenerateOptions = GenerateOptions
-    { generateFromDhallInstance = True
+    { constructorModifier = id
+    , generateFromDhallInstance = True
     , generateToDhallInstance = False
     }
 
+generateToInterpretOptions :: GenerateOptions -> HaskellType (Expr s a) -> Q Exp
+generateToInterpretOptions GenerateOptions{..} haskellType = [| Dhall.InterpretOptions
+    { Dhall.fieldModifier = Dhall.fieldModifier Dhall.defaultInterpretOptions
+    , Dhall.constructorModifier = \ $(nameP) -> $(toCases constructorModifier $ constructors haskellType)
+    , Dhall.singletonConstructors = Dhall.singletonConstructors Dhall.defaultInterpretOptions
+    }|]
+    where
+        constructors SingleConstructor{..} = [constructorName]
+        constructors MultipleConstructors{..} = case code of
+            Union kts -> Dhall.Map.keys kts
+            _ -> []
+
+        toCases :: (Text -> Text) -> [Text] -> Q Exp
+        toCases f = foldr mkCase [| error $ "SHOULD NEVER HAPPEN: Unmatched " <> show $(nameE) |]
+            where
+                mkCase n cont = [|
+                    case $(nameE) of
+                        $(textToQPat $ f n) -> $(textToQExp n)
+                        _ -> $(cont)
+                    |]
+
+        nameE :: Q Exp
+        nameE = pure $ Syntax.VarE $ Syntax.mkName "n"
+
+        nameP :: Q Pat
+        nameP = pure $ Syntax.VarP $ Syntax.mkName "n"
+
+        textToQExp :: Text -> Q Exp
+        textToQExp = pure . Syntax.LitE . Syntax.StringL . Text.unpack
+
+        textToQPat :: Text -> Q Pat
+        textToQPat = pure . Syntax.LitP . Syntax.StringL . Text.unpack
+
 -- | Generate a Haskell datatype declaration with one constructor from a Dhall
--- type
+-- type.
 --
 -- This comes in handy if you need to keep Dhall types and Haskell types in
 -- sync.  You make the Dhall types the source of truth and use Template Haskell
