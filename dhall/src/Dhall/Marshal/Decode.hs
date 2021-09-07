@@ -90,6 +90,7 @@ module Dhall.Marshal.Decode
     , GenericFromDhallUnion(..)
     , genericAuto
     , genericAutoWith
+    , genericAutoWithInputNormalizer
 
     -- * Decoding errors
     , DhallErrors(..)
@@ -221,8 +222,8 @@ fromList [("a",False),("b",True)]
     implement `Generic`.  This does not auto-generate an instance for recursive
     types.
 
-    The default instance can be tweaked using 'genericAutoWith' and custom
-    'InterpretOptions', or using
+    The default instance can be tweaked using 'genericAutoWith'/'genericAutoWithInputNormalizer'
+    and custom 'InterpretOptions', or using
     [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
     and 'Dhall.Deriving.Codec' from "Dhall.Deriving".
 -}
@@ -687,7 +688,13 @@ genericAuto = genericAutoWith defaultInterpretOptions
 {-| `genericAutoWith` is a configurable version of `genericAuto`.
 -}
 genericAutoWith :: (Generic a, GenericFromDhall a (Rep a)) => InterpretOptions -> Decoder a
-genericAutoWith options = withProxy (\p -> fmap to (evalState (genericAutoWithNormalizer p defaultInputNormalizer options) 1))
+genericAutoWith options = genericAutoWithInputNormalizer options defaultInputNormalizer
+
+{-| `genericAutoWithInputNormalizer` is like `genericAutoWith`, but instead of
+    using the `defaultInputNormalizer` it expects an custom `InputNormalizer`.
+-}
+genericAutoWithInputNormalizer :: (Generic a, GenericFromDhall a (Rep a)) => InterpretOptions -> InputNormalizer -> Decoder a
+genericAutoWithInputNormalizer options inputNormalizer = withProxy (\p -> fmap to (evalState (genericAutoWithNormalizer p inputNormalizer options) 1))
     where
         withProxy :: (Proxy a -> Decoder a) -> Decoder a
         withProxy f = f Proxy

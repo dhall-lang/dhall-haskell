@@ -186,11 +186,17 @@ toNestedHaskellType haskellTypes = loop
 derivingGenericClause :: DerivClause
 derivingGenericClause = DerivClause (Just StockStrategy) [ ConT ''Generic ]
 
-derivingFromClause :: DerivClause
-derivingFromClause = DerivClause (Just AnyclassStrategy) [ ConT ''FromDhall ]
+fromDhallInstance :: Syntax.Name -> Q Exp -> Q [Dec]
+fromDhallInstance n interpretOptions = [d|
+    instance FromDhall $(pure $ ConT n) where
+        autoWith = Dhall.genericAutoWithInputNormalizer $(interpretOptions)
+    |]
 
-derivingToClause :: DerivClause
-derivingToClause = DerivClause (Just AnyclassStrategy) [ ConT ''ToDhall ]
+toDhallInstance :: Syntax.Name -> Q Exp -> Q [Dec]
+toDhallInstance n interpretOptions = [d|
+    instance ToDhall $(pure $ ConT n) where
+        injectWith = Dhall.genericToDhallWithInputNormalizer $(interpretOptions)
+    |]
 
 -- | Convert a Dhall type to the corresponding Haskell datatype declaration
 toDeclaration
@@ -198,20 +204,21 @@ toDeclaration
     => GenerateOptions
     -> [HaskellType (Expr s a)]
     -> HaskellType (Expr s a)
-    -> Q Dec
-toDeclaration GenerateOptions{..} haskellTypes MultipleConstructors{..} =
+    -> Q [Dec]
+toDeclaration generateOptions@GenerateOptions{..} haskellTypes MultipleConstructors{..} =
     case code of
         Union kts -> do
             let name = Syntax.mkName (Text.unpack typeName)
 
             let derivingClauses =
-                    [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ] <>
-                    [ derivingFromClause | generateFromDhallInstance ] <>
-                    [ derivingToClause | generateToDhallInstance ]
+                    [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
             constructors <- traverse (toConstructor haskellTypes typeName) (Dhall.Map.toList kts )
 
-            return (DataD [] name [] Nothing constructors derivingClauses)
+            fmap concat . sequence $
+                [pure [DataD [] name [] Nothing constructors derivingClauses]] <>
+                [ fromDhallInstance name [|Dhall.defaultInterpretOptions|] | generateFromDhallInstance ] <>
+                [ toDhallInstance name [|Dhall.defaultInterpretOptions|] | generateToDhallInstance ]
 
         _ -> do
             let document =
@@ -259,13 +266,14 @@ toDeclaration GenerateOptions{..} haskellTypes SingleConstructor{..} = do
     let name = Syntax.mkName (Text.unpack typeName)
 
     let derivingClauses =
-            [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ] <>
-            [ derivingFromClause | generateFromDhallInstance ] <>
-            [ derivingToClause | generateToDhallInstance ]
+            [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
     constructor <- toConstructor haskellTypes typeName (constructorName, Just code)
 
-    return (DataD [] name [] Nothing [constructor] derivingClauses)
+    fmap concat . sequence $
+        [pure [DataD [] name [] Nothing [constructor] derivingClauses]] <>
+        [ fromDhallInstance name [|Dhall.defaultInterpretOptions|] | generateFromDhallInstance ] <>
+        [ toDhallInstance name [|Dhall.defaultInterpretOptions|] | generateToDhallInstance ]
 
 -- | Convert a Dhall type to the corresponding Haskell constructor
 toConstructor
@@ -467,4 +475,4 @@ makeHaskellTypesWith generateOptions haskellTypes = do
 
     haskellTypes' <- traverse (traverse (Syntax.runIO . Dhall.inputExpr)) haskellTypes
 
-    traverse (toDeclaration generateOptions haskellTypes') haskellTypes'
+    concat <$> traverse (toDeclaration generateOptions haskellTypes') haskellTypes'
