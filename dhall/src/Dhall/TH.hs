@@ -6,12 +6,16 @@
 
 -- | Template Haskell utilities
 module Dhall.TH
-    ( -- * Template Haskell
+    ( -- * Embedding Dhall in Haskell
       staticDhallExpression
     , dhall
+      -- * Generating Haskell from Dhall expressions
     , makeHaskellTypeFromUnion
     , makeHaskellTypes
+    , makeHaskellTypesWith
     , HaskellType(..)
+    , GenerateOptions(..)
+    , defaultGenerateOptions
     ) where
 
 import Data.Text                 (Text)
@@ -191,10 +195,11 @@ derivingToClause = DerivClause (Just AnyclassStrategy) [ ConT ''ToDhall ]
 -- | Convert a Dhall type to the corresponding Haskell datatype declaration
 toDeclaration
     :: (Eq a, Pretty a)
-    => [HaskellType (Expr s a)]
+    => GenerateOptions
+    -> [HaskellType (Expr s a)]
     -> HaskellType (Expr s a)
     -> Q Dec
-toDeclaration haskellTypes MultipleConstructors{..} =
+toDeclaration GenerateOptions{..} haskellTypes MultipleConstructors{..} =
     case code of
         Union kts -> do
             let name = Syntax.mkName (Text.unpack typeName)
@@ -250,7 +255,7 @@ toDeclaration haskellTypes MultipleConstructors{..} =
             let message = Pretty.renderString (Dhall.Pretty.layout document)
 
             fail message
-toDeclaration haskellTypes SingleConstructor{..} = do
+toDeclaration GenerateOptions{..} haskellTypes SingleConstructor{..} = do
     let name = Syntax.mkName (Text.unpack typeName)
 
     let derivingClauses =
@@ -319,9 +324,7 @@ toConstructor haskellTypes outerTypeName (constructorName, maybeAlternativeType)
 -- This is a special case of `Dhall.TH.makeHaskellTypes`:
 --
 -- > makeHaskellTypeFromUnion typeName code =
--- >    let generateFromDhallInstance = True
--- >        generateToDhallInstance = True
--- >    in makeHaskellTypes [ MultipleConstructors{..} ]
+-- >     makeHaskellTypes [ MultipleConstructors{..} ]
 makeHaskellTypeFromUnion
     :: Text
     -- ^ Name of the generated Haskell type
@@ -329,21 +332,16 @@ makeHaskellTypeFromUnion
     -- ^ Dhall code that evaluates to a union type
     -> Q [Dec]
 makeHaskellTypeFromUnion typeName code =
-    let generateFromDhallInstance = True
-        generateToDhallInstance = True
-    in makeHaskellTypes [ MultipleConstructors{..} ]
+    makeHaskellTypes [ MultipleConstructors{..} ]
 
--- | Used by `makeHaskellTypes` to specify how to generate Haskell types
+-- | Used by `makeHaskellTypes` and `makeHaskellTypesWith` to specify how to
+-- generate Haskell types
 data HaskellType code
     -- | Generate a Haskell type with more than one constructor from a Dhall
     -- union type
     = MultipleConstructors
         { typeName :: Text
         -- ^ Name of the generated Haskell type
-        , generateFromDhallInstance :: Bool
-        -- ^ Generate a `FromDhall` instance for the Haskell type
-        , generateToDhallInstance :: Bool
-        -- ^ Generate a `ToDhall` instance for the Haskell type
         , code :: code
         -- ^ Dhall code that evaluates to a union type
         }
@@ -356,14 +354,28 @@ data HaskellType code
         -- ^ Name of the generated Haskell type
         , constructorName :: Text
         -- ^ Name of the constructor
-        , generateFromDhallInstance :: Bool
-        -- ^ Generate a `FromDhall` instance for the Haskell type
-        , generateToDhallInstance :: Bool
-        -- ^ Generate a `ToDhall` instance for the Haskell type
         , code :: code
         -- ^ Dhall code that evaluates to a type
         }
     deriving (Functor, Foldable, Traversable)
+
+-- | This data type holds various options that let you control several aspects
+-- how Haskell code is generated. In particular you can
+--
+--   * disable the generation of `FromDhall`/`ToDhall` instances.
+data GenerateOptions = GenerateOptions
+    { generateFromDhallInstance :: Bool
+    -- ^ Generate a `FromDhall` instance for the Haskell type
+    , generateToDhallInstance :: Bool
+    -- ^ Generate a `ToDhall` instance for the Haskell type
+    }
+
+-- | A default set of options used by `makeHaskellTypes`.
+defaultGenerateOptions :: GenerateOptions
+defaultGenerateOptions = GenerateOptions
+    { generateFromDhallInstance = True
+    , generateToDhallInstance = False
+    }
 
 -- | Generate a Haskell datatype declaration with one constructor from a Dhall
 -- type
@@ -441,9 +453,18 @@ data HaskellType code
 -- > deriving instance Ord  Employee
 -- > deriving instance Show Employee
 makeHaskellTypes :: [HaskellType Text] -> Q [Dec]
-makeHaskellTypes haskellTypes = do
+makeHaskellTypes = makeHaskellTypesWith defaultGenerateOptions
+
+-- | Like `makeHaskellTypes`, but with the ability to customize the generated
+-- Haskell code by passing `GenerateOptions`.
+--
+-- For instance, `makeHaskellTypes` is implemented using this function:
+--
+-- > makeHaskellTypes = makeHaskellTypesWith defaultGenerateOptions
+makeHaskellTypesWith :: GenerateOptions -> [HaskellType Text] -> Q [Dec]
+makeHaskellTypesWith generateOptions haskellTypes = do
     Syntax.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
 
     haskellTypes' <- traverse (traverse (Syntax.runIO . Dhall.inputExpr)) haskellTypes
 
-    traverse (toDeclaration haskellTypes') haskellTypes'
+    traverse (toDeclaration generateOptions haskellTypes') haskellTypes'
