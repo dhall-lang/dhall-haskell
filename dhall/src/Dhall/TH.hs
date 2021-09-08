@@ -27,10 +27,12 @@ import Prettyprinter             (Pretty)
 
 import Language.Haskell.TH.Syntax
     ( Bang (..)
+    , Body (..)
     , Con (..)
     , Dec (..)
     , Exp (..)
-    , Pat
+    , Match (..)
+    , Pat (..)
     , Q
     , SourceStrictness (..)
     , SourceUnpackedness (..)
@@ -40,6 +42,7 @@ import Language.Haskell.TH.Syntax
 import Language.Haskell.TH.Syntax (DerivClause (..), DerivStrategy (..))
 
 import qualified Data.List                   as List
+import qualified Data.Set                    as Set
 import qualified Data.Text                   as Text
 import qualified Data.Typeable               as Typeable
 import qualified Dhall
@@ -382,6 +385,8 @@ data GenerateOptions = GenerateOptions
     { constructorModifier :: Text -> Text
     -- ^ How to map a Dhall union field name to a Haskell constructor.
     -- Note: The `constructorName` of `SingleConstructor` will be passed to this function, too.
+    , fieldModifier :: Text -> Text
+    -- ^ How to map a Dhall record field names to a Haskell record field names.
     , generateFromDhallInstance :: Bool
     -- ^ Generate a `FromDhall` instance for the Haskell type
     , generateToDhallInstance :: Bool
@@ -392,42 +397,51 @@ data GenerateOptions = GenerateOptions
 defaultGenerateOptions :: GenerateOptions
 defaultGenerateOptions = GenerateOptions
     { constructorModifier = id
+    , fieldModifier = id
     , generateFromDhallInstance = True
     , generateToDhallInstance = False
     }
 
 generateToInterpretOptions :: GenerateOptions -> HaskellType (Expr s a) -> Q Exp
 generateToInterpretOptions GenerateOptions{..} haskellType = [| Dhall.InterpretOptions
-    { Dhall.fieldModifier = Dhall.fieldModifier Dhall.defaultInterpretOptions
-    , Dhall.constructorModifier = \ $(nameP) -> $(toCases constructorModifier $ constructors haskellType)
+    { Dhall.fieldModifier = \ $(pure nameP) ->
+        $(toCases fieldModifier $ fields haskellType)
+    , Dhall.constructorModifier = \ $(pure nameP) ->
+        $(toCases constructorModifier $ constructors haskellType)
     , Dhall.singletonConstructors = Dhall.singletonConstructors Dhall.defaultInterpretOptions
     }|]
     where
+        constructors :: HaskellType (Expr s a) -> [Text]
         constructors SingleConstructor{..} = [constructorName]
-        constructors MultipleConstructors{..} = case code of
-            Union kts -> Dhall.Map.keys kts
-            _ -> []
+        constructors MultipleConstructors{..} | Union kts <- code = Dhall.Map.keys kts
+        constructors _ = []
+
+        fields :: HaskellType (Expr s a) -> [Text]
+        fields SingleConstructor{..} | Record kts <- code = Dhall.Map.keys kts
+        fields MultipleConstructors{..} | Union kts <- code = Set.toList $ mconcat
+            [ Dhall.Map.keysSet kts'
+            | (_, Just (Record kts')) <- Dhall.Map.toList kts
+            ]
+        fields _ = []
 
         toCases :: (Text -> Text) -> [Text] -> Q Exp
-        toCases f = foldr mkCase [| error $ "SHOULD NEVER HAPPEN: Unmatched " <> show $(nameE) |]
+        toCases f xs = do
+            err <- [| error $ "SHOULD NEVER HAPPEN: Unmatched " <> show $(pure nameE) |]
+            pure $ CaseE nameE $ map mkMatch xs <> [Match WildP (NormalB err) []]
             where
-                mkCase n cont = [|
-                    case $(nameE) of
-                        $(textToQPat $ f n) -> $(textToQExp n)
-                        _ -> $(cont)
-                    |]
+                mkMatch n = Match (textToPat $ f n) (NormalB $ textToExp n) []
 
-        nameE :: Q Exp
-        nameE = pure $ Syntax.VarE $ Syntax.mkName "n"
+        nameE :: Exp
+        nameE = Syntax.VarE $ Syntax.mkName "n"
 
-        nameP :: Q Pat
-        nameP = pure $ Syntax.VarP $ Syntax.mkName "n"
+        nameP :: Pat
+        nameP = Syntax.VarP $ Syntax.mkName "n"
 
-        textToQExp :: Text -> Q Exp
-        textToQExp = pure . Syntax.LitE . Syntax.StringL . Text.unpack
+        textToExp :: Text -> Exp
+        textToExp = Syntax.LitE . Syntax.StringL . Text.unpack
 
-        textToQPat :: Text -> Q Pat
-        textToQPat = pure . Syntax.LitP . Syntax.StringL . Text.unpack
+        textToPat :: Text -> Pat
+        textToPat = Syntax.LitP . Syntax.StringL . Text.unpack
 
 -- | Generate a Haskell datatype declaration with one constructor from a Dhall
 -- type.
