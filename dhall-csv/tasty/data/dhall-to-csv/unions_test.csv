@@ -1,0 +1,5 @@
+union1,union2,union3
+Option1,42,EmptyAlternative
+Option2,true,-1
+Option3,3.14,EmptyAlternative
+Option1,Hello world,1

@@ -3,8 +3,8 @@
 
 module Main where
 
-import Data.Void   (Void)
-import Test.Tasty  (TestTree)
+import Data.Void  (Void)
+import Test.Tasty (TestTree)
 
 import qualified Data.Aeson           as Aeson
 import qualified Data.ByteString.Lazy
@@ -57,6 +57,7 @@ testTree =
             , testDhallToJSON "./tasty/data/nesting3"
             , testDhallToJSON "./tasty/data/nestingLegacy0"
             , testDhallToJSON "./tasty/data/nestingLegacy1"
+            , testDhallToJSON "./tasty/data/time"
             ]
         , Test.Tasty.testGroup "Union keys"
             [ testJSONToDhall "./tasty/data/unionKeys"

@@ -1,5 +1,5 @@
-{-# LANGUAGE NamedFieldPuns   #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns   #-}
 {-# LANGUAGE QuasiQuotes      #-}
 
 module Dhall.Kubernetes.Convert
@@ -11,26 +11,26 @@ module Dhall.Kubernetes.Convert
   , pathSplitter
   ) where
 
-import Control.Applicative (empty)
+import Control.Applicative    (empty)
 import Data.Aeson
-import Data.Aeson.Types (Parser, parseMaybe)
-import Data.Bifunctor (first, second)
-import Data.Maybe (fromMaybe, mapMaybe)
-import Data.Scientific (Scientific)
-import Data.Set (Set)
-import Data.Text (Text)
+import Data.Aeson.Types       (Parser, parseMaybe)
+import Data.Bifunctor         (first, second)
+import Data.Maybe             (fromMaybe, mapMaybe)
+import Data.Scientific        (Scientific)
+import Data.Set               (Set)
+import Data.Text              (Text)
 import Dhall.Kubernetes.Types
-import GHC.Generics (Generic, Rep)
+import GHC.Generics           (Generic, Rep)
 
-import qualified Data.Char         as Char
-import qualified Data.List         as List
-import qualified Data.Map.Strict   as Data.Map
-import qualified Data.Maybe        as Maybe
-import qualified Data.Set          as Set
-import qualified Data.Sort         as Sort
-import qualified Data.Text         as Text
-import qualified Data.Tuple        as Tuple
-import qualified Dhall.Core        as Dhall
+import qualified Data.Char       as Char
+import qualified Data.List       as List
+import qualified Data.Map.Strict as Data.Map
+import qualified Data.Maybe      as Maybe
+import qualified Data.Set        as Set
+import qualified Data.Sort       as Sort
+import qualified Data.Text       as Text
+import qualified Data.Tuple      as Tuple
+import qualified Dhall.Core      as Dhall
 import qualified Dhall.Map
 import qualified Dhall.Optics
 
@@ -105,9 +105,9 @@ namespacedObjectFromImport :: Dhall.Import -> Maybe Text
 namespacedObjectFromImport Dhall.Import
   { importHashed = Dhall.ImportHashed
     { importType = Dhall.Local Dhall.Here Dhall.File
-      { file = f , .. }
-    , .. }
-  , .. } = Just $ Text.replace ".dhall" "" f
+      { file = f }
+    }
+  } = Just $ Text.replace ".dhall" "" f
 namespacedObjectFromImport _ = Nothing
 
 -- | Get a Dhall Text literal from a lone string

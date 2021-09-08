@@ -8,9 +8,9 @@
 module Main where
 
 import Control.Exception (SomeException)
-import Data.ByteString (ByteString)
-import Options.Generic (Generic, ParseRecord, type (<?>)(..))
-import System.Exit (ExitCode(..))
+import Data.ByteString   (ByteString)
+import Options.Generic   (Generic, ParseRecord, type (<?>) (..))
+import System.Exit       (ExitCode (..))
 
 import qualified Control.Exception
 import qualified Data.ByteString

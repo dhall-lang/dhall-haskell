@@ -5,6 +5,7 @@ module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
 import Data.Text         (Text)
+import Data.Void         (Void)
 import Prelude           hiding (FilePath)
 import Test.Tasty        (TestTree)
 import Turtle            (FilePath, (</>))
@@ -46,7 +47,7 @@ getTests = do
             , importDirectory </> "success/unit/asLocation/RemoteChainMissingA.dhall"
             ]
 
-    successTests <- Test.Util.discover (Turtle.chars <> "A.dhall") successTest (do
+    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
 
         Monad.guard (path `notElem` flakyTests)
@@ -73,24 +74,32 @@ getTests = do
     return testTree
 
 successTest :: Text -> TestTree
-successTest path = do
-    let pathString = Text.unpack path
+successTest prefix = do
+    let inputPath = Text.unpack (prefix <> "A.dhall")
 
-    let directoryString = FilePath.takeDirectory pathString
+    let expectedPath = Text.unpack (prefix <> "B.dhall")
+
+    let directoryString = FilePath.takeDirectory inputPath
 
     let expectedFailures =
-            [ importDirectory </> "success/unit/cors/TwoHopsA.dhall"
-            , importDirectory </> "success/unit/cors/SelfImportAbsoluteA.dhall"
-            , importDirectory </> "success/unit/cors/AllowedAllA.dhall"
-            , importDirectory </> "success/unit/cors/SelfImportRelativeA.dhall"
-            , importDirectory </> "success/unit/cors/OnlyGithubA.dhall"
+            [ importDirectory </> "success/unit/cors/TwoHops"
+            , importDirectory </> "success/unit/cors/SelfImportAbsolute"
+            , importDirectory </> "success/unit/cors/AllowedAll"
+            , importDirectory </> "success/unit/cors/SelfImportRelative"
+            , importDirectory </> "success/unit/cors/OnlyGithub"
+            , importDirectory </> "success/userHeaders"
+            , importDirectory </> "success/userHeadersOverride"
             ]
 
-    Test.Util.testCase path expectedFailures (do
+    Test.Util.testCase prefix expectedFailures (do
 
-        text <- Text.IO.readFile pathString
+        text <- Text.IO.readFile inputPath
+
+        expectedText <- Text.IO.readFile expectedPath
 
         actualExpr <- Core.throws (Parser.exprFromText mempty text)
+
+        expectedExpr <- Core.throws (Parser.exprFromText mempty expectedText)
 
         let originalCache = "dhall-lang/tests/import/cache"
 
@@ -103,23 +112,23 @@ successTest path = do
                     (Test.Util.loadWith actualExpr)
                     (Import.emptyStatusWithManager httpManager directoryString)
 
-        let usesCache = [ "hashFromCacheA.dhall"
-                        , "unit/asLocation/HashA.dhall"
-                        , "unit/IgnorePoisonedCacheA.dhall"
-                        , "unit/DontCacheIfHashA.dhall"
+        let usesCache = [ "hashFromCache"
+                        , "unit/asLocation/Hash"
+                        , "unit/IgnorePoisonedCache"
+                        , "unit/DontCacheIfHash"
                         ]
 
         let endsIn path' =
-                not (null (Turtle.match (Turtle.ends path') (Test.Util.toDhallPath path)))
+                not (null (Turtle.match (Turtle.ends path') (Test.Util.toDhallPath prefix)))
 
         let buildNewCache = do
                 tempdir <- fmap Turtle.decodeString (Turtle.managed (Temp.withSystemTempDirectory "dhall-cache"))
                 Turtle.liftIO (Turtle.cptree originalCache tempdir)
                 return tempdir
 
-        let runTest =
+        let cacheSetup =
                 if any endsIn usesCache
-                    then Turtle.runManaged $ do
+                    then do
                         cacheDir <- buildNewCache
 
                         let set = do
@@ -135,21 +144,28 @@ successTest path = do
                                 Turtle.export "XDG_CACHE_HOME" x
 
                         _ <- Turtle.managed (Exception.bracket set reset)
-
-                        _ <- Turtle.liftIO load
-
                         return ()
-                    else do
-                        _ <- load
+                else pure ()
 
-                        return ()
+        let setup = cacheSetup >> Test.Util.managedTestEnvironment prefix
 
-        let handler :: SomeException -> IO ()
+        let resolve = Turtle.with setup (const load)
+
+        let handler :: SomeException -> IO (Core.Expr Parser.Src Void)
             handler exception = Tasty.HUnit.assertFailure (show exception)
 
-        Exception.handle handler runTest
+        actualResolved <- Exception.handle handler resolve
 
-        return () )
+        expectedResolved <- Import.assertNoImports expectedExpr
+
+        let actual = Core.normalize actualResolved :: Core.Expr Void Void
+
+        let expected = Core.normalize expectedResolved :: Core.Expr Void Void
+
+        let message =
+                "The imported expression did not match the expected output"
+
+        Tasty.HUnit.assertEqual message expected actual)
 
 failureTest :: Text -> TestTree
 failureTest path = do

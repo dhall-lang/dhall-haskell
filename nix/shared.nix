@@ -444,7 +444,9 @@ let
       '';
     };
 
-  toShell = drv: drv.env;
+  toShell = drv: drv.env.overrideAttrs (base: {
+    nativeBuildInputs = (base.nativeBuildInputs or []) ++ [ pkgs.cabal-install ];
+  });
 
   possibly-static = {
     dhall            = makeStaticIfPossible "dhall"           ;
@@ -512,18 +514,18 @@ in
 
     inherit (pkgs.releaseTools) aggregate;
 
-    shell-dhall            = pkgs.haskell.packages."${compiler}".dhall.env           ;
-    shell-dhall-bash       = pkgs.haskell.packages."${compiler}".dhall-bash.env      ;
-    shell-dhall-csv        = pkgs.haskell.packages."${compiler}".dhall-csv.env       ;
-    shell-dhall-docs       = pkgs.haskell.packages."${compiler}".dhall-docs.env      ;
-    shell-dhall-json       = pkgs.haskell.packages."${compiler}".dhall-json.env      ;
-    shell-dhall-lsp-server = pkgs.haskell.packages."${compiler}".dhall-lsp-server.env;
-    shell-dhall-nix        = pkgs.haskell.packages."${compiler}".dhall-nix.env       ;
-    shell-dhall-nixpkgs    = pkgs.haskell.packages."${compiler}".dhall-nixpkgs.env   ;
-    shell-dhall-openapi    = pkgs.haskell.packages."${compiler}".dhall-openapi.env   ;
-    shell-dhall-toml       = pkgs.haskell.packages."${compiler}".dhall-toml.env      ;
-    shell-dhall-try        = pkgs.haskell.packages."${compiler}".dhall-try.env       ;
-    shell-dhall-yaml       = pkgs.haskell.packages."${compiler}".dhall-yaml.env      ;
+    shell-dhall            = toShell pkgs.haskell.packages."${compiler}".dhall           ;
+    shell-dhall-bash       = toShell pkgs.haskell.packages."${compiler}".dhall-bash      ;
+    shell-dhall-csv        = toShell pkgs.haskell.packages."${compiler}".dhall-csv       ;
+    shell-dhall-docs       = toShell pkgs.haskell.packages."${compiler}".dhall-docs      ;
+    shell-dhall-json       = toShell pkgs.haskell.packages."${compiler}".dhall-json      ;
+    shell-dhall-lsp-server = toShell pkgs.haskell.packages."${compiler}".dhall-lsp-server;
+    shell-dhall-nix        = toShell pkgs.haskell.packages."${compiler}".dhall-nix       ;
+    shell-dhall-nixpkgs    = toShell pkgs.haskell.packages."${compiler}".dhall-nixpkgs   ;
+    shell-dhall-openapi    = toShell pkgs.haskell.packages."${compiler}".dhall-openapi   ;
+    shell-dhall-toml       = toShell pkgs.haskell.packages."${compiler}".dhall-toml      ;
+    shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try       ;
+    shell-dhall-yaml       = toShell pkgs.haskell.packages."${compiler}".dhall-yaml      ;
 
     image-dhall            = toDockerImage "dhall"           ;
     image-dhall-bash       = toDockerImage "dhall-bash"      ;

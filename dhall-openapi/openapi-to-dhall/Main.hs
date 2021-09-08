@@ -4,7 +4,10 @@
 module Main (main) where
 
 import Control.Applicative.Combinators (option, sepBy1)
-import Data.Aeson                      (decodeFileStrict, eitherDecodeFileStrict)
+import Data.Aeson
+    ( decodeFileStrict
+    , eitherDecodeFileStrict
+    )
 import Data.Bifunctor                  (bimap)
 import Data.Foldable                   (for_)
 import Data.Text                       (Text, pack, unpack)
@@ -14,45 +17,45 @@ import Dhall.Format                    (Format (..))
 import Numeric.Natural                 (Natural)
 import Text.Megaparsec
     ( Parsec
+    , eof
     , errorBundlePretty
+    , optional
     , parse
     , some
-    , optional
     , (<|>)
-    , eof
     )
 import Text.Megaparsec.Char            (alphaNumChar, char)
 
-import Dhall.Kubernetes.Data           (patchCyclicImports)
+import Dhall.Kubernetes.Data  (patchCyclicImports)
 import Dhall.Kubernetes.Types
     ( DuplicateHandler
-    , ModelName (..)
     , ModelHierarchy
+    , ModelName (..)
     , Prefix
     , Swagger (..)
     )
-import System.FilePath                  ((</>))
+import System.FilePath        ((</>))
 
-import qualified Data.List                             as List
-import qualified Data.Map.Strict                       as Data.Map
-import qualified Data.Ord                              as Ord
-import qualified Data.Text                             as Text
-import qualified Data.Text.IO                          as Text
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as PrettyText
-import qualified Dhall.Core                            as Dhall
+import qualified Data.List                  as List
+import qualified Data.Map.Strict            as Data.Map
+import qualified Data.Ord                   as Ord
+import qualified Data.Text                  as Text
+import qualified Data.Text.IO               as Text
+import qualified Dhall.Core                 as Dhall
 import qualified Dhall.Format
-import qualified Dhall.Kubernetes.Convert              as Convert
-import qualified Dhall.Kubernetes.Types                as Types
+import qualified Dhall.Kubernetes.Convert   as Convert
+import qualified Dhall.Kubernetes.Types     as Types
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
+import qualified Prettyprinter              as Pretty
+import qualified Prettyprinter.Render.Text  as PrettyText
+import qualified System.Directory           as Directory
 import qualified System.IO
-import qualified System.Directory                      as Directory
-import qualified Text.Megaparsec                       as Megaparsec
-import qualified Text.Megaparsec.Char.Lexer            as Megaparsec.Lexer
+import qualified Text.Megaparsec            as Megaparsec
+import qualified Text.Megaparsec.Char.Lexer as Megaparsec.Lexer
 
 -- | Top-level program options
 data Options = Options

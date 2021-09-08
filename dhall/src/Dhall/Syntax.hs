@@ -13,6 +13,8 @@
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE UnicodeSyntax              #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 {-| This module contains the core syntax types and optics for them.
 
 'reservedIdentifiers', 'denote' and friends are included because they are
@@ -88,37 +90,44 @@ module Dhall.Syntax (
     , shift
     ) where
 
-import Control.DeepSeq            (NFData)
-import Data.Bifunctor             (Bifunctor (..))
-import Data.Bits                  (xor)
-import Data.Data                  (Data)
-import Data.Foldable
-import Data.HashSet               (HashSet)
-import Data.List.NonEmpty         (NonEmpty (..))
-import Data.Sequence              (Seq)
-import Data.String                (IsString (..))
-import Data.Text                  (Text)
-import Data.Text.Prettyprint.Doc  (Doc, Pretty)
-import Data.Traversable           ()
-import Data.Void                  (Void)
-import Dhall.Map                  (Map)
+import                Control.DeepSeq            (NFData)
+import                Data.Bifunctor             (Bifunctor (..))
+import                Data.Bits                  (xor)
+import                Data.Data                  (Data)
+import                Data.Foldable
+import                Data.HashSet               (HashSet)
+import                Data.List.NonEmpty         (NonEmpty (..))
+import                Data.Sequence              (Seq)
+import                Data.String                (IsString (..))
+import                Data.Text                  (Text)
+import                Data.Traversable           ()
+import                Data.Void                  (Void)
+import                Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import Dhall.Src                  (Src (..))
-import GHC.Generics               (Generic)
-import Instances.TH.Lift          ()
-import Language.Haskell.TH.Syntax (Lift)
-import Numeric.Natural            (Natural)
-import Unsafe.Coerce              (unsafeCoerce)
+import                Dhall.Src                  (Src (..))
+import                GHC.Generics               (Generic)
+import                Instances.TH.Lift          ()
+import                Language.Haskell.TH.Syntax (Lift)
+import                Numeric.Natural            (Natural)
+import                Prettyprinter              (Doc, Pretty)
+import                Unsafe.Coerce              (unsafeCoerce)
 
 import qualified Control.Monad
+import qualified Data.Fixed         as Fixed
 import qualified Data.HashSet
-import qualified Data.List.NonEmpty        as NonEmpty
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text
-import qualified Data.Text.Prettyprint.Doc as Pretty
+import qualified Data.Time          as Time
 import qualified Dhall.Crypto
-import qualified Dhall.Optics              as Optics
-import qualified Lens.Family               as Lens
-import qualified Network.URI               as URI
+import qualified Dhall.Optics       as Optics
+import qualified Lens.Family        as Lens
+import qualified Network.URI        as URI
+import qualified Prettyprinter      as Pretty
+
+deriving instance Lift Time.Day
+deriving instance Lift Time.TimeOfDay
+deriving instance Lift Time.TimeZone
+deriving instance Lift (Fixed.Fixed a)
 
 -- $setup
 -- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
@@ -363,19 +372,19 @@ instance Bifunctor RecordField where
         RecordField (k <$> s0) (first k value) (k <$> s1) (k <$> s2)
     second = fmap
 
-{-| Record the label of a function or a function-type expression
-
-For example,
-
-> λ({- A -} a {- B -} : {- C -} T) -> e
-
-will be instantiated as follows:
-* @functionBindingSrc0@ corresponds to the @A@ comment
-* @functionBindingVariable@ is @a@
-* @functionBindingSrc1@ corresponds to the @B@ comment
-* @functionBindingSrc2@ corresponds to the @C@ comment
-* @functionBindingAnnotation@ is @T@
--}
+-- | Record the label of a function or a function-type expression
+--
+-- For example,
+--
+-- > λ({- A -} a {- B -} : {- C -} T) -> e
+--
+-- … will be instantiated as follows:
+--
+-- * @functionBindingSrc0@ corresponds to the @A@ comment
+-- * @functionBindingVariable@ is @a@
+-- * @functionBindingSrc1@ corresponds to the @B@ comment
+-- * @functionBindingSrc2@ corresponds to the @C@ comment
+-- * @functionBindingAnnotation@ is @T@
 data FunctionBinding s a = FunctionBinding
     { functionBindingSrc0 :: Maybe s
     , functionBindingVariable :: Text
@@ -533,6 +542,22 @@ data Expr s a
     | TextReplace
     -- | > TextShow                                 ~  Text/show
     | TextShow
+    -- | > Date                                     ~  Date
+    | Date
+    -- | > DateLiteral (fromGregorian _YYYY _MM _DD) ~ YYYY-MM-DD
+    | DateLiteral Time.Day
+    -- | > Time                                     ~  Time
+    | Time
+    -- | > TimeLiteral (TimeOfDay hh mm ss) _       ~  hh:mm:ss
+    | TimeLiteral
+        Time.TimeOfDay
+        Word
+        -- ^ Precision
+    -- | > TimeZone                                 ~  TimeZone
+    | TimeZone
+    -- | > TimeZoneLiteral (TimeZone ( 60 * _HH + _MM) _ _) ~ +HH:MM
+    -- | > TimeZoneLiteral (TimeZone (-60 * _HH + _MM) _ _) ~ -HH:MM
+    | TimeZoneLiteral Time.TimeZone
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) []                     ~  [] : t
@@ -824,6 +849,12 @@ unsafeSubExpressions f (TextLit chunks) =
 unsafeSubExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
 unsafeSubExpressions _ TextReplace = pure TextReplace
 unsafeSubExpressions _ TextShow = pure TextShow
+unsafeSubExpressions _ Date = pure Date
+unsafeSubExpressions _ (DateLiteral a) = pure (DateLiteral a)
+unsafeSubExpressions _ Time = pure Time
+unsafeSubExpressions _ (TimeLiteral a b) = pure (TimeLiteral a b)
+unsafeSubExpressions _ TimeZone = pure TimeZone
+unsafeSubExpressions _ (TimeZoneLiteral a) = pure (TimeZoneLiteral a)
 unsafeSubExpressions _ List = pure List
 unsafeSubExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
 unsafeSubExpressions f (ListAppend a b) = ListAppend <$> f a <*> f b
@@ -1006,7 +1037,7 @@ instance Pretty URL where
         <>  foldMap prettyHeaders headers
       where
         prettyHeaders h =
-          " using " <> Pretty.unAnnotate (prettyImportExpression h)
+          " using (" <> Pretty.unAnnotate (Pretty.pretty h) <> ")"
 
         File {..} = path
 
@@ -1185,8 +1216,7 @@ shallowDenote         e  = e
 reservedKeywords :: HashSet Text
 reservedKeywords =
     Data.HashSet.fromList
-        [
-          "if"
+        [ "if"
         , "then"
         , "else"
         , "let"
@@ -1244,6 +1274,9 @@ reservedIdentifiers = reservedKeywords <>
         , "Integer"
         , "Double"
         , "Text"
+        , "Date"
+        , "Time"
+        , "TimeZone"
         , "List"
         , "Type"
         , "Kind"

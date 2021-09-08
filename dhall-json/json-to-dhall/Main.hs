@@ -15,20 +15,15 @@ import Dhall.Pretty        (CharacterSet (..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
-import qualified Data.Aeson                                as Aeson
-import qualified Data.ByteString.Lazy.Char8                as ByteString
-import qualified Data.Text.IO                              as Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
+import qualified Data.Aeson                 as Aeson
+import qualified Data.ByteString.Lazy.Char8 as ByteString
 import qualified Dhall.Core
-import qualified Dhall.Pretty
+import qualified Dhall.Util
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative                       as Options
-import qualified Paths_dhall_json                          as Meta
-import qualified System.Console.ANSI                       as ANSI
+import qualified Options.Applicative        as Options
+import qualified Paths_dhall_json           as Meta
 import qualified System.Exit
-import qualified System.IO                                 as IO
+import qualified System.IO                  as IO
 
 -- ---------------
 -- Command options
@@ -161,31 +156,6 @@ main = do
 
             typeCheckSchemaExpr id finalSchema
 
-    let renderExpression characterSet plain output expression = do
-            let document =
-                    Dhall.Pretty.prettyCharacterSet characterSet expression
-
-            let stream = Dhall.Pretty.layout document
-
-            case output of
-                Nothing -> do
-                    supportsANSI <- ANSI.hSupportsANSI IO.stdout
-
-                    let ansiStream =
-                            if supportsANSI && not plain
-                            then fmap Dhall.Pretty.annToAnsiStyle stream
-                            else Pretty.unAnnotateS stream
-
-                    Pretty.Terminal.renderIO IO.stdout ansiStream
-
-                    Text.IO.putStrLn ""
-
-                Just file_ ->
-                    IO.withFile file_ IO.WriteMode $ \h -> do
-                        Pretty.Text.renderIO h stream
-
-                        Text.IO.hPutStrLn h ""
-
     case options of
         Version ->
             putStrLn (showVersion Meta.version)
@@ -200,7 +170,7 @@ main = do
 
                 expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
 
-                renderExpression characterSet plain output expression
+                Dhall.Util.renderExpression characterSet plain output expression
 
         Type{..} -> do
             let characterSet = toCharacterSet ascii
@@ -210,7 +180,7 @@ main = do
 
                 finalSchema <- toSchema Nothing value
 
-                renderExpression characterSet plain output finalSchema
+                Dhall.Util.renderExpression characterSet plain output finalSchema
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

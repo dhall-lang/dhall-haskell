@@ -2,6 +2,7 @@
 {-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -12,6 +13,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -54,6 +56,10 @@ module Dhall.Marshal.Decode
     , string
     , lazyText
     , strictText
+      -- ** Time
+    , timeOfDay
+    , day
+    , timeZone
       -- ** Containers
     , maybe
     , pair
@@ -130,10 +136,14 @@ import Data.Either.Validation
     , eitherToValidation
     , validationToEither
     )
+import Data.Functor.Contravariant
+    ( Equivalence (..)
+    , Op (..)
+    , Predicate (..)
+    )
 import Data.Hashable                    (Hashable)
 import Data.Int                         (Int16, Int32, Int64, Int8)
 import Data.List.NonEmpty               (NonEmpty (..))
-import Data.Text.Prettyprint.Doc        (Pretty)
 import Data.Typeable                    (Proxy (..), Typeable)
 import Dhall.Parser                     (Src (..))
 import Dhall.Syntax
@@ -145,6 +155,7 @@ import Dhall.Syntax
     )
 import GHC.Generics
 import Prelude                          hiding (maybe, sequence)
+import Prettyprinter                    (Pretty)
 
 import qualified Control.Applicative
 import qualified Data.Foldable
@@ -161,6 +172,7 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
+import qualified Data.Time            as Time
 import qualified Data.Vector
 import qualified Dhall.Core           as Core
 import qualified Dhall.Map
@@ -305,6 +317,15 @@ instance FromDhall a => FromDhall [a] where
 instance FromDhall a => FromDhall (Vector a) where
     autoWith opts = vector (autoWith opts)
 
+instance FromDhall Time.TimeOfDay where
+    autoWith _ = timeOfDay
+
+instance FromDhall Time.Day where
+    autoWith _ = day
+
+instance FromDhall Time.TimeZone where
+    autoWith _ = timeZone
+
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
 -}
@@ -337,6 +358,12 @@ instance FromDhall (f (Result f)) => FromDhall (Result f) where
         extract expr = typeError expected expr
 
         expected = pure "result"
+
+deriving newtype instance (ToDhall x) => FromDhall (Predicate x)
+
+deriving newtype instance (ToDhall x) => FromDhall (Equivalence x)
+
+deriving newtype instance (FromDhall b, ToDhall x) => FromDhall (Op b x)
 
 -- | You can use this instance to marshal recursive types from Dhall to Haskell.
 --
@@ -883,6 +910,45 @@ strictText = Decoder {..}
     extract  expr                   = typeError expected expr
 
     expected = pure Text
+
+{-| Decode `Time.TimeOfDay`
+
+>>> input timeOfDay "00:00:00"
+00:00:00
+-}
+timeOfDay :: Decoder Time.TimeOfDay
+timeOfDay = Decoder {..}
+  where
+    extract (TimeLiteral t _) = pure t
+    extract  expr             = typeError expected expr
+
+    expected = pure Time
+
+{-| Decode `Time.Day`
+
+>>> input day "2000-01-01"
+2000-01-01
+-}
+day :: Decoder Time.Day
+day = Decoder {..}
+  where
+    extract (DateLiteral d) = pure d
+    extract  expr           = typeError expected expr
+
+    expected = pure Date
+
+{-| Decode `Time.TimeZone`
+
+>>> input timeZone "+00:00"
++0000
+-}
+timeZone :: Decoder Time.TimeZone
+timeZone = Decoder {..}
+  where
+    extract (TimeZoneLiteral z) = pure z
+    extract  expr               = typeError expected expr
+
+    expected = pure TimeZone
 
 {-| Decode a `Maybe`.
 

@@ -14,7 +14,7 @@ import Data.Aeson
     , (.:)
     , (.:?)
     )
-import Data.Default                     (Default(def))
+import Data.Default                     (Default (def))
 import Data.Dynamic                     (Dynamic)
 import Data.Map.Strict                  (Map, empty)
 import Data.Text                        (Text)

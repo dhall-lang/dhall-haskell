@@ -24,8 +24,8 @@ bar = true
 ```
 
 ## Roadmap
-* [ ] - minimal `dhall-to-toml`
+* [x] - minimal `dhall-to-toml`
 * [ ] - schema inference for `toml-to-dhall`
-* [ ] - minimal `toml-to-dhall`
+* [x] - minimal `toml-to-dhall`
 * [ ] - documentation in docs.dhall-lang.org
 

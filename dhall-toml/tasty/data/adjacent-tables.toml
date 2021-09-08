@@ -1,0 +1,9 @@
+[a]
+    a1 = 1
+    a2 = true
+    a3 = "hello"
+
+[b]
+    b1 = 2
+    b2 = false
+    b3 = "world"

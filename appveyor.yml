@@ -9,7 +9,7 @@ branches:
 
 environment:
   STACK_ROOT: C:\sr
-  STACK_VERSION: 1.9.3
+  STACK_VERSION: 2.7.1
   # Override the temp directory to avoid sed escaping issues
   # See https://github.com/haskell/cabal/issues/5386
   TMP: c:\tmp

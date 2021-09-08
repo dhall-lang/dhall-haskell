@@ -1,0 +1,9 @@
+a2 = true
+
+[a1]
+    b1 = "hello"
+    b2 = "world"
+
+    [a1.b3]
+        c1 = "!"
+        c2 = 42

@@ -52,7 +52,7 @@ module Dhall.Eval (
 
 import Data.Bifunctor     (first)
 import Data.Foldable      (foldr', toList)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
 import Data.Text          (Text)
 import Data.Void          (Void)
@@ -77,6 +77,7 @@ import qualified Data.Char
 import qualified Data.Sequence as Sequence
 import qualified Data.Set
 import qualified Data.Text     as Text
+import qualified Data.Time     as Time
 import qualified Dhall.Map     as Map
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
@@ -199,6 +200,13 @@ data Val a
     | VTextAppend !(Val a) !(Val a)
     | VTextShow !(Val a)
     | VTextReplace !(Val a) !(Val a) !(Val a)
+
+    | VDate
+    | VDateLiteral Time.Day
+    | VTime
+    | VTimeLiteral Time.TimeOfDay Word
+    | VTimeZone
+    | VTimeZoneLiteral Time.TimeZone
 
     | VList !(Val a)
     | VListLit !(Maybe (Val a)) !(Seq (Val a))
@@ -644,6 +652,18 @@ eval !env t0 =
                                     VTextReplace needle replacement haystack
                         _ ->
                             VTextReplace needle replacement haystack
+        Date ->
+            VDate
+        DateLiteral d ->
+            VDateLiteral d
+        Time ->
+            VTime
+        TimeLiteral t p ->
+            VTimeLiteral t p
+        TimeZone ->
+            VTimeZone
+        TimeZoneLiteral z ->
+            VTimeZoneLiteral z
         List ->
             VPrim VList
         ListLit ma ts ->
@@ -961,6 +981,18 @@ conv !env t0 t0' =
             conv env t t'
         (VTextReplace a b c, VTextReplace a' b' c') ->
             conv env a a' && conv env b b' && conv env c c'
+        (VDate, VDate) ->
+            True
+        (VDateLiteral l, VDateLiteral r) ->
+            l == r
+        (VTime, VTime) ->
+            True
+        (VTimeLiteral tl pl, VTimeLiteral tr pr) ->
+            tl == tr && pl == pr
+        (VTimeZone, VTimeZone) ->
+            True
+        (VTimeZoneLiteral l, VTimeZoneLiteral r) ->
+            l == r
         (VList a, VList a') ->
             conv env a a'
         (VListLit _ xs, VListLit _ xs') ->
@@ -1159,6 +1191,18 @@ quote !env !t0 =
             TextShow `qApp` t
         VTextReplace a b c ->
             TextReplace `qApp` a `qApp` b `qApp` c
+        VDate ->
+            Date
+        VDateLiteral d ->
+            DateLiteral d
+        VTime ->
+            Time
+        VTimeLiteral t p ->
+            TimeLiteral t p
+        VTimeZone ->
+            TimeZone
+        VTimeZoneLiteral z ->
+            TimeZoneLiteral z
         VList t ->
             List `qApp` t
         VListLit ma ts ->
@@ -1344,6 +1388,18 @@ alphaNormalize = goEnv EmptyNames
                 TextShow
             TextReplace ->
                 TextReplace
+            Date ->
+                Date
+            DateLiteral d ->
+                DateLiteral d
+            Time ->
+                Time
+            TimeLiteral t p ->
+                TimeLiteral t p
+            TimeZone ->
+                TimeZone
+            TimeZoneLiteral z ->
+                TimeZoneLiteral z
             List ->
                 List
             ListLit ma ts ->

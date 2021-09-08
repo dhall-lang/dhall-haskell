@@ -2,21 +2,21 @@
 
 module Dhall.Test.Diff where
 
-import Data.Text   (Text)
-import Prelude     hiding (FilePath)
-import Test.Tasty  (TestTree)
-import Turtle      (FilePath)
+import Data.Text  (Text)
+import Prelude    hiding (FilePath)
+import Test.Tasty (TestTree)
+import Turtle     (FilePath)
 
-import qualified Data.Text                             as Text
-import qualified Data.Text.IO                          as Text.IO
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty.Text
-import qualified Dhall.Core                            as Core
-import qualified Dhall.Diff                            as Diff
-import qualified Dhall.Parser                          as Parser
+import qualified Data.Text                 as Text
+import qualified Data.Text.IO              as Text.IO
+import qualified Dhall.Core                as Core
+import qualified Dhall.Diff                as Diff
+import qualified Dhall.Parser              as Parser
 import qualified Dhall.Pretty
-import qualified Dhall.Test.Util                       as Test.Util
-import qualified Test.Tasty                            as Tasty
-import qualified Test.Tasty.HUnit                      as Tasty.HUnit
+import qualified Dhall.Test.Util           as Test.Util
+import qualified Prettyprinter.Render.Text as Pretty.Text
+import qualified Test.Tasty                as Tasty
+import qualified Test.Tasty.HUnit          as Tasty.HUnit
 import qualified Turtle
 
 diffDirectory :: FilePath

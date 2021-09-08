@@ -22,29 +22,33 @@ module Dhall.Util
     , CheckFailed(..)
     , MultipleCheckFailed(..)
     , handleMultipleChecksFailed
+    , renderExpression
     ) where
 
-import Control.Exception         (Exception (..))
-import Control.Monad.IO.Class    (MonadIO (..))
-import Data.Bifunctor            (first)
-import Data.Either               (lefts)
-import Data.Foldable             (toList)
-import Data.List.NonEmpty        (NonEmpty (..))
-import Data.String               (IsString)
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Doc, Pretty)
-import Dhall.Parser              (Header (..), ParseError)
-import Dhall.Pretty              (Ann)
-import Dhall.Src                 (Src)
-import Dhall.Syntax              (Expr, Import)
+import Control.Exception      (Exception (..))
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Bifunctor         (first)
+import Data.Either            (lefts)
+import Data.Foldable          (toList)
+import Data.List.NonEmpty     (NonEmpty (..))
+import Data.String            (IsString)
+import Data.Text              (Text)
+import Dhall.Parser           (Header (..), ParseError)
+import Dhall.Pretty           (Ann, CharacterSet)
+import Dhall.Src              (Src)
+import Dhall.Syntax           (Expr, Import)
+import Prettyprinter          (Doc, Pretty)
 
 import qualified Control.Exception
 import qualified Data.Text
 import qualified Data.Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
+import qualified Prettyprinter                 as Pretty
+import qualified Prettyprinter.Render.Terminal as Pretty.Terminal
+import qualified Prettyprinter.Render.Text     as Pretty.Text
+import qualified System.Console.ANSI           as ANSI
+import qualified System.IO                     as IO
 
 -- | Utility function to cut out the interior of a large text block
 snip :: Text -> Text
@@ -241,3 +245,31 @@ getExpressionAndHeaderFromStdinText
     :: Censor -> String -> Text -> IO (Header, Expr Src Import)
 getExpressionAndHeaderFromStdinText censor inputName =
     get Dhall.Parser.exprAndHeaderFromText censor . StdinText inputName
+
+{-| Convenient utility to output an expression either to a file
+    or to stdout.
+-}
+renderExpression :: Pretty a => CharacterSet -> Bool -> Maybe FilePath -> Expr Src a -> IO ()
+renderExpression characterSet plain output expression = do
+    let document = Dhall.Pretty.prettyCharacterSet characterSet expression
+
+    let stream = Dhall.Pretty.layout document
+
+    case output of
+        Nothing -> do
+            supportsANSI <- ANSI.hSupportsANSI IO.stdout
+
+            let ansiStream =
+                    if supportsANSI && not plain
+                    then fmap Dhall.Pretty.annToAnsiStyle stream
+                    else Pretty.unAnnotateS stream
+
+            Pretty.Terminal.renderIO IO.stdout ansiStream
+
+            Data.Text.IO.putStrLn ""
+
+        Just file_ ->
+            IO.withFile file_ IO.WriteMode $ \h -> do
+                Pretty.Text.renderIO h stream
+
+                Data.Text.IO.hPutStrLn h ""

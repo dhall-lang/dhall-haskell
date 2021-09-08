@@ -7,9 +7,9 @@ import Dhall.Parser (Header (..))
 import Dhall.Pretty (CharacterSet (..))
 import Dhall.Src    (Src)
 
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Pretty
+import qualified Prettyprinter             as Pretty
+import qualified Prettyprinter.Render.Text as Pretty
 
 -- | Pretty-print the given Dhall expression.
 formatExpr :: Pretty.Pretty b => Maybe CharacterSet -> Expr Src b -> Text

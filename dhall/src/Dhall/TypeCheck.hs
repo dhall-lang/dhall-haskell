@@ -38,7 +38,6 @@ import Data.Semigroup                    (Max (..))
 import Data.Sequence                     (Seq, ViewL (..))
 import Data.Set                          (Set)
 import Data.Text                         (Text)
-import Data.Text.Prettyprint.Doc         (Doc, Pretty (..))
 import Data.Typeable                     (Typeable)
 import Data.Void                         (Void, absurd)
 import Dhall.Context                     (Context)
@@ -51,6 +50,7 @@ import Dhall.Eval
 import Dhall.Pretty                      (Ann)
 import Dhall.Src                         (Src)
 import Lens.Family                       (over)
+import Prettyprinter                     (Doc, Pretty (..), vsep)
 
 import Dhall.Syntax
     ( Binding (..)
@@ -63,25 +63,25 @@ import Dhall.Syntax
     , Var (..)
     )
 
-import qualified Data.Foldable                           as Foldable
-import qualified Data.List.NonEmpty                      as NonEmpty
+import qualified Data.Foldable               as Foldable
+import qualified Data.List.NonEmpty          as NonEmpty
 import qualified Data.Map
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text                               as Text
-import qualified Data.Text.Prettyprint.Doc               as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.String as Pretty
+import qualified Data.Text                   as Text
 import qualified Data.Traversable
 import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Diff
-import qualified Dhall.Eval                              as Eval
+import qualified Dhall.Eval                  as Eval
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
-import qualified Dhall.Syntax                            as Syntax
+import qualified Dhall.Syntax                as Syntax
 import qualified Dhall.Util
 import qualified Lens.Family
+import qualified Prettyprinter               as Pretty
+import qualified Prettyprinter.Render.String as Pretty
 
 {-| A type synonym for `Void`
 
@@ -578,6 +578,24 @@ infer typer = loop
         TextShow ->
             return (VText ~> VText)
 
+        Date ->
+            return (VConst Type)
+
+        DateLiteral _ ->
+            return VDate
+
+        Time ->
+            return (VConst Type)
+
+        TimeLiteral _ _ ->
+            return VTime
+
+        TimeZone ->
+            return (VConst Type)
+
+        TimeZoneLiteral _ ->
+            return VTimeZone
+
         List ->
             return (VConst Type ~> VConst Type)
 
@@ -774,7 +792,7 @@ infer typer = loop
 
             _R' <- loop ctx r
 
-            let r'' = quote names (eval values l)
+            let r'' = quote names (eval values r)
 
             xLs' <- case _L' of
                 VRecord xLs' ->
@@ -1380,15 +1398,20 @@ data TypeMessage s a
     | CantMultiply (Expr s a) (Expr s a)
     deriving (Show)
 
+formatHints :: [Doc Ann] -> Doc Ann
+formatHints hints = vsep (map format hints)
+  where
+    format hint = "\n\n\ESC[1;33mHint\ESC[0m: " <> hint
+
 shortTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
 shortTypeMessage msg =
-    "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
+    "\ESC[1;31mError\ESC[0m: " <> short <> formatHints hints <> "\n"
   where
     ErrorMessages {..} = prettyTypeMessage msg
 
 longTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> Doc Ann
 longTypeMessage msg =
-        "\ESC[1;31mError\ESC[0m: " <> short <> "\n"
+        "\ESC[1;31mError\ESC[0m: " <> short <> formatHints hints <> "\n"
     <>  "\n"
     <>  long
   where
@@ -1400,6 +1423,8 @@ longTypeMessage msg =
 data ErrorMessages = ErrorMessages
     { short :: Doc Ann
     -- ^ Default succinct 1-line explanation of what went wrong
+    , hints :: [Doc Ann]
+    -- ^ Possibly-empty hints based on specific types involved in the error
     , long  :: Doc Ann
     -- ^ Longer and more detailed explanation of the error
     }
@@ -1410,6 +1435,12 @@ _NOT = "\ESC[1mnot\ESC[0m"
 insert :: Pretty a => a -> Doc Ann
 insert = Dhall.Util.insert
 
+emptyRecordTypeHint :: (Eq a, Pretty a) => Expr s a -> [Doc Ann]
+emptyRecordTypeHint expr =
+    if Eval.judgmentallyEqual expr (Record mempty) then
+        ["{} is the empty record type, use {=} for the empty record value"]
+    else []
+
 -- | Convert a `TypeMessage` to short- and long-form `ErrorMessages`
 prettyTypeMessage :: (Eq a, Pretty a) => TypeMessage s a -> ErrorMessages
 prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
@@ -1417,6 +1448,8 @@ prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
   -- https://github.com/dhall-lang/dhall-haskell/pull/116
   where
     short = "Unbound variable: " <> Pretty.pretty x
+    
+    hints = []
 
     long =
         "Explanation: Expressions can only reference previously introduced (i.e. “bound”)\n\
@@ -1530,6 +1563,8 @@ prettyTypeMessage (UnboundVariable x) = ErrorMessages {..}
 prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
   where
     short = "Invalid function input"
+    
+    hints = []
 
     long =
         "Explanation: A function can accept an input “term” that has a given “type”, like\n\
@@ -1599,6 +1634,8 @@ prettyTypeMessage (InvalidInputType expr) = ErrorMessages {..}
 prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
   where
     short = "Invalid function output"
+
+    hints = []
 
     long =
         "Explanation: A function can return an output “term” that has a given “type”,    \n\
@@ -1678,6 +1715,8 @@ prettyTypeMessage (InvalidOutputType expr) = ErrorMessages {..}
 prettyTypeMessage (NotAFunction expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a function"
+
+    hints = []
 
     long =
         "Explanation: Expressions separated by whitespace denote function application,   \n\
@@ -1819,6 +1858,8 @@ prettyTypeMessage (TypeMismatch expr0 expr1 expr2 expr3) = ErrorMessages {..}
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr3)
 
+    hints = emptyRecordTypeHint expr2
+
     long =
         "Explanation: Every function declares what type or kind of argument to accept    \n\
         \                                                                                \n\
@@ -1952,6 +1993,9 @@ prettyTypeMessage (AnnotMismatch expr0 expr1 expr2) = ErrorMessages {..}
     short = "Expression doesn't match annotation\n"
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
+
+    hints = []
+
     long =
         "Explanation: You can annotate an expression with its type or kind using the     \n\
         \❰:❱ symbol, like this:                                                          \n\
@@ -2048,6 +2092,8 @@ prettyTypeMessage Untyped = ErrorMessages {..}
   where
     short = "❰Sort❱ has no type, kind, or sort"
 
+    hints = []
+
     long =
         "Explanation: There are five levels of expressions that form a hierarchy:        \n\
         \                                                                                \n\
@@ -2085,6 +2131,8 @@ prettyTypeMessage (InvalidPredicate expr0 expr1) = ErrorMessages {..}
     short = "Invalid predicate for ❰if❱: "
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized Bool expr1)
+
+    hints = []
 
     long =
         "Explanation: Every ❰if❱ expression begins with a predicate which must have type \n\
@@ -2150,6 +2198,8 @@ prettyTypeMessage (IfBranchMismatch expr0 expr1 expr2 expr3) =
     short = "❰if❱ branches must have matching types\n"
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr3)
+
+    hints = []
 
     long =
         "Explanation: Every ❰if❱ expression has a ❰then❱ and ❰else❱ branch, each of which\n\
@@ -2225,6 +2275,8 @@ prettyTypeMessage (ListLitInvariant) = ErrorMessages {..}
   where
     short = "Internal error: A non-empty list literal violated an internal invariant"
 
+    hints = []
+
     long =
         "Explanation: Internal error: A non-empty list literal violated an internal      \n\
         \invariant.                                                                      \n\
@@ -2239,6 +2291,8 @@ prettyTypeMessage (ListLitInvariant) = ErrorMessages {..}
 prettyTypeMessage (InvalidListType expr0) = ErrorMessages {..}
   where
     short = "Invalid type for ❰List❱"
+
+    hints = []
 
     long =
         "Explanation: ❰List❱s can optionally document their type with a type annotation, \n\
@@ -2302,6 +2356,8 @@ prettyTypeMessage MissingListType =
   where
     short = "An empty list requires a type annotation"
 
+    hints = []
+
     long =
         "Explanation: Lists do not require a type annotation if they have at least one   \n\
         \element:                                                                        \n\
@@ -2328,6 +2384,8 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
     short = "List elements should all have the same type\n"
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr2)
+
+    hints = []
 
     long =
         "Explanation: Every element in a list must have the same type                    \n\
@@ -2367,6 +2425,8 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr2)
 
+    hints = []
+
     long =
         "Explanation: Every element in the list must have a type matching the type       \n\
         \annotation at the end of the list                                               \n\
@@ -2402,6 +2462,8 @@ prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
 prettyTypeMessage (InvalidSome expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "❰Some❱ argument has the wrong type"
+
+    hints = []
 
     long =
         "Explanation: The ❰Some❱ constructor expects an argument that is a term, where   \n\
@@ -2445,6 +2507,8 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
   where
     short = "Invalid field type"
 
+    hints = []
+
     long =
         "Explanation: Every record type annotates each field with a ❰Type❱, a ❰Kind❱, or \n\
         \a ❰Sort❱ like this:                                                             \n\
@@ -2487,6 +2551,8 @@ prettyTypeMessage (InvalidFieldType k expr0) = ErrorMessages {..}
 prettyTypeMessage (InvalidAlternativeType k expr0) = ErrorMessages {..}
   where
     short = "Invalid alternative type"
+
+    hints = []
 
     long =
         "Explanation: Every union type specifies the type of each alternative, like this:\n\
@@ -2545,6 +2611,8 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
 
+    hints = []
+
     long =
         "Explanation: You can append two ❰List❱s using the ❰#❱ operator, like this:      \n\
         \                                                                                \n\
@@ -2583,10 +2651,12 @@ prettyTypeMessage (ListAppendMismatch expr0 expr1) = ErrorMessages {..}
         txt1 = insert expr1
 
 prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {..}
- where
-   short = "The completion schema must be a record"
+  where
+    short = "The completion schema must be a record"
 
-   long =
+    hints = []
+
+    long =
         "Explanation: You can complete records using the ❰::❱ operator:                  \n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────────┐ \n\
@@ -2607,10 +2677,12 @@ prettyTypeMessage (CompletionSchemaMustBeARecord expr0 expr1) = ErrorMessages {.
         txt1 = insert expr1
 
 prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..}
- where
-   short = "Completion schema is missing a field: " <> pretty fieldName
+  where
+    short = "Completion schema is missing a field: " <> pretty fieldName
 
-   long =
+    hints = []
+
+    long =
         "Explanation: You can complete records using the ❰::❱ operator like this:\n\
         \                                                                                \n\
         \    ┌─────────────────────────────────────────────────────────────────────────┐ \n\
@@ -2635,6 +2707,8 @@ prettyTypeMessage (MustUpdateARecord withExpression expression typeExpression) =
     ErrorMessages {..}
   where
     short = "You can only update records"
+
+    hints = []
 
     long =
         "Explanation: You can update records using the ❰with❱ keyword, like this:        \n\
@@ -2688,6 +2762,8 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
         _   -> "override"
 
     short = "You can only " <> action <> " records"
+
+    hints = emptyRecordTypeHint expression
 
     long =
         "Explanation: You can " <> action <> " records using the ❰" <> op <> "❱ operator, like this:\n\
@@ -2745,6 +2821,8 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
     ErrorMessages {..}
   where
     short = "Invalid duplicate field: " <> Dhall.Pretty.Internal.prettyLabel k
+
+    hints = []
 
     long =
         "Explanation: You can specify a field twice if both fields are themselves        \n\
@@ -2812,6 +2890,8 @@ prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
   where
     short = "❰⩓❱ requires arguments that are record types"
 
+    hints = []
+
     long =
         "Explanation: You can only use the ❰⩓❱ operator on arguments that are record type\n\
         \literals, like this:                                                            \n\
@@ -2850,6 +2930,8 @@ prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
     ErrorMessages {..}
   where
     short = "Record type mismatch"
+
+    hints = []
 
     long =
         "Explanation: You can only use the ❰⩓❱ operator on record types if they are both \n\
@@ -2900,6 +2982,8 @@ prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
 prettyTypeMessage (DuplicateFieldCannotBeMerged ks) = ErrorMessages {..}
   where
     short = "Duplicate field cannot be merged: " <> pretty (toPath ks)
+
+    hints = []
 
     long =
         "Explanation: Duplicate fields are only allowed if they are both records and if  \n\
@@ -2962,6 +3046,8 @@ prettyTypeMessage (DuplicateFieldCannotBeMerged ks) = ErrorMessages {..}
 prettyTypeMessage (FieldCollision ks) = ErrorMessages {..}
   where
     short = "Field collision on: " <> pretty (toPath ks)
+
+    hints = []
 
     long =
         "Explanation: You can recursively merge records using the ❰∧❱ operator:          \n\
@@ -3027,6 +3113,8 @@ prettyTypeMessage (FieldTypeCollision ks) = ErrorMessages {..}
   where
     short = "Field type collision on: " <> pretty (toPath ks)
 
+    hints = []
+
     long =
         "Explanation: You can recursively merge record types using the ❰⩓❱ operator, like\n\
         \this:                                                                           \n\
@@ -3067,6 +3155,8 @@ prettyTypeMessage (FieldTypeCollision ks) = ErrorMessages {..}
 prettyTypeMessage (MustMergeARecord expr0 expr1) = ErrorMessages {..}
   where
     short = "❰merge❱ expects a record of handlers"
+
+    hints = []
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
@@ -3123,6 +3213,8 @@ prettyTypeMessage (MustMergeUnionOrOptional expr0 expr1) = ErrorMessages {..}
   where
     short = "❰merge❱ expects a union or an ❰Optional❱"
 
+    hints = []
+
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
         \a record with one handler per alternative, like this:                           \n\
@@ -3173,6 +3265,8 @@ prettyTypeMessage (UnusedHandler ks) = ErrorMessages {..}
   where
     short = "Unused handler"
 
+    hints = []
+
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
         \a record with one handler per alternative, like this:                           \n\
@@ -3216,6 +3310,8 @@ prettyTypeMessage (MissingHandler exemplar ks) = ErrorMessages {..}
          xs@(_:_) -> "Missing handlers: " <> (Pretty.hsep . Pretty.punctuate Pretty.comma
                                              . map Dhall.Pretty.Internal.prettyLabel $ exemplar:xs)
 
+    hints = []
+
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
         \a record with one handler per alternative, like this:                           \n\
@@ -3257,6 +3353,8 @@ prettyTypeMessage MissingMergeType =
   where
     short = "An empty ❰merge❱ requires a type annotation"
 
+    hints = []
+
     long =
         "Explanation: A ❰merge❱ does not require a type annotation if the union has at   \n\
         \least one alternative, like this                                                \n\
@@ -3288,6 +3386,8 @@ prettyTypeMessage (HandlerInputTypeMismatch expr0 expr1 expr2) =
     short = "Wrong handler input type\n"
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
+
+    hints = []
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
@@ -3349,6 +3449,8 @@ prettyTypeMessage (DisallowedHandlerType label handlerType handlerOutputType var
   where
     short = "Disallowed handler type"
 
+    hints = []
+
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
         \a record with one handler per alternative, like this:                           \n\
@@ -3396,6 +3498,8 @@ prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
     short = "Wrong handler output type\n"
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
+
+    hints = []
 
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
@@ -3461,6 +3565,8 @@ prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
 
+    hints = []
+
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
         \a record with one handler per alternative, like this:                           \n\
@@ -3515,6 +3621,8 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
   where
     short = "Handler for "<> Dhall.Pretty.Internal.prettyLabel k <> " is not a function"
 
+    hints = []
+
     long =
         "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
         \a record with one handler per alternative, like this:                           \n\
@@ -3552,9 +3660,11 @@ prettyTypeMessage (HandlerNotAFunction k expr0) = ErrorMessages {..}
         txt0 = insert k
         txt1 = insert expr0
 
-prettyTypeMessage (MustMapARecord _expr0 _expr1) = ErrorMessages {..}
+prettyTypeMessage (MustMapARecord provided _providedType) = ErrorMessages {..}
   where
     short = "❰toMap❱ expects a record value"
+
+    hints = emptyRecordTypeHint provided
 
     long =
         "Explanation: You can apply ❰toMap❱ to any homogenous record, like this:         \n\
@@ -3584,6 +3694,8 @@ prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
   where
     short = "❰toMap❱ expects a record of kind ❰Type❱"
 
+    hints = []
+
     long =
         "Explanation: You can apply ❰toMap❱ to any homogenous record of kind ❰Type❱, like\n\
         \ this:                                                                          \n\
@@ -3609,6 +3721,8 @@ prettyTypeMessage (InvalidToMapRecordKind type_ kind) = ErrorMessages {..}
 prettyTypeMessage (HeterogenousRecordToMap _expr0 _expr1 _expr2) = ErrorMessages {..}
   where
     short = "❰toMap❱ expects a homogenous record"
+
+    hints = []
 
     long =
         "Explanation: You can apply ❰toMap❱ to any homogenous record, like this:         \n\
@@ -3637,6 +3751,8 @@ prettyTypeMessage (MapTypeMismatch expr0 expr1) = ErrorMessages {..}
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
 
+    hints = []
+
     long =
         "Explanation: a ❰toMap❱ application has been annotated with a type that doesn't  \n\
         \match its inferred type.                                                        \n"
@@ -3647,6 +3763,8 @@ prettyTypeMessage (InvalidToMapType expr) =
     short = "An empty ❰toMap❱ was annotated with an invalid type"
         <>  "\n"
         <>  insert expr
+
+    hints = []
 
     long =
         "Explanation: A ❰toMap❱ applied to an empty record must have a type annotation:  \n\
@@ -3664,6 +3782,8 @@ prettyTypeMessage MissingToMapType =
     ErrorMessages {..}
   where
     short = "An empty ❰toMap❱ requires a type annotation"
+
+    hints = []
 
     long =
         "Explanation: A ❰toMap❱ does not require a type annotation if the record has at  \n\
@@ -3687,6 +3807,8 @@ prettyTypeMessage MissingToMapType =
 prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a record or a union"
+
+    hints = []
 
     long =
         "Explanation: You can only access fields on records or unions, like this:        \n\
@@ -3745,6 +3867,8 @@ prettyTypeMessage (CantAccess lazyText0 expr0 expr1) = ErrorMessages {..}
 prettyTypeMessage (CantProject lazyText0 expr0 expr1) = ErrorMessages {..}
   where
     short = "Not a record"
+
+    hints = []
 
     long =
         "Explanation: You can only project fields on records, like this:                 \n\
@@ -3807,6 +3931,8 @@ prettyTypeMessage (CantProjectByExpression expr) = ErrorMessages {..}
   where
     short = "Selector is not a record type"
 
+    hints = []
+
     long =
         "Explanation: You can project by an expression if that expression is a record    \n\
         \type:                                                                           \n\
@@ -3866,6 +3992,8 @@ prettyTypeMessage (DuplicateProjectionLabel k) = ErrorMessages {..}
   where
     short = "Duplicate projection label: " <> Dhall.Pretty.Internal.prettyLabel k
 
+    hints = []
+
     long =
         "Explanation: You can only specify a label once when projecting a record's fields\n\
         \by label.  For example, this is valid:                                          \n\
@@ -3895,6 +4023,8 @@ prettyTypeMessage (DuplicateProjectionLabel k) = ErrorMessages {..}
 prettyTypeMessage (MissingField k expr0) = ErrorMessages {..}
   where
     short = "Missing record field: " <> Dhall.Pretty.Internal.prettyLabel k
+
+    hints = []
 
     long =
         "Explanation: You can only access fields on records, like this:                  \n\
@@ -3938,6 +4068,8 @@ prettyTypeMessage (MissingConstructor k expr0) = ErrorMessages {..}
   where
     short = "Missing constructor: " <> Dhall.Pretty.Internal.prettyLabel k
 
+    hints = []
+
     long =
         "Explanation: You can access constructors from unions, like this:                \n\
         \                                                                                \n\
@@ -3977,6 +4109,8 @@ prettyTypeMessage (ProjectionTypeMismatch k expr0 expr1 expr2 expr3) = ErrorMess
     short = "Projection type mismatch\n"
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr2 expr3)
+
+    hints = []
 
     long =
         "Explanation: You can project a subset of fields from a record by specifying the \n\
@@ -4024,6 +4158,8 @@ prettyTypeMessage (AssertionFailed expr0 expr1) = ErrorMessages {..}
     short = "Assertion failed\n"
         <>  "\n"
         <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr1)
+
+    hints = []
 
     long =
         "Explanation: You can assert at type-checking time that two terms are equal if   \n\
@@ -4088,6 +4224,8 @@ prettyTypeMessage (NotAnEquivalence expr) = ErrorMessages {..}
   where
     short = "Not an equivalence\n"
 
+    hints = []
+
     long =
         "Explanation: The type annotation for an ❰assert❱ must evaluate to an equivalence\n\
         \of the form ❰x ≡ y❱, like this:                                                 \n\
@@ -4141,6 +4279,8 @@ prettyTypeMessage (IncomparableExpression expr) = ErrorMessages {..}
   where
     short = "Incomparable expression\n"
 
+    hints = []
+
     long =
         "Explanation: You can use an ❰assert❱ to compare two terms for equivalence, like \n\
         \this:                                                                           \n\
@@ -4171,6 +4311,8 @@ prettyTypeMessage (IncomparableExpression expr) = ErrorMessages {..}
 prettyTypeMessage (EquivalenceTypeMismatch l _L r _R) = ErrorMessages {..}
   where
     short = "The two sides of the equivalence have different types"
+
+    hints = []
 
     long =
         "Explanation: You can use ❰≡❱ to compare two terms of the same type for          \n\
@@ -4210,6 +4352,8 @@ prettyTypeMessage (EquivalenceTypeMismatch l _L r _R) = ErrorMessages {..}
 prettyTypeMessage (NotWithARecord expr0 expr1) = ErrorMessages {..}
   where
     short = "❰with❱ only works on records"
+
+    hints = []
 
     long =
         "Explanation: You can use ❰with❱ to update a record, like this:                  \n\
@@ -4261,6 +4405,8 @@ prettyTypeMessage (CantNE expr0 expr1) =
 prettyTypeMessage (CantInterpolate expr0 expr1) = ErrorMessages {..}
   where
     short = "You can only interpolate ❰Text❱"
+
+    hints = []
 
     long =
         "Explanation: Text interpolation only works on expressions of type ❰Text❱        \n\
@@ -4324,6 +4470,8 @@ prettyTypeMessage (CantTextAppend expr0 expr1) = ErrorMessages {..}
   where
     short = "❰++❱ only works on ❰Text❱"
 
+    hints = []
+
     long =
         "Explanation: The ❰++❱ operator expects two arguments that have type ❰Text❱      \n\
         \                                                                                \n\
@@ -4370,6 +4518,8 @@ prettyTypeMessage (CantListAppend expr0 expr1) = ErrorMessages {..}
   where
     short = "❰#❱ only works on ❰List❱s"
 
+    hints = []
+
     long =
         "Explanation: The ❰#❱ operator expects two arguments that are both ❰List❱s       \n\
         \                                                                                \n\
@@ -4405,6 +4555,8 @@ buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Bool❱s"
 
+    hints = []
+
     long =
         "Explanation: The ❰" <> txt2 <> "❱ operator expects two arguments that have type ❰Bool❱\n\
         \                                                                                \n\
@@ -4433,6 +4585,8 @@ buildNaturalOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessage
 buildNaturalOperator operator expr0 expr1 = ErrorMessages {..}
   where
     short = "❰" <> txt2 <> "❱ only works on ❰Natural❱s"
+
+    hints = []
 
     long =
         "Explanation: The ❰" <> txt2 <> "❱ operator expects two arguments that have type ❰Natural❱\n\

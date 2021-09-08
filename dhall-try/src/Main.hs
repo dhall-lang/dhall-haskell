@@ -10,8 +10,6 @@ import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
 import qualified Data.Text.Lazy.Encoding
-import qualified Data.Text.Prettyprint.Doc             as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
 import qualified Dhall.Core
 import qualified Dhall.Import
 import qualified Dhall.JSON
@@ -20,6 +18,8 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified GHCJS.Foreign.Callback
+import qualified Prettyprinter             as Pretty
+import qualified Prettyprinter.Render.Text as Pretty
 
 import Control.Exception      (Exception, SomeException)
 import Data.JSString          (JSString)
