@@ -194,7 +194,7 @@ derivingGenericClause = DerivClause (Just StockStrategy) [ ConT ''Generic ]
 -- | Generates a `FromDhall` instances.
 fromDhallInstance
     :: Syntax.Name -- ^ The name of the type the instances is for
-    -> Q Exp       -- ^ A TH splice generating some `InterpretOptions`
+    -> Q Exp       -- ^ A TH splice generating some `Dhall.InterpretOptions`
     -> Q [Dec]
 fromDhallInstance n interpretOptions = [d|
     instance FromDhall $(pure $ ConT n) where
@@ -204,7 +204,7 @@ fromDhallInstance n interpretOptions = [d|
 -- | Generates a `ToDhall` instances.
 toDhallInstance
     :: Syntax.Name -- ^ The name of the type the instances is for
-    -> Q Exp       -- ^ A TH splice generating some `InterpretOptions`
+    -> Q Exp       -- ^ A TH splice generating some `Dhall.InterpretOptions`
     -> Q [Dec]
 toDhallInstance n interpretOptions = [d|
     instance ToDhall $(pure $ ConT n) where
@@ -416,8 +416,8 @@ defaultGenerateOptions = GenerateOptions
 
 -- | This function generates `Dhall.InterpretOptions` that can be used for the
 --   marshalling of the Haskell type generated according to the `GenerateOptions`.
---   I.e. those `InterpretOptions` reflect the mapping done by `constructorModifier`
---   and `fieldModifier` on the value level.
+--   I.e. those `Dhall.InterpretOptions` reflect the mapping done by
+--   `constructorModifier` and `fieldModifier` on the value level.
 generateToInterpretOptions :: GenerateOptions -> HaskellType (Expr s a) -> Q Exp
 generateToInterpretOptions GenerateOptions{..} haskellType = [| Dhall.InterpretOptions
     { Dhall.fieldModifier = \ $(pure nameP) ->
