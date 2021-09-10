@@ -313,7 +313,7 @@ toConstructor GenerateOptions{..} haskellTypes outerTypeName (constructorName, m
             let process (key, dhallFieldType) = do
                     haskellFieldType <- toNestedHaskellType haskellTypes dhallFieldType
 
-                    return (Syntax.mkName (Text.unpack key), bang, haskellFieldType)
+                    return (Syntax.mkName (Text.unpack $ fieldModifier key), bang, haskellFieldType)
 
             varBangTypes <- traverse process (Dhall.Map.toList $ Core.recordFieldValue <$> kts)
 
@@ -399,7 +399,7 @@ defaultGenerateOptions = GenerateOptions
     { constructorModifier = id
     , fieldModifier = id
     , generateFromDhallInstance = True
-    , generateToDhallInstance = False
+    , generateToDhallInstance = True
     }
 
 generateToInterpretOptions :: GenerateOptions -> HaskellType (Expr s a) -> Q Exp
