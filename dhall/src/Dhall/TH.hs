@@ -187,16 +187,25 @@ toNestedHaskellType haskellTypes = loop
             predicate haskellType =
                 Core.judgmentallyEqual (code haskellType) dhallType
 
+-- | A deriving clause for `Generic`.
 derivingGenericClause :: DerivClause
 derivingGenericClause = DerivClause (Just StockStrategy) [ ConT ''Generic ]
 
-fromDhallInstance :: Syntax.Name -> Q Exp -> Q [Dec]
+-- | Generates a `FromDhall` instances.
+fromDhallInstance
+    :: Syntax.Name -- ^ The name of the type the instances is for
+    -> Q Exp       -- ^ A TH splice generating some `InterpretOptions`
+    -> Q [Dec]
 fromDhallInstance n interpretOptions = [d|
     instance FromDhall $(pure $ ConT n) where
         autoWith = Dhall.genericAutoWithInputNormalizer $(interpretOptions)
     |]
 
-toDhallInstance :: Syntax.Name -> Q Exp -> Q [Dec]
+-- | Generates a `ToDhall` instances.
+toDhallInstance
+    :: Syntax.Name -- ^ The name of the type the instances is for
+    -> Q Exp       -- ^ A TH splice generating some `InterpretOptions`
+    -> Q [Dec]
 toDhallInstance n interpretOptions = [d|
     instance ToDhall $(pure $ ConT n) where
         injectWith = Dhall.genericToDhallWithInputNormalizer $(interpretOptions)
@@ -352,17 +361,17 @@ makeHaskellTypeFromUnion typeName code =
     makeHaskellTypes [ MultipleConstructors{..} ]
 
 -- | Used by `makeHaskellTypes` and `makeHaskellTypesWith` to specify how to
--- generate Haskell types
+-- generate Haskell types.
 data HaskellType code
     -- | Generate a Haskell type with more than one constructor from a Dhall
-    -- union type
+    -- union type.
     = MultipleConstructors
         { typeName :: Text
         -- ^ Name of the generated Haskell type
         , code :: code
         -- ^ Dhall code that evaluates to a union type
         }
-    -- | Generate a Haskell type with one constructor from any Dhall type
+    -- | Generate a Haskell type with one constructor from any Dhall type.
     --
     -- To generate a constructor with multiple named fields, supply a Dhall
     -- record type.  This does not support more than one anonymous field.
@@ -393,7 +402,10 @@ data GenerateOptions = GenerateOptions
     -- ^ Generate a `ToDhall` instance for the Haskell type
     }
 
--- | A default set of options used by `makeHaskellTypes`.
+-- | A default set of options used by `makeHaskellTypes`. That means:
+--
+--     * Constructors and fields are passed unmodified.
+--     * Both `FromDhall` and `ToDhall` instances are generated.
 defaultGenerateOptions :: GenerateOptions
 defaultGenerateOptions = GenerateOptions
     { constructorModifier = id
@@ -402,6 +414,10 @@ defaultGenerateOptions = GenerateOptions
     , generateToDhallInstance = True
     }
 
+-- | This function generates `Dhall.InterpretOptions` that can be used for the
+--   marshalling of the Haskell type generated according to the `GenerateOptions`.
+--   I.e. those `InterpretOptions` reflect the mapping done by `constructorModifier`
+--   and `fieldModifier` on the value level.
 generateToInterpretOptions :: GenerateOptions -> HaskellType (Expr s a) -> Q Exp
 generateToInterpretOptions GenerateOptions{..} haskellType = [| Dhall.InterpretOptions
     { Dhall.fieldModifier = \ $(pure nameP) ->
