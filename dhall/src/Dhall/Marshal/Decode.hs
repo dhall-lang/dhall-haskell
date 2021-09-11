@@ -60,6 +60,9 @@ module Dhall.Marshal.Decode
     , timeOfDay
     , day
     , timeZone
+    , localTime
+    , zonedTime
+    , utcTime
       -- ** Containers
     , maybe
     , pair
@@ -325,6 +328,15 @@ instance FromDhall Time.Day where
 
 instance FromDhall Time.TimeZone where
     autoWith _ = timeZone
+
+instance FromDhall Time.LocalTime where
+    autoWith _ = localTime
+
+instance FromDhall Time.ZonedTime where
+    autoWith _ = zonedTime
+
+instance FromDhall Time.UTCTime where
+    autoWith _ = utcTime
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
@@ -949,6 +961,39 @@ timeZone = Decoder {..}
     extract  expr               = typeError expected expr
 
     expected = pure TimeZone
+
+{-| Decode `Time.LocalTime`
+
+>>> input localTime "2020-01-01T12:34:56"
+2020-01-01 12:34:56
+-}
+localTime :: Decoder Time.LocalTime
+localTime = record $
+  Time.LocalTime
+    <$> field "date" day
+    <*> field "time" timeOfDay
+
+{-| Decode `Time.ZonedTime`
+
+>>> input zonedTime "2020-01-01T12:34:56+02:00"
+2020-01-01 12:34:56 +0200
+-}
+zonedTime :: Decoder Time.ZonedTime
+zonedTime = record $
+  adapt
+    <$> field "date" day
+    <*> field "time" timeOfDay
+    <*> field "timeZone" timeZone
+  where
+    adapt date time = Time.ZonedTime (Time.LocalTime date time)
+
+{-| Decode `Time.UTCTime`
+
+>>> input utcTime "2020-01-01T12:34:56+02:00"
+2020-01-01 10:34:56 UTC
+-}
+utcTime :: Decoder Time.UTCTime
+utcTime = Time.zonedTimeToUTC <$> zonedTime
 
 {-| Decode a `Maybe`.
 
