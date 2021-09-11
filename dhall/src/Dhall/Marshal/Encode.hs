@@ -333,6 +333,26 @@ instance ToDhall Time.TimeZone where
 
         declared = TimeZone
 
+instance ToDhall Time.LocalTime where
+    injectWith _ = recordEncoder $
+      adapt
+        >$< encodeField "date"
+        >*< encodeField "time"
+      where
+        adapt (Time.LocalTime date time) = (date, time)
+
+instance ToDhall Time.ZonedTime where
+    injectWith _ = recordEncoder $
+      adapt
+        >$< encodeField "date"
+        >*< encodeField "time"
+        >*< encodeField "timeZone"
+      where
+        adapt (Time.ZonedTime (Time.LocalTime date time) timeZone) = (date, (time, timeZone))
+
+instance ToDhall Time.UTCTime where
+    injectWith = contramap (Time.utcToZonedTime Time.utc) . injectWith
+
 {-| Note that the output list will be sorted.
 
 >>> let x = Data.Set.fromList ["mom", "hi" :: Text]
