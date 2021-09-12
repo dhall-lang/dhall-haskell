@@ -442,7 +442,7 @@ generateToInterpretOptions GenerateOptions{..} haskellType = [| Dhall.InterpretO
 
         toCases :: (Text -> Text) -> [Text] -> Q Exp
         toCases f xs = do
-            err <- [| error $ "SHOULD NEVER HAPPEN: Unmatched " <> show $(pure nameE) |]
+            err <- [| Core.internalError $ "Unmatched " <> show $(pure nameE) |]
             pure $ CaseE nameE $ map mkMatch xs <> [Match WildP (NormalB err) []]
             where
                 mkMatch n = Match (textToPat $ f n) (NormalB $ textToExp n) []
