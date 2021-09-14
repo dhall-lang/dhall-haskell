@@ -9,7 +9,11 @@ let
 
   shared_8_6_1 = callShared { compiler = "ghc861"; };
 
-  shared_ghcjs = callShared { compiler = "ghcjs"; };
+
+  # We can re-enable this once https://github.com/NixOS/nixpkgs/issues/133271
+  # is fixed and Nixpkgs is upgraded to a version that incorporates GHCJS
+
+  # shared_ghcjs = callShared { compiler = "ghcjs"; };
 
   shared = callShared { };
 
@@ -22,7 +26,7 @@ in
       { name = "dhall";
 
         constituents = [
-          shared_ghcjs.dhall-try
+          # shared_ghcjs.dhall-try
 
           shared.tarball-dhall
           shared.tarball-dhall-bash
