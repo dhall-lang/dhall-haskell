@@ -1,10 +1,11 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedLists    #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE QuasiQuotes        #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TypeFamilies       #-}
-{-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE OverloadedLists     #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE QuasiQuotes         #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 {-| This library only exports a single `dhallToNix` function for translating a
     Dhall syntax tree to a Nix syntax tree for the @hnix@ library
@@ -105,6 +106,10 @@ import Dhall.Core
     , DhallDouble (..)
     , Expr (..)
     , FunctionBinding (..)
+    , Import(..)
+    , ImportHashed(..)
+    , ImportMode(..)
+    , ImportType(..)
     , MultiLet (..)
     , PreferAnnotation (..)
     , Var (..)
@@ -124,6 +129,12 @@ import Nix.Expr
     , (==>)
     , (@.)
     , (@@)
+    )
+import Nix.Expr.Shorthands
+    ( attrsE
+    , letE
+    , mkSym
+    , mkStr
     )
 
 import qualified Data.Text
@@ -222,10 +233,11 @@ Right x: y: x + y
     Precondition: You must first type-check the Dhall expression before passing
     the expression to `dhallToNix`
 -}
-dhallToNix :: Expr s Void -> Either CompileError (Fix NExprF)
+dhallToNix :: forall s. Expr s Dhall.Core.Import -> Either CompileError (Fix NExprF)
 dhallToNix e =
     loop (rewriteShadowed (Dhall.Core.normalize e))
   where
+    untranslatable :: Fix NExprF
     untranslatable = Fix (NSet NNonRecursive [])
 
     -- This is an intermediate utility used to remove all occurrences of
@@ -239,7 +251,7 @@ dhallToNix e =
     -- If `Nothing` then the current bound variable doesn't need to be renamed.
     -- If any other number, then rename the variable to include the maximum
     -- depth.
-    maximumDepth :: Var -> Expr s Void -> Maybe Int
+    maximumDepth :: forall a. Var -> Expr s a -> Maybe Int
     maximumDepth v@(V x n) (Lam _ FunctionBinding {functionBindingVariable = x', functionBindingAnnotation = a} b)
         | x == x' =
             max (maximumDepth v a) (fmap (+ 1) (maximumDepth (V x (n + 1)) b))
@@ -259,7 +271,7 @@ dhallToNix e =
 
     -- Higher-level utility that builds on top of `maximumDepth` to rename a
     -- variable if there are shadowed references to that variable
-    rename :: (Text, Expr s Void) -> Maybe (Text, Expr s Void)
+    rename :: forall a. (Text, Expr s a) -> Maybe (Text, Expr s a)
     rename (x, expression) =
         case maximumDepth (V x 0) expression of
             Nothing ->
@@ -274,7 +286,7 @@ dhallToNix e =
               where
                 x' = x <> Data.Text.pack (show n)
 
-    renameShadowed :: Expr s Void -> Maybe (Expr s Void)
+    renameShadowed :: forall a. Expr s a -> Maybe (Expr s a)
     renameShadowed (Lam cs FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a} b) = do
         (x', b') <- rename (x, b)
 
@@ -294,6 +306,7 @@ dhallToNix e =
     rewriteShadowed =
         Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
 
+    loop :: Expr s Dhall.Core.Import -> Either CompileError (Fix NExprF)
     loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Fix (NSym a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
@@ -660,4 +673,62 @@ dhallToNix e =
         loop (Dhall.Core.desugarWith a)
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
-    loop (Embed x) = absurd x
+    loop (Embed (Import (ImportHashed maybeHash importType) mode)) =
+      case importType of
+        Local{} -> return untranslatable
+        Env{} -> return untranslatable
+        Missing -> return untranslatable
+        Remote url ->
+          case mode of
+            Location -> return untranslatable
+            RawText -> return untranslatable
+            Code ->
+              case maybeHash of
+                Nothing -> return untranslatable
+                Just hash ->
+                  --     dhallToNixUrlFOD (
+                  --       let
+                  --         packageSet = fetchurl {
+                  --           url = "https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20210905/packages.dhall";
+                  --           hash = "sha256-FA82MIAfKwLV86QF1IcuCvMX5O8YcBamsA+X1Z1idcY=";
+                  --           downloadToTemp = true;
+                  --           postFetch = ''
+                  --             ${dhall}/bin/dhall encode --file "$downloadedFile" > $out
+                  --           '';
+                  --         };
+                  --       in
+                  --         runCommand "decodedPackageSet" {} ''
+                  --           ${dhall}/bin/dhall decode --file "${packageSet}" > $out
+                  --         '';
+                  --     )
+                  return $
+                    Fix
+                      (NBinary
+                        NApp
+                        (Fix (NSym "dhallToNixUrlFOD"))
+                        (letE
+                          "packageSet"
+                          ("fetchurl" @@
+                            attrsE
+                              [ ("url", "")
+                              , ("hash", "")
+                              , ("downloadToTemp", "")
+                              , ("postFetch", "")
+                              ]
+                          )
+                          ("runCommand" @@ mkStr "decodedPackageSet" @@
+                            attrsE [] @@
+                            (Fix
+                              (NStr
+                                (DoubleQuoted
+                                  [ Antiquoted "dhall"
+                                  , Plain "/bin/dhall decode --file \""
+                                  , Antiquoted "packageSet"
+                                  , Plain "\" > $out"
+                                  ]
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )

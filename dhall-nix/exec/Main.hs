@@ -48,14 +48,20 @@ main = handle (Dhall.detailed (do
         Left  err  -> Control.Exception.throwIO err
         Right expr -> return expr
 
-    expr' <- Dhall.Import.load expr
-    case Dhall.TypeCheck.typeOf expr' of
-        Left  err -> Control.Exception.throwIO err
-        Right _   -> return ()
+    -- expr' <- Dhall.Import.load expr
+    -- case Dhall.TypeCheck.typeOf expr' of
+    --     Left  err -> Control.Exception.throwIO err
+    --     Right _   -> return ()
 
-    nix <- case Dhall.Nix.dhallToNix expr' of
+    -- nix <- case Dhall.Nix.dhallToNix expr' of
+    --     Left err  -> Control.Exception.throwIO err
+    --     Right nix -> return nix
+
+    nix <- case Dhall.Nix.dhallToNix expr of
         Left err  -> Control.Exception.throwIO err
         Right nix -> return nix
+
+
     print (Nix.Pretty.prettyNix nix) ))
 
 handle :: IO a -> IO a
