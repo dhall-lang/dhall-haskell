@@ -42,19 +42,19 @@ import Dhall.Util
     )
 import System.Console.ANSI (hSupportsANSI)
 
-import qualified Control.Exception                         as Exception
-import qualified Control.Monad.Trans.State.Strict          as State
-import qualified Data.Text.IO                              as Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
-import qualified Dhall.Core                                as Core
+import qualified Control.Exception                  as Exception
+import qualified Control.Monad.Trans.State.Strict   as State
+import qualified Data.Text.IO                       as Text.IO
+import qualified Dhall.Core                         as Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
-import qualified Dhall.Util                                as Util
-import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite.LazyText
+import qualified Dhall.Util                         as Util
+import qualified Prettyprinter                      as Pretty
+import qualified Prettyprinter.Render.Terminal      as Pretty
+import qualified Prettyprinter.Render.Text          as Pretty.Text
+import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
 import qualified System.FilePath
 import qualified System.IO
 

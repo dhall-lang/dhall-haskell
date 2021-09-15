@@ -52,7 +52,7 @@ module Dhall.Eval (
 
 import Data.Bifunctor     (first)
 import Data.Foldable      (foldr', toList)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
 import Data.Text          (Text)
 import Data.Void          (Void)
@@ -981,6 +981,18 @@ conv !env t0 t0' =
             conv env t t'
         (VTextReplace a b c, VTextReplace a' b' c') ->
             conv env a a' && conv env b b' && conv env c c'
+        (VDate, VDate) ->
+            True
+        (VDateLiteral l, VDateLiteral r) ->
+            l == r
+        (VTime, VTime) ->
+            True
+        (VTimeLiteral tl pl, VTimeLiteral tr pr) ->
+            tl == tr && pl == pr
+        (VTimeZone, VTimeZone) ->
+            True
+        (VTimeZoneLiteral l, VTimeZoneLiteral r) ->
+            l == r
         (VList a, VList a') ->
             conv env a a'
         (VListLit _ xs, VListLit _ xs') ->

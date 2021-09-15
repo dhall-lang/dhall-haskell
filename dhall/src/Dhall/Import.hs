@@ -155,23 +155,24 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative              (Alternative (..))
+import Control.Applicative              (Alternative (..), liftA2)
 import Control.Exception
     ( Exception
     , IOException
     , SomeException
     , toException
     )
-import Control.Monad.Catch              (MonadCatch (catch), handle, throwM)
-import Control.Monad.IO.Class           (MonadIO (..))
-import Control.Monad.Morph              (hoist)
-import Control.Monad.State.Strict       (MonadState, StateT)
-import Data.ByteString                  (ByteString)
-import Data.List.NonEmpty               (NonEmpty (..))
-import Data.Text                        (Text)
-import Data.Typeable                    (Typeable)
-import Data.Void                        (Void, absurd)
-import Dhall.TypeCheck                  (TypeError)
+import Control.Monad.Catch        (MonadCatch (catch), handle, throwM)
+import Control.Monad.IO.Class     (MonadIO (..))
+import Control.Monad.Morph        (hoist)
+import Control.Monad.State.Strict (MonadState, StateT)
+import Data.ByteString            (ByteString)
+import Data.CaseInsensitive       (CI)
+import Data.List.NonEmpty         (NonEmpty (..))
+import Data.Text                  (Text)
+import Data.Typeable              (Typeable)
+import Data.Void                  (Void, absurd)
+import Dhall.TypeCheck            (TypeError)
 
 import Dhall.Syntax
     ( Chunks (..)
@@ -235,8 +236,8 @@ import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Bina
 import qualified System.Directory                            as Directory
 import qualified System.Environment
 import qualified System.FilePath                             as FilePath
-import qualified System.Info
 import qualified System.IO
+import qualified System.Info
 import qualified Text.Megaparsec
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token

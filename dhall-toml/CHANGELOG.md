@@ -1,4 +1,3 @@
-0.1.0
+1.0.0
 
-* Bootstrap in the package
-
+* Initial release

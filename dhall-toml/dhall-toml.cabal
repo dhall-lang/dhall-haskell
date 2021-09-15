@@ -1,5 +1,5 @@
 Name:               dhall-toml
-Version:            0.1.0
+Version:            1.0.0
 Cabal-Version:      >=1.10
 Build-Type:         Simple
 License:            BSD3
@@ -35,12 +35,12 @@ Library
     Hs-Source-Dirs:   src
     Build-Depends:
         base                 >= 4.12     && < 5    ,
-        dhall                >= 1.39.0   && < 1.40 ,
+        dhall                >= 1.39.0   && < 1.41 ,
         tomland              >= 1.3.2.0  && < 1.4  ,
         text                 >= 0.11.1.0 && < 1.3  ,
         containers           >= 0.5.9    && < 0.7  ,
         unordered-containers >= 0.2      && < 0.3  ,
-        prettyprinter        >= 1.5.1    && < 1.8
+        prettyprinter        >= 1.7.0    && < 1.8
     Exposed-Modules:
         Dhall.DhallToToml
         Dhall.TomlToDhall

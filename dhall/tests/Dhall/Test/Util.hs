@@ -23,17 +23,17 @@ module Dhall.Test.Util
     , managedTestEnvironment
     ) where
 
+import Control.Applicative              (liftA2, (<|>))
+import Control.Exception                (tryJust)
+import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict (StateT)
-import Control.Applicative ((<|>), liftA2)
-import Control.Exception (tryJust)
-import Control.Monad     (guard)
 import Data.Bifunctor                   (first)
 import Data.Text                        (Text)
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
-    ( Chunks(..)
-    , Expr(..)
+    ( Chunks (..)
+    , Expr (..)
     , Import
     , Normalizer
     , ReifiedNormalizer (..)

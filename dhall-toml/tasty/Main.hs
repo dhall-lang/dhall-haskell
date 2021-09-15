@@ -1,23 +1,23 @@
 module Main where
 
-import Control.Monad       (unless)
-import Data.Text           (unpack)
-import Data.Void           (Void)
-import Dhall.DhallToToml   (dhallToToml)
-import Dhall.TomlToDhall   (tomlToDhall)
-import Dhall.Toml.Utils    (fileToDhall)
-import Dhall.Parser        (Src)
-import Test.Tasty          (TestTree)
-import Test.Tasty.HUnit    (HasCallStack, Assertion, assertFailure)
-import Toml.Type.TOML      (TOML, tomlDiff)
-import Toml.Type.Printer   (pretty)
+import Control.Monad     (unless)
+import Data.Text         (unpack)
+import Data.Void         (Void)
+import Dhall.DhallToToml (dhallToToml)
+import Dhall.Parser      (Src)
+import Dhall.Toml.Utils  (fileToDhall)
+import Dhall.TomlToDhall (tomlToDhall)
+import Test.Tasty        (TestTree)
+import Test.Tasty.HUnit  (Assertion, HasCallStack, assertFailure)
+import Toml.Type.Printer (pretty)
+import Toml.Type.TOML    (TOML, tomlDiff)
 
-import qualified Toml.Parser
 import qualified Data.Text.IO
-import qualified Dhall.Core      as Core
+import qualified Dhall.Core       as Core
 import qualified GHC.IO.Encoding
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
+import qualified Toml.Parser
 
 main :: IO ()
 main = do
@@ -44,6 +44,7 @@ testTree =
             , "./tasty/data/record-list"
             , "./tasty/data/union-empty"
             , "./tasty/data/union-typed"
+            , "./tasty/data/union-nested"
             , "./tasty/data/optional"
             ]
         tomlToDhallTests = map testTomlToDhall

@@ -27,34 +27,34 @@ import Dhall.Src           (Src)
 import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
     ( Censor (..)
-    , MultipleCheckFailed (..)
     , Header (..)
     , Input (..)
+    , MultipleCheckFailed (..)
     , OutputMode (..)
     )
 
-import qualified Control.Exception                         as Exception
+import qualified Control.Exception                  as Exception
 import qualified Data.Map
-import qualified Data.Maybe                                as Maybe
-import qualified Data.Text.IO                              as Text.IO
-import qualified Data.Text.Prettyprint.Doc                 as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty.Terminal
-import qualified Data.Text.Prettyprint.Doc.Render.Text     as Pretty.Text
-import qualified Data.Void                                 as Void
-import qualified Dhall.Core                                as Core
-import qualified Dhall.Import                              as Import
-import qualified Dhall.Map                                 as Map
-import qualified Dhall.Normalize                           as Normalize
-import qualified Dhall.Optics                              as Optics
-import qualified Dhall.Parser                              as Parser
+import qualified Data.Maybe                         as Maybe
+import qualified Data.Text.IO                       as Text.IO
+import qualified Data.Void                          as Void
+import qualified Dhall.Core                         as Core
+import qualified Dhall.Import                       as Import
+import qualified Dhall.Map                          as Map
+import qualified Dhall.Normalize                    as Normalize
+import qualified Dhall.Optics                       as Optics
+import qualified Dhall.Parser                       as Parser
 import qualified Dhall.Pretty
-import qualified Dhall.Substitution                        as Substitution
-import qualified Dhall.Syntax                              as Syntax
-import qualified Dhall.TypeCheck                           as TypeCheck
-import qualified Dhall.Util                                as Util
-import qualified System.AtomicWrite.Writer.LazyText        as AtomicWrite
-import qualified System.Console.ANSI                       as ANSI
-import qualified System.IO                                 as IO
+import qualified Dhall.Substitution                 as Substitution
+import qualified Dhall.Syntax                       as Syntax
+import qualified Dhall.TypeCheck                    as TypeCheck
+import qualified Dhall.Util                         as Util
+import qualified Prettyprinter                      as Pretty
+import qualified Prettyprinter.Render.Terminal      as Pretty.Terminal
+import qualified Prettyprinter.Render.Text          as Pretty.Text
+import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite
+import qualified System.Console.ANSI                as ANSI
+import qualified System.IO                          as IO
 
 -- | Arguments to the @rewrite-with-schemas@ subcommand
 data Schemas = Schemas

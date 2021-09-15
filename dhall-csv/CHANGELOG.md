@@ -1,3 +1,3 @@
-0.0.1
+1.0.0
 
-* Initial beta release
+* Initial release

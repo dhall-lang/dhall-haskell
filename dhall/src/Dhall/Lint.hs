@@ -19,7 +19,7 @@ module Dhall.Lint
     ) where
 
 import Control.Applicative ((<|>))
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty  (NonEmpty (..))
 
 import Dhall.Syntax
     ( Binding (..)

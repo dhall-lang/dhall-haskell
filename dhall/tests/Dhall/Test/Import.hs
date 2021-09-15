@@ -88,6 +88,8 @@ successTest prefix = do
             , importDirectory </> "success/unit/cors/AllowedAll"
             , importDirectory </> "success/unit/cors/SelfImportRelative"
             , importDirectory </> "success/unit/cors/OnlyGithub"
+            , importDirectory </> "success/userHeaders"
+            , importDirectory </> "success/userHeadersOverride"
             ]
 
     Test.Util.testCase prefix expectedFailures (do

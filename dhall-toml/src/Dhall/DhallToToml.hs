@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 {-| This module exports the `dhallToToml` function for translating a
     Dhall syntax tree to a TOML syntax tree (`TOML`) for the @tomland@
     library.
@@ -99,31 +101,31 @@ module Dhall.DhallToToml
     , CompileError
     ) where
 
-import Control.Monad             (foldM)
-import Control.Exception         (Exception, throwIO)
-import Data.Foldable             (toList)
-import Data.List.NonEmpty        (NonEmpty((:|)))
-import Data.Text                 (Text)
-import Data.Text.Prettyprint.Doc (Pretty)
-import Data.Void                 (Void)
-import Dhall.Core                (Expr, DhallDouble(..))
-import Dhall.Toml.Utils          (inputToDhall)
-import Toml.Type.TOML            (TOML)
-import Toml.Type.Key             (Piece(Piece), Key(Key, unKey))
-import Toml.Type.Printer         (pretty)
+import Control.Exception  (Exception, throwIO)
+import Control.Monad      (foldM)
+import Data.Foldable      (toList)
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Text          (Text)
+import Data.Void          (Void)
+import Dhall.Core         (DhallDouble (..), Expr)
+import Dhall.Toml.Utils   (inputToDhall)
+import Prettyprinter      (Pretty)
+import Toml.Type.Key      (Key (Key, unKey), Piece (Piece))
+import Toml.Type.Printer  (pretty)
+import Toml.Type.TOML     (TOML)
 
-import qualified Data.Bifunctor                        as Bifunctor
-import qualified Data.Sequence                         as Seq
-import qualified Data.Text                             as Text
-import qualified Data.Text.IO                          as Text.IO
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
-import qualified Dhall.Core                            as Core
-import qualified Dhall.Map                             as Map
+import qualified Data.Bifunctor            as Bifunctor
+import qualified Data.Sequence             as Seq
+import qualified Data.Text                 as Text
+import qualified Data.Text.IO              as Text.IO
+import qualified Dhall.Core                as Core
+import qualified Dhall.Map                 as Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
-import qualified Toml.Type.TOML                        as Toml.TOML
-import qualified Toml.Type.Value                       as Toml.Value
-import qualified Toml.Type.AnyValue                    as Toml.AnyValue
+import qualified Prettyprinter.Render.Text as Pretty
+import qualified Toml.Type.AnyValue        as Toml.AnyValue
+import qualified Toml.Type.TOML            as Toml.TOML
+import qualified Toml.Type.Value           as Toml.Value
 
 
 data CompileError
@@ -223,8 +225,16 @@ dhallToToml e0 = do
     r <- assertRecordLit (Core.normalize e0)
     toTomlTable r
 
+-- empty union alternative like < A | B >.A
+pattern UnionEmpty :: Text -> Expr s a
+pattern UnionEmpty x <- Core.Field (Core.Union _) (Core.FieldSelection _ x _)
+-- union alternative with type like < A : Natural | B>.A 1
+pattern UnionApp :: Expr s a -> Expr s a
+pattern UnionApp x <- Core.App (Core.Field (Core.Union _) _) x
+
 assertRecordLit :: Expr Void Void -> Either CompileError (Map.Map Text (Core.RecordField Void Void))
 assertRecordLit (Core.RecordLit r) = Right r
+assertRecordLit (UnionApp x)       = assertRecordLit x
 assertRecordLit e                  = Left $ NotARecord e
 
 toTomlTable :: Map.Map Text (Core.RecordField Void Void) -> Either CompileError TOML
@@ -238,6 +248,8 @@ toTomlRecordFold curKey toml' (key', val) = toToml toml' newKey (Core.recordFiel
         append (x:xs) y = x :| xs ++ [y]
         newKey = Key $ append curKey $ Piece key'
 
+
+
 toToml :: TOML -> Key -> Expr Void Void -> Either CompileError TOML
 toToml toml key expr  = case expr of
     Core.BoolLit a -> return $ insertPrim (Toml.Value.Bool a)
@@ -246,16 +258,21 @@ toToml toml key expr  = case expr of
     Core.TextLit (Core.Chunks [] a) -> return $ insertPrim (Toml.Value.Text a)
     Core.App Core.None _ -> return toml
     Core.Some a -> toToml toml key a
-    -- empty union alternative like < A | B >.A
-    Core.Field (Core.Union _) (Core.FieldSelection _ a _) -> return $ insertPrim (Toml.Value.Text a)
-    -- union alternative with type like < A : Natural | B>.A 1
-    Core.App (Core.Field (Core.Union _) _) a -> toToml toml key a
+    UnionEmpty a -> return $ insertPrim (Toml.Value.Text a)
+    UnionApp a -> toToml toml key a
     Core.ListLit _ a -> case toList a of
         -- empty array
         [] -> return $ insertPrim (Toml.Value.Array [])
         -- TODO: unions need to be handled here as well, it's a bit tricky
         -- because they also have to be probed for being a "simple"
         -- array of table
+        union@(UnionApp (Core.RecordLit _)) : unions -> do
+            tables' <- case mapM assertRecordLit (union :| unions) of
+                Right x -> mapM toTomlTable x
+                Left (NotARecord e) -> Left (HeterogeneousArray e)
+                Left x -> Left x
+            return $ Toml.TOML.insertTableArrays key tables' toml
+
         record@(Core.RecordLit _) : records -> do
             tables' <- case mapM assertRecordLit (record :| records)  of
                 Right x -> mapM toTomlTable x
@@ -323,6 +340,8 @@ toToml toml key expr  = case expr of
             Core.NaturalLit x               -> rightAny $ Toml.Value.Integer $ toInteger x
             Core.DoubleLit (DhallDouble x)  -> rightAny $ Toml.Value.Double x
             Core.TextLit (Core.Chunks [] x) -> rightAny $ Toml.Value.Text x
+            UnionEmpty x                    -> rightAny $ Toml.Value.Text x
+            UnionApp x                      -> toAny x
             Core.ListLit _ x                -> do
                 anyList <- mapM toAny $ toList x
                 case Toml.AnyValue.toMArray anyList of
@@ -330,6 +349,7 @@ toToml toml key expr  = case expr of
                     Left _ -> Left $ HeterogeneousArray expr
             Core.RecordLit _ -> Left $ UnsupportedArray e
             _ -> Left $ Unsupported e
+
 
 {-| Runs the @dhall-to-toml@ command
 -}

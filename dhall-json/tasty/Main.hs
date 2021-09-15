@@ -3,8 +3,8 @@
 
 module Main where
 
-import Data.Void   (Void)
-import Test.Tasty  (TestTree)
+import Data.Void  (Void)
+import Test.Tasty (TestTree)
 
 import qualified Data.Aeson           as Aeson
 import qualified Data.ByteString.Lazy

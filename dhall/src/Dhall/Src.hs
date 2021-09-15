@@ -15,10 +15,10 @@ module Dhall.Src
 import Control.DeepSeq            (NFData)
 import Data.Data                  (Data)
 import Data.Text                  (Text)
-import Data.Text.Prettyprint.Doc  (Pretty (..))
 import GHC.Generics               (Generic)
 import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift (..))
+import Prettyprinter              (Pretty (..))
 import Text.Megaparsec            (SourcePos (SourcePos), mkPos, unPos)
 
 import {-# SOURCE #-} qualified Dhall.Util

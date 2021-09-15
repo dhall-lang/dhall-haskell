@@ -56,6 +56,13 @@ module Dhall.Marshal.Decode
     , string
     , lazyText
     , strictText
+      -- ** Time
+    , timeOfDay
+    , day
+    , timeZone
+    , localTime
+    , zonedTime
+    , utcTime
       -- ** Containers
     , maybe
     , pair
@@ -86,6 +93,7 @@ module Dhall.Marshal.Decode
     , GenericFromDhallUnion(..)
     , genericAuto
     , genericAutoWith
+    , genericAutoWithInputNormalizer
 
     -- * Decoding errors
     , DhallErrors(..)
@@ -132,11 +140,14 @@ import Data.Either.Validation
     , eitherToValidation
     , validationToEither
     )
-import Data.Functor.Contravariant       (Op(..), Predicate(..), Equivalence(..))
+import Data.Functor.Contravariant
+    ( Equivalence (..)
+    , Op (..)
+    , Predicate (..)
+    )
 import Data.Hashable                    (Hashable)
 import Data.Int                         (Int16, Int32, Int64, Int8)
 import Data.List.NonEmpty               (NonEmpty (..))
-import Data.Text.Prettyprint.Doc        (Pretty)
 import Data.Typeable                    (Proxy (..), Typeable)
 import Dhall.Parser                     (Src (..))
 import Dhall.Syntax
@@ -148,6 +159,7 @@ import Dhall.Syntax
     )
 import GHC.Generics
 import Prelude                          hiding (maybe, sequence)
+import Prettyprinter                    (Pretty)
 
 import qualified Control.Applicative
 import qualified Data.Foldable
@@ -164,6 +176,7 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
+import qualified Data.Time            as Time
 import qualified Data.Vector
 import qualified Dhall.Core           as Core
 import qualified Dhall.Map
@@ -212,8 +225,8 @@ fromList [("a",False),("b",True)]
     implement `Generic`.  This does not auto-generate an instance for recursive
     types.
 
-    The default instance can be tweaked using 'genericAutoWith' and custom
-    'InterpretOptions', or using
+    The default instance can be tweaked using 'genericAutoWith'/'genericAutoWithInputNormalizer'
+    and custom 'InterpretOptions', or using
     [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
     and 'Dhall.Deriving.Codec' from "Dhall.Deriving".
 -}
@@ -307,6 +320,24 @@ instance FromDhall a => FromDhall [a] where
 
 instance FromDhall a => FromDhall (Vector a) where
     autoWith opts = vector (autoWith opts)
+
+instance FromDhall Time.TimeOfDay where
+    autoWith _ = timeOfDay
+
+instance FromDhall Time.Day where
+    autoWith _ = day
+
+instance FromDhall Time.TimeZone where
+    autoWith _ = timeZone
+
+instance FromDhall Time.LocalTime where
+    autoWith _ = localTime
+
+instance FromDhall Time.ZonedTime where
+    autoWith _ = zonedTime
+
+instance FromDhall Time.UTCTime where
+    autoWith _ = utcTime
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
@@ -669,7 +700,13 @@ genericAuto = genericAutoWith defaultInterpretOptions
 {-| `genericAutoWith` is a configurable version of `genericAuto`.
 -}
 genericAutoWith :: (Generic a, GenericFromDhall a (Rep a)) => InterpretOptions -> Decoder a
-genericAutoWith options = withProxy (\p -> fmap to (evalState (genericAutoWithNormalizer p defaultInputNormalizer options) 1))
+genericAutoWith options = genericAutoWithInputNormalizer options defaultInputNormalizer
+
+{-| `genericAutoWithInputNormalizer` is like `genericAutoWith`, but instead of
+    using the `defaultInputNormalizer` it expects an custom `InputNormalizer`.
+-}
+genericAutoWithInputNormalizer :: (Generic a, GenericFromDhall a (Rep a)) => InterpretOptions -> InputNormalizer -> Decoder a
+genericAutoWithInputNormalizer options inputNormalizer = withProxy (\p -> fmap to (evalState (genericAutoWithNormalizer p inputNormalizer options) 1))
     where
         withProxy :: (Proxy a -> Decoder a) -> Decoder a
         withProxy f = f Proxy
@@ -892,6 +929,78 @@ strictText = Decoder {..}
     extract  expr                   = typeError expected expr
 
     expected = pure Text
+
+{-| Decode `Time.TimeOfDay`
+
+>>> input timeOfDay "00:00:00"
+00:00:00
+-}
+timeOfDay :: Decoder Time.TimeOfDay
+timeOfDay = Decoder {..}
+  where
+    extract (TimeLiteral t _) = pure t
+    extract  expr             = typeError expected expr
+
+    expected = pure Time
+
+{-| Decode `Time.Day`
+
+>>> input day "2000-01-01"
+2000-01-01
+-}
+day :: Decoder Time.Day
+day = Decoder {..}
+  where
+    extract (DateLiteral d) = pure d
+    extract  expr           = typeError expected expr
+
+    expected = pure Date
+
+{-| Decode `Time.TimeZone`
+
+>>> input timeZone "+00:00"
++0000
+-}
+timeZone :: Decoder Time.TimeZone
+timeZone = Decoder {..}
+  where
+    extract (TimeZoneLiteral z) = pure z
+    extract  expr               = typeError expected expr
+
+    expected = pure TimeZone
+
+{-| Decode `Time.LocalTime`
+
+>>> input localTime "2020-01-01T12:34:56"
+2020-01-01 12:34:56
+-}
+localTime :: Decoder Time.LocalTime
+localTime = record $
+  Time.LocalTime
+    <$> field "date" day
+    <*> field "time" timeOfDay
+
+{-| Decode `Time.ZonedTime`
+
+>>> input zonedTime "2020-01-01T12:34:56+02:00"
+2020-01-01 12:34:56 +0200
+-}
+zonedTime :: Decoder Time.ZonedTime
+zonedTime = record $
+  adapt
+    <$> field "date" day
+    <*> field "time" timeOfDay
+    <*> field "timeZone" timeZone
+  where
+    adapt date time = Time.ZonedTime (Time.LocalTime date time)
+
+{-| Decode `Time.UTCTime`
+
+>>> input utcTime "2020-01-01T12:34:56+02:00"
+2020-01-01 10:34:56 UTC
+-}
+utcTime :: Decoder Time.UTCTime
+utcTime = Time.zonedTimeToUTC <$> zonedTime
 
 {-| Decode a `Maybe`.
 

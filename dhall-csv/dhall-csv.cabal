@@ -1,8 +1,7 @@
 Name: dhall-csv
-Version: 0.0.1
+Version: 1.0.0
 Cabal-Version: >=1.10
 Build-Type: Simple
-Tested-With: GHC == 8.6.5
 License: BSD3
 License-File: LICENSE
 Copyright: 2021 Marcos Lerones
@@ -39,10 +38,10 @@ Library
         containers           >= 0.5.9     && < 0.7 ,
         either                                     ,
         exceptions           >= 0.8.3     && < 0.11,
-        dhall                >= 1.39.0    && < 1.40,
+        dhall                >= 1.39.0    && < 1.41,
         filepath                             < 1.5 ,
         optparse-applicative                       ,
-        prettyprinter        >= 1.5.1     && < 1.8 ,
+        prettyprinter        >= 1.7.0     && < 1.8 ,
         text                 >= 0.11.1.0  && < 1.3 ,
         unordered-containers                 < 0.3 ,
         vector               >= 0.12      && < 0.13

@@ -16,7 +16,7 @@ module Dhall.Test.Dhall where
 import Control.Exception      (SomeException, throwIO, try)
 import Data.Either.Validation (validationToEither)
 import Data.Fix               (Fix (..))
-import Data.Functor.Classes   (Eq1(..), Show1(..))
+import Data.Functor.Classes   (Eq1 (..), Show1 (..))
 import Data.List.NonEmpty     (NonEmpty (..))
 import Data.Maybe             (isJust)
 import Data.Scientific        (Scientific)

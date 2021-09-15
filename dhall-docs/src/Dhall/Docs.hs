@@ -19,8 +19,8 @@ module Dhall.Docs
 import Control.Applicative (optional, (<|>))
 import Data.Text           (Text)
 import Data.Version        (showVersion)
-import Dhall.Pretty        (CharacterSet(..))
 import Dhall.Docs.Core
+import Dhall.Pretty        (CharacterSet (..))
 import Options.Applicative (Parser, ParserInfo)
 import Path                (Abs, Dir, Path)
 

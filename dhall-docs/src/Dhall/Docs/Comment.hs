@@ -24,12 +24,12 @@ import Text.Megaparsec     (SourcePos, (<?>))
 
 import qualified Data.Either
 import qualified Data.Foldable
-import qualified Data.List.NonEmpty      as NonEmpty
-import qualified Data.Maybe              as Maybe
+import qualified Data.List.NonEmpty  as NonEmpty
+import qualified Data.Maybe          as Maybe
 import qualified Data.Text
-import qualified Dhall.Parser.Token      as Token
+import qualified Dhall.Parser.Token  as Token
 import qualified Text.Megaparsec
-import qualified Text.Megaparsec.Pos     as Megaparsec.Pos
+import qualified Text.Megaparsec.Pos as Megaparsec.Pos
 
 -- | For explanation of this data-type see 'DhallComment'
 data CommentType = DhallDocsComment | MarkedComment | RawComment
