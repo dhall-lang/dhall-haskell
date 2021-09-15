@@ -133,6 +133,7 @@ import Nix.Expr
 import Nix.Expr.Shorthands
     ( attrsE
     , letE
+    , mkBool
     , mkSym
     , mkStr
     )
@@ -702,33 +703,32 @@ dhallToNix e =
                   --         '';
                   --     )
                   return $
-                    Fix
-                      (NBinary
-                        NApp
-                        (Fix (NSym "dhallToNixUrlFOD"))
-                        (letE
-                          "packageSet"
-                          ("fetchurl" @@
-                            attrsE
-                              [ ("url", "")
-                              , ("hash", "")
-                              , ("downloadToTemp", "")
-                              , ("postFetch", "")
-                              ]
-                          )
-                          ("runCommand" @@ mkStr "decodedPackageSet" @@
-                            attrsE [] @@
-                            (Fix
-                              (NStr
-                                (DoubleQuoted
+                    "dhallToNixUrlFOD" @@
+                      (letE
+                        "packageSet"
+                        ("fetchurl" @@
+                          attrsE
+                            [ ("url", mkStr $ Dhall.Core.pretty url)
+                            , ("hash", "")
+                            , ("downloadToTemp", mkBool True)
+                            , ("postFetch",
+                                mkStrAntiquote
                                   [ Antiquoted "dhall"
-                                  , Plain "/bin/dhall decode --file \""
-                                  , Antiquoted "packageSet"
-                                  , Plain "\" > $out"
+                                  , Plain "/bin/dhall encoded --file \"$downloadedFile\" > $out"
                                   ]
-                                )
                               )
-                            )
-                          )
+                            ]
+                        )
+                        ("runCommand" @@ mkStr "decodedPackageSet" @@
+                          attrsE [] @@
+                          mkStrAntiquote
+                            [ Antiquoted "dhall"
+                            , Plain "/bin/dhall decode --file \""
+                            , Antiquoted "packageSet"
+                            , Plain "\" > $out"
+                            ]
                         )
                       )
+
+mkStrAntiquote :: [ Antiquoted Text (Fix NExprF) ] -> Fix NExprF
+mkStrAntiquote strs = Fix (NStr (DoubleQuoted strs))
