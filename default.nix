@@ -18,7 +18,9 @@ in
       dhall-yaml
     ;
 
-    inherit (shared_ghcjs) dhall-try;
+    # We can re-enable these once https://github.com/NixOS/nixpkgs/issues/133271
+    # is fixed and Nixpkgs is upgraded to a version that incorporates GHCJS
 
-    dhall-ghcjs = shared_ghcjs.dhall;
+    # inherit (shared_ghcjs) dhall-try;
+    # dhall-ghcjs = shared_ghcjs.dhall;
   }
