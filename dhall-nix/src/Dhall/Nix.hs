@@ -94,6 +94,10 @@ module Dhall.Nix (
     ) where
 
 import Control.Exception (Exception)
+import Data.ByteArray.Encoding
+    ( Base (Base64)
+    , convertToBase
+    )
 import Data.Fix          (Fix (..))
 import Data.Foldable     (toList)
 import Data.Text         (Text)
@@ -134,12 +138,16 @@ import Nix.Expr.Shorthands
     ( attrsE
     , letE
     , mkBool
+    , mkFunction
+    , mkParamset
     , mkSym
     , mkStr
     )
 
+import qualified Data.ByteString.Char8 as ByteString.Char8
 import qualified Data.Text
 import qualified Dhall.Core
+import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Optics
 import qualified Dhall.Pretty
@@ -236,7 +244,21 @@ Right x: y: x + y
 -}
 dhallToNix :: forall s. Expr s Dhall.Core.Import -> Either CompileError (Fix NExprF)
 dhallToNix e =
-    loop (rewriteShadowed (Dhall.Core.normalize e))
+    let result = loop (rewriteShadowed (Dhall.Core.normalize e))
+    in
+    case result of
+      Left err -> Left err
+      Right nixExpr ->
+        Right $
+          mkFunction
+            (mkParamset
+              [ ("dhallToNixUrlFOD", Nothing)
+              , ("fetchurl", Nothing)
+              , ("dhall", Nothing)
+              ]
+              False
+            )
+            nixExpr
   where
     untranslatable :: Fix NExprF
     untranslatable = Fix (NSet NNonRecursive [])
@@ -709,7 +731,7 @@ dhallToNix e =
                         ("fetchurl" @@
                           attrsE
                             [ ("url", mkStr $ Dhall.Core.pretty url)
-                            , ("hash", "")
+                            , ("hash", mkStr $ dhallHashToSriHash hash)
                             , ("downloadToTemp", mkBool True)
                             , ("postFetch",
                                 mkStrAntiquote
@@ -732,3 +754,8 @@ dhallToNix e =
 
 mkStrAntiquote :: [ Antiquoted Text (Fix NExprF) ] -> Fix NExprF
 mkStrAntiquote strs = Fix (NStr (DoubleQuoted strs))
+
+dhallHashToSriHash :: Dhall.Crypto.SHA256Digest -> Text
+dhallHashToSriHash (Dhall.Crypto.SHA256Digest bytes) =
+  let hash = Data.Text.pack $ ByteString.Char8.unpack $ convertToBase Base64 bytes
+  in "sha256-" <> hash
