@@ -739,7 +739,9 @@ dhallToNix e =
                             , ("postFetch",
                                 mkStrAntiquote
                                   [ Antiquoted "dhall"
-                                  , Plain "/bin/dhall encoded --file \"$downloadedFile\" > $out"
+                                  , Plain "/bin/dhall normalize --alpha --file \"$downloadedFile\" | "
+                                  , Antiquoted "dhall"
+                                  , Plain "/bin/dhall encode > $out"
                                   ]
                               )
                             ]
