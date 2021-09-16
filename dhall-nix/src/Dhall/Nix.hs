@@ -136,9 +136,11 @@ import Nix.Expr
     )
 import Nix.Expr.Shorthands
     ( attrsE
+    , inherit
     , letE
     , mkBool
     , mkFunction
+    , mkNonRecSet
     , mkParamset
     , mkSym
     , mkStr
@@ -254,6 +256,7 @@ dhallToNix e =
             (mkParamset
               [ ("dhallToNixUrlFOD", Nothing)
               , ("fetchurl", Nothing)
+              , ("runCommand", Nothing)
               , ("dhall", Nothing)
               ]
               False
@@ -750,6 +753,16 @@ dhallToNix e =
                             , Plain "\" > $out"
                             ]
                         )
+                      ) @@
+                      ( mkNonRecSet
+                          [ inherit
+                              [ "dhallToNixUrlFOD"
+                              , "fetchurl"
+                              , "runCommand"
+                              , "dhall"
+                              ]
+                              (Nix.SourcePos "unknown" (Nix.mkPos 1) (Nix.mkPos 1))
+                          ]
                       )
 
 mkStrAntiquote :: [ Antiquoted Text (Fix NExprF) ] -> Fix NExprF
