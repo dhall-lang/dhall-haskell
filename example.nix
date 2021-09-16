@@ -32,9 +32,44 @@ let
       import drv;
 
   dhallToNixUrlFOD = _dhallToNixUrlFOD;
+
+  xxx =
+    { dhallToNixUrlFOD, fetchurl, runCommand, dhall }:
+    {
+      dependencies = [ "console" "effect" "prelude" "psci-support" ];
+      name = "my-project";
+      packages =
+        dhallToNixUrlFOD (
+          let
+            packageSet =
+              (fetchurl {
+                url = "https://gist.githubusercontent.com/cdepillabout/2683131f078753fd24723ab8bf1e1b74/raw/0de0be4b0238974a33aac07580338105fa5c42e1/example-remote-import.dhall";
+                hash = "sha256-W1WfXQXIvufW57F5N7fxqRvi/YMBdvlnwlFn4eMyVLc=";
+                downloadToTemp = true;
+                postFetch = ''
+                  env | sort
+                  ${dhall}/bin/dhall --alpha --plain --file "$downloadedFile" | ${dhall}/bin/dhall encode > $out
+                '';
+              }).overrideAttrs (oldAttrs: {
+                SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+                NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+                nativeBuildInputs = (oldAttrs.nativeBuildInputs or []) ++ [ cacert ];
+              });
+          in runCommand "decodedPackageSet" {} "${dhall}/bin/dhall decode --file \"${packageSet}\" > \$out") {
+        inherit dhallToNixUrlFOD fetchurl runCommand dhall;
+      };
+      sources = [ "src/**/*.purs" "test/**/*.purs" ];
+    };
+
 in
 
-dhallToNixUrlFOD ./example-purescript-package/spago2.dhall {
+# dhallToNixUrlFOD ./example-purescript-package/spago2.dhall {
+# dhallToNixUrlFOD ./example-spago2.dhall {
+#   inherit dhallToNixUrlFOD fetchurl runCommand;
+#   dhall = myDhall;
+# }
+
+xxx {
   inherit dhallToNixUrlFOD fetchurl runCommand;
   dhall = myDhall;
 }
