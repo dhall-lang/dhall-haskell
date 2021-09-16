@@ -170,11 +170,12 @@ getSiteHeaders :: StateT Status IO SiteHeaders
 getSiteHeaders = do
     Status { _siteHeaders = oldSiteHeaders, _stack, ..} <- State.get
 
+    -- TODO pointless?
     case oldSiteHeaders of
         Nothing -> do
-            siteHeaders <- liftIO (_loadSiteHeaders _stack)
+            siteHeaders <- _loadSiteHeaders
 
-            State.put (Status { _siteHeaders = Just siteHeaders , ..})
+            -- State.put (Status { _siteHeaders = Just siteHeaders , ..})
 
             return siteHeaders
 
@@ -264,8 +265,7 @@ addHeaders siteHeaders urlHeaders request =
       
         originHeaders = HashMap.lookupDefault [] origin siteHeaders
 
-        filterHeaders Nothing = []
-        filterHeaders (Just headers) = filter (not . overridden) headers
+        filterHeaders = foldMap (filter (not . overridden))
 
         overridden :: HTTPHeader -> Bool
         overridden (key, _value) = any (matchesKey key) originHeaders

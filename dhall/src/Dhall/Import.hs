@@ -155,7 +155,7 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative              (Alternative (..), liftA2)
+import Control.Applicative              (Alternative (..))
 import Control.Exception
     ( Exception
     , IOException
@@ -167,7 +167,6 @@ import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
-import Data.CaseInsensitive       (CI)
 import Data.List.NonEmpty         (NonEmpty (..))
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
@@ -801,11 +800,7 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
-fetchDisabledForHeaders :: URL -> StateT Status IO Data.Text.Text
-fetchDisabledForHeaders _url = do
-    Status { _stack } <- State.get
-    throwMissingImport (Imported _stack CannotImportFromHeadersFile)
-
+-- TODO revert to fetchRemove, remove from params?
 defaultFetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
 defaultFetchRemote (url@URL { headers = maybeHeadersExpression }) = do
@@ -1027,43 +1022,53 @@ normalizeHeadersIn url = return url
 
 -- | A no-op user headers loader used for remote contexts
 --   (and loading user headers themselves)
-noopUserHeaders :: IO (Maybe SiteHeadersFile)
-noopUserHeaders = return Nothing
+noopUserHeaders :: Maybe.MaybeT IO SiteHeadersFile
+noopUserHeaders = Maybe.MaybeT (return Nothing)
 
 -- | Given a SiteHeadersFile loader, return a SiteHeaders loader.
---   The loader uses the caller's import stack, despite not using the
---   same status (in particular, remote imports are disallowed)
-siteHeadersLoader :: IO (Maybe SiteHeadersFile) -> NonEmpty Chained -> IO SiteHeaders
-siteHeadersLoader loadSideHeadersFile importStack = loadSideHeadersFile >>= \case
-    Nothing -> return mempty
-    Just (SiteHeadersFile { parentDirectory, fileContents, source }) ->
-        loadFile source parentDirectory fileContents
+-- TODO is this actually using the stack? We're discarding the parent directory.
+-- Perhaps it should literally return an expr with DHALL_HEADERS ? ~/.cache/....
+siteHeadersLoader :: Maybe.MaybeT IO SiteHeadersFile -> StateT Status IO SiteHeaders
+siteHeadersLoader loadSiteHeadersFile = do
+    Status { _stack, ..} <- State.get
+    -- run load
+    loaded <- liftIO (Maybe.runMaybeT loadSiteHeadersFile)
+    case loaded of
+        Nothing -> return mempty
+        Just (SiteHeadersFile { parentDirectory, fileContents, source }) ->
+            _
+            -- loadWith source parentDirectory fileContents
+    -- liftIO (toSiteHeaders headersExpr)
+
+    -- don't go through load process again
+    -- TODO is this needed? I think it already caches imports...
+    -- State.put (Status { _siteHeaders = return loded , ..})
   where
-    sourceChained :: ImportType -> Chained
-    sourceChained source = Chained (Import (ImportHashed Nothing source) Code )
+    -- sourceChained :: ImportType -> Chained
+    -- sourceChained source = Chained (Import (ImportHashed Nothing source) Code )
 
-    extendStack :: NonEmpty Chained -> ImportType -> NonEmpty Chained
-    extendStack existing source = pure (sourceChained source) <> existing
+    -- extendStack :: NonEmpty Chained -> ImportType -> NonEmpty Chained
+    -- extendStack existing source = pure (sourceChained source) <> existing
 
-    loadFile source parentDirectory fileContents = do
-        let fullStack = extendStack importStack source
+    -- loadFile source parentDirectory fileContents = do
+    --     let fullStack = extendStack importStack source
 
-        expr <- case Dhall.Parser.exprFromText mempty fileContents of
-            Left err -> throwMissingImport (Imported fullStack err)
-            Right expr -> return expr
+    --     expr <- case Dhall.Parser.exprFromText mempty fileContents of
+    --         Left err -> throwMissingImport (Imported fullStack err)
+    --         Right expr -> return expr
 
-        loaded <- loadWithStatus
-            (makeEmptyStatus
-                defaultNewManager
-                noopUserHeaders
-                fetchDisabledForHeaders
-                parentDirectory) {
-                    _stack = fullStack
-                }
-            IgnoreSemanticCache
-            expr
+    --     loaded <- loadWithStatus
+    --         (makeEmptyStatus
+    --             defaultNewManager
+    --             noopUserHeaders
+    --             defaultFetchRemote
+    --             parentDirectory) {
+    --                 _stack = fullStack
+    --             }
+    --         IgnoreSemanticCache
+    --         expr
 
-        toSiteHeaders loaded
+    --     toSiteHeaders loaded
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
@@ -1078,7 +1083,7 @@ emptyStatusWithManager newManager = makeEmptyStatus newManager defaultUserHeader
 -- | See 'emptyStatus'.
 makeEmptyStatus
     :: IO Manager
-    -> IO (Maybe SiteHeadersFile)
+    -> Maybe.MaybeT IO SiteHeadersFile
     -> (URL -> StateT Status IO Data.Text.Text)
     -> FilePath
     -> Status

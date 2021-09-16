@@ -7,11 +7,14 @@ module Dhall.Import.UserHeaders
     , envOnlyUserHeaders
     ) where
 
-import Control.Exception        (tryJust)
-import Control.Monad            (guard)
-import Data.Either.Combinators  (rightToMaybe)
-import Data.Text                (Text)
-import Dhall.Import.Headers     (SiteHeadersFile(..))
+import Control.Applicative       ((<|>))
+import Control.Exception         (tryJust)
+import Control.Monad             (guard)
+import Control.Monad.IO.Class    (liftIO)
+import Control.Monad.Trans.Maybe (MaybeT(..))
+import Data.Either.Combinators   (rightToMaybe)
+import Data.Text                 (Text)
+import Dhall.Import.Headers      (SiteHeadersFile(..))
 import Dhall.Core
     ( Directory(..)
     , File(..)
@@ -32,51 +35,43 @@ siteHeadersFile :: FilePath -> ImportType -> Text -> SiteHeadersFile
 siteHeadersFile parentDirectory source fileContents =
     SiteHeadersFile { parentDirectory , source, fileContents }
 
--- lift 'siteHeadersFile' to work on IO (Maybe Text)
-siteHeadersFile' :: FilePath -> ImportType -> IO (Maybe Text) -> IO (Maybe SiteHeadersFile)
-siteHeadersFile' parentDirectory source getText = do
-    mtext <- getText
-    return (fmap (siteHeadersFile parentDirectory source) mtext)
-
 {-| Resolve the raw dhall text for user headers
     only from $DHALL_HEADERS, not the filesystem
  -}
-envOnlyUserHeaders :: IO (Maybe SiteHeadersFile)
-envOnlyUserHeaders =
-    siteHeadersFile' "." (Core.Env (Text.pack key)) (fmap (fmap Text.pack) (lookupEnv key))
-      where
-        key = "DHALL_HEADERS"
+envOnlyUserHeaders :: MaybeT IO SiteHeadersFile
+envOnlyUserHeaders = do
+    string <- MaybeT (lookupEnv key)
 
-configFileOnlyUserHeaders :: IO (Maybe SiteHeadersFile)
+    return (siteHeadersFile "." (Core.Env (Text.pack key)) (Text.pack string))
+  where
+    key = "DHALL_HEADERS"
+
+configFileOnlyUserHeaders :: MaybeT IO SiteHeadersFile
 configFileOnlyUserHeaders = do
-    directory <- getXdgDirectory XdgConfig "dhall"
-    siteHeadersFile'
-      directory
-      (makeSource directory)
-      (tryReadFile (directory </> (Text.unpack filename)))
+    directory <- liftIO (getXdgDirectory XdgConfig "dhall")
 
-      where
-        filename :: Text
-        filename = "headers.dhall"
+    text <- MaybeT (tryReadFile (directory </> (Text.unpack filename)))
 
-        makeSource directory =
-            Core.Local Absolute File
-                { directory = Directory
-                    { components = reverse (components directory) }
-                , file = filename
-                }
- 
-        components directory = map Text.pack (splitDirectories directory)
+    return (siteHeadersFile directory (makeSource directory) text)
+  where
+    filename :: Text
+    filename = "headers.dhall"
 
-        tryReadFile path = rightToMaybe <$>
-            tryJust (guard . isDoesNotExistError) (IO.readFile path)
+    makeSource directory =
+        Core.Local Absolute File
+            { directory = Directory
+                { components = reverse (components directory) }
+            , file = filename
+            }
 
+    components directory = map Text.pack (splitDirectories directory)
+
+    tryReadFile path = rightToMaybe <$>
+        tryJust (guard . isDoesNotExistError) (IO.readFile path)
 
 {-| Resolve the raw dhall text for user headers,
     along with the directory containing it
     (which is `.` if loaded from $DHALL_HEADERS)
  -}
-defaultUserHeaders :: IO (Maybe SiteHeadersFile)
-defaultUserHeaders = envOnlyUserHeaders >>= \case
-    Just file -> return (Just file)
-    Nothing -> configFileOnlyUserHeaders
+defaultUserHeaders :: MaybeT IO SiteHeadersFile
+defaultUserHeaders = envOnlyUserHeaders <|> configFileOnlyUserHeaders

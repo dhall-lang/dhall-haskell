@@ -111,7 +111,7 @@ data Status = Status
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
     -- requests
 
-    , _loadSiteHeaders :: NonEmpty Chained -> IO SiteHeaders
+    , _loadSiteHeaders :: StateT Status IO SiteHeaders
     , _siteHeaders :: Maybe SiteHeaders
     -- ^ Used to cache the user's custom headers for all remote imports
 
@@ -136,7 +136,7 @@ data Status = Status
 --   importing relative to the given root import.
 emptyStatusWith
     :: IO Manager
-    -> (NonEmpty Chained -> IO SiteHeaders)
+    -> StateT Status IO SiteHeaders
     -> (URL -> StateT Status IO Data.Text.Text)
     -> Import
     -> Status
