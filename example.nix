@@ -1,48 +1,32 @@
-with import <nixpkgs> {};
-
-
-# spago:
-# { name = "my-project"
-# , dependencies = [ "console", "effect", "prelude", "psci-support" ]
-# , packages = https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20210905/packages.dhall sha256:140f3630801f2b02d5f3a405d4872e0af317e4ef187016a6b00f97d59d6275c6
-# , sources = [ "src/**/*.purs", "test/**/*.purs" ]
-# }
-
-# turns into nix:
-# {
-#   dependencies = [ "console" "effect" "prelude" "psci-support" ];
-#   name = "my-project";
-#   packages = {};
-#   packages =
-#     dhallToNixUrlFOD (
-#       let
-#         packageSet = fetchurl {
-#           url = "https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20210905/packages.dhall";
-#           hash = "sha256-FA82MIAfKwLV86QF1IcuCvMX5O8YcBamsA+X1Z1idcY=";
-#           downloadToTemp = true;
-#           postFetch = ''
-#             ${dhall}/bin/dhall encode --file "$downloadedFile" > $out
-#           '';
-#         };
-#       in
-#         runCommand "decodedPackageSet" {} ''
-#           ${dhall}/bin/dhall decode --file "${packageSet}" > $out
-#         '';
-#     )
-#   sources = [ "src/**/*.purs" "test/**/*.purs" ];
-# }
 
 let
+  nixpkgsSrc = builtins.fetchTarball {
+    # nixos-unstable as of 2021-09-16.
+    url = "https://github.com/NixOS/nixpkgs/archive/bcd607489d76795508c48261e1ad05f5d4b7672f.tar.gz";
+    sha256 = "0yjp9lrhzvyh9dc4b9dl456fr6nlchfmn85adq0vi4pnwfmh90z6";
+  };
+in
+
+with import nixpkgsSrc {};
+
+let
+
+  myDhall = haskellPackages.dhall_1_40_1;
+
+  dhall-nix-url-fod = haskellPackages.callCabal2nix "dhall-nix" ./dhall-nix {
+    dhall = myDhall;
+  };
+
   _dhallToNixUrlFOD = dhallFile:
     let
       drv = stdenv.mkDerivation {
         name = "dhall-compiled.nix";
 
         buildCommand = ''
-          dhall-to-nix <<< "${dhallFile}" > $out
+          dhall-to-nix < "${dhallFile}" > $out
         '';
 
-        buildInputs = [ dhall-nix ];
+        buildInputs = [ dhall-nix-url-fod ];
       };
     in
       import drv;
@@ -50,4 +34,7 @@ let
   dhallToNixUrlFOD = _dhallToNixUrlFOD;
 in
 
-dhallToNixUrlFOD ~/temp/temp-purescript-pacakge/spago2.dhall
+dhallToNixUrlFOD ./example-purescript-package/spago2.dhall {
+  inherit dhallToNixUrlFOD fetchurl runCommand;
+  dhall = myDhall;
+}
