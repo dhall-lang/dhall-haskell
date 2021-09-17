@@ -41,6 +41,7 @@ module Dhall.Marshal.Encode
     , GenericToDhall(..)
     , genericToDhall
     , genericToDhallWith
+    , genericToDhallWithInputNormalizer
     , InterpretOptions(..)
     , SingletonConstructors(..)
     , defaultInterpretOptions
@@ -127,8 +128,8 @@ instance Contravariant Encoder where
     implement `Generic`.  This does not auto-generate an instance for recursive
     types.
 
-    The default instance can be tweaked using 'genericToDhallWith' and custom
-    'InterpretOptions', or using
+    The default instance can be tweaked using 'genericToDhallWith'/'genericToDhallWithInputNormalizer'
+    and custom 'InterpretOptions', or using
     [DerivingVia](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#extension-DerivingVia)
     and 'Dhall.Deriving.Codec' from "Dhall.Deriving".
 -}
@@ -332,6 +333,26 @@ instance ToDhall Time.TimeZone where
         embed = TimeZoneLiteral
 
         declared = TimeZone
+
+instance ToDhall Time.LocalTime where
+    injectWith _ = recordEncoder $
+      adapt
+        >$< encodeField "date"
+        >*< encodeField "time"
+      where
+        adapt (Time.LocalTime date time) = (date, time)
+
+instance ToDhall Time.ZonedTime where
+    injectWith _ = recordEncoder $
+      adapt
+        >$< encodeField "date"
+        >*< encodeField "time"
+        >*< encodeField "timeZone"
+      where
+        adapt (Time.ZonedTime (Time.LocalTime date time) timeZone) = (date, (time, timeZone))
+
+instance ToDhall Time.UTCTime where
+    injectWith = contramap (Time.utcToZonedTime Time.utc) . injectWith
 
 {-| Note that the output list will be sorted.
 
@@ -725,8 +746,16 @@ want to define orphan instances for.
 -}
 genericToDhallWith
   :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> Encoder a
-genericToDhallWith options
-    = contramap GHC.Generics.from (evalState (genericToDhallWithNormalizer defaultInputNormalizer options) 1)
+genericToDhallWith options = genericToDhallWithInputNormalizer options defaultInputNormalizer
+
+{-| `genericToDhallWithInputNormalizer` is like `genericToDhallWith`, but
+    instead of using the `defaultInputNormalizer` it expects an custom
+    `InputNormalizer`.
+-}
+genericToDhallWithInputNormalizer
+  :: (Generic a, GenericToDhall (Rep a)) => InterpretOptions -> InputNormalizer -> Encoder a
+genericToDhallWithInputNormalizer options inputNormalizer
+    = contramap GHC.Generics.from (evalState (genericToDhallWithNormalizer inputNormalizer options) 1)
 
 
 

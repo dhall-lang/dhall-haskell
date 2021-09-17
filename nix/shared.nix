@@ -1,7 +1,7 @@
 let
   pinned = import ./pinnedNixpkgs.nix;
-
-  defaultCompiler = "ghc865";
+  
+  defaultCompiler = "ghc8104";
 
 in
 
@@ -38,60 +38,13 @@ let
       builtins.listToAttrs (map toNameValue names);
 
   overlayShared = pkgsNew: pkgsOld: {
-    applyPatchesToCabalDrv =
-      cabalDrv: pkgsNew.haskell.lib.overrideCabal cabalDrv (old: {
-          patches = (old.patches or []) ++ [
-            (pkgsNew.makeCabalPatch {
-                name = "5446.patch";
-                url = "https://github.com/haskell/cabal/commit/cb221c23c274f79dcab65aef3756377af113ae21.patch";
-                sha256 = "02qalj5y35lq22f19sz3c18syym53d6bdqzbnx9f6z3m7xg591p1";
-              }
-            )
-            (pkgsNew.makeCabalPatch {
-                name = "5451.patch";
-                url = "https://github.com/haskell/cabal/commit/0aeb541393c0fce6099ea7b0366c956e18937791.patch";
-                sha256 = "0pa9r79730n1kah8x54jrd6zraahri21jahasn7k4ng30rnnidgz";
-              }
-            )
-          ];
-        }
-      );
-
-
-    fixedCabal =
-      let
-        buildPlatformHaskellPackagesWithFixedCabal =
-          pkgsNew.pkgsMusl.haskell.packages."${compiler}".override (old: {
-              overrides =
-                pkgsNew.lib.composeExtensions
-                  (old.overrides or (_: _: {}))
-                  (haskellPackagesNew: haskellPackagesOld: {
-                      Cabal = pkgsNew.applyPatchesToCabalDrv haskellPackagesNew.Cabal_2_4_1_0;
-                    }
-                  );
-            }
-          );
-
-      in
-        buildPlatformHaskellPackagesWithFixedCabal.Cabal;
+    fixedCabal = pkgsNew.pkgsMusl.haskell.packages."${compiler}".Cabal_3_2_1_0;
 
     sdist = pkgsNew.callPackage ./sdist.nix { };
 
     dhallToNix = pkgsOld.dhallToNix.override {
       inherit (pkgsNew.haskell.packages."${compiler}") dhall-nix;
     };
-
-    makeCabalPatch = { name, url, sha256 }:
-      let
-        plainPatchFile = pkgsNew.fetchpatch { inherit name url sha256; };
-
-      in
-        pkgsNew.runCommand "${name}-Cabal-only" {} ''
-          ${pkgsNew.patchutils}/bin/filterdiff \
-            -p1 -i 'Cabal/*' -x 'Cabal/ChangeLog.md' \
-            --strip=2 --addoldprefix=a/ --addnewprefix=b/ \
-            ${plainPatchFile} > $out
-        '';
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
@@ -277,23 +230,6 @@ let
                             '';
                           }
                         );
-
-                    generic-random = haskellPackagesOld.generic-random_1_3_0_0;
-
-                    haskeline = haskellPackagesNew.haskeline_0_8_0_0;
-
-                    haskell-lsp = haskellPackagesNew.haskell-lsp_0_19_0_0;
-
-                    haskell-lsp-types =
-                      haskellPackagesNew.haskell-lsp-types_0_19_0_0;
-
-                    HsYAML = haskellPackagesNew.HsYAML_0_2_1_0;
-
-                    path = haskellPackagesNew.path_0_7_0;
-
-                    path-io = haskellPackagesNew.path-io_1_6_0;
-
-                    semialign = haskellPackagesNew.semialign_1_1;
                   };
 
               in
@@ -341,7 +277,6 @@ let
           )).overrideAttrs (old: {
               preCompileBuildDriver = (old.preCompileBuildDriver or "") + ''
                 cabalPackageId=$(basename --suffix=.conf ${pkgsNew.fixedCabal}/lib/ghc-*/package.conf.d/*.conf)
-                echo "Determined cabalPackageId as $cabalPackageId"
                 setupCompileFlags="$setupCompileFlags -package-id $cabalPackageId"
               '';
             }
@@ -349,19 +284,14 @@ let
 
         statify = drv:
           pkgsNew.haskell.lib.appendConfigureFlags
-            (pkgsNew.haskell.lib.disableLibraryProfiling
-              (pkgsNew.haskell.lib.disableSharedExecutables
-                (pkgsNew.haskell.lib.useFixedCabal
-                   (pkgsNew.haskell.lib.justStaticExecutables
-                     (pkgsNew.haskell.lib.dontCheck drv)
-                   )
-                )
-              )
+            (pkgsNew.haskell.lib.justStaticExecutables
+              (pkgsNew.haskell.lib.useFixedCabal (pkgsNew.haskell.lib.dontCheck drv))
             )
             [ "--enable-executable-static"
-              "--extra-lib-dirs=${pkgsNew.pkgsMusl.ncurses.override { enableStatic = true; }}/lib"
+              "--extra-lib-dirs=${pkgsNew.pkgsMusl.ncurses.override { enableStatic = true; enableShared = true; }}/lib"
               "--extra-lib-dirs=${pkgsNew.pkgsMusl.gmp6.override { withStatic = true; }}/lib"
               "--extra-lib-dirs=${pkgsNew.pkgsMusl.zlib.static}/lib"
+              "--extra-lib-dirs=${pkgsNew.pkgsMusl.libsodium.overrideAttrs (old: { dontDisableStatic = true; })}/lib"
               "--extra-lib-dirs=${pkgsNew.pkgsMusl.libffi.overrideAttrs (old: { dontDisableStatic = true; })}/lib"
             ];
       };
