@@ -130,6 +130,7 @@ import Nix.Expr
     , NString (..)
     , Params (..)
     , ($+)
+    , ($++)
     , (==>)
     , (@.)
     , (@@)
@@ -140,10 +141,12 @@ import Nix.Expr.Shorthands
     , letE
     , mkBool
     , mkFunction
+    , mkList
     , mkNonRecSet
     , mkParamset
-    , mkSym
+    , mkSelector
     , mkStr
+    , mkSym
     )
 
 import qualified Data.ByteString.Char8 as ByteString.Char8
@@ -255,9 +258,10 @@ dhallToNix e =
           mkFunction
             (mkParamset
               [ ("dhallToNixUrlFOD", Nothing)
+              , ("cacert", Nothing)
+              , ("dhall", Nothing)
               , ("fetchurl", Nothing)
               , ("runCommand", Nothing)
-              , ("dhall", Nothing)
               ]
               False
             )
@@ -712,39 +716,60 @@ dhallToNix e =
               case maybeHash of
                 Nothing -> return untranslatable
                 Just hash ->
-                  --     dhallToNixUrlFOD (
-                  --       let
-                  --         packageSet = fetchurl {
+                  -- The following code block creates a function call to
+                  -- dhallToNixUrlFOD that looks like the following:
+                  --
+                  -- dhallToNixUrlFOD
+                  --   (let
+                  --       packageSet =
+                  --         (fetchurl {
                   --           url = "https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20210905/packages.dhall";
-                  --           hash = "sha256-FA82MIAfKwLV86QF1IcuCvMX5O8YcBamsA+X1Z1idcY=";
+                  --           hash = "sha256-W1WfXQXIvufW57F5N7fxqRvi/YMBdvlnwlFn4eMyVLc=";
                   --           downloadToTemp = true;
-                  --           postFetch = ''
-                  --             ${dhall}/bin/dhall encode --file "$downloadedFile" > $out
-                  --           '';
-                  --         };
-                  --       in
-                  --         runCommand "decodedPackageSet" {} ''
-                  --           ${dhall}/bin/dhall decode --file "${packageSet}" > $out
-                  --         '';
-                  --     )
+                  --           postFetch = "${dhall}/bin/dhall --alpha --plain --file \"\$downloadedFile\" | ${dhall}/bin/dhall encode > \$out";
+                  --         }).overrideAttrs (oldAttrs: {
+                  --           nativeBuildInputs = (oldAttrs.nativeBuildInputs or []) ++ [ cacert ];
+                  --         });
+                  --    in
+                  --      runCommand "decodedPackageSet" {} "${dhall}/bin/dhall decode --file \"${packageSet}\" > \$out"
+                  --   )
+                  --   { inherit dhallToNixUrlFOD cacert dhall fetchurl runCommand; };
                   return $
                     "dhallToNixUrlFOD" @@
                       (letE
                         "packageSet"
-                        ("fetchurl" @@
-                          attrsE
-                            [ ("url", mkStr $ Dhall.Core.pretty url)
-                            , ("hash", mkStr $ dhallHashToSriHash hash)
-                            , ("downloadToTemp", mkBool True)
-                            , ("postFetch",
-                                mkStrAntiquote
-                                  [ Antiquoted "dhall"
-                                  , Plain "/bin/dhall --alpha --plain --file \"$downloadedFile\" | "
-                                  , Antiquoted "dhall"
-                                  , Plain "/bin/dhall encode > $out"
-                                  ]
-                              )
-                            ]
+                        (
+                          ("fetchurl" @@
+                            attrsE
+                              [ ("url", mkStr $ Dhall.Core.pretty url)
+                              , ("hash", mkStr $ dhallHashToSriHash hash)
+                              , ("downloadToTemp", mkBool True)
+                              , ("postFetch",
+                                  mkStrAntiquote
+                                    [ Antiquoted "dhall"
+                                    , Plain "/bin/dhall --alpha --plain --file \"$downloadedFile\" | "
+                                    , Antiquoted "dhall"
+                                    , Plain "/bin/dhall encode > $out"
+                                    ]
+                                )
+                              ]
+                          ) @.
+                          "overrideAttrs" @@
+                          mkFunction
+                            "oldAttrs"
+                            (attrsE
+                              [ ("nativeBuildInputs",
+                                  (Fix
+                                    (NSelect
+                                      "oldAttrs"
+                                      (mkSelector "nativeBuildInputs")
+                                      (Just $ mkList [])
+                                    )
+                                  ) $++
+                                  mkList [ "cacert" ]
+                                )
+                              ]
+                            )
                         )
                         ("runCommand" @@ mkStr "decodedPackageSet" @@
                           attrsE [] @@
@@ -759,9 +784,10 @@ dhallToNix e =
                       ( mkNonRecSet
                           [ inherit
                               [ "dhallToNixUrlFOD"
+                              , "cacert"
+                              , "dhall"
                               , "fetchurl"
                               , "runCommand"
-                              , "dhall"
                               ]
                               (Nix.SourcePos "unknown" (Nix.mkPos 1) (Nix.mkPos 1))
                           ]
