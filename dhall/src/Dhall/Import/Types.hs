@@ -131,7 +131,7 @@ data Status = Status
     }
 
 -- | Initial `Status`, parameterised over the HTTP 'Manager',
---   the user headers and the remote resolver,
+--   the origin headers and the remote resolver,
 --   importing relative to the given root import.
 emptyStatusWith
     :: IO Manager

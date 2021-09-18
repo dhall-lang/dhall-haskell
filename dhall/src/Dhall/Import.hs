@@ -131,7 +131,7 @@ module Dhall.Import (
     , makeEmptyStatus
     , remoteStatus
     , remoteStatusWithManager
-    , defaultFetchRemote
+    , fetchRemote
     , stack
     , cache
     , Depends(..)
@@ -156,7 +156,7 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative              (Alternative (..))
+import Control.Applicative        (Alternative (..))
 import Control.Exception
     ( Exception
     , IOException
@@ -203,6 +203,7 @@ import Dhall.Import.Headers
     , toOriginHeaders
     )
 import Dhall.Import.Types
+
 import Dhall.Parser
     ( ParseError (..)
     , Parser (..)
@@ -381,17 +382,6 @@ instance Show CannotImportHTTPURL where
         <>  "The requested URL was: "
         <>  url
         <>  "\n"
-
-data CannotImportFromHeadersFile =
-    CannotImportFromHeadersFile
-    deriving (Typeable)
-
-instance Exception CannotImportFromHeadersFile
-
-instance Show CannotImportFromHeadersFile where
-    show CannotImportFromHeadersFile =
-            "\n"
-        <>  "\ESC[1;31mError\ESC[0m: Cannot import a remote URL from the headers configuration expression.\n"
 
 {-|
 > canonicalize . canonicalize = canonicalize
@@ -805,16 +795,16 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
--- TODO revert to fetchRemove, remove from params?
-defaultFetchRemote :: URL -> StateT Status IO Data.Text.Text
+
+fetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
-defaultFetchRemote (url@URL { headers = maybeHeadersExpression }) = do
+fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Core.pretty url)
     Status { _stack } <- State.get
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
-defaultFetchRemote url = do
+fetchRemote url = do
     zoom remote (State.put fetchFromHTTP)
     fetchFromHTTP url
   where
@@ -1025,13 +1015,13 @@ normalizeHeadersIn url@URL { headers = Just headersExpression } = do
 
 normalizeHeadersIn url = return url
 
--- | An empty user headers used for remote contexts
+-- | Empty origin headers used for remote contexts
 --   (and fallback when nothing is set in env or config file)
 emptyOriginHeaders :: Expr Src Import
 emptyOriginHeaders = ListLit (Just (fmap absurd originHeadersTypeExpr)) mempty
 
--- | A fake Src to annotate headers expressions with
---   We need to wrap headers expressions in a Note for error reporting,
+-- | A fake Src to annotate headers expressions with.
+--   We need to wrap headers expressions in a Note for nice error reporting,
 --   and because `?` handling only catches SourcedExceptions
 headersSrc :: Src
 headersSrc = Src {
@@ -1068,30 +1058,29 @@ originHeadersLoader headersExpr = do
 
     loaded <- loadWith (ImportAlt partialExpr emptyOriginHeaders)
     headers <- liftIO (toOriginHeaders loaded)
- 
-    -- short-circuit _loadOriginHeaders to return this directly next time
+
+    -- return cached headers next time
     _ <- State.modify (\state -> state { _loadOriginHeaders = return headers })
 
     return headers
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus = makeEmptyStatus defaultNewManager defaultOriginHeaders defaultFetchRemote
+emptyStatus = makeEmptyStatus defaultNewManager defaultOriginHeaders
 
 emptyStatusWithManager
     :: IO Manager
     -> FilePath
     -> Status
-emptyStatusWithManager newManager = makeEmptyStatus newManager defaultOriginHeaders defaultFetchRemote
+emptyStatusWithManager newManager = makeEmptyStatus newManager defaultOriginHeaders
 
 -- | See 'emptyStatus'.
 makeEmptyStatus
     :: IO Manager
     -> IO (Expr Src Import)
-    -> (URL -> StateT Status IO Data.Text.Text)
     -> FilePath
     -> Status
-makeEmptyStatus newManager headersExpr fetchRemote rootDirectory =
+makeEmptyStatus newManager headersExpr rootDirectory =
     emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
@@ -1125,7 +1114,7 @@ remoteStatus = remoteStatusWithManager defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) defaultFetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1228,7 +1217,7 @@ load = loadWithManager defaultNewManager
 loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
 loadWithManager newManager =
     loadWithStatus
-        (makeEmptyStatus newManager defaultOriginHeaders defaultFetchRemote ".")
+        (makeEmptyStatus newManager defaultOriginHeaders ".")
         UseSemanticCache
 
 printWarning :: (MonadIO m) => String -> m ()
@@ -1244,7 +1233,7 @@ printWarning message = do
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
 loadRelativeTo parentDirectory = loadWithStatus
-    (makeEmptyStatus defaultNewManager defaultOriginHeaders defaultFetchRemote parentDirectory)
+    (makeEmptyStatus defaultNewManager defaultOriginHeaders parentDirectory)
 
 -- | See 'loadRelativeTo'.
 loadWithStatus

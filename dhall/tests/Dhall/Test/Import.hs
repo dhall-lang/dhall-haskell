@@ -109,8 +109,7 @@ successTest prefix = do
         let status =
                 Import.makeEmptyStatus
                     httpManager
-                    (return Import.envOriginHeaders)
-                    Import.defaultFetchRemote
+                    (pure Import.envOriginHeaders)
                     directoryString
 
         let load =

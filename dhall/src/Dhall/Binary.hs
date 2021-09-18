@@ -1273,8 +1273,8 @@ encodeImport import_ =
             Just digest ->
                 Encoding.encodeBytes ("\x12\x20" <> Data.ByteArray.convert digest)
 
-        -- OriginHeaders can't be encoded by the user, they're only constructed internally
-        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2; OriginHeaders -> error "Impossible")
+        -- OriginHeaders will never actually be encoded, they're only constructed internally
+        m = Encoding.encodeInt (case importMode of Code -> 0; OriginHeaders -> 0; RawText -> 1; Location -> 2)
 
     Import{..} = import_
 

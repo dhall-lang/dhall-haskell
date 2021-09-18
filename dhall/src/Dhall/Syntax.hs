@@ -1058,8 +1058,6 @@ data ImportType
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
-    -- | ReferentiallyOpaque ImportType
-    -- ^ A potentially-local import which is allowed even from remote parents
     | Missing
     deriving (Eq, Generic, Ord, Show, NFData)
 
@@ -1095,8 +1093,6 @@ instance Pretty ImportType where
     pretty (Remote url) = Pretty.pretty url
 
     pretty (Env env) = "env:" <> prettyEnvironmentVariable env
-
-    -- pretty (ReferentiallyOpaque importType) = Pretty.pretty importType
 
     pretty Missing = "missing"
 
