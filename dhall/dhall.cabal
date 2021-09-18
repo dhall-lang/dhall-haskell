@@ -621,8 +621,6 @@ Library
     Autogen-Modules:
         Paths_dhall
     if flag(with-http)
-      Exposed-Modules:
-        Dhall.Import.UserHeaders
       Other-Modules:
         Dhall.Import.HTTP
         Dhall.Import.Manager

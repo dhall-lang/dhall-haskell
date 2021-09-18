@@ -3,10 +3,10 @@
 {-# LANGUAGE ViewPatterns        #-}
 
 module Dhall.Import.Headers
-    ( SiteHeadersFile(..)
+    ( normalizeHeaders
+    , siteHeadersTypeExpr
     , toHeaders
     , toSiteHeaders
-    , normalizeHeaders
     ) where
 
 import Control.Applicative     (Alternative (..), liftA2)
@@ -30,13 +30,6 @@ import qualified Dhall.Core             as Core
 import qualified Dhall.Map
 import qualified Dhall.TypeCheck
 import qualified Dhall.Pretty.Internal
-
--- SiteHeadersFile is the raw configuration used to build SiteHeaders
-data SiteHeadersFile = SiteHeadersFile {
-    parentDirectory :: FilePath,
-    source :: ImportType,
-    fileContents :: Data.Text.Text
-}
 
 -- | Given a well-typed (of type `List { header : Text, value Text }` or
 -- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form

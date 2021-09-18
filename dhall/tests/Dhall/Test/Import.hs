@@ -17,7 +17,6 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
-import qualified Dhall.Import.UserHeaders         as UserHeaders
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
 import qualified Network.HTTP.Client              as HTTP
@@ -112,7 +111,7 @@ successTest prefix = do
         let status =
                 Import.makeEmptyStatus
                     httpManager
-                    UserHeaders.envOnlyUserHeaders
+                    (return Import.envUserHeaders)
                     Import.defaultFetchRemote
                     directoryString
 

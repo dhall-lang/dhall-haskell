@@ -1261,6 +1261,10 @@ encodeImport import_ =
             encodeList
                 (prefix ++ [ Encoding.encodeInt 6, Encoding.encodeString x ])
 
+        -- ReferentiallyOpaque _ ->
+        --     -- these can't be represented in the language, ignore them
+        --     error "Impossible?"
+
         Missing ->
             encodeList (prefix ++ [ Encoding.encodeInt 7 ])
   where
@@ -1273,7 +1277,7 @@ encodeImport import_ =
             Just digest ->
                 Encoding.encodeBytes ("\x12\x20" <> Data.ByteArray.convert digest)
 
-        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
+        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2; SiteHeaders -> error "Impossible?")
 
     Import{..} = import_
 

@@ -1058,6 +1058,8 @@ data ImportType
     -- ^ URL of remote resource and optional headers stored in an import
     | Env  Text
     -- ^ Environment variable
+    -- | ReferentiallyOpaque ImportType
+    -- ^ A potentially-local import which is allowed even from remote parents
     | Missing
     deriving (Eq, Generic, Ord, Show, NFData)
 
@@ -1094,10 +1096,15 @@ instance Pretty ImportType where
 
     pretty (Env env) = "env:" <> prettyEnvironmentVariable env
 
+    -- pretty (ReferentiallyOpaque importType) = Pretty.pretty importType
+
     pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText | Location
+--   SiteHeaders is identical to Code, except local imports with this mode
+--   are allowed from any source (local or remote). This type is only used when
+--   loading Site headers, it can't be set by the user.
+data ImportMode = SiteHeaders | Code | RawText | Location
   deriving (Eq, Generic, Ord, Show, NFData)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
@@ -1139,9 +1146,10 @@ instance Pretty Import where
       where
         suffix :: Text
         suffix = case importMode of
-            RawText  -> " as Text"
-            Location -> " as Location"
-            Code     -> ""
+            RawText     -> " as Text"
+            Location    -> " as Location"
+            Code        -> ""
+            SiteHeaders -> ""
 
 {-| Returns `True` if the given `Char` is valid within an unquoted path
     component

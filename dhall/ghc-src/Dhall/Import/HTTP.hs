@@ -4,6 +4,7 @@
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
+    , siteHeadersFileExpr
     ) where
 
 import Control.Exception                (Exception)
@@ -15,14 +16,22 @@ import Data.Dynamic                     (toDyn)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Text.Encoding               (decodeUtf8)
 import Dhall.Core
-    ( Import (..)
+    ( Expr (..)
+    , Directory (..)
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
     , ImportHashed (..)
+    , ImportMode (..)
     , ImportType (..)
     , Scheme (..)
     , URL (..)
     )
 import Dhall.Import.Types
+import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
+import System.Directory                 (getXdgDirectory, XdgDirectory(XdgConfig))
+import System.FilePath                  (splitDirectories)
 
 
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..))
@@ -166,22 +175,6 @@ newManager = do
         Just manager ->
             return manager
 
-getSiteHeaders :: StateT Status IO SiteHeaders
-getSiteHeaders = do
-    Status { _siteHeaders = oldSiteHeaders, _stack, ..} <- State.get
-
-    -- TODO pointless?
-    case oldSiteHeaders of
-        Nothing -> do
-            siteHeaders <- _loadSiteHeaders
-
-            -- State.put (Status { _siteHeaders = Just siteHeaders , ..})
-
-            return siteHeaders
-
-        Just siteHeaders ->
-            return siteHeaders
-
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
     , actualOrigin    :: ByteString
@@ -275,7 +268,9 @@ addHeaders siteHeaders urlHeaders request =
 
 fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
 fetchFromHttpUrl childURL mheaders = do
-    siteHeaders <- getSiteHeaders
+    Status { _loadSiteHeaders } <- State.get
+
+    siteHeaders <- _loadSiteHeaders
 
     manager <- newManager
 
@@ -310,3 +305,11 @@ fetchFromHttpUrl childURL mheaders = do
     case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
         Left  err  -> liftIO (Control.Exception.throwIO err)
         Right text -> return (Data.Text.Lazy.toStrict text)
+
+siteHeadersFileExpr :: IO (Expr Src Import)
+siteHeadersFileExpr = do
+    directoryStr <- getXdgDirectory XdgConfig "dhall"
+    let components = map Text.pack (splitDirectories directoryStr)
+    let directory = Directory (reverse components)
+    let file = (File directory "headers.dhall")
+    return (Embed (Import (ImportHashed Nothing (Local Absolute file)) SiteHeaders))

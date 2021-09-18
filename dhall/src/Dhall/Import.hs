@@ -127,6 +127,7 @@ module Dhall.Import (
     , chainedChangeMode
     , emptyStatus
     , emptyStatusWithManager
+    , envUserHeaders
     , makeEmptyStatus
     , remoteStatus
     , remoteStatusWithManager
@@ -190,19 +191,18 @@ import Dhall.Syntax
     )
 
 import System.FilePath ((</>))
+import Text.Megaparsec (SourcePos (SourcePos), mkPos)
 
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Headers
-    ( SiteHeadersFile(..)
+    ( normalizeHeaders
+    , siteHeadersTypeExpr
     , toHeaders
     , toSiteHeaders
-    , normalizeHeaders
     )
 import Dhall.Import.Types
-import Dhall.Import.UserHeaders (defaultUserHeaders)
-
 import Dhall.Parser
     ( ParseError (..)
     , Parser (..)
@@ -641,6 +641,11 @@ writeToSemanticCache hash bytes = do
 -- scratch.
 loadImportWithSemisemanticCache
   :: Chained -> StateT Status IO ImportSemantics
+
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed hash importType) SiteHeaders)) =
+    -- SiteHeaders are loaded as Code
+    loadImportWithSemisemanticCache (Chained (Import (ImportHashed hash importType) Code))
+
 loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
     text <- fetchFresh importType
     Status {..} <- State.get
@@ -1020,55 +1025,54 @@ normalizeHeadersIn url@URL { headers = Just headersExpression } = do
 
 normalizeHeadersIn url = return url
 
--- | A no-op user headers loader used for remote contexts
---   (and loading user headers themselves)
-noopUserHeaders :: Maybe.MaybeT IO SiteHeadersFile
-noopUserHeaders = Maybe.MaybeT (return Nothing)
+-- | An empty user headers used for remote contexts
+--   (and fallback when nothing is set in env or config file)
+emptyUserHeaders :: Expr Src Import
+emptyUserHeaders = ListLit (Just (fmap absurd siteHeadersTypeExpr)) mempty
 
--- | Given a SiteHeadersFile loader, return a SiteHeaders loader.
--- TODO is this actually using the stack? We're discarding the parent directory.
--- Perhaps it should literally return an expr with DHALL_HEADERS ? ~/.cache/....
-siteHeadersLoader :: Maybe.MaybeT IO SiteHeadersFile -> StateT Status IO SiteHeaders
-siteHeadersLoader loadSiteHeadersFile = do
-    Status { _stack, ..} <- State.get
-    -- run load
-    loaded <- liftIO (Maybe.runMaybeT loadSiteHeadersFile)
-    case loaded of
-        Nothing -> return mempty
-        Just (SiteHeadersFile { parentDirectory, fileContents, source }) ->
-            _
-            -- loadWith source parentDirectory fileContents
-    -- liftIO (toSiteHeaders headersExpr)
-
-    -- don't go through load process again
-    -- TODO is this needed? I think it already caches imports...
-    -- State.put (Status { _siteHeaders = return loded , ..})
+-- | A fake Src to annotate headers expressions with
+--   We need to wrap headers expressions in a Note for error reporting,
+--   and because `?` handling only catches SourcedExceptions
+headersSrc :: Src
+headersSrc = Src {
+        srcStart = SourcePos {
+            sourceName = fakeSrcName,
+            sourceLine = mkPos 1,
+            sourceColumn = mkPos 1
+        },
+        srcEnd = SourcePos {
+            sourceName = fakeSrcName,
+            sourceLine = mkPos 1,
+            sourceColumn = mkPos (Text.length fakeSrcText)
+        },
+        srcText = fakeSrcText
+    }
   where
-    -- sourceChained :: ImportType -> Chained
-    -- sourceChained source = Chained (Import (ImportHashed Nothing source) Code )
+    fakeSrcText = "«Origin Header Configuration»"
+    fakeSrcName = "[builtin]"
 
-    -- extendStack :: NonEmpty Chained -> ImportType -> NonEmpty Chained
-    -- extendStack existing source = pure (sourceChained source) <> existing
+-- | Load headers only from the environment (used in tests)
+envUserHeaders :: Expr Src Import
+envUserHeaders = Note headersSrc (Embed (Import (ImportHashed Nothing (Env "DHALL_HEADERS")) SiteHeaders))
 
-    -- loadFile source parentDirectory fileContents = do
-    --     let fullStack = extendStack importStack source
+-- | Load headers in env, falling back to config file
+defaultUserHeaders :: IO (Expr Src Import)
+defaultUserHeaders = do
+    fromFile <- siteHeadersFileExpr
+    return (ImportAlt envUserHeaders (Note headersSrc fromFile))
 
-    --     expr <- case Dhall.Parser.exprFromText mempty fileContents of
-    --         Left err -> throwMissingImport (Imported fullStack err)
-    --         Right expr -> return expr
+-- | Given a headers expression, return a site headers loader
+siteHeadersLoader :: IO (Expr Src Import) -> StateT Status IO SiteHeaders
+siteHeadersLoader headersExpr = do
+    partialExpr <- liftIO headersExpr
 
-    --     loaded <- loadWithStatus
-    --         (makeEmptyStatus
-    --             defaultNewManager
-    --             noopUserHeaders
-    --             defaultFetchRemote
-    --             parentDirectory) {
-    --                 _stack = fullStack
-    --             }
-    --         IgnoreSemanticCache
-    --         expr
+    loaded <- loadWith (ImportAlt partialExpr emptyUserHeaders)
+    headers <- liftIO (toSiteHeaders loaded)
+ 
+    -- short-circuit _siteHeaders to return this directly next time
+    _ <- State.modify (\state -> state { _loadSiteHeaders = return headers })
 
-    --     toSiteHeaders loaded
+    return headers
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
@@ -1083,12 +1087,12 @@ emptyStatusWithManager newManager = makeEmptyStatus newManager defaultUserHeader
 -- | See 'emptyStatus'.
 makeEmptyStatus
     :: IO Manager
-    -> Maybe.MaybeT IO SiteHeadersFile
+    -> IO (Expr Src Import)
     -> (URL -> StateT Status IO Data.Text.Text)
     -> FilePath
     -> Status
-makeEmptyStatus newManager loadSiteHeadersFile fetchRemote rootDirectory =
-    emptyStatusWith newManager (siteHeadersLoader loadSiteHeadersFile) fetchRemote rootImport
+makeEmptyStatus newManager headersExpr fetchRemote rootDirectory =
+    emptyStatusWith newManager (siteHeadersLoader headersExpr) fetchRemote rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1121,7 +1125,7 @@ remoteStatus = remoteStatusWithManager defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager (siteHeadersLoader noopUserHeaders) defaultFetchRemote rootImport
+    emptyStatusWith newManager (siteHeadersLoader (pure emptyUserHeaders)) defaultFetchRemote rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1150,9 +1154,12 @@ loadWith expr₀ = case expr₀ of
         local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
         local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
 
-    let referentiallySane = not (local child) || local parent
+    let referentiallySane = case import₀ of
+            Import _ Location -> True
+            Import _ SiteHeaders -> True
+            _ -> not (local child) || local parent
 
-    if importMode import₀ == Location || referentiallySane
+    if referentiallySane
         then return ()
         else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
 
@@ -1320,6 +1327,9 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
             ignore
 
         Location ->
+            ignore
+
+        SiteHeaders ->
             ignore
 
         Code ->

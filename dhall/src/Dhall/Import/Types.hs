@@ -112,8 +112,8 @@ data Status = Status
     -- requests
 
     , _loadSiteHeaders :: StateT Status IO SiteHeaders
-    , _siteHeaders :: Maybe SiteHeaders
-    -- ^ Used to cache the user's custom headers for all remote imports
+    -- ^ Load the site headers from environment or configuration file.
+    --   After loading once, further evaluations return the cached version.
 
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
@@ -149,8 +149,6 @@ emptyStatusWith _newManager _loadSiteHeaders _remote rootImport = Status {..}
     _cache = Map.empty
 
     _manager = Nothing
-
-    _siteHeaders = Nothing
 
     _substitutions = Dhall.Substitution.empty
 
