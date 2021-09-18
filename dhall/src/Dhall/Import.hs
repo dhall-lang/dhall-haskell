@@ -1055,7 +1055,6 @@ defaultOriginHeaders = do
 originHeadersLoader :: IO (Expr Src Import) -> StateT Status IO OriginHeaders
 originHeadersLoader headersExpr = do
     partialExpr <- liftIO headersExpr
-
     loaded <- loadWith (ImportAlt partialExpr emptyOriginHeaders)
     headers <- liftIO (toOriginHeaders loaded)
 
