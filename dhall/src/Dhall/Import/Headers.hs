@@ -4,9 +4,9 @@
 
 module Dhall.Import.Headers
     ( normalizeHeaders
-    , siteHeadersTypeExpr
+    , originHeadersTypeExpr
     , toHeaders
-    , toSiteHeaders
+    , toOriginHeaders
     ) where
 
 import Control.Applicative     (Alternative (..), liftA2)
@@ -17,9 +17,8 @@ import Data.Void               (Void)
 import Dhall.Core
     ( Chunks (..)
     , Expr (..)
-    , ImportType
     )
-import Dhall.Import.Types      (HTTPHeader , SiteHeaders)
+import Dhall.Import.Types      (HTTPHeader , OriginHeaders)
 import Dhall.Parser            (Src (..))
 
 import qualified Data.CaseInsensitive
@@ -54,24 +53,24 @@ toHeader (RecordLit m) = do
 toHeader _ =
     empty
 
--- | Normalize, typecheck and return SiteHeaders from a given expression.
-toSiteHeaders :: Expr Src Void -> IO SiteHeaders
-toSiteHeaders expr = fmap convert (normalizeSiteHeaders expr)
+-- | Normalize, typecheck and return OriginHeaders from a given expression.
+toOriginHeaders :: Expr Src Void -> IO OriginHeaders
+toOriginHeaders expr = fmap convert (normalizeOriginHeaders expr)
   where
-    convert :: Expr s a -> SiteHeaders
-    convert (ListLit _ hs) = HashMap.fromList (sitePairs hs)
+    convert :: Expr s a -> OriginHeaders
+    convert (ListLit _ hs) = HashMap.fromList (originPairs hs)
     convert _ = mempty
 
-    sitePairs hs = Data.Foldable.toList (Data.Foldable.fold (mapM toSitePair hs))
+    originPairs hs = Data.Foldable.toList (Data.Foldable.fold (mapM toOriginPair hs))
 
-    toSitePair :: Expr s a -> Maybe (Text, [HTTPHeader])
-    toSitePair (RecordLit m) = do
+    toOriginPair :: Expr s a -> Maybe (Text, [HTTPHeader])
+    toOriginPair (RecordLit m) = do
       (Core.recordFieldValue -> TextLit (Chunks [] keyText), Core.recordFieldValue -> value)
           <- lookupMapKey
       return (keyText, toHeaders value)
         where
           lookupMapKey = liftA2 (,) (Dhall.Map.lookup "mapKey" m) (Dhall.Map.lookup "mapValue" m)
-    toSitePair _ = Nothing
+    toOriginPair _ = Nothing
 
 makeHeadersTypeExpr :: Text -> Text -> Expr Src Void
 makeHeadersTypeExpr keyKey valueKey =
@@ -89,8 +88,8 @@ headersTypeExpr = makeHeadersTypeExpr "mapKey" "mapValue"
 leagacyHeadersTypeExpr :: Expr Src Void
 leagacyHeadersTypeExpr = makeHeadersTypeExpr "header" "value"
 
-siteHeadersTypeExpr :: Expr Src Void
-siteHeadersTypeExpr =
+originHeadersTypeExpr :: Expr Src Void
+originHeadersTypeExpr =
   App List
       ( Record $ Core.makeRecordField <$>
           Dhall.Map.fromList
@@ -128,5 +127,5 @@ normalizeHeaders headersExpr = do
 
     handle handler₀ (typecheck headersTypeExpr headersExpr)
 
-normalizeSiteHeaders :: Expr Src Void -> IO (Expr Src Void)
-normalizeSiteHeaders = typecheck siteHeadersTypeExpr
+normalizeOriginHeaders :: Expr Src Void -> IO (Expr Src Void)
+normalizeOriginHeaders = typecheck originHeadersTypeExpr

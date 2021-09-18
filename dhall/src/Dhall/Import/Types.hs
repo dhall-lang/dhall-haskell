@@ -18,7 +18,6 @@ import Dhall.Context                    (Context)
 import Dhall.Core
     ( Expr
     , Import (..)
-    , ImportType
     , ReifiedNormalizer (..)
     , URL
     )
@@ -85,7 +84,7 @@ defaultNewManager =
 type HTTPHeader = (CI ByteString, ByteString)
 
 -- | A map of site origin -> HTTP headers
-type SiteHeaders = HashMap Data.Text.Text [HTTPHeader]
+type OriginHeaders = HashMap Data.Text.Text [HTTPHeader]
 
 {-| Used internally to track whether or not we've already warned the user about
     caching issues
@@ -111,8 +110,8 @@ data Status = Status
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
     -- requests
 
-    , _loadSiteHeaders :: StateT Status IO SiteHeaders
-    -- ^ Load the site headers from environment or configuration file.
+    , _loadOriginHeaders :: StateT Status IO OriginHeaders
+    -- ^ Load the origin headers from environment or configuration file.
     --   After loading once, further evaluations return the cached version.
 
     , _remote :: URL -> StateT Status IO Data.Text.Text
@@ -136,11 +135,11 @@ data Status = Status
 --   importing relative to the given root import.
 emptyStatusWith
     :: IO Manager
-    -> StateT Status IO SiteHeaders
+    -> StateT Status IO OriginHeaders
     -> (URL -> StateT Status IO Data.Text.Text)
     -> Import
     -> Status
-emptyStatusWith _newManager _loadSiteHeaders _remote rootImport = Status {..}
+emptyStatusWith _newManager _loadOriginHeaders _remote rootImport = Status {..}
   where
     _stack = pure (Chained rootImport)
 

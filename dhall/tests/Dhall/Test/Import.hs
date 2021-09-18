@@ -87,8 +87,6 @@ successTest prefix = do
             , importDirectory </> "success/unit/cors/AllowedAll"
             , importDirectory </> "success/unit/cors/SelfImportRelative"
             , importDirectory </> "success/unit/cors/OnlyGithub"
-            , importDirectory </> "success/userHeaders"
-            , importDirectory </> "success/userHeadersOverride"
             ]
 
     Test.Util.testCase prefix expectedFailures (do
@@ -111,7 +109,7 @@ successTest prefix = do
         let status =
                 Import.makeEmptyStatus
                     httpManager
-                    (return Import.envUserHeaders)
+                    (return Import.envOriginHeaders)
                     Import.defaultFetchRemote
                     directoryString
 

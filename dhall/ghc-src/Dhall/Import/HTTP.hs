@@ -4,7 +4,7 @@
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
-    , siteHeadersFileExpr
+    , originHeadersFileExpr
     ) where
 
 import Control.Exception                (Exception)
@@ -250,27 +250,27 @@ corsCompliant (Remote parentURL) childURL responseHeaders = liftIO $ do
                 Control.Exception.throwIO (NotCORSCompliant {..})
 corsCompliant _ _ _ = return ()
 
-addHeaders :: SiteHeaders -> Maybe [HTTPHeader] -> HTTP.Request -> HTTP.Request
-addHeaders siteHeaders urlHeaders request =
-    request { HTTP.requestHeaders = (filterHeaders urlHeaders) <> originHeaders }
+addHeaders :: OriginHeaders -> Maybe [HTTPHeader] -> HTTP.Request -> HTTP.Request
+addHeaders originHeaders urlHeaders request =
+    request { HTTP.requestHeaders = (filterHeaders urlHeaders) <> perOriginHeaders }
       where
         origin = decodeUtf8 (HTTP.host request) <> ":" <> Text.pack (show (HTTP.port request))
-      
-        originHeaders = HashMap.lookupDefault [] origin siteHeaders
+ 
+        perOriginHeaders = HashMap.lookupDefault [] origin originHeaders
 
         filterHeaders = foldMap (filter (not . overridden))
 
         overridden :: HTTPHeader -> Bool
-        overridden (key, _value) = any (matchesKey key) originHeaders
+        overridden (key, _value) = any (matchesKey key) perOriginHeaders
 
         matchesKey :: CI ByteString -> HTTPHeader -> Bool
         matchesKey key (candidate, _value) = key == candidate
 
 fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
 fetchFromHttpUrl childURL mheaders = do
-    Status { _loadSiteHeaders } <- State.get
+    Status { _loadOriginHeaders } <- State.get
 
-    siteHeaders <- _loadSiteHeaders
+    originHeaders <- _loadOriginHeaders
 
     manager <- newManager
 
@@ -278,7 +278,7 @@ fetchFromHttpUrl childURL mheaders = do
 
     baseRequest <- liftIO (HTTP.parseUrlThrow childURLString)
 
-    let requestWithHeaders = addHeaders siteHeaders mheaders baseRequest
+    let requestWithHeaders = addHeaders originHeaders mheaders baseRequest
 
     let io = HTTP.httpLbs requestWithHeaders manager
 
@@ -306,10 +306,10 @@ fetchFromHttpUrl childURL mheaders = do
         Left  err  -> liftIO (Control.Exception.throwIO err)
         Right text -> return (Data.Text.Lazy.toStrict text)
 
-siteHeadersFileExpr :: IO (Expr Src Import)
-siteHeadersFileExpr = do
+originHeadersFileExpr :: IO (Expr Src Import)
+originHeadersFileExpr = do
     directoryStr <- getXdgDirectory XdgConfig "dhall"
     let components = map Text.pack (splitDirectories directoryStr)
     let directory = Directory (reverse components)
     let file = (File directory "headers.dhall")
-    return (Embed (Import (ImportHashed Nothing (Local Absolute file)) SiteHeaders))
+    return (Embed (Import (ImportHashed Nothing (Local Absolute file)) OriginHeaders))

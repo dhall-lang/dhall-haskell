@@ -127,7 +127,7 @@ module Dhall.Import (
     , chainedChangeMode
     , emptyStatus
     , emptyStatusWithManager
-    , envUserHeaders
+    , envOriginHeaders
     , makeEmptyStatus
     , remoteStatus
     , remoteStatusWithManager
@@ -198,9 +198,9 @@ import Dhall.Import.HTTP
 #endif
 import Dhall.Import.Headers
     ( normalizeHeaders
-    , siteHeadersTypeExpr
+    , originHeadersTypeExpr
     , toHeaders
-    , toSiteHeaders
+    , toOriginHeaders
     )
 import Dhall.Import.Types
 import Dhall.Parser
@@ -642,8 +642,8 @@ writeToSemanticCache hash bytes = do
 loadImportWithSemisemanticCache
   :: Chained -> StateT Status IO ImportSemantics
 
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed hash importType) SiteHeaders)) =
-    -- SiteHeaders are loaded as Code
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed hash importType) OriginHeaders)) =
+    -- OriginHeaders are loaded as Code
     loadImportWithSemisemanticCache (Chained (Import (ImportHashed hash importType) Code))
 
 loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
@@ -1027,8 +1027,8 @@ normalizeHeadersIn url = return url
 
 -- | An empty user headers used for remote contexts
 --   (and fallback when nothing is set in env or config file)
-emptyUserHeaders :: Expr Src Import
-emptyUserHeaders = ListLit (Just (fmap absurd siteHeadersTypeExpr)) mempty
+emptyOriginHeaders :: Expr Src Import
+emptyOriginHeaders = ListLit (Just (fmap absurd originHeadersTypeExpr)) mempty
 
 -- | A fake Src to annotate headers expressions with
 --   We need to wrap headers expressions in a Note for error reporting,
@@ -1052,37 +1052,37 @@ headersSrc = Src {
     fakeSrcName = "[builtin]"
 
 -- | Load headers only from the environment (used in tests)
-envUserHeaders :: Expr Src Import
-envUserHeaders = Note headersSrc (Embed (Import (ImportHashed Nothing (Env "DHALL_HEADERS")) SiteHeaders))
+envOriginHeaders :: Expr Src Import
+envOriginHeaders = Note headersSrc (Embed (Import (ImportHashed Nothing (Env "DHALL_HEADERS")) OriginHeaders))
 
 -- | Load headers in env, falling back to config file
-defaultUserHeaders :: IO (Expr Src Import)
-defaultUserHeaders = do
-    fromFile <- siteHeadersFileExpr
-    return (ImportAlt envUserHeaders (Note headersSrc fromFile))
+defaultOriginHeaders :: IO (Expr Src Import)
+defaultOriginHeaders = do
+    fromFile <- originHeadersFileExpr
+    return (ImportAlt envOriginHeaders (Note headersSrc fromFile))
 
--- | Given a headers expression, return a site headers loader
-siteHeadersLoader :: IO (Expr Src Import) -> StateT Status IO SiteHeaders
-siteHeadersLoader headersExpr = do
+-- | Given a headers expression, return an origin headers loader
+originHeadersLoader :: IO (Expr Src Import) -> StateT Status IO OriginHeaders
+originHeadersLoader headersExpr = do
     partialExpr <- liftIO headersExpr
 
-    loaded <- loadWith (ImportAlt partialExpr emptyUserHeaders)
-    headers <- liftIO (toSiteHeaders loaded)
+    loaded <- loadWith (ImportAlt partialExpr emptyOriginHeaders)
+    headers <- liftIO (toOriginHeaders loaded)
  
-    -- short-circuit _siteHeaders to return this directly next time
-    _ <- State.modify (\state -> state { _loadSiteHeaders = return headers })
+    -- short-circuit _loadOriginHeaders to return this directly next time
+    _ <- State.modify (\state -> state { _loadOriginHeaders = return headers })
 
     return headers
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus = makeEmptyStatus defaultNewManager defaultUserHeaders defaultFetchRemote
+emptyStatus = makeEmptyStatus defaultNewManager defaultOriginHeaders defaultFetchRemote
 
 emptyStatusWithManager
     :: IO Manager
     -> FilePath
     -> Status
-emptyStatusWithManager newManager = makeEmptyStatus newManager defaultUserHeaders defaultFetchRemote
+emptyStatusWithManager newManager = makeEmptyStatus newManager defaultOriginHeaders defaultFetchRemote
 
 -- | See 'emptyStatus'.
 makeEmptyStatus
@@ -1092,7 +1092,7 @@ makeEmptyStatus
     -> FilePath
     -> Status
 makeEmptyStatus newManager headersExpr fetchRemote rootDirectory =
-    emptyStatusWith newManager (siteHeadersLoader headersExpr) fetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1125,7 +1125,7 @@ remoteStatus = remoteStatusWithManager defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager (siteHeadersLoader (pure emptyUserHeaders)) defaultFetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) defaultFetchRemote rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1156,7 +1156,7 @@ loadWith expr₀ = case expr₀ of
 
     let referentiallySane = case import₀ of
             Import _ Location -> True
-            Import _ SiteHeaders -> True
+            Import _ OriginHeaders -> True
             _ -> not (local child) || local parent
 
     if referentiallySane
@@ -1228,7 +1228,7 @@ load = loadWithManager defaultNewManager
 loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
 loadWithManager newManager =
     loadWithStatus
-        (makeEmptyStatus newManager defaultUserHeaders defaultFetchRemote ".")
+        (makeEmptyStatus newManager defaultOriginHeaders defaultFetchRemote ".")
         UseSemanticCache
 
 printWarning :: (MonadIO m) => String -> m ()
@@ -1244,7 +1244,7 @@ printWarning message = do
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
 loadRelativeTo parentDirectory = loadWithStatus
-    (makeEmptyStatus defaultNewManager defaultUserHeaders defaultFetchRemote parentDirectory)
+    (makeEmptyStatus defaultNewManager defaultOriginHeaders defaultFetchRemote parentDirectory)
 
 -- | See 'loadRelativeTo'.
 loadWithStatus
@@ -1329,7 +1329,7 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
         Location ->
             ignore
 
-        SiteHeaders ->
+        OriginHeaders ->
             ignore
 
         Code ->

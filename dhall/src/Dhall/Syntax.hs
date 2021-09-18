@@ -1101,10 +1101,10 @@ instance Pretty ImportType where
     pretty Missing = "missing"
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
---   SiteHeaders is identical to Code, except local imports with this mode
+--   OriginHeaders is identical to Code, except local imports with this mode
 --   are allowed from any source (local or remote). This type is only used when
---   loading Site headers, it can't be set by the user.
-data ImportMode = SiteHeaders | Code | RawText | Location
+--   loading Origin headers, it can't be set by the user.
+data ImportMode = OriginHeaders | Code | RawText | Location
   deriving (Eq, Generic, Ord, Show, NFData)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
@@ -1149,7 +1149,7 @@ instance Pretty Import where
             RawText     -> " as Text"
             Location    -> " as Location"
             Code        -> ""
-            SiteHeaders -> ""
+            OriginHeaders -> ""
 
 {-| Returns `True` if the given `Char` is valid within an unquoted path
     component
