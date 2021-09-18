@@ -286,7 +286,7 @@ instance Exception ReferentiallyOpaque
 
 instance Show ReferentiallyOpaque where
     show (ReferentiallyOpaque import_) =
-        "\nReferentially opaque import: " ++ Dhall.Pretty.Internal.prettyToString import_
+        "\nReferentially opaque import (local imports are not permitted from remote sources): " ++ Dhall.Pretty.Internal.prettyToString import_
 
 -- | Extend another exception with the current import stack
 data Imported e = Imported
