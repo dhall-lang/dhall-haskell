@@ -312,4 +312,4 @@ originHeadersFileExpr = do
     let components = map Text.pack (splitDirectories directoryStr)
     let directory = Directory (reverse components)
     let file = (File directory "headers.dhall")
-    return (Embed (Import (ImportHashed Nothing (Local Absolute file)) OriginHeaders))
+    return (Embed (Import (ImportHashed Nothing (Local Absolute file)) Code))

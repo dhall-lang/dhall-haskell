@@ -1043,25 +1043,48 @@ headersSrc = Src {
 
 -- | Load headers only from the environment (used in tests)
 envOriginHeaders :: Expr Src Import
-envOriginHeaders = Note headersSrc (Embed (Import (ImportHashed Nothing (Env "DHALL_HEADERS")) OriginHeaders))
+envOriginHeaders = Note headersSrc (Embed (Import (ImportHashed Nothing (Env "DHALL_HEADERS")) Code))
 
 -- | Load headers in env, falling back to config file
 defaultOriginHeaders :: IO (Expr Src Import)
 defaultOriginHeaders = do
     fromFile <- originHeadersFileExpr
-    return (ImportAlt envOriginHeaders (Note headersSrc fromFile))
+    return (Note headersSrc (ImportAlt envOriginHeaders (Note headersSrc fromFile)))
 
 -- | Given a headers expression, return an origin headers loader
 originHeadersLoader :: IO (Expr Src Import) -> StateT Status IO OriginHeaders
 originHeadersLoader headersExpr = do
-    partialExpr <- liftIO headersExpr
-    loaded <- loadWith (ImportAlt partialExpr emptyOriginHeaders)
-    headers <- liftIO (toOriginHeaders loaded)
+
+    -- Load the headers using a parallel state with an empty impport chain.
+    -- We also set _loadOriginHeaders to prevent reentrant loads.
+
+    status <- State.get
+
+    let headerLoadStatus = status {
+        _stack = pure (NonEmpty.last (_stack status)),
+        _loadOriginHeaders = reentrantLoad
+    }
+
+    (headers, _) <- liftIO (State.runStateT doLoad headerLoadStatus)
 
     -- return cached headers next time
     _ <- State.modify (\state -> state { _loadOriginHeaders = return headers })
 
     return headers
+  where
+
+    -- The builtin Cycle error should make this unnecessary,
+    -- but loadWith raises ReferentiallyOpaque before we have a chance to
+    -- raise a Cycle, and the former is caught by dhall's `?` operator.
+    reentrantLoad = do
+        Status { _stack } <- State.get
+        let (Chained parent) = NonEmpty.head _stack
+        throwMissingImport (Imported _stack (Cycle parent))
+
+    doLoad = do
+        partialExpr <- liftIO headersExpr
+        loaded <- loadWith (Note headersSrc (ImportAlt partialExpr emptyOriginHeaders))
+        liftIO (toOriginHeaders loaded)
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status

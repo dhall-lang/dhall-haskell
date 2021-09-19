@@ -39,4 +39,4 @@ fetchFromHttpUrl _ _ =
     fail "Dhall does not yet support custom headers when built using GHCJS"
 
 originHeadersFileExpr :: IO (Expr Src Import)
-originHeadersFileExpr = return (Missing)
+originHeadersFileExpr = return Missing
