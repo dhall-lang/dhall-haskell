@@ -46,6 +46,7 @@ module Dhall.Syntax (
 
     -- ** Optics
     , subExpressions
+    , subExpressionsWith
     , unsafeSubExpressions
     , chunkExprs
     , bindingExprs
@@ -782,15 +783,23 @@ data MultiLet s a = MultiLet (NonEmpty (Binding s a)) (Expr s a)
 -- | A traversal over the immediate sub-expressions of an expression.
 subExpressions
     :: Applicative f => (Expr s a -> f (Expr s a)) -> Expr s a -> f (Expr s a)
-subExpressions _ (Embed a) = pure (Embed a)
-subExpressions f (Note a b) = Note a <$> f b
-subExpressions f (Let a b) = Let <$> bindingExprs f a <*> f b
-subExpressions f (Record a) = Record <$> traverse (recordFieldExprs f) a
-subExpressions f (RecordLit a) = RecordLit <$> traverse (recordFieldExprs f) a
-subExpressions f (Lam cs fb e) = Lam cs <$> functionBindingExprs f fb <*> f e
-subExpressions f (Field a b) = Field <$> f a <*> pure b
-subExpressions f expression = unsafeSubExpressions f expression
+subExpressions = subExpressionsWith (pure . Embed)
 {-# INLINABLE subExpressions #-}
+
+{-| A traversal over the immediate sub-expressions of an expression which
+    allows mapping embedded values
+-}
+subExpressionsWith
+    :: Applicative f => (a -> f (Expr s b)) -> (Expr s a -> f (Expr s b)) -> Expr s a -> f (Expr s b)
+subExpressionsWith h _ (Embed a) = h a
+subExpressionsWith _ f (Note a b) = Note a <$> f b
+subExpressionsWith _ f (Let a b) = Let <$> bindingExprs f a <*> f b
+subExpressionsWith _ f (Record a) = Record <$> traverse (recordFieldExprs f) a
+subExpressionsWith _ f (RecordLit a) = RecordLit <$> traverse (recordFieldExprs f) a
+subExpressionsWith _ f (Lam cs fb e) = Lam cs <$> functionBindingExprs f fb <*> f e
+subExpressionsWith _ f (Field a b) = Field <$> f a <*> pure b
+subExpressionsWith _ f expression = unsafeSubExpressions f expression
+{-# INLINABLE subExpressionsWith #-}
 
 {-| An internal utility used to implement transformations that require changing
     one of the type variables of the `Expr` type
