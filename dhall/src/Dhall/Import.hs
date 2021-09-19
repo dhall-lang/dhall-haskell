@@ -631,11 +631,6 @@ writeToSemanticCache hash bytes = do
 -- scratch.
 loadImportWithSemisemanticCache
   :: Chained -> StateT Status IO ImportSemantics
-
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed hash importType) OriginHeaders)) =
-    -- OriginHeaders are loaded as Code
-    loadImportWithSemisemanticCache (Chained (Import (ImportHashed hash importType) Code))
-
 loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
     text <- fetchFresh importType
     Status {..} <- State.get
@@ -1165,12 +1160,9 @@ loadWith expr₀ = case expr₀ of
         local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
         local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
 
-    let referentiallySane = case import₀ of
-            Import _ Location -> True
-            Import _ OriginHeaders -> True
-            _ -> not (local child) || local parent
+    let referentiallySane = not (local child) || local parent
 
-    if referentiallySane
+    if importMode import₀ == Location || referentiallySane
         then return ()
         else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
 
@@ -1338,9 +1330,6 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
             ignore
 
         Location ->
-            ignore
-
-        OriginHeaders ->
             ignore
 
         Code ->
