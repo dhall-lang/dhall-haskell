@@ -107,7 +107,7 @@ Test-Suite tasty
         dhall-csv               ,
         filepath                ,
         tasty        <  1.5     ,
-        tasty-silver <  3.3     ,
+        tasty-silver <  3.4     ,
         tasty-hunit  >= 0.2     ,
         unordered-containers    ,
         text                    ,
