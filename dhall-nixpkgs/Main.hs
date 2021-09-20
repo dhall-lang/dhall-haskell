@@ -431,7 +431,7 @@ dependencyToNix url@URL{ authority, path } = do
                     return Dependency{..}
 
                 _ -> do
-                    die (NotAValidGitHubRepositoryURL url)
+                    die (NotAValidGistRepositoryURL url)
 
         "gist.githubusercontent.com" -> do
             let File{ directory, file } = path
@@ -439,7 +439,7 @@ dependencyToNix url@URL{ authority, path } = do
             let Dhall.Core.Directory{ components } = directory
 
             case reverse (file : components) of
-                owner : hash : _raw : _rev : rest -> do
+                owner : hash : "raw" : _rev : rest -> do
                     let fileArgument = Text.intercalate "/" rest
 
                     let package = owner <> "_" <> hash
@@ -725,6 +725,7 @@ die e = liftIO $ do
 data Error
     = MissingSemanticIntegrityCheck URL
     | NotAValidGitHubRepositoryURL URL
+    | NotAValidGistRepositoryURL URL
     | UnsupportedDomainDependency URL Text
     | RepositoryIsNotAValidURI Text
     | UnsupportedURIScheme Text String
@@ -771,6 +772,22 @@ Your Dhall package appears to depend on the following import:
 normally have.  The URL should minimally have the following path components:
 
 ↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
+|]
+
+    NotAValidGistRepositoryURL url ->
+        let dependency = Dhall.Core.pretty url
+
+        in  [NeatInterpolation.text|
+Error: Not a valid gist repository URL
+
+Your Dhall package appears to depend on the following import:
+
+↳ $dependency
+
+... which is missing one or more path components that a raw GitHub import would
+normally have.  The URL should minimally have the following path components:
+
+↳ https://gist.githubusercontent.com/$${owner}/$${id}/raw/$${revision}/…
 |]
 
     UnsupportedDomainDependency url authority ->
