@@ -433,6 +433,29 @@ dependencyToNix url@URL{ authority, path } = do
                 _ -> do
                     die (NotAValidGitHubRepositoryURL url)
 
+        "gist.githubusercontent.com" -> do
+            let File{ directory, file } = path
+
+            let Dhall.Core.Directory{ components } = directory
+
+            case reverse (file : components) of
+                owner : hash : _raw : _rev : rest -> do
+                    let fileArgument = Text.intercalate "/" rest
+
+                    let package = owner <> "_" <> hash
+
+                    let functionParameter = (package, Nothing)
+
+                    let dependencyExpression =
+                                (Nix.mkSym package @. "overridePackage")
+                            @@  Nix.attrsE
+                                    [ ("file", Nix.mkStr fileArgument ) ]
+
+                    return Dependency{..}
+
+                _ -> do
+                    die (NotAValidGitHubRepositoryURL url)
+
         "prelude.dhall-lang.org" -> do
             let File{ directory, file } = path
 
@@ -487,8 +510,9 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
         _        -> die (UnsupportedURIScheme uri uriScheme)
 
     case uriRegName of
-        "github.com" -> return ()
-        _            -> die (UnsupportedDomain uri uriRegName)
+        "github.com"      -> return ()
+        "gist.github.com" -> return ()
+        _                 -> die (UnsupportedDomain uri uriRegName)
 
     case uriPort of
         "" -> return ()
@@ -758,6 +782,7 @@ Error: Unsupported domain
 This tool currently only translates the following domains into Nix dependencies:
 
 * raw.githubusercontent.com
+* gist.githubusercontent.com
 * prelude.dhall-lang.org
 
 One of the Dhall project's dependencies:
