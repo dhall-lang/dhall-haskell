@@ -168,7 +168,8 @@ import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
-import Data.List.NonEmpty         (NonEmpty (..))
+import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
+import Data.Maybe                 (fromMaybe)
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
@@ -1050,15 +1051,14 @@ defaultOriginHeaders = do
 originHeadersLoader :: IO (Expr Src Import) -> StateT Status IO OriginHeaders
 originHeadersLoader headersExpr = do
 
-    -- Load the headers using a parallel state with an empty impport chain.
-    -- We also set _loadOriginHeaders to prevent reentrant loads.
+    -- Load the headers using the parent stack, which should always be a local
+    -- import (we only load headers for the first remote import)
 
     status <- State.get
 
-    let headerLoadStatus = status {
-        _stack = pure (NonEmpty.last (_stack status)),
-        _loadOriginHeaders = reentrantLoad
-    }
+    let parentStack = fromMaybe abortEmptyStack (nonEmpty (NonEmpty.tail (_stack status)))
+
+    let headerLoadStatus = status { _stack = parentStack }
 
     (headers, _) <- liftIO (State.runStateT doLoad headerLoadStatus)
 
@@ -1067,14 +1067,7 @@ originHeadersLoader headersExpr = do
 
     return headers
   where
-
-    -- The builtin Cycle error should make this unnecessary,
-    -- but loadWith raises ReferentiallyOpaque before we have a chance to
-    -- raise a Cycle, and the former is caught by dhall's `?` operator.
-    reentrantLoad = do
-        Status { _stack } <- State.get
-        let (Chained parent) = NonEmpty.head _stack
-        throwMissingImport (Imported _stack (Cycle parent))
+    abortEmptyStack = Core.internalError "Origin headers loaded with an empty stack"
 
     doLoad = do
         partialExpr <- liftIO headersExpr
