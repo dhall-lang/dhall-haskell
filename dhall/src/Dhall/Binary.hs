@@ -1273,7 +1273,7 @@ encodeImport import_ =
             Just digest ->
                 Encoding.encodeBytes ("\x12\x20" <> Data.ByteArray.convert digest)
 
-        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2)
+        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
 
     Import{..} = import_
 

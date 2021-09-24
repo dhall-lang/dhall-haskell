@@ -1139,9 +1139,9 @@ instance Pretty Import where
       where
         suffix :: Text
         suffix = case importMode of
-            RawText     -> " as Text"
-            Location    -> " as Location"
-            Code        -> ""
+            RawText  -> " as Text"
+            Location -> " as Location"
+            Code     -> ""
 
 {-| Returns `True` if the given `Char` is valid within an unquoted path
     component
