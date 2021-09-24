@@ -3,12 +3,14 @@
 
 module Dhall.Test.Import where
 
-import Control.Exception (SomeException)
-import Data.Text         (Text)
-import Data.Void         (Void)
-import Prelude           hiding (FilePath)
-import Test.Tasty        (TestTree)
-import Turtle            (FilePath, (</>))
+import Control.Exception         (SomeException)
+import Data.Foldable             (fold)
+import Data.Text                 (Text, isSuffixOf)
+import Data.Void                 (Void)
+import Filesystem.Path.CurrentOS (toText)
+import Prelude                   hiding (FilePath)
+import Test.Tasty                (TestTree)
+import Turtle                    (FilePath, (</>))
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad                    as Monad
@@ -54,7 +56,7 @@ getTests = do
 
         return path )
 
-    failureTests <- Test.Util.discover (Turtle.chars <> ".dhall") failureTest (do
+    failureTests <- Test.Util.discover (Turtle.chars <* ".dhall") failureTest (do
         path <- Turtle.lstree (importDirectory </> "failure")
 
         let expectedSuccesses =
@@ -62,7 +64,8 @@ getTests = do
                 , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
                 ]
 
-        Monad.guard (path `notElem` expectedSuccesses)
+        _ <- Monad.guard (path `notElem` expectedSuccesses)
+        _ <- Monad.guard (not ("ENV.dhall" `isSuffixOf` (fold (toText path))))
         return path )
 
     let testTree =
@@ -168,18 +171,22 @@ successTest prefix = do
         Tasty.HUnit.assertEqual message expected actual)
 
 failureTest :: Text -> TestTree
-failureTest path = do
+failureTest prefix = do
+    let path = prefix <> ".dhall"
+
     let pathString = Text.unpack path
 
     Tasty.HUnit.testCase pathString (do
         actualExpr <- do
           Core.throws (Parser.exprFromText mempty (Test.Util.toDhallPath path))
 
-        succeeded <- Exception.catch @SomeException
-          (do _ <- Test.Util.load actualExpr
-              return True
-          )
-          (\_ -> return False)
+        let setup = Test.Util.managedTestEnvironment prefix
+
+        let run = Exception.catch @SomeException
+              (Test.Util.load actualExpr >> return True)
+              (\_ -> return False)
+
+        succeeded <- Turtle.with setup (const run)
 
         if succeeded
             then fail "Import should have failed, but it succeeds"
