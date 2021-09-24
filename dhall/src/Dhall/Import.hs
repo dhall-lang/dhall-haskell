@@ -196,6 +196,8 @@ import Text.Megaparsec (SourcePos (SourcePos), mkPos)
 
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
+#else
+originHeadersFileExpr = emptyOriginHeaders
 #endif
 import Dhall.Import.Headers
     ( normalizeHeaders
