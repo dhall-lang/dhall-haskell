@@ -792,7 +792,7 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
-
+-- | Fetch the text contents of a URL
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
@@ -1079,6 +1079,7 @@ originHeadersLoader headersExpr = do
 emptyStatus :: FilePath -> Status
 emptyStatus = makeEmptyStatus defaultNewManager defaultOriginHeaders
 
+-- | See 'emptyStatus'
 emptyStatusWithManager
     :: IO Manager
     -> FilePath
