@@ -610,6 +610,7 @@ Library
     Other-Modules:
         Dhall.Eval
         Dhall.Import.Types
+        Dhall.Import.Headers
         Dhall.Marshal.Internal
         Dhall.Normalize
         Dhall.Parser.Combinators

@@ -90,8 +90,6 @@ successTest prefix = do
             , importDirectory </> "success/unit/cors/AllowedAll"
             , importDirectory </> "success/unit/cors/SelfImportRelative"
             , importDirectory </> "success/unit/cors/OnlyGithub"
-            , importDirectory </> "success/userHeaders"
-            , importDirectory </> "success/userHeadersOverride"
             ]
 
     Test.Util.testCase prefix expectedFailures (do
@@ -110,10 +108,17 @@ successTest prefix = do
                 HTTP.newManager
                     HTTP.tlsManagerSettings
                         { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
+
+        let status =
+                Import.makeEmptyStatus
+                    httpManager
+                    (pure Import.envOriginHeaders)
+                    directoryString
+
         let load =
                 State.evalStateT
                     (Test.Util.loadWith actualExpr)
-                    (Import.emptyStatusWithManager httpManager directoryString)
+                    status
 
         let usesCache = [ "hashFromCache"
                         , "unit/asLocation/Hash"
