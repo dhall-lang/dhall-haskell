@@ -1019,7 +1019,7 @@ emptyOriginHeaders = ListLit (Just (fmap absurd originHeadersTypeExpr)) mempty
 
 -- | A fake Src to annotate headers expressions with.
 --   We need to wrap headers expressions in a Note for nice error reporting,
---   and because `?` handling only catches SourcedExceptions
+--   and because ImportAlt handling only catches SourcedExceptions
 headersSrc :: Src
 headersSrc = Src {
         srcStart = SourcePos {
