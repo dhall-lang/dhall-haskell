@@ -195,8 +195,6 @@ import Text.Megaparsec (SourcePos (SourcePos), mkPos)
 
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
-#else
-originHeadersFileExpr = emptyOriginHeaders
 #endif
 import Dhall.Import.Headers
     ( normalizeHeaders
@@ -1044,9 +1042,13 @@ envOriginHeaders = Note headersSrc (Embed (Import (ImportHashed Nothing (Env "DH
 
 -- | Load headers in env, falling back to config file
 defaultOriginHeaders :: IO (Expr Src Import)
+#ifndef WITH_HTTP
+defaultOriginHeaders = return emptyOriginHeaders
+#else
 defaultOriginHeaders = do
     fromFile <- originHeadersFileExpr
     return (Note headersSrc (ImportAlt envOriginHeaders (Note headersSrc fromFile)))
+#endif
 
 -- | Given a headers expression, return an origin headers loader
 originHeadersLoader :: IO (Expr Src Import) -> StateT Status IO OriginHeaders
