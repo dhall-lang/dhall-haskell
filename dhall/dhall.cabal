@@ -683,6 +683,7 @@ Test-Suite tasty
         serialise                                      ,
         special-values                           < 0.2 ,
         spoon                                    < 0.4 ,
+        system-filepath                                ,
         tasty                     >= 0.11.2   && < 1.5 ,
         tasty-expected-failure                   < 0.13,
         tasty-hunit               >= 0.10     && < 0.11,
