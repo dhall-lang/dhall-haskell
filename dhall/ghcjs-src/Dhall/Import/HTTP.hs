@@ -2,14 +2,16 @@
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
+    , originHeadersFileExpr
     ) where
 
 import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Dhall.Core                       (URL (..))
-import Dhall.Import.Types               (Status)
+import Dhall.Core                       (URL (..), Expr (..))
+import Dhall.Import.Types               (Import, Status)
+import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
 
 import qualified Data.Text      as Text
@@ -35,3 +37,6 @@ fetchFromHttpUrl childURL Nothing = do
     return body
 fetchFromHttpUrl _ _ =
     fail "Dhall does not yet support custom headers when built using GHCJS"
+
+originHeadersFileExpr :: IO (Expr Src Import)
+originHeadersFileExpr = return Missing

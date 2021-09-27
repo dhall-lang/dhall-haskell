@@ -108,7 +108,7 @@ module Dhall.Import (
       load
     , loadWithManager
     , loadRelativeTo
-    , loadRelativeToWithManager
+    , loadWithStatus
     , loadWith
     , localToPath
     , hashExpression
@@ -126,8 +126,11 @@ module Dhall.Import (
     , chainedChangeMode
     , emptyStatus
     , emptyStatusWithManager
+    , envOriginHeaders
+    , makeEmptyStatus
     , remoteStatus
     , remoteStatusWithManager
+    , fetchRemote
     , stack
     , cache
     , Depends(..)
@@ -152,7 +155,7 @@ module Dhall.Import (
     , HashMismatch(..)
     ) where
 
-import Control.Applicative        (Alternative (..), liftA2)
+import Control.Applicative        (Alternative (..))
 import Control.Exception
     ( Exception
     , IOException
@@ -164,8 +167,8 @@ import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
-import Data.CaseInsensitive       (CI)
-import Data.List.NonEmpty         (NonEmpty (..))
+import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
+import Data.Maybe                 (fromMaybe)
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
@@ -188,10 +191,17 @@ import Dhall.Syntax
     )
 
 import System.FilePath ((</>))
+import Text.Megaparsec (SourcePos (SourcePos), mkPos)
 
 #ifdef WITH_HTTP
 import Dhall.Import.HTTP
 #endif
+import Dhall.Import.Headers
+    ( normalizeHeaders
+    , originHeadersTypeExpr
+    , toHeaders
+    , toOriginHeaders
+    )
 import Dhall.Import.Types
 
 import Dhall.Parser
@@ -209,12 +219,9 @@ import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
-import qualified Data.CaseInsensitive
-import qualified Data.Foldable
 import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
-import qualified Data.Text.Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core                                  as Core
@@ -354,9 +361,6 @@ instance Show MissingImports where
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
-
--- | HTTP headers
-type HTTPHeader = (CI ByteString, ByteString)
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -501,7 +505,7 @@ chainedChangeMode mode (Chained (Import importHashed _)) =
 -- | Chain imports, also typecheck and normalize headers if applicable.
 chainImport :: Chained -> Import -> StateT Status IO Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
-    url' <- normalizeHeaders url
+    url' <- normalizeHeadersIn url
     let child' = child { importHashed = importHashed { importType = Remote url' } }
     return (Chained (canonicalize (parent <> child')))
 
@@ -786,7 +790,7 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
-
+-- | Fetch the text contents of a URL
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
@@ -804,29 +808,6 @@ fetchRemote url = do
         let maybeHeaders = fmap toHeaders maybeHeadersExpression
         fetchFromHttpUrl url' maybeHeaders
 #endif
-
--- | Given a well-typed (of type `List { header : Text, value Text }` or
--- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form
--- construct the corresponding binary http headers; otherwise return the empty
--- list.
-toHeaders :: Expr s a -> [HTTPHeader]
-toHeaders (ListLit _ hs) = Data.Foldable.toList (Data.Foldable.fold maybeHeaders)
-  where
-      maybeHeaders = mapM toHeader hs
-toHeaders _ = []
-
-toHeader :: Expr s a -> Maybe HTTPHeader
-toHeader (RecordLit m) = do
-    (Core.recordFieldValue -> TextLit (Chunks [] keyText), Core.recordFieldValue -> TextLit (Chunks [] valueText))
-        <- lookupHeader <|> lookupMapKey
-    let keyBytes   = Data.Text.Encoding.encodeUtf8 keyText
-    let valueBytes = Data.Text.Encoding.encodeUtf8 valueText
-    return (Data.CaseInsensitive.mk keyBytes, valueBytes)
-      where
-        lookupHeader = liftA2 (,) (Dhall.Map.lookup "header" m) (Dhall.Map.lookup "value" m)
-        lookupMapKey = liftA2 (,) (Dhall.Map.lookup "mapKey" m) (Dhall.Map.lookup "mapValue" m)
-toHeader _ =
-    empty
 
 getCacheFile
     :: (MonadCatch m, Alternative m, MonadState CacheWarning m, MonadIO m)
@@ -1019,62 +1000,102 @@ getCacheBaseDirectory = alternative₀ <|> alternative₁ <|> alternative₂
 
 -- If the URL contains headers typecheck them and replace them with their normal
 -- forms.
-normalizeHeaders :: URL -> StateT Status IO URL
-normalizeHeaders url@URL { headers = Just headersExpression } = do
+normalizeHeadersIn :: URL -> StateT Status IO URL
+normalizeHeadersIn url@URL { headers = Just headersExpression } = do
     Status { _stack } <- State.get
     loadedExpr <- loadWith headersExpression
+    let handler (e :: SomeException) = throwMissingImport (Imported _stack e)
+    normalized <- liftIO $ handle handler (normalizeHeaders loadedExpr)
+    return url { headers = Just (fmap absurd normalized) }
 
-    let go key₀ key₁ = do
-            let expected :: Expr Src Void
-                expected =
-                    App List
-                        ( Record $ Core.makeRecordField <$>
-                            Dhall.Map.fromList
-                                [ (key₀, Text)
-                                , (key₁, Text)
-                                ]
-                        )
+normalizeHeadersIn url = return url
 
-            let suffix_ = Dhall.Pretty.Internal.prettyToStrictText expected
-            let annot = case loadedExpr of
-                    Note (Src begin end bytes) _ ->
-                        Note (Src begin end bytes') (Annot loadedExpr expected)
-                      where
-                        bytes' = bytes <> " : " <> suffix_
-                    _ ->
-                        Annot loadedExpr expected
+-- | Empty origin headers used for remote contexts
+--   (and fallback when nothing is set in env or config file)
+emptyOriginHeaders :: Expr Src Import
+emptyOriginHeaders = ListLit (Just (fmap absurd originHeadersTypeExpr)) mempty
 
-            _ <- case (Dhall.TypeCheck.typeOf annot) of
-                Left err -> throwMissingImport (Imported _stack err)
-                Right _  -> return ()
+-- | A fake Src to annotate headers expressions with.
+--   We need to wrap headers expressions in a Note for nice error reporting,
+--   and because ImportAlt handling only catches SourcedExceptions
+headersSrc :: Src
+headersSrc = Src {
+        srcStart = SourcePos {
+            sourceName = fakeSrcName,
+            sourceLine = mkPos 1,
+            sourceColumn = mkPos 1
+        },
+        srcEnd = SourcePos {
+            sourceName = fakeSrcName,
+            sourceLine = mkPos 1,
+            sourceColumn = mkPos (Text.length fakeSrcText)
+        },
+        srcText = fakeSrcText
+    }
+  where
+    fakeSrcText = "«Origin Header Configuration»"
+    fakeSrcName = "[builtin]"
 
-            return (Core.normalize loadedExpr)
+-- | Load headers only from the environment (used in tests)
+envOriginHeaders :: Expr Src Import
+envOriginHeaders = Note headersSrc (Embed (Import (ImportHashed Nothing (Env "DHALL_HEADERS")) Code))
 
-    let handler₀ (e :: SomeException) = do
-            {- Try to typecheck using the preferred @mapKey@/@mapValue@ fields
-               and fall back to @header@/@value@ if that fails. However, if
-               @header@/@value@ still fails then re-throw the original exception
-               for @mapKey@ / @mapValue@. -}
-            let handler₁ (_ :: SomeException) =
-                    throwMissingImport (Imported _stack e)
+-- | Load headers in env, falling back to config file
+defaultOriginHeaders :: IO (Expr Src Import)
+#ifndef WITH_HTTP
+defaultOriginHeaders = return emptyOriginHeaders
+#else
+defaultOriginHeaders = do
+    fromFile <- originHeadersFileExpr
+    return (Note headersSrc (ImportAlt envOriginHeaders (Note headersSrc fromFile)))
+#endif
 
-            handle handler₁ (go "header" "value")
+-- | Given a headers expression, return an origin headers loader
+originHeadersLoader :: IO (Expr Src Import) -> StateT Status IO OriginHeaders
+originHeadersLoader headersExpr = do
 
-    headersExpression' <-
-        handle handler₀ (go "mapKey" "mapValue")
+    -- Load the headers using the parent stack, which should always be a local
+    -- import (we only load headers for the first remote import)
 
-    return url { headers = Just (fmap absurd headersExpression') }
+    status <- State.get
 
-normalizeHeaders url = return url
+    let parentStack = fromMaybe abortEmptyStack (nonEmpty (NonEmpty.tail (_stack status)))
+
+    let headerLoadStatus = status { _stack = parentStack }
+
+    (headers, _) <- liftIO (State.runStateT doLoad headerLoadStatus)
+
+    -- return cached headers next time
+    _ <- State.modify (\state -> state { _loadOriginHeaders = return headers })
+
+    return headers
+  where
+    abortEmptyStack = Core.internalError "Origin headers loaded with an empty stack"
+
+    doLoad = do
+        partialExpr <- liftIO headersExpr
+        loaded <- loadWith (Note headersSrc (ImportAlt partialExpr emptyOriginHeaders))
+        liftIO (toOriginHeaders loaded)
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus = emptyStatusWithManager defaultNewManager
+emptyStatus = makeEmptyStatus defaultNewManager defaultOriginHeaders
+
+-- | See 'emptyStatus'
+emptyStatusWithManager
+    :: IO Manager
+    -> FilePath
+    -> Status
+emptyStatusWithManager newManager = makeEmptyStatus newManager defaultOriginHeaders
 
 -- | See 'emptyStatus'.
-emptyStatusWithManager :: IO Manager -> FilePath -> Status
-emptyStatusWithManager newManager rootDirectory =
-    emptyStatusWith newManager fetchRemote rootImport
+makeEmptyStatus
+    :: IO Manager
+    -> IO (Expr Src Import)
+    -> FilePath
+    -> Status
+makeEmptyStatus newManager headersExpr rootDirectory =
+    emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1107,7 +1128,7 @@ remoteStatus = remoteStatusWithManager defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager fetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1205,7 +1226,10 @@ load = loadWithManager defaultNewManager
 
 -- | See 'load'.
 loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
-loadWithManager newManager = loadRelativeToWithManager newManager "." UseSemanticCache
+loadWithManager newManager =
+    loadWithStatus
+        (makeEmptyStatus newManager defaultOriginHeaders ".")
+        UseSemanticCache
 
 printWarning :: (MonadIO m) => String -> m ()
 printWarning message = do
@@ -1219,19 +1243,19 @@ printWarning message = do
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
-loadRelativeTo = loadRelativeToWithManager defaultNewManager
+loadRelativeTo parentDirectory = loadWithStatus
+    (makeEmptyStatus defaultNewManager defaultOriginHeaders parentDirectory)
 
 -- | See 'loadRelativeTo'.
-loadRelativeToWithManager
-    :: IO Manager
-    -> FilePath
+loadWithStatus
+    :: Status
     -> SemanticCacheMode
     -> Expr Src Import
     -> IO (Expr Src Void)
-loadRelativeToWithManager newManager rootDirectory semanticCacheMode expression =
+loadWithStatus status semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
-        (emptyStatusWithManager newManager rootDirectory) { _semanticCacheMode = semanticCacheMode }
+        status { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression :: Expr Void Void -> Data.ByteString.ByteString
 encodeExpression expression = bytesStrict

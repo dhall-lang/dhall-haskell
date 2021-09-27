@@ -1,8 +1,10 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
+    , originHeadersFileExpr
     ) where
 
 import Control.Exception                (Exception)
@@ -12,21 +14,31 @@ import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
 import Data.Dynamic                     (toDyn)
 import Data.List.NonEmpty               (NonEmpty (..))
+import Data.Text.Encoding               (decodeUtf8)
 import Dhall.Core
-    ( Import (..)
+    ( Expr (..)
+    , Directory (..)
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
     , ImportHashed (..)
+    , ImportMode (..)
     , ImportType (..)
     , Scheme (..)
     , URL (..)
     )
 import Dhall.Import.Types
+import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
+import System.Directory                 (getXdgDirectory, XdgDirectory(XdgConfig))
+import System.FilePath                  (splitDirectories)
 
 
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..))
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
@@ -238,20 +250,35 @@ corsCompliant (Remote parentURL) childURL responseHeaders = liftIO $ do
                 Control.Exception.throwIO (NotCORSCompliant {..})
 corsCompliant _ _ _ = return ()
 
-type HTTPHeader = Network.HTTP.Types.Header
+addHeaders :: OriginHeaders -> Maybe [HTTPHeader] -> HTTP.Request -> HTTP.Request
+addHeaders originHeaders urlHeaders request =
+    request { HTTP.requestHeaders = (filterHeaders urlHeaders) <> perOriginHeaders }
+      where
+        origin = decodeUtf8 (HTTP.host request) <> ":" <> Text.pack (show (HTTP.port request))
+ 
+        perOriginHeaders = HashMap.lookupDefault [] origin originHeaders
+
+        filterHeaders = foldMap (filter (not . overridden))
+
+        overridden :: HTTPHeader -> Bool
+        overridden (key, _value) = any (matchesKey key) perOriginHeaders
+
+        matchesKey :: CI ByteString -> HTTPHeader -> Bool
+        matchesKey key (candidate, _value) = key == candidate
 
 fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
 fetchFromHttpUrl childURL mheaders = do
+    Status { _loadOriginHeaders } <- State.get
+
+    originHeaders <- _loadOriginHeaders
+
     manager <- newManager
 
     let childURLString = Text.unpack (renderURL childURL)
 
-    request <- liftIO (HTTP.parseUrlThrow childURLString)
+    baseRequest <- liftIO (HTTP.parseUrlThrow childURLString)
 
-    let requestWithHeaders =
-            case mheaders of
-              Nothing      -> request
-              Just headers -> request { HTTP.requestHeaders = headers }
+    let requestWithHeaders = addHeaders originHeaders mheaders baseRequest
 
     let io = HTTP.httpLbs requestWithHeaders manager
 
@@ -278,3 +305,11 @@ fetchFromHttpUrl childURL mheaders = do
     case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
         Left  err  -> liftIO (Control.Exception.throwIO err)
         Right text -> return (Data.Text.Lazy.toStrict text)
+
+originHeadersFileExpr :: IO (Expr Src Import)
+originHeadersFileExpr = do
+    directoryStr <- getXdgDirectory XdgConfig "dhall"
+    let components = map Text.pack (splitDirectories directoryStr)
+    let directory = Directory (reverse components)
+    let file = (File directory "headers.dhall")
+    return (Embed (Import (ImportHashed Nothing (Local Absolute file)) Code))
