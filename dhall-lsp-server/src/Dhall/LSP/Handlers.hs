@@ -557,9 +557,7 @@ completionHandler request = do
        where
         _label = completeText
         _kind = Nothing
-#if MIN_VERSION_haskell_lsp(0,21,0)
         _tags = mempty
-#endif
         _detail = fmap pretty completeType
         _documentation = Nothing
         _deprecated = Nothing

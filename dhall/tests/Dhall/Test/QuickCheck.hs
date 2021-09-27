@@ -453,12 +453,7 @@ standardizedExpression _ =
     True
 
 chooseCharacter :: (Char, Char) -> Gen Char
-chooseCharacter =
-#if MIN_VERSION_QuickCheck(2,14,0)
-    Test.QuickCheck.chooseEnum
-#else
-    Test.QuickCheck.choose
-#endif
+chooseCharacter = Test.QuickCheck.chooseEnum
 
 instance Arbitrary File where
     arbitrary = lift2 File
