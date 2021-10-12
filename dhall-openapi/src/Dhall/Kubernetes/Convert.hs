@@ -232,9 +232,9 @@ toTypes' prefixMap typeSplitter definitions toMerge
               "string"  -> (Dhall.Text, Data.Map.empty)
               "boolean" -> (Dhall.Bool, Data.Map.empty)
               "integer" -> case (minimum_ definition, exclusiveMinimum definition) of
-                (Just min_, Just True) | min_ >= -1 -> (Dhall.Natural, Data.Map.empty)
-                (Just min_, _)         | min_ >= 0 -> (Dhall.Natural, Data.Map.empty)
-                _                      -> (Dhall.Integer, Data.Map.empty)
+                (Just min_, Just True) | min_ < -1 -> (Dhall.Integer, Data.Map.empty)
+                (Just min_, _)         | min_ < 0 -> (Dhall.Integer, Data.Map.empty)
+                _                      -> (Dhall.Natural, Data.Map.empty)
               "number"  -> (Dhall.Double, Data.Map.empty)
               other     -> error $ "Found missing Swagger type: " <> Text.unpack other
             -- There are empty schemas that only have a description, so we return empty record
