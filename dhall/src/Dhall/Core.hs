@@ -90,6 +90,7 @@ import Dhall.Pretty.Internal
 import Dhall.Src              (Src (..))
 import Dhall.Syntax
 import Dhall.Syntax.Import
+import Dhall.Syntax.Optics
 import Instances.TH.Lift      ()
 import Lens.Family            (over)
 import Prettyprinter          (Pretty)

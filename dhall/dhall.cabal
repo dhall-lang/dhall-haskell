@@ -619,6 +619,7 @@ Library
         Dhall.Shift
         Dhall.Syntax
         Dhall.Syntax.Import
+        Dhall.Syntax.Optics
         Dhall.URL
         Paths_dhall
     Autogen-Modules:

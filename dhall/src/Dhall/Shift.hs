@@ -9,8 +9,8 @@ import Dhall.Syntax
     , Expr (..)
     , FunctionBinding (..)
     , Var (..)
-    , subExpressions
     )
+import Dhall.Syntax.Optics (subExpressions)
 
 import qualified Lens.Family as Lens
 

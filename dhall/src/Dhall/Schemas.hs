@@ -46,7 +46,6 @@ import qualified Dhall.Optics                       as Optics
 import qualified Dhall.Parser                       as Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Substitution                 as Substitution
-import qualified Dhall.Syntax                       as Syntax
 import qualified Dhall.TypeCheck                    as TypeCheck
 import qualified Dhall.Util                         as Util
 import qualified Prettyprinter                      as Pretty
@@ -136,7 +135,7 @@ decodeSchemas (RecordLit keyValues) = do
     let typeMetadata = Data.Map.fromList $ do
             (name, (_Type, _default)) <- Map.toList m
 
-            return (Import.hashExpression (Syntax.denote _Type), (name, _default))
+            return (Import.hashExpression (Core.denote _Type), (name, _default))
 
     return typeMetadata
 decodeSchemas  _ =
@@ -174,7 +173,7 @@ rewriteWithSchemas _schemas expression = do
                     Left _ ->
                         empty
                     Right subExpressionType ->
-                        return (Import.hashExpression (Syntax.denote subExpressionType))
+                        return (Import.hashExpression (Core.denote subExpressionType))
 
                 (name, _default) <- Data.Map.lookup hash typeMetadata
 
@@ -196,10 +195,10 @@ rewriteWithSchemas _schemas expression = do
 
     let rewrittenExpression :: Expr Src Import
         rewrittenExpression =
-            fmap Void.absurd (Optics.transformOf Syntax.subExpressions schemasRewrite normalizedExpression)
+            fmap Void.absurd (Optics.transformOf Core.subExpressions schemasRewrite normalizedExpression)
 
     if Normalize.freeIn (V "schemas" 0) rewrittenExpression
-        then return (Let (Syntax.makeBinding "schemas" _schemas) rewrittenExpression)
+        then return (Let (Core.makeBinding "schemas" _schemas) rewrittenExpression)
         else return expression
 
 -- | Errors that can be thrown by `rewriteWithSchemas`

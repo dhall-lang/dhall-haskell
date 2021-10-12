@@ -26,9 +26,9 @@ import Data.Functor.Identity (Identity (..))
 import Data.List.NonEmpty    (NonEmpty (..))
 import Data.Sequence         (ViewL (..), ViewR (..))
 import Data.Traversable
+import Dhall.Shift           (shift)
 import Instances.TH.Lift     ()
 import Prelude               hiding (succ)
-import Dhall.Shift           (shift)
 
 import Dhall.Syntax
     ( Binding (Binding)
@@ -44,11 +44,12 @@ import Dhall.Syntax
 
 import qualified Data.Sequence
 import qualified Data.Set
-import qualified Data.Text     as Text
-import qualified Dhall.Eval    as Eval
+import qualified Data.Text           as Text
+import qualified Dhall.Eval          as Eval
 import qualified Dhall.Map
-import qualified Dhall.Syntax  as Syntax
-import qualified Lens.Family   as Lens
+import qualified Dhall.Syntax        as Syntax
+import qualified Dhall.Syntax.Optics as Syntax.Optics
+import qualified Lens.Family         as Lens
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
@@ -87,7 +88,7 @@ subst (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
 
     mt' = fmap (fmap (subst (V x n) e)) mt
     r'  =             subst (V x n) e  r
-subst x e expression = Lens.over Syntax.subExpressions (subst x e) expression
+subst x e expression = Lens.over Syntax.Optics.subExpressions (subst x e) expression
 
 {-| This function is used to determine whether folds like @Natural/fold@ or
     @List/fold@ should be lazy or strict in their accumulator based on the type
@@ -632,7 +633,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             RecordLit kvs ->
                 case Dhall.Map.lookup x kvs of
                     Just v  -> pure $ recordFieldValue v
-                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure k
+                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.Optics.recordFieldExprs loop) kvs) <*> pure k
             Project r_ _ -> loop (Field r_ k)
             Prefer cs _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
                 Just v -> pure (Field (Prefer cs PreferFromSource (singletonRecordLit v) r_) k)

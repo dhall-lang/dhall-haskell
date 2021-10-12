@@ -96,6 +96,7 @@ import qualified Data.Maybe
 import qualified Data.Text                     as Text
 import qualified Data.Time                     as Time
 import qualified Dhall.Map                     as Map
+import qualified Dhall.Syntax.Optics           as Syntax.Optics
 import qualified Prettyprinter                 as Pretty
 import qualified Prettyprinter.Render.String   as Pretty
 import qualified Prettyprinter.Render.Terminal as Terminal
@@ -148,7 +149,7 @@ instance FromJSON CharacterSet where
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
 detectCharacterSet :: Expr Src a -> CharacterSet
-detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
+detectCharacterSet = foldOf (cosmosOf Syntax.Optics.subExpressions . to exprToCharacterSet)
   where
     exprToCharacterSet = \case
         Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
