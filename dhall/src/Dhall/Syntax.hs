@@ -887,7 +887,7 @@ unhandledConstructor constructor =
     internalError
         (   "Dhall.Syntax.unsafeSubExpressions: Unhandled "
         <>  constructor
-        <>  " construtor"
+        <>  " constructor"
         )
 
 {-| Traverse over the immediate 'Expr' children in a 'Binding'.
