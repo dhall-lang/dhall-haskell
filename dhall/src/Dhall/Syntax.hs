@@ -88,6 +88,11 @@ import                Data.Traversable           ()
 import                Data.Void                  (Void)
 import                Dhall.Map                  (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal
+    ( CharacterSet (..)
+    , prettyConst
+    , prettyExpr
+    , prettyVar
+    )
 import                Dhall.Src                  (Src (..))
 import                GHC.Generics               (Generic)
 import                Instances.TH.Lift          ()
