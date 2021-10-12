@@ -1,5 +1,7 @@
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 {-| This module contains the core calculus for the Dhall language.
 
@@ -76,11 +78,12 @@ module Dhall.Core (
     , Eval.textShow
     , censorExpression
     , censorText
-    , Syntax.desugarWith
+    , desugarWith
     ) where
 
 import Control.Exception      (Exception)
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.List.NonEmpty     (NonEmpty (..))
 import Data.Text              (Text)
 import Dhall.Normalize
 import Dhall.Pretty.Internal
@@ -94,7 +97,7 @@ import Prettyprinter          (Pretty)
 import qualified Control.Exception
 import qualified Data.Text
 import qualified Dhall.Eval        as Eval
-import qualified Dhall.Syntax      as Syntax
+import qualified Dhall.Optics      as Optics
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
@@ -145,6 +148,30 @@ throws :: (Exception e, MonadIO io) => Either e a -> io a
 throws (Left  e) = liftIO (Control.Exception.throwIO e)
 throws (Right r) = return r
 {-# INLINABLE throws #-}
+
+-- | Desugar all @with@ expressions
+desugarWith :: Expr s a -> Expr s a
+desugarWith = Optics.rewriteOf subExpressions rewrite
+  where
+    rewrite e@(With record (key :| []) value) =
+        Just
+            (Prefer
+                mempty
+                (PreferFromWith e)
+                record
+                (RecordLit [ (key, makeRecordField value) ])
+            )
+    rewrite e@(With record (key0 :| key1 : keys) value) =
+        Just
+            (Let
+                (makeBinding "_" record)
+                (Prefer mempty (PreferFromWith e) "_"
+                    (RecordLit
+                        [ (key0, makeRecordField $ With (Field "_" (FieldSelection Nothing key0 Nothing)) (key1 :| keys) (shift 1 "_" value)) ]
+                    )
+                )
+            )
+    rewrite _ = Nothing
 
 {- $setup
 >>> import qualified Codec.Serialise
