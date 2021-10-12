@@ -64,7 +64,7 @@ module Dhall.Syntax (
     , reservedIdentifiers
     , reservedKeywords
 
-    -- * `Data.Text.Text` manipulation
+    -- * `Chunks` manipulation
     , toDoubleQuoted
     , longestSharedWhitespacePrefix
     , linesLiteral
