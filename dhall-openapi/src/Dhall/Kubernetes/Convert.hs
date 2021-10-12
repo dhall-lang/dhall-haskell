@@ -231,9 +231,12 @@ toTypes' prefixMap typeSplitter definitions toMerge
               "string"  | format definition == Just "int-or-string" -> (intOrStringType, Data.Map.empty)
               "string"  -> (Dhall.Text, Data.Map.empty)
               "boolean" -> (Dhall.Bool, Data.Map.empty)
-              "integer" -> case (minimum_ definition, exclusiveMinimum definition) of
+              "integer" -> case (minimum_ definition, exclusiveMinimum definition,
+                                 maximum_ definition, exclusiveMaximum definition) of
                 (Just min_, Just True) | min_ < -1 -> (Dhall.Integer, Data.Map.empty)
                 (Just min_, _)         | min_ < 0 -> (Dhall.Integer, Data.Map.empty)
+                (Just max_, Just True) | max_ < 1 -> (Dhall.Integer, Data.Map.empty)
+                (Just max_, _)         | max_ < 0 -> (Dhall.Integer, Data.Map.empty)
                 _                      -> (Dhall.Natural, Data.Map.empty)
               "number"  -> (Dhall.Double, Data.Map.empty)
               other     -> error $ "Found missing Swagger type: " <> Text.unpack other
