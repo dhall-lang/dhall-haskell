@@ -86,6 +86,7 @@ import Dhall.Normalize
 import Dhall.Pretty.Internal
 import Dhall.Src              (Src (..))
 import Dhall.Syntax
+import Dhall.Syntax.Import
 import Instances.TH.Lift      ()
 import Lens.Family            (over)
 import Prettyprinter          (Pretty)

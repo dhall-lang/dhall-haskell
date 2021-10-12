@@ -172,9 +172,8 @@ import Data.Maybe                 (fromMaybe)
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
-import Dhall.TypeCheck            (TypeError)
 
-import Dhall.Syntax
+import Dhall.Core
     ( Chunks (..)
     , Directory (..)
     , Expr (..)
@@ -190,6 +189,7 @@ import Dhall.Syntax
     , recordFieldExprs
     )
 
+import Dhall.TypeCheck            (TypeError)
 import System.FilePath ((</>))
 import Text.Megaparsec (SourcePos (SourcePos), mkPos)
 

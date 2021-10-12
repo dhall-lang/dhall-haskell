@@ -25,11 +25,10 @@ import Control.Exception (Exception)
 import Data.Text         (Text)
 import Data.Void         (Void)
 import Dhall.Src         (Src (..))
-import Dhall.Syntax
 import Text.Megaparsec   (ParseErrorBundle (..), PosState (..))
 
 import qualified Data.Text       as Text
-import qualified Dhall.Core      as Core
+import           Dhall.Core      as Core
 import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators

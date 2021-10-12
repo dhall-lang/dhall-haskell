@@ -14,6 +14,7 @@ import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
 import Dhall.Src               (Src (..))
 import Dhall.Syntax
+import Dhall.Syntax.Import
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad

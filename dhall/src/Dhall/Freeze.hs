@@ -24,13 +24,13 @@ module Dhall.Freeze
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty)
 import Data.Maybe          (fromMaybe)
-import Dhall.Pretty        (CharacterSet, detectCharacterSet)
-import Dhall.Syntax
+import Dhall.Core
     ( Expr (..)
     , Import (..)
     , ImportHashed (..)
     , ImportType (..)
     )
+import Dhall.Pretty        (CharacterSet, detectCharacterSet)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)

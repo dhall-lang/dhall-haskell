@@ -617,6 +617,7 @@ Library
         Dhall.Parser.Combinators
         Dhall.Pretty.Internal
         Dhall.Syntax
+        Dhall.Syntax.Import
         Dhall.URL
         Paths_dhall
     Autogen-Modules:

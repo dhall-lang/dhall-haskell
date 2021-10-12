@@ -132,6 +132,7 @@ import Data.Functor            (void, ($>))
 import Data.Ratio              ((%))
 import Data.Text               (Text)
 import Dhall.Syntax
+import Dhall.Syntax.Import
 import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad              as Monad
@@ -671,7 +672,7 @@ pathComponent componentType = do
     let pathData =
             case componentType of
                 FileComponent ->
-                    Text.Megaparsec.takeWhile1P Nothing Dhall.Syntax.pathCharacter
+                    Text.Megaparsec.takeWhile1P Nothing Dhall.Syntax.Import.pathCharacter
                 URLComponent ->
                     star pchar
 

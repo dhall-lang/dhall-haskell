@@ -5,7 +5,7 @@ module Dhall.URL where
 
 import Data.Text (Text)
 
-import Dhall.Syntax (Directory (..), File (..), Scheme (..), URL (..))
+import Dhall.Syntax.Import (Directory (..), File (..), Scheme (..), URL (..))
 
 import qualified Network.URI.Encode as URI.Encode
 

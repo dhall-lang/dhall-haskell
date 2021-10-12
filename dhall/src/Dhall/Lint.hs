@@ -21,7 +21,7 @@ module Dhall.Lint
 import Control.Applicative ((<|>))
 import Data.List.NonEmpty  (NonEmpty (..))
 
-import Dhall.Syntax
+import Dhall.Core
     ( Binding (..)
     , Chunks (..)
     , Directory (..)
