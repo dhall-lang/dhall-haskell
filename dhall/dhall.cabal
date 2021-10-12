@@ -616,6 +616,7 @@ Library
         Dhall.Normalize
         Dhall.Parser.Combinators
         Dhall.Pretty.Internal
+        Dhall.Shift
         Dhall.Syntax
         Dhall.Syntax.Import
         Dhall.URL
