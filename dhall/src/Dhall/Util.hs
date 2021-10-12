@@ -33,11 +33,11 @@ import Data.Foldable          (toList)
 import Data.List.NonEmpty     (NonEmpty (..))
 import Data.String            (IsString)
 import Data.Text              (Text)
-import Dhall.Syntax           (Expr)
-import Dhall.Syntax.Import    (Import)
 import Dhall.Parser           (Header (..), ParseError)
 import Dhall.Pretty           (Ann, CharacterSet)
 import Dhall.Src              (Src)
+import Dhall.Syntax           (Expr)
+import Dhall.Syntax.Import    (Import)
 import Prettyprinter          (Doc, Pretty)
 
 import qualified Control.Exception
