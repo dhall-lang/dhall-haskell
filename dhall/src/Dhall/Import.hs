@@ -244,7 +244,7 @@ import qualified Text.Parser.Token
 
 {- $setup
 
-    >>> import Dhall.Syntax
+    >>> import Dhall.Syntax.Import
 -}
 
 -- | An import failed because of a cycle in the import graph

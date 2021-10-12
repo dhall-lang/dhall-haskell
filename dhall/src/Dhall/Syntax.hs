@@ -112,6 +112,7 @@ deriving instance Lift (Fixed.Fixed a)
 
 -- $setup
 -- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
+-- >>> import Dhall.Syntax.Import (Import)
 
 {-| Constants for a pure type system
 
