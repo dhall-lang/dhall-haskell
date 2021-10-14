@@ -149,6 +149,7 @@ data Directory = Directory
     , file :: FilePath
     , source :: Bool
     , document :: Bool
+    , urlAsFOD :: Bool
     }
 
 data NixPrefetchGit = NixPrefetchGit
@@ -204,6 +205,13 @@ parseDocument =
     Options.switch
         (   Options.long "document"
         <>  Options.help "Generate documentation for the Nix package"
+        )
+
+parseUrlAsFOD :: Parser Bool
+parseUrlAsFOD =
+    Options.switch
+        (   Options.long "url-as-fod"
+        <>  Options.help "Translate Dhall remote imports to Nix fixed-output derivations"
         )
 
 parseName :: Parser (Maybe Text)
@@ -270,6 +278,8 @@ parseDirectory = do
     source <- parseSource
 
     document <- parseDocument
+
+    urlAsFOD <- parseUrlAsFOD
 
     return Directory{..}
 
@@ -633,7 +643,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
     Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 directoryToNixpkgs :: Directory -> IO ()
-directoryToNixpkgs Directory{ name, directory, file, source, document } = do
+directoryToNixpkgs Directory{ name, directory, file, source, document, urlAsFOD } = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
