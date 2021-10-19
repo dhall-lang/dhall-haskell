@@ -2,28 +2,28 @@
 <html>
 <head>
 <title>/JumpToDefOnUnused.dhall</title>
-<link href="index.css" type="text/css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" type="text/css" rel="stylesheet">
+<link href="index.css" rel="stylesheet" type="text/css">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet" type="text/css">
 <script src="index.js" type="text/javascript">
 </script>
 <meta charset="UTF-8">
 </head>
 <body>
 <div class="nav-bar">
-<img src="dhall-icon.svg" class="dhall-icon">
+<img class="dhall-icon" src="dhall-icon.svg">
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
-<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
+<a class="nav-option" id="switch-light-dark-mode">Switch Light/Dark Mode</a>
 </div>
 <div class="main-container">
 <h2 class="doc-title">
 <span class="crumb-divider">/</span>
 <a href="index.html">test-package</a>
 <span class="crumb-divider">/</span>
-<span href="index.html" class="title-crumb">JumpToDefOnUnused.dhall</span>
+<span class="title-crumb" href="index.html">JumpToDefOnUnused.dhall</span>
 </h2>
-<a data-path="/JumpToDefOnUnused.dhall" class="copy-to-clipboard">
+<a class="copy-to-clipboard" data-path="/JumpToDefOnUnused.dhall">
 <i>
 <small>Copy path to clipboard</small>
 </i>
@@ -37,11 +37,11 @@ are unused and therefore won&#39;t be highlighted</p>
 <h3>Source</h3>
 <div class="source-code">
 <pre>{-|<br>`dhall-docs` will detect some names (record fields, let-bindings and lam-bindings)<br>are unused and therefore won&#39;t be highlighted<br>-}<br>
-<br>let unused = 1<br>let <span data-name="var7-5" id="var7-5" class="name-decl">used</span> = 3<br>
-<br>let unusedRecord = { foo = 1 }<br>let <span data-name="var10-5" id="var10-5" class="name-decl">usedRecord</span> = { <span data-name="var10-20" id="var10-20" class="name-decl">foo</span> = 1 }<br>
-<br>let <span data-name="var12-5" id="var12-5" class="name-decl">f</span> =<br>       \(unused : Bool)<br>    -&gt; \(<span data-name="var14-10" id="var14-10" class="name-decl">used</span> : Natural)<br>    -&gt; \(<span data-name="var15-10" id="var15-10" class="name-decl">r</span> : { unused : Text, <span data-name="var15-31" id="var15-31" class="name-decl">used</span> : Natural}) -&gt; <a href="#var14-10" data-name="var14-10" class="name-use">used</a> + <a href="#var15-10" data-name="var15-10" class="name-use">r</a>.<a href="#var15-31" data-name="var15-31" class="name-use">used</a>
+<br>let unused = 1<br>let <span class="name-decl" data-name="var7-5" id="var7-5">used</span> = 3<br>
+<br>let unusedRecord = { foo = 1 }<br>let <span class="name-decl" data-name="var10-5" id="var10-5">usedRecord</span> = { <span class="name-decl" data-name="var10-20" id="var10-20">foo</span> = 1 }<br>
+<br>let <span class="name-decl" data-name="var12-5" id="var12-5">f</span> =<br>       \(unused : Bool)<br>    -&gt; \(<span class="name-decl" data-name="var14-10" id="var14-10">used</span> : Natural)<br>    -&gt; \(<span class="name-decl" data-name="var15-10" id="var15-10">r</span> : { unused : Text, <span class="name-decl" data-name="var15-31" id="var15-31">used</span> : Natural}) -&gt; <a class="name-use" data-name="var14-10" href="#var14-10">used</a> + <a class="name-use" data-name="var15-10" href="#var15-10">r</a>.<a class="name-use" data-name="var15-31" href="#var15-31">used</a>
 <br>
-<br>in <a href="#var7-5" data-name="var7-5" class="name-use">used</a> + <a href="#var10-5" data-name="var10-5" class="name-use">usedRecord</a>.<a href="#var10-20" data-name="var10-20" class="name-use">foo</a> + <a href="#var12-5" data-name="var12-5" class="name-use">f</a> True 1 { unused = &quot;foo&quot;, used = 3 }<br>
+<br>in <a class="name-use" data-name="var7-5" href="#var7-5">used</a> + <a class="name-use" data-name="var10-5" href="#var10-5">usedRecord</a>.<a class="name-use" data-name="var10-20" href="#var10-20">foo</a> + <a class="name-use" data-name="var12-5" href="#var12-5">f</a> True 1 { unused = &quot;foo&quot;, used = 3 }<br>
 </pre>
 </div>
 </div>
