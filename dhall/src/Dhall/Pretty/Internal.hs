@@ -861,7 +861,7 @@ prettyPrinters characterSet =
                 <>  Pretty.indent 2 (prettyImportExpression_ b)
                 <>  Pretty.hardline
                 <>  colon <> space
-                <>  prettyApplicationExpression c
+                <>  prettyExpression c
                 )
 
         short = keyword "merge" <> space
@@ -869,7 +869,7 @@ prettyPrinters characterSet =
             <>  " "
             <>  prettyImportExpression_ b
             <>  space <> colon <> space
-            <>  prettyApplicationExpression c
+            <>  prettyExpression c
     prettyAnnotatedExpression (ToMap a (Just b)) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -880,13 +880,13 @@ prettyPrinters characterSet =
                 <>  Pretty.indent 2 (prettyImportExpression_ a)
                 <>  Pretty.hardline
                 <>  colon <> space
-                <>  prettyApplicationExpression b
+                <>  prettyExpression b
                 )
 
         short = keyword "toMap" <> space
             <>  prettyImportExpression_ a
             <>  space <> colon <> space
-            <>  prettyApplicationExpression b
+            <>  prettyExpression b
     prettyAnnotatedExpression a0@(Annot _ _) =
         enclose'
             ""
