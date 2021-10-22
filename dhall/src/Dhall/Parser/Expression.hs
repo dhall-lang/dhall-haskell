@@ -426,7 +426,7 @@ parsers embedded = Parsers{..}
 
                                     return (Merge c d (Just b))
                                 (ToMap c Nothing, NakedMergeOrSomeOrToMap) -> do
-                                    b <- applicationExpression
+                                    b <- expression
 
                                     return (ToMap c (Just b))
                                 _ -> do

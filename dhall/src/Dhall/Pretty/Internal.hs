@@ -906,7 +906,7 @@ prettyPrinters characterSet =
     prettyAnnotatedExpression (ListLit (Just a) b) =
             list (map prettyExpression (Data.Foldable.toList b))
         <>  " : "
-        <>  prettyApplicationExpression a
+        <>  prettyExpression a
     prettyAnnotatedExpression a
         | Just doc <- preserveSource a =
             doc
