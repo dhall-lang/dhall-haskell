@@ -154,7 +154,7 @@ data Directory = Directory
     , file :: FilePath
     , source :: Bool
     , document :: Bool
-    , urlAsFOD :: Bool
+    , fixedOutputDerivations :: Bool
     }
 
 data NixPrefetchGit = NixPrefetchGit
@@ -212,10 +212,10 @@ parseDocument =
         <>  Options.help "Generate documentation for the Nix package"
         )
 
-parseUrlAsFOD :: Parser Bool
-parseUrlAsFOD =
+parseFixedOutputDerivations :: Parser Bool
+parseFixedOutputDerivations =
     Options.switch
-        (   Options.long "url-as-fod"
+        (   Options.long "fixed-output-derivations"
         <>  Options.help "Translate Dhall remote imports to Nix fixed-output derivations"
         )
 
@@ -284,7 +284,7 @@ parseDirectory = do
 
     document <- parseDocument
 
-    urlAsFOD <- parseUrlAsFOD
+    fixedOutputDerivations <- parseFixedOutputDerivations
 
     return Directory{..}
 
@@ -387,9 +387,9 @@ data Dependency = Dependency
       -- ^ Function parameter used to bring the dependency into scope for the
       --   Nix package.
       --
-      --   This is 'Nothing' when 'urlAsFOD' is enabled, since these
+      --   This is 'Nothing' when 'fixedOutputDerivations' is enabled, since these
       --   dependencies don't need to passed in as arguments. This is 'Just'
-      --   when 'urlAsFOD' is not enabled.
+      --   when 'fixedOutputDerivations' is not enabled.
       --
       --   The @'Maybe' 'NExpr'@ is always 'Nothing', but we
       --   include it here for convenience
@@ -397,12 +397,12 @@ data Dependency = Dependency
       -- ^ The dependency expression to include in the dependency list.
       --
       -- 'dependencyToNix' will create an expression of the following form.
-      -- This is called when 'urlToFOD' is 'False':
+      -- This is called when 'fixedOutputDerivations' is 'False':
       --
       --   > someDependency.override { file = "./someFile.dhall" }
       --
       -- 'dependencyToNixAsFOD' will create an expression of the following form.
-      -- This is called when 'urlToFOD' is 'True':
+      -- This is called when 'fixedOutputDerivations' is 'True':
       --
       --   > buildDhallUrl {
       --   >   url = "https://some.url.to/a/dhall/file.dhall";
@@ -740,7 +740,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
     Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 directoryToNixpkgs :: Directory -> IO ()
-directoryToNixpkgs Directory{ name, directory, file, source, document, urlAsFOD } = do
+directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutputDerivations } = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
@@ -770,7 +770,7 @@ directoryToNixpkgs Directory{ name, directory, file, source, document, urlAsFOD 
 
     let depToNix :: (URL, SHA256Digest) -> IO Dependency
         depToNix (url, sha256) =
-            if urlAsFOD
+            if fixedOutputDerivations
               then dependencyToNixAsFOD url sha256
               else dependencyToNix url
 
