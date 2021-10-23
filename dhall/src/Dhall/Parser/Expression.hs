@@ -418,15 +418,15 @@ parsers embedded = Parsers{..}
                             nonemptyWhitespace
                             case (shallowDenote a, a0Info) of
                                 (ListLit Nothing [], _) -> do
-                                    b <- applicationExpression
+                                    b <- expression
 
                                     return (ListLit (Just b) [])
                                 (Merge c d Nothing, NakedMergeOrSomeOrToMap) -> do
-                                    b <- applicationExpression
+                                    b <- expression
 
                                     return (Merge c d (Just b))
                                 (ToMap c Nothing, NakedMergeOrSomeOrToMap) -> do
-                                    b <- applicationExpression
+                                    b <- expression
 
                                     return (ToMap c (Just b))
                                 _ -> do
