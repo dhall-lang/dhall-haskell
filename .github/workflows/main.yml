@@ -14,12 +14,18 @@ jobs:
     strategy:
       matrix:
         os:
-          - runner: macOS-latest
-            package: macos
-          - runner: ubuntu-latest
+          - runner: 'macOS-latest'
+            package: 'macos'
+            archive-command: 'tar --create --file'
+            file-extension: 'tar.bz2'
+          - runner: 'ubuntu-latest'
             package: null
-          - runner: windows-latest
-            package: windows
+            archive-command: 'tar --create --file'
+            file-extension: 'tar.bz2'
+          - runner: 'windows-latest'
+            package: 'windows'
+            archive-command: 'zip'
+            file-extension: 'zip'
         package:
           - name: dhall
             assets: >
@@ -118,6 +124,8 @@ jobs:
           cabal-name: ${{ matrix.package.name }}
           os: ${{ matrix.os.package }}
           assets: ${{ matrix.package.assets }}
+          archive-command: ${{ matrix.os.archive-command }}
+          file-extension: ${{ matrix.os.file-extension }}
       - if: ${{ matrix.os.package != null }}
         name: "Upload package"
         uses: actions/upload-artifact@v2

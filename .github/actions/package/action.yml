@@ -27,7 +27,7 @@ inputs:
   archive-command:
     description: 'Archive command to use'
     required: false
-    default: 'tar -jcvf'
+    default: 'tar --create --file'
 outputs:
   package-file:
     description: "Output path of the package"
