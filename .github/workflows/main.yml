@@ -24,7 +24,7 @@ jobs:
             file-extension: 'tar.bz2'
           - runner: 'windows-latest'
             package: 'windows'
-            archive-command: 'zip'
+            archive-command: '7z a -tzip'
             file-extension: 'zip'
         package:
           - name: dhall
