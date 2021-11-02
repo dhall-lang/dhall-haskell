@@ -230,7 +230,6 @@ import Prettyprinter       (Pretty)
 
 import qualified Data.Aeson                as Aeson
 import qualified Data.Foldable             as Foldable
-import qualified Data.HashMap.Strict       as HashMap
 import qualified Data.List
 import qualified Data.Map
 import qualified Data.Ord
@@ -238,6 +237,7 @@ import qualified Data.Text
 import qualified Data.Vector               as Vector
 import qualified Dhall.Core                as Core
 import qualified Dhall.Import
+import qualified Dhall.JSON.Compat         as JSON.Compat
 import qualified Dhall.Map
 import qualified Dhall.Optics
 import qualified Dhall.Parser
@@ -536,7 +536,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
 
                         ys <- traverse inner (Foldable.toList xs)
 
-                        return (Aeson.Object (HashMap.fromList ys))
+                        return (Aeson.Object (JSON.Compat.objectFromList ys))
                     outer (Core.App (Core.Field (V 0) (FA "number")) (Core.DoubleLit (DhallDouble n))) =
                         return (Aeson.toJSON n)
                     outer (Core.App (Core.Field (V 0) (FA "string")) (Core.TextLit (Core.Chunks [] text))) =
@@ -581,7 +581,7 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
 
                         ys <- traverse inner (Foldable.toList xs)
 
-                        return (Aeson.Object (HashMap.fromList ys))
+                        return (Aeson.Object (JSON.Compat.objectFromList ys))
                     outer (Core.App (Core.Field (V 0) (FA "double")) (Core.DoubleLit (DhallDouble n))) =
                         return (Aeson.toJSON n)
                     outer (Core.App (Core.Field (V 0) (FA "integer")) (Core.IntegerLit n)) =
@@ -635,7 +635,7 @@ toOrderedList =
 omitNull :: Value -> Value
 omitNull (Object object) = Object fields
   where
-    fields =HashMap.filter (/= Null) (fmap omitNull object)
+    fields = JSON.Compat.filterObject (/= Null) (fmap omitNull object)
 omitNull (Array array) =
     Array (fmap omitNull array)
 omitNull (String string) =
@@ -654,7 +654,7 @@ omitEmpty :: Value -> Value
 omitEmpty (Object object) =
     if null fields then Null else Object fields
   where
-    fields = HashMap.filter (/= Null) (fmap omitEmpty object)
+    fields = JSON.Compat.filterObject (/= Null) (fmap omitEmpty object)
 omitEmpty (Array array) =
     if null elems then Null else Array elems
   where

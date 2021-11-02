@@ -473,7 +473,7 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                        >= 4.11.0.0 && < 5   ,
-        aeson                       >= 1.0.0.0  && < 1.6 ,
+        aeson                       >= 1.0.0.0  && < 2.1 ,
         aeson-pretty                               < 0.9 ,
         ansi-terminal               >= 0.6.3.1  && < 0.12,
         atomic-write                >= 0.2.0.7  && < 0.3 ,
