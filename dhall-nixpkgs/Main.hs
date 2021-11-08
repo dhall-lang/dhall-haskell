@@ -407,7 +407,7 @@ data Dependency = Dependency
       --   > buildDhallUrl {
       --   >   url = "https://some.url.to/a/dhall/file.dhall";
       --   >   hash = "sha256-ZTSiQUXpPbPfPvS8OeK6dDQE6j6NbP27ho1cg9YfENI=";
-      --   >   dhall-hash =
+      --   >   dhallHash =
       --   >     "sha256:6534a24145e93db3df3ef4bc39e2ba743404ea3e8d6cfdbb868d5c83d61f10d2";
       --   > }
     }
@@ -421,11 +421,11 @@ data Dependency = Dependency
 --   > buildDhallUrl {
 --   >   url = "https://some.url.to/a/dhall/file.dhall";
 --   >   hash = "sha256-ZTSiQUXpPbPfPvS8OeK6dDQE6j6NbP27ho1cg9YfENI=";
---   >   dhall-hash =
+--   >   dhallHash =
 --   >     "sha256:6534a24145e93db3df3ef4bc39e2ba743404ea3e8d6cfdbb868d5c83d61f10d2";
 --   > }
 --
--- The @hash@ argument is an SRI hash that Nix understands.  The @dhall-hash@
+-- The @hash@ argument is an SRI hash that Nix understands.  The @dhallHash@
 -- argument is a base-16-encoded hash that Dhall understands.
 dependencyToNixAsFOD :: URL -> SHA256Digest -> IO Dependency
 dependencyToNixAsFOD url (SHA256Digest shaBytes) = do
@@ -442,7 +442,7 @@ dependencyToNixAsFOD url (SHA256Digest shaBytes) = do
             @@  Nix.attrsE
                     [ ("url", Nix.mkStr $ Dhall.Core.pretty url)
                     , ("hash", Nix.mkStr $ Text.pack nixSRIHash)
-                    , ("dhall-hash", Nix.mkStr $ Text.pack dhallHash)
+                    , ("dhallHash", Nix.mkStr $ Text.pack dhallHash)
                     ]
 
     return Dependency{..}
