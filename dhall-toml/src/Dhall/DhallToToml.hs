@@ -127,6 +127,11 @@ import qualified Toml.Type.AnyValue        as Toml.AnyValue
 import qualified Toml.Type.TOML            as Toml.TOML
 import qualified Toml.Type.Value           as Toml.Value
 
+-- $setup
+--
+-- >>> import Toml.Type.TOML (TOML(..))
+-- >>> import Toml.Type.AnyValue (AnyValue(..))
+-- >>> import qualified Data.HashMap.Strict as HashMap
 
 data CompileError
     = Unsupported (Expr Void Void)
@@ -138,6 +143,7 @@ data CompileError
     --   implemented it yet
     --   NOTE: the only way to get this error is through unions
     | HeterogeneousArray (Expr Void Void)
+    deriving (Eq)
 
 instance Show CompileError where
     show (Unsupported e) =
@@ -215,8 +221,8 @@ insert = Text.unpack . Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.in
 >>> import Toml.Type.Printer
 >>> f = makeRecordField
 >>> let toml = dhallToToml $ RecordLit [("foo", f $ NaturalLit 1), ("bar", f $ TextLit "ABC")]
->>> toml
-Right (TOML {tomlPairs = fromList [("foo" :| [],Integer 1),("bar" :| [],Text "ABC")], tomlTables = fromList [], tomlTableArrays = fromList []})
+>>> toml == Right (TOML {tomlPairs = HashMap.fromList [("foo",AnyValue (Toml.Value.Integer 1)),("bar",AnyValue (Toml.Value.Text "ABC"))], tomlTables = HashMap.fromList [], tomlTableArrays = HashMap.fromList []})
+True
 >>> fmap Toml.Type.Printer.pretty toml
 Right "bar = \"ABC\"\nfoo = 1\n"
 -}
