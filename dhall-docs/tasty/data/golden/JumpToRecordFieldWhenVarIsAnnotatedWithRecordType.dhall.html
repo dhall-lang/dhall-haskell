@@ -2,9 +2,9 @@
 <html>
 <head>
 <title>/JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall</title>
-<link href="index.css" rel="stylesheet" type="text/css">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet" type="text/css">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
@@ -14,7 +14,7 @@
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
-<a class="nav-option" id="switch-light-dark-mode">Switch Light/Dark Mode</a>
+<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
 </div>
 <div class="main-container">
 <h2 class="doc-title">
@@ -39,8 +39,8 @@
 <div class="source-code">
 <pre>{-|<br>On this example, even when the variable `a` is annotated with a record-type,<br>`dhall-docs` will infer the actual type from the bounded value.<br>
 <br>All interactions with fields on selector-expressions won&#39;t affect the rendered-type.<br>
-<br>(The example is intended to not type-check as a Dhall expression)<br>-}<br>let <span class="name-decl" data-name="var9-5" id="var9-5">a</span> : { x : Text } = { <span class="name-decl" data-name="var9-26" id="var9-26">x</span> = &quot;foo&quot;, <span class="name-decl" data-name="var9-37" id="var9-37">y</span> = &quot;bar&quot; }<br>
-<br>in <a class="name-use" data-name="var9-5" href="#var9-5">a</a>.<a class="name-use" data-name="var9-26" href="#var9-26">x</a> ++ <a class="name-use" data-name="var9-5" href="#var9-5">a</a>.<a class="name-use" data-name="var9-37" href="#var9-37">y</a>
+<br>(The example is intended to not type-check as a Dhall expression)<br>-}<br>let <span id="var9-5" class="name-decl" data-name="var9-5">a</span> : { x : Text } = { <span id="var9-26" class="name-decl" data-name="var9-26">x</span> = &quot;foo&quot;, <span id="var9-37" class="name-decl" data-name="var9-37">y</span> = &quot;bar&quot; }<br>
+<br>in <a href="#var9-5" class="name-use" data-name="var9-5">a</a>.<a href="#var9-26" class="name-use" data-name="var9-26">x</a> ++ <a href="#var9-5" class="name-use" data-name="var9-5">a</a>.<a href="#var9-37" class="name-use" data-name="var9-37">y</a>
 <br>
 </pre>
 </div>
