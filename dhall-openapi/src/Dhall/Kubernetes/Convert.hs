@@ -233,10 +233,10 @@ toTypes' prefixMap typeSplitter definitions toMerge
               "boolean" -> (Dhall.Bool, Data.Map.empty)
               "integer" -> case (minimum_ definition, exclusiveMinimum definition,
                                  maximum_ definition, exclusiveMaximum definition) of
-                (Just min_, Just True) | min_ < -1 -> (Dhall.Integer, Data.Map.empty)
-                (Just min_, _)         | min_ < 0 -> (Dhall.Integer, Data.Map.empty)
-                (Just max_, Just True) | max_ < 1 -> (Dhall.Integer, Data.Map.empty)
-                (Just max_, _)         | max_ < 0 -> (Dhall.Integer, Data.Map.empty)
+                (Just min_, Just True, _, _) | min_ < -1 -> (Dhall.Integer, Data.Map.empty)
+                (Just min_, _, _, _)         | min_ < 0 -> (Dhall.Integer, Data.Map.empty)
+                (_, _, Just max_, Just True) | max_ < 1 -> (Dhall.Integer, Data.Map.empty)
+                (_, _, Just max_, _)         | max_ < 0 -> (Dhall.Integer, Data.Map.empty)
                 _                      -> (Dhall.Natural, Data.Map.empty)
               "number"  -> (Dhall.Double, Data.Map.empty)
               other     -> error $ "Found missing Swagger type: " <> Text.unpack other
@@ -442,6 +442,8 @@ data V1JSONSchemaProps =
         , v1JSONSchemaPropsFormat :: Maybe Text
         , v1JSONSchemaPropsMinimum :: Maybe Scientific
         , v1JSONSchemaPropsExclusiveMinimum :: Maybe Bool
+        , v1JSONSchemaPropsMaximum :: Maybe Scientific
+        , v1JSONSchemaPropsExclusiveMaximum :: Maybe Bool
         , v1JSONSchemaPropsItems :: Maybe Value
         , v1JSONSchemaPropsProperties :: Maybe (Data.Map.Map String V1JSONSchemaProps)
         , v1JSONSchemaPropsAdditionalProperties :: Maybe V1JSONSchemaProps
@@ -461,6 +463,8 @@ mkV1JSONSchemaProps =
         , v1JSONSchemaPropsFormat = Nothing
         , v1JSONSchemaPropsMinimum = Nothing
         , v1JSONSchemaPropsExclusiveMinimum = Nothing
+        , v1JSONSchemaPropsMaximum = Nothing
+        , v1JSONSchemaPropsExclusiveMaximum = Nothing
         , v1JSONSchemaPropsItems = Nothing
         , v1JSONSchemaPropsProperties = Nothing
         , v1JSONSchemaPropsAdditionalProperties = Nothing
@@ -532,6 +536,8 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
         , format               = v1JSONSchemaPropsFormat
         , minimum_             = v1JSONSchemaPropsMinimum
         , exclusiveMinimum     = v1JSONSchemaPropsExclusiveMinimum
+        , maximum_         = v1JSONSchemaPropsMaximum
+        , exclusiveMaximum = v1JSONSchemaPropsExclusiveMaximum
         , description          = v1JSONSchemaPropsDescription
         , items                = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
         , properties           = fmap toProperties v1JSONSchemaPropsProperties
