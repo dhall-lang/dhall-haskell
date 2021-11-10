@@ -162,13 +162,13 @@ pathSplitter pathsAndModels modelHierarchy definition
     many types reference other types so we need to access them to decide things
     like "should this key be optional"
 -}
-toTypes :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
-toTypes prefixMap typeSplitter definitions = toTypes' prefixMap typeSplitter definitions Data.Map.empty
+toTypes :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Bool -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
+toTypes prefixMap typeSplitter preferNaturalInt definitions = toTypes' prefixMap typeSplitter definitions preferNaturalInt Data.Map.empty
 
-toTypes' :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr -> Data.Map.Map ModelName Expr
-toTypes' prefixMap typeSplitter definitions toMerge
+toTypes' :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Data.Map.Map ModelName Definition -> Bool -> Data.Map.Map ModelName Expr -> Data.Map.Map ModelName Expr
+toTypes' prefixMap typeSplitter definitions preferNaturalInt toMerge
   | Data.Map.null definitions = toMerge
-  | otherwise = mergeNoConflicts (==) (toTypes' prefixMap typeSplitter newDefs modelMap) toMerge
+  | otherwise = mergeNoConflicts (==) (toTypes' prefixMap typeSplitter newDefs preferNaturalInt modelMap) toMerge
      where
 
         -- some CRDs are equal all except for the top description. This is safe as the only usage of description
@@ -231,13 +231,17 @@ toTypes' prefixMap typeSplitter definitions toMerge
               "string"  | format definition == Just "int-or-string" -> (intOrStringType, Data.Map.empty)
               "string"  -> (Dhall.Text, Data.Map.empty)
               "boolean" -> (Dhall.Bool, Data.Map.empty)
-              "integer" -> case (minimum_ definition, exclusiveMinimum definition,
-                                 maximum_ definition, exclusiveMaximum definition) of
-                (Just min_, Just True, _, _) | min_ < -1 -> (Dhall.Integer, Data.Map.empty)
-                (Just min_, _, _, _)         | min_ < 0 -> (Dhall.Integer, Data.Map.empty)
-                (_, _, Just max_, Just True) | max_ < 1 -> (Dhall.Integer, Data.Map.empty)
-                (_, _, Just max_, _)         | max_ < 0 -> (Dhall.Integer, Data.Map.empty)
-                _                      -> (Dhall.Natural, Data.Map.empty)
+              "integer" -> if preferNaturalInt then case (minimum_ definition, exclusiveMinimum definition,
+                          maximum_ definition, exclusiveMaximum definition) of
+                  (Just min_, Just True, _, _) | min_ < -1 -> (Dhall.Integer, Data.Map.empty)
+                  (Just min_, _, _, _)         | min_ < 0  -> (Dhall.Integer, Data.Map.empty)
+                  (_, _, Just max_, Just True) | max_ < 1  -> (Dhall.Integer, Data.Map.empty)
+                  (_, _, Just max_, _)         | max_ < 0  -> (Dhall.Integer, Data.Map.empty)
+                  _                                        -> (Dhall.Natural, Data.Map.empty)
+                else case (minimum_ definition, exclusiveMinimum definition) of
+                  (Just min_, Just True) | min_ >= -1 -> (Dhall.Natural, Data.Map.empty)
+                  (Just min_, _)         | min_ >= 0  -> (Dhall.Natural, Data.Map.empty)
+                  _                                   -> (Dhall.Integer, Data.Map.empty)
               "number"  -> (Dhall.Double, Data.Map.empty)
               other     -> error $ "Found missing Swagger type: " <> Text.unpack other
             -- There are empty schemas that only have a description, so we return empty record

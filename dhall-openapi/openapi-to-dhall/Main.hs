@@ -60,6 +60,7 @@ import qualified Text.Megaparsec.Char.Lexer as Megaparsec.Lexer
 -- | Top-level program options
 data Options = Options
     { skipDuplicates :: Bool
+    , preferNaturalInt :: Bool
     , prefixMap :: Data.Map.Map Prefix Dhall.Import
     , splits :: Data.Map.Map ModelHierarchy (Maybe ModelName)
     , filename :: String
@@ -205,12 +206,17 @@ parseSplits =
 
 
 parseOptions :: Options.Applicative.Parser Options
-parseOptions = Options <$> parseSkip <*> parsePrefixMap' <*> parseSplits' <*> fileArg <*> crdArg
+parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parsePrefixMap' <*> parseSplits' <*> fileArg <*> crdArg
   where
     parseSkip =
       Options.Applicative.switch
         (  Options.Applicative.long "skipDuplicates"
         <> Options.Applicative.help "Skip types with the same name when aggregating types"
+        )
+    parseNaturalInt =
+      Options.Applicative.switch
+        (  Options.Applicative.long "preferNaturalInt"
+        <> Options.Applicative.help "Render Swagger Integer as Dhall Natural unless negative numbers included in range"
         )
     parsePrefixMap' =
       option Data.Map.empty $ Options.Applicative.option parsePrefixMap
@@ -288,7 +294,7 @@ main = do
         ) defs
 
   -- Convert to Dhall types in a Map
-  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits) fixedDefs
+  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits) preferNaturalInt fixedDefs
 
   -- Output to types
   Directory.createDirectoryIfMissing True "types"
