@@ -61,6 +61,7 @@ import qualified Text.Megaparsec.Char.Lexer as Megaparsec.Lexer
 data Options = Options
     { skipDuplicates :: Bool
     , preferNaturalInt :: Bool
+    , natIntExceptions :: String
     , prefixMap :: Data.Map.Map Prefix Dhall.Import
     , splits :: Data.Map.Map ModelHierarchy (Maybe ModelName)
     , filename :: String
@@ -206,7 +207,7 @@ parseSplits =
 
 
 parseOptions :: Options.Applicative.Parser Options
-parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parsePrefixMap' <*> parseSplits' <*> fileArg <*> crdArg
+parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parseNatIntExceptions <*> parsePrefixMap' <*> parseSplits' <*> fileArg <*> crdArg
   where
     parseSkip =
       Options.Applicative.switch
@@ -218,6 +219,11 @@ parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parsePrefixMap' <*>
         (  Options.Applicative.long "preferNaturalInt"
         <> Options.Applicative.help "Render Swagger Integer as Dhall Natural unless negative numbers included in range"
         )
+    parseNatIntExceptions =
+      option "" $ Options.Applicative.strOption
+       (  Options.Applicative.long "natIntExceptions"
+        <> Options.Applicative.help "List of Type.field that should be treated the opposite way to preferNaturalInt; e.g.: ContainerStateTerminated.exitCode,ContainerStateTerminated.signal"
+       )
     parsePrefixMap' =
       option Data.Map.empty $ Options.Applicative.option parsePrefixMap
         (  Options.Applicative.long "prefixMap"
@@ -293,8 +299,12 @@ main = do
         . fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps.dhall"
         ) defs
 
+  -- TODO: move this into a Parser
+  let natIntExceptions' = map ((\e -> (Text.unpack $ head e, Text.unpack $ last e)) . (Text.splitOn "."))
+         $ Text.splitOn "," (Text.pack natIntExceptions)
+
   -- Convert to Dhall types in a Map
-  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits) preferNaturalInt fixedDefs
+  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits) preferNaturalInt natIntExceptions' fixedDefs
 
   -- Output to types
   Directory.createDirectoryIfMissing True "types"
