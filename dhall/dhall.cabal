@@ -493,7 +493,7 @@ Library
         filepath                    >= 1.4      && < 1.5 ,
         half                        >= 0.2.2.3  && < 0.4 ,
         haskeline                   >= 0.7.2.1  && < 0.9 ,
-        hashable                    >= 1.2      && < 1.4 ,
+        hashable                    >= 1.2      && < 1.5 ,
         lens-family-core            >= 1.0.0    && < 2.2 ,
         -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
         megaparsec                  >= 8        && < 10  ,
