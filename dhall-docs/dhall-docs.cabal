@@ -83,7 +83,7 @@ Library
         prettyprinter        >= 1.7.0     && < 1.8 ,
         text                 >= 0.11.1.0  && < 2.1 ,
         transformers         >= 0.2.0.0   && < 0.7 ,
-        mtl                  >= 2.2.1     && < 2.3 ,
+        mtl                  >= 2.2.1     && < 2.4 ,
         optparse-applicative >= 0.14.0.0  && < 0.18
     Exposed-Modules:
         Dhall.Docs
