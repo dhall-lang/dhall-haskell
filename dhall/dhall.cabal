@@ -713,7 +713,7 @@ Test-Suite doctest
         directory                     ,
         filepath                < 1.5 ,
         mockery                 < 0.4 ,
-        doctest   >= 0.7.0   && < 0.19
+        doctest   >= 0.7.0   && < 0.20
     if os(windows)
       -- https://github.com/dhall-lang/dhall-haskell/issues/2237
       Buildable: False
