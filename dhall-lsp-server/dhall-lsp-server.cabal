@@ -55,7 +55,7 @@ library
     , haskell-lsp          >= 0.21.0.0 && < 0.25
     , rope-utf16-splay     >= 0.3.1.0  && < 0.4
     , hslogger             >= 1.2.10   && < 1.4
-    , lens                 >= 4.16.1   && < 5.1
+    , lens                 >= 4.16.1   && < 5.2
     -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
     , megaparsec           >= 7.0.2    && < 10
     , mtl                  >= 2.2.2    && < 2.3
