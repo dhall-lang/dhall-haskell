@@ -13,18 +13,17 @@ module Dhall.Crypto (
     ) where
 
 import Control.DeepSeq         (NFData)
-import Crypto.Hash             (SHA256)
-import Data.ByteArray          (ByteArrayAccess, convert)
-import Data.ByteArray.Encoding (Base (Base16), convertToBase)
 import Data.ByteString         (ByteString)
 import GHC.Generics            (Generic)
 
-import qualified Crypto.Hash
-import qualified Data.ByteString.Char8 as ByteString.Char8
+import qualified Crypto.Hash.SHA256
+import qualified Data.ByteString        as ByteString
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8  as ByteString.Char8
 
 -- | A SHA256 digest
 newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }
-  deriving (Eq, Generic, Ord, NFData, ByteArrayAccess)
+  deriving (Eq, Generic, Ord, NFData)
 
 instance Show SHA256Digest where
   show = toString
@@ -33,16 +32,14 @@ instance Show SHA256Digest where
     `Nothing` if the conversion fails
 -}
 sha256DigestFromByteString :: ByteString -> Maybe SHA256Digest
-sha256DigestFromByteString bytes = SHA256Digest . convert <$> mh
-  where
-    mh = Crypto.Hash.digestFromByteString bytes :: Maybe (Crypto.Hash.Digest SHA256)
+sha256DigestFromByteString bytes
+  | ByteString.length bytes == 32 = Just (SHA256Digest bytes)
+  | otherwise                     = Nothing
 
 -- | Hash a `ByteString` and return the hash as a `SHA256Digest`
 sha256Hash :: ByteString -> SHA256Digest
-sha256Hash bytes = SHA256Digest $ convert h
-  where
-    h = Crypto.Hash.hash bytes :: Crypto.Hash.Digest SHA256
+sha256Hash = SHA256Digest . Crypto.Hash.SHA256.hash
 
 -- | 'String' representation of a 'SHA256Digest'
 toString :: SHA256Digest -> String
-toString (SHA256Digest bytes) = ByteString.Char8.unpack $ convertToBase Base16 bytes
+toString (SHA256Digest bytes) = ByteString.Char8.unpack $ Base16.encode bytes

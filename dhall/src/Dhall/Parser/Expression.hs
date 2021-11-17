@@ -8,7 +8,6 @@
 module Dhall.Parser.Expression where
 
 import Control.Applicative     (Alternative (..), liftA2, optional)
-import Data.ByteArray.Encoding (Base (..))
 import Data.Foldable           (foldl')
 import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
@@ -19,8 +18,7 @@ import Text.Parser.Combinators (choice, try, (<?>))
 import qualified Control.Monad
 import qualified Control.Monad.Combinators          as Combinators
 import qualified Control.Monad.Combinators.NonEmpty as Combinators.NonEmpty
-import qualified Data.ByteArray.Encoding
-import qualified Data.ByteString
+import qualified Data.ByteString.Base16             as Base16
 import qualified Data.Char                          as Char
 import qualified Data.List
 import qualified Data.List.NonEmpty                 as NonEmpty
@@ -1202,9 +1200,9 @@ importHash_ = do
     _ <- text "sha256:"
     t <- count 64 (satisfy hexdig <?> "hex digit")
     let strictBytes16 = Data.Text.Encoding.encodeUtf8 t
-    strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
+    strictBytes <- case Base16.decode strictBytes16 of
         Left  string      -> fail string
-        Right strictBytes -> return (strictBytes :: Data.ByteString.ByteString)
+        Right strictBytes -> return strictBytes
     case Dhall.Crypto.sha256DigestFromByteString strictBytes of
       Nothing -> fail "Invalid sha256 hash"
       Just h  -> pure h
