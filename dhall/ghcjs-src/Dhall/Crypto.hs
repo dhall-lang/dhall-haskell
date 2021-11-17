@@ -13,31 +13,30 @@ module Dhall.Crypto (
     ) where
 
 import Control.DeepSeq                   (NFData)
-import Data.ByteArray                    (ByteArrayAccess)
-import Data.ByteArray.Encoding           (Base (Base16), convertToBase)
 import Data.ByteString                   (ByteString)
 import GHC.Generics                      (Generic)
 import JavaScript.TypedArray.ArrayBuffer (ArrayBuffer)
 import System.IO.Unsafe                  (unsafePerformIO)
 
-import qualified Data.ByteString       as ByteString
-import qualified Data.ByteString.Char8 as ByteString.Char8
-import qualified GHCJS.Buffer          as Buffer
+import qualified Data.ByteString        as ByteString
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8  as ByteString.Char8
+import qualified GHCJS.Buffer           as Buffer
 
 -- | A SHA256 digest
 newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }
-  deriving (Eq, Generic, Ord, NFData, ByteArrayAccess)
+  deriving (Eq, Generic, Ord, NFData)
 
 instance Show SHA256Digest where
-  show (SHA256Digest bytes) = ByteString.Char8.unpack $ convertToBase Base16 bytes
+  show (SHA256Digest bytes) = ByteString.Char8.unpack $ Base16.encode bytes
 
 {-| Attempt to interpret a `ByteString` as a `SHA256Digest`, returning
     `Nothing` if the conversion fails
 -}
 sha256DigestFromByteString :: ByteString -> Maybe SHA256Digest
 sha256DigestFromByteString bytes
-  | ByteString.length bytes == 32 = Just $ SHA256Digest bytes
-  | otherwise = Nothing
+  | ByteString.length bytes == 32 = Just (SHA256Digest bytes)
+  | otherwise                     = Nothing
 
 -- Use NodeJS' crypto module if there's a 'process' module, e.g. we're running
 -- inside GHCJS' THRunner. If we're running in the browser, use the WebCrypto
