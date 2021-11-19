@@ -76,7 +76,6 @@ import Control.Monad.Morph              (hoist)
 import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson                       (FromJSON)
-import Data.ByteArray.Encoding          (Base (Base16, Base64), convertToBase)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Maybe                       (mapMaybe)
 import Data.Text                        (Text)
@@ -108,6 +107,8 @@ import Dhall.Core
 import qualified Control.Foldl                    as Foldl
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
+import qualified Data.ByteString.Base16           as Base16
+import qualified Data.ByteString.Base64           as Base64
 import qualified Data.ByteString.Char8            as ByteString.Char8
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List.NonEmpty               as NonEmpty
@@ -432,10 +433,10 @@ dependencyToNixAsFOD url (SHA256Digest shaBytes) = do
     let functionParameter = Nothing
 
     let dhallHash =
-            "sha256:" <> ByteString.Char8.unpack (convertToBase Base16 shaBytes)
+            "sha256:" <> ByteString.Char8.unpack (Base16.encode shaBytes)
 
     let nixSRIHash =
-            "sha256-" <> ByteString.Char8.unpack (convertToBase Base64 shaBytes)
+            "sha256-" <> ByteString.Char8.unpack (Base64.encode shaBytes)
 
     let dependencyExpression =
                 "buildDhallUrl"

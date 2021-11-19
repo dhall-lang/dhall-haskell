@@ -189,7 +189,7 @@ parseDhallDocsText (BlockComment blockComment) =
         Just e -> DhallDocsText e
   where
     joinedText = Data.Text.strip $ Data.Text.unlines reIndentedLines
-    (_ : commentLines) = Data.Text.lines blockComment
+    commentLines = tail $ Data.Text.lines blockComment
 
     leadingSpaces = Data.Text.takeWhile isSpace
         where

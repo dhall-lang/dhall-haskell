@@ -5,17 +5,16 @@
 
 module Dhall.Docs.Store (getDocsHomeDirectory, makeHashForDirectory) where
 
-import Crypto.Hash  (Digest, SHA256)
 import Dhall.Crypto (SHA256Digest (..))
 import Path         (Abs, Dir, Path, Rel, (</>))
 import Path.IO      (XdgDirectory (..))
 
-import qualified Control.Monad         as Monad
-import qualified Crypto.Hash           as Hash
-import qualified Data.ByteArray        as ByteArray
-import qualified Data.ByteString       as ByteString
-import qualified Data.ByteString.Char8 as ByteString.Char8
-import qualified Data.List             as List
+import qualified Control.Monad          as Monad
+import qualified Crypto.Hash.SHA256
+import qualified Data.ByteString        as ByteString
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8  as ByteString.Char8
+import qualified Data.List              as List
 import qualified Path
 import qualified Path.IO
 
@@ -41,12 +40,12 @@ makeHashForDirectory :: Path Abs Dir -> IO SHA256Digest
 makeHashForDirectory dir = do
     (dirs, files) <- Path.IO.listDirRecurRel dir
 
-    let context0 = Hash.hashInit
+    let context0 = Crypto.Hash.SHA256.init
 
     let addDir context directory = do
             let nameBytes = ByteString.Char8.pack (Path.toFilePath directory)
 
-            return $! Hash.hashUpdate context nameBytes
+            return $! Crypto.Hash.SHA256.update context nameBytes
 
     context1 <- Monad.foldM addDir context0 (List.sort dirs)
 
@@ -55,11 +54,8 @@ makeHashForDirectory dir = do
 
             contentBytes <- ByteString.readFile (Path.toFilePath (dir </> file))
 
-            return $! Hash.hashUpdates context [ nameBytes, contentBytes ]
+            return $! Crypto.Hash.SHA256.updates context [ nameBytes, contentBytes ]
 
     context2 <- Monad.foldM addFile context1 (List.sort files)
 
-    let digest :: Digest SHA256
-        digest = Hash.hashFinalize context2
-
-    return (SHA256Digest (ByteArray.convert digest))
+    return (SHA256Digest (Crypto.Hash.SHA256.finalize context2))
