@@ -18,52 +18,55 @@ jobs:
             package: 'macos'
             archive-command: 'tar --create --file'
             file-extension: 'tar.bz2'
+            executable-extension: ''
           - runner: 'ubuntu-latest'
             package: null
             archive-command: 'tar --create --file'
             file-extension: 'tar.bz2'
+            executable-extension: ''
           - runner: 'windows-latest'
             package: 'windows'
             archive-command: '7z a -tzip'
             file-extension: 'zip'
+            executable-extension: '.exe'
         package:
           - name: dhall
             assets: >
-              bin/dhall
+              "bin/dhall${{ matrix.os.executable-extension }}"
               share/man/man1/dhall.1
           - name: dhall-bash
             assets: >
-              bin/dhall-to-bash
+              "bin/dhall-to-bash${{ matrix.os.executable-extension }}"
           - name: dhall-csv
             assets: >
-              bin/csv-to-dhall
-              bin/dhall-to-csv
+              "bin/csv-to-dhall${{ matrix.os.executable-extension }}"
+              "bin/dhall-to-csv${{ matrix.os.executable-extension }}"
           - name: dhall-docs
             assets: >
-              bin/dhall-docs
+              "bin/dhall-docs${{ matrix.os.executable-extension }}"
               share/man/man1/dhall-docs.1
           - name: dhall-json
             assets: >
-              bin/dhall-to-json
-              bin/dhall-to-yaml
-              bin/json-to-dhall
+              "bin/dhall-to-json${{ matrix.os.executable-extension }}"
+              "bin/dhall-to-yaml${{ matrix.os.executable-extension }}"
+              "bin/json-to-dhall${{ matrix.os.executable-extension }}"
           - name: dhall-lsp-server
             assets: >
-              bin/dhall-lsp-server
+              "bin/dhall-lsp-server${{ matrix.os.executable-extension }}"
           - name: dhall-nix
             assets: >
-              bin/dhall-to-nix
+              "bin/dhall-to-nix${{ matrix.os.executable-extension }}"
           - name: dhall-openapi
             assets: >
-              bin/openapi-to-dhall
+              "bin/openapi-to-dhall${{ matrix.os.executable-extension }}"
           - name: dhall-toml
             assets: >
-              bin/dhall-to-toml
-              bin/toml-to-dhall
+              "bin/dhall-to-toml${{ matrix.os.executable-extension }}"
+              "bin/toml-to-dhall${{ matrix.os.executable-extension }}"
           - name: dhall-yaml
             assets: >
-              bin/dhall-to-yaml-ng
-              bin/yaml-to-dhall
+              "bin/dhall-to-yaml-ng${{ matrix.os.executable-extension }}"
+              "bin/yaml-to-dhall${{ matrix.os.executable-extension }}"
         exclude:
           # Temporarily exclude dhall-nix on Ubuntu due to build failure
           # See: https://github.com/dhall-lang/dhall-haskell/runs/2920388542
