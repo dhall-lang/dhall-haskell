@@ -515,7 +515,7 @@ dependencyToNix url@URL{ authority, path } = do
 
                     let package = owner <> "_" <> hash
 
-                    let functionParameter = (package, Nothing)
+                    let functionParameter = Just (package, Nothing)
 
                     let dependencyExpression =
                                 (Nix.mkSym package @. "overridePackage")
