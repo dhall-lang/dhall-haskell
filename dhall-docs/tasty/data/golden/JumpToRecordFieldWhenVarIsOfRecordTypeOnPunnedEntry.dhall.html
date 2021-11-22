@@ -2,9 +2,9 @@
 <html>
 <head>
 <title>/JumpToRecordFieldWhenVarIsOfRecordTypeOnPunnedEntry.dhall</title>
-<link href="index.css" rel="stylesheet" type="text/css">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet" type="text/css">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
@@ -14,7 +14,7 @@
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
-<a class="nav-option" id="switch-light-dark-mode">Switch Light/Dark Mode</a>
+<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
 </div>
 <div class="main-container">
 <h2 class="doc-title">
@@ -36,8 +36,8 @@ the user clicks the <code>x</code> from <code>a.x</code>, it will jump to the <c
 </div>
 <h3>Source</h3>
 <div class="source-code">
-<pre>{-|<br>On this example, `dhall-docs` will detect that the variable `a` is bounded<br>to a record literal. It will also be aware that that the attribute `x`. When<br>the user clicks the `x` from `a.x`, it will jump to the `x` punned-entry<br>-}<br>let x = 1<br>let <span class="name-decl" data-name="var7-5" id="var7-5">a</span> = { <span class="name-decl" data-name="var7-11" id="var7-11">x</span> }<br>
-<br>in <a class="name-use" data-name="var7-5" href="#var7-5">a</a>.<a class="name-use" data-name="var7-11" href="#var7-11">x</a>
+<pre>{-|<br>On this example, `dhall-docs` will detect that the variable `a` is bounded<br>to a record literal. It will also be aware that that the attribute `x`. When<br>the user clicks the `x` from `a.x`, it will jump to the `x` punned-entry<br>-}<br>let x = 1<br>let <span id="var7-5" class="name-decl" data-name="var7-5">a</span> = { <span id="var7-11" class="name-decl" data-name="var7-11">x</span> }<br>
+<br>in <a href="#var7-5" class="name-use" data-name="var7-5">a</a>.<a href="#var7-11" class="name-use" data-name="var7-11">x</a>
 <br>
 </pre>
 </div>

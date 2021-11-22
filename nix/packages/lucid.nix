@@ -4,8 +4,8 @@
 }:
 mkDerivation {
   pname = "lucid";
-  version = "2.10.0";
-  sha256 = "cf8740ca356a971bf5ffacd49d36bba2d6ce807f4f0cf551f5a6cf60c358f9f7";
+  version = "2.11.0";
+  sha256 = "549715bd4ca7b3034e689df6d73e459a8b4efbff0c74b8f961fc0edbf7082ed4";
   libraryHaskellDepends = [
     base blaze-builder bytestring containers hashable mmorph mtl text
     transformers unordered-containers

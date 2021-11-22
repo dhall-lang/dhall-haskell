@@ -2,9 +2,9 @@
 <html>
 <head>
 <title>/Pair.dhall</title>
-<link href="index.css" rel="stylesheet" type="text/css">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet" type="text/css">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
@@ -14,7 +14,7 @@
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
-<a class="nav-option" id="switch-light-dark-mode">Switch Light/Dark Mode</a>
+<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
 </div>
 <div class="main-container">
 <h2 class="doc-title">
@@ -36,9 +36,9 @@
 <div class="source-code">
 <pre>
 <br>{-|<br>Just a *Pair* right here<br>-}<br>
-<br>let <span class="name-decl" data-name="var6-5" id="var6-5">Pair</span>
-<br>  : forall(A: Type) -- | Type of first position<br>  -&gt; forall(B: Type) -- | Type of second position<br>  -&gt; Type<br>  = λ(<span class="name-decl" data-name="var10-7" id="var10-7">A</span>: Type) -&gt; λ(<span class="name-decl" data-name="var10-21" id="var10-21">B</span>: Type) -&gt; {first: <a class="name-use" data-name="var10-7" href="#var10-7">A</a>, second: <a class="name-use" data-name="var10-21" href="#var10-21">B</a>}<br>
-<br>in <a class="name-use" data-name="var6-5" href="#var6-5">Pair</a>
+<br>let <span id="var6-5" class="name-decl" data-name="var6-5">Pair</span>
+<br>  : forall(A: Type) -- | Type of first position<br>  -&gt; forall(B: Type) -- | Type of second position<br>  -&gt; Type<br>  = λ(<span id="var10-7" class="name-decl" data-name="var10-7">A</span>: Type) -&gt; λ(<span id="var10-21" class="name-decl" data-name="var10-21">B</span>: Type) -&gt; {first: <a href="#var10-7" class="name-use" data-name="var10-7">A</a>, second: <a href="#var10-21" class="name-use" data-name="var10-21">B</a>}<br>
+<br>in <a href="#var6-5" class="name-use" data-name="var6-5">Pair</a>
 <br>
 </pre>
 </div>

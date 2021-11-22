@@ -76,7 +76,6 @@ import Control.Monad.Morph              (hoist)
 import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson                       (FromJSON)
-import Data.ByteArray.Encoding          (Base (Base16, Base64), convertToBase)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Maybe                       (mapMaybe)
 import Data.Text                        (Text)
@@ -108,6 +107,8 @@ import Dhall.Core
 import qualified Control.Foldl                    as Foldl
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
+import qualified Data.ByteString.Base16           as Base16
+import qualified Data.ByteString.Base64           as Base64
 import qualified Data.ByteString.Char8            as ByteString.Char8
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List.NonEmpty               as NonEmpty
@@ -407,7 +408,7 @@ data Dependency = Dependency
       --   > buildDhallUrl {
       --   >   url = "https://some.url.to/a/dhall/file.dhall";
       --   >   hash = "sha256-ZTSiQUXpPbPfPvS8OeK6dDQE6j6NbP27ho1cg9YfENI=";
-      --   >   dhall-hash =
+      --   >   dhallHash =
       --   >     "sha256:6534a24145e93db3df3ef4bc39e2ba743404ea3e8d6cfdbb868d5c83d61f10d2";
       --   > }
     }
@@ -421,28 +422,28 @@ data Dependency = Dependency
 --   > buildDhallUrl {
 --   >   url = "https://some.url.to/a/dhall/file.dhall";
 --   >   hash = "sha256-ZTSiQUXpPbPfPvS8OeK6dDQE6j6NbP27ho1cg9YfENI=";
---   >   dhall-hash =
+--   >   dhallHash =
 --   >     "sha256:6534a24145e93db3df3ef4bc39e2ba743404ea3e8d6cfdbb868d5c83d61f10d2";
 --   > }
 --
--- The @hash@ argument is an SRI hash that Nix understands.  The @dhall-hash@
+-- The @hash@ argument is an SRI hash that Nix understands.  The @dhallHash@
 -- argument is a base-16-encoded hash that Dhall understands.
 dependencyToNixAsFOD :: URL -> SHA256Digest -> IO Dependency
 dependencyToNixAsFOD url (SHA256Digest shaBytes) = do
     let functionParameter = Nothing
 
     let dhallHash =
-            "sha256:" <> ByteString.Char8.unpack (convertToBase Base16 shaBytes)
+            "sha256:" <> ByteString.Char8.unpack (Base16.encode shaBytes)
 
     let nixSRIHash =
-            "sha256-" <> ByteString.Char8.unpack (convertToBase Base64 shaBytes)
+            "sha256-" <> ByteString.Char8.unpack (Base64.encode shaBytes)
 
     let dependencyExpression =
                 "buildDhallUrl"
             @@  Nix.attrsE
                     [ ("url", Nix.mkStr $ Dhall.Core.pretty url)
                     , ("hash", Nix.mkStr $ Text.pack nixSRIHash)
-                    , ("dhall-hash", Nix.mkStr $ Text.pack dhallHash)
+                    , ("dhallHash", Nix.mkStr $ Text.pack dhallHash)
                     ]
 
     return Dependency{..}
@@ -495,6 +496,29 @@ dependencyToNix url@URL{ authority, path } = do
 
                     let dependencyExpression =
                                 (Nix.mkSym repo @. "overridePackage")
+                            @@  Nix.attrsE
+                                    [ ("file", Nix.mkStr fileArgument ) ]
+
+                    return Dependency{..}
+
+                _ -> do
+                    die (NotAValidGistRepositoryURL url)
+
+        "gist.githubusercontent.com" -> do
+            let File{ directory, file } = path
+
+            let Dhall.Core.Directory{ components } = directory
+
+            case reverse (file : components) of
+                owner : hash : "raw" : _rev : rest -> do
+                    let fileArgument = Text.intercalate "/" rest
+
+                    let package = owner <> "_" <> hash
+
+                    let functionParameter = Just (package, Nothing)
+
+                    let dependencyExpression =
+                                (Nix.mkSym package @. "overridePackage")
                             @@  Nix.attrsE
                                     [ ("file", Nix.mkStr fileArgument ) ]
 
@@ -596,8 +620,9 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
         _        -> die (UnsupportedURIScheme uri uriScheme)
 
     case uriRegName of
-        "github.com" -> return ()
-        _            -> die (UnsupportedDomain uri uriRegName)
+        "github.com"      -> return ()
+        "gist.github.com" -> return ()
+        _                 -> die (UnsupportedDomain uri uriRegName)
 
     case uriPort of
         "" -> return ()
@@ -812,6 +837,7 @@ die e = liftIO $ do
 data Error
     = MissingSemanticIntegrityCheck URL
     | NotAValidGitHubRepositoryURL URL
+    | NotAValidGistRepositoryURL URL
     | UnsupportedDomainDependency URL Text
     | RepositoryIsNotAValidURI Text
     | UnsupportedURIScheme Text String
@@ -860,6 +886,22 @@ normally have.  The URL should minimally have the following path components:
 ↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
 |]
 
+    NotAValidGistRepositoryURL url ->
+        let dependency = Dhall.Core.pretty url
+
+        in  [NeatInterpolation.text|
+Error: Not a valid gist repository URL
+
+Your Dhall package appears to depend on the following import:
+
+↳ $dependency
+
+... which is missing one or more path components that a raw GitHub import would
+normally have.  The URL should minimally have the following path components:
+
+↳ https://gist.githubusercontent.com/$${owner}/$${id}/raw/$${revision}/…
+|]
+
     UnsupportedDomainDependency url authority ->
         let dependency = Dhall.Core.pretty url
 
@@ -869,6 +911,7 @@ Error: Unsupported domain
 This tool currently only translates the following domains into Nix dependencies:
 
 * raw.githubusercontent.com
+* gist.githubusercontent.com
 * prelude.dhall-lang.org
 
 One of the Dhall project's dependencies:

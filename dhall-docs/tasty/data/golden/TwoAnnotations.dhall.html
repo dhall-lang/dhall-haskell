@@ -2,9 +2,9 @@
 <html>
 <head>
 <title>/TwoAnnotations.dhall</title>
-<link href="index.css" rel="stylesheet" type="text/css">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet" type="text/css">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
@@ -14,7 +14,7 @@
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
-<a class="nav-option" id="switch-light-dark-mode">Switch Light/Dark Mode</a>
+<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
 </div>
 <div class="main-container">
 <h2 class="doc-title">
@@ -36,9 +36,9 @@ latter annotation.</p>
 </div>
 <h3>Source</h3>
 <div class="source-code">
-<pre>{-|<br>This expression contains type annotations on both the `let` binding and on the<br>body of the `let` expression.  The documentation generator prefers to use the<br>latter annotation.<br>-}<br>let <span class="name-decl" data-name="var6-5" id="var6-5">x</span> = 1<br>
-<br>let <span class="name-decl" data-name="var8-5" id="var8-5">y</span> = Natural<br>
-<br>in  <a class="name-use" data-name="var6-5" href="#var6-5">x</a> : <a class="name-use" data-name="var8-5" href="#var8-5">y</a>
+<pre>{-|<br>This expression contains type annotations on both the `let` binding and on the<br>body of the `let` expression.  The documentation generator prefers to use the<br>latter annotation.<br>-}<br>let <span id="var6-5" class="name-decl" data-name="var6-5">x</span> = 1<br>
+<br>let <span id="var8-5" class="name-decl" data-name="var8-5">y</span> = Natural<br>
+<br>in  <a href="#var6-5" class="name-use" data-name="var6-5">x</a> : <a href="#var8-5" class="name-use" data-name="var8-5">y</a>
 <br>
 </pre>
 </div>

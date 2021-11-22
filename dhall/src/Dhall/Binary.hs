@@ -61,7 +61,6 @@ import qualified Codec.CBOR.Decoding   as Decoding
 import qualified Codec.CBOR.Encoding   as Encoding
 import qualified Codec.CBOR.Read       as Read
 import qualified Codec.Serialise       as Serialise
-import qualified Data.ByteArray
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Short
@@ -1271,7 +1270,7 @@ encodeImport import_ =
                 Encoding.encodeNull
 
             Just digest ->
-                Encoding.encodeBytes ("\x12\x20" <> Data.ByteArray.convert digest)
+                Encoding.encodeBytes ("\x12\x20" <> Dhall.Crypto.unSHA256Digest digest)
 
         m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
 
