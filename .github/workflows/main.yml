@@ -30,43 +30,36 @@ jobs:
             file-extension: 'zip'
             executable-extension: '.exe'
         package:
-          - name: dhall
-            assets: >
-              "bin/dhall${{ matrix.os.executable-extension }}"
-              share/man/man1/dhall.1
-          - name: dhall-bash
-            assets: >
-              "bin/dhall-to-bash${{ matrix.os.executable-extension }}"
-          - name: dhall-csv
-            assets: >
-              "bin/csv-to-dhall${{ matrix.os.executable-extension }}"
-              "bin/dhall-to-csv${{ matrix.os.executable-extension }}"
-          - name: dhall-docs
-            assets: >
-              "bin/dhall-docs${{ matrix.os.executable-extension }}"
-              share/man/man1/dhall-docs.1
-          - name: dhall-json
-            assets: >
-              "bin/dhall-to-json${{ matrix.os.executable-extension }}"
-              "bin/dhall-to-yaml${{ matrix.os.executable-extension }}"
-              "bin/json-to-dhall${{ matrix.os.executable-extension }}"
-          - name: dhall-lsp-server
-            assets: >
-              "bin/dhall-lsp-server${{ matrix.os.executable-extension }}"
-          - name: dhall-nix
-            assets: >
-              "bin/dhall-to-nix${{ matrix.os.executable-extension }}"
-          - name: dhall-openapi
-            assets: >
-              "bin/openapi-to-dhall${{ matrix.os.executable-extension }}"
-          - name: dhall-toml
-            assets: >
-              "bin/dhall-to-toml${{ matrix.os.executable-extension }}"
-              "bin/toml-to-dhall${{ matrix.os.executable-extension }}"
-          - name: dhall-yaml
-            assets: >
-              "bin/dhall-to-yaml-ng${{ matrix.os.executable-extension }}"
-              "bin/yaml-to-dhall${{ matrix.os.executable-extension }}"
+          - name: 'dhall'
+            executable-assets: 'bin/dhall'
+            other-assets: 'share/man/man1/dhall.1'
+          - name: 'dhall-bash'
+            executable-assets: 'bin/dhall-to-bash'
+            other-assets: ''
+          - name: 'dhall-csv'
+            executable-assets: 'bin/csv-to-dhall bin/dhall-to-csv'
+            other-assets: ''
+          - name: 'dhall-docs'
+            executable-assets: 'bin/dhall-docs'
+            other-assets: 'share/man/man1/dhall-docs.1'
+          - name: 'dhall-json'
+            executable-assets: 'bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall'
+            other-assets: ''
+          - name: 'dhall-lsp-server'
+            executable-assets: 'bin/dhall-lsp-server'
+            other-assets: ''
+          - name: 'dhall-nix'
+            executable-assets: 'bin/dhall-to-nix'
+            other-assets: ''
+          - name: 'dhall-openapi'
+            executable-assets: 'bin/openapi-to-dhall'
+            other-assets: ''
+          - name: 'dhall-toml'
+            executable-assets: 'bin/dhall-to-toml bin/toml-to-dhall'
+            other-assets: ''
+          - name: 'dhall-yaml'
+            executable-assets: 'bin/dhall-to-yaml-ng bin/yaml-to-dhall'
+            other-assets: ''
         exclude:
           # Temporarily exclude dhall-nix on Ubuntu due to build failure
           # See: https://github.com/dhall-lang/dhall-haskell/runs/2920388542
@@ -126,9 +119,11 @@ jobs:
         with:
           cabal-name: ${{ matrix.package.name }}
           os: ${{ matrix.os.package }}
-          assets: ${{ matrix.package.assets }}
+          executable-assets: ${{ matrix.package.executable-assets }}
+          other-assets: ${{ matrix.package.other-assets }}
           archive-command: ${{ matrix.os.archive-command }}
           file-extension: ${{ matrix.os.file-extension }}
+          executable-extension: ${{ matrix.os.executable-extension }}
       - if: ${{ matrix.os.package != null }}
         name: "Upload package"
         uses: actions/upload-artifact@v2

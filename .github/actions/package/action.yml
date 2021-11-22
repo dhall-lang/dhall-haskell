@@ -20,7 +20,15 @@ inputs:
     description: 'Override the file extension of the package file'
     required: false
     default: 'tar.bz2'
-  assets:
+  executable-extension:
+    description: 'Override the file extension of executables'
+    required: false
+    default: ''
+  executable-assets:
+    description: 'Files to include in the package'
+    required: false
+    default: ''
+  other-assets:
     description: 'Files to include in the package'
     required: false
     default: ''
@@ -67,4 +75,6 @@ runs:
         fi
         echo "::set-output name=value::${value}"
     - shell: bash
-      run: ${{ inputs.archive-command }} "${{ steps.get-package-file.outputs.value }}" ${{ inputs.assets }}
+      run: |
+        executable-assets=( ${{ inputs.executable-assets }} )
+        ${{ inputs.archive-command }} "${{ steps.get-package-file.outputs.value }}" "${executable-assets[@]/%/${{ inputs.executable-extension }}}" ${{ inputs.other-assets }}
