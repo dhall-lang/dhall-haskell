@@ -2,9 +2,9 @@
 <html>
 <head>
 <title>/JumpToLamBindingSimple.dhall</title>
-<link href="index.css" rel="stylesheet" type="text/css">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet" type="text/css">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
@@ -14,7 +14,7 @@
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
-<a class="nav-option" id="switch-light-dark-mode">Switch Light/Dark Mode</a>
+<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
 </div>
 <div class="main-container">
 <h2 class="doc-title">
@@ -39,7 +39,7 @@ to the declaration of a</p>
 <h3>Source</h3>
 <div class="source-code">
 <pre>{-|<br>This examples shows a demo of jumping to a let-binding definition. If you hover<br>the `a` paramter, the front-end will highlight all of its usages and if you<br>click it you will navigate to its definition.<br>
-<br>The amount of empty lines left are intentional to show you how the browser jumps<br>to the declaration of a<br>-}<br>let <span class="name-decl" data-name="var9-5" id="var9-5">fun</span> = \(<span class="name-decl" data-name="var9-13" id="var9-13">v</span> : Text) -&gt;<br>
+<br>The amount of empty lines left are intentional to show you how the browser jumps<br>to the declaration of a<br>-}<br>let <span id="var9-5" class="name-decl" data-name="var9-5">fun</span> = \(<span id="var9-13" class="name-decl" data-name="var9-13">v</span> : Text) -&gt;<br>
 <br>
 <br>
 <br>
@@ -92,11 +92,11 @@ to the declaration of a</p>
 <br>
 <br>
 <br>
-<br>    <a class="name-use" data-name="var9-13" href="#var9-13">v</a>
+<br>    <a href="#var9-13" class="name-use" data-name="var9-13">v</a>
 <br>
 <br>
 <br>
-<br>in <a class="name-use" data-name="var9-5" href="#var9-5">fun</a>
+<br>in <a href="#var9-5" class="name-use" data-name="var9-5">fun</a>
 <br>
 </pre>
 </div>

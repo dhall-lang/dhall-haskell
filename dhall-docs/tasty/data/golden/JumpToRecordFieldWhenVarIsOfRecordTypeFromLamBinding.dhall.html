@@ -2,9 +2,9 @@
 <html>
 <head>
 <title>/JumpToRecordFieldWhenVarIsOfRecordTypeFromLamBinding.dhall</title>
-<link href="index.css" rel="stylesheet" type="text/css">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet" type="text/css">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
@@ -14,7 +14,7 @@
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
-<a class="nav-option" id="switch-light-dark-mode">Switch Light/Dark Mode</a>
+<a id="switch-light-dark-mode" class="nav-option">Switch Light/Dark Mode</a>
 </div>
 <div class="main-container">
 <h2 class="doc-title">
@@ -42,7 +42,7 @@ the annotation doesn&#39;t affect on the later case. This can be seen in the
 <div class="source-code">
 <pre>{-|<br>On this example, `dhall-docs` will detect that the argument `a` of the only<br>function in this file is of record type. Therefore, any interactions on selector<br>expressions over the `a` variable will interact with the fields on the record-type.<br>
 <br>Note that the treatment for `Lam` variables is different from `Let` bindings:<br>the annotation doesn&#39;t affect on the later case. This can be seen in the<br>[test case for let bindings](./JumpToRecordFieldWhenLetAnnotationPresentShouldIgnoreAnnotation.dhall)<br>-}<br>
-<br>λ(<span class="name-decl" data-name="var11-3" id="var11-3">b</span> : Type) →<br>λ(<span class="name-decl" data-name="var12-3" id="var12-3">c</span> : Type) →<br>λ(<span class="name-decl" data-name="var13-3" id="var13-3">a</span> : { <span class="name-decl" data-name="var13-9" id="var13-9">list</span> : List <a class="name-use" data-name="var11-3" href="#var11-3">b</a>, <span class="name-decl" data-name="var13-24" id="var13-24">cons</span> : <a class="name-use" data-name="var11-3" href="#var11-3">b</a> → <a class="name-use" data-name="var12-3" href="#var12-3">c</a> → <a class="name-use" data-name="var12-3" href="#var12-3">c</a>, <span class="name-decl" data-name="var13-42" id="var13-42">nil</span> : <a class="name-use" data-name="var12-3" href="#var12-3">c</a> }) →<br>  List/fold <a class="name-use" data-name="var11-3" href="#var11-3">b</a> <a class="name-use" data-name="var13-3" href="#var13-3">a</a>.<a class="name-use" data-name="var13-9" href="#var13-9">list</a> <a class="name-use" data-name="var12-3" href="#var12-3">c</a> <a class="name-use" data-name="var13-3" href="#var13-3">a</a>.<a class="name-use" data-name="var13-24" href="#var13-24">cons</a> <a class="name-use" data-name="var13-3" href="#var13-3">a</a>.<a class="name-use" data-name="var13-42" href="#var13-42">nil</a>
+<br>λ(<span id="var11-3" class="name-decl" data-name="var11-3">b</span> : Type) →<br>λ(<span id="var12-3" class="name-decl" data-name="var12-3">c</span> : Type) →<br>λ(<span id="var13-3" class="name-decl" data-name="var13-3">a</span> : { <span id="var13-9" class="name-decl" data-name="var13-9">list</span> : List <a href="#var11-3" class="name-use" data-name="var11-3">b</a>, <span id="var13-24" class="name-decl" data-name="var13-24">cons</span> : <a href="#var11-3" class="name-use" data-name="var11-3">b</a> → <a href="#var12-3" class="name-use" data-name="var12-3">c</a> → <a href="#var12-3" class="name-use" data-name="var12-3">c</a>, <span id="var13-42" class="name-decl" data-name="var13-42">nil</span> : <a href="#var12-3" class="name-use" data-name="var12-3">c</a> }) →<br>  List/fold <a href="#var11-3" class="name-use" data-name="var11-3">b</a> <a href="#var13-3" class="name-use" data-name="var13-3">a</a>.<a href="#var13-9" class="name-use" data-name="var13-9">list</a> <a href="#var12-3" class="name-use" data-name="var12-3">c</a> <a href="#var13-3" class="name-use" data-name="var13-3">a</a>.<a href="#var13-24" class="name-use" data-name="var13-24">cons</a> <a href="#var13-3" class="name-use" data-name="var13-3">a</a>.<a href="#var13-42" class="name-use" data-name="var13-42">nil</a>
 <br>
 </pre>
 </div>

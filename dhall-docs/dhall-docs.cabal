@@ -71,7 +71,7 @@ Library
         file-embed           >= 0.0.10.0           ,
         filepath             >= 1.4       && < 1.5 ,
         lens-family-core     >= 1.0.0     && < 2.2 ,
-        lucid                >= 2.9.12    && < 2.11,
+        lucid                >= 2.9.12    && < 2.12,
         mmark                >= 0.0.7.0   && < 0.8 ,
         -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
         megaparsec           >= 7         && < 10  ,
@@ -138,10 +138,8 @@ Test-Suite tasty
         dhall-docs                        ,
         foldl        < 1.5                ,
 
-        -- lucid-2.9.13 introduces stable attribute ordering in its rendering
-        -- output:
-        -- https://hackage.haskell.org/package/lucid-2.9.13/changelog
-        lucid        >= 2.9.13            ,
+        -- lucid preserves input attribute order since v2.11.0
+        lucid        >= 2.11.0            ,
 
         path                              ,
         path-io                           ,
