@@ -502,6 +502,29 @@ dependencyToNix url@URL{ authority, path } = do
                     return Dependency{..}
 
                 _ -> do
+                    die (NotAValidGistRepositoryURL url)
+
+        "gist.githubusercontent.com" -> do
+            let File{ directory, file } = path
+
+            let Dhall.Core.Directory{ components } = directory
+
+            case reverse (file : components) of
+                owner : hash : "raw" : _rev : rest -> do
+                    let fileArgument = Text.intercalate "/" rest
+
+                    let package = owner <> "_" <> hash
+
+                    let functionParameter = Just (package, Nothing)
+
+                    let dependencyExpression =
+                                (Nix.mkSym package @. "overridePackage")
+                            @@  Nix.attrsE
+                                    [ ("file", Nix.mkStr fileArgument ) ]
+
+                    return Dependency{..}
+
+                _ -> do
                     die (NotAValidGitHubRepositoryURL url)
 
         "prelude.dhall-lang.org" -> do
@@ -597,8 +620,9 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
         _        -> die (UnsupportedURIScheme uri uriScheme)
 
     case uriRegName of
-        "github.com" -> return ()
-        _            -> die (UnsupportedDomain uri uriRegName)
+        "github.com"      -> return ()
+        "gist.github.com" -> return ()
+        _                 -> die (UnsupportedDomain uri uriRegName)
 
     case uriPort of
         "" -> return ()
@@ -813,6 +837,7 @@ die e = liftIO $ do
 data Error
     = MissingSemanticIntegrityCheck URL
     | NotAValidGitHubRepositoryURL URL
+    | NotAValidGistRepositoryURL URL
     | UnsupportedDomainDependency URL Text
     | RepositoryIsNotAValidURI Text
     | UnsupportedURIScheme Text String
@@ -861,6 +886,22 @@ normally have.  The URL should minimally have the following path components:
 ↳ https://raw.githubusercontent.com/$${owner}/$${repository}/$${revision}/…
 |]
 
+    NotAValidGistRepositoryURL url ->
+        let dependency = Dhall.Core.pretty url
+
+        in  [NeatInterpolation.text|
+Error: Not a valid gist repository URL
+
+Your Dhall package appears to depend on the following import:
+
+↳ $dependency
+
+... which is missing one or more path components that a raw GitHub import would
+normally have.  The URL should minimally have the following path components:
+
+↳ https://gist.githubusercontent.com/$${owner}/$${id}/raw/$${revision}/…
+|]
+
     UnsupportedDomainDependency url authority ->
         let dependency = Dhall.Core.pretty url
 
@@ -870,6 +911,7 @@ Error: Unsupported domain
 This tool currently only translates the following domains into Nix dependencies:
 
 * raw.githubusercontent.com
+* gist.githubusercontent.com
 * prelude.dhall-lang.org
 
 One of the Dhall project's dependencies:
