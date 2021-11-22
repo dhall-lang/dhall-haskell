@@ -14,67 +14,75 @@ jobs:
     strategy:
       matrix:
         os:
-          - runner: macOS-latest
-            package: macos
-          - runner: ubuntu-latest
+          - runner: 'macOS-latest'
+            package: 'macos'
+            archive-command: 'tar --create --file'
+            file-extension: 'tar.bz2'
+            executable-extension: ''
+          - runner: 'ubuntu-latest'
             package: null
-          - runner: windows-latest
-            package: windows
+            archive-command: 'tar --create --file'
+            file-extension: 'tar.bz2'
+            executable-extension: ''
+          - runner: 'windows-latest'
+            package: 'windows'
+            archive-command: '7z a -tzip'
+            file-extension: 'zip'
+            executable-extension: '.exe'
         package:
-          - name: dhall
-            assets: >
-              bin/dhall
-              share/man/man1/dhall.1
-          - name: dhall-bash
-            assets: >
-              bin/dhall-to-bash
-          - name: dhall-csv
-            assets: >
-              bin/csv-to-dhall
-              bin/dhall-to-csv
-          - name: dhall-docs
-            assets: >
-              bin/dhall-docs
-              share/man/man1/dhall-docs.1
-          - name: dhall-json
-            assets: >
-              bin/dhall-to-json
-              bin/dhall-to-yaml
-              bin/json-to-dhall
-          - name: dhall-lsp-server
-            assets: >
-              bin/dhall-lsp-server
-          - name: dhall-nix
-            assets: >
-              bin/dhall-to-nix
-          - name: dhall-openapi
-            assets: >
-              bin/openapi-to-dhall
-          - name: dhall-toml
-            assets: >
-              bin/dhall-to-toml
-              bin/toml-to-dhall
-          - name: dhall-yaml
-            assets: >
-              bin/dhall-to-yaml-ng
-              bin/yaml-to-dhall
+          - name: 'dhall'
+            executable-assets: 'bin/dhall'
+            other-assets: 'share/man/man1/dhall.1'
+          - name: 'dhall-bash'
+            executable-assets: 'bin/dhall-to-bash'
+            other-assets: ''
+          - name: 'dhall-csv'
+            executable-assets: 'bin/csv-to-dhall bin/dhall-to-csv'
+            other-assets: ''
+          - name: 'dhall-docs'
+            executable-assets: 'bin/dhall-docs'
+            other-assets: 'share/man/man1/dhall-docs.1'
+          - name: 'dhall-json'
+            executable-assets: 'bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall'
+            other-assets: ''
+          - name: 'dhall-lsp-server'
+            executable-assets: 'bin/dhall-lsp-server'
+            other-assets: ''
+          - name: 'dhall-nix'
+            executable-assets: 'bin/dhall-to-nix'
+            other-assets: ''
+          - name: 'dhall-openapi'
+            executable-assets: 'bin/openapi-to-dhall'
+            other-assets: ''
+          - name: 'dhall-toml'
+            executable-assets: 'bin/dhall-to-toml bin/toml-to-dhall'
+            other-assets: ''
+          - name: 'dhall-yaml'
+            executable-assets: 'bin/dhall-to-yaml-ng bin/yaml-to-dhall'
+            other-assets: ''
         exclude:
           # Temporarily exclude dhall-nix on Ubuntu due to build failure
           # See: https://github.com/dhall-lang/dhall-haskell/runs/2920388542
           - os:
-              runner: ubuntu-latest
+              runner: 'ubuntu-latest'
               package: null
+              archive-command: 'tar --create --file'
+              file-extension: 'tar.bz2'
+              executable-extension: ''
             package:
-              name: dhall-nix
-              assets: >
-                bin/dhall-to-nix
+              name: 'dhall-nix'
+              executable-assets: 'bin/dhall-to-nix'
+              other-assets: ''
           - os:
-              runner: windows-latest
-              package: windows
+              runner: 'windows-latest'
+              package: 'windows'
+              archive-command: '7z a -tzip'
+              file-extension: 'zip'
+              executable-extension: '.exe'
             package:
-              name: dhall-nix
-              assets: >
-                bin/dhall-to-nix
+              name: 'dhall-nix'
+              executable-assets: 'bin/dhall-to-nix'
+              other-assets: ''
       fail-fast: false
     name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
@@ -117,7 +125,11 @@ jobs:
         with:
           cabal-name: ${{ matrix.package.name }}
           os: ${{ matrix.os.package }}
-          assets: ${{ matrix.package.assets }}
+          executable-assets: ${{ matrix.package.executable-assets }}
+          other-assets: ${{ matrix.package.other-assets }}
+          archive-command: ${{ matrix.os.archive-command }}
+          file-extension: ${{ matrix.os.file-extension }}
+          executable-extension: ${{ matrix.os.executable-extension }}
       - if: ${{ matrix.os.package != null }}
         name: "Upload package"
         uses: actions/upload-artifact@v2
