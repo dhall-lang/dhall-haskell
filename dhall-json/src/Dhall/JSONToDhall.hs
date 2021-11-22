@@ -381,17 +381,15 @@ import qualified Data.Aeson                 as Aeson
 import qualified Data.Aeson.Types           as Aeson.Types
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import qualified Data.Foldable              as Foldable
-import qualified Data.HashMap.Strict        as HM
-import qualified Data.List                  as List
 import qualified Data.Map
 import qualified Data.Map.Merge.Lazy        as Data.Map.Merge
-import qualified Data.Ord                   as Ord
 import qualified Data.Sequence              as Seq
 import qualified Data.String
 import qualified Data.Text                  as Text
 import qualified Data.Vector                as Vector
 import qualified Dhall.Core                 as D
 import qualified Dhall.Import
+import qualified Dhall.JSON.Compat          as JSON.Compat
 import qualified Dhall.Lint                 as Lint
 import qualified Dhall.Map                  as Map
 import qualified Dhall.Optics               as Optics
@@ -519,8 +517,8 @@ typeCheckSchemaExpr compileException expr =
 
 keyValMay :: Value -> Maybe (Text, Value)
 keyValMay (Aeson.Object o) = do
-     Aeson.String k <- HM.lookup "key" o
-     v <- HM.lookup "value" o
+     Aeson.String k <- JSON.Compat.lookupObject "key" o
+     v <- JSON.Compat.lookupObject "value" o
      return (k, v)
 keyValMay _ = Nothing
 
@@ -532,7 +530,7 @@ keyValMay _ = Nothing
 -}
 inferSchema :: Value -> Schema
 inferSchema (Aeson.Object m) =
-    let convertMap = Data.Map.fromList . HM.toList
+    let convertMap = Data.Map.fromDistinctAscList . JSON.Compat.mapToAscList
 
     in (Record . RecordSchema . convertMap) (fmap inferSchema m)
 inferSchema (Aeson.Array xs) =
@@ -832,13 +830,13 @@ dhallFromJSON (Conversion {..}) expressionType =
 
     -- object ~> Record
     loop jsonPath (D.Record r) v@(Aeson.Object o)
-        | extraKeys <- HM.keys o \\ Map.keys r
+        | extraKeys <- JSON.Compat.objectKeys o \\ Map.keys r
         , strictRecs && not (null extraKeys)
         = Left (UnhandledKeys extraKeys (D.Record r) v jsonPath)
         | otherwise
         = let f :: Text -> ExprX -> Either CompileError ExprX
-              f k t | Just value <- HM.lookup k o
-                    = loop (Aeson.Types.Key k : jsonPath) t value
+              f k t | Just value <- JSON.Compat.lookupObject k o
+                    = loop (Aeson.Types.Key (JSON.Compat.textToKey k) : jsonPath) t value
                     | App D.Optional t' <- t
                     = Right (App D.None t')
                     | App D.List _ <- t
@@ -853,7 +851,7 @@ dhallFromJSON (Conversion {..}) expressionType =
         | not noKeyValArr
         , os :: [Value] <- toList a
         , Just kvs <- traverse keyValMay os
-        = loop jsonPath t (Aeson.Object $ HM.fromList kvs)
+        = loop jsonPath t (Aeson.Object $ JSON.Compat.objectFromList kvs)
         | noKeyValArr
         = Left (NoKeyValArray t v)
         | otherwise
@@ -866,7 +864,7 @@ dhallFromJSON (Conversion {..}) expressionType =
         , Just mapKey   <- D.recordFieldValue <$> Map.lookup "mapKey" r
         , Just mapValue <- D.recordFieldValue <$> Map.lookup "mapValue" r
         = do
-          keyExprMap <- HM.traverseWithKey  (\k child -> loop (Aeson.Types.Key k : jsonPath) mapValue child) o
+          keyExprMap <- JSON.Compat.traverseObjectWithKey (\k child -> loop (Aeson.Types.Key k : jsonPath) mapValue child) o
 
           toKey <-
               case mapKey of
@@ -881,9 +879,9 @@ dhallFromJSON (Conversion {..}) expressionType =
                   ]
 
           let records =
-                (fmap f . Seq.fromList . List.sort . HM.toList) keyExprMap
+                (fmap f . Seq.fromList . JSON.Compat.mapToAscList) keyExprMap
 
-          let typeAnn = if HM.null o then Just t else Nothing
+          let typeAnn = if null o then Just t else Nothing
 
           return (D.ListLit typeAnn records)
         | noKeyValMap
@@ -972,10 +970,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                       elements =
                           Seq.fromList
                               (fmap inner
-                                  (List.sortBy
-                                      (Ord.comparing fst)
-                                      (HM.toList o)
-                                  )
+                                  (JSON.Compat.mapToAscList o)
                               )
 
                       elementType
@@ -1061,10 +1056,7 @@ dhallFromJSON (Conversion {..}) expressionType =
                       elements =
                           Seq.fromList
                               (fmap inner
-                                  (List.sortBy
-                                      (Ord.comparing fst)
-                                      (HM.toList o)
-                                  )
+                                  (JSON.Compat.mapToAscList o)
                               )
 
                       elementType

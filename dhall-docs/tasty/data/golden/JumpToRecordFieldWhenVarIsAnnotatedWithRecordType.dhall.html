@@ -2,15 +2,15 @@
 <html>
 <head>
 <title>/JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall</title>
-<link href="index.css" type="text/css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" type="text/css" rel="stylesheet">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
 <body>
 <div class="nav-bar">
-<img src="dhall-icon.svg" class="dhall-icon">
+<img class="dhall-icon" src="dhall-icon.svg">
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
@@ -21,9 +21,9 @@
 <span class="crumb-divider">/</span>
 <a href="index.html">test-package</a>
 <span class="crumb-divider">/</span>
-<span href="index.html" class="title-crumb">JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall</span>
+<span class="title-crumb" href="index.html">JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall</span>
 </h2>
-<a data-path="/JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall" class="copy-to-clipboard">
+<a class="copy-to-clipboard" data-path="/JumpToRecordFieldWhenVarIsAnnotatedWithRecordType.dhall">
 <i>
 <small>Copy path to clipboard</small>
 </i>
@@ -39,8 +39,8 @@
 <div class="source-code">
 <pre>{-|<br>On this example, even when the variable `a` is annotated with a record-type,<br>`dhall-docs` will infer the actual type from the bounded value.<br>
 <br>All interactions with fields on selector-expressions won&#39;t affect the rendered-type.<br>
-<br>(The example is intended to not type-check as a Dhall expression)<br>-}<br>let <span data-name="var9-5" id="var9-5" class="name-decl">a</span> : { x : Text } = { <span data-name="var9-26" id="var9-26" class="name-decl">x</span> = &quot;foo&quot;, <span data-name="var9-37" id="var9-37" class="name-decl">y</span> = &quot;bar&quot; }<br>
-<br>in <a href="#var9-5" data-name="var9-5" class="name-use">a</a>.<a href="#var9-26" data-name="var9-26" class="name-use">x</a> ++ <a href="#var9-5" data-name="var9-5" class="name-use">a</a>.<a href="#var9-37" data-name="var9-37" class="name-use">y</a>
+<br>(The example is intended to not type-check as a Dhall expression)<br>-}<br>let <span id="var9-5" class="name-decl" data-name="var9-5">a</span> : { x : Text } = { <span id="var9-26" class="name-decl" data-name="var9-26">x</span> = &quot;foo&quot;, <span id="var9-37" class="name-decl" data-name="var9-37">y</span> = &quot;bar&quot; }<br>
+<br>in <a href="#var9-5" class="name-use" data-name="var9-5">a</a>.<a href="#var9-26" class="name-use" data-name="var9-26">x</a> ++ <a href="#var9-5" class="name-use" data-name="var9-5">a</a>.<a href="#var9-37" class="name-use" data-name="var9-37">y</a>
 <br>
 </pre>
 </div>

@@ -8,6 +8,7 @@ module Dhall.Parser.Token (
     validCodepoint,
     whitespace,
     lineComment,
+    lineCommentPrefix,
     blockComment,
     nonemptyWhitespace,
     bashEnvironmentVariable,
@@ -464,19 +465,22 @@ hexNumber = choice [ hexDigit, hexUpper, hexLower ]
       where
         predicate c = 'a' <= c && c <= 'f'
 
--- | Parse a Dhall's single-line comment, starting from `--` and until the
---   last character of the line /before/ the end-of-line character
-lineComment :: Parser Text
-lineComment = do
+-- | Same as `lineComment` except that this doesn't parse the end-of-line
+--   character
+lineCommentPrefix :: Parser Text
+lineCommentPrefix = do
     _ <- text "--"
 
     let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
 
     commentText <- Dhall.Parser.Combinators.takeWhile predicate
 
-    _ <- endOfLine
-
     return ("--" <> commentText)
+
+-- | Parse a Dhall's single-line comment, starting from `--` and until the
+--   last character of the line /before/ the end-of-line character
+lineComment :: Parser Text
+lineComment = try (lineCommentPrefix <* endOfLine)
 
 -- | Parsed text doesn't include opening braces
 blockComment :: Parser Text

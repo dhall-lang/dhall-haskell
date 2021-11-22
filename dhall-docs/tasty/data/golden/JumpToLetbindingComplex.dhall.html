@@ -2,15 +2,15 @@
 <html>
 <head>
 <title>/JumpToLetbindingComplex.dhall</title>
-<link href="index.css" type="text/css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" type="text/css" rel="stylesheet">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
 <body>
 <div class="nav-bar">
-<img src="dhall-icon.svg" class="dhall-icon">
+<img class="dhall-icon" src="dhall-icon.svg">
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
@@ -21,9 +21,9 @@
 <span class="crumb-divider">/</span>
 <a href="index.html">test-package</a>
 <span class="crumb-divider">/</span>
-<span href="index.html" class="title-crumb">JumpToLetbindingComplex.dhall</span>
+<span class="title-crumb" href="index.html">JumpToLetbindingComplex.dhall</span>
 </h2>
-<a data-path="/JumpToLetbindingComplex.dhall" class="copy-to-clipboard">
+<a class="copy-to-clipboard" data-path="/JumpToLetbindingComplex.dhall">
 <i>
 <small>Copy path to clipboard</small>
 </i>
@@ -34,11 +34,11 @@
 </div>
 <h3>Source</h3>
 <div class="source-code">
-<pre>{-|<br>A complex example of jump-to-definition on let-bindings<br>-}<br>let <span data-name="var4-5" id="var4-5" class="name-decl">f</span> = \(<span data-name="var4-11" id="var4-11" class="name-decl">f</span> : Natural) -&gt;<br>    let <span data-name="var5-9" id="var5-9" class="name-decl">a</span> = 1 in <a href="#var4-11" data-name="var4-11" class="name-use">f</a> + <a href="#var5-9" data-name="var5-9" class="name-use">a</a>
+<pre>{-|<br>A complex example of jump-to-definition on let-bindings<br>-}<br>let <span id="var4-5" class="name-decl" data-name="var4-5">f</span> = \(<span id="var4-11" class="name-decl" data-name="var4-11">f</span> : Natural) -&gt;<br>    let <span id="var5-9" class="name-decl" data-name="var5-9">a</span> = 1 in <a href="#var4-11" class="name-use" data-name="var4-11">f</a> + <a href="#var5-9" class="name-use" data-name="var5-9">a</a>
 <br>
-<br>let <span data-name="var7-5" id="var7-5" class="name-decl">a</span> = <a href="#var4-5" data-name="var4-5" class="name-use">f</a> 1<br>
-<br>let <span data-name="var9-5" id="var9-5" class="name-decl">b</span> = <a href="#var7-5" data-name="var7-5" class="name-use">a</a> + <a href="#var4-5" data-name="var4-5" class="name-use">f</a> 3<br>
-<br>in <a href="#var9-5" data-name="var9-5" class="name-use">b</a>
+<br>let <span id="var7-5" class="name-decl" data-name="var7-5">a</span> = <a href="#var4-5" class="name-use" data-name="var4-5">f</a> 1<br>
+<br>let <span id="var9-5" class="name-decl" data-name="var9-5">b</span> = <a href="#var7-5" class="name-use" data-name="var7-5">a</a> + <a href="#var4-5" class="name-use" data-name="var4-5">f</a> 3<br>
+<br>in <a href="#var9-5" class="name-use" data-name="var9-5">b</a>
 <br>
 </pre>
 </div>

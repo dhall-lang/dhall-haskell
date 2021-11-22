@@ -8,7 +8,10 @@ module Dhall.Import.Types where
 
 import Control.Exception                (Exception)
 import Control.Monad.Trans.State.Strict (StateT)
+import Data.ByteString                  (ByteString)
+import Data.CaseInsensitive             (CI)
 import Data.Dynamic
+import Data.HashMap.Strict              (HashMap)
 import Data.List.NonEmpty               (NonEmpty)
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)
@@ -77,6 +80,12 @@ defaultNewManager =
   pure ()
 #endif
 
+-- | HTTP headers
+type HTTPHeader = (CI ByteString, ByteString)
+
+-- | A map of site origin -> HTTP headers
+type OriginHeaders = HashMap Data.Text.Text [HTTPHeader]
+
 {-| Used internally to track whether or not we've already warned the user about
     caching issues
 -}
@@ -101,6 +110,10 @@ data Status = Status
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
     -- requests
 
+    , _loadOriginHeaders :: StateT Status IO OriginHeaders
+    -- ^ Load the origin headers from environment or configuration file.
+    --   After loading once, further evaluations return the cached version.
+
     , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
 
@@ -117,14 +130,16 @@ data Status = Status
     --   cache directory
     }
 
--- | Initial `Status`, parameterised over the HTTP 'Manager' and the remote
---   resolver, importing relative to the given root import.
+-- | Initial `Status`, parameterised over the HTTP 'Manager',
+--   the origin headers and the remote resolver,
+--   importing relative to the given root import.
 emptyStatusWith
     :: IO Manager
+    -> StateT Status IO OriginHeaders
     -> (URL -> StateT Status IO Data.Text.Text)
     -> Import
     -> Status
-emptyStatusWith _newManager _remote rootImport = Status {..}
+emptyStatusWith _newManager _loadOriginHeaders _remote rootImport = Status {..}
   where
     _stack = pure (Chained rootImport)
 

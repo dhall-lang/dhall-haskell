@@ -136,13 +136,7 @@ instance MonadPlus Parser where
     -- {-# INLINE mplus #-}
 
 instance Text.Megaparsec.MonadParsec Void Text Parser where
-#if MIN_VERSION_megaparsec(8, 0, 0)
     parseError e = Parser (Text.Megaparsec.parseError e)
-#else
-    failure u e    = Parser (Text.Megaparsec.failure u e)
-
-    fancyFailure e = Parser (Text.Megaparsec.fancyFailure e)
-#endif
 
     label l (Parser p) = Parser (Text.Megaparsec.label l p)
 

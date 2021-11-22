@@ -2,15 +2,15 @@
 <html>
 <head>
 <title>/JumpToLetBindingWithShadowing.dhall</title>
-<link href="index.css" type="text/css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" type="text/css" rel="stylesheet">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
 <body>
 <div class="nav-bar">
-<img src="dhall-icon.svg" class="dhall-icon">
+<img class="dhall-icon" src="dhall-icon.svg">
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
@@ -21,9 +21,9 @@
 <span class="crumb-divider">/</span>
 <a href="index.html">test-package</a>
 <span class="crumb-divider">/</span>
-<span href="index.html" class="title-crumb">JumpToLetBindingWithShadowing.dhall</span>
+<span class="title-crumb" href="index.html">JumpToLetBindingWithShadowing.dhall</span>
 </h2>
-<a data-path="/JumpToLetBindingWithShadowing.dhall" class="copy-to-clipboard">
+<a class="copy-to-clipboard" data-path="/JumpToLetBindingWithShadowing.dhall">
 <i>
 <small>Copy path to clipboard</small>
 </i>
@@ -38,8 +38,8 @@ declaration should not change the others</p>
 <h3>Source</h3>
 <div class="source-code">
 <pre>{-|<br>On this example, the first declaration of variable `a` is shadowed with the<br>later declaration. The jump-to-definintion on the usage of `a`<br>should not highlight the first declaration, and interacting with the first<br>declaration should not change the others<br>-}<br>let a = 1<br>
-<br>let <span data-name="var9-5" id="var9-5" class="name-decl">a</span> = 2<br>
-<br>in <a href="#var9-5" data-name="var9-5" class="name-use">a</a>
+<br>let <span id="var9-5" class="name-decl" data-name="var9-5">a</span> = 2<br>
+<br>in <a href="#var9-5" class="name-use" data-name="var9-5">a</a>
 <br>
 </pre>
 </div>

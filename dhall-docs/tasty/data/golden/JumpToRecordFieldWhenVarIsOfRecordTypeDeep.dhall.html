@@ -2,15 +2,15 @@
 <html>
 <head>
 <title>/JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall</title>
-<link href="index.css" type="text/css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" type="text/css" rel="stylesheet">
-<script src="index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="index.js">
 </script>
 <meta charset="UTF-8">
 </head>
 <body>
 <div class="nav-bar">
-<img src="dhall-icon.svg" class="dhall-icon">
+<img class="dhall-icon" src="dhall-icon.svg">
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
@@ -21,9 +21,9 @@
 <span class="crumb-divider">/</span>
 <a href="index.html">test-package</a>
 <span class="crumb-divider">/</span>
-<span href="index.html" class="title-crumb">JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall</span>
+<span class="title-crumb" href="index.html">JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall</span>
 </h2>
-<a data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall" class="copy-to-clipboard">
+<a class="copy-to-clipboard" data-path="/JumpToRecordFieldWhenVarIsOfRecordTypeDeep.dhall">
 <i>
 <small>Copy path to clipboard</small>
 </i>
@@ -38,8 +38,8 @@ code.</p>
 </div>
 <h3>Source</h3>
 <div class="source-code">
-<pre>{-|<br>On this example, `dhall-docs` will detect that the variable `a` is bounded<br>to a record literal. It will also detect that the `field` key from the record<br>literal is another record literal. When the user clicks `deep` from the<br>`a.field.deep`, it will jump to the definition of that variable in the source<br>code.<br>-}<br>let <span data-name="var8-5" id="var8-5" class="name-decl">a</span> = { <span data-name="var8-11" id="var8-11" class="name-decl">field</span> = { <span data-name="var8-21" id="var8-21" class="name-decl">deep</span> = &quot;bar&quot; } }<br>
-<br>in Text/show <a href="#var8-5" data-name="var8-5" class="name-use">a</a>.<a href="#var8-11" data-name="var8-11" class="name-use">field</a>.<a href="#var8-21" data-name="var8-21" class="name-use">deep</a>
+<pre>{-|<br>On this example, `dhall-docs` will detect that the variable `a` is bounded<br>to a record literal. It will also detect that the `field` key from the record<br>literal is another record literal. When the user clicks `deep` from the<br>`a.field.deep`, it will jump to the definition of that variable in the source<br>code.<br>-}<br>let <span id="var8-5" class="name-decl" data-name="var8-5">a</span> = { <span id="var8-11" class="name-decl" data-name="var8-11">field</span> = { <span id="var8-21" class="name-decl" data-name="var8-21">deep</span> = &quot;bar&quot; } }<br>
+<br>in Text/show <a href="#var8-5" class="name-use" data-name="var8-5">a</a>.<a href="#var8-11" class="name-use" data-name="var8-11">field</a>.<a href="#var8-21" class="name-use" data-name="var8-21">deep</a>
 <br>
 </pre>
 </div>

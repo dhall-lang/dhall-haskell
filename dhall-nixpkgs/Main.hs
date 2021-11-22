@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 
 {-| @dhall-to-nixpkgs@ is essentially the Dhall analog of @cabal2nix@.
 
@@ -76,8 +77,10 @@ import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson                       (FromJSON)
 import Data.List.NonEmpty               (NonEmpty (..))
+import Data.Maybe                       (mapMaybe)
 import Data.Text                        (Text)
 import Data.Void                        (Void)
+import Dhall.Crypto                     (SHA256Digest (..))
 import Dhall.Import                     (Status (..), stack)
 import Dhall.Parser                     (Src)
 import GHC.Generics                     (Generic)
@@ -104,6 +107,9 @@ import Dhall.Core
 import qualified Control.Foldl                    as Foldl
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
+import qualified Data.ByteString.Base16           as Base16
+import qualified Data.ByteString.Base64           as Base64
+import qualified Data.ByteString.Char8            as ByteString.Char8
 import qualified Data.Foldable                    as Foldable
 import qualified Data.List.NonEmpty               as NonEmpty
 import qualified Data.Text                        as Text
@@ -149,6 +155,7 @@ data Directory = Directory
     , file :: FilePath
     , source :: Bool
     , document :: Bool
+    , fixedOutputDerivations :: Bool
     }
 
 data NixPrefetchGit = NixPrefetchGit
@@ -204,6 +211,13 @@ parseDocument =
     Options.switch
         (   Options.long "document"
         <>  Options.help "Generate documentation for the Nix package"
+        )
+
+parseFixedOutputDerivations :: Parser Bool
+parseFixedOutputDerivations =
+    Options.switch
+        (   Options.long "fixed-output-derivations"
+        <>  Options.help "Translate Dhall remote imports to Nix fixed-output derivations"
         )
 
 parseName :: Parser (Maybe Text)
@@ -271,6 +285,8 @@ parseDirectory = do
 
     document <- parseDocument
 
+    fixedOutputDerivations <- parseFixedOutputDerivations
+
     return Directory{..}
 
 parserInfoOptions :: ParserInfo Options
@@ -306,11 +322,12 @@ nub = Foldl.fold Foldl.nub
     This function finds all remote imports that are transitive dependencies of
     the given expression, failing if any of them are missing integrity checks.
 -}
-findExternalDependencies :: Expr Src Import -> StateT Status Shell URL
+findExternalDependencies :: Expr Src Import -> StateT Status Shell (URL, SHA256Digest)
 findExternalDependencies expression = do
     -- This is a best-effort attempt to pick an import alternative if there is
     -- more than one
-    let pickAlt (ImportAlt e0 e1)
+    let pickAlt :: Expr Src Import -> Maybe (Expr Src Import)
+        pickAlt (ImportAlt e0 e1)
             -- If only the latter import has an integrity check, then select
             -- that
             | Embed Import{ importHashed = ImportHashed{ hash = Nothing } } <- Dhall.Core.shallowDenote e0
@@ -322,7 +339,8 @@ findExternalDependencies expression = do
         pickAlt _ =
             Nothing
 
-    let rewrittenExpression =
+    let rewrittenExpression :: Expr Src Import
+        rewrittenExpression =
             Dhall.Optics.rewriteOf Dhall.Core.subExpressions pickAlt expression
 
     import_ <- lift (Turtle.select (Foldable.toList rewrittenExpression))
@@ -349,8 +367,8 @@ findExternalDependencies expression = do
 
         Remote url ->
             case hash of
-                Just _ ->
-                    return url
+                Just sha256 ->
+                    return (url, sha256)
                 Nothing ->
                     die (MissingSemanticIntegrityCheck url)
 
@@ -366,16 +384,69 @@ findExternalDependencies expression = do
             findExternalDependencies parsedExpression
 
 data Dependency = Dependency
-    { functionParameter :: (Text, Maybe NExpr)
+    { functionParameter :: Maybe (Text, Maybe NExpr)
       -- ^ Function parameter used to bring the dependency into scope for the
-      --   Nix package.  The @`Maybe` `NExpr`@ is always `Nothing`, but we
+      --   Nix package.
+      --
+      --   This is 'Nothing' when 'fixedOutputDerivations' is enabled, since these
+      --   dependencies don't need to passed in as arguments. This is 'Just'
+      --   when 'fixedOutputDerivations' is not enabled.
+      --
+      --   The @'Maybe' 'NExpr'@ is always 'Nothing', but we
       --   include it here for convenience
     , dependencyExpression :: NExpr
-      -- ^ The dependency expression to include in the dependency list.  This
-      --   will be an expression of the form:
+      -- ^ The dependency expression to include in the dependency list.
+      --
+      -- 'dependencyToNix' will create an expression of the following form.
+      -- This is called when 'fixedOutputDerivations' is 'False':
       --
       --   > someDependency.override { file = "./someFile.dhall" }
+      --
+      -- 'dependencyToNixAsFOD' will create an expression of the following form.
+      -- This is called when 'fixedOutputDerivations' is 'True':
+      --
+      --   > buildDhallUrl {
+      --   >   url = "https://some.url.to/a/dhall/file.dhall";
+      --   >   hash = "sha256-ZTSiQUXpPbPfPvS8OeK6dDQE6j6NbP27ho1cg9YfENI=";
+      --   >   dhallHash =
+      --   >     "sha256:6534a24145e93db3df3ef4bc39e2ba743404ea3e8d6cfdbb868d5c83d61f10d2";
+      --   > }
     }
+    deriving stock Show
+
+-- | Convert a 'URL' and integrity check to a Nix 'Dependency' that uses the
+-- Nix function @buildDhallUrl@ to build.
+--
+-- This function will create a Nix dependency of the form:
+--
+--   > buildDhallUrl {
+--   >   url = "https://some.url.to/a/dhall/file.dhall";
+--   >   hash = "sha256-ZTSiQUXpPbPfPvS8OeK6dDQE6j6NbP27ho1cg9YfENI=";
+--   >   dhallHash =
+--   >     "sha256:6534a24145e93db3df3ef4bc39e2ba743404ea3e8d6cfdbb868d5c83d61f10d2";
+--   > }
+--
+-- The @hash@ argument is an SRI hash that Nix understands.  The @dhallHash@
+-- argument is a base-16-encoded hash that Dhall understands.
+dependencyToNixAsFOD :: URL -> SHA256Digest -> IO Dependency
+dependencyToNixAsFOD url (SHA256Digest shaBytes) = do
+    let functionParameter = Nothing
+
+    let dhallHash =
+            "sha256:" <> ByteString.Char8.unpack (Base16.encode shaBytes)
+
+    let nixSRIHash =
+            "sha256-" <> ByteString.Char8.unpack (Base64.encode shaBytes)
+
+    let dependencyExpression =
+                "buildDhallUrl"
+            @@  Nix.attrsE
+                    [ ("url", Nix.mkStr $ Dhall.Core.pretty url)
+                    , ("hash", Nix.mkStr $ Text.pack nixSRIHash)
+                    , ("dhallHash", Nix.mkStr $ Text.pack dhallHash)
+                    ]
+
+    return Dependency{..}
 
 {-| The Nixpkgs support for Dhall implements two conventions that
     @dhall-to-nixpkgs@ depends on:
@@ -409,7 +480,7 @@ dependencyToNix url@URL{ authority, path } = do
                 "dhall-lang" : "dhall-lang" : _rev : "Prelude" : rest -> do
                     let fileArgument = Text.intercalate "/" rest
 
-                    let functionParameter = (prelude, Nothing)
+                    let functionParameter = Just (prelude, Nothing)
 
                     let dependencyExpression =
                                 (Nix.mkSym prelude @. "overridePackage")
@@ -421,7 +492,7 @@ dependencyToNix url@URL{ authority, path } = do
                 _owner : repo : _rev : rest -> do
                     let fileArgument = Text.intercalate "/" rest
 
-                    let functionParameter = (repo, Nothing)
+                    let functionParameter = Just (repo, Nothing)
 
                     let dependencyExpression =
                                 (Nix.mkSym repo @. "overridePackage")
@@ -483,10 +554,10 @@ dependencyToNix url@URL{ authority, path } = do
                                 rest
                         rest ->
                             rest
-                        
+
             let fileArgument = Text.intercalate "/" pathComponents
 
-            let functionParameter = (prelude, Nothing)
+            let functionParameter = Just (prelude, Nothing)
 
             let dependencyExpression =
                         (Nix.mkSym prelude @. "overridePackage")
@@ -497,6 +568,45 @@ dependencyToNix url@URL{ authority, path } = do
             return Dependency{..}
         _ -> do
             die (UnsupportedDomainDependency url authority)
+
+-- | Turn a list of 'Dependency's into an argument list for the generated Nix
+-- function.
+--
+-- The following 'makeNixFunctionParams' call:
+--
+-- @@
+--   'makeNixFunctionParams'
+--     \"buildDhallDirectoryPackage\"
+--     [ 'Dependency' ('Just' (\"Prelude\", 'Nothing')) ...
+--     , 'Dependency' ('Just' (\"Prelude\", 'Nothing')) ...
+--     , 'Dependency' 'Nothing' ...
+--     , 'Dependency' ('Just' (\"example-repo\", 'Nothing')) ...
+--     ]
+-- @@
+--
+-- will generate an argument list like the following:
+--
+-- > { buildDhallDirectoryPackage, buildDhallUrl, Prelude, example-repo }:
+--
+-- Note that identical 'functionParameter's will be collapsed into a single
+-- parameter (like @Prelude@ above).
+--
+-- @buildDhallUrl@ will be added as an argument only if there is a 'Dependency'
+-- with a 'Nothing' value for 'functionalParameter'.
+makeNixFunctionParams :: Text -> [Dependency] -> [(Text, Maybe NExpr)]
+makeNixFunctionParams buildDhallFuncName nixDependencies =
+    let containsBuildDhallUrlDependency =
+            any (\dep -> functionParameter dep == Nothing) nixDependencies
+
+        buildDhallUrlParam =
+            if containsBuildDhallUrlDependency
+                then [ ("buildDhallUrl", Nothing) ]
+                else [ ]
+
+    in  (   [ (buildDhallFuncName, Nothing) ]
+        <>  buildDhallUrlParam
+        <>  nub (mapMaybe functionParameter nixDependencies)
+        )
 
 githubToNixpkgs :: GitHub -> IO ()
 githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source, document } = do
@@ -624,18 +734,16 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
-    nixDependencies <- traverse dependencyToNix dependencies
+    nixDependencies <- traverse (\(url, _sha256) -> dependencyToNix url) dependencies
 
     let buildDhallGitHubPackage = "buildDhallGitHubPackage"
 
+    let functionParams =
+            makeNixFunctionParams buildDhallGitHubPackage nixDependencies
+
     let nixExpression =
             Nix.mkFunction
-                (Nix.mkParamset
-                    (   [ (buildDhallGitHubPackage, Nothing) ]
-                    <>  nub (fmap functionParameter nixDependencies)
-                    )
-                    False
-                )
+                (Nix.mkParamset functionParams False)
                 (   Nix.mkSym buildDhallGitHubPackage
                 @@  Nix.attrsE
                         [ ("name", Nix.mkStr finalName)
@@ -657,7 +765,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
     Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 directoryToNixpkgs :: Directory -> IO ()
-directoryToNixpkgs Directory{ name, directory, file, source, document } = do
+directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutputDerivations } = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
@@ -685,7 +793,13 @@ directoryToNixpkgs Directory{ name, directory, file, source, document } = do
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
-    nixDependencies <- traverse dependencyToNix dependencies
+    let depToNix :: (URL, SHA256Digest) -> IO Dependency
+        depToNix (url, sha256) =
+            if fixedOutputDerivations
+              then dependencyToNixAsFOD url sha256
+              else dependencyToNix url
+
+    nixDependencies <- traverse depToNix dependencies
 
     let buildDhallDirectoryPackage = "buildDhallDirectoryPackage"
 
@@ -695,14 +809,12 @@ directoryToNixpkgs Directory{ name, directory, file, source, document } = do
           where
             directoryString = Turtle.encodeString directory
 
+    let functionParams =
+            makeNixFunctionParams buildDhallDirectoryPackage nixDependencies
+
     let nixExpression =
             Nix.mkFunction
-                (Nix.mkParamset
-                    (   [ (buildDhallDirectoryPackage, Nothing) ]
-                    <>  nub (fmap functionParameter nixDependencies)
-                    )
-                    False
-                )
+                (Nix.mkParamset functionParams False)
                 (   Nix.mkSym buildDhallDirectoryPackage
                 @@  Nix.attrsE
                         [ ("name", Nix.mkStr finalName)
@@ -984,7 +1096,7 @@ The following command:
   , rev : Text
   , path : Text
   , sha256 : Text
-  , fetchSubmodules : Bool 
+  , fetchSubmodules : Bool
   }
 
 ... but JSON decoding failed with the following error:

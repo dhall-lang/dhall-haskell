@@ -2,15 +2,15 @@
 <html>
 <head>
 <title>/deep/nested/folder/my-even.dhall</title>
-<link href="../../../index.css" type="text/css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap" type="text/css" rel="stylesheet">
-<script src="../../../index.js" type="text/javascript">
+<link rel="stylesheet" type="text/css" href="../../../index.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&amp;family=Lato:ital,wght@0,400;0,700;1,400&amp;display=swap">
+<script type="text/javascript" src="../../../index.js">
 </script>
 <meta charset="UTF-8">
 </head>
 <body>
 <div class="nav-bar">
-<img src="../../../dhall-icon.svg" class="dhall-icon">
+<img class="dhall-icon" src="../../../dhall-icon.svg">
 <p class="package-title">test-package</p>
 <div class="nav-bar-content-divider">
 </div>
@@ -21,15 +21,15 @@
 <span class="crumb-divider">/</span>
 <a href="../../../index.html">test-package</a>
 <span class="crumb-divider">/</span>
-<a href="../../index.html" class="title-crumb">deep</a>
+<a class="title-crumb" href="../../index.html">deep</a>
 <span class="crumb-divider">/</span>
-<a href="../index.html" class="title-crumb">nested</a>
+<a class="title-crumb" href="../index.html">nested</a>
 <span class="crumb-divider">/</span>
-<a href="index.html" class="title-crumb">folder</a>
+<a class="title-crumb" href="index.html">folder</a>
 <span class="crumb-divider">/</span>
-<span href="index.html" class="title-crumb">my-even.dhall</span>
+<span class="title-crumb" href="index.html">my-even.dhall</span>
 </h2>
-<a data-path="/deep/nested/folder/my-even.dhall" class="copy-to-clipboard">
+<a class="copy-to-clipboard" data-path="/deep/nested/folder/my-even.dhall">
 <i>
 <small>Copy path to clipboard</small>
 </i>
@@ -46,10 +46,10 @@
 </div>
 <h3>Source</h3>
 <div class="source-code">
-<pre>{-<br>Check if a natural is even or not returning an union data-type<br>-}<br>let <span data-name="var4-5" id="var4-5" class="name-decl">my-even</span>
-<br>    : Natural → &lt; even | odd &gt;<br>    = λ(<span data-name="var6-9" id="var6-9" class="name-decl">n</span> : Natural) →<br>        if Natural/even <a href="#var6-9" data-name="var6-9" class="name-use">n</a> then &lt; even | odd&gt;.even else &lt; even | odd &gt;.odd<br>
-<br>let example0 = assert : <a href="#var4-5" data-name="var4-5" class="name-use">my-even</a> 1 === &lt;even | odd&gt;.odd<br>let example0 = assert : <a href="#var4-5" data-name="var4-5" class="name-use">my-even</a> 2 === &lt;even | odd&gt;.even<br>
-<br>in <a href="#var4-5" data-name="var4-5" class="name-use">my-even</a>
+<pre>{-<br>Check if a natural is even or not returning an union data-type<br>-}<br>let <span id="var4-5" class="name-decl" data-name="var4-5">my-even</span>
+<br>    : Natural → &lt; even | odd &gt;<br>    = λ(<span id="var6-9" class="name-decl" data-name="var6-9">n</span> : Natural) →<br>        if Natural/even <a href="#var6-9" class="name-use" data-name="var6-9">n</a> then &lt; even | odd&gt;.even else &lt; even | odd &gt;.odd<br>
+<br>let example0 = assert : <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a> 1 === &lt;even | odd&gt;.odd<br>let example0 = assert : <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a> 2 === &lt;even | odd&gt;.even<br>
+<br>in <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a>
 <br>
 </pre>
 </div>
