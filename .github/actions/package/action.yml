@@ -76,5 +76,5 @@ runs:
         echo "::set-output name=value::${value}"
     - shell: bash
       run: |
-        executable-assets=( ${{ inputs.executable-assets }} )
-        ${{ inputs.archive-command }} "${{ steps.get-package-file.outputs.value }}" "${executable-assets[@]/%/${{ inputs.executable-extension }}}" ${{ inputs.other-assets }}
+        EXECUTABLE_ASSETS=( ${{ inputs.executable-assets }} )
+        ${{ inputs.archive-command }} "${{ steps.get-package-file.outputs.value }}" "${EXECUTABLE_ASSETS[@]/%/${{ inputs.executable-extension }}}" ${{ inputs.other-assets }}
