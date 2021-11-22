@@ -64,19 +64,25 @@ jobs:
           # Temporarily exclude dhall-nix on Ubuntu due to build failure
           # See: https://github.com/dhall-lang/dhall-haskell/runs/2920388542
           - os:
-              runner: ubuntu-latest
+              runner: 'ubuntu-latest'
               package: null
+              archive-command: 'tar --create --file'
+              file-extension: 'tar.bz2'
+              executable-extension: ''
             package:
-              name: dhall-nix
-              assets: >
-                bin/dhall-to-nix
+              name: 'dhall-nix'
+              executable-assets: 'bin/dhall-to-nix'
+              other-assets: ''
           - os:
-              runner: windows-latest
-              package: windows
+              runner: 'windows-latest'
+              package: 'windows'
+              archive-command: '7z a -tzip'
+              file-extension: 'zip'
+              executable-extension: '.exe'
             package:
-              name: dhall-nix
-              assets: >
-                bin/dhall-to-nix
+              name: 'dhall-nix'
+              executable-assets: 'bin/dhall-to-nix'
+              other-assets: ''
       fail-fast: false
     name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
