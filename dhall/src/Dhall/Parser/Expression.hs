@@ -1066,8 +1066,6 @@ parsers embedded = Parsers{..}
             let emptyUnionType = do
                     try (optional (_bar *> whitespace) *> _closeAngle)
 
-                    _ <- optional (_bar *> whitespace)
-
                     return (Union mempty)
 
             nonEmptyUnionType <|> emptyUnionType ) <?> "literal"
