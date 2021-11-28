@@ -462,6 +462,7 @@ Test-Suite doctest
       -- https://github.com/dhall-lang/dhall-haskell/issues/2237
       Buildable: False
     Default-Language: Haskell2010
+    buildable: False
 
 Benchmark dhall-parser
     Import: common

@@ -1,1 +1,32 @@
-packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-nix ./dhall-docs ./dhall-openapi ./dhall-nixpkgs ./dhall-csv ./dhall-toml ./dhall-lsp-server
+packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-nix ./dhall-openapi ./dhall-nixpkgs ./dhall-csv
+
+source-repository-package
+    type: git
+    location: https://github.com/haskell/mtl.git
+    tag: 5d0f62b
+
+source-repository-package
+    type: git
+    location: https://github.com/ekmett/exceptions.git
+    tag: 28b9b49a51deb7c1343e003dafb4c69ef79f2e8b
+
+source-repository-package
+    type: git
+    location: https://github.com/Bodigrim/tasty.git
+    tag: aed32006bcab905a8b579ba45ce803fe257943d8
+    subdir: core
+
+source-repository-package
+    type: git
+    location: https://github.com/ekmett/free.git
+    tag: 63ccf73981002747e334fa38072235ce3eab7490
+
+source-repository-package
+    type: git
+    location: https://github.com/sjakobi/megaparsec.git
+    tag: 3c4c79ef7ec6be665380a61c67a3bf9cc52fad76
+
+source-repository-package
+    type: git
+    location: https://github.com/sjakobi/repline.git
+    tag: 803493033a55dc8c13358db66c4d162ba5fe11ad
