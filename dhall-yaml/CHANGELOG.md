@@ -1,3 +1,7 @@
+1.2.9
+
+* [Build against `aeson-2.0`](https://github.com/dhall-lang/dhall-haskell/pull/2315)
+
 1.2.8
 
 * Build against `dhall-1.40.0`

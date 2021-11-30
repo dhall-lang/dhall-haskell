@@ -1,3 +1,7 @@
+1.7.9
+
+* [Build against `aeson-2.0`](https://github.com/dhall-lang/dhall-haskell/pull/2315)
+
 1.7.8
 
 * [Add support for `Date` / `Time` / `TimeZone`](https://github.com/dhall-lang/dhall-haskell/pull/2247)

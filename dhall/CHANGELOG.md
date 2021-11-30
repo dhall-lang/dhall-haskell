@@ -1,3 +1,33 @@
+1.40.2
+
+* [Supports standard version 21.1.0](https://github.com/dhall-lang/dhall-haskell/pull/2236)
+    * [The interpreter now supports customizing headers using a `headers.dhall`
+      configuration file](https://github.com/dhall-lang/dhall-haskell/pull/2236)
+    * [Generalize grammar for certain annotations](https://github.com/dhall-lang/dhall-haskell/pull/2320)
+    * [Add support for a trailing line comment without a newline](https://github.com/dhall-lang/dhall-haskell/pull/2309)
+* [BUG FIX: `dhall repl` no longer ignores type annotations on `:let` commands](https://github.com/dhall-lang/dhall-haskell/pull/2297)
+    * Before this fix, `:let x : T = 3` would ignore the `: T` type annotation
+* [BUG FIX: Don't accept a bar after an empty union](https://github.com/dhall-lang/dhall-haskell/pull/2338)
+    * Before this fix, the interpreter would accept something like `<>|`, which
+      is not valid according to the standard grammar
+* New `FromDhall`/`ToDhall` instances for `Day`/`TimeOfDay`/`TimeZone` [#2294](https://github.com/dhall-lang/dhall-haskell/pull/2294) [#2300](https://github.com/dhall-lang/dhall-haskell/pull/2300)
+    * These types correspond to the recent temporal literals added to the
+      language
+* [New `subExpressionsWith` `Traversal`](https://github.com/dhall-lang/dhall-haskell/pull/2302)
+* [Add Template Haskell support for modifying field names in generated Haskell
+  types](https://github.com/dhall-lang/dhall-haskell/pull/2285)
+    * This adds a new `makeHaskellTypesWith` utility with takes a
+      `GenerateOptions` function argument for customizing the code-generation
+      logic
+    * This comes in handy when Dhall fields have names are reserved keywords in
+      Haskell code.  You can now transform the Haskell field names to avoid
+      collisions
+* [Support GHC 9.2](https://github.com/dhall-lang/dhall-haskell/pull/2328)
+* Fixes and improvements to documentation
+    * [#2290](https://github.com/dhall-lang/dhall-haskell/pull/2290)
+* Fixes and improvements to error messages
+    * [#2303](https://github.com/dhall-lang/dhall-haskell/pull/2303)
+
 1.40.1
 
 * [BUG FIX: Fix equivalence check for `Date` / `Time` / `TimeZone`](https://github.com/dhall-lang/dhall-haskell/pull/2291)

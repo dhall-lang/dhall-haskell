@@ -1,3 +1,11 @@
+1.0.8
+
+* [Support GHC 9.2](https://github.com/dhall-lang/dhall-haskell/pull/2328)
+* [Build against `tasty-silver-3.3`](https://github.com/dhall-lang/dhall-haskell/pull/2307)
+* [Build against `megaparsec-9.2`](https://github.com/dhall-lang/dhall-haskell/pull/2311)
+* [Build against `lucid-2.11`](https://github.com/dhall-lang/dhall-haskell/pull/2327)
+* [Build against `doctest-0.19`](https://github.com/dhall-lang/dhall-haskell/pull/2331)
+
 1.0.7
 
 * [Add `--base-import-url` flag](https://github.com/dhall-lang/dhall-haskell/pull/2215)
