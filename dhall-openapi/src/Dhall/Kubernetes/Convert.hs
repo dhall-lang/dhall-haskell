@@ -217,6 +217,9 @@ toTypes' prefixMap typeSplitter definitions toMerge
                   adaptRecordList = Dhall.Map.mapMaybe (Just . Dhall.makeRecordField)
 
               in (Dhall.Record $ adaptRecordList $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields, newPropDefs)
+          | Just props <- additionalProperties definition
+          , let (mapValue, rest) = convertToType modelHierarchy props =
+              (Dhall.Record (Dhall.Map.fromList [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField mapValue) ]), rest)
             -- This is another way to declare an intOrString
           | Maybe.isJust $ intOrString definition = (intOrStringType, Data.Map.empty)
             -- Otherwise - if we have a 'type' - it's a basic type
@@ -438,6 +441,7 @@ data V1JSONSchemaProps =
         , v1JSONSchemaPropsExclusiveMinimum :: Maybe Bool
         , v1JSONSchemaPropsItems :: Maybe Value
         , v1JSONSchemaPropsProperties :: Maybe (Data.Map.Map String V1JSONSchemaProps)
+        , v1JSONSchemaPropsAdditionalProperties :: Maybe V1JSONSchemaProps
         , v1JSONSchemaPropsRequired :: Maybe [Text]
         , v1JSONSchemaPropsType :: Maybe Text
         , v1JSONSchemaPropsIntOrString :: Maybe Bool
@@ -456,6 +460,7 @@ mkV1JSONSchemaProps =
         , v1JSONSchemaPropsExclusiveMinimum = Nothing
         , v1JSONSchemaPropsItems = Nothing
         , v1JSONSchemaPropsProperties = Nothing
+        , v1JSONSchemaPropsAdditionalProperties = Nothing
         , v1JSONSchemaPropsRequired = Nothing
         , v1JSONSchemaPropsType = Nothing
         , v1JSONSchemaPropsIntOrString = Nothing
@@ -519,17 +524,18 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
     propsToDefinition :: V1JSONSchemaProps -> Maybe BaseData -> Definition
     propsToDefinition V1JSONSchemaProps{..} basedata =
       Definition
-        { typ              = v1JSONSchemaPropsType
-        , ref              = Ref <$> v1JSONSchemaPropsRef
-        , format           = v1JSONSchemaPropsFormat
-        , minimum_         = v1JSONSchemaPropsMinimum
-        , exclusiveMinimum = v1JSONSchemaPropsExclusiveMinimum
-        , description      = v1JSONSchemaPropsDescription
-        , items            = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
-        , properties       = fmap toProperties v1JSONSchemaPropsProperties
-        , required         = fmap (Set.fromList . fmap FieldName) v1JSONSchemaPropsRequired
-        , baseData         = basedata
-        , intOrString      = v1JSONSchemaPropsIntOrString
+        { typ                  = v1JSONSchemaPropsType
+        , ref                  = Ref <$> v1JSONSchemaPropsRef
+        , format               = v1JSONSchemaPropsFormat
+        , minimum_             = v1JSONSchemaPropsMinimum
+        , exclusiveMinimum     = v1JSONSchemaPropsExclusiveMinimum
+        , description          = v1JSONSchemaPropsDescription
+        , items                = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
+        , properties           = fmap toProperties v1JSONSchemaPropsProperties
+        , additionalProperties = fmap (\p -> propsToDefinition p Nothing) v1JSONSchemaPropsAdditionalProperties
+        , required             = fmap (Set.fromList . fmap FieldName) v1JSONSchemaPropsRequired
+        , baseData             = basedata
+        , intOrString          = v1JSONSchemaPropsIntOrString
         }
 
     toProperties :: Data.Map.Map String V1JSONSchemaProps -> Data.Map.Map ModelName Definition
