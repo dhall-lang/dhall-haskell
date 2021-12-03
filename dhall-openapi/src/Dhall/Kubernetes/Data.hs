@@ -14,12 +14,16 @@ patchCyclicImports Definition{ properties = oldProps, .. } = Definition{..}
     toRemove =
       Set.fromList $
         (   ModelName
-        <$> [ "allOf"
+        <$> [ "additionalItems"
+            , "additionalProperties"
+            , "allOf"
             , "anyOf"
+            , "definitions"
+            , "dependencies"
+            , "items"
             , "not"
             , "oneOf"
-            , "additionalItems"
-            , "additionalProperties"
-            , "items"
+            , "properties"
+            , "patternProperties"
             ]
         )
