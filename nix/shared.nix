@@ -1,7 +1,7 @@
 let
   pinned = import ./pinnedNixpkgs.nix;
   
-  defaultCompiler = "ghc8104";
+  defaultCompiler = "ghc8107";
 
 in
 
