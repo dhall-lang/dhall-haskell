@@ -280,12 +280,15 @@ main = do
 
   let fix m = Data.Map.adjust patchCyclicImports (ModelName m)
 
-  -- Convert to Dhall types in a Map
-  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits)
+  let fixedDefs =
         -- TODO: find a better way to deal with this cyclic import
-         $ fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps"
-         $ fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
-            defs
+        ( fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps"
+        . fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1.JSONSchemaProps"
+        . fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps.dhall"
+        ) defs
+
+  -- Convert to Dhall types in a Map
+  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits) fixedDefs
 
   -- Output to types
   Directory.createDirectoryIfMissing True "types"
@@ -294,7 +297,7 @@ main = do
     writeDhall path expr
 
   -- Convert from Dhall types to defaults
-  let defaults = Data.Map.mapMaybeWithKey (Convert.toDefault prefixMap defs) types
+  let defaults = Data.Map.mapMaybeWithKey (Convert.toDefault prefixMap fixedDefs) types
 
   -- Output to defaults
   Directory.createDirectoryIfMissing True "defaults"
