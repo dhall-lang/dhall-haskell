@@ -219,7 +219,7 @@ toTypes' prefixMap typeSplitter definitions toMerge
               in (Dhall.Record $ adaptRecordList $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields, newPropDefs)
           | Just props <- additionalProperties definition
           , let (mapValue, rest) = convertToType modelHierarchy props =
-              (Dhall.Record (Dhall.Map.fromList [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField mapValue) ]), rest)
+              (Dhall.App Dhall.List (Dhall.Record (Dhall.Map.fromList [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField mapValue) ])), rest)
             -- This is another way to declare an intOrString
           | Maybe.isJust $ intOrString definition = (intOrStringType, Data.Map.empty)
             -- Otherwise - if we have a 'type' - it's a basic type
