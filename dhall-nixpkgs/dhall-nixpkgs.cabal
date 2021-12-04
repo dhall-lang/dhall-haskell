@@ -19,7 +19,7 @@ Executable dhall-to-nixpkgs
   Build-Depends:       base                 >= 4.11     && < 5
                      , aeson                >= 1.0.0.0  && < 2.1
                      , base16-bytestring    >= 1.0.0.0
-                     , base64-bytestring    >= 1.2.1.0
+                     , base64-bytestring    >= 1.1.0.0
                      , bytestring                          < 0.12
                      , data-fix
                      , dhall                >= 1.32.0   && < 1.41
