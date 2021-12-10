@@ -27,6 +27,10 @@ module Dhall.Marshal.Internal
     -- * Re-exports
     , Fix(..)
     , HashMap
+    , Int8
+    , Int16
+    , Int32
+    , Int64
     , Map
     , Natural
     , Scientific
@@ -44,6 +48,7 @@ module Dhall.Marshal.Internal
 import Control.Monad.Trans.State.Strict
 import Data.Fix                         (Fix (..))
 import Data.HashMap.Strict              (HashMap)
+import Data.Int                         (Int16, Int32, Int64, Int8)
 import Data.Map                         (Map)
 import Data.Scientific                  (Scientific)
 import Data.Sequence                    (Seq)

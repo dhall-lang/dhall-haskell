@@ -206,6 +206,34 @@ instance ToDhall Int where
 
         declared = Integer
 
+instance ToDhall Int8 where
+    injectWith _ = Encoder {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+instance ToDhall Int16 where
+    injectWith _ = Encoder {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+instance ToDhall Int32 where
+    injectWith _ = Encoder {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
+instance ToDhall Int64 where
+    injectWith _ = Encoder {..}
+      where
+        embed = IntegerLit . toInteger
+
+        declared = Integer
+
 {-| Encode a 'Word' to a Dhall @Natural@.
 
 >>> embed inject (12 :: Word)

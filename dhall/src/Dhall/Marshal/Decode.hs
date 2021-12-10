@@ -146,7 +146,6 @@ import Data.Functor.Contravariant
     , Predicate (..)
     )
 import Data.Hashable                    (Hashable)
-import Data.Int                         (Int16, Int32, Int64, Int8)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Typeable                    (Proxy (..), Typeable)
 import Dhall.Parser                     (Src (..))
