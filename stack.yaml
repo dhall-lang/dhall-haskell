@@ -1,4 +1,4 @@
-resolver: lts-18.0
+resolver: lts-18.18
 packages:
   - dhall
   - dhall-bash
