@@ -24,3 +24,6 @@ nix:
   packages:
     - ncurses
     - zlib
+flags:
+  mintty:
+    Win32-2-13-1: false
