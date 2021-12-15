@@ -253,6 +253,12 @@ freezeExpression
     -> IO (Expr s Import)
 freezeExpression = freezeExpressionWithManager Dhall.Import.defaultNewManager
 
+-- https://github.com/dhall-lang/dhall-haskell/issues/2347
+toMissing :: Import -> Import
+toMissing import_ =
+    import_ { importHashed = (importHashed import_) { importType = Missing } }
+
+
 -- | See 'freezeExpression'.
 freezeExpressionWithManager
     :: IO Dhall.Import.Manager
@@ -315,16 +321,20 @@ freezeExpressionWithManager newManager directory scope intent expression = do
             (Embed import_@(Import { importHashed = ImportHashed { hash = Nothing } })) = do
                 frozenImport <- freezeFunction import_
 
+                let frozenMissing = toMissing frozenImport
+
                 {- The two imports can be the same if the import is local and
                    `freezeFunction` only freezes remote imports by default
                 -}
                 if frozenImport /= import_
-                    then return (ImportAlt (Embed frozenImport) (Embed import_))
+                    then return (ImportAlt (Embed frozenMissing) (Embed import_))
                     else return (Embed import_)
         cache
             (Embed import_@(Import { importHashed = ImportHashed { hash = Just _ } })) = do
                 -- Regenerate the integrity check, just in case it's wrong
                 frozenImport <- freezeFunction import_
+
+                let frozenMissing = toMissing frozenImport
 
                 -- `dhall freeze --cache` also works the other way around, adding an
                 -- unprotected fallback import to imports that are already
@@ -335,7 +345,7 @@ freezeExpressionWithManager newManager directory scope intent expression = do
                             }
                         }
 
-                return (ImportAlt (Embed frozenImport) (Embed thawedImport))
+                return (ImportAlt (Embed frozenMissing) (Embed thawedImport))
         cache expression_ =
             return expression_
 
