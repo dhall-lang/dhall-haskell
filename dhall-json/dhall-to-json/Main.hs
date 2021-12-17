@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Main where
 
@@ -12,14 +13,16 @@ import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
 import qualified Data.Aeson
-import qualified Data.Aeson.Encode.Pretty
+import qualified Data.Aeson.Encode.Pretty          as Pretty
 import qualified Data.ByteString.Lazy
-import qualified Data.Text.IO             as Text.IO
+import qualified Data.Scientific                   as Scientific
+import qualified Data.Text.IO                      as Text.IO
+import qualified Data.Text.Lazy.Builder.Scientific as Text.Scientific
 import qualified Dhall
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
-import qualified Options.Applicative      as Options
-import qualified Paths_dhall_json         as Meta
+import qualified Options.Applicative               as Options
+import qualified Paths_dhall_json                  as Meta
 import qualified System.Exit
 import qualified System.IO
 
@@ -123,14 +126,21 @@ main = do
 
         Options {..} ->
             handle $ do
-                let config = Data.Aeson.Encode.Pretty.Config
-                               { Data.Aeson.Encode.Pretty.confIndent = Data.Aeson.Encode.Pretty.Spaces 2
-                               , Data.Aeson.Encode.Pretty.confCompare = compare
-                               , Data.Aeson.Encode.Pretty.confNumFormat = Data.Aeson.Encode.Pretty.Generic
-                               , Data.Aeson.Encode.Pretty.confTrailingNewline = False }
+                let custom scientific =
+                        Text.Scientific.formatScientificBuilder Text.Scientific.Fixed places scientific
+                      where
+                        places = case Scientific.floatingOrInteger @Double @Integer scientific of
+                            Left  _floating -> Nothing
+                            Right _integer  -> Just 0
+
+                let config = Pretty.Config
+                               { Pretty.confIndent = Pretty.Spaces 2
+                               , Pretty.confCompare = compare
+                               , Pretty.confNumFormat = Pretty.Custom custom
+                               , Pretty.confTrailingNewline = False }
                 let encode =
                         if pretty
-                        then Data.Aeson.Encode.Pretty.encodePretty' config
+                        then Pretty.encodePretty' config
                         else Data.Aeson.encode
 
                 let explaining = if explain then Dhall.detailed else id

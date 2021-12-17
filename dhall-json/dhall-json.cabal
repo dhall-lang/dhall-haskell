@@ -39,7 +39,7 @@ Library
     Build-Depends:
         base                      >= 4.11.0.0  && < 5   ,
         aeson                     >= 1.4.6.0   && < 2.1 ,
-        aeson-pretty                              < 0.9 ,
+        aeson-pretty              >= 0.8.0     && < 0.9 ,
         aeson-yaml                >= 1.1.0     && < 1.2 ,
         bytestring                                < 0.12,
         containers                >= 0.5.9     && < 0.7 ,
@@ -75,6 +75,7 @@ Executable dhall-to-json
         dhall                                  ,
         dhall-json                             ,
         optparse-applicative                   ,
+        scientific                             ,
         text
     Other-Modules:
         Paths_dhall_json
