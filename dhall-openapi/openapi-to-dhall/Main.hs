@@ -61,7 +61,7 @@ import qualified Text.Megaparsec.Char.Lexer as Megaparsec.Lexer
 data Options = Options
     { skipDuplicates :: Bool
     , preferNaturalInt :: Bool
-    , natIntExceptions :: String
+    , natIntExceptions :: [(String,String)]
     , prefixMap :: Data.Map.Map Prefix Dhall.Import
     , splits :: Data.Map.Map ModelHierarchy (Maybe ModelName)
     , filename :: String
@@ -176,6 +176,18 @@ parseImport :: String -> Types.Expr -> Dhall.Parser.Parser Dhall.Import
 parseImport _ (Dhall.Note _ (Dhall.Embed l)) = pure l
 parseImport prefix e = fail $ "Expected a Dhall import for " <> prefix <> " not:\n" <> show e
 
+parseNatIntExceptions :: Options.Applicative.ReadM [(String, String)]
+parseNatIntExceptions =
+  Options.Applicative.eitherReader $ \s ->
+    bimap errorBundlePretty id $ result (pack s)
+  where
+    parser = do
+      typ <- some (alphaNumChar)
+      char '.'
+      fld <- some (alphaNumChar)
+      return (typ, fld)
+    result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "EXCEPTIONS"
+
 parsePrefixMap :: Options.Applicative.ReadM (Data.Map.Map Prefix Dhall.Import)
 parsePrefixMap =
   Options.Applicative.eitherReader $ \s ->
@@ -207,7 +219,7 @@ parseSplits =
 
 
 parseOptions :: Options.Applicative.Parser Options
-parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parseNatIntExceptions <*> parsePrefixMap' <*> parseSplits' <*> fileArg <*> crdArg
+parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parseNatIntExceptions' <*> parsePrefixMap' <*> parseSplits' <*> fileArg <*> crdArg
   where
     parseSkip =
       Options.Applicative.switch
@@ -219,10 +231,11 @@ parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parseNatIntExceptio
         (  Options.Applicative.long "preferNaturalInt"
         <> Options.Applicative.help "Render Swagger Integer as Dhall Natural unless negative numbers included in range"
         )
-    parseNatIntExceptions =
-      option "" $ Options.Applicative.strOption
+    parseNatIntExceptions' =
+      option [] $ Options.Applicative.option parseNatIntExceptions
        (  Options.Applicative.long "natIntExceptions"
         <> Options.Applicative.help "List of Type.field that should be treated the opposite way to preferNaturalInt; e.g.: ContainerStateTerminated.exitCode,ContainerStateTerminated.signal"
+        <> Options.Applicative.metavar "EXCEPTIONS"
        )
     parsePrefixMap' =
       option Data.Map.empty $ Options.Applicative.option parsePrefixMap
@@ -299,12 +312,8 @@ main = do
         . fix "io.k8s.apiextensions-apiserver.pkg.apis.apiextensions.v1beta1.JSONSchemaProps.dhall"
         ) defs
 
-  -- TODO: move this into a Parser
-  let natIntExceptions' = map ((\e -> (Text.unpack $ head e, Text.unpack $ last e)) . (Text.splitOn "."))
-         $ Text.splitOn "," (Text.pack natIntExceptions)
-
   -- Convert to Dhall types in a Map
-  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits) preferNaturalInt natIntExceptions' fixedDefs
+  let types = Convert.toTypes prefixMap (Convert.pathSplitter splits) preferNaturalInt natIntExceptions fixedDefs
 
   -- Output to types
   Directory.createDirectoryIfMissing True "types"
