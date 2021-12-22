@@ -385,7 +385,7 @@ parsers embedded = Parsers{..}
                     bs <- some (do
                         try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
 
-                        keys <- Combinators.NonEmpty.sepBy1 anyLabel (try (whitespace *> _dot) *> whitespace)
+                        keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
 
                         whitespace
 
