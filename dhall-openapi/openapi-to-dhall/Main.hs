@@ -215,7 +215,7 @@ parseSplits =
         mo <- parseModel
         return mo
       return (path, model)
-    result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "MAPPING"
+    result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "SPLITS"
 
 
 parseOptions :: Options.Applicative.Parser Options
@@ -248,7 +248,7 @@ parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parseNatIntExceptio
         (  Options.Applicative.long "splitPaths"
         <> Options.Applicative.help
           "Specifiy path and model name pairs with paths being delimited by '.' and pairs separated by '=' for which \
-          \definitions should be aritifically split with a ref: \n\
+          \definitions should be artificially split with a ref: \n\
           \'(com.example.v1.Certificate).spec=com.example.v1.CertificateSpec'\n\
           \When the model name is omitted, a guess will be made based on the first word of the definition's \
           \description. Also note that top level model names in a path must use () when the name contains '.'"
