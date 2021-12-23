@@ -426,6 +426,9 @@ vWith (VRecordLit kvs) (k₀ :| k₁ : ks) v = VRecordLit (Map.insert k₀ e₂ 
             Just e₁' -> e₁'
 
     e₂ = vWith e₁ (k₁ :| ks) v
+vWith (VNone _T) ("?" :| _      ) _ = VNone _T
+vWith (VSome  _) ("?" :| []     ) v = VSome v
+vWith (VSome  t) ("?" :| k₁ : ks) v = VSome (vWith t (k₁ :| ks) v)
 vWith e₀ ks v₀ = VWith e₀ ks v₀
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a

@@ -1275,25 +1275,43 @@ infer typer = loop
 
             -- The purpose of this inner loop is to ensure that we only need to
             -- typecheck the record once
-            let with tE' ks v = do
-                    kTs' <- case tE' of
-                        VRecord kTs' -> return kTs'
-                        _            -> die (NotWithARecord e₀ (quote names tE'))
+
+            let with tE' ks v = case tE' of
+                  
+                  VRecord kTs' ->
+                    
+                    case ks of
+                      k :| [] -> do
+                          tV' <- loop ctx v
+
+                          return (VRecord (Dhall.Map.insert k tV' kTs'))
+                      k₀ :| k₁ : ks' -> do
+                          let _T =
+                                  case Dhall.Map.lookup k₀ kTs' of
+                                      Just _T' -> _T'
+                                      Nothing  -> VRecord mempty
+
+                          tV' <- with _T (k₁ :| ks') v
+
+                          return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+
+                  VOptional _O' -> do
 
                     case ks of
-                        k :| [] -> do
-                            tV' <- loop ctx v
 
-                            return (VRecord (Dhall.Map.insert k tV' kTs'))
-                        k₀ :| k₁ : ks' -> do
-                            let _T =
-                                    case Dhall.Map.lookup k₀ kTs' of
-                                        Just _T' -> _T'
-                                        Nothing  -> VRecord mempty
+                      "?" :| [] -> do
+                        tV' <- loop ctx v
+                        if Eval.conv values _O' tV'
+                          then return (VOptional _O')
+                          else die OptionalWithTypeMismatch
 
-                            tV' <- with _T (k₁ :| ks') v
+                      "?" :| k₁ : ks' -> do
+                        tV' <- with _O' (k₁ :| ks') v
+                        return (VOptional tV')
 
-                            return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+                      _ -> die NotAQuestionPath
+
+                  _ -> die (NotWithARecord e₀ (quote names tE')) -- TODO: NotWithARecordOrOptional
 
             with tE₀' ks₀ v₀
 
@@ -1396,6 +1414,8 @@ data TypeMessage s a
     | CantListAppend (Expr s a) (Expr s a)
     | CantAdd (Expr s a) (Expr s a)
     | CantMultiply (Expr s a) (Expr s a)
+    | OptionalWithTypeMismatch
+    | NotAQuestionPath
     deriving (Show)
 
 formatHints :: [Doc Ann] -> Doc Ann
@@ -4550,6 +4570,19 @@ prettyTypeMessage (CantAdd expr0 expr1) =
 prettyTypeMessage (CantMultiply expr0 expr1) =
         buildNaturalOperator "*" expr0 expr1
 
+prettyTypeMessage OptionalWithTypeMismatch = ErrorMessages {..}
+  where
+    short = "OptionalWithTypeMismatch"
+    hints = []
+    long = ""
+
+prettyTypeMessage NotAQuestionPath = ErrorMessages {..}
+  where
+    short = "NotAQuestionPath"
+    hints = []
+    long = ""
+
+
 buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
@@ -4831,6 +4864,10 @@ messageExpressions f m = case m of
         CantAdd <$> f a <*> f b
     CantMultiply a b ->
         CantMultiply <$> f a <*> f b
+    OptionalWithTypeMismatch ->
+        pure OptionalWithTypeMismatch
+    NotAQuestionPath ->
+        pure NotAQuestionPath
 
 {-| Newtype used to wrap error messages so that they render with a more
     detailed explanation of what went wrong
