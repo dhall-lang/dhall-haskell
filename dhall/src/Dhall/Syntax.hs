@@ -632,6 +632,8 @@ data Expr s a
     -- | > ToMap x (Just t)                         ~  toMap x : t
     --   > ToMap x  Nothing                         ~  toMap x
     | ToMap (Expr s a) (Maybe (Expr s a))
+    -- | > ShowConstructor x                        ~  showConstructor x
+    | ShowConstructor (Expr s a)
     -- | > Field e (FieldSelection _ x _)              ~  e.x
     | Field (Expr s a) (FieldSelection s)
     -- | > Project e (Left xs)                      ~  e.{ xs }
@@ -879,6 +881,7 @@ unsafeSubExpressions f (Prefer cs a b c) = Prefer cs <$> a' <*> f b <*> f c
 unsafeSubExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 unsafeSubExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 unsafeSubExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
+unsafeSubExpressions f (ShowConstructor a) = ShowConstructor <$> f a
 unsafeSubExpressions f (Project a b) = Project <$> f a <*> traverse f b
 unsafeSubExpressions f (Assert a) = Assert <$> f a
 unsafeSubExpressions f (Equivalent cs a b) = Equivalent cs <$> f a <*> f b

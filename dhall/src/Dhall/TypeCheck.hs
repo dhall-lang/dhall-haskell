@@ -1130,6 +1130,14 @@ infer typer = loop
 
                        die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
 
+        ShowConstructor e -> do
+            _E' <- loop ctx e
+            case _E' of
+              VUnion _ -> pure VText
+              VOptional _ -> pure VText
+
+              _ -> die ShowConstructorNotOnUnion
+
         Field e (Syntax.fieldSelectionLabel -> x) -> do
             _E' <- loop ctx e
 
@@ -1396,6 +1404,7 @@ data TypeMessage s a
     | CantListAppend (Expr s a) (Expr s a)
     | CantAdd (Expr s a) (Expr s a)
     | CantMultiply (Expr s a) (Expr s a)
+    | ShowConstructorNotOnUnion
     deriving (Show)
 
 formatHints :: [Doc Ann] -> Doc Ann
@@ -4550,6 +4559,12 @@ prettyTypeMessage (CantAdd expr0 expr1) =
 prettyTypeMessage (CantMultiply expr0 expr1) =
         buildNaturalOperator "*" expr0 expr1
 
+prettyTypeMessage ShowConstructorNotOnUnion = ErrorMessages {..}
+  where
+      short = "ShowConstructorNotOnUnion"
+      hints = []
+      long = ""
+
 buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
@@ -4831,6 +4846,8 @@ messageExpressions f m = case m of
         CantAdd <$> f a <*> f b
     CantMultiply a b ->
         CantMultiply <$> f a <*> f b
+    ShowConstructorNotOnUnion ->
+        pure ShowConstructorNotOnUnion
 
 {-| Newtype used to wrap error messages so that they render with a more
     detailed explanation of what went wrong

@@ -228,6 +228,7 @@ data Val a
     | VPrefer !(Val a) !(Val a)
     | VMerge !(Val a) !(Val a) !(Maybe (Val a))
     | VToMap !(Val a) !(Maybe (Val a))
+    | VShowConstructor !(Val a)
     | VField !(Val a) !Text
     | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
     | VProject !(Val a) !(Either (Set Text) (Val a))
@@ -807,6 +808,14 @@ eval !env t0 =
                     in  VListLit Nothing s
                 (x', ma') ->
                     VToMap x' ma'
+        ShowConstructor x ->
+            case eval env x of
+                VInject m k _
+                    | Just _ <- Map.lookup k m -> VTextLit (VChunks [] k)
+                    | otherwise                -> error errorMsg
+                VSome _ -> VTextLit (VChunks [] "Some")
+                VNone _ -> VTextLit (VChunks [] "None")
+                x' -> VShowConstructor x'
         Field t (Syntax.fieldSelectionLabel -> k) ->
             vField (eval env t) k
         Project t (Left ks) ->
@@ -1243,6 +1252,8 @@ quote !env !t0 =
             Merge (quote env t) (quote env u) (fmap (quote env) ma)
         VToMap t ma ->
             ToMap (quote env t) (fmap (quote env) ma)
+        VShowConstructor t ->
+            ShowConstructor (quote env t)
         VField t k ->
             Field (quote env t) $ Syntax.makeFieldSelection k
         VProject t p ->
@@ -1442,6 +1453,8 @@ alphaNormalize = goEnv EmptyNames
                 Merge (go x) (go y) (fmap go ma)
             ToMap x ma ->
                 ToMap (go x) (fmap go ma)
+            ShowConstructor x ->
+                ShowConstructor (go x)
             Field t k ->
                 Field (go t) k
             Project t ks ->
