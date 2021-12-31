@@ -182,9 +182,9 @@ parseNatIntExceptions =
     bimap errorBundlePretty id $ result (pack s)
   where
     parser = do
-      typ <- some (alphaNumChar)
+      typ <- some alphaNumChar
       char '.'
-      fld <- some (alphaNumChar)
+      fld <- some alphaNumChar
       return (typ, fld)
     result = parse ((Dhall.Parser.unParser parser `sepBy1` char ',') <* eof) "EXCEPTIONS"
 
