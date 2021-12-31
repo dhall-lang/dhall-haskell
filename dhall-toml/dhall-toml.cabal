@@ -37,14 +37,17 @@ Library
         base                 >= 4.12     && < 5    ,
         dhall                >= 1.39.0   && < 1.41 ,
         tomland              >= 1.3.2.0  && < 1.4  ,
-        text                 >= 0.11.1.0 && < 1.3  ,
+        text                 >= 0.11.1.0 && < 2.1  ,
         containers           >= 0.5.9    && < 0.7  ,
         unordered-containers >= 0.2      && < 0.3  ,
-        prettyprinter        >= 1.7.0    && < 1.8
+        prettyprinter        >= 1.7.0    && < 1.8  ,
+        optparse-applicative >= 0.14     && < 0.17
     Exposed-Modules:
         Dhall.DhallToToml
         Dhall.TomlToDhall
         Dhall.Toml.Utils
+    Other-Modules:
+        Paths_dhall_toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
 

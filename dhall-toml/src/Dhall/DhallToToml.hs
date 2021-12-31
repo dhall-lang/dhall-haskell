@@ -1,4 +1,6 @@
+{-# LANGUAGE ApplicativeDo   #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {-| This module exports the `dhallToToml` function for translating a
     Dhall syntax tree to a TOML syntax tree (`TOML`) for the @tomland@
@@ -106,9 +108,10 @@ import Control.Monad      (foldM)
 import Data.Foldable      (toList)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text          (Text)
+import Data.Version       (showVersion)
 import Data.Void          (Void)
 import Dhall.Core         (DhallDouble (..), Expr)
-import Dhall.Toml.Utils   (inputToDhall)
+import Dhall.Toml.Utils   (fileToDhall, inputToDhall)
 import Prettyprinter      (Pretty)
 import Toml.Type.Key      (Key (Key, unKey), Piece (Piece))
 import Toml.Type.Printer  (pretty)
@@ -122,6 +125,8 @@ import qualified Dhall.Core                as Core
 import qualified Dhall.Map                 as Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
+import qualified Options.Applicative       as OA
+import qualified Paths_dhall_toml          as Meta
 import qualified Prettyprinter.Render.Text as Pretty
 import qualified Toml.Type.AnyValue        as Toml.AnyValue
 import qualified Toml.Type.TOML            as Toml.TOML
@@ -356,15 +361,37 @@ toToml toml key expr  = case expr of
             Core.RecordLit _ -> Left $ UnsupportedArray e
             _ -> Left $ Unsupported e
 
+data Options = Options
+    { input :: Maybe FilePath
+    , output :: Maybe FilePath
+    }
+
+parserInfo :: OA.ParserInfo Options
+parserInfo = OA.info
+    (OA.helper <*> versionOption <*> optionsParser)
+    (OA.fullDesc <> OA.progDesc "Convert Dhall to TOML")
+  where
+    versionOption = OA.infoOption (showVersion Meta.version) $
+        OA.long "version" <> OA.help "Display version"
+    optionsParser = do
+        input <- OA.optional . OA.strOption $
+               OA.long "file"
+            <> OA.help "Read Dhall from file instead of standard input"
+            <> fileOpts
+        output <- OA.optional . OA.strOption $
+               OA.long "output"
+            <> OA.help "Write TOML to a file instead of standard output"
+            <> fileOpts
+        pure Options {..}
+    fileOpts = OA.metavar "FILE" <> OA.action "file"
 
 {-| Runs the @dhall-to-toml@ command
 -}
 dhallToTomlMain :: IO ()
 dhallToTomlMain = do
-    resolvedExpression <- inputToDhall
+    Options {..} <- OA.execParser parserInfo
+    resolvedExpression <- maybe inputToDhall fileToDhall input
     toml <- case dhallToToml resolvedExpression of
         Left err -> throwIO err
         Right toml -> return toml
-    Text.IO.putStrLn $ pretty toml
-
-
+    maybe Text.IO.putStrLn Text.IO.writeFile output $ pretty toml
