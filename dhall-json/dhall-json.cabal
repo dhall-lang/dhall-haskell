@@ -75,7 +75,6 @@ Executable dhall-to-json
         dhall                                  ,
         dhall-json                             ,
         optparse-applicative                   ,
-        scientific                             ,
         text
     Other-Modules:
         Paths_dhall_json

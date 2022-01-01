@@ -13,11 +13,10 @@ import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
 import qualified Data.Aeson
+import qualified Data.Aeson.Text
 import qualified Data.Aeson.Encode.Pretty          as Pretty
 import qualified Data.ByteString.Lazy
-import qualified Data.Scientific                   as Scientific
 import qualified Data.Text.IO                      as Text.IO
-import qualified Data.Text.Lazy.Builder.Scientific as Text.Scientific
 import qualified Dhall
 import qualified Dhall.JSON
 import qualified GHC.IO.Encoding
@@ -127,17 +126,14 @@ main = do
         Options {..} ->
             handle $ do
                 let custom scientific =
-                        Text.Scientific.formatScientificBuilder Text.Scientific.Fixed places scientific
-                      where
-                        places = case Scientific.floatingOrInteger @Double @Integer scientific of
-                            Left  _floating -> Nothing
-                            Right _integer  -> Just 0
+                        Data.Aeson.Text.encodeToTextBuilder (Data.Aeson.Number scientific)
 
                 let config = Pretty.Config
                                { Pretty.confIndent = Pretty.Spaces 2
                                , Pretty.confCompare = compare
                                , Pretty.confNumFormat = Pretty.Custom custom
-                               , Pretty.confTrailingNewline = False }
+                               , Pretty.confTrailingNewline = False
+                               }
                 let encode =
                         if pretty
                         then Pretty.encodePretty' config
