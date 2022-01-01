@@ -50,7 +50,7 @@ Library
         optparse-applicative      >= 0.14.0.0  && < 0.17,
         prettyprinter             >= 1.7.0     && < 1.8 ,
         scientific                >= 0.3.0.0   && < 0.4 ,
-        text                      >= 0.11.1.0  && < 1.3 ,
+        text                      >= 0.11.1.0  && < 2.1 ,
         unordered-containers                      < 0.3 ,
         vector
     Exposed-Modules:
@@ -106,7 +106,7 @@ Executable json-to-dhall
         optparse-applicative                             ,
         prettyprinter                                    ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
-        text                                       < 1.3
+        text
     Other-Modules:
         Paths_dhall_json
     GHC-Options: -Wall

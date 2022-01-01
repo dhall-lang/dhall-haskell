@@ -162,13 +162,13 @@ pathSplitter pathsAndModels modelHierarchy definition
     many types reference other types so we need to access them to decide things
     like "should this key be optional"
 -}
-toTypes :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
-toTypes prefixMap typeSplitter definitions = toTypes' prefixMap typeSplitter definitions Data.Map.empty
+toTypes :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Bool -> [(String,String)] -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
+toTypes prefixMap typeSplitter preferNaturalInt natIntExceptions definitions = toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions Data.Map.empty
 
-toTypes' :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr -> Data.Map.Map ModelName Expr
-toTypes' prefixMap typeSplitter definitions toMerge
+toTypes' :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Bool -> [(String,String)] -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr -> Data.Map.Map ModelName Expr
+toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions toMerge
   | Data.Map.null definitions = toMerge
-  | otherwise = mergeNoConflicts (==) (toTypes' prefixMap typeSplitter newDefs modelMap) toMerge
+  | otherwise = mergeNoConflicts (==) (toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions newDefs modelMap) toMerge
      where
 
         -- some CRDs are equal all except for the top description. This is safe as the only usage of description
@@ -176,10 +176,18 @@ toTypes' prefixMap typeSplitter definitions toMerge
         equalsIgnoringDescription :: Definition -> Definition -> Bool
         equalsIgnoringDescription a b = a { description = description b } == b
 
+        getModelName :: ModelHierarchy -> String
+        getModelName hierarchy =
+          case hierarchy of
+            [] -> ""
+            [ModelName{..}] -> Text.unpack (last $ Text.splitOn "." unModelName)
+            _ -> getModelName (tail hierarchy)
+
         convertAndAccumWithKey :: ModelHierarchy -> Data.Map.Map ModelName Definition -> ModelName -> Definition -> (Data.Map.Map ModelName Definition, Expr)
         convertAndAccumWithKey modelHierarchy accDefs k v = (mergeNoConflicts equalsIgnoringDescription accDefs leftOverDefs, expr)
           where
-             (expr, leftOverDefs) = convertToType (modelHierarchy ++ [k]) v
+             isException = ((getModelName modelHierarchy), (getModelName [k])) `elem` natIntExceptions
+             (expr, leftOverDefs) = (convertToType (modelHierarchy ++ [k]) v (isException /= preferNaturalInt))
 
         (newDefs, modelMap) = Data.Map.mapAccumWithKey (convertAndAccumWithKey []) Data.Map.empty definitions
        
@@ -190,8 +198,8 @@ toTypes' prefixMap typeSplitter definitions toMerge
 
         -- | Convert a single Definition to a Dhall Type, yielding any definitions to be split
         --   Note: model hierarchy contains the modelName of of the current definition as the last entry
-        convertToType :: ModelHierarchy -> Definition -> (Expr, Data.Map.Map ModelName Definition)
-        convertToType modelHierarchy definition
+        convertToType :: ModelHierarchy -> Definition -> Bool -> (Expr, Data.Map.Map ModelName Definition)
+        convertToType modelHierarchy definition prefNatInt
           | Just splitModelName <- typeSplitter modelHierarchy definition =
             ( Dhall.Embed $ mkImport prefixMap [] ((unModelName splitModelName) <> ".dhall"), Data.Map.singleton splitModelName definition)
           -- If we point to a ref we just reference it via Import
@@ -218,7 +226,7 @@ toTypes' prefixMap typeSplitter definitions toMerge
 
               in (Dhall.Record $ adaptRecordList $ Dhall.Map.fromList $ fmap (first $ unModelName) allFields, newPropDefs)
           | Just props <- additionalProperties definition
-          , let (mapValue, rest) = convertToType modelHierarchy props =
+          , let (mapValue, rest) = convertToType modelHierarchy props prefNatInt =
               (Dhall.App Dhall.List (Dhall.Record (Dhall.Map.fromList [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField mapValue) ])), rest)
             -- This is another way to declare an intOrString
           | Maybe.isJust $ intOrString definition = (intOrStringType, Data.Map.empty)
@@ -226,15 +234,22 @@ toTypes' prefixMap typeSplitter definitions toMerge
           | Just basic <- typ definition = case basic of
               "object"  -> (kvList, Data.Map.empty)
               "array"   | Just item <- items definition ->
-                let (e, tm) = convertToType (modelHierarchy) item
+                let (e, tm) = convertToType (modelHierarchy) item prefNatInt
                 in (Dhall.App Dhall.List e, tm)
               "string"  | format definition == Just "int-or-string" -> (intOrStringType, Data.Map.empty)
               "string"  -> (Dhall.Text, Data.Map.empty)
               "boolean" -> (Dhall.Bool, Data.Map.empty)
-              "integer" -> case (minimum_ definition, exclusiveMinimum definition) of
-                (Just min_, Just True) | min_ >= -1 -> (Dhall.Natural, Data.Map.empty)
-                (Just min_, _)         | min_ >= 0 -> (Dhall.Natural, Data.Map.empty)
-                _                      -> (Dhall.Integer, Data.Map.empty)
+              "integer" -> if prefNatInt then case (minimum_ definition, exclusiveMinimum definition,
+                          maximum_ definition, exclusiveMaximum definition) of
+                  (Just min_, Just True, _, _) | min_ < -1 -> (Dhall.Integer, Data.Map.empty)
+                  (Just min_, _, _, _)         | min_ < 0  -> (Dhall.Integer, Data.Map.empty)
+                  (_, _, Just max_, Just True) | max_ < 1  -> (Dhall.Integer, Data.Map.empty)
+                  (_, _, Just max_, _)         | max_ < 0  -> (Dhall.Integer, Data.Map.empty)
+                  _                                        -> (Dhall.Natural, Data.Map.empty)
+                else case (minimum_ definition, exclusiveMinimum definition) of
+                  (Just min_, Just True) | min_ >= -1 -> (Dhall.Natural, Data.Map.empty)
+                  (Just min_, _)         | min_ >= 0  -> (Dhall.Natural, Data.Map.empty)
+                  _                                   -> (Dhall.Integer, Data.Map.empty)
               "number"  -> (Dhall.Double, Data.Map.empty)
               other     -> error $ "Found missing Swagger type: " <> Text.unpack other
             -- There are empty schemas that only have a description, so we return empty record
@@ -439,6 +454,8 @@ data V1JSONSchemaProps =
         , v1JSONSchemaPropsFormat :: Maybe Text
         , v1JSONSchemaPropsMinimum :: Maybe Scientific
         , v1JSONSchemaPropsExclusiveMinimum :: Maybe Bool
+        , v1JSONSchemaPropsMaximum :: Maybe Scientific
+        , v1JSONSchemaPropsExclusiveMaximum :: Maybe Bool
         , v1JSONSchemaPropsItems :: Maybe Value
         , v1JSONSchemaPropsProperties :: Maybe (Data.Map.Map String V1JSONSchemaProps)
         , v1JSONSchemaPropsAdditionalProperties :: Maybe V1JSONSchemaProps
@@ -458,6 +475,8 @@ mkV1JSONSchemaProps =
         , v1JSONSchemaPropsFormat = Nothing
         , v1JSONSchemaPropsMinimum = Nothing
         , v1JSONSchemaPropsExclusiveMinimum = Nothing
+        , v1JSONSchemaPropsMaximum = Nothing
+        , v1JSONSchemaPropsExclusiveMaximum = Nothing
         , v1JSONSchemaPropsItems = Nothing
         , v1JSONSchemaPropsProperties = Nothing
         , v1JSONSchemaPropsAdditionalProperties = Nothing
@@ -529,6 +548,8 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
         , format               = v1JSONSchemaPropsFormat
         , minimum_             = v1JSONSchemaPropsMinimum
         , exclusiveMinimum     = v1JSONSchemaPropsExclusiveMinimum
+        , maximum_         = v1JSONSchemaPropsMaximum
+        , exclusiveMaximum = v1JSONSchemaPropsExclusiveMaximum
         , description          = v1JSONSchemaPropsDescription
         , items                = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
         , properties           = fmap toProperties v1JSONSchemaPropsProperties
