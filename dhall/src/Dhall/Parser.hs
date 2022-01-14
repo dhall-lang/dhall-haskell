@@ -21,12 +21,13 @@ module Dhall.Parser (
     , Parser(..)
     ) where
 
-import Control.Exception (Exception)
-import Data.Text         (Text)
-import Data.Void         (Void)
-import Dhall.Src         (Src (..))
+import Control.Applicative (many)
+import Control.Exception   (Exception)
+import Data.Text           (Text)
+import Data.Void           (Void)
+import Dhall.Src           (Src (..))
 import Dhall.Syntax
-import Text.Megaparsec   (ParseErrorBundle (..), PosState (..))
+import Text.Megaparsec     (ParseErrorBundle (..), PosState (..))
 
 import qualified Data.Text       as Text
 import qualified Dhall.Core      as Core
@@ -123,7 +124,7 @@ exprAndHeaderFromText delta text = case result of
     Right (txt, r) -> Right (createHeader txt, r)
   where
     parser = do
-        (bytes, _) <- Text.Megaparsec.match whitespace
+        (bytes, _) <- Text.Megaparsec.match (many shebang *> whitespace)
         r <- expr
         Text.Megaparsec.eof
         return (bytes, r)

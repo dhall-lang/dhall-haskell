@@ -234,25 +234,27 @@ temporalLiteral =
     <|> try partialTime
     <|> try timeNumOffset
 
+shebang :: Parser ()
+shebang = do
+    _ <- text "#!"
+
+    let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
+
+    _ <- Dhall.Parser.Combinators.takeWhile predicate
+
+    _ <- endOfLine
+
+    return ()
+
 -- | Given a parser for imports,
 parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers{..}
   where
     completeExpression_ =
-            many shebang
-        *>  whitespace
+            whitespace
         *>  expression
         <*  whitespace
         <*  optional lineCommentPrefix
-
-    shebang = do
-        _ <- text "#!"
-
-        let predicate c = ('\x20' <= c && c <= '\x10FFFF') || c == '\t'
-
-        _ <- Dhall.Parser.Combinators.takeWhile predicate
-
-        endOfLine
 
     letBinding = do
         src0 <- try (_let *> src nonemptyWhitespace)
