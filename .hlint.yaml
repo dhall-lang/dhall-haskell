@@ -31,6 +31,12 @@
 - ignore: {name: "Use ."}
 - ignore: {name: "Use list comprehension"}
 - ignore: {name: "Use fromMaybe"}
+- ignore: {name: "Avoid lambda using `infix`"}
+- ignore: {name: "Use tuple-section"}
+- ignore: {name: "Use <$>"}
+- ignore: {name: "Redundant <$>"}
+- ignore: {name: "Replace case with maybe"}
+- ignore: {name: "Replace case with fromMaybe"}
 
 
 # Specify additional command line arguments

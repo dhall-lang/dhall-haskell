@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 

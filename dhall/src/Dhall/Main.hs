@@ -361,7 +361,7 @@ parseMode =
       where
         -- Parse explicit stdin in the input filepaths
         parseStdin inputs
-            | any (== InputFile "-") inputs = StandardInput : filter (/= InputFile "-") inputs
+            | InputFile "-" `elem` inputs = StandardInput : filter (/= InputFile "-") inputs
             | otherwise = inputs
 
         f = fromMaybe (pure StandardInput) . nonEmpty . parseStdin . fmap InputFile

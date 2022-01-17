@@ -10,8 +10,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns         #-}
 
-{-# OPTIONS_GHC -O #-}
-
 {-| Eval-apply environment machine with conversion checking and quoting to
     normal forms. Fairly similar to GHCI's STG machine algorithmically, but much
     simpler, with no known call optimization or environment trimming.
