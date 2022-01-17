@@ -16,7 +16,7 @@ jobs:
         os:
           - runner: 'macOS-latest'
             package: 'macos'
-            archive-command: 'tar --create --file'
+            archive-command: 'tar --create -j --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
           - runner: 'ubuntu-latest'
