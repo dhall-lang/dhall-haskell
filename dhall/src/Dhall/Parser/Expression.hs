@@ -234,6 +234,7 @@ temporalLiteral =
     <|> try partialTime
     <|> try timeNumOffset
 
+-- | Parse a \"shebang\" line (i.e. an initial line beginning with @#!@)
 shebang :: Parser ()
 shebang = do
     _ <- text "#!"
