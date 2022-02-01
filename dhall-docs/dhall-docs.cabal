@@ -81,7 +81,7 @@ Library
         text                 >= 0.11.1.0  && < 2.1 ,
         transformers         >= 0.2.0.0  && < 0.6 ,
         mtl                  >= 2.2.1     && < 2.3 ,
-        optparse-applicative >= 0.14.0.0  && < 0.17
+        optparse-applicative >= 0.14.0.0  && < 0.18
     Exposed-Modules:
         Dhall.Docs
         Dhall.Docs.Core
