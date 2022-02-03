@@ -1354,7 +1354,7 @@ prettyPrinters characterSet =
       where
         sign = if 0 <= minutes then "+" else "-"
 
-        (_HH, _MM) = minutes `divMod` 60
+        (_HH, _MM) = abs minutes `divMod` 60
     prettyPrimitiveExpression List =
         builtin "List"
     prettyPrimitiveExpression ListBuild =
