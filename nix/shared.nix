@@ -150,12 +150,9 @@ let
                         ).overrideAttrs (old: { XDG_CACHE_HOME=".cache"; });
 
                     dhall-no-http =
-                      # The import tests fail with HTTP support compiled out
-                      pkgsNew.haskell.lib.dontCheck
-                        (pkgsNew.haskell.lib.appendConfigureFlag
-                          haskellPackagesNew.dhall
-                          [ "-f-with-http" ]
-                        );
+                      pkgsNew.haskell.lib.appendConfigureFlag
+                        haskellPackagesNew.dhall
+                        [ "-f-with-http" ];
 
                     dhall-bash =
                       haskellPackagesNew.callCabal2nix

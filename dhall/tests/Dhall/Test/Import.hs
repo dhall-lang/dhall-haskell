@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
@@ -62,6 +63,18 @@ getTests = do
         let expectedSuccesses =
                 [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
                 , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
+#ifndef WITH_HTTP
+                -- We attempt to simulate test.dhall-lang.org, but even so
+                -- some tests unexpectedly succeed due to the inadequacy of
+                -- the simulation
+                , importDirectory </> "failure/unit/cors/OnlySelf.dhall"
+                , importDirectory </> "failure/unit/cors/OnlyOther.dhall"
+                , importDirectory </> "failure/unit/cors/Null.dhall"
+                , importDirectory </> "failure/unit/cors/TwoHops.dhall"
+                , importDirectory </> "failure/unit/cors/Empty.dhall"
+                , importDirectory </> "failure/unit/cors/NoCORS.dhall"
+                , importDirectory </> "failure/originHeadersFromRemote.dhall"
+#endif
                 ]
 
         _ <- Monad.guard (path `notElem` expectedSuccesses)
@@ -84,7 +97,15 @@ successTest prefix = do
 
     let directoryString = FilePath.takeDirectory inputPath
 
-    let expectedFailures = [ ]
+    let expectedFailures =
+            [
+#ifndef WITH_HTTP
+              importDirectory </> "success/originHeadersImportFromEnv"
+            , importDirectory </> "success/originHeadersImport"
+            , importDirectory </> "success/originHeadersOverride"
+            , importDirectory </> "success/unit/asLocation/RemoteChainEnv"
+#endif
+            ]
 
     Test.Util.testCase prefix expectedFailures (do
 
@@ -98,6 +119,7 @@ successTest prefix = do
 
         let originalCache = "dhall-lang/tests/import/cache"
 
+#ifdef WITH_HTTP
         let httpManager =
                 HTTP.newManager
                     HTTP.tlsManagerSettings
@@ -108,6 +130,9 @@ successTest prefix = do
                     httpManager
                     (pure Import.envOriginHeaders)
                     directoryString
+#else
+        let status = Import.emptyStatus directoryString
+#endif
 
         let load =
                 State.evalStateT

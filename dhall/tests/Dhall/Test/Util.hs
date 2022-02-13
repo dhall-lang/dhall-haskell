@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE ViewPatterns      #-}
@@ -33,7 +34,9 @@ import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
     ( Chunks (..)
+    , Directory (..)
     , Expr (..)
+    , File (..)
     , Import
     , Normalizer
     , ReifiedNormalizer (..)
@@ -111,55 +114,78 @@ loadWith = Dhall.Import.loadWith
 #else
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr = do
-    let mockRemote' url = do
-            liftIO . putStrLn $ "\nTesting without real HTTP support --"
-                ++ " using mock HTTP client to resolve remote import."
-            mockRemote url
-    zoom Dhall.Import.remote (State.put mockRemote')
+    zoom Dhall.Import.remote (State.put mockRemote)
     Dhall.Import.loadWith expr
 
 mockRemote :: Dhall.Core.URL -> StateT Status IO Data.Text.Text
--- Matches anything pointing to
--- `https://raw.githubusercontent.com/dhall-lang/dhall-lang/master/`
-mockRemote (URL { authority = "raw.githubusercontent.com"
-                , path = Dhall.Core.File (Dhall.Core.Directory components) file })
-  | take 3 (reverse components) == ["dhall-lang", "dhall-lang", "master"] = do
-    let dropEnd n ls = take (length ls - n) ls
-    let localDir = dropEnd 3 components ++ ["dhall-lang"]
+mockRemote
+    url@URL
+        { authority = "raw.githubusercontent.com"
+        , path = File (Directory components) file
+        } = do
+    let localDir = case reverse components of
+            "dhall-lang" : "dhall-lang" : _ : rest ->
+                reverse ("dhall-lang" : rest)
+            "Nadrieril" : "dhall-rust" : _ : "dhall" : rest ->
+                reverse ("dhall-lang" : rest)
+            _ -> do
+                fail ("Unable to mock URL: " <> Text.unpack (Dhall.Core.pretty url))
 
-    localPath <- Dhall.Import.localToPath Dhall.Core.Here (Dhall.Core.File (Dhall.Core.Directory localDir) file)
-    liftIO $ Data.Text.IO.readFile localPath
+    localPath <- Dhall.Import.localToPath Dhall.Core.Here (File (Directory localDir) file)
 
--- Matches anything pointing to
--- `https://test.dhall-lang.org/Bool/package.dhall`; checks that a `test` header
--- is present and redirects to the local copy of the prelude.
-mockRemote (URL { authority = "test.dhall-lang.org"
-                , path = Dhall.Core.File (Dhall.Core.Directory components) file
-                , headers = Just headersExpr }) =
-    case Data.Foldable.find ((== "test") . fst) hs of
-        Nothing -> fail $ "(mock http) Tried to load an import from "
-                          ++"\"test.dhall-lang.org\""
-                          ++ "without setting the \"test\" header field."
-        Just (_, _) -> do
-            let localDir = components ++ ["Prelude", "dhall-lang"]
-            localPath <- Dhall.Import.localToPath Dhall.Core.Here (Dhall.Core.File (Dhall.Core.Directory localDir) file)
-            liftIO $ Data.Text.IO.readFile localPath
-  where
-    hs = Dhall.Import.toHeaders headersExpr
+    liftIO (Data.Text.IO.readFile localPath)
 
--- Emulates `https://httpbin.org/user-agent`
-mockRemote (URL { authority = "httpbin.org"
-                , path = Dhall.Core.File (Dhall.Core.Directory []) "user-agent"
-                , headers = Just headersExpr }) =
-    case Data.Foldable.find ((== "user-agent") . fst) hs of
-        Nothing -> fail $ "(mock http) Tried to read the user agent via "
-                          ++ "\"httpbin.com/user-agent\" without supplying one "
-                          ++ "in the header!"
-        Just (_, userAgent) -> do
+mockRemote
+    URL { authority = "prelude.dhall-lang.org"
+        , path = File (Directory components) file
+        } = do
+    let localDir = components ++ [ "Prelude", "dhall-lang" ]
+
+    localPath <- Dhall.Import.localToPath Dhall.Core.Here (File (Directory localDir) file)
+
+    liftIO (Data.Text.IO.readFile localPath)
+
+mockRemote url@URL{ authority = "test.dhall-lang.org", path, headers } =
+    case (path, fmap Dhall.Import.toHeaders headers) of
+        (File (Directory []) "foo", Just [("test", _)]) ->
+            return "./bar"
+        (File (Directory []) "bar", Just [("test", _)]) ->
+            return "True"
+        (File (Directory ["cors"]) "AllowedAll.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlyGithub.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlySelf.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlyOther.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "Empty.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "NoCORS.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "Null.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "SelfImportAbsolute.dhall", _) ->
+            return "https://test.dhall-lang.org/cors/NoCORS.dhall"
+        (File (Directory ["cors"]) "SelfImportRelative.dhall", _) ->
+            return "./NoCORS.dhall"
+        (File (Directory ["cors"]) "TwoHopsFail.dhall", _) ->
+            return "https://raw.githubusercontent.com/dhall-lang/dhall-lang/5ff7ecd2411894dd9ce307dc23020987361d2d43/tests/import/data/cors/OnlySelf.dhall"
+        (File (Directory ["cors"]) "TwoHopsSuccess.dhall", _) ->
+            return "https://raw.githubusercontent.com/dhall-lang/dhall-lang/5ff7ecd2411894dd9ce307dc23020987361d2d43/tests/import/data/cors/OnlyGithub.dhall"
+        _ -> do
+            fail ("Unable to mock URL: " <> Text.unpack (Dhall.Core.pretty url))
+
+mockRemote url@URL{ authority = "httpbin.org", path, headers } =
+    case (path, fmap Dhall.Import.toHeaders headers) of
+        (File (Directory []) "user-agent", Just [("user-agent", userAgent)]) -> do
             let agentText = Data.Text.Encoding.decodeUtf8 userAgent
+
             return ("{\n  \"user-agent\": \"" <> agentText <> "\"\n}\n")
-  where
-    hs = Dhall.Import.toHeaders headersExpr
+        (File (Directory []) "user-agent", Nothing) -> do
+            return ("{\n  \"user-agent\": \"Dhall\"\n}\n")
+        _ -> do
+            fail ("Unable to mock URL: " <> Text.unpack (Dhall.Core.pretty url))
 
 mockRemote url = do
     let urlString = Text.unpack (Dhall.Core.pretty url)
