@@ -67,7 +67,8 @@ import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.ExpectedFailure       as Tasty.ExpectedFailure
 import qualified Turtle
 
-#ifndef WITH_HTTP
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+#else
 import Control.Monad.IO.Class   (MonadIO (..))
 import Dhall.Core               (URL (..))
 import Lens.Family.State.Strict (zoom)
@@ -107,7 +108,7 @@ loadRelativeTo rootDirectory semanticCacheMode expression =
         (loadWith expression)
         (Dhall.Import.emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
-#ifdef WITH_HTTP
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith = Dhall.Import.loadWith
 

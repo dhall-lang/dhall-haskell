@@ -63,7 +63,7 @@ getTests = do
         let expectedSuccesses =
                 [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
                 , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
-#ifndef WITH_HTTP
+#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
                 -- We attempt to simulate test.dhall-lang.org, but even so
                 -- some tests unexpectedly succeed due to the inadequacy of
                 -- the simulation
@@ -99,7 +99,7 @@ successTest prefix = do
 
     let expectedFailures =
             [
-#ifndef WITH_HTTP
+#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
               importDirectory </> "success/originHeadersImportFromEnv"
             , importDirectory </> "success/originHeadersImport"
             , importDirectory </> "success/originHeadersOverride"
@@ -119,7 +119,7 @@ successTest prefix = do
 
         let originalCache = "dhall-lang/tests/import/cache"
 
-#ifdef WITH_HTTP
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
         let httpManager =
                 HTTP.newManager
                     HTTP.tlsManagerSettings
