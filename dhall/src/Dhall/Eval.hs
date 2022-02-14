@@ -1042,6 +1042,8 @@ conv !env t0 t0' =
             conv env t t' && conv env u u'
         (VToMap t _, VToMap t' _) ->
             conv env t t'
+        (VShowConstructor t, VShowConstructor t') ->
+            conv env t t'
         (VField t k, VField t' k') ->
             conv env t t' && k == k'
         (VProject t (Left ks), VProject t' (Left ks')) ->
