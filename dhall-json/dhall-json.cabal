@@ -47,7 +47,7 @@ Library
         exceptions                >= 0.8.3     && < 0.11,
         filepath                                  < 1.5 ,
         lens-family-core          >= 1.0.0     && < 2.2 ,
-        optparse-applicative      >= 0.14.0.0  && < 0.17,
+        optparse-applicative      >= 0.14.0.0  && < 0.18,
         prettyprinter             >= 1.7.0     && < 1.8 ,
         scientific                >= 0.3.0.0   && < 0.4 ,
         text                      >= 0.11.1.0  && < 2.1 ,
