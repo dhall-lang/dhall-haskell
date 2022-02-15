@@ -76,7 +76,8 @@ Library
         -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
         megaparsec           >= 7         && < 10  ,
         path                 >= 0.7.0     && < 0.10,
-        path-io              >= 1.6.0     && < 1.7 ,
+        -- path-io follows SemVer: https://github.com/mrkkrp/path-io/issues/68
+        path-io              >= 1.6.0     && < 2 ,
         prettyprinter        >= 1.7.0     && < 1.8 ,
         text                 >= 0.11.1.0  && < 2.1 ,
         transformers         >= 0.2.0.0  && < 0.6 ,
