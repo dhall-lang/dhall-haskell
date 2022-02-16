@@ -636,6 +636,10 @@ skeleton (ToMap {}) =
         keyword "toMap"
     <>  " "
     <>  ignore
+skeleton (ShowConstructor {}) =
+        keyword "showConstructor"
+    <>  " "
+    <>  ignore
 skeleton (Field {}) =
         ignore
     <>  dot
@@ -782,6 +786,15 @@ diffAnnotatedExpression (ToMap aL bL) (ToMap aR bR) = align doc
 diffAnnotatedExpression l@(ToMap {}) r =
     mismatch l r
 diffAnnotatedExpression l r@(ToMap {}) =
+    mismatch l r
+diffAnnotatedExpression (ShowConstructor aL) (ShowConstructor aR) = align doc
+  where
+    doc =   keyword "showConstructor"
+        <>  " "
+        <>  format " " (diffWithExpression aL aR)
+diffAnnotatedExpression l@(ShowConstructor {}) r =
+    mismatch l r
+diffAnnotatedExpression l r@(ShowConstructor {}) =
     mismatch l r
 diffAnnotatedExpression (ListLit aL@(Just _) bL) (ListLit aR bR) = align doc
   where

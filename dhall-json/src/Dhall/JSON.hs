@@ -1045,6 +1045,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' =      loop a
             b' = fmap loop b
 
+        Core.ShowConstructor a ->
+            Core.ShowConstructor a'
+          where
+            a' = loop a
+
         Core.Field a b ->
             Core.Field a' b
           where
