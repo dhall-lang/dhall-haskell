@@ -1,3 +1,5 @@
+-- TODO: update because we added ShowConstructor constructor to Expr in Dhall.Syntax
+
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleInstances   #-}
@@ -405,6 +407,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "RecordCompletion")
             % (1 :: W "Merge")
             % (1 :: W "ToMap")
+            % (1 :: W "ShowConstructor")
             % (7 :: W "Field")
             % (7 :: W "Project")
             % (1 :: W "Assert")

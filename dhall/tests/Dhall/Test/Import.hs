@@ -84,13 +84,7 @@ successTest prefix = do
 
     let directoryString = FilePath.takeDirectory inputPath
 
-    let expectedFailures =
-            [ importDirectory </> "success/unit/cors/TwoHops"
-            , importDirectory </> "success/unit/cors/SelfImportAbsolute"
-            , importDirectory </> "success/unit/cors/AllowedAll"
-            , importDirectory </> "success/unit/cors/SelfImportRelative"
-            , importDirectory </> "success/unit/cors/OnlyGithub"
-            ]
+    let expectedFailures = [ ]
 
     Test.Util.testCase prefix expectedFailures (do
 

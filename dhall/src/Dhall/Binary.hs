@@ -638,6 +638,9 @@ decodeExpressionInternal decodeEmbed = go
                                 let minutes = sign (_HH * 60 + _MM)
 
                                 return (TimeZoneLiteral (Time.TimeZone minutes False ""))
+                            34 -> do
+                                t <- go
+                                return (ShowConstructor t)
                             _ ->
                                 die ("Unexpected tag: " <> show tag)
 
@@ -1059,6 +1062,11 @@ encodeExpressionInternal encodeEmbed = go
             sign = 0 <= minutes
 
             (_HH, _MM) = abs minutes `divMod` 60
+
+        ShowConstructor t ->
+            encodeList2
+                (Encoding.encodeInt 34)
+                (go t)
 
         Note _ b ->
             go b

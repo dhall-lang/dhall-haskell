@@ -142,6 +142,8 @@ data CompileError
     -- ^ Nix does not provide a way to reference a shadowed variable
     | CannotProjectByType
     -- ^ We currently do not support threading around type information
+    | CannotShowConstructor
+    -- ^ We currently do not support the `showConstructor` keyword
     deriving (Typeable)
 
 instance Show CompileError where
@@ -205,6 +207,16 @@ The ❰dhall-to-nix❱ compiler does not support projecting out a subset of a re
 by the expected type (i.e. ❰someRecord.(someType)❱ 
     |]
 
+    show CannotShowConstructor =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Cannot translate the ❰showConstructor❱ keyword
+
+The ❰dhall-to-nix❱ compiler does not support the ❰showConstructor❱ keyword.
+
+In theory this keyword shouldn't need to be translated anyway since the keyword
+doesn't survive β-normalization, so if you see this error message there might be
+an internal error in ❰dhall-to-nix❱ that you should report.
+    |]
 
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
@@ -614,6 +626,8 @@ dhallToNix e =
         let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet NNonRecursive setBindings)))))
         let toMap = Fix (NAbs "kvs" (Fix (NBinary NApp map_ ks)))
         return (Fix (NBinary NApp toMap a'))
+    loop (ShowConstructor _) = do
+        Left CannotShowConstructor
     loop (Prefer _ _ b c) = do
         b' <- loop b
         c' <- loop c

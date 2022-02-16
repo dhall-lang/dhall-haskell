@@ -1130,6 +1130,14 @@ infer typer = loop
 
                        die (MapTypeMismatch (quote names (mapType _T')) _T₁'')
 
+        ShowConstructor e -> do
+            _E' <- loop ctx e
+            case _E' of
+              VUnion _ -> pure VText
+              VOptional _ -> pure VText
+
+              _ -> die ShowConstructorNotOnUnion
+
         Field e (Syntax.fieldSelectionLabel -> x) -> do
             _E' <- loop ctx e
 
@@ -1416,6 +1424,7 @@ data TypeMessage s a
     | CantMultiply (Expr s a) (Expr s a)
     | OptionalWithTypeMismatch
     | NotAQuestionPath
+    | ShowConstructorNotOnUnion
     deriving (Show)
 
 formatHints :: [Doc Ann] -> Doc Ann
@@ -4582,6 +4591,11 @@ prettyTypeMessage NotAQuestionPath = ErrorMessages {..}
     hints = []
     long = ""
 
+prettyTypeMessage ShowConstructorNotOnUnion = ErrorMessages {..}
+  where
+      short = "ShowConstructorNotOnUnion"
+      hints = []
+      long = ""
 
 buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
@@ -4868,6 +4882,8 @@ messageExpressions f m = case m of
         pure OptionalWithTypeMismatch
     NotAQuestionPath ->
         pure NotAQuestionPath
+    ShowConstructorNotOnUnion ->
+        pure ShowConstructorNotOnUnion
 
 {-| Newtype used to wrap error messages so that they render with a more
     detailed explanation of what went wrong

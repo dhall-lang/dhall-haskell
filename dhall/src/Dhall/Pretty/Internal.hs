@@ -1199,6 +1199,7 @@ prettyPrinters characterSet =
             Some a            -> app (builtin "Some") (a : args)
             Merge a b Nothing -> app (keyword "merge") (a : b : args)
             ToMap a Nothing   -> app (keyword "toMap") (a : args)
+            ShowConstructor a -> app (keyword "showConstructor") (a : args)
             e | Note _ b <- e ->
                   go args b
               | null args ->
@@ -1354,7 +1355,7 @@ prettyPrinters characterSet =
       where
         sign = if 0 <= minutes then "+" else "-"
 
-        (_HH, _MM) = minutes `divMod` 60
+        (_HH, _MM) = abs minutes `divMod` 60
     prettyPrimitiveExpression List =
         builtin "List"
     prettyPrimitiveExpression ListBuild =
@@ -1480,7 +1481,19 @@ prettyPrinters characterSet =
                                 <>  keyword "toMap"
                                 <>  case shallowDenote val' of
                                         RecordCompletion _T r ->
-                                            completion _T r
+                                                " "
+                                            <>  completion _T r
+                                        _ ->    Pretty.hardline
+                                            <>  "    "
+                                            <>  prettyImportExpression_ val'
+
+                            ShowConstructor val' ->
+                                    " "
+                                <>  keyword "showConstructor"
+                                <>  case shallowDenote val' of
+                                        RecordCompletion _T r ->
+                                                " "
+                                            <>  completion _T r
                                         _ ->    Pretty.hardline
                                             <>  "    "
                                             <>  prettyImportExpression_ val'
