@@ -47,6 +47,7 @@ import Dhall.Syntax
     , Scheme (..)
     , URL (..)
     , Var (..)
+    , WithComponent (..)
     )
 
 import Data.Foldable (toList)
@@ -559,7 +560,18 @@ decodeExpressionInternal decodeEmbed = go
 
                                 n <- Decoding.decodeListLen
 
-                                ks₀ <- replicateDecoder n Decoding.decodeString
+                                let decodeWithComponent = do
+                                        tokenType₂ <- Decoding.peekTokenType
+                                        case tokenType₂ of
+                                            TypeString -> do
+                                                fmap WithLabel Decoding.decodeString
+                                            _ -> do
+                                                m <- Decoding.decodeInt
+
+                                                case m of
+                                                    0 -> return WithQuestion
+                                                    _ -> die ("Unexpected integer encoding a with expression: " <> show n)
+                                ks₀ <- replicateDecoder n decodeWithComponent
 
                                 ks₁ <- case NonEmpty.nonEmpty ks₀ of
                                     Nothing ->
@@ -1017,8 +1029,11 @@ encodeExpressionInternal encodeEmbed = go
             encodeList4
                 (Encoding.encodeInt 29)
                 (go l)
-                (encodeList (fmap Encoding.encodeString ks))
+                (encodeList (fmap encodeWithComponent ks))
                 (go r)
+          where
+            encodeWithComponent  WithQuestion  = Encoding.encodeInt 0
+            encodeWithComponent (WithLabel k ) = Encoding.encodeString k
 
         DateLiteral day ->
             encodeList4

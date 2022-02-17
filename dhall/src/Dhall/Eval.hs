@@ -69,6 +69,7 @@ import Dhall.Syntax
     , PreferAnnotation (..)
     , RecordField (..)
     , Var (..)
+    , WithComponent (..)
     )
 
 import qualified Data.Char
@@ -234,7 +235,7 @@ data Val a
     | VProject !(Val a) !(Either (Set Text) (Val a))
     | VAssert !(Val a)
     | VEquivalent !(Val a) !(Val a)
-    | VWith !(Val a) (NonEmpty Text) !(Val a)
+    | VWith !(Val a) (NonEmpty WithComponent) !(Val a)
     | VEmbed a
 
 -- | For use with "Text.Show.Functions".
@@ -417,9 +418,9 @@ vProjectByFields env t ks =
             t' ->
                 VProject t' (Left ks)
 
-vWith :: Val a -> NonEmpty Text -> Val a -> Val a
-vWith (VRecordLit kvs) (k  :| []     ) v = VRecordLit (Map.insert k  v  kvs)
-vWith (VRecordLit kvs) (k₀ :| k₁ : ks) v = VRecordLit (Map.insert k₀ e₂ kvs)
+vWith :: Val a -> NonEmpty WithComponent -> Val a -> Val a
+vWith (VRecordLit kvs) (WithLabel k  :| []     ) v = VRecordLit (Map.insert k  v  kvs)
+vWith (VRecordLit kvs) (WithLabel k₀ :| k₁ : ks) v = VRecordLit (Map.insert k₀ e₂ kvs)
   where
     e₁ =
         case Map.lookup k₀ kvs of
@@ -427,9 +428,9 @@ vWith (VRecordLit kvs) (k₀ :| k₁ : ks) v = VRecordLit (Map.insert k₀ e₂ 
             Just e₁' -> e₁'
 
     e₂ = vWith e₁ (k₁ :| ks) v
-vWith (VNone _T) ("?" :| _      ) _ = VNone _T
-vWith (VSome  _) ("?" :| []     ) v = VSome v
-vWith (VSome  t) ("?" :| k₁ : ks) v = VSome (vWith t (k₁ :| ks) v)
+vWith (VNone _T) (WithQuestion :| _      ) _ = VNone _T
+vWith (VSome  _) (WithQuestion :| []     ) v = VSome v
+vWith (VSome  t) (WithQuestion :| k₁ : ks) v = VSome (vWith t (k₁ :| ks) v)
 vWith e₀ ks v₀ = VWith e₀ ks v₀
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a

@@ -35,6 +35,7 @@ import Dhall.Syntax
     , FunctionBinding (..)
     , RecordField (..)
     , Var (..)
+    , WithComponent (..)
     )
 import Numeric.Natural       (Natural)
 import Prettyprinter         (Doc, Pretty)
@@ -1067,12 +1068,15 @@ diffWithExpression (With eL ksL vL) (With eR ksR vR) =
         (   format " " (diffImportExpression eL eR)
         <>  "with "
         <>  align
-            (   format " " (diffPath ksL ksR)
+            (   format " " (diffPath (fmap toText ksL) (fmap toText ksR))
             <>  "= "
             <>  diffOperatorExpression vL vR
             )
         )
   where
+    toText  WithQuestion  = "?"
+    toText (WithLabel k ) = k
+
     diffPath (kL :| []) (kR :| []) =
         diffLabel kL kR
     diffPath (kL₀ :| kL₁ : ksL') (kR₀ :| kR₁ : ksR') =
