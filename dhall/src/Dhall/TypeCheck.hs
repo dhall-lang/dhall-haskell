@@ -4581,15 +4581,67 @@ prettyTypeMessage (CantMultiply expr0 expr1) =
 
 prettyTypeMessage OptionalWithTypeMismatch = ErrorMessages {..}
   where
-    short = "OptionalWithTypeMismatch"
+    short = "❰with❱ cannot change the type of an ❰Optional❱ value"
     hints = []
-    long = ""
+    long =
+        "Explanation: The ❰with❱ keyword cannot change the type of a value stored inside \n\
+        \of a ❰Some❱ constructor                                                         \n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰with❱:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \           The old value has type ❰Natural❱                                     \n\
+        \           ⇩                                                                    \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ Some 1 with ? = 2 │                                                       \n\
+        \    └───────────────────┘                                                       \n\
+        \                      ⇧                                                         \n\
+        \                      ... which matches the type of the new value, which is also\n\
+        \                      ❰Natural❱                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the following example is not valid:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \           The old value has type ❰Natural❱                                     \n\
+        \           ⇩                                                                    \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ Some 1 with ? = True │                                                    \n\
+        \    └──────────────────────┘                                                    \n\
+        \                      ⇧                                                         \n\
+        \                      ... but the new value has type ❰Bool❱, which does not     \n\
+        \                      match                                                     \n"
 
 prettyTypeMessage NotAQuestionPath = ErrorMessages {..}
   where
-    short = "NotAQuestionPath"
+    short = "Use ❰?❱ to update an ❰Optional❱ value"
     hints = []
-    long = ""
+    long =
+        "Explanation: The ❰with❱ keyword supports updating ❰Optional❱ values using a path\n\
+        \component of ❰?❱, but you provided a path component other than ❰?❱.             \n\
+        \                                                                                \n\
+        \For example, these are valid uses of ❰with❱ to update an ❰Optional❱ value:      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ Some 1 with ? = 2 │                                                       \n\
+        \    └───────────────────┘                                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────┐                                             \n\
+        \    │ { x = Some 1 } with x.? = 2 │                                             \n\
+        \    └─────────────────────────────┘                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the following example is not valid:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ Some 1 with x = True │                                                    \n\
+        \    └──────────────────────┘                                                    \n\
+        \                  ⇧                                                             \n\
+        \                  This path component should have been ❰?❱                      \n"
+
 
 prettyTypeMessage ShowConstructorNotOnUnion = ErrorMessages {..}
   where
