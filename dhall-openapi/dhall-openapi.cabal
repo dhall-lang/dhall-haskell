@@ -1,6 +1,6 @@
 Cabal-Version:  >=1.11
 Name:           dhall-openapi
-Version:        1.0.2
+Version:        1.0.3
 Homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi#dhall-openapi
 Author:         Fabrizio Ferrai
 Maintainer:     Gabriel439@gmail.com

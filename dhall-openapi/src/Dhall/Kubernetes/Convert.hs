@@ -195,6 +195,8 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
           [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField Dhall.Text) ]
         intOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
           [ ("Int", Dhall.Integer), ("String", Dhall.Text) ]
+        natOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
+          [ ("Nat", Dhall.Natural), ("String", Dhall.Text) ]
 
         -- | Convert a single Definition to a Dhall Type, yielding any definitions to be split
         --   Note: model hierarchy contains the modelName of of the current definition as the last entry
@@ -229,14 +231,16 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
           , let (mapValue, rest) = convertToType modelHierarchy props prefNatInt =
               (Dhall.App Dhall.List (Dhall.Record (Dhall.Map.fromList [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField mapValue) ])), rest)
             -- This is another way to declare an intOrString
-          | Maybe.isJust $ intOrString definition = (intOrStringType, Data.Map.empty)
+          | Maybe.isJust $ intOrString definition =
+             (if prefNatInt then natOrStringType else intOrStringType, Data.Map.empty)
             -- Otherwise - if we have a 'type' - it's a basic type
           | Just basic <- typ definition = case basic of
               "object"  -> (kvList, Data.Map.empty)
               "array"   | Just item <- items definition ->
                 let (e, tm) = convertToType (modelHierarchy) item prefNatInt
                 in (Dhall.App Dhall.List e, tm)
-              "string"  | format definition == Just "int-or-string" -> (intOrStringType, Data.Map.empty)
+              "string"  | format definition == Just "int-or-string" ->
+                (if prefNatInt then natOrStringType else intOrStringType, Data.Map.empty)
               "string"  -> (Dhall.Text, Data.Map.empty)
               "boolean" -> (Dhall.Bool, Data.Map.empty)
               "integer" -> if prefNatInt then case (minimum_ definition, exclusiveMinimum definition,
