@@ -44,8 +44,8 @@ data Definition = Definition
   , format               :: Maybe Text
   , minimum_             :: Maybe Scientific -- Avoid shadowing with Prelude.minimum
   , exclusiveMinimum     :: Maybe Bool
-  , maximum_         :: Maybe Scientific -- Avoid shadowing with Prelude.maximum
-  , exclusiveMaximum :: Maybe Bool
+  , maximum_             :: Maybe Scientific -- Avoid shadowing with Prelude.maximum
+  , exclusiveMaximum     :: Maybe Bool
   , description          :: Maybe Text
   , items                :: Maybe Definition
   , properties           :: Maybe (Map ModelName Definition)
@@ -62,8 +62,8 @@ instance FromJSON Definition where
     format               <- o .:? "format"
     minimum_             <- o .:? "minimum"
     exclusiveMinimum     <- o .:? "exclusiveMinimum"
-    maximum_         <- o .:? "maximum"
-    exclusiveMaximum <- o .:? "exclusiveMaximum"
+    maximum_             <- o .:? "maximum"
+    exclusiveMaximum     <- o .:? "exclusiveMaximum"
     properties           <- o .:? "properties"
     additionalProperties <- o .:? "additionalProperties"
     required             <- o .:? "required"

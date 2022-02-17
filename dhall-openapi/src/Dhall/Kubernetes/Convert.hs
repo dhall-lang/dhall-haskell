@@ -552,8 +552,8 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
         , format               = v1JSONSchemaPropsFormat
         , minimum_             = v1JSONSchemaPropsMinimum
         , exclusiveMinimum     = v1JSONSchemaPropsExclusiveMinimum
-        , maximum_         = v1JSONSchemaPropsMaximum
-        , exclusiveMaximum = v1JSONSchemaPropsExclusiveMaximum
+        , maximum_             = v1JSONSchemaPropsMaximum
+        , exclusiveMaximum     = v1JSONSchemaPropsExclusiveMaximum
         , description          = v1JSONSchemaPropsDescription
         , items                = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
         , properties           = fmap toProperties v1JSONSchemaPropsProperties
