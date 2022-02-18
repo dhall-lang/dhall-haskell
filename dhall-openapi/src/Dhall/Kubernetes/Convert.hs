@@ -196,7 +196,7 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
         intOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
           [ ("Int", Dhall.Integer), ("String", Dhall.Text) ]
         natOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
-          [ ("Nat", Dhall.Natural), ("String", Dhall.Text) ]
+          [ ("Int", Dhall.Natural), ("String", Dhall.Text) ]
 
         -- | Convert a single Definition to a Dhall Type, yielding any definitions to be split
         --   Note: model hierarchy contains the modelName of of the current definition as the last entry
