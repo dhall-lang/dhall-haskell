@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
@@ -102,8 +103,6 @@ import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Lens.Family (toListOf)
-import Nix.Atoms (NAtom (..))
-import Nix (($//), ($==))
 
 import Dhall.Core
     ( Binding (..)
@@ -120,14 +119,24 @@ import Dhall.Core
 
 import Nix.Expr
     ( Antiquoted (..)
-    , Binding (..)
-    , NBinaryOp (..)
-    , NExprF (..)
+    , NExpr
+    , NExprF (NStr)
     , NKeyName (..)
-    , NRecordType (..)
     , NString (..)
-    , Params (..)
+    , Params (Param)
+    , ($!=)
+    , ($&&)
+    , ($*)
     , ($+)
+    , ($++)
+    , ($-)
+    , ($/)
+    , ($//)
+    , ($<)
+    , ($<=)
+    , ($==)
+    , ($==)
+    , ($||)
     , (==>)
     , (@.)
     , (@@)
@@ -241,11 +250,11 @@ Right x: y: x + y
     Precondition: You must first type-check the Dhall expression before passing
     the expression to `dhallToNix`
 -}
-dhallToNix :: Expr s Void -> Either CompileError (Fix NExprF)
+dhallToNix :: Expr s Void -> Either CompileError NExpr
 dhallToNix e =
     loop (rewriteShadowed (Dhall.Core.normalize e))
   where
-    untranslatable = Fix (NSet NNonRecursive [])
+    untranslatable = Nix.attrsE []
 
     -- This is an intermediate utility used to remove all occurrences of
     -- shadowing (since Nix does not support references to shadowed variables)
@@ -314,137 +323,122 @@ dhallToNix e =
         Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
 
     loop (Const _) = return untranslatable
-    loop (Var (V a 0)) = return (Fix (NSym a))
+    loop (Var (V a 0)) = return (Nix.mkSym a)
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
         c' <- loop c
-        return (Fix (NAbs (Param a) c'))
+        return (Param a ==> c')
     loop (Pi _ _ _ _) = return untranslatable
-    -- None needs a type to convert to an Optional
     loop (App None _) =
-      return (Fix (NConstant NNull))
+      return Nix.mkNull
     loop (App (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
         v' <- loop v
         let e0 = do
                 k' <- Dhall.Map.keys kts
                 return (k', Nothing)
-        let e2 = Fix (NBinary NApp (Fix (NSym k)) v')
-        return (Fix (NAbs (ParamSet e0 False Nothing) e2))
+        let e2 = Nix.mkSym k @@ v'
+        return (Nix.mkParamset e0 False ==> e2)
     loop (App a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NApp a' b'))
+        return (a' @@ b')
     loop (Let a0 b0) = do
-        let MultiLet as b = Dhall.Core.multiLet a0 b0
-        as' <- for as $ \a -> do
-          val <- loop $ Dhall.Core.value a
-          pure $ NamedVar [StaticKey $ Dhall.Core.variable a] val Nix.nullPos
+        let MultiLet bindings b = Dhall.Core.multiLet a0 b0
+        bindings' <- for bindings $ \Binding{ variable, value } -> do
+          value' <- loop value
+          pure (variable, value')
         b' <- loop b
-        return (Fix (NLet (toList as') b'))
+        return (Nix.letsE (toList bindings') b')
     loop (Annot a _) = loop a
     loop Bool = return untranslatable
-    loop (BoolLit b) = return (Fix (NConstant (NBool b)))
+    loop (BoolLit b) = return (Nix.mkBool b)
     loop (BoolAnd a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NAnd a' b'))
+        return (a' $&& b')
     loop (BoolOr a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NOr a' b'))
+        return (a' $|| b')
     loop (BoolEQ a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NEq a' b'))
+        return (a' $== b')
     loop (BoolNE a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NNEq a' b'))
+        return (a' $!= b')
     loop (BoolIf a b c) = do
         a' <- loop a
         b' <- loop b
         c' <- loop c
-        return (Fix (NIf a' b' c'))
+        return (Nix.mkIf a' b' c')
     loop Natural = return untranslatable
-    loop (NaturalLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
+    loop (NaturalLit n) = return (Nix.mkInt (fromIntegral n))
     loop NaturalFold = do
-        let e0 = Fix (NBinary NMinus "n" (Fix (NConstant (NInt 1))))
-        let e1 = Fix (NBinary NApp (Fix (NBinary NApp (Fix (NBinary NApp "naturalFold" e0)) "t")) "succ")
-        let e2 = Fix (NBinary NApp "succ" (Fix (NBinary NApp e1 "zero")))
-        let e3 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
-        let e4 = Fix (NAbs "succ" (Fix (NAbs "zero" (Fix (NIf e3 "zero" e2)))))
-        let e5 = Fix (NAbs "n" (Fix (NAbs "t" e4)))
-        return (Fix (NLet [NamedVar ["naturalFold"] e5 Nix.nullPos] "naturalFold"))
+        let naturalFold =
+                    "n"
+                ==> "t"
+                ==> "succ"
+                ==> "zero"
+                ==> Nix.mkIf ("n" $<= Nix.mkInt 0)
+                        "zero"
+                        (   "succ"
+                        @@  (   "naturalFold"
+                            @@  ("n" $- Nix.mkInt 1)
+                            @@  "t"
+                            @@  "succ"
+                            @@  "zero"
+                            )
+                        )
+        return (Nix.letsE [ ("naturalFold", naturalFold) ] "naturalFold")
     loop NaturalBuild = do
-        let e0 = Fix (NBinary NPlus "n" (Fix (NConstant (NInt 1))))
-        let e1 = Fix (NBinary NApp (Fix (NBinary NApp "k" untranslatable)) (Fix (NAbs "n" e0)))
-        return (Fix (NAbs "k" (Fix (NBinary NApp e1 (Fix (NConstant (NInt 0)))))))
+        return
+            (   "k"
+            ==> (   "k"
+                @@  untranslatable
+                @@  ("n" ==> ("n" $+ Nix.mkInt 1))
+                @@  Nix.mkInt 0
+                )
+            )
     loop NaturalIsZero = do
-        let e0 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 0))))
-        return (Fix (NAbs "n" e0))
+        return ("n" ==> ("n" $== Nix.mkInt 0))
     loop NaturalEven = do
-        let e0 = Fix (NBinary NMinus "n" (Fix (NConstant (NInt 2))))
-        let e1 = Fix (NBinary NApp "naturalEven" e0)
-        let e2 = Fix (NBinary NNEq "n" (Fix (NConstant (NInt 1))))
-        let e3 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 0))))
-        let e4 = Fix (NBinary NOr e3 (Fix (NBinary NAnd e2 e1)))
-        let e5 = NamedVar ["naturalEven"] (Fix (NAbs "n" e4)) Nix.nullPos
-        let e6 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "n")
-        let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
-        let e8 = Fix (NAbs "n" (Fix (NBinary NApp "naturalEven" (Fix (NIf e7 e6 "n")))))
-        return (Fix (NLet [e5] e8))
+        return ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $== "n")
     loop NaturalOdd = do
-        let e0 = Fix (NBinary NMinus "n" (Fix (NConstant (NInt 2))))
-        let e1 = Fix (NBinary NApp "naturalOdd" e0)
-        let e2 = Fix (NBinary NNEq "n" (Fix (NConstant (NInt 0))))
-        let e3 = Fix (NBinary NEq "n" (Fix (NConstant (NInt 1))))
-        let e4 = Fix (NBinary NOr e3 (Fix (NBinary NAnd e2 e1)))
-        let e5 = NamedVar ["naturalOdd"] (Fix (NAbs "n" e4)) Nix.nullPos
-        let e6 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "n")
-        let e7 = Fix (NBinary NLte "n" (Fix (NConstant (NInt 0))))
-        let e8 = Fix (NAbs "n" (Fix (NBinary NApp "naturalOdd" (Fix (NIf e7 e6 "n")))))
-        return (Fix (NLet [e5] e8))
+        return ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $!= "n")
     loop NaturalShow =
         return "toString"
     loop NaturalSubtract = do
-        let e0 = NamedVar ["z"] (Fix (NBinary NMinus "y" "x")) Nix.nullPos
-        let e1 = Fix (NBinary NLt "z" (Fix (NConstant (NInt 0))))
-        let e2 = Fix (NConstant (NInt 0))
-        let e3 = "z"
-        let e4 = Fix (NIf e1 e2 e3)
-        let e5 = Fix (NLet [e0] e4)
-        return (Fix (NAbs "x" (Fix (NAbs "y" e5))))
+        return
+            (   "x"
+            ==> "y"
+            ==> Nix.letE "z" ("y" $- "x")
+                    (Nix.mkIf ("z" $< Nix.mkInt 0) (Nix.mkInt 0) "z")
+            )
     loop NaturalToInteger =
-        return (Fix (NAbs "n" "n"))
+        return ("n" ==> "n")
     loop (NaturalPlus a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NPlus a' b'))
+        return (a' $+ b')
     loop (NaturalTimes a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NMult a' b'))
+        return (a' $* b')
     loop Integer = return untranslatable
-    loop (IntegerLit n) = return (Fix (NConstant (NInt (fromIntegral n))))
+    loop (IntegerLit n) = return (Nix.mkInt n)
     loop IntegerClamp = do
-        let e0 = Fix (NConstant (NInt 0))
-        let e1 = Fix (NBinary NLte (Fix (NConstant (NInt 0))) "x")
-        let e2 = Fix (NAbs "x" (Fix (NIf e1 "x" e0)))
-        return e2
+        return ("x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") "x" (Nix.mkInt 0))
     loop IntegerNegate = do
-        let e0 = Fix (NBinary NMinus (Fix (NConstant (NInt 0))) "x")
-        let e1 = Fix (NAbs "x" e0)
-        return e1
+        return ("x" ==> (Nix.mkInt 0 $- "x"))
     loop IntegerShow = do
-        let e0 = Fix (NBinary NApp "toString" "x")
-        let e1 = Fix (NBinary NPlus (Fix (NStr "+")) e0)
-        let e2 = Fix (NBinary NLte (Fix (NConstant (NInt 0))) "x")
-        let e3 = Fix (NAbs "x" (Fix (NIf e2 e1 e0)))
-        return e3
+        let e0 = "toString" @@ "x"
+        return ("x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") (Nix.mkStr "+" $+ e0) e0)
     loop IntegerToDouble =
-        return (Fix (NAbs "x" "x"))
+        return ("x" ==> "x")
     loop Double = return untranslatable
-    loop (DoubleLit (DhallDouble n)) = return (Fix (NConstant (NFloat (realToFrac n))))
+    loop (DoubleLit (DhallDouble n)) = return (Nix.mkFloat (realToFrac n))
     loop DoubleShow =
         return "toString"
     loop Text = return untranslatable
@@ -459,7 +453,7 @@ dhallToNix e =
     loop (TextAppend a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NPlus a' b'))
+        return (a' $+ b')
     loop TextReplace = do
         let from = Nix.mkList [ "needle" ]
 
@@ -474,92 +468,123 @@ dhallToNix e =
     loop TextShow = do
         let from =
                 Nix.mkList
-                    [ Nix.mkStr "\""
-                    , Nix.mkStr "$"
-                    , Nix.mkStr "\\"
+                    [ "\""
+                    , "$"
+                    , "\\"
                  -- Nix doesn't support \b and \f
-                 -- , Nix.mkStr "\b"
-                 -- , Nix.mkStr "\f"
-                    , Nix.mkStr "\n"
-                    , Nix.mkStr "\r"
-                    , Nix.mkStr "\t"
+                 -- , "\b"
+                 -- , "\f"
+                    , "\n"
+                    , "\r"
+                    , "\t"
                     ]
 
         let to =
                 Nix.mkList
-                    [ Nix.mkStr "\\\""
-                    , Nix.mkStr "\\u0024"
-                    , Nix.mkStr "\\\\"
-                 -- , Nix.mkStr "\\b"
-                 -- , Nix.mkStr "\\f"
-                    , Nix.mkStr "\\n"
-                    , Nix.mkStr "\\r"
-                    , Nix.mkStr "\\t"
+                    [ "\\\""
+                    , "\\u0024"
+                    , "\\\\"
+                 -- , "\\b"
+                 -- , "\\f"
+                    , "\\n"
+                    , "\\r"
+                    , "\\t"
                     ]
 
         let replaced = "builtins" @. "replaceStrings" @@ from @@ to @@ "t"
 
-        let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
+        let quoted = "\"" $+ replaced $+ "\""
 
         return ("t" ==> quoted)
     loop Date = return untranslatable
     loop Time = return untranslatable
     loop TimeZone = return untranslatable
-    loop List = return (Fix (NAbs "t" untranslatable))
+    loop List = return ("t" ==> untranslatable)
     loop (ListAppend a b) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NConcat a' b'))
+        return (a' $++ b')
     loop (ListLit _ bs) = do
         bs' <- mapM loop (toList bs)
-        return (Fix (NList bs'))
+        return (Nix.mkList bs')
     loop ListBuild = do
-        let e0 = Fix (NBinary NApp "k" untranslatable)
-        let e1 = Fix (NBinary NConcat (Fix (NList ["x"])) "xs")
-        let e2 = Fix (NBinary NApp e0 (Fix (NAbs "x" (Fix (NAbs "xs" e1)))))
-        let e3 = Fix (NAbs "k" (Fix (NBinary NApp e2 (Fix (NList [])))))
-        return (Fix (NAbs "t" e3))
+        return
+            (   "t"
+            ==> "k"
+            ==> (   "k"
+                @@  untranslatable
+                @@  ("x" ==> "xs" ==> (Nix.mkList ["x"] $++ "xs"))
+                @@  Nix.mkList []
+                )
+            )
     loop ListFold = do
-        let e0 = Fix (NBinary NApp "f" (Fix (NBinary NApp (Fix (NBinary NApp "cons" "y")) "ys")))
-        let e1 = Fix (NAbs "f" (Fix (NAbs "y" (Fix (NAbs "ys" e0)))))
-        let e2 = Fix (NBinary NApp "builtins.foldl'" e1)
-        let e3 = Fix (NBinary NApp (Fix (NBinary NApp e2 (Fix (NAbs "ys" "ys")))) "xs")
-        let e4 = Fix (NAbs "xs" (Fix (NAbs "t" (Fix (NAbs "cons" e3)))))
-        return (Fix (NAbs "t" e4))
-    loop ListLength = return (Fix (NAbs "t" "builtins.length"))
+        return
+            (   "t"
+            ==> "xs"
+            ==> "t"
+            ==> "cons"
+            ==> (   "builtins.foldl'"
+                @@  (   "f"
+                    ==> "y"
+                    ==> "ys"
+                    ==> ("f" @@ ("cons" @@ "y" @@ "ys"))
+                    )
+                @@  ("ys" ==> "ys")
+                @@  "xs"
+                )
+            )
+    loop ListLength = return ("t" ==> "builtins.length")
     loop ListHead = do
-        let e0 = Fix (NBinary NApp "builtins.head" "xs")
-        let e1 = Fix (NBinary NEq "xs" (Fix (NList [])))
-        let e2 = Fix (NAbs "xs" (Fix (NIf e1 (Fix (NConstant NNull)) e0)))
-        return (Fix (NAbs "t" e2))
+        return
+            (   "t"
+            ==> "xs"
+            ==> Nix.mkIf ("xs" $== Nix.mkList [])
+                    Nix.mkNull
+                    ("builtins.head" @@ "xs")
+            )
     loop ListLast = do
-        let e0 = Fix (NBinary NApp "builtins.length" "xs")
-        let e1 = Fix (NBinary NMinus e0 (Fix (NConstant (NInt 1))))
-        let e2 = Fix (NBinary NApp (Fix (NBinary NApp "builtins.elemAt" "xs")) e1)
-        let e3 = Fix (NBinary NEq "xs" (Fix (NList [])))
-        let e4 = Fix (NAbs "xs" (Fix (NIf e3 (Fix (NConstant NNull)) e2)))
-        return (Fix (NAbs "t" e4))
+        return
+            (   "t"
+            ==> "xs"
+            ==> Nix.mkIf ("xs" $== Nix.mkList [])
+                    Nix.mkNull
+                    (   "builtins.elemAt"
+                    @@ "xs"
+                    @@ (("builtins.length" @@ "xs") $- Nix.mkInt 1)
+                    )
+            )
     loop ListIndexed = do
-        let e0 = Fix (NBinary NApp "builtins.length" "xs")
-        let e1 = Fix (NBinary NApp (Fix (NBinary NApp "builtins.elemAt" "xs")) "i")
-        let e2 =
-                [ NamedVar ["index"] "i" Nix.nullPos
-                , NamedVar ["value"] e1  Nix.nullPos
-                ]
-        let e3 = Fix (NBinary NApp "builtins.genList" (Fix (NAbs "i" (Fix (NSet NNonRecursive e2)))))
-        return (Fix (NAbs "t" (Fix (NAbs "xs" (Fix (NBinary NApp e3 e0))))))
+        return
+            (   "t"
+            ==> "xs"
+            ==> (   "builtins.genList"
+                @@  (   "i"
+                    ==> Nix.attrsE
+                            [ ("index", "i")
+                            , ("value", "builtins.elemAt" @@ "xs" @@ "i")
+                            ]
+                    )
+                @@  ("builtins.length" @@ "xs")
+                )
+            )
     loop ListReverse = do
-        let e0 = Fix (NBinary NMinus "n" "i")
-        let e1 = Fix (NBinary NMinus e0 (Fix (NConstant (NInt 1))))
-        let e2 = Fix (NBinary NApp (Fix (NBinary NApp "builtins.elemAt" "xs")) e1)
-        let e3 = Fix (NBinary NApp "builtins.genList" (Fix (NAbs "i" e2)))
-        let e4 = Fix (NBinary NApp e3 "n")
-        let e5 = Fix (NBinary NApp "builtins.length" "xs")
-        let e6 = Fix (NAbs "xs" (Fix (NLet [NamedVar ["n"] e5 Nix.nullPos] e4)))
-        return (Fix (NAbs "t" e6))
-    loop Optional = return (Fix (NAbs "t" untranslatable))
+        return
+            (   "t"
+            ==> "xs"
+            ==> Nix.letE "n" ("builtins.length" @@ "xs")
+                    (   "builtins.genList"
+                    @@  (   "i"
+                        ==> (   "builtins.elemAt"
+                            @@  "xs"
+                            @@  ("n" $- "i" $- Nix.mkInt 1)
+                            )
+                        )
+                    @@  "n"
+                    )
+            )
+    loop Optional = return ("t" ==> untranslatable)
     loop (Some a) = loop a
-    loop None = return (Fix (NConstant NNull))
+    loop None = return ("t" ==> Nix.mkNull)
     loop t
         | Just text <- Dhall.Pretty.temporalToText t = do
             loop (Dhall.Core.TextLit (Dhall.Core.Chunks [] text))
@@ -571,74 +596,82 @@ dhallToNix e =
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse (loop . Dhall.Core.recordFieldValue) a
-        let a'' = do
-                (k, v) <- Dhall.Map.toList a'
-                return (NamedVar [StaticKey k] v Nix.nullPos)
-        return (Fix (NSet NNonRecursive a''))
+        return (Nix.attrsE (Dhall.Map.toList a'))
     loop (Union _) = return untranslatable
     loop (Combine _ _ a b) = do
         a' <- loop a
         b' <- loop b
-        let e0 = Fix (NBinary NApp (Fix (NBinary NApp "map" "toKeyVals")) "ks")
-        let e1 = Fix (NBinary NApp "builtins.concatLists" e0)
-        let e2 = Fix (NBinary NApp "builtins.listToAttrs" e1)
 
-        let defL = Fix (NBinary NApp (Fix (NBinary NApp "builtins.hasAttr" "k")) "kvsL")
-        let defR = Fix (NBinary NApp (Fix (NBinary NApp "builtins.hasAttr" "k")) "kvsR")
-        let valL = Fix (NBinary NApp (Fix (NBinary NApp "builtins.getAttr" "k")) "kvsL")
-        let valR = Fix (NBinary NApp (Fix (NBinary NApp "builtins.getAttr" "k")) "kvsR")
+        let defL = "builtins.hasAttr" @@ "k" @@ "kvsL"
+        let defR = "builtins.hasAttr" @@ "k" @@ "kvsR"
+        let valL = "builtins.getAttr" @@ "k" @@ "kvsL"
+        let valR = "builtins.getAttr" @@ "k" @@ "kvsR"
 
-        let empty_ = Fix (NList [])
         let toNameValue v =
-                let bindings =
-                        [ NamedVar ["name" ] "k" Nix.nullPos
-                        , NamedVar ["value"] v   Nix.nullPos
+                Nix.mkList [ Nix.attrsE [ ("name", "k"), ("value", v) ] ]
+
+        let toKeyVals =
+                    "k"
+                ==> Nix.mkIf defL
+                        (Nix.mkIf defR
+                            (Nix.mkIf
+                                (   ("builtins.isAttrs" @@ valL)
+                                $&& ("builtins.isAttrs" @@ valR)
+                                )
+                                (toNameValue ("combine" @@ valL @@ valR))
+                                (toNameValue valR)
+                            )
+                            (toNameValue valL)
+                        )
+                        (Nix.mkIf defR
+                            (toNameValue valR)
+                            (Nix.mkList [])
+                        )
+
+        return
+            (Nix.letE "combine"
+                (   "kvsL"
+                ==> "kvsR"
+                ==> Nix.letsE
+                        [ ( "ks"
+                          ,     ("builtins.attrNames" @@ "kvsL")
+                            $++ ("builtins.attrNames" @@ "kvsR")
+                          )
+                        , ("toKeyVals", toKeyVals)
                         ]
-                in  Fix (NList [Fix (NSet NNonRecursive bindings)])
-
-        let e3 = Fix (NBinary NApp (Fix (NBinary NApp "combine" valL)) valR)
-        let e4 = Fix (NBinary NApp "builtins.isAttrs" valL)
-        let e5 = Fix (NBinary NApp "builtins.isAttrs" valR)
-        let e6 = Fix (NBinary NAnd e4 e5)
-        let e7 = Fix (NIf e6 (toNameValue e3) (toNameValue valR))
-        let e8 = Fix (NIf defR e7 (toNameValue valL))
-        let e9 = Fix (NIf defR (toNameValue valR) empty_)
-        let toKeyVals = Fix (NAbs "k" (Fix (NIf defL e8 e9)))
-
-        let ksL = Fix (NBinary NApp "builtins.attrNames" "kvsL")
-        let ksR = Fix (NBinary NApp "builtins.attrNames" "kvsR")
-        let ks  = Fix (NBinary NConcat ksL ksR)
-
-        let e10 =
-                [ NamedVar ["ks"       ] ks        Nix.nullPos
-                , NamedVar ["toKeyVals"] toKeyVals Nix.nullPos
-                ]
-        let combine = Fix (NAbs "kvsL" (Fix (NAbs "kvsR" (Fix (NLet e10 e2)))))
-
-        let e11 = Fix (NBinary NApp (Fix (NBinary NApp "combine" a')) b')
-        return (Fix (NLet [NamedVar ["combine"] combine Nix.nullPos] e11))
+                        (   "builtins.listToAttrs"
+                        @@  (   "builtins.concatLists"
+                            @@  ("map" @@ "toKeyVals" @@ "ks")
+                            )
+                        )
+                )
+                ("combine" @@ a' @@ b')
+            )
     loop (CombineTypes _ _ _) = return untranslatable
     loop (Merge a b _) = do
         a' <- loop a
         b' <- loop b
-        return (Fix (NBinary NApp b' a'))
+        return (b' @@ a')
     loop (ToMap a _) = do
         a' <- loop a
-        let ks = Fix (NBinary NApp "builtins.attrNames" "kvs")
-        let v = Fix (NBinary NApp (Fix (NBinary NApp "builtins.getAttr" "k")) "kvs")
-        let setBindings =
-                [ NamedVar [StaticKey "mapKey"] "k" Nix.nullPos
-                , NamedVar [StaticKey "mapValue"] v Nix.nullPos
-                ]
-        let map_ = Fix (NBinary NApp "map" (Fix (NAbs "k" (Fix (NSet NNonRecursive setBindings)))))
-        let toMap = Fix (NAbs "kvs" (Fix (NBinary NApp map_ ks)))
-        return (Fix (NBinary NApp toMap a'))
+        return
+            (Nix.letE "kvs" a'
+                (   "map"
+                @@  (   "k"
+                    ==> Nix.attrsE
+                            [ ("mapKey", "k")
+                            , ("mapValue", "builtins.getAttr" @@ "k" @@ "kvs")
+                            ]
+                    )
+                @@  ("builtins.attrNames" @@ "kvs")
+                )
+            )
     loop (ShowConstructor _) = do
         Left CannotShowConstructor
     loop (Prefer _ _ b c) = do
         b' <- loop b
         c' <- loop c
-        return (Fix (NBinary NUpdate b' c'))
+        return (b' $// c')
     loop (RecordCompletion a b) =
         loop (Annot (Prefer mempty PreferFromCompletion (Field a def) b) (Field a typ))
       where
@@ -651,26 +684,24 @@ dhallToNix e =
             -- (here "x").
             --
             -- This translates `< Foo : T >.Foo` to `x: { Foo }: Foo x`
-            Just ( Just _ ) -> do
+            Just (Just _) -> do
                 let e0 = do
                         k' <- Dhall.Map.keys kts
                         return (k', Nothing)
-                let e2 = Fix (NBinary NApp (Fix (NSym k)) (Fix (NSym "x")))
-                return (Fix (NAbs (Param "x") (Fix (NAbs (ParamSet e0 False Nothing) e2))))
+                return ("x" ==> Nix.mkParamset e0 False ==> (Nix.mkSym k @@ "x"))
 
             _ -> do
                 let e0 = do
                         k' <- Dhall.Map.keys kts
                         return (k', Nothing)
-                let e2 = Fix (NSym k)
-                return (Fix (NAbs (ParamSet e0 False Nothing) e2))
+                return (Nix.mkParamset e0 False ==> Nix.mkSym k)
     loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
         a' <- loop a
-        return (Fix (NSelect a' [StaticKey b] Nothing))
+        return (a' @. b)
     loop (Project a (Left b)) = do
         a' <- loop a
         let b' = fmap StaticKey (toList b)
-        return (Fix (NSet NNonRecursive [Inherit (Just a') b' Nix.nullPos]))
+        return (Nix.mkNonRecSet [ Nix.inheritFrom a' b' Nix.nullPos ])
     loop (Project _ (Right _)) =
         Left CannotProjectByType
     loop (Assert _) =
