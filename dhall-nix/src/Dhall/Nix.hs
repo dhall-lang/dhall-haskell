@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE ViewPatterns       #-}
 
@@ -93,24 +94,30 @@ module Dhall.Nix (
     ) where
 
 import Control.Exception (Exception)
-import Data.Fix          (Fix (..))
-import Data.Foldable     (toList)
-import Data.Text         (Text)
-import Data.Traversable  (for)
-import Data.Typeable     (Typeable)
-import Data.Void         (Void, absurd)
+import Data.Fix (Fix (..))
+import Data.Foldable (toList)
+import Data.List.NonEmpty (NonEmpty(..))
+import Data.Text (Text)
+import Data.Traversable (for)
+import Data.Typeable (Typeable)
+import Data.Void (Void, absurd)
+import Lens.Family (toListOf)
+import Nix.Atoms (NAtom (..))
+import Nix (($//), ($==))
+
 import Dhall.Core
     ( Binding (..)
     , Chunks (..)
     , DhallDouble (..)
     , Expr (..)
+    , FieldSelection (..)
     , FunctionBinding (..)
     , MultiLet (..)
     , PreferAnnotation (..)
     , Var (..)
+    , WithComponent (..)
     )
-import Lens.Family       (toListOf)
-import Nix.Atoms         (NAtom (..))
+
 import Nix.Expr
     ( Antiquoted (..)
     , Binding (..)
@@ -670,8 +677,24 @@ dhallToNix e =
         return untranslatable
     loop (Equivalent _ _ _) =
         return untranslatable
-    loop a@With{} =
-        loop (Dhall.Core.desugarWith a)
+    loop (With a (WithLabel k :| []) b) = do
+        a' <- loop a
+        b' <- loop b
+
+        return (a' $// Nix.attrsE [(k, b')])
+    loop (With a (WithLabel k :| k' : ks) b) = do
+        a' <- loop a
+        b' <- loop (With (Field "_" (FieldSelection Nothing k Nothing)) (k' :| ks) (Dhall.Core.shift 1 "_" b))
+
+        return (Nix.letE "_" a' ("_" $// Nix.attrsE [(k, b')]))
+    loop (With a (WithQuestion :| []) b) = do
+        a' <- loop a
+        b' <- loop b
+        return (Nix.mkIf (a' $== Nix.mkNull) Nix.mkNull b')
+    loop (With a (WithQuestion :| k : ks) b) = do
+        a' <- loop a
+        b' <- loop (With "_" (k :| ks) (Dhall.Core.shift 1 "_" b))
+        return (Nix.letE "_" a' (Nix.mkIf (a' $== Nix.mkNull) Nix.mkNull b'))
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x

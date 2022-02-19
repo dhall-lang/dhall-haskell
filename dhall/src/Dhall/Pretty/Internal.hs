@@ -513,7 +513,7 @@ escapeLabel :: Bool -> Text -> Text
 escapeLabel allowReserved l =
     case Text.uncons l of
         Just (h, t)
-            | headCharacter h && Text.all tailCharacter t && (notReservedIdentifier || (allowReserved && someOrNotLanguageKeyword))
+            | headCharacter h && Text.all tailCharacter t && (notReservedIdentifier || (allowReserved && someOrNotLanguageKeyword)) && l /= "?"
                 -> l
         _       -> "`" <> l <> "`"
     where
@@ -829,7 +829,11 @@ prettyPrinters characterSet =
             <>  Pretty.align (keyword "with" <> " " <> update)
 
         (update, _) =
-            prettyKeyValue prettyOperatorExpression equals (makeKeyValue b c)
+            prettyKeyValue prettyOperatorExpression equals
+                (makeKeyValue (fmap toText b) c)
+
+        toText  WithQuestion  = "?"
+        toText (WithLabel k ) = k
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
       where

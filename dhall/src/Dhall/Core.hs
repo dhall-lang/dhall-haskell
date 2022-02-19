@@ -31,6 +31,7 @@ module Dhall.Core (
     , makeFunctionBinding
     , FieldSelection (..)
     , makeFieldSelection
+    , WithComponent (..)
     , Expr(..)
 
     -- * Normalization
@@ -76,7 +77,6 @@ module Dhall.Core (
     , Eval.textShow
     , censorExpression
     , censorText
-    , Syntax.desugarWith
     ) where
 
 import Control.Exception      (Exception)
@@ -92,8 +92,7 @@ import Prettyprinter          (Pretty)
 
 import qualified Control.Exception
 import qualified Data.Text
-import qualified Dhall.Eval        as Eval
-import qualified Dhall.Syntax      as Syntax
+import qualified Dhall.Eval         as Eval
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
