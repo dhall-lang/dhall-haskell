@@ -426,6 +426,7 @@ data FieldSelection s = FieldSelection
 makeFieldSelection :: Text -> FieldSelection s
 makeFieldSelection t = FieldSelection Nothing t Nothing
 
+-- | A path component for a @with@ expression
 data WithComponent = WithLabel Text | WithQuestion
     deriving (Data, Eq, Generic, Lift, NFData, Ord, Show)
 
