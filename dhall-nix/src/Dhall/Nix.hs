@@ -468,32 +468,32 @@ dhallToNix e =
     loop TextShow = do
         let from =
                 Nix.mkList
-                    [ "\""
-                    , "$"
-                    , "\\"
+                    [ Nix.mkStr "\""
+                    , Nix.mkStr "$"
+                    , Nix.mkStr "\\"
                  -- Nix doesn't support \b and \f
-                 -- , "\b"
-                 -- , "\f"
-                    , "\n"
-                    , "\r"
-                    , "\t"
+                 -- , Nix.mkStr "\b"
+                 -- , Nix.mkStr "\f"
+                    , Nix.mkStr "\n"
+                    , Nix.mkStr "\r"
+                    , Nix.mkStr "\t"
                     ]
 
         let to =
                 Nix.mkList
-                    [ "\\\""
-                    , "\\u0024"
-                    , "\\\\"
-                 -- , "\\b"
-                 -- , "\\f"
-                    , "\\n"
-                    , "\\r"
-                    , "\\t"
+                    [ Nix.mkStr "\\\""
+                    , Nix.mkStr "\\u0024"
+                    , Nix.mkStr "\\\\"
+                 -- , Nix.mkStr "\\b"
+                 -- , Nix.mkStr "\\f"
+                    , Nix.mkStr "\\n"
+                    , Nix.mkStr "\\r"
+                    , Nix.mkStr "\\t"
                     ]
 
         let replaced = "builtins" @. "replaceStrings" @@ from @@ to @@ "t"
 
-        let quoted = "\"" $+ replaced $+ "\""
+        let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
 
         return ("t" ==> quoted)
     loop Date = return untranslatable
