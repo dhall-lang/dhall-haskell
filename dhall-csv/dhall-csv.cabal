@@ -1,5 +1,5 @@
 Name: dhall-csv
-Version: 1.0.1
+Version: 1.0.2
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -38,7 +38,7 @@ Library
         containers           >= 0.5.9     && < 0.7 ,
         either                                     ,
         exceptions           >= 0.8.3     && < 0.11,
-        dhall                >= 1.39.0    && < 1.41,
+        dhall                >= 1.39.0    && < 1.42,
         filepath                             < 1.5 ,
         optparse-applicative                       ,
         prettyprinter        >= 1.7.0     && < 1.8 ,

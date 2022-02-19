@@ -1,3 +1,23 @@
+1.41.0
+
+* [Support standard version 22.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v22.0.0)
+  * [Allow `with` expressions to update `Optional` values using `?`](https://github.com/dhall-lang/dhall-haskell/pull/2386)
+  * [Add `showConstructor` keyword](https://github.com/dhall-lang/dhall-haskell/pull/2384)
+* [BUG FIX: Fix pretty-printing of time zones](https://github.com/dhall-lang/dhall-haskell/pull/2379)
+  * Timezones with a negative offset were previously being rendered with two
+    leading minus signs instead of one
+* [BUG FIX: `dhall freeze --cache` to work with standard version 21.0.0](https://github.com/dhall-lang/dhall-haskell/pull/2350)
+  * `dhall freeze` will now use `missing sha256:…` for the first import so that
+    the latter import will be tried if the import is not in cache
+  * The old behavior is incompatible with standard version 21.0.0 because the
+    new behavior of the `?` operator doesn't fall back on hash mismatches
+* [BUG FIX: Allow `with` expression to update a field named `Some`](https://github.com/dhall-lang/dhall-haskell/pull/2354)
+  * This fixes a discrepancy between the Haskell implementation and the standard
+    where the Haskell implementation would not permit
+    `{ Some = 0 } with Some = 1 `
+* [Fix `dhall {format,lint,freeze}` to preserve leading shebangs](https://github.com/dhall-lang/dhall-haskell/pull/2364)
+* [Add `FromDhall` instances for `Int{,8,16,32,64}`](https://github.com/dhall-lang/dhall-haskell/pull/2349)
+
 1.40.2
 
 * [Supports standard version 21.1.0](https://github.com/dhall-lang/dhall-haskell/pull/2236)
