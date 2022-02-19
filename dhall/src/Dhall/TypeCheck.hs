@@ -4618,7 +4618,7 @@ prettyTypeMessage NotALabelPath = ErrorMessages {..}
     hints = []
     long =
         "Explanation: The ❰with❱ keyword supports updating records by naming the field(s)\n\
-        \to update, but you provided a path component of ❰?❱, which only works on.       \n\
+        \to update, but you provided a path component of ❰?❱, which only works on        \n\
         \❰Optional❱ values and not records.                                              \n\
         \                                                                                \n\
         \For example, these are valid uses of ❰with❱ to update a record:                 \n\
