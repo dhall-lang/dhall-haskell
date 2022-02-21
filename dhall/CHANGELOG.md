@@ -16,7 +16,7 @@
     where the Haskell implementation would not permit
     `{ Some = 0 } with Some = 1 `
 * [Fix `dhall {format,lint,freeze}` to preserve leading shebangs](https://github.com/dhall-lang/dhall-haskell/pull/2364)
-* [Add `FromDhall` instances for `Int{,8,16,32,64}`](https://github.com/dhall-lang/dhall-haskell/pull/2349)
+* [Add `FromDhall` instances for `Int{8,16,32,64}`](https://github.com/dhall-lang/dhall-haskell/pull/2349)
 
 1.40.2
 
