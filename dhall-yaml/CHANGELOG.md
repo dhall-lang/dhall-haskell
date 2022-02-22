@@ -1,3 +1,9 @@
+1.2.10
+
+* Build against `dhall-1.41`
+* [Build against `optparse-applicative-0.17`](https://github.com/dhall-lang/dhall-haskell/pull/2376)
+* [Build against `text-2.0`](https://github.com/dhall-lang/dhall-haskell/pull/2356)
+
 1.2.9
 
 * [Build against `aeson-2.0`](https://github.com/dhall-lang/dhall-haskell/pull/2315)
