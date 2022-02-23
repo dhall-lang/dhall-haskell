@@ -1,3 +1,7 @@
+1.41.1
+
+* [BUG FIX: Don't escape `?` path component when pretty-printing `with` expressions](https://github.com/dhall-lang/dhall-haskell/pull/2392)
+
 1.41.0
 
 * [Support standard version 22.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v22.0.0)
