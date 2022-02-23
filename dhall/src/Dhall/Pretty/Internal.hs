@@ -529,8 +529,12 @@ prettyLabel = prettyLabelShared False
 prettyAnyLabel :: Text -> Doc Ann
 prettyAnyLabel = prettyLabelShared True
 
-prettyAnyLabels :: Foldable list => list (Maybe Src, Text, Maybe Src) -> Doc Ann
-prettyAnyLabels keys = Pretty.group (Pretty.flatAlt long short)
+prettyKeys
+    :: Foldable list
+    => (key -> Doc Ann)
+    -> list (Maybe Src, key, Maybe Src)
+    -> Doc Ann
+prettyKeys prettyK keys = Pretty.group (Pretty.flatAlt long short)
   where
     short = (mconcat . Pretty.punctuate dot . map prettyKey . toList) keys
 
@@ -550,7 +554,7 @@ prettyAnyLabels keys = Pretty.group (Pretty.flatAlt long short)
         . Pretty.punctuate Pretty.hardline
         . Data.Maybe.catMaybes
         $ [ renderSrcMaybe mSrc0
-          , Just (prettyAnyLabel key)
+          , Just (prettyK key)
           , renderSrcMaybe mSrc1
           ]
 
@@ -829,11 +833,11 @@ prettyPrinters characterSet =
             <>  Pretty.align (keyword "with" <> " " <> update)
 
         (update, _) =
-            prettyKeyValue prettyOperatorExpression equals
-                (makeKeyValue (fmap toText b) c)
+            prettyKeyValue prettyKey prettyOperatorExpression equals
+                (makeKeyValue b c)
 
-        toText  WithQuestion  = "?"
-        toText (WithLabel k ) = k
+        prettyKey (WithLabel text) = prettyAnyLabel text
+        prettyKey  WithQuestion    = syntax "?"
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
       where
@@ -1417,11 +1421,12 @@ prettyPrinters characterSet =
 
     prettyKeyValue
         :: Pretty a
-        => (Expr Src a -> Doc Ann)
+        => (key -> Doc Ann)
+        -> (Expr Src a -> Doc Ann)
         -> Doc Ann
-        -> KeyValue Src a
+        -> KeyValue key Src a
         -> (Doc Ann, Doc Ann)
-    prettyKeyValue prettyValue separator (KeyValue key mSrc val) =
+    prettyKeyValue prettyKey prettyValue separator (KeyValue key mSrc val) =
         duplicate (Pretty.group (Pretty.flatAlt long short))
       where
         completion _T r =
@@ -1433,7 +1438,7 @@ prettyPrinters characterSet =
                     _ ->
                         prettySelectorExpression r
 
-        short = prettyAnyLabels key
+        short = prettyKeys prettyKey key
             <>  " "
             <>  separator
             <>  " "
@@ -1443,7 +1448,7 @@ prettyPrinters characterSet =
             <>  prettyValue val
 
         long =  Pretty.align
-                    (   prettyAnyLabels key
+                    (   prettyKeys prettyKey key
                     <>  preSeparator
                     )
             <>  separator
@@ -1533,7 +1538,7 @@ prettyPrinters characterSet =
     prettyRecord :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecord =
         ( braces
-        . map (prettyKeyValue prettyExpression colon . adapt)
+        . map (prettyKeyValue prettyAnyLabel prettyExpression colon . adapt)
         . Map.toList
         )
       where
@@ -1590,12 +1595,12 @@ prettyPrinters characterSet =
                     | Var (V key' 0) <- Dhall.Syntax.shallowDenote val
                     , key == key'
                     , not (containsComment mSrc2) ->
-                        duplicate (prettyAnyLabels [(mSrc0, key, mSrc1)])
+                        duplicate (prettyKeys prettyAnyLabel [(mSrc0, key, mSrc1)])
                 _ ->
-                    prettyKeyValue prettyExpression equals kv
+                    prettyKeyValue prettyAnyLabel prettyExpression equals kv
 
     prettyAlternative (key, Just val) =
-        prettyKeyValue prettyExpression colon (makeKeyValue (pure key) val)
+        prettyKeyValue prettyAnyLabel prettyExpression colon (makeKeyValue (pure key) val)
     prettyAlternative (key, Nothing) =
         duplicate (prettyAnyLabel key)
 
@@ -1793,13 +1798,13 @@ escapeTrailingSingleQuote chunks@(Chunks as b) =
 pretty_ :: Pretty a => a -> Text
 pretty_ = prettyToStrictText
 
-data KeyValue s a = KeyValue
-    { _keyValueKeys  :: NonEmpty (Maybe s, Text, Maybe s)
+data KeyValue k s a = KeyValue
+    { _keyValueKeys  :: NonEmpty (Maybe s, k , Maybe s)
     , _keyValueSrc   :: Maybe s
     , _keyValueValue :: Expr s a
     }
 
-makeKeyValue :: NonEmpty Text -> Expr s a -> KeyValue s a
+makeKeyValue :: NonEmpty key -> Expr s a -> KeyValue key s a
 makeKeyValue keys expr = KeyValue (adapt <$> keys) Nothing expr
   where
     adapt key = (Nothing, key, Nothing)
@@ -1807,10 +1812,11 @@ makeKeyValue keys expr = KeyValue (adapt <$> keys) Nothing expr
 {- This utility function converts
    `{ x = { y = { z = 1 } } }` to `{ x.y.z = 1 }`
 -}
-consolidateRecordLiteral :: Map Text (RecordField Src a) -> [KeyValue Src a]
+consolidateRecordLiteral
+    :: Map Text (RecordField Src a) -> [KeyValue Text Src a]
 consolidateRecordLiteral = concatMap adapt . Map.toList
   where
-    adapt :: (Text, RecordField Src a) -> [KeyValue Src a]
+    adapt :: (Text, RecordField Src a) -> [KeyValue Text Src a]
     adapt (key, RecordField mSrc0 val mSrc1 mSrc2)
         | not (containsComment mSrc2)
         , RecordLit m <- e
