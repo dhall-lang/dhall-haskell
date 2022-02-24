@@ -229,12 +229,12 @@ parseOptions = Options <$> parseSkip <*> parseNaturalInt <*> parseNatIntExceptio
     parseNaturalInt =
       Options.Applicative.switch
         (  Options.Applicative.long "preferNaturalInt"
-        <> Options.Applicative.help "Render Swagger Integer as Dhall Natural unless negative numbers included in range"
+        <> Options.Applicative.help "Render Swagger Integer as Dhall Natural unless negative numbers included in range, and Swagger IntOrString as Dhall NatOrString"
         )
     parseNatIntExceptions' =
       option [] $ Options.Applicative.option parseNatIntExceptions
        (  Options.Applicative.long "natIntExceptions"
-        <> Options.Applicative.help "List of Type.field that should be treated the opposite way to preferNaturalInt; e.g.: ContainerStateTerminated.exitCode,ContainerStateTerminated.signal"
+        <> Options.Applicative.help "List of Integer and/or IntOrString Type.field that should be treated the opposite way to preferNaturalInt; e.g.: ContainerStateTerminated.exitCode,ContainerStateTerminated.signal"
         <> Options.Applicative.metavar "EXCEPTIONS"
        )
     parsePrefixMap' =
@@ -348,6 +348,9 @@ main = do
           (RecordLit
               [ ( "IntOrString"
                 , Dhall.makeRecordField $ Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) $ Dhall.makeFieldSelection "IntOrString"
+                )
+              , ( "NatOrString"
+                , Dhall.makeRecordField $ Field (Embed (Convert.mkImport prefixMap [ ] "types.dhall")) $ Dhall.makeFieldSelection "NatOrString"
                 )
               , ( "Resource", mkEmbedField (Convert.mkImport prefixMap [ ] "typesUnion.dhall"))
               ]
