@@ -1,6 +1,6 @@
 Cabal-Version: 2.4
 Name: dhall
-Version: 1.41.0
+Version: 1.41.1
 Build-Type: Simple
 License: BSD-3-Clause
 License-File: LICENSE
