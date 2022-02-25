@@ -629,7 +629,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         return $ case x' of
             Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
                 case Dhall.Map.lookup kY ktsY of
-                    Just _ -> TextLit (Chunks [] kY)
+                    Just Nothing -> TextLit (Chunks [] kY)
+                    _ -> ShowConstructor x'
+            App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) _ ->
+                case Dhall.Map.lookup kY ktsY of
+                    Just (Just _) -> TextLit (Chunks [] kY)
                     _ -> ShowConstructor x'
             Some _ ->
                 TextLit (Chunks [] "Some")
@@ -940,7 +944,14 @@ isNormalized e0 = loop (Syntax.denote e0)
           RecordLit _ -> False
           _ -> loop x && all loop t
       ShowConstructor x -> loop x && case x of
-          Field (Union _) _ -> False
+          Field (Union kts) (Syntax.fieldSelectionLabel -> k) ->
+              case Dhall.Map.lookup k kts of
+                  Just Nothing -> False
+                  _            -> True
+          App (Field (Union kts) (Syntax.fieldSelectionLabel -> k)) _ ->
+              case Dhall.Map.lookup k kts of
+                  Just (Just _) -> False
+                  _             -> True
           Some _ -> False
           App None _ -> False
           _ -> True
