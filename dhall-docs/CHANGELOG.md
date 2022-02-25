@@ -1,3 +1,10 @@
+1.0.9
+
+* Build against `dhall-1.41`
+* [Relax upper bound on `path-io`](https://github.com/dhall-lang/dhall-haskell/pull/2385)
+* [Build against `optparse-applicative-0.17`](https://github.com/dhall-lang/dhall-haskell/pull/2376)
+* [Build against `text-2.0`](https://github.com/dhall-lang/dhall-haskell/pull/2356)
+
 1.0.8
 
 * [Support GHC 9.2](https://github.com/dhall-lang/dhall-haskell/pull/2328)

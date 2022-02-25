@@ -1,6 +1,6 @@
 Cabal-Version:  >=1.11
 Name:           dhall-openapi
-Version:        1.0.2
+Version:        1.0.4
 Homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-openapi#dhall-openapi
 Author:         Fabrizio Ferrai
 Maintainer:     Gabriel439@gmail.com
@@ -79,7 +79,7 @@ Library
     base                    >= 4.11.0.0  && < 5    ,
     aeson                   >= 1.0.0.0   && < 2.1  ,
     containers              >= 0.5.8.0   && < 0.7  ,
-    dhall                   >= 1.38.0    && < 1.41 ,
+    dhall                   >= 1.38.0    && < 1.42 ,
     prettyprinter           >= 1.7.0     && < 1.8  ,
     scientific              >= 0.3.0.0   && < 0.4  ,
     sort                    >= 1.0       && < 1.1  ,

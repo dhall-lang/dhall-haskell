@@ -1,3 +1,10 @@
+1.7.10
+
+* [Don't use scientific notation for large integers](https://github.com/dhall-lang/dhall-haskell/pull/2352)
+* Build against `dhall-1.41`
+* [Build against `text-2.0`](https://github.com/dhall-lang/dhall-haskell/pull/2356)
+* [Build against `optparse-applicative-0.17`](https://github.com/dhall-lang/dhall-haskell/pull/2376)
+
 1.7.9
 
 * [Build against `aeson-2.0`](https://github.com/dhall-lang/dhall-haskell/pull/2315)

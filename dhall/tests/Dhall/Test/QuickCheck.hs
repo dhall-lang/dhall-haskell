@@ -52,6 +52,7 @@ import Dhall.Core
     , Scheme (..)
     , URL (..)
     , Var (..)
+    , WithComponent (..)
     )
 import Dhall.Map              (Map)
 
@@ -297,6 +298,10 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (FunctionBinding s a) where
 instance Arbitrary s => Arbitrary (FieldSelection s) where
     arbitrary = FieldSelection <$> pure Nothing <*> label <*> pure Nothing
     shrink = genericShrink
+
+instance Arbitrary WithComponent where
+    arbitrary =
+        Test.QuickCheck.oneof [ pure WithQuestion, WithLabel <$> arbitrary ]
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =

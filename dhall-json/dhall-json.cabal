@@ -1,5 +1,5 @@
 Name: dhall-json
-Version: 1.7.9
+Version: 1.7.10
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -43,7 +43,7 @@ Library
         aeson-yaml                >= 1.1.0     && < 1.2 ,
         bytestring                                < 0.12,
         containers                >= 0.5.9     && < 0.7 ,
-        dhall                     >= 1.40.0    && < 1.41,
+        dhall                     >= 1.41.0    && < 1.42,
         exceptions                >= 0.8.3     && < 0.11,
         filepath                                  < 1.5 ,
         lens-family-core          >= 1.0.0     && < 2.2 ,

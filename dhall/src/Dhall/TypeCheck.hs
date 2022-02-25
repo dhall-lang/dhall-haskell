@@ -61,6 +61,7 @@ import Dhall.Syntax
     , PreferAnnotation (..)
     , RecordField (..)
     , Var (..)
+    , WithComponent (..)
     )
 
 import qualified Data.Foldable               as Foldable
@@ -1283,25 +1284,41 @@ infer typer = loop
 
             -- The purpose of this inner loop is to ensure that we only need to
             -- typecheck the record once
-            let with tE' ks v = do
-                    kTs' <- case tE' of
-                        VRecord kTs' -> return kTs'
-                        _            -> die (NotWithARecord e₀ (quote names tE'))
 
+            let with tE' ks v = case tE' of
+                  VRecord kTs' ->
                     case ks of
-                        k :| [] -> do
-                            tV' <- loop ctx v
+                      WithLabel k :| [] -> do
+                          tV' <- loop ctx v
 
-                            return (VRecord (Dhall.Map.insert k tV' kTs'))
-                        k₀ :| k₁ : ks' -> do
-                            let _T =
-                                    case Dhall.Map.lookup k₀ kTs' of
-                                        Just _T' -> _T'
-                                        Nothing  -> VRecord mempty
+                          return (VRecord (Dhall.Map.insert k tV' kTs'))
+                      WithLabel k₀ :| k₁ : ks' -> do
+                          let _T =
+                                  case Dhall.Map.lookup k₀ kTs' of
+                                      Just _T' -> _T'
+                                      Nothing  -> VRecord mempty
 
-                            tV' <- with _T (k₁ :| ks') v
+                          tV' <- with _T (k₁ :| ks') v
 
-                            return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+                          return (VRecord (Dhall.Map.insert k₀ tV' kTs'))
+                      WithQuestion :| _ -> do
+                          die NotALabelPath
+
+                  VOptional _O' -> do
+                    case ks of
+                      WithQuestion  :| [] -> do
+                        tV' <- loop ctx v
+                        if Eval.conv values _O' tV'
+                          then return (VOptional _O')
+                          else die OptionalWithTypeMismatch
+
+                      WithQuestion :| k₁ : ks' -> do
+                        tV' <- with _O' (k₁ :| ks') v
+                        return (VOptional tV')
+
+                      WithLabel k :| _ -> die (NotAQuestionPath k)
+
+                  _ -> die (NotWithARecord e₀ (quote names tE')) -- TODO: NotWithARecordOrOptional
 
             with tE₀' ks₀ v₀
 
@@ -1404,6 +1421,9 @@ data TypeMessage s a
     | CantListAppend (Expr s a) (Expr s a)
     | CantAdd (Expr s a) (Expr s a)
     | CantMultiply (Expr s a) (Expr s a)
+    | OptionalWithTypeMismatch
+    | NotALabelPath
+    | NotAQuestionPath Text
     | ShowConstructorNotOnUnion
     deriving (Show)
 
@@ -4559,6 +4579,120 @@ prettyTypeMessage (CantAdd expr0 expr1) =
 prettyTypeMessage (CantMultiply expr0 expr1) =
         buildNaturalOperator "*" expr0 expr1
 
+prettyTypeMessage OptionalWithTypeMismatch = ErrorMessages {..}
+  where
+    short = "❰with❱ cannot change the type of an ❰Optional❱ value"
+    hints = []
+    long =
+        "Explanation: The ❰with❱ keyword cannot change the type of a value stored inside \n\
+        \of a ❰Some❱ constructor                                                         \n\
+        \                                                                                \n\
+        \For example, this is a valid use of ❰with❱:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \           The old value has type ❰Natural❱                                     \n\
+        \           ⇩                                                                    \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ Some 1 with ? = 2 │                                                       \n\
+        \    └───────────────────┘                                                       \n\
+        \                      ⇧                                                         \n\
+        \                      ... which matches the type of the new value, which is also\n\
+        \                      ❰Natural❱                                                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the following example is not valid:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \           The old value has type ❰Natural❱                                     \n\
+        \           ⇩                                                                    \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ Some 1 with ? = True │                                                    \n\
+        \    └──────────────────────┘                                                    \n\
+        \                      ⇧                                                         \n\
+        \                      ... but the new value has type ❰Bool❱, which does not     \n\
+        \                      match                                                     \n"
+
+prettyTypeMessage NotALabelPath = ErrorMessages {..}
+  where
+    short = "Use a label to update a record"
+    hints = []
+    long =
+        "Explanation: The ❰with❱ keyword supports updating records by naming the field(s)\n\
+        \to update, but you provided a path component of ❰?❱, which only works on        \n\
+        \❰Optional❱ values and not records.                                              \n\
+        \                                                                                \n\
+        \For example, these are valid uses of ❰with❱ to update a record:                 \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ { x = 1 } with x = 2 │                                                    \n\
+        \    └──────────────────────┘                                                    \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────────────┐                                          \n\
+        \    │ { x = { y = 1 } } with x.y = 2 │                                          \n\
+        \    └────────────────────────────────┘                                          \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the following example is not valid:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ { x = 1 } with ? = 2 │                                                    \n\
+        \    └──────────────────────┘                                                    \n\
+        \                     ⇧                                                          \n\
+        \                     This path component is reserved for updating ❰Optional❱    \n\
+        \                     values and not records                                     \n\
+        \                                                                                \n\
+        \Note that you can update a field named ❰?❱ if you escape the path component,    \n\
+        \though:                                                                         \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌────────────────────────┐                                                  \n\
+        \    │ { ? = 1 } with `?` = 2 │                                                  \n\
+        \    └────────────────────────┘                                                  \n"
+
+prettyTypeMessage (NotAQuestionPath k) = ErrorMessages {..}
+  where
+    short = "Use ❰?❱ to update an ❰Optional❱ value"
+    hints = []
+    long =
+        "Explanation: The ❰with❱ keyword supports updating ❰Optional❱ values using a path\n\
+        \component of ❰?❱, but you provided a path component other than ❰?❱.             \n\
+        \                                                                                \n\
+        \For example, these are valid uses of ❰with❱ to update an ❰Optional❱ value:      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────┐                                                       \n\
+        \    │ Some 1 with ? = 2 │                                                       \n\
+        \    └───────────────────┘                                                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────┐                                             \n\
+        \    │ { x = Some 1 } with x.? = 2 │                                             \n\
+        \    └─────────────────────────────┘                                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but the following example is not valid:                                     \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────┐                                                    \n\
+        \    │ Some 1 with x = True │                                                    \n\
+        \    └──────────────────────┘                                                    \n\
+        \                  ⇧                                                             \n\
+        \                  This path component should have been ❰?❱                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You provided this path component:                                               \n\
+        \                                                                                \n\
+        \" <> txt0 <> "\n\
+        \                                                                                \n\
+        \... which perhaps should have been ❰?❱.                                         \n"
+      where
+        txt0 = insert k
+
 prettyTypeMessage ShowConstructorNotOnUnion = ErrorMessages {..}
   where
       short = "ShowConstructorNotOnUnion"
@@ -4846,6 +4980,12 @@ messageExpressions f m = case m of
         CantAdd <$> f a <*> f b
     CantMultiply a b ->
         CantMultiply <$> f a <*> f b
+    OptionalWithTypeMismatch ->
+        pure OptionalWithTypeMismatch
+    NotALabelPath ->
+        pure NotALabelPath
+    NotAQuestionPath k ->
+        pure (NotAQuestionPath k)
     ShowConstructorNotOnUnion ->
         pure ShowConstructorNotOnUnion
 

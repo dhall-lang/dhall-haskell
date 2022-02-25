@@ -388,7 +388,11 @@ parsers embedded = Parsers{..}
                     bs <- some (do
                         try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
 
-                        keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
+                        let withComponent =
+                                    fmap WithLabel anyLabelOrSome
+                                <|> fmap (\_ -> WithQuestion) (text "?")
+
+                        keys <- Combinators.NonEmpty.sepBy1 withComponent (try (whitespace *> _dot) *> whitespace)
 
                         whitespace
 
