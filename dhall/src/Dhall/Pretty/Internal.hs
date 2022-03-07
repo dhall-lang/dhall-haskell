@@ -1900,7 +1900,8 @@ layoutOpts =
     Pretty.defaultLayoutOptions
         { Pretty.layoutPageWidth = Pretty.AvailablePerLine 80 1.0 }
 
-{-| Convert an expression representing a temporal value to `Text`, if possible
+{-| Convert an expression representing a temporal value to `Data.Text.Text`, if
+    possible
 
     This is used by downstream integrations (e.g. `dhall-json` for treating
     temporal values as strings
