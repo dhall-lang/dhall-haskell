@@ -1968,6 +1968,7 @@ import Dhall
 -- $substitutions
 --
 -- Substitutions are another way to extend the language.
+--
 -- Suppose we have the following Haskell datatype:
 --
 -- > data Result = Failure Integer | Success String
@@ -1985,22 +1986,9 @@ import Dhall
 -- Right now it is quite easy to keep these two definitions (the one in Haskell source and the one in the Dhall file) synchronized:
 -- If we implement a new feature in the Haskell source we update the corresponding type in the Dhall file.
 -- But what happens if our application is growing and our Result type contains e.g. 10 unions with possible types embedded in it?
--- Maintaining the code will get tedious. Luckily we can extract the correct Dhall type from the Haskell definition:
 --
--- > resultDecoder :: Dhall.Decoder Result
--- > resultDecoder = Dhall.auto
--- >
--- > resultType :: Expr Src Void
--- > resultType = maximum $ Dhall.expected resultDecoder
--- >
--- > resultTypeString :: String
--- > resultTypeString = show $ pretty resultType
---
--- Now we just have to inject that type into the Dhall code and we are done. One common way to do that is to wrap the import of example.dhall in a let expression:
---
--- > Dhall.input (Dhall.auto :: Dhall.Decoder Result) ("let Result = " <> Data.Text.pack resultTypeString <> " in ./example.dhall")
---
--- Now we can omit the definition of Result in our example.dhall file. While this will work perfectly Dhall provides a cleaner solution for our \"injection problem\":
+-- We can override the interpreter's @evaluateSettings@ with a custom set of
+-- substitutions, like this:
 --
 -- > {-# LANGUAGE OverloadedStrings #-}
 -- >
