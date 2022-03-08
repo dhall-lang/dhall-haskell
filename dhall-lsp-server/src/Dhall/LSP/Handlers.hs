@@ -1,5 +1,8 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE CPP            #-}
+{-# LANGUAGE DataKinds      #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE MultiWayIf     #-}
 
 module Dhall.LSP.Handlers where
 
@@ -55,104 +58,45 @@ import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
 import Dhall.LSP.State
 
 import Control.Applicative              ((<|>))
-import Control.Concurrent.MVar
-import Control.Lens                     (assign, modifying, use, uses, (^.))
+import Control.Lens                     (assign, modifying, use, (^.))
 import Control.Monad                    (forM, guard)
-import Control.Monad.Trans              (liftIO)
-import Control.Monad.Trans.Except       (catchE, runExceptT, throwE)
-import Control.Monad.Trans.State.Strict (execStateT)
-import Data.Default                     (def)
+import Control.Monad.Trans              (lift, liftIO)
+import Control.Monad.Trans.Except       (catchE, throwE)
+import Data.Aeson                       (FromJSON(..), Value(..))
 import Data.Maybe                       (maybeToList)
 import Data.Text                        (Text, isPrefixOf)
+import Language.LSP.Server              (Handlers, LspT)
+import Language.LSP.Types               hiding (Range(..), line)
+import Language.LSP.Types.Lens
 import System.FilePath
 import Text.Megaparsec                  (SourcePos (..), unPos)
 
-import qualified Data.Aeson                      as J
-import qualified Data.HashMap.Strict             as HashMap
-import qualified Data.Map.Strict                 as Map
-import qualified Data.Rope.UTF16                 as Rope
-import qualified Data.Text                       as Text
-import qualified Language.Haskell.LSP.Core       as LSP
-import qualified Language.Haskell.LSP.Messages   as LSP
-import qualified Language.Haskell.LSP.Types      as J
-import qualified Language.Haskell.LSP.Types.Lens as J
-import qualified Language.Haskell.LSP.VFS        as LSP
-import qualified Network.URI                     as URI
-import qualified Network.URI.Encode              as URI
+import qualified Data.Aeson              as Aeson
+import qualified Data.HashMap.Strict     as HashMap
+import qualified Data.Map.Strict         as Map
+import qualified Data.Rope.UTF16         as Rope
+import qualified Data.Text               as Text
+import qualified Language.LSP.Server     as LSP
+import qualified Language.LSP.Types      as LSP.Types
+import qualified Language.LSP.VFS        as LSP
+import qualified Network.URI             as URI
+import qualified Network.URI.Encode      as URI
 
-
--- Workaround to make our single-threaded LSP fit dhall-lsp's API, which
--- expects a multi-threaded implementation. Reports errors to the user via the
--- LSP `ShowMessage` notification.
-wrapHandler
-  :: MVar ServerState
-  -> (a -> HandlerM ())
-  -> a
-  -> IO ()
-wrapHandler vstate handle message =
-  modifyMVar_ vstate $
-    execStateT . runExceptT $
-      catchE (handle message) lspUserMessage
-
-getServerConfig :: HandlerM ServerConfig
-getServerConfig = do
-  lsp <- use lspFuncs
-  mConfig <- liftIO (LSP.config lsp)
-  case mConfig of
-    Just config -> return config
-    Nothing -> return def
-
-lspUserMessage :: (Severity, Text) -> HandlerM ()
-lspUserMessage (Log, text) =
-  lspSendNotification LSP.NotLogMessage J.WindowLogMessage
-    $ J.LogMessageParams J.MtLog text
-lspUserMessage (severity, text) =
-  lspSendNotification LSP.NotShowMessage J.WindowShowMessage
-    $ J.ShowMessageParams severity' text
-  where severity' = case severity of
-          Error -> J.MtError
-          Warning -> J.MtWarning
-          Info -> J.MtInfo
-          Log -> J.MtLog
-
-
-lspSend :: LSP.FromServerMessage -> HandlerM ()
-lspSend msg = do
-  send <- use (lspFuncs . sendFunc)
-  liftIO $ send msg
-
-lspRespond :: (J.ResponseMessage response -> LSP.FromServerMessage)
-  -> J.RequestMessage J.ClientMethod request response -> response -> HandlerM ()
-lspRespond constructor request response =
-  lspSend . constructor $ LSP.makeResponseMessage request response
-
-lspSendNotification
-  :: (J.NotificationMessage J.ServerMethod params -> LSP.FromServerMessage)
-  -> J.ServerMethod -> params -> HandlerM ()
-lspSendNotification constructor method params =
-  lspSend . constructor $ J.NotificationMessage "2.0" method params
-
-lspRequest
-  :: (J.RequestMessage J.ServerMethod params response -> LSP.FromServerMessage)
-  -> J.ServerMethod -> params -> HandlerM ()
-lspRequest constructor method params = do
-  getNextReqId <- uses lspFuncs LSP.getNextReqId
-  reqId <- liftIO getNextReqId
-  lspSend . constructor $ J.RequestMessage "2.0" reqId method params
+liftLSP :: LspT ServerConfig IO a -> HandlerM a
+liftLSP m = lift (lift m)
 
 -- | A helper function to query haskell-lsp's VFS.
-readUri :: J.Uri -> HandlerM Text
-readUri uri = do
-  getVirtualFileFunc <- uses lspFuncs LSP.getVirtualFileFunc
-  mVirtualFile <- liftIO $ getVirtualFileFunc (J.toNormalizedUri uri)
+readUri :: Uri -> HandlerM Text
+readUri uri_ = do
+  mVirtualFile <- liftLSP (LSP.getVirtualFile (LSP.Types.toNormalizedUri uri_))
   case mVirtualFile of
     Just (LSP.VirtualFile _ _ rope) -> return (Rope.toText rope)
-    Nothing -> fail $ "Could not find " <> show uri <> " in VFS."
+    Nothing -> throwE (Error, "Could not find " <> Text.pack (show uri_) <> " in VFS.")
 
-loadFile :: J.Uri -> HandlerM (Expr Src Void)
-loadFile uri = do
-  txt <- readUri uri
-  fileIdentifier <- fileIdentifierFromUri uri
+loadFile :: Uri -> HandlerM (Expr Src Void)
+loadFile uri_ = do
+  txt <- readUri uri_
+  fileIdentifier <- fileIdentifierFromUri uri_
   cache <- use importCache
 
   expr <- case parse txt of
@@ -169,109 +113,124 @@ loadFile uri = do
   return expr'
 
 -- helper
-fileIdentifierFromUri :: J.Uri -> HandlerM FileIdentifier
-fileIdentifierFromUri uri =
-  let mFileIdentifier = fmap fileIdentifierFromFilePath (J.uriToFilePath uri)
-                        <|> (do uri' <- (URI.parseURI . Text.unpack . J.getUri) uri
+fileIdentifierFromUri :: Uri -> HandlerM FileIdentifier
+fileIdentifierFromUri uri_ =
+  let mFileIdentifier = fmap fileIdentifierFromFilePath (uriToFilePath uri_)
+                        <|> (do uri' <- (URI.parseURI . Text.unpack . getUri) uri_
                                 fileIdentifierFromURI uri')
   in case mFileIdentifier of
     Just fileIdentifier -> return fileIdentifier
-    Nothing -> throwE (Error, J.getUri uri <> " is not a valid name for a dhall file.")
+    Nothing -> throwE (Error, getUri uri_ <> " is not a valid name for a dhall file.")
 
 -- helper
-rangeToJSON :: Range -> J.Range
-rangeToJSON (Range (x1,y1) (x2,y2)) = J.Range (J.Position x1 y1) (J.Position x2 y2)
+rangeToJSON :: Range -> LSP.Types.Range
+rangeToJSON (Range (x1,y1) (x2,y2)) =
+    LSP.Types.Range (Position x1 y1) (Position x2 y2)
 
-hoverExplain :: J.HoverRequest -> HandlerM ()
-hoverExplain request = do
-  let uri = request ^. J.params . J.textDocument . J.uri
-      J.Position line col = request ^. J.params . J.position
-  mError <- uses errors $ Map.lookup uri
-  let isHovered (Diagnosis _ (Just (Range left right)) _) =
-        left <= (line,col) && (line,col) <= right
-      isHovered _ = False
+hoverHandler :: Handlers HandlerM
+hoverHandler =
+    LSP.requestHandler STextDocumentHover \request respond -> do
+        let uri_ = request^.params.textDocument.uri
 
-      hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) =
-        let _range = Just $ J.Range (uncurry J.Position left)
-                                    (uncurry J.Position right)
-            encodedDiag = URI.encode (Text.unpack diagnosis)
-            command = "[Explain error](dhall-explain:?"
-                        <> Text.pack encodedDiag <> " )"
-            _contents = J.HoverContents $ J.MarkupContent J.MkMarkdown command
-        in Just J.Hover { .. }
-      hoverFromDiagnosis _ = Nothing
+        let Position{ _line, _character } = request^.params.position
 
-      mHover = do err <- mError
-                  explanation <- explain err
-                  guard (isHovered explanation)
-                  hoverFromDiagnosis explanation
-  lspRespond LSP.RspHover request mHover
+        errorMap <- use errors
 
-hoverType :: J.HoverRequest -> HandlerM ()
-hoverType request = do
-  let uri = request ^. J.params . J.textDocument . J.uri
-      J.Position line col = request ^. J.params . J.position
-  expr <- loadFile uri
-  (welltyped, _) <- case typecheck expr of
-    Left _ -> throwE (Info, "Can't infer type; code does not type-check.")
-    Right wt -> return wt
-  case typeAt (line,col) welltyped of
-    Left err -> throwE (Error, Text.pack err)
-    Right (mSrc, typ) ->
-      let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
-          _contents = J.HoverContents $ J.MarkupContent J.MkPlainText (pretty typ)
-          hover = J.Hover{..}
-      in lspRespond LSP.RspHover request (Just hover)
+        case Map.lookup uri_ errorMap of
+            Nothing -> do
+                expr <- loadFile uri_
+                (welltyped, _) <- case typecheck expr of
+                    Left  _  -> throwE (Info, "Can't infer type; code does not type-check.")
+                    Right wt -> return wt
+                case typeAt (_line, _character) welltyped of
+                    Left err -> throwE (Error, Text.pack err)
+                    Right (mSrc, typ) -> do
+                        let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
 
-hoverHandler :: J.HoverRequest -> HandlerM ()
-hoverHandler request = do
-  let uri = request ^. J.params . J.textDocument . J.uri
-  errorMap <- use errors
-  case Map.lookup uri errorMap of
-    Nothing -> hoverType request
-    _ -> hoverExplain request
+                        let _contents = HoverContents (MarkupContent MkPlainText (pretty typ))
+                        respond (Right (Just Hover{ _contents, _range }))
+            Just err -> do
+                let isHovered (Diagnosis _ (Just (Range left right)) _) =
+                        left <= (_line, _character) && (_line, _character) <= right
+                    isHovered _ =
+                        False
+
+                let hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = do
+                        let _range = Just (rangeToJSON (Range left right))
+                            encodedDiag = URI.encode (Text.unpack diagnosis)
+
+                            _kind = MkMarkdown
+
+                            _value =
+                                    "[Explain error](dhall-explain:?"
+                                <>  Text.pack encodedDiag
+                                <>  " )"
+
+                            _contents = HoverContents MarkupContent{..}
+                        Just Hover{ _contents, _range }
+                    hoverFromDiagnosis _ =
+                        Nothing
+
+                let mHover = do
+                        explanation <- explain err
+
+                        guard (isHovered explanation)
+
+                        hoverFromDiagnosis explanation
+
+                respond (Right mHover)
+
+documentLinkHandler :: Handlers HandlerM
+documentLinkHandler =
+    LSP.requestHandler STextDocumentDocumentLink \request respond -> do
+        let uri_ = request^.params.textDocument.uri
+
+        path <- case uriToFilePath uri_ of
+            Nothing ->
+                throwE (Log, "Could not process document links; failed to convert URI to file path.")
+            Just p ->
+                return p
+
+        txt <- readUri uri_
+
+        expr <- case parse txt of
+            Right e ->
+                return e
+            Left _ ->
+                throwE (Log, "Could not process document links; did not parse.")
+
+        let imports = embedsWithRanges expr :: [(Range, Import)]
+
+        let basePath = takeDirectory path
+
+        let go :: (Range, Import) -> IO [DocumentLink]
+            go (range_, Import (ImportHashed _ (Local prefix file)) _) = do
+              filePath <- localToPath prefix file
+              let filePath' = basePath </> filePath  -- absolute file path
+              let _range = rangeToJSON range_
+              let _target = Just (filePathToUri filePath')
+              let _tooltip = Nothing
+              let _xdata = Nothing
+              return [DocumentLink {..}]
+
+            go (range_, Import (ImportHashed _ (Remote url)) _) = do
+              let _range = rangeToJSON range_
+              let url' = url { headers = Nothing }
+              let _target = Just (Uri (pretty url'))
+              let _tooltip = Nothing
+              let _xdata = Nothing
+              return [DocumentLink {..}]
+
+            go _ = return []
+
+        links <- liftIO $ mapM go imports
+        respond (Right (List (concat links)))
 
 
-documentLinkHandler :: J.DocumentLinkRequest -> HandlerM ()
-documentLinkHandler req = do
-  let uri = req ^. J.params . J.textDocument . J.uri
-  path <- case J.uriToFilePath uri of
-    Nothing -> throwE (Log, "Could not process document links; failed to convert URI to file path.")
-    Just p -> return p
-  txt <- readUri uri
-  expr <- case parse txt of
-    Right e -> return e
-    Left _ -> throwE (Log, "Could not process document links; did not parse.")
-
-  let imports = embedsWithRanges expr :: [(Range, Import)]
-
-  let basePath = takeDirectory path
-
-  let go :: (Range, Import) -> IO [J.DocumentLink]
-      go (range, Import (ImportHashed _ (Local prefix file)) _) = do
-        filePath <- localToPath prefix file
-        let filePath' = basePath </> filePath  -- absolute file path
-        let url' = J.filePathToUri filePath'
-        let _range = rangeToJSON range
-        let _target = Just (J.getUri url')
-        return [J.DocumentLink {..}]
-
-      go (range, Import (ImportHashed _ (Remote url)) _) = do
-        let _range = rangeToJSON range
-        let url' = url { headers = Nothing }
-        let _target = Just (pretty url')
-        return [J.DocumentLink {..}]
-
-      go _ = return []
-
-  links <- liftIO $ mapM go imports
-  lspRespond LSP.RspDocumentLink req (J.List (concat links))
-
-
-diagnosticsHandler :: J.Uri -> HandlerM ()
-diagnosticsHandler uri = do
-  txt <- readUri uri
-  fileIdentifier <- fileIdentifierFromUri uri
+diagnosticsHandler :: Uri -> HandlerM ()
+diagnosticsHandler _uri = do
+  txt <- readUri _uri
+  fileIdentifier <- fileIdentifierFromUri _uri
   -- make sure we don't keep a stale version around
   modifying importCache (invalidate fileIdentifier)
   cache <- use importCache
@@ -295,140 +254,178 @@ diagnosticsHandler uri = do
           Right expr -> suggest expr
           _ -> []
 
-      suggestionToDiagnostic Suggestion {..} =
-        let _range = rangeToJSON range
-            _severity = Just J.DsHint
+      suggestionToDiagnostic Suggestion { range = range_, .. } =
+        let _range = rangeToJSON range_
+            _severity = Just DsHint
             _source = Just "Dhall.Lint"
             _code = Nothing
             _message = suggestion
             _tags = Nothing
             _relatedInformation = Nothing
-        in J.Diagnostic {..}
+        in Diagnostic {..}
 
-      diagnosisToDiagnostic Diagnosis {..} =
-        let _range = case range of
-              Just range' ->
-                rangeToJSON range'
-              Nothing -> J.Range (J.Position 0 0) (J.Position 0 0)
-            _severity = Just J.DsError
+      diagnosisToDiagnostic Diagnosis { range = range_, .. } =
+        let _range = case range_ of
+              Just range' -> rangeToJSON range'
+              Nothing     -> LSP.Types.Range (Position 0 0) (Position 0 0)
+            _severity = Just DsError
             _source = Just doctor
             _code = Nothing
             _tags = Nothing
             _message = diagnosis
             _relatedInformation = Nothing
-        in J.Diagnostic {..}
+        in Diagnostic {..}
 
-      diagnostics = concatMap (map diagnosisToDiagnostic . diagnose) (maybeToList errs)
-                     ++ map suggestionToDiagnostic suggestions
+  modifying errors (Map.alter (const errs) _uri)  -- cache errors
 
-  modifying errors (Map.alter (const errs) uri)  -- cache errors
-  lspSendNotification LSP.NotPublishDiagnostics J.TextDocumentPublishDiagnostics
-                      (J.PublishDiagnosticsParams uri (J.List diagnostics))
-
-
-documentFormattingHandler :: J.DocumentFormattingRequest -> HandlerM ()
-documentFormattingHandler request = do
-  let uri = request ^. J.params . J.textDocument . J.uri
-  txt <- readUri uri
-
-  (header, expr) <- case parseWithHeader txt of
-    Right res -> return res
-    _ -> throwE (Warning, "Failed to format dhall code; parse error.")
-
-  ServerConfig {..} <- getServerConfig
-
-  let formatted = formatExprWithHeader chosenCharacterSet expr header
-      numLines = Text.length txt
-      range = J.Range (J.Position 0 0) (J.Position numLines 0)
-      edits = J.List [J.TextEdit range formatted]
-
-  lspRespond LSP.RspDocumentFormatting request edits
+  let _version = Nothing
+  let _diagnostics =
+          List
+              (   concatMap (map diagnosisToDiagnostic . diagnose) (maybeToList errs)
+              ++  map suggestionToDiagnostic suggestions
+              )
 
 
-executeCommandHandler :: J.ExecuteCommandRequest -> HandlerM ()
-executeCommandHandler request
-  | command == "dhall.server.lint" = executeLintAndFormat request
-  | command == "dhall.server.annotateLet" = executeAnnotateLet request
-  | command == "dhall.server.freezeImport" = executeFreezeImport request
-  | command == "dhall.server.freezeAllImports" = executeFreezeAllImports request
-  | otherwise = throwE (Warning, "Command '" <> command
-                                   <> "' not known; ignored.")
-  where command = request ^. J.params . J.command
+  liftLSP (LSP.sendNotification STextDocumentPublishDiagnostics PublishDiagnosticsParams{ _uri, _version, _diagnostics })
 
-getCommandArguments :: J.FromJSON a => J.ExecuteCommandRequest -> HandlerM a
+documentFormattingHandler :: Handlers HandlerM
+documentFormattingHandler =
+    LSP.requestHandler STextDocumentFormatting \request respond -> do
+        let _uri = request^.params.textDocument.uri
+
+        txt <- readUri _uri
+
+        (header, expr) <- case parseWithHeader txt of
+          Right res -> return res
+          _ -> throwE (Warning, "Failed to format dhall code; parse error.")
+
+        ServerConfig{..} <- liftLSP LSP.getConfig
+
+        let numLines = Text.length txt
+        let _newText= formatExprWithHeader chosenCharacterSet expr header
+        let _range = LSP.Types.Range (Position 0 0) (Position numLines 0)
+
+        respond (Right (List [TextEdit{..}]))
+
+executeCommandHandler :: Handlers HandlerM
+executeCommandHandler =
+    LSP.requestHandler SWorkspaceExecuteCommand \request respond -> do
+        let command_ = request^.params.command
+        if  | command_ == "dhall.server.lint" ->
+                executeLintAndFormat request respond
+            | command_ == "dhall.server.annotateLet" ->
+                executeAnnotateLet request
+            | command_ == "dhall.server.freezeImport" ->
+                executeFreezeImport request
+            | command_ == "dhall.server.freezeAllImports" ->
+                executeFreezeAllImports request
+            | otherwise -> do
+                throwE
+                    ( Warning
+                    , "Command '" <> command_ <> "' not known; ignored."
+                    )
+
+getCommandArguments
+    :: FromJSON a => RequestMessage 'WorkspaceExecuteCommand -> HandlerM a
+-- (HasParams s a, FromJSON a) => s -> HandlerM a
 getCommandArguments request = do
-  json <- case request ^. J.params . J.arguments of
-    Just (J.List (x : _)) -> return x
+  json <- case request ^. params . arguments of
+    Just (List (x : _)) -> return x
     _ -> throwE (Error, "Failed to execute command; arguments missing.")
-  case J.fromJSON json of
-    J.Success args -> return args
-    _ -> throwE (Error, "Failed to execute command; failed to parse arguments.")
-
+  case Aeson.fromJSON json of
+    Aeson.Success args ->
+        return args
+    _ ->
+        throwE (Error, "Failed to execute command; failed to parse arguments.")
 
 -- implements dhall.server.lint
-executeLintAndFormat :: J.ExecuteCommandRequest -> HandlerM ()
-executeLintAndFormat request = do
-  uri <- getCommandArguments request
-  txt <- readUri uri
+executeLintAndFormat
+    :: RequestMessage 'WorkspaceExecuteCommand
+    -> (Either a Value -> HandlerM b)
+    -> HandlerM ()
+executeLintAndFormat request respond = do
+  uri_ <- getCommandArguments request
+  txt <- readUri uri_
 
   (header, expr) <- case parseWithHeader txt of
     Right res -> return res
     _ -> throwE (Warning, "Failed to lint dhall code; parse error.")
 
-  ServerConfig {..} <- getServerConfig
+  ServerConfig{..} <- liftLSP LSP.getConfig
 
-  let linted = formatExprWithHeader chosenCharacterSet (lint expr) header
-      numLines = Text.length txt
-      range = J.Range (J.Position 0 0) (J.Position numLines 0)
-      edit = J.WorkspaceEdit
-        (Just (HashMap.singleton uri (J.List [J.TextEdit range linted]))) Nothing
+  let numLines = Text.length txt
 
-  lspRespond LSP.RspExecuteCommand request J.Null
-  lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
-    (J.ApplyWorkspaceEditParams edit)
+  let _newText = formatExprWithHeader chosenCharacterSet (lint expr) header
 
+  let _range = LSP.Types.Range (Position 0 0) (Position numLines 0)
 
-executeAnnotateLet :: J.ExecuteCommandRequest -> HandlerM ()
+  let _edit =
+          WorkspaceEdit
+              { _changes = Just (HashMap.singleton uri_ (List [TextEdit{..}]))
+              , _documentChanges = Nothing
+              , _changeAnnotations = Nothing
+              }
+
+  let _label = Nothing
+
+  _ <- respond (Right Aeson.Null)
+
+  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _label, _edit } nullHandler)
+
+  return ()
+
+executeAnnotateLet
+    :: RequestMessage 'WorkspaceExecuteCommand
+    -> HandlerM ()
 executeAnnotateLet request = do
-  args <- getCommandArguments request :: HandlerM J.TextDocumentPositionParams
-  let uri = args ^. J.textDocument . J.uri
-      line = args ^. J.position . J.line
-      col = args ^. J.position . J.character
+  args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
+  let uri_ = args ^. textDocument . uri
+      line_ = args ^. position . line
+      col_ = args ^. position . character
 
-  expr <- loadFile uri
+  expr <- loadFile uri_
   (welltyped, _) <- case typecheck expr of
     Left _ -> throwE (Warning, "Failed to annotate let binding; not well-typed.")
     Right e -> return e
 
-  ServerConfig {..} <- getServerConfig
+  ServerConfig{..} <- liftLSP LSP.getConfig
 
   (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, annotExpr)
-    <- case annotateLet (line, col) welltyped of
+    <- case annotateLet (line_, col_) welltyped of
       Right x -> return x
       Left msg -> throwE (Warning, Text.pack msg)
 
-  let range = J.Range (J.Position (unPos x1 - 1) (unPos y1 - 1))
-                      (J.Position (unPos x2 - 1) (unPos y2 - 1))
-      txt = formatExpr chosenCharacterSet annotExpr
-      edit = J.WorkspaceEdit
-        (Just (HashMap.singleton uri (J.List [J.TextEdit range txt]))) Nothing
+  let _range = LSP.Types.Range (Position (unPos x1 - 1) (unPos y1 - 1))
+                      (Position (unPos x2 - 1) (unPos y2 - 1))
 
-  lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
-    (J.ApplyWorkspaceEditParams edit)
+  let _newText= formatExpr chosenCharacterSet annotExpr
 
+  let _edit = WorkspaceEdit
+          { _changes = Just (HashMap.singleton uri_ (List [TextEdit{..}]))
+          , _documentChanges = Nothing
+          , _changeAnnotations = Nothing
+          }
 
-executeFreezeAllImports :: J.ExecuteCommandRequest -> HandlerM ()
+  let _label = Nothing
+
+  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _label, _edit } nullHandler)
+
+  return ()
+
+executeFreezeAllImports
+    :: RequestMessage 'WorkspaceExecuteCommand
+    -> HandlerM ()
 executeFreezeAllImports request = do
-  uri <- getCommandArguments request
+  uri_ <- getCommandArguments request
 
-  fileIdentifier <- fileIdentifierFromUri uri
-  txt <- readUri uri
+  fileIdentifier <- fileIdentifierFromUri uri_
+  txt <- readUri uri_
   expr <- case parse txt of
     Right e -> return e
     Left _ -> throwE (Warning, "Could not freeze imports; did not parse.")
 
   let importRanges = getAllImportsWithHashPositions expr
-  edits <- forM importRanges $ \(import_, Range (x1, y1) (x2, y2)) -> do
+  edits_ <- forM importRanges $ \(import_, Range (x1, y1) (x2, y2)) -> do
     cache <- use importCache
     let importExpr = Embed (stripHash import_)
 
@@ -438,37 +435,46 @@ executeFreezeAllImports request = do
       Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
     assign importCache cache'
 
-    let range = J.Range (J.Position x1 y1) (J.Position x2 y2)
-    return (J.TextEdit range (" " <> hash))
+    let _range = LSP.Types.Range (Position x1 y1) (Position x2 y2)
+    let _newText = " " <> hash
+    return TextEdit{..}
 
-  let workspaceEdit = J.WorkspaceEdit
-        (Just (HashMap.singleton uri (J.List edits))) Nothing
-  lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
-    (J.ApplyWorkspaceEditParams workspaceEdit)
+  let _edit = WorkspaceEdit
+          { _changes = Just (HashMap.singleton uri_ (List edits_))
+          , _documentChanges = Nothing
+          , _changeAnnotations = Nothing
+          }
 
+  let _label = Nothing
 
-executeFreezeImport :: J.ExecuteCommandRequest -> HandlerM ()
+  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
+
+  return ()
+
+executeFreezeImport
+    :: RequestMessage 'WorkspaceExecuteCommand
+    -> HandlerM ()
 executeFreezeImport request = do
-  args <- getCommandArguments request :: HandlerM J.TextDocumentPositionParams
-  let uri = args ^. J.textDocument . J.uri
-      line = args ^. J.position . J.line
-      col = args ^. J.position . J.character
+  args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
+  let uri_  = args ^. textDocument . uri
+  let line_ = args ^. position . line
+  let col_  = args ^. position . character
 
-  txt <- readUri uri
+  txt <- readUri uri_
   expr <- case parse txt of
     Right e -> return e
     Left _ -> throwE (Warning, "Could not freeze import; did not parse.")
 
   (src, import_)
-    <- case exprAt (line, col) expr of
+    <- case exprAt (line_, col_) expr of
       Just (Note src (Embed i)) -> return (src, i)
       _ -> throwE (Warning, "You weren't pointing at an import!")
 
   Range (x1, y1) (x2, y2) <- case getImportHashPosition src of
-      Just range -> return range
+      Just range_ -> return range_
       Nothing -> throwE (Error, "Failed to re-parse import!")
 
-  fileIdentifier <- fileIdentifierFromUri uri
+  fileIdentifier <- fileIdentifierFromUri uri_
   cache <- use importCache
   let importExpr = Embed (stripHash import_)
 
@@ -478,116 +484,128 @@ executeFreezeImport request = do
     Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
   assign importCache cache'
 
-  let range = J.Range (J.Position x1 y1) (J.Position x2 y2)
-      edit = J.WorkspaceEdit
-        (Just (HashMap.singleton uri (J.List [J.TextEdit range (" " <> hash)]))) Nothing
+  let _range = LSP.Types.Range (Position x1 y1) (Position x2 y2)
+  let _newText = " " <> hash
 
-  lspRequest LSP.ReqApplyWorkspaceEdit J.WorkspaceApplyEdit
-    (J.ApplyWorkspaceEditParams edit)
+  let _edit = WorkspaceEdit
+          { _changes = Just (HashMap.singleton uri_ (List [TextEdit{..}]))
+          , _documentChanges = Nothing
+          , _changeAnnotations = Nothing
+          }
 
-completionHandler :: J.CompletionRequest -> HandlerM ()
-completionHandler request = do
-  let uri = request ^. J.params . J.textDocument . J.uri
-      line = request ^. J.params . J.position . J.line
-      col = request ^. J.params . J.position . J.character
+  let _label = Nothing
 
-  txt <- readUri uri
-  let (completionLeadup, completionPrefix) = completionQueryAt txt (line, col)
+  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
 
-  let computeCompletions
-        -- environment variable
-        | "env:" `isPrefixOf` completionPrefix =
-          liftIO completeEnvironmentImport
+  return ()
 
-        -- local import
-        | any (`isPrefixOf` completionPrefix) [ "/", "./", "../", "~/" ] = do
-          let relativeTo | Just path <- J.uriToFilePath uri = path
+completionHandler :: Handlers HandlerM
+completionHandler =
+  LSP.requestHandler STextDocumentCompletion \request respond -> do
+    let uri_ = request ^. params . textDocument . uri
+        line_ = request ^. params . position . line
+        col_ = request ^. params . position . character
+
+    txt <- readUri uri_
+    let (completionLeadup, completionPrefix) = completionQueryAt txt (line_, col_)
+
+    let computeCompletions
+          -- environment variable
+          | "env:" `isPrefixOf` completionPrefix =
+            liftIO completeEnvironmentImport
+
+          -- local import
+          | any (`isPrefixOf` completionPrefix) [ "/", "./", "../", "~/" ] = do
+            let relativeTo | Just path <- uriToFilePath uri_ = path
                          | otherwise = "."
-          liftIO $ completeLocalImport relativeTo (Text.unpack completionPrefix)
+            liftIO $ completeLocalImport relativeTo (Text.unpack completionPrefix)
 
-        -- record projection / union constructor
-        | (target, _) <- Text.breakOnEnd "." completionPrefix
-        , not (Text.null target) = do
-          let bindersExpr = binderExprFromText completionLeadup
+          -- record projection / union constructor
+          | (target_, _) <- Text.breakOnEnd "." completionPrefix
+          , not (Text.null target_) = do
+            let bindersExpr = binderExprFromText completionLeadup
 
-          fileIdentifier <- fileIdentifierFromUri uri
-          cache <- use importCache
-          loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+            fileIdentifier <- fileIdentifierFromUri uri_
+            cache <- use importCache
+            loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
 
-          (cache', bindersExpr') <-
-            case loadedBinders of
-              Right (cache', binders) ->
-                return (cache', binders)
-              Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
+            (cache', bindersExpr') <-
+              case loadedBinders of
+                Right (cache', binders) ->
+                  return (cache', binders)
+                Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
 
-          let completionContext = buildCompletionContext bindersExpr'
+            let completionContext = buildCompletionContext bindersExpr'
 
-          targetExpr <- case parse (Text.dropEnd 1 target) of
-            Right e -> return e
-            Left _ -> throwE (Log, "Could not complete projection; prefix did not parse.")
+            targetExpr <- case parse (Text.dropEnd 1 target_) of
+              Right e -> return e
+              Left _ -> throwE (Log, "Could not complete projection; prefix did not parse.")
 
-          loaded' <- liftIO $ load fileIdentifier targetExpr cache'
-          case loaded' of
-            Right (cache'', targetExpr') -> do
-              assign importCache cache''
-              return (completeProjections completionContext targetExpr')
-            Left _ -> return []
+            loaded' <- liftIO $ load fileIdentifier targetExpr cache'
+            case loaded' of
+              Right (cache'', targetExpr') -> do
+                assign importCache cache''
+                return (completeProjections completionContext targetExpr')
+              Left _ -> return []
 
-        -- complete identifiers in scope
-        | otherwise = do
-          let bindersExpr = binderExprFromText completionLeadup
+          -- complete identifiers in scope
+          | otherwise = do
+            let bindersExpr = binderExprFromText completionLeadup
 
-          fileIdentifier <- fileIdentifierFromUri uri
-          cache <- use importCache  -- todo save cache afterwards
-          loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+            fileIdentifier <- fileIdentifierFromUri uri_
+            cache <- use importCache  -- todo save cache afterwards
+            loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
 
-          bindersExpr' <-
-            case loadedBinders of
-              Right (cache', binders) -> do
-                assign importCache cache'
-                return binders
-              Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
+            bindersExpr' <-
+              case loadedBinders of
+                Right (cache', binders) -> do
+                  assign importCache cache'
+                  return binders
+                Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
 
-          let context = buildCompletionContext bindersExpr'
-          return (completeFromContext context)
+            let context_ = buildCompletionContext bindersExpr'
 
-  completions <- computeCompletions
+            return (completeFromContext context_)
 
-  let item (Completion {..}) = J.CompletionItem {..}
-       where
-        _label = completeText
-        _kind = Nothing
-        _tags = mempty
-        _detail = fmap pretty completeType
-        _documentation = Nothing
-        _deprecated = Nothing
-        _preselect = Nothing
-        _sortText = Nothing
-        _filterText = Nothing
-        _insertText = Nothing
-        _insertTextFormat = Nothing
-        _textEdit = Nothing
-        _additionalTextEdits = Nothing
-        _commitCharacters = Nothing
-        _command = Nothing
-        _xdata = Nothing
-  lspRespond LSP.RspCompletion request $ J.Completions (J.List (map item completions))
+    completions <- computeCompletions
 
+    let toCompletionItem (Completion {..}) = CompletionItem {..}
+         where
+          _label = completeText
+          _kind = Nothing
+          _tags = mempty
+          _detail = fmap pretty completeType
+          _documentation = Nothing
+          _deprecated = Nothing
+          _preselect = Nothing
+          _sortText = Nothing
+          _filterText = Nothing
+          _insertText = Nothing
+          _insertTextFormat = Nothing
+          _insertTextMode = Nothing
+          _textEdit = Nothing
+          _additionalTextEdits = Nothing
+          _commitCharacters = Nothing
+          _command = Nothing
+          _xdata = Nothing
 
--- handler that doesn't do anything. Useful for example to make haskell-lsp shut
--- up about unhandled DidChangeTextDocument notifications (which are already
--- handled haskell-lsp itself).
-nullHandler :: a -> HandlerM ()
+    let _items = List (map toCompletionItem completions)
+
+    let _isIncomplete = False
+
+    respond (Right (InR CompletionList{..}))
+
+nullHandler :: a -> LspT ServerConfig IO ()
 nullHandler _ = return ()
 
-didOpenTextDocumentNotificationHandler
-  :: J.DidOpenTextDocumentNotification -> HandlerM ()
-didOpenTextDocumentNotificationHandler notification = do
-  let uri = notification ^. J.params . J.textDocument . J.uri
-  diagnosticsHandler uri
+didOpenTextDocumentNotificationHandler :: Handlers HandlerM
+didOpenTextDocumentNotificationHandler =
+    LSP.notificationHandler STextDocumentDidOpen \notification -> do
+        let _uri = notification^.params.textDocument.uri
+        diagnosticsHandler _uri
 
-didSaveTextDocumentNotificationHandler
-  :: J.DidSaveTextDocumentNotification -> HandlerM ()
-didSaveTextDocumentNotificationHandler notification = do
-  let uri = notification ^. J.params . J.textDocument . J.uri
-  diagnosticsHandler uri
+didSaveTextDocumentNotificationHandler :: Handlers HandlerM
+didSaveTextDocumentNotificationHandler =
+    LSP.notificationHandler STextDocumentDidSave \notification -> do
+        let _uri = notification^.params.textDocument.uri
+        diagnosticsHandler _uri

@@ -1,13 +1,13 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BlockArguments     #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE RecordWildCards    #-}
 
 {-| This is the entry point for the LSP server. -}
 module Dhall.LSP.Server(run) where
 
-import Control.Concurrent.MVar
-import Control.Lens            ((^.))
-import Data.Aeson              (Result (Success), fromJSON)
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (fromJSON)
 import Data.Default
-import Data.Text               (Text)
 import Dhall.LSP.Handlers
     ( completionHandler
     , didOpenTextDocumentNotificationHandler
@@ -16,101 +16,122 @@ import Dhall.LSP.Handlers
     , documentLinkHandler
     , executeCommandHandler
     , hoverHandler
-    , nullHandler
-    , wrapHandler
     )
 import Dhall.LSP.State
+import Language.LSP.Server (Options(..), ServerDefinition(..), type (<~>)(..))
+import Language.LSP.Types
+import System.Exit (ExitCode(..))
 
-import qualified Language.Haskell.LSP.Control    as LSP.Control
-import qualified Language.Haskell.LSP.Core       as LSP.Core
-import qualified Language.Haskell.LSP.Types      as J
-import qualified Language.Haskell.LSP.Types.Lens as J
+import qualified Control.Concurrent.MVar as MVar
+import qualified Control.Monad.Trans.Except as Except
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Aeson as Aeson
+import qualified Data.Text as Text
+import qualified Language.LSP.Server as LSP
+import qualified System.Exit as Exit
 import qualified System.Log.Logger
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
 run mlog = do
   setupLogger mlog
-  state <- newEmptyMVar
 
-  let onInitialConfiguration :: J.InitializeRequest -> Either Text ServerConfig
-      onInitialConfiguration req
-        | Just initOpts <- req ^. J.params . J.initializationOptions
-        , Success config <- fromJSON initOpts
-        = Right config
-      onInitialConfiguration _ = Right def
+  state <- MVar.newMVar initialState
 
-  let onConfigurationChange :: J.DidChangeConfigurationNotification -> Either Text ServerConfig
-      onConfigurationChange notification
-        | preConfig <- notification ^. J.params . J.settings
-        , Success config <- fromJSON preConfig
-        = Right config
-      onConfigurationChange _ = Right def
+  let defaultConfig = def
 
-  -- Callback that is called when the LSP server is started; makes the lsp
-  -- state (LspFuncs) available to the message handlers through the `state` MVar.
-  let onStartup :: LSP.Core.LspFuncs ServerConfig -> IO (Maybe J.ResponseError)
-      onStartup lsp = do
-        putMVar state (initialState lsp)
-        return Nothing
+  let onConfigurationChange _oldConfig json =
+        case fromJSON json of
+            Aeson.Success config -> Right config
+            Aeson.Error   string -> Left (Text.pack string)
 
-  _ <- LSP.Control.run (LSP.Core.InitializeCallbacks {..})
-                       (lspHandlers state)
-                       lspOptions
-                       Nothing
-  return ()
+  let doInitialize environment _request = do
+          return (Right environment)
+
+  let options = def
+        { LSP.textDocumentSync = Just syncOptions
+
+        , completionTriggerCharacters = Just [':', '.', '/']
+
+        -- Note that this registers the dhall.server.lint command
+        -- with VSCode, which means that our plugin can't expose a
+        -- command of the same name. In the case of dhall.lint we
+        -- name the server-side command dhall.server.lint to work
+        -- around this peculiarity.
+        , executeCommandCommands =
+            Just
+              [ "dhall.server.lint",
+                "dhall.server.annotateLet",
+                "dhall.server.freezeImport",
+                "dhall.server.freezeAllImports"
+              ]
+        }
+
+  let staticHandlers =
+        mconcat
+          [ hoverHandler
+          , didOpenTextDocumentNotificationHandler
+          , didSaveTextDocumentNotificationHandler
+          , executeCommandHandler
+          , documentFormattingHandler
+          , documentLinkHandler
+          , completionHandler
+          ]
+
+  let interpretHandler environment = Iso{..}
+        where
+          forward :: HandlerM a -> IO a
+          forward handler =
+            MVar.modifyMVar state \oldState -> do
+              LSP.runLspT environment do
+                (e, newState) <- State.runStateT (Except.runExceptT handler) oldState
+                result <- case e of
+                  Left (Log, _message) -> do
+                    let _xtype = MtLog
+
+                    LSP.sendNotification SWindowLogMessage LogMessageParams{..}
+
+                    liftIO (fail (Text.unpack _message))
+
+                  Left (severity_, _message) -> do
+                    let _xtype = case severity_ of
+                          Error   -> MtError
+                          Warning -> MtWarning
+                          Info    -> MtInfo
+                          Log     -> MtLog
+
+                    LSP.sendNotification SWindowShowMessage ShowMessageParams{..}
+                    liftIO (fail (Text.unpack _message))
+                  Right a -> do
+                      return a
+
+                return (newState, result)
+
+          backward = liftIO
+
+  exitCode <- LSP.runServer ServerDefinition{..}
+
+  case exitCode of
+      0 -> return ()
+      n -> Exit.exitWith (ExitFailure n)
 
 -- | sets the output logger.
 -- | if no filename is provided then logger is disabled, if input is string `[OUTPUT]` then log goes to stderr,
 -- | which then redirects inside VSCode to the output pane of the plugin.
 setupLogger :: Maybe FilePath -> IO () -- TODO: ADD verbosity
-setupLogger Nothing          = pure ()
-setupLogger (Just "[OUTPUT]") = LSP.Core.setupLogger Nothing [] System.Log.Logger.DEBUG
-setupLogger file              = LSP.Core.setupLogger file [] System.Log.Logger.DEBUG
+setupLogger  Nothing          = pure ()
+setupLogger (Just "[OUTPUT]") = LSP.setupLogger Nothing [] System.Log.Logger.DEBUG
+setupLogger file              = LSP.setupLogger file [] System.Log.Logger.DEBUG
 
 
 -- Tells the LSP client to notify us about file changes. Handled behind the
 -- scenes by haskell-lsp (in Language.Haskell.LSP.VFS); we don't handle the
 -- corresponding notifications ourselves.
-syncOptions :: J.TextDocumentSyncOptions
-syncOptions = J.TextDocumentSyncOptions
-  { J._openClose         = Just True
-  , J._change            = Just J.TdSyncIncremental
-  , J._willSave          = Just False
-  , J._willSaveWaitUntil = Just False
-  , J._save              = Just $ J.SaveOptions $ Just False
+syncOptions :: TextDocumentSyncOptions
+syncOptions = TextDocumentSyncOptions
+  { _openClose         = Just True
+  , _change            = Just TdSyncIncremental
+  , _willSave          = Just False
+  , _willSaveWaitUntil = Just False
+  , _save              = Just (InR (SaveOptions (Just False)))
   }
-
--- Server capabilities. Tells the LSP client that we can execute commands etc.
-lspOptions :: LSP.Core.Options
-lspOptions = def { LSP.Core.textDocumentSync = Just syncOptions
-                 , LSP.Core.completionTriggerCharacters = Just [':', '.', '/']
-                 -- Note that this registers the dhall.server.lint command
-                 -- with VSCode, which means that our plugin can't expose a
-                 -- command of the same name. In the case of dhall.lint we
-                 -- name the server-side command dhall.server.lint to work
-                 -- around this peculiarity.
-                 , LSP.Core.executeCommandCommands =
-                     Just
-                       [ "dhall.server.lint",
-                         "dhall.server.annotateLet",
-                         "dhall.server.freezeImport",
-                         "dhall.server.freezeAllImports"
-                       ]
-                 }
-
-lspHandlers :: MVar ServerState -> LSP.Core.Handlers
-lspHandlers state
-  = def { LSP.Core.initializedHandler                       = Just $ wrapHandler state nullHandler
-        , LSP.Core.hoverHandler                             = Just $ wrapHandler state hoverHandler
-        , LSP.Core.didOpenTextDocumentNotificationHandler   = Just $ wrapHandler state didOpenTextDocumentNotificationHandler
-        , LSP.Core.didChangeTextDocumentNotificationHandler = Just $ wrapHandler state nullHandler
-        , LSP.Core.didSaveTextDocumentNotificationHandler   = Just $ wrapHandler state didSaveTextDocumentNotificationHandler
-        , LSP.Core.didCloseTextDocumentNotificationHandler  = Just $ wrapHandler state nullHandler
-        , LSP.Core.cancelNotificationHandler                = Just $ wrapHandler state nullHandler
-        , LSP.Core.responseHandler                          = Just $ wrapHandler state nullHandler
-        , LSP.Core.executeCommandHandler                    = Just $ wrapHandler state executeCommandHandler
-        , LSP.Core.documentFormattingHandler                = Just $ wrapHandler state documentFormattingHandler
-        , LSP.Core.documentLinkHandler                      = Just $ wrapHandler state documentLinkHandler
-        , LSP.Core.completionHandler                        = Just $ wrapHandler state completionHandler
-        }
