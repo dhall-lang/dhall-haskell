@@ -10,17 +10,14 @@ jobs:
       matrix:
         os:
           - runner: 'macOS-latest'
-            package: 'macos'
             archive-command: 'tar --create -j --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
           - runner: 'ubuntu-latest'
-            package: null
             archive-command: 'tar --create --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
           - runner: 'windows-latest'
-            package: 'windows'
             archive-command: '7z a -tzip'
             file-extension: 'zip'
             executable-extension: '.exe'
