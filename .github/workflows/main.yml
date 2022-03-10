@@ -61,6 +61,10 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
+            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
+
             stack build --copy-bins --local-bin-path ./bin "${package}"
           done
       - name: "Run tests"
@@ -80,6 +84,10 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
+            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
+
             stack test "${package}"
           done
       - name: "Prepare packaging"
