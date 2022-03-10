@@ -176,7 +176,7 @@ jobs:
           package 'dhall' "bin/dhall${exe}" 'share/man/man1/dhall.1'
           package 'dhall-bash' "bin/dhall-to-bash${exe}"
           package 'dhall-csv' "bin/csv-to-dhall${exe}" "bin/dhall-to-csv${exe}"
-          package 'dhall-docs' "bin/dhall-docs${exe}' 'share/man/man1/dhall-docs.1'
+          package 'dhall-docs' "bin/dhall-docs${exe}" 'share/man/man1/dhall-docs.1'
           package 'dhall-json' "bin/dhall-to-json${exe}" "bin/dhall-to-yaml${exe}" "bin/json-to-dhall${exe}"
           package 'dhall-lsp-server' "bin/dhall-lsp-server${exe}"
           package 'dhall-nix' "bin/dhall-to-nix${exe}"
@@ -186,5 +186,5 @@ jobs:
       - name: "Upload package"
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ steps.package.outputs.package-file }}
-          path: ${{ steps.package.outputs.package-file }}
+          name: 'dhall-${{runner.os}}.${{matrix.os.file-extension}}'
+          path: 'dhall-*${{runner.os}}.${{matrix.os.file-extension}}'
