@@ -70,7 +70,6 @@ jobs:
       - name: "Run tests"
         shell: bash
         run: |
-          ${{ runner.os == 'Windows' }} && chcp 65001
           packages=(
             dhall
             dhall-bash
