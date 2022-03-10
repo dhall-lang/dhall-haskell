@@ -4,11 +4,6 @@ env:
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
 on: [push]
-#on:
-#  push:
-#    tags:
-#      - '[0-9]+.[0-9]+.[0-9]+'
-#      - '[0-9]+.[0-9]+.[0-9]+[0-9]+'
 jobs:
   build:
     strategy:
