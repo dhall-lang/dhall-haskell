@@ -51,6 +51,7 @@ jobs:
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
       - name: "Build"
+        shell: bash
         run: |
           packages=(
             dhall
@@ -68,6 +69,7 @@ jobs:
             stack build --copy-bins --local-bin-path ./bin "${package}"
           done
       - name: "Run tests"
+        shell: bash
         run: |
           ${{ runner.os == 'Windows' }} && chcp 65001
           packages=(
@@ -86,12 +88,14 @@ jobs:
             stack test "${package}"
           done
       - name: "Prepare packaging"
+        shell: bash
         run: |
           mkdir -p share/man/man1
           cp dhall/man/dhall.1 share/man/man1/
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
       - id: package
         name: "Create packages"
+        shell: bash
         run: |
           packages=(
             dhall
