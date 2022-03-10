@@ -4,87 +4,25 @@ env:
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
 on: [push]
-#on:
-#  push:
-#    tags:
-#      - '[0-9]+.[0-9]+.[0-9]+'
-#      - '[0-9]+.[0-9]+.[0-9]+[0-9]+'
 jobs:
   build:
     strategy:
       matrix:
         os:
           - runner: 'macOS-latest'
-            package: 'macos'
             archive-command: 'tar --create -j --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
           - runner: 'ubuntu-latest'
-            package: null
             archive-command: 'tar --create --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
           - runner: 'windows-latest'
-            package: 'windows'
             archive-command: '7z a -tzip'
             file-extension: 'zip'
             executable-extension: '.exe'
-        package:
-          - name: 'dhall'
-            executable-assets: 'bin/dhall'
-            other-assets: 'share/man/man1/dhall.1'
-          - name: 'dhall-bash'
-            executable-assets: 'bin/dhall-to-bash'
-            other-assets: ''
-          - name: 'dhall-csv'
-            executable-assets: 'bin/csv-to-dhall bin/dhall-to-csv'
-            other-assets: ''
-          - name: 'dhall-docs'
-            executable-assets: 'bin/dhall-docs'
-            other-assets: 'share/man/man1/dhall-docs.1'
-          - name: 'dhall-json'
-            executable-assets: 'bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall'
-            other-assets: ''
-          - name: 'dhall-lsp-server'
-            executable-assets: 'bin/dhall-lsp-server'
-            other-assets: ''
-          - name: 'dhall-nix'
-            executable-assets: 'bin/dhall-to-nix'
-            other-assets: ''
-          - name: 'dhall-openapi'
-            executable-assets: 'bin/openapi-to-dhall'
-            other-assets: ''
-          - name: 'dhall-toml'
-            executable-assets: 'bin/dhall-to-toml bin/toml-to-dhall'
-            other-assets: ''
-          - name: 'dhall-yaml'
-            executable-assets: 'bin/dhall-to-yaml-ng bin/yaml-to-dhall'
-            other-assets: ''
-        exclude:
-          # Temporarily exclude dhall-nix on Ubuntu due to build failure
-          # See: https://github.com/dhall-lang/dhall-haskell/runs/2920388542
-          - os:
-              runner: 'ubuntu-latest'
-              package: null
-              archive-command: 'tar --create --file'
-              file-extension: 'tar.bz2'
-              executable-extension: ''
-            package:
-              name: 'dhall-nix'
-              executable-assets: 'bin/dhall-to-nix'
-              other-assets: ''
-          - os:
-              runner: 'windows-latest'
-              package: 'windows'
-              archive-command: '7z a -tzip'
-              file-extension: 'zip'
-              executable-extension: '.exe'
-            package:
-              name: 'dhall-nix'
-              executable-assets: 'bin/dhall-to-nix'
-              other-assets: ''
       fail-fast: false
-    name: ${{ matrix.package.name }} on ${{ matrix.os.runner }}
+    name: ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: "Checkout repository"
@@ -99,40 +37,104 @@ jobs:
       - name: "Cache"
         uses: actions/cache@v2
         with:
-          key: ${{ matrix.package.name }}-${{ matrix.os.runner }}-${{ hashFiles('stack.yaml') }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{ hashFiles('stack.yaml') }}-${{ env.cache_generation }}
           restore-keys: |
-            ${{ matrix.package.name }}${{ matrix.os.runner }}-
+            ${{ matrix.os.runner }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
       - name: "Build"
-        run: >
-          stack build
-          --copy-bins --local-bin-path ./bin
-          ${{ matrix.package.name }}
-      - name: "Run tests"
+        shell: bash
         run: |
-          ${{ runner.os == 'Windows' && matrix.package.name == 'dhall' }} && chcp 65001
-          stack test ${{ matrix.package.name }}
+          packages=(
+            dhall
+            dhall-bash
+            dhall-csv
+            dhall-docs
+            dhall-json
+            dhall-lsp-server
+            dhall-nix
+            dhall-openapi
+            dhall-toml
+            dhall-yaml
+          )
+          for package in "${packages[@]}"; do
+            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
+
+            stack build --copy-bins --local-bin-path ./bin "${package}"
+          done
+      - name: "Run tests"
+        shell: bash
+        run: |
+          packages=(
+            dhall
+            dhall-bash
+            dhall-csv
+            dhall-docs
+            dhall-json
+            dhall-lsp-server
+            dhall-nix
+            dhall-openapi
+            dhall-toml
+            dhall-yaml
+          )
+          for package in "${packages[@]}"; do
+            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
+
+            stack test "${package}"
+          done
       - name: "Prepare packaging"
+        shell: bash
         run: |
           mkdir -p share/man/man1
           cp dhall/man/dhall.1 share/man/man1/
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
-      - if: ${{ matrix.os.package != null }}
-        id: package
-        name: "Create package"
-        uses: ./.github/actions/package
-        with:
-          cabal-name: ${{ matrix.package.name }}
-          os: ${{ matrix.os.package }}
-          executable-assets: ${{ matrix.package.executable-assets }}
-          other-assets: ${{ matrix.package.other-assets }}
-          archive-command: ${{ matrix.os.archive-command }}
-          file-extension: ${{ matrix.os.file-extension }}
-          executable-extension: ${{ matrix.os.executable-extension }}
-      - if: ${{ matrix.os.package != null }}
-        name: "Upload package"
+      - id: package
+        name: "Create packages"
+        shell: bash
+        run: |
+          packages=(
+            dhall
+            dhall-bash
+            dhall-csv
+            dhall-docs
+            dhall-json
+            dhall-lsp-server
+            dhall-nix
+            dhall-openapi
+            dhall-toml
+            dhall-yaml
+          )
+
+          architecture="$(uname -m)"
+
+          function package() (
+            local package="${1}"
+            local version="$(stack query locals "${package}" version)"
+            shift
+            local assets=("${@}")
+            local package_file="${package}-${version}-${architecture}-${{runner.os}}.${{ matrix.os.file-extension }}"
+            ${{matrix.os.archive-command}} "${package_file}" "${assets[@]}"
+          )
+
+          exe='${{matrix.os.executable-extension}}'
+          package 'dhall' "bin/dhall${exe}" 'share/man/man1/dhall.1'
+          package 'dhall-bash' "bin/dhall-to-bash${exe}"
+          package 'dhall-csv' "bin/csv-to-dhall${exe}" "bin/dhall-to-csv${exe}"
+          package 'dhall-docs' "bin/dhall-docs${exe}" 'share/man/man1/dhall-docs.1'
+          package 'dhall-json' "bin/dhall-to-json${exe}" "bin/dhall-to-yaml${exe}" "bin/json-to-dhall${exe}"
+          package 'dhall-lsp-server' "bin/dhall-lsp-server${exe}"
+          if [ '${{matrix.os.runner}}' == 'macOS-latest' ]; then
+              package 'dhall-nix' "bin/dhall-to-nix${exe}"
+          fi
+          package 'dhall-openapi' "bin/openapi-to-dhall${exe}"
+          package 'dhall-toml' "bin/dhall-to-toml${exe}" "bin/toml-to-dhall${exe}"
+          package 'dhall-yaml' "bin/dhall-to-yaml-ng${exe}" "bin/yaml-to-dhall${exe}"
+      - name: "Upload package"
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ steps.package.outputs.package-file }}
-          path: ${{ steps.package.outputs.package-file }}
+          name: 'dhall-${{runner.os}}.${{matrix.os.file-extension}}'
+          path: 'dhall-*${{runner.os}}.${{matrix.os.file-extension}}'
