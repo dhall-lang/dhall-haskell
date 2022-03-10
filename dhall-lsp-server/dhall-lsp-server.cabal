@@ -52,7 +52,7 @@ library
     , dhall                >= 1.38.0   && < 1.42
     , dhall-json           >= 1.4      && < 1.8
     , filepath             >= 1.4.2    && < 1.5
-    , lsp                  >= 1.2.0.0  && < 1.5
+    , lsp                  >= 1.2.0.0  && < 1.4
     , rope-utf16-splay     >= 0.3.1.0  && < 0.4
     , hslogger             >= 1.2.10   && < 1.4
     , lens                 >= 4.16.1   && < 5.2
@@ -103,8 +103,8 @@ Test-Suite tests
     Main-Is: Main.hs
     GHC-Options: -Wall
     Build-Depends:
-        base                                   ,
-        lsp-types         >= 1.2.0.0  && < 1.5  ,
+        base                                    ,
+        lsp-types         >= 1.2.0.0  && < 1.4  ,
         hspec             >= 2.7      && < 2.10 ,
         lsp-test          >= 0.13.0.0 && < 0.15 ,
         tasty             >= 0.11.2   && < 1.5  ,
