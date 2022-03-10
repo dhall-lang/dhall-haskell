@@ -29,60 +29,6 @@ jobs:
             archive-command: '7z a -tzip'
             file-extension: 'zip'
             executable-extension: '.exe'
-        package:
-          - name: 'dhall'
-            executable-assets: 'bin/dhall'
-            other-assets: 'share/man/man1/dhall.1'
-          - name: 'dhall-bash'
-            executable-assets: 'bin/dhall-to-bash'
-            other-assets: ''
-          - name: 'dhall-csv'
-            executable-assets: 'bin/csv-to-dhall bin/dhall-to-csv'
-            other-assets: ''
-          - name: 'dhall-docs'
-            executable-assets: 'bin/dhall-docs'
-            other-assets: 'share/man/man1/dhall-docs.1'
-          - name: 'dhall-json'
-            executable-assets: 'bin/dhall-to-json bin/dhall-to-yaml bin/json-to-dhall'
-            other-assets: ''
-          - name: 'dhall-lsp-server'
-            executable-assets: 'bin/dhall-lsp-server'
-            other-assets: ''
-          - name: 'dhall-nix'
-            executable-assets: 'bin/dhall-to-nix'
-            other-assets: ''
-          - name: 'dhall-openapi'
-            executable-assets: 'bin/openapi-to-dhall'
-            other-assets: ''
-          - name: 'dhall-toml'
-            executable-assets: 'bin/dhall-to-toml bin/toml-to-dhall'
-            other-assets: ''
-          - name: 'dhall-yaml'
-            executable-assets: 'bin/dhall-to-yaml-ng bin/yaml-to-dhall'
-            other-assets: ''
-        exclude:
-          # Temporarily exclude dhall-nix on Ubuntu due to build failure
-          # See: https://github.com/dhall-lang/dhall-haskell/runs/2920388542
-          - os:
-              runner: 'ubuntu-latest'
-              package: null
-              archive-command: 'tar --create --file'
-              file-extension: 'tar.bz2'
-              executable-extension: ''
-            package:
-              name: 'dhall-nix'
-              executable-assets: 'bin/dhall-to-nix'
-              other-assets: ''
-          - os:
-              runner: 'windows-latest'
-              package: 'windows'
-              archive-command: '7z a -tzip'
-              file-extension: 'zip'
-              executable-extension: '.exe'
-            package:
-              name: 'dhall-nix'
-              executable-assets: 'bin/dhall-to-nix'
-              other-assets: ''
       fail-fast: false
     name: ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
@@ -179,7 +125,9 @@ jobs:
           package 'dhall-docs' "bin/dhall-docs${exe}" 'share/man/man1/dhall-docs.1'
           package 'dhall-json' "bin/dhall-to-json${exe}" "bin/dhall-to-yaml${exe}" "bin/json-to-dhall${exe}"
           package 'dhall-lsp-server' "bin/dhall-lsp-server${exe}"
-          package 'dhall-nix' "bin/dhall-to-nix${exe}"
+          if [ '${{matrix.os.runner}}' != 'windows-latest' ]; then
+              package 'dhall-nix' "bin/dhall-to-nix${exe}"
+          fi
           package 'dhall-openapi' "bin/openapi-to-dhall${exe}"
           package 'dhall-toml' "bin/dhall-to-toml${exe}" "bin/toml-to-dhall${exe}"
           package 'dhall-yaml' "bin/dhall-to-yaml-ng${exe}" "bin/yaml-to-dhall${exe}"
