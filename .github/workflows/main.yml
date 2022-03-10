@@ -123,7 +123,7 @@ jobs:
             ${{matrix.os.archive-command}} "${package_file}" "${assets[@]}"
           )
 
-          exe='${{matrix.os.executable_extension}}'
+          exe='${{matrix.os.executable-extension}}'
           package 'dhall' "bin/dhall${exe}" 'share/man/man1/dhall.1'
           package 'dhall-bash' "bin/dhall-to-bash${exe}"
           package 'dhall-csv' "bin/csv-to-dhall${exe}" "bin/dhall-to-csv${exe}"
