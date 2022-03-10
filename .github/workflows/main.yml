@@ -114,10 +114,9 @@ jobs:
 
           architecture="$(uname -m)"
 
-          version="$(stack query locals "${package}" version)"
-
           function package() (
             local package="${1}"
+            local version="$(stack query locals "${package}" version)"
             shift
             local assets=("${@}")
             local package_file="${package}-${version}-${architecture}-${{runner.os}}.${{ matrix.os.file-extension }}"
