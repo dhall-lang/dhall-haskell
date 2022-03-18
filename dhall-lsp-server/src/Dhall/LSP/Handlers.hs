@@ -3,6 +3,7 @@
 {-# LANGUAGE DataKinds      #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE MultiWayIf     #-}
+{-# LANGUAGE ViewPatterns   #-}
 
 module Dhall.LSP.Handlers where
 
@@ -125,14 +126,16 @@ fileIdentifierFromUri uri_ =
 -- helper
 rangeToJSON :: Range -> LSP.Types.Range
 rangeToJSON (Range (x1,y1) (x2,y2)) =
-    LSP.Types.Range (Position x1 y1) (Position x2 y2)
+    LSP.Types.Range
+      (Position (fromIntegral x1) (fromIntegral y1))
+      (Position (fromIntegral x2) (fromIntegral y2))
 
 hoverHandler :: Handlers HandlerM
 hoverHandler =
     LSP.requestHandler STextDocumentHover \request respond -> do
         let uri_ = request^.params.textDocument.uri
 
-        let Position{ _line, _character } = request^.params.position
+        let Position{ _line = fromIntegral -> _line, _character = fromIntegral -> _character } = request^.params.position
 
         errorMap <- use errors
 
@@ -301,7 +304,7 @@ documentFormattingHandler =
 
         ServerConfig{..} <- liftLSP LSP.getConfig
 
-        let numLines = Text.length txt
+        let numLines = fromIntegral (Text.length txt)
         let _newText= formatExprWithHeader chosenCharacterSet expr header
         let _range = LSP.Types.Range (Position 0 0) (Position numLines 0)
 
@@ -353,7 +356,7 @@ executeLintAndFormat request respond = do
 
   ServerConfig{..} <- liftLSP LSP.getConfig
 
-  let numLines = Text.length txt
+  let numLines = fromIntegral (Text.length txt)
 
   let _newText = formatExprWithHeader chosenCharacterSet (lint expr) header
 
@@ -380,8 +383,8 @@ executeAnnotateLet
 executeAnnotateLet request = do
   args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
   let uri_ = args ^. textDocument . uri
-      line_ = args ^. position . line
-      col_ = args ^. position . character
+      line_ = fromIntegral (args ^. position . line)
+      col_ = fromIntegral (args ^. position . character)
 
   expr <- loadFile uri_
   (welltyped, _) <- case typecheck expr of
@@ -395,8 +398,8 @@ executeAnnotateLet request = do
       Right x -> return x
       Left msg -> throwE (Warning, Text.pack msg)
 
-  let _range = LSP.Types.Range (Position (unPos x1 - 1) (unPos y1 - 1))
-                      (Position (unPos x2 - 1) (unPos y2 - 1))
+  let _range = LSP.Types.Range (Position (fromIntegral (unPos x1 - 1)) (fromIntegral (unPos y1 - 1)))
+                      (Position (fromIntegral (unPos x2 - 1)) (fromIntegral (unPos y2 - 1)))
 
   let _newText= formatExpr chosenCharacterSet annotExpr
 
@@ -435,7 +438,7 @@ executeFreezeAllImports request = do
       Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
     assign importCache cache'
 
-    let _range = LSP.Types.Range (Position x1 y1) (Position x2 y2)
+    let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
     let _newText = " " <> hash
     return TextEdit{..}
 
@@ -457,8 +460,8 @@ executeFreezeImport
 executeFreezeImport request = do
   args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
   let uri_  = args ^. textDocument . uri
-  let line_ = args ^. position . line
-  let col_  = args ^. position . character
+  let line_ = fromIntegral (args ^. position . line)
+  let col_  = fromIntegral (args ^. position . character)
 
   txt <- readUri uri_
   expr <- case parse txt of
@@ -484,7 +487,7 @@ executeFreezeImport request = do
     Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
   assign importCache cache'
 
-  let _range = LSP.Types.Range (Position x1 y1) (Position x2 y2)
+  let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
   let _newText = " " <> hash
 
   let _edit = WorkspaceEdit
@@ -502,9 +505,9 @@ executeFreezeImport request = do
 completionHandler :: Handlers HandlerM
 completionHandler =
   LSP.requestHandler STextDocumentCompletion \request respond -> do
-    let uri_ = request ^. params . textDocument . uri
-        line_ = request ^. params . position . line
-        col_ = request ^. params . position . character
+    let uri_  = request ^. params . textDocument . uri
+        line_ = fromIntegral (request ^. params . position . line)
+        col_  = fromIntegral (request ^. params . position . character)
 
     txt <- readUri uri_
     let (completionLeadup, completionPrefix) = completionQueryAt txt (line_, col_)
