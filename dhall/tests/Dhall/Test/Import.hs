@@ -22,13 +22,17 @@ import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
-import qualified Network.HTTP.Client              as HTTP
-import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.FilePath                  as FilePath
 import qualified System.IO.Temp                   as Temp
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
+
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+import qualified Network.HTTP.Client              as HTTP
+import qualified Network.HTTP.Client.TLS          as HTTP
+#endif
+
 
 importDirectory :: FilePath
 importDirectory = "./dhall-lang/tests/import"
