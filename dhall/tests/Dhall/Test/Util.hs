@@ -34,9 +34,7 @@ import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
     ( Chunks (..)
-    , Directory (..)
     , Expr (..)
-    , File (..)
     , Import
     , Normalizer
     , ReifiedNormalizer (..)
@@ -52,7 +50,6 @@ import Turtle                           (FilePath, Pattern, Shell, fp)
 import qualified Control.Exception
 import qualified Control.Foldl                    as Foldl
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.Foldable
 import qualified Data.Functor
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
@@ -67,9 +64,11 @@ import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.ExpectedFailure       as Tasty.ExpectedFailure
 import qualified Turtle
 
-#ifndef WITH_HTTP
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+import qualified Data.Foldable
+#else
 import Control.Monad.IO.Class   (MonadIO (..))
-import Dhall.Core               (URL (..))
+import Dhall.Core               (URL (..), File (..), Directory (..))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Data.Foldable
@@ -107,7 +106,7 @@ loadRelativeTo rootDirectory semanticCacheMode expression =
         (loadWith expression)
         (Dhall.Import.emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
 
-#ifdef WITH_HTTP
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith = Dhall.Import.loadWith
 

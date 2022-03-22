@@ -22,13 +22,17 @@ import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
-import qualified Network.HTTP.Client              as HTTP
-import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.FilePath                  as FilePath
 import qualified System.IO.Temp                   as Temp
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
+
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+import qualified Network.HTTP.Client              as HTTP
+import qualified Network.HTTP.Client.TLS          as HTTP
+#endif
+
 
 importDirectory :: FilePath
 importDirectory = "./dhall-lang/tests/import"
@@ -63,7 +67,7 @@ getTests = do
         let expectedSuccesses =
                 [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
                 , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
-#ifndef WITH_HTTP
+#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
                 -- We attempt to simulate test.dhall-lang.org, but even so
                 -- some tests unexpectedly succeed due to the inadequacy of
                 -- the simulation
@@ -99,7 +103,7 @@ successTest prefix = do
 
     let expectedFailures =
             [
-#ifndef WITH_HTTP
+#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
               importDirectory </> "success/originHeadersImportFromEnv"
             , importDirectory </> "success/originHeadersImport"
             , importDirectory </> "success/originHeadersOverride"
@@ -119,7 +123,7 @@ successTest prefix = do
 
         let originalCache = "dhall-lang/tests/import/cache"
 
-#ifdef WITH_HTTP
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
         let httpManager =
                 HTTP.newManager
                     HTTP.tlsManagerSettings

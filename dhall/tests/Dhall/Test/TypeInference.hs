@@ -59,7 +59,7 @@ successTest :: Text -> TestTree
 successTest prefix = do
     let expectedFailures =
                 []
-#ifdef WITH_HTTP
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 #else
             ++  [ typeInferenceDirectory </> "success/CacheImports"
                 ]
