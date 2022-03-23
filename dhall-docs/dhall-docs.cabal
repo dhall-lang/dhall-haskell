@@ -22,11 +22,13 @@ Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
     README.md
+    tasty/data/package/*.txt
     tasty/data/package/*.dhall
     tasty/data/package/a/*.dhall
     tasty/data/package/a/b/*.dhall
     tasty/data/package/a/b/c/*.dhall
     tasty/data/package/deep/nested/folder/*.dhall
+    tasty/data/golden/*.txt.html
     tasty/data/golden/*.dhall.html
     tasty/data/golden/a/*.dhall.html
     tasty/data/golden/a/b/*.dhall.html

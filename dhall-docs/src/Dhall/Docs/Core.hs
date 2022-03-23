@@ -147,30 +147,42 @@ newtype FileComments = FileComments
 -- | Represents a Dhall file that can be rendered as documentation.
 --   If you'd like to improve or add features to a .dhall documentation page,
 --   add that extra information here.
-data DhallFile = DhallFile
-    { path :: Path Rel File             -- ^ Path of the file
-    , contents :: Text                  -- ^ File contents
-    , expr :: Expr Src Import           -- ^ Parsed AST from 'contents'
-    , mType :: Maybe (Expr Void Import) -- ^ Type of the parsed expression,
-                                        --   extracted from the source code
-    , examples :: [Expr Void Import]    -- ^ Examples extracted from assertions
-                                        --   in the file
-    , fileComments :: FileComments
+data RenderedFile = RenderedFile
+    { path :: Path Rel File
+      -- ^ Path of the file
+    , contents :: Text
+      -- ^ File contents
+    , fileType :: FileType
+      -- ^ This corresponds to the import mode (e.g. @as Text@)
     } deriving (Show)
 
+data FileType
+    = DhallFile
+        { expr :: Expr Src Import
+          -- ^ Parsed AST from 'contents'
+        , mType :: Maybe (Expr Void Import)
+          -- ^ Type of the parsed expression, extracted from the source code
+        , examples :: [Expr Void Import]
+          -- ^ Examples extracted from assertions in the file
+        , fileComments :: FileComments
+        }
+    | TextFile
+    deriving (Show)
+
 {-| Takes a list of files paths with their contents and returns the list of
-    valid `DhallFile`s.
+    valid `RenderedFile`s.
 
     Returned files contains all the information to be used on `Html ()`
     generation.
 
     The result is sorted by `path`
 -}
-getAllDhallFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [DhallFile]
-getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles [] . filter hasDhallExtension
+getAllRenderedFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [RenderedFile]
+getAllRenderedFiles =
+    fmap Maybe.catMaybes . mapM toRenderedFile . foldr validFiles []
   where
-    hasDhallExtension :: (Path Rel File, a) -> Bool
-    hasDhallExtension (absFile, _) = case Path.splitExtension absFile of
+    hasDhallExtension :: Path Rel File -> Bool
+    hasDhallExtension absFile = case Path.splitExtension absFile of
         Nothing -> False
         Just (_, ext) -> ext == ".dhall"
 
@@ -179,8 +191,9 @@ getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles []
         Left _ -> xs
         Right textContent -> (relFile, textContent) : xs
 
-    toDhallFile :: (Path Rel File, Text) -> GeneratedDocs (Maybe DhallFile)
-    toDhallFile (relFile, contents) =
+    toRenderedFile
+        :: (Path Rel File, Text) -> GeneratedDocs (Maybe RenderedFile)
+    toRenderedFile (relFile, contents) =
         case exprAndHeaderFromText (Path.fromRelFile relFile) contents of
             Right (Header header, expr) -> do
                 let denoted = denote expr :: Expr Void Import
@@ -193,16 +206,26 @@ getAllDhallFiles = fmap Maybe.catMaybes . mapM toDhallFile . foldr validFiles []
                             return Nothing
                         Just (Right c) -> return $ Just c
 
-                return $ Just $ DhallFile
-                    { expr, contents
+                return $ Just $ RenderedFile
+                    { contents
                     , path = relFile
-                    , mType = extractTypeIfInSource denoted
-                    , examples = examplesFromAssertions denoted
-                    , fileComments = FileComments headerContents
+                    , fileType = DhallFile
+                        { expr
+                        , mType = extractTypeIfInSource denoted
+                        , examples = examplesFromAssertions denoted
+                        , fileComments = FileComments headerContents
+                        }
                     }
-            Left ParseError{..} -> do
+            Left ParseError{..} | hasDhallExtension relFile -> do
                 Writer.tell [InvalidDhall unwrap]
                 return Nothing
+
+            Left _ -> do
+                return $ Just $ RenderedFile
+                    { contents
+                    , path = relFile
+                    , fileType = TextFile
+                    }
 
     bindings :: Expr Void Import -> [Binding Void Import]
     bindings expr = case expr of
@@ -288,32 +311,47 @@ resolveRelativePath currentDir =
         "." -> ""
         _ -> "../" <> resolveRelativePath (Path.parent currentDir)
 
--- | Generates `Text` from the HTML representation of a `DhallFile`
+-- | Generates `Text` from the HTML representation of a `RenderedFile`
 makeHtml
     :: Maybe Text           -- ^ Base import URL
     -> Text                 -- ^ Package name
     -> CharacterSet         -- ^ Output encoding
-    -> DhallFile            -- ^ Parsed header
+    -> RenderedFile            -- ^ Parsed header
     -> GeneratedDocs Text
-makeHtml baseImportUrl packageName characterSet DhallFile {..} = do
-    let relativeResourcesPath = resolveRelativePath $ Path.parent path
-    let strippedHeader = Maybe.maybe "" unDhallDocsText (headerComment fileComments)
-    headerAsHtml <-
-        case markdownToHtml path strippedHeader of
-            Left err -> do
-                Writer.tell [InvalidMarkdown err]
-                return $ Lucid.toHtml strippedHeader
-            Right html -> return html
+makeHtml baseImportUrl packageName characterSet RenderedFile{..} = do
+    let relativeResourcesPath = resolveRelativePath (Path.parent path)
 
-    let htmlAsText = Text.Lazy.toStrict $ Lucid.renderText $ dhallFileToHtml
-            path
-            contents
-            expr
-            examples
-            headerAsHtml
-            DocParams { relativeResourcesPath, packageName, characterSet, baseImportUrl }
+    case fileType of
+        DhallFile{..} -> do
+            let strippedHeader =
+                    Maybe.maybe "" unDhallDocsText (headerComment fileComments)
 
-    return htmlAsText
+            headerAsHtml <-
+                case markdownToHtml path strippedHeader of
+                    Left err -> do
+                        Writer.tell [InvalidMarkdown err]
+                        return $ Lucid.toHtml strippedHeader
+                    Right html -> return html
+
+            let htmlAsText =
+                    Text.Lazy.toStrict $ Lucid.renderText $ dhallFileToHtml
+                        path
+                        contents
+                        expr
+                        examples
+                        headerAsHtml
+                        DocParams{ relativeResourcesPath, packageName, characterSet, baseImportUrl }
+
+            return htmlAsText
+        TextFile -> do
+            let htmlAsText =
+                    Text.Lazy.toStrict $ Lucid.renderText $ textFileToHtml
+                        path
+                        contents
+                        DocParams{ relativeResourcesPath, packageName, characterSet, baseImportUrl }
+
+            return htmlAsText
+
 
 {-| Create an @index.html@ file on each available folder in the input.
 
@@ -337,16 +375,16 @@ createIndexes
     :: Maybe Text
     -> Text
     -> CharacterSet
-    -> [DhallFile]
+    -> [RenderedFile]
     -> [(Path Rel File, Text)]
-createIndexes baseImportUrl packageName characterSet dhallFiles = map toIndex dirToDirsAndFilesMapAssocs
+createIndexes baseImportUrl packageName characterSet renderedFiles = map toIndex dirToDirsAndFilesMapAssocs
   where
     -- Files grouped by their directory
-    dirToFilesMap :: Map (Path Rel Dir) [DhallFile]
-    dirToFilesMap = Map.unionsWith (<>) $ map toMap $ Data.List.sortBy (compare `on` path) dhallFiles
+    dirToFilesMap :: Map (Path Rel Dir) [RenderedFile]
+    dirToFilesMap = Map.unionsWith (<>) $ map toMap $ Data.List.sortBy (compare `on` path) renderedFiles
       where
-        toMap :: DhallFile -> Map (Path Rel Dir) [DhallFile]
-        toMap dhallFile = Map.singleton (Path.parent $ path dhallFile) [dhallFile]
+        toMap :: RenderedFile -> Map (Path Rel Dir) [RenderedFile]
+        toMap renderedFile = Map.singleton (Path.parent $ path renderedFile) [renderedFile]
 
     {-  This is used to compute the list of exported packages on each folder.
         We try to compress the folders as much as we can. See `createIndexes`
@@ -361,7 +399,7 @@ createIndexes baseImportUrl packageName characterSet dhallFiles = map toIndex di
 
         cons d = Map.insertWith (<>) (Path.parent d) [d]
 
-    dirToDirsAndFilesMapAssocs :: [(Path Rel Dir, ([DhallFile], [Path Rel Dir]))]
+    dirToDirsAndFilesMapAssocs :: [(Path Rel Dir, ([RenderedFile], [Path Rel Dir]))]
     dirToDirsAndFilesMapAssocs = Map.assocs $
         Map.Merge.merge
             (Map.Merge.mapMissing onlyFiles)
@@ -374,13 +412,19 @@ createIndexes baseImportUrl packageName characterSet dhallFiles = map toIndex di
         onlyDirectories _       directories = ([]   , directories)
         both            _ files directories = (files, directories)
 
-    toIndex :: (Path Rel Dir, ([DhallFile], [Path Rel Dir])) -> (Path Rel File, Text)
+    toIndex :: (Path Rel Dir, ([RenderedFile], [Path Rel Dir])) -> (Path Rel File, Text)
     toIndex (indexDir, (files, dirs)) =
         (indexDir </> $(Path.mkRelFile "index.html"), Text.Lazy.toStrict $ Lucid.renderText html)
       where
+        adapt RenderedFile{..} = (stripPrefix (addHtmlExt path), m)
+          where
+            m = case fileType of
+                DhallFile{..} -> mType
+                TextFile      -> Nothing
+
         html = indexToHtml
             indexDir
-            (map (\DhallFile{..} -> (stripPrefix $ addHtmlExt path, mType)) files)
+            (map adapt files)
             (map stripPrefix dirs)
             DocParams { relativeResourcesPath = resolveRelativePath indexDir, packageName, characterSet, baseImportUrl }
 
@@ -476,7 +520,7 @@ generateDocsPure baseImportUrl packageName characterSet inputFiles = go
   where
     go :: GeneratedDocs [(Path Rel File, Text)]
     go = do
-        dhallFiles <- getAllDhallFiles inputFiles
-        htmls <- mapM (makeHtml baseImportUrl packageName characterSet) dhallFiles
-        let indexes = createIndexes baseImportUrl packageName characterSet dhallFiles
-        return (zip (map (addHtmlExt . path) dhallFiles) htmls <> indexes)
+        renderedFiles <- getAllRenderedFiles inputFiles
+        htmls <- mapM (makeHtml baseImportUrl packageName characterSet) renderedFiles
+        let indexes = createIndexes baseImportUrl packageName characterSet renderedFiles
+        return (zip (map (addHtmlExt . path) renderedFiles) htmls <> indexes)
