@@ -412,6 +412,7 @@ Test-Suite tasty
         temporary                 >= 1.2.1    && < 1.4 ,
         turtle                                   < 1.6 ,
     Default-Language: Haskell2010
+    Ghc-Options: -threaded -rtsopts -with-rtsopts=-N
 
 Test-Suite doctest
     Import: common
