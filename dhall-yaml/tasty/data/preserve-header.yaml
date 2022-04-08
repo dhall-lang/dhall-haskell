@@ -1,0 +1,6 @@
+# Test header preservation
+#
+# Line comments strip the leading `--`
+#{- Block comments include the surrounding `{-` and `-}`
+#  -}
+1

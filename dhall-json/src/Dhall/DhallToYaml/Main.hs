@@ -34,6 +34,7 @@ parseOptions =
             <*> optional parseFile
             <*> optional parseOutput
             <*> parseNoEdit
+            <*> parsePreserveHeader
             )
     <|> parseVersion
   where
@@ -70,6 +71,12 @@ parseOptions =
         Options.switch
            (   Options.long "generated-comment"
            <>  Options.help "Include a comment header warning not to edit the generated file"
+           )
+
+    parsePreserveHeader =
+        Options.switch
+           (   Options.long "preserve-header"
+           <>  Options.help "Translate any Dhall comment header to a YAML comment header"
            )
 
 parserInfo :: ParserInfo (Maybe Options)
