@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
@@ -21,13 +22,17 @@ import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
-import qualified Network.HTTP.Client              as HTTP
-import qualified Network.HTTP.Client.TLS          as HTTP
 import qualified System.FilePath                  as FilePath
 import qualified System.IO.Temp                   as Temp
 import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
+
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+import qualified Network.HTTP.Client              as HTTP
+import qualified Network.HTTP.Client.TLS          as HTTP
+#endif
+
 
 importDirectory :: FilePath
 importDirectory = "./dhall-lang/tests/import"
@@ -62,6 +67,18 @@ getTests = do
         let expectedSuccesses =
                 [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
                 , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
+#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
+                -- We attempt to simulate test.dhall-lang.org, but even so
+                -- some tests unexpectedly succeed due to the inadequacy of
+                -- the simulation
+                , importDirectory </> "failure/unit/cors/OnlySelf.dhall"
+                , importDirectory </> "failure/unit/cors/OnlyOther.dhall"
+                , importDirectory </> "failure/unit/cors/Null.dhall"
+                , importDirectory </> "failure/unit/cors/TwoHops.dhall"
+                , importDirectory </> "failure/unit/cors/Empty.dhall"
+                , importDirectory </> "failure/unit/cors/NoCORS.dhall"
+                , importDirectory </> "failure/originHeadersFromRemote.dhall"
+#endif
                 ]
 
         _ <- Monad.guard (path `notElem` expectedSuccesses)
@@ -84,7 +101,15 @@ successTest prefix = do
 
     let directoryString = FilePath.takeDirectory inputPath
 
-    let expectedFailures = [ ]
+    let expectedFailures =
+            [
+#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
+              importDirectory </> "success/originHeadersImportFromEnv"
+            , importDirectory </> "success/originHeadersImport"
+            , importDirectory </> "success/originHeadersOverride"
+            , importDirectory </> "success/unit/asLocation/RemoteChainEnv"
+#endif
+            ]
 
     Test.Util.testCase prefix expectedFailures (do
 
@@ -98,6 +123,7 @@ successTest prefix = do
 
         let originalCache = "dhall-lang/tests/import/cache"
 
+#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
         let httpManager =
                 HTTP.newManager
                     HTTP.tlsManagerSettings
@@ -108,6 +134,9 @@ successTest prefix = do
                     httpManager
                     (pure Import.envOriginHeaders)
                     directoryString
+#else
+        let status = Import.emptyStatus directoryString
+#endif
 
         let load =
                 State.evalStateT
