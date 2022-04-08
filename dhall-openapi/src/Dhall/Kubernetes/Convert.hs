@@ -33,6 +33,7 @@ import qualified Data.Tuple      as Tuple
 import qualified Dhall.Core      as Dhall
 import qualified Dhall.Map
 import qualified Dhall.Optics
+import qualified Data.Map as Map
 
 modelsToText :: ModelHierarchy -> [Text]
 modelsToText = List.map (\ (ModelName unModelName) -> unModelName)
@@ -79,10 +80,31 @@ requiredFields modelHierarchy required
         )
       ]
 
+-- Special types: the first is a union found in the k8s swagger;
+-- the second is a parallel union we construct for distinguishing
+-- signed and unsigned intergers on the dhall side
+intOrStringK8sType :: Text
+intOrStringK8sType = "io.k8s.apimachinery.pkg.util.intstr.IntOrString"
+natOrStringK8sType :: Text
+natOrStringK8sType = "io.k8s.apimachinery.pkg.util.intstr.NatOrString"
 
--- | Get a filename from a Swagger ref
-pathFromRef :: Ref -> Text
-pathFromRef (Ref r) = (Text.split (== '/') r) List.!! 2
+intOrStringDhallType :: Dhall.Expr s a
+intOrStringDhallType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
+  [ ("Int", Dhall.Integer), ("String", Dhall.Text) ]
+natOrStringDhallType :: Dhall.Expr s a
+natOrStringDhallType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
+  [ ("Nat", Dhall.Natural), ("String", Dhall.Text) ]
+
+-- | Get a filename from a Swagger ref, also handling when we need to split
+-- | NatOrString from IntOrString
+pathFromRef :: Bool -> Ref -> Text
+pathFromRef prefNatInt (Ref r) =
+  if prefNatInt && qualType == intOrStringK8sType then
+    natOrStringK8sType
+  else
+    qualType
+  where
+    qualType = (Text.split (== '/') r) List.!! 2
 
 -- | Build an import from path components (note: they need to be in reverse order)
 --   and a filename
@@ -163,7 +185,10 @@ pathSplitter pathsAndModels modelHierarchy definition
     like "should this key be optional"
 -}
 toTypes :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Bool -> [(String,String)] -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr
-toTypes prefixMap typeSplitter preferNaturalInt natIntExceptions definitions = toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions Data.Map.empty
+toTypes prefixMap typeSplitter preferNaturalInt natIntExceptions definitions =
+    Map.insert (ModelName natOrStringK8sType) natOrStringDhallType types
+  where
+    types = toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions Data.Map.empty
 
 toTypes' :: Data.Map.Map Prefix Dhall.Import -> ([ModelName] -> Definition -> Maybe ModelName) -> Bool -> [(String,String)] -> Data.Map.Map ModelName Definition -> Data.Map.Map ModelName Expr -> Data.Map.Map ModelName Expr
 toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions toMerge
@@ -193,8 +218,6 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
        
         kvList = Dhall.App Dhall.List $ Dhall.Record $ Dhall.Map.fromList
           [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField Dhall.Text) ]
-        intOrStringType = Dhall.Union $ Dhall.Map.fromList $ fmap (second Just)
-          [ ("Int", Dhall.Integer), ("String", Dhall.Text) ]
 
         -- | Convert a single Definition to a Dhall Type, yielding any definitions to be split
         --   Note: model hierarchy contains the modelName of of the current definition as the last entry
@@ -203,7 +226,7 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
           | Just splitModelName <- typeSplitter modelHierarchy definition =
             ( Dhall.Embed $ mkImport prefixMap [] ((unModelName splitModelName) <> ".dhall"), Data.Map.singleton splitModelName definition)
           -- If we point to a ref we just reference it via Import
-          | Just r <- ref definition = ( Dhall.Embed $ mkImport prefixMap [] (pathFromRef r <> ".dhall"), Data.Map.empty)
+          | Just r <- ref definition = ( Dhall.Embed $ mkImport prefixMap [] (pathFromRef prefNatInt r <> ".dhall"), Data.Map.empty)
           | Just props <- properties definition =
               let
                   shouldBeRequired :: ModelHierarchy -> FieldName -> Bool
@@ -229,14 +252,15 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
           , let (mapValue, rest) = convertToType modelHierarchy props prefNatInt =
               (Dhall.App Dhall.List (Dhall.Record (Dhall.Map.fromList [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField mapValue) ])), rest)
             -- This is another way to declare an intOrString
-          | Maybe.isJust $ intOrString definition = (intOrStringType, Data.Map.empty)
+          | Maybe.isJust $ intOrString definition =
+             (if prefNatInt then natOrStringDhallType else intOrStringDhallType, Data.Map.empty)
             -- Otherwise - if we have a 'type' - it's a basic type
           | Just basic <- typ definition = case basic of
               "object"  -> (kvList, Data.Map.empty)
               "array"   | Just item <- items definition ->
                 let (e, tm) = convertToType (modelHierarchy) item prefNatInt
                 in (Dhall.App Dhall.List e, tm)
-              "string"  | format definition == Just "int-or-string" -> (intOrStringType, Data.Map.empty)
+              "string"  | format definition == Just "int-or-string" -> (intOrStringDhallType, Data.Map.empty)
               "string"  -> (Dhall.Text, Data.Map.empty)
               "boolean" -> (Dhall.Bool, Data.Map.empty)
               "integer" -> if prefNatInt then case (minimum_ definition, exclusiveMinimum definition,
@@ -548,8 +572,8 @@ toDefinition crd = fmap (\d -> (modelName, d)) definition
         , format               = v1JSONSchemaPropsFormat
         , minimum_             = v1JSONSchemaPropsMinimum
         , exclusiveMinimum     = v1JSONSchemaPropsExclusiveMinimum
-        , maximum_         = v1JSONSchemaPropsMaximum
-        , exclusiveMaximum = v1JSONSchemaPropsExclusiveMaximum
+        , maximum_             = v1JSONSchemaPropsMaximum
+        , exclusiveMaximum     = v1JSONSchemaPropsExclusiveMaximum
         , description          = v1JSONSchemaPropsDescription
         , items                = v1JSONSchemaPropsItems >>= parseMaybe parseJSON
         , properties           = fmap toProperties v1JSONSchemaPropsProperties

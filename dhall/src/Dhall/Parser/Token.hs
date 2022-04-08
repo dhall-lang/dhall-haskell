@@ -47,6 +47,7 @@ module Dhall.Parser.Token (
     _using,
     _merge,
     _toMap,
+    _showConstructor,
     _assert,
     _Some,
     _None,
@@ -951,6 +952,13 @@ _merge = keyword "merge"
 -}
 _toMap :: Parser ()
 _toMap = keyword "toMap"
+
+{-| Parse the @showConstructor@ keyword
+
+    This corresponds to the @showConstructor@ rule from the official grammar
+-}
+_showConstructor :: Parser ()
+_showConstructor = keyword "showConstructor"
 
 {-| Parse the @assert@ keyword
 

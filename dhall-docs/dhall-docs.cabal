@@ -1,5 +1,5 @@
 Name: dhall-docs
-Version: 1.0.8
+Version: 1.0.9
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -22,11 +22,13 @@ Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
     README.md
+    tasty/data/package/*.txt
     tasty/data/package/*.dhall
     tasty/data/package/a/*.dhall
     tasty/data/package/a/b/*.dhall
     tasty/data/package/a/b/c/*.dhall
     tasty/data/package/deep/nested/folder/*.dhall
+    tasty/data/golden/*.txt.html
     tasty/data/golden/*.dhall.html
     tasty/data/golden/a/*.dhall.html
     tasty/data/golden/a/b/*.dhall.html
@@ -67,7 +69,7 @@ Library
         containers                                 ,
         cryptohash-sha256                          ,
         directory            >= 1.3.0.0   && < 1.4 ,
-        dhall                >= 1.38.0    && < 1.41,
+        dhall                >= 1.38.0    && < 1.42,
         file-embed           >= 0.0.10.0           ,
         filepath             >= 1.4       && < 1.5 ,
         lens-family-core     >= 1.0.0     && < 2.2 ,
@@ -76,7 +78,8 @@ Library
         -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
         megaparsec           >= 7         && < 10  ,
         path                 >= 0.7.0     && < 0.10,
-        path-io              >= 1.6.0     && < 1.7 ,
+        -- path-io follows SemVer: https://github.com/mrkkrp/path-io/issues/68
+        path-io              >= 1.6.0     && < 2 ,
         prettyprinter        >= 1.7.0     && < 1.8 ,
         text                 >= 0.11.1.0  && < 2.1 ,
         transformers         >= 0.2.0.0  && < 0.6 ,

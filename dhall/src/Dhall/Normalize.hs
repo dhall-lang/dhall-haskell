@@ -38,6 +38,7 @@ import Dhall.Syntax
     , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
+    , WithComponent (..)
     , Var (..)
     )
 
@@ -623,6 +624,22 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                 return (ListLit listType keyValues)
             _ ->
                 return (ToMap x' t')
+    ShowConstructor x -> do
+        x' <- loop x
+        return $ case x' of
+            Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
+                case Dhall.Map.lookup kY ktsY of
+                    Just Nothing -> TextLit (Chunks [] kY)
+                    _ -> ShowConstructor x'
+            App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) _ ->
+                case Dhall.Map.lookup kY ktsY of
+                    Just (Just _) -> TextLit (Chunks [] kY)
+                    _ -> ShowConstructor x'
+            Some _ ->
+                TextLit (Chunks [] "Some")
+            App None _ ->
+                TextLit (Chunks [] "None")
+            _ -> ShowConstructor x'
     Field r k@FieldSelection{fieldSelectionLabel = x}        -> do
         let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
 
@@ -686,9 +703,9 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         case e' of
             RecordLit kvs ->
                 case ks of
-                    k :| [] ->
+                    WithLabel k :| [] ->
                         return (RecordLit (Dhall.Map.insert k (Syntax.makeRecordField v') kvs))
-                    k₀ :| k₁ : ks' -> do
+                    WithLabel k₀ :| k₁ : ks' -> do
                         let e₁ =
                                 case Dhall.Map.lookup k₀ kvs of
                                     Nothing -> RecordLit mempty
@@ -697,6 +714,23 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         e₂ <- loop (With e₁ (k₁ :| ks') v')
 
                         return (RecordLit (Dhall.Map.insert k₀ (Syntax.makeRecordField e₂) kvs))
+                    WithQuestion :| _ -> do
+                        return (With e' ks v')
+            Some t ->
+                case ks of
+                    WithQuestion :| [] -> do
+                        return (Some v')
+                    WithQuestion :| k : ks' -> do
+                        w <- loop (With t (k :| ks') v)
+                        return (Some w)
+                    WithLabel _ :| _ ->
+                        return (With e' ks v')
+            App None _T ->
+                case ks of
+                    WithQuestion :| _ ->
+                        return (App None _T)
+                    WithLabel _ :| _ ->
+                        return (With e' ks v')
             _ ->
                 return (With e' ks v')
     Note _ e' -> loop e'
@@ -909,6 +943,18 @@ isNormalized e0 = loop (Syntax.denote e0)
       ToMap x t -> case x of
           RecordLit _ -> False
           _ -> loop x && all loop t
+      ShowConstructor x -> loop x && case x of
+          Field (Union kts) (Syntax.fieldSelectionLabel -> k) ->
+              case Dhall.Map.lookup k kts of
+                  Just Nothing -> False
+                  _            -> True
+          App (Field (Union kts) (Syntax.fieldSelectionLabel -> k)) _ ->
+              case Dhall.Map.lookup k kts of
+                  Just (Just _) -> False
+                  _             -> True
+          Some _ -> False
+          App None _ -> False
+          _ -> True
       Field r (FieldSelection Nothing k Nothing) -> case r of
           RecordLit _ -> False
           Project _ _ -> False

@@ -388,7 +388,11 @@ parsers embedded = Parsers{..}
                     bs <- some (do
                         try (nonemptyWhitespace *> _with *> nonemptyWhitespace)
 
-                        keys <- Combinators.NonEmpty.sepBy1 anyLabelOrSome (try (whitespace *> _dot) *> whitespace)
+                        let withComponent =
+                                    fmap WithLabel anyLabelOrSome
+                                <|> fmap (\_ -> WithQuestion) (text "?")
+
+                        keys <- Combinators.NonEmpty.sepBy1 withComponent (try (whitespace *> _dot) *> whitespace)
 
                         whitespace
 
@@ -520,10 +524,15 @@ parsers embedded = Parsers{..}
 
                     return (\a -> ToMap a Nothing, Just "argument to ❰toMap❱")
 
-            let alternative3 =
+            let alternative3 = do
+                    try (_showConstructor *> nonemptyWhitespace)
+
+                    return (\a -> ShowConstructor a, Just "argument to ❰showConstructor❱")
+
+            let alternative4 =
                     return (id, Nothing)
 
-            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2 <|> alternative3
+            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2 <|> alternative3 <|> alternative4
 
             let adapt parser =
                     case maybeMessage of

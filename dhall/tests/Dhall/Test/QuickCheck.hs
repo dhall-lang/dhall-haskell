@@ -1,3 +1,5 @@
+-- TODO: update because we added ShowConstructor constructor to Expr in Dhall.Syntax
+
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleInstances   #-}
@@ -50,6 +52,7 @@ import Dhall.Core
     , Scheme (..)
     , URL (..)
     , Var (..)
+    , WithComponent (..)
     )
 import Dhall.Map              (Map)
 
@@ -296,6 +299,10 @@ instance Arbitrary s => Arbitrary (FieldSelection s) where
     arbitrary = FieldSelection <$> pure Nothing <*> label <*> pure Nothing
     shrink = genericShrink
 
+instance Arbitrary WithComponent where
+    arbitrary =
+        Test.QuickCheck.oneof [ pure WithQuestion, WithLabel <$> arbitrary ]
+
 instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
     arbitrary =
         Test.QuickCheck.suchThat
@@ -405,6 +412,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (7 :: W "RecordCompletion")
             % (1 :: W "Merge")
             % (1 :: W "ToMap")
+            % (1 :: W "ShowConstructor")
             % (7 :: W "Field")
             % (7 :: W "Project")
             % (1 :: W "Assert")
