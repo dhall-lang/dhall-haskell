@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# LANGUAGE CPP #-}
 
 {-| Dhall is a programming language specialized for configuration files.  This
     module contains a tutorial explaining how to author configuration files
@@ -375,13 +376,23 @@ import Dhall
 --
 -- ... and you can reference that expression either directly:
 --
+#if defined(WITH_HTTP) && defined(USE_HTTP_CLIENT_TLS) && defined(NETWORK_TESTS)
 -- >>> input auto "https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
 -- True
+#else
+-- > >>> input auto "https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
+-- > True
+#endif
 --
 -- ... or inside of a larger expression:
 --
+#if defined(WITH_HTTP) && defined(USE_HTTP_CLIENT_TLS) && defined(NETWORK_TESTS)
 -- >>> input auto "False == https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
 -- False
+#else
+-- > >>> input auto "False == https://raw.githubusercontent.com/dhall-lang/dhall-haskell/18e4e9a18dc53271146df3ccf5b4177c3552236b/examples/True" :: IO Bool
+-- > False
+#endif
 --
 -- You're not limited to hosting Dhall expressions on GitHub.  You can host a
 -- Dhall expression anywhere that you can host UTF8-encoded text on the web,

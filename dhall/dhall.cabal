@@ -196,6 +196,11 @@ Flag cross
   Default:     False
   Manual:      True
 
+Flag network-tests
+  Description: Enable tests which depend on an internet connection
+  Default:     True
+  Manual:      True
+
 Common common
     Build-Depends:
         base                        >= 4.11.0.0 && < 5   ,
@@ -253,6 +258,9 @@ Common common
       if flag(use-http-client-tls)
         CPP-Options:
           -DUSE_HTTP_CLIENT_TLS
+      if flag(network-tests)
+        CPP-Options:
+          -DNETWORK_TESTS
 
     GHC-Options: -Wall -Wcompat -Wincomplete-uni-patterns
 
