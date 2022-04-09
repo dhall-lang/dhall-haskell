@@ -208,6 +208,7 @@ module Dhall.JSON (
     , SpecialDoubleMode(..)
     , handleSpecialDoubles
     , codeToValue
+    , codeToHeaderAndValue
 
     -- * Exceptions
     , CompileError(..)
@@ -224,6 +225,7 @@ import Dhall.Core          (Binding (..), DhallDouble (..), Expr)
 import Dhall.Import        (SemanticCacheMode (..))
 import Dhall.JSON.Util     (pattern FA, pattern V)
 import Dhall.Map           (Map)
+import Dhall.Parser        (Header(..))
 import Options.Applicative (Parser)
 import Prelude             hiding (getContents)
 import Prettyprinter       (Pretty)
@@ -1187,7 +1189,27 @@ codeToValue
   -> Text  -- ^ Input text.
   -> IO Value
 codeToValue conversion specialDoubleMode mFilePath code = do
-    parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(input)" mFilePath) code)
+  fmap snd (codeToHeaderAndValue conversion specialDoubleMode mFilePath code)
+
+{-| This is like `codeToValue`, except also returning a `Header` that is a
+    valid YAML comment derived from the original Dhall code's `Header`
+-}
+codeToHeaderAndValue
+  :: Conversion
+  -> SpecialDoubleMode
+  -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
+                     -- are resolved relative to the current directory.
+  -> Text  -- ^ Input text.
+  -> IO (Header, Value)
+codeToHeaderAndValue conversion specialDoubleMode mFilePath code = do
+    (Header header, parsedExpression) <- Core.throws (Dhall.Parser.exprAndHeaderFromText (fromMaybe "(input)" mFilePath) code)
+
+    let adapt line =
+            case Data.Text.stripPrefix "--" line of
+                Just suffix -> "#" <> suffix
+                Nothing     -> "#" <> line
+
+    let yamlHeader = Data.Text.unlines (map adapt (Data.Text.lines header))
 
     let rootDirectory = case mFilePath of
             Nothing -> "."
@@ -1204,4 +1226,4 @@ codeToValue conversion specialDoubleMode mFilePath code = do
 
     case dhallToJSON specialDoubleExpression of
       Left  err  -> Control.Exception.throwIO err
-      Right json -> return json
+      Right json -> return (Header yamlHeader, json)

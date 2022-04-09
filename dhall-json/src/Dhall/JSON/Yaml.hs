@@ -19,25 +19,28 @@ module Dhall.JSON.Yaml
 import Data.ByteString     (ByteString)
 import Data.Text           (Text)
 import Dhall.JSON          (Conversion (..), SpecialDoubleMode (..))
+import Dhall.Parser        (Header(..))
 import Options.Applicative (Parser)
 
 import qualified Data.Aeson
 import qualified Data.Aeson.Yaml
 import qualified Data.ByteString.Lazy
+import qualified Data.Text.Encoding
 import qualified Data.Vector
 import qualified Dhall
 import qualified Dhall.JSON
 import qualified Options.Applicative
 
 data Options = Options
-    { explain    :: Bool
-    , omission   :: Data.Aeson.Value -> Data.Aeson.Value
-    , documents  :: Bool
-    , quoted     :: Bool
-    , conversion :: Conversion
-    , file       :: Maybe FilePath
-    , output     :: Maybe FilePath
-    , noEdit     :: Bool
+    { explain        :: Bool
+    , omission       :: Data.Aeson.Value -> Data.Aeson.Value
+    , documents      :: Bool
+    , quoted         :: Bool
+    , conversion     :: Conversion
+    , file           :: Maybe FilePath
+    , output         :: Maybe FilePath
+    , noEdit         :: Bool
+    , preserveHeader :: Bool
     }
 
 defaultOptions :: Options
@@ -50,6 +53,7 @@ defaultOptions =
           , file = Nothing
           , output = Nothing
           , noEdit = False
+          , preserveHeader = False
           }
 
 parseDocuments :: Parser Bool
@@ -84,12 +88,18 @@ dhallToYaml Options{..} mFilePath code = do
 
   let explaining = if explain then Dhall.detailed else id
 
-  json <- omission <$> explaining (Dhall.JSON.codeToValue conversion UseYAMLEncoding mFilePath code)
+  let adapt (header, value) = (header, omission value)
+
+  (Header comment, json) <- adapt <$> explaining (Dhall.JSON.codeToHeaderAndValue conversion UseYAMLEncoding mFilePath code)
+
+  let suffix
+        | preserveHeader = Data.Text.Encoding.encodeUtf8 comment
+        | otherwise      = mempty
 
   let header =
           if noEdit
-          then generatedCodeNotice
-          else mempty
+          then generatedCodeNotice <> suffix
+          else suffix
 
   return $ header <> jsonToYaml json documents quoted
 

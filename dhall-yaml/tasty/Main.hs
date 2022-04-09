@@ -69,6 +69,10 @@ testTree =
             TestBoth
         , testYamlToDhall
             "./tasty/data/mergify"
+        , testDhallToYaml
+            Dhall.JSON.Yaml.defaultOptions{ preserveHeader = True }
+            "./tasty/data/preserve-header"
+            TestBoth
         ]
 
 testDhallToYaml :: Options -> String -> TestScope -> TestTree

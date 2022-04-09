@@ -12,19 +12,21 @@ module Dhall.Yaml
 import Data.ByteString      (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.Text            (Text)
-import Dhall.JSON           (SpecialDoubleMode (..), codeToValue)
+import Dhall.JSON           (SpecialDoubleMode (..), codeToHeaderAndValue)
 import Dhall.JSON.Yaml      (Options (..))
+import Dhall.Parser         (Header (..))
 
 import qualified Data.Aeson
 import qualified Data.ByteString
-import qualified Data.Char        as Char
-import qualified Data.Text        as Text
+import qualified Data.Char          as Char
+import qualified Data.Text          as Text
+import qualified Data.Text.Encoding
 import qualified Data.Vector
-import qualified Data.YAML        as Y
+import qualified Data.YAML          as Y
 import qualified Data.YAML.Aeson
-import qualified Data.YAML.Event  as YE
-import qualified Data.YAML.Schema as YS
-import qualified Data.YAML.Token  as YT
+import qualified Data.YAML.Event    as YE
+import qualified Data.YAML.Schema   as YS
+import qualified Data.YAML.Token    as YT
 import qualified Dhall
 import qualified Dhall.JSON.Yaml
 
@@ -40,12 +42,18 @@ dhallToYaml Options{..} mFilePath code = do
 
   let explaining = if explain then Dhall.detailed else id
 
-  json <- omission <$> explaining (codeToValue conversion UseYAMLEncoding mFilePath code)
+  let adapt (header, value) = (header, omission value)
+
+  (Header comment, json) <- adapt <$> explaining (codeToHeaderAndValue conversion UseYAMLEncoding mFilePath code)
+
+  let suffix
+          | preserveHeader = Data.Text.Encoding.encodeUtf8 comment
+          | otherwise      = mempty
 
   let header =
           if noEdit
-          then Dhall.JSON.Yaml.generatedCodeNotice
-          else mempty
+          then Dhall.JSON.Yaml.generatedCodeNotice <> suffix
+          else suffix
 
   return $ header <> jsonToYaml json documents quoted
 
