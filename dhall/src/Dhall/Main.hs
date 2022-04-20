@@ -3,6 +3,7 @@
 -}
 
 {-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -24,7 +25,7 @@ module Dhall.Main
 import Control.Applicative (optional, (<|>))
 import Control.Exception   (Handler (..), SomeException)
 import Control.Monad       (when, foldM)
-import Data.Foldable       (for_)
+import Data.Foldable       (for_, foldl')
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
 import Data.Maybe          (fromMaybe)
 import Data.Text           (Text)
@@ -968,47 +969,58 @@ command (Options {..}) = do
                 Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
-                eatArgCmds :: Expr Void Void -> String -> IO (Expr Void Void)
-                eatArgCmds currExp arg = case currExp of
-                  Dhall.Core.Lam _ (Dhall.Core.FunctionBinding { functionBindingVariable }) subExp ->
-                    Dhall.Core.normalizeWithM
-                      (\x -> case x of
-                        Dhall.Core.App (Dhall.Core.Var (Dhall.Core.V v 0))
-                            (Dhall.Core.TextLit (Dhall.Core.Chunks [] txt))
-                          | v == functionBindingVariable -> Just <$> do
-                              res <- Data.Text.pack <$> System.Process.readCreateProcess
-                                (System.Process.shell arg)
-                                (Data.Text.unpack txt)
-                              pure $ Dhall.Core.TextLit (Dhall.Core.Chunks [] res)
-                        _ -> pure Nothing
-                      )
-                      subExp
-                  _ -> do
-                    let invalidDecoderExpected :: Expr Void Void
-                        invalidDecoderExpected = Dhall.Core.Pi
-                            Nothing
-                            "_"
-                            (Dhall.Core.Pi Nothing "_" Dhall.Core.Text Dhall.Core.Text)
-                            Dhall.Core.Text
-                    let invalidDecoderExpression :: Expr Void Void
-                        invalidDecoderExpression = currExp
+                peelArg :: Either (Int, Expr Void Void) (Expr Void Void, Data.Map.Map Text [String])
+                        -> String
+                        -> Either (Int, Expr Void Void) (Expr Void Void, Data.Map.Map Text [String])
+                peelArg = \case
+                  Left (!extraLayers, !expr) -> \_ -> Left (extraLayers + 1, expr)
+                  Right (!currExp, !currMap) -> \arg -> case currExp of
+                      Dhall.Core.Lam _ (Dhall.Core.FunctionBinding { functionBindingVariable }) subExp ->
+                        Right (subExp, Data.Map.insertWith (++) functionBindingVariable [arg] currMap)
+                      _ -> Left (1, currExp)
+                peeledExprAndMap =
+                    foldl' peelArg (Right (normalizedExpression, Data.Map.empty)) argCmds
 
-                    Control.Exception.throwIO (Dhall.InvalidDecoder {..})
-            outExpr <- foldM eatArgCmds normalizedExpression argCmds
-            case outExpr of
-                Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
-                    let write = case output of
-                          StandardOutput -> Data.Text.IO.putStr
-                          OutputFile file_ -> Data.Text.IO.writeFile file_
-                    in write text
-                _ -> do
-                    let invalidDecoderExpected :: Expr Void Void
-                        invalidDecoderExpected = Dhall.Core.Text
+            case peeledExprAndMap of
+              Left (extraLayers, expr) -> do
+                let addPiLayer :: Expr Void Void -> Expr Void Void
+                    addPiLayer = Dhall.Core.Pi
+                      Nothing "_"
+                      (Dhall.Core.Pi Nothing "_" Dhall.Core.Text Dhall.Core.Text)
+                    invalidDecoderExpected :: Expr Void Void
+                    invalidDecoderExpected = iterate addPiLayer Dhall.Core.Text !! extraLayers
+                    invalidDecoderExpression :: Expr Void Void
+                    invalidDecoderExpression = expr
+                Control.Exception.throwIO (Dhall.InvalidDecoder {..})
+              Right (expr, argMap) -> do
+                res <- Dhall.Core.normalizeWithM
+                  (\x -> case x of
+                    Dhall.Core.App (Dhall.Core.Var (Dhall.Core.V v i))
+                          (Dhall.Core.TextLit (Dhall.Core.Chunks [] txt))
+                      | Just as <- Data.Map.lookup v argMap
+                      , a:_     <- drop i as
+                      -> Just <$> do
+                        sysOut <- Data.Text.pack <$> System.Process.readCreateProcess
+                          (System.Process.shell a)
+                          (Data.Text.unpack txt)
+                        pure $ Dhall.Core.TextLit (Dhall.Core.Chunks [] sysOut)
+                    _ -> pure Nothing
+                  )
+                  expr
+                case res of
+                    Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
+                        let write = case output of
+                              StandardOutput -> Data.Text.IO.putStr
+                              OutputFile file_ -> Data.Text.IO.writeFile file_
+                        in write text
+                    _ -> do
+                        let invalidDecoderExpected :: Expr Void Void
+                            invalidDecoderExpected = Dhall.Core.Text
 
-                    let invalidDecoderExpression :: Expr Void Void
-                        invalidDecoderExpression = outExpr
+                        let invalidDecoderExpression :: Expr Void Void
+                            invalidDecoderExpression = res
 
-                    Control.Exception.throwIO (Dhall.InvalidDecoder {..})
+                        Control.Exception.throwIO (Dhall.InvalidDecoder {..})
 
         Tags {..} -> do
             tags <- Dhall.Tags.generate input suffixes followSymlinks
