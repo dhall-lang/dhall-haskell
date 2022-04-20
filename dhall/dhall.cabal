@@ -238,6 +238,7 @@ Common common
         prettyprinter               >= 1.7.0    && < 1.8 ,
         prettyprinter-ansi-terminal >= 1.1.1    && < 1.2 ,
         pretty-simple                              < 4.2 ,
+        process                     >= 1.6.0    && < 1.7 ,
         profunctors                 >= 3.1.2    && < 5.7 ,
         repline                     >= 0.4.0.0  && < 0.5 ,
         serialise                   >= 0.2.0.0  && < 0.3 ,

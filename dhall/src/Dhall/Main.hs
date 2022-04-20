@@ -23,7 +23,7 @@ module Dhall.Main
 
 import Control.Applicative (optional, (<|>))
 import Control.Exception   (Handler (..), SomeException)
-import Control.Monad       (when)
+import Control.Monad       (when, foldM)
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
 import Data.Maybe          (fromMaybe)
@@ -110,6 +110,7 @@ import qualified System.Console.ANSI
 import qualified System.Exit                        as Exit
 import qualified System.FilePath
 import qualified System.IO
+import qualified System.Process
 import qualified Text.Dot
 import qualified Text.Pretty.Simple
 
@@ -158,7 +159,7 @@ data Mode
           }
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
-    | Text { file :: Input, output :: Output }
+    | Text { file :: Input, output :: Output, argCmds :: [String] }
     | DirectoryTree { file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
@@ -264,7 +265,7 @@ parseMode =
             Generate
             "text"
             "Render a Dhall expression that evaluates to a Text literal"
-            (Text <$> parseFile <*> parseOutput)
+            (Text <$> parseFile <*> parseOutput <*> Options.Applicative.many parseArgCmd)
     <|> subcommand
             Generate
             "to-directory-tree"
@@ -551,6 +552,13 @@ parseMode =
         Options.Applicative.switch
             (   Options.Applicative.long "cache"
             <>  Options.Applicative.help "Cache the hashed expression"
+            )
+
+    parseArgCmd = Options.Applicative.strOption
+            (   Options.Applicative.long "argCmd"
+            <>  Options.Applicative.help "Use shell command to supply as `Text -> Text` argument"
+            <>  Options.Applicative.metavar "CMD"
+            <>  Options.Applicative.action "CMD"
             )
 
 -- | `ParserInfo` for the `Options` type
@@ -959,11 +967,35 @@ command (Options {..}) = do
             resolvedExpression <-
                 Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
-
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
+                eatArgCmds :: Expr Void Void -> String -> IO (Expr Void Void)
+                eatArgCmds currExp arg = case currExp of
+                  Dhall.Core.Lam _ (Dhall.Core.FunctionBinding { functionBindingVariable }) subExp ->
+                    Dhall.Core.normalizeWithM
+                      (\x -> case x of
+                        Dhall.Core.App (Dhall.Core.Var (Dhall.Core.V v 0))
+                            (Dhall.Core.TextLit (Dhall.Core.Chunks [] txt))
+                          | v == functionBindingVariable -> Just <$> do
+                              res <- Data.Text.pack <$> System.Process.readCreateProcess
+                                (System.Process.shell arg)
+                                (Data.Text.unpack txt)
+                              pure $ Dhall.Core.TextLit (Dhall.Core.Chunks [] res)
+                        _ -> pure Nothing
+                      )
+                      subExp
+                  _ -> do
+                    let invalidDecoderExpected :: Expr Void Void
+                        invalidDecoderExpected = Dhall.Core.Pi
+                            Nothing
+                            "_"
+                            (Dhall.Core.Pi Nothing "_" Dhall.Core.Text Dhall.Core.Text)
+                            Dhall.Core.Text
+                    let invalidDecoderExpression :: Expr Void Void
+                        invalidDecoderExpression = currExp
 
-            case normalizedExpression of
+                    Control.Exception.throwIO (Dhall.InvalidDecoder {..})
+            outExpr <- foldM eatArgCmds normalizedExpression argCmds
+            case outExpr of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
                     let write = case output of
                           StandardOutput -> Data.Text.IO.putStr
@@ -974,7 +1006,7 @@ command (Options {..}) = do
                         invalidDecoderExpected = Dhall.Core.Text
 
                     let invalidDecoderExpression :: Expr Void Void
-                        invalidDecoderExpression = normalizedExpression
+                        invalidDecoderExpression = outExpr
 
                     Control.Exception.throwIO (Dhall.InvalidDecoder {..})
 
