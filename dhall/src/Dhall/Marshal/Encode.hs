@@ -382,6 +382,37 @@ instance ToDhall Time.ZonedTime where
 instance ToDhall Time.UTCTime where
     injectWith = contramap (Time.utcToZonedTime Time.utc) . injectWith
 
+instance ToDhall Time.DayOfWeek where
+    injectWith _ = Encoder{..}
+      where
+        embed Time.Sunday =
+            Field declared (Core.makeFieldSelection "Sunday")
+        embed Time.Monday =
+            Field declared (Core.makeFieldSelection "Monday" )
+        embed Time.Tuesday =
+            Field declared (Core.makeFieldSelection "Tuesday")
+        embed Time.Wednesday =
+            Field declared (Core.makeFieldSelection "Wednesday")
+        embed Time.Thursday =
+            Field declared (Core.makeFieldSelection "Thursday")
+        embed Time.Friday =
+            Field declared (Core.makeFieldSelection "Friday")
+        embed Time.Saturday =
+            Field declared (Core.makeFieldSelection "Saturday")
+
+        declared =
+            Union
+                (Dhall.Map.fromList
+                    [ ("Sunday", Nothing)
+                    , ("Monday", Nothing)
+                    , ("Tuesday", Nothing)
+                    , ("Wednesday", Nothing)
+                    , ("Thursday", Nothing)
+                    , ("Friday", Nothing)
+                    , ("Saturday", Nothing)
+                    ]
+                )
+
 {-| Note that the output list will be sorted.
 
 >>> let x = Data.Set.fromList ["mom", "hi" :: Text]
