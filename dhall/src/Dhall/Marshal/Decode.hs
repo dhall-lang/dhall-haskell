@@ -1005,6 +1005,11 @@ zonedTime = record $
 utcTime :: Decoder Time.UTCTime
 utcTime = Time.zonedTimeToUTC <$> zonedTime
 
+{-| Decode `Time.DayOfWeek`
+
+>>> input dayOfWeek "< Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday >.Monday"
+Monday
+-}
 dayOfWeek :: Decoder Time.DayOfWeek
 dayOfWeek = Decoder{..}
   where
