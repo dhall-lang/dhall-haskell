@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -61,6 +62,7 @@ module Dhall.Marshal.Decode
     , localTime
     , zonedTime
     , utcTime
+    , dayOfWeek
       -- ** Containers
     , maybe
     , pair
@@ -151,6 +153,7 @@ import Dhall.Syntax
     ( Chunks (..)
     , DhallDouble (..)
     , Expr (..)
+    , FieldSelection (..)
     , FunctionBinding (..)
     , Var (..)
     )
@@ -335,6 +338,9 @@ instance FromDhall Time.ZonedTime where
 
 instance FromDhall Time.UTCTime where
     autoWith _ = utcTime
+
+instance FromDhall Time.DayOfWeek where
+    autoWith _ = dayOfWeek
 
 {-| Note that this instance will throw errors in the presence of duplicates in
     the list. To ignore duplicates, use `setIgnoringDuplicates`.
@@ -998,6 +1004,42 @@ zonedTime = record $
 -}
 utcTime :: Decoder Time.UTCTime
 utcTime = Time.zonedTimeToUTC <$> zonedTime
+
+{-| Decode `Time.DayOfWeek`
+
+>>> input dayOfWeek "< Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday >.Monday"
+Monday
+-}
+dayOfWeek :: Decoder Time.DayOfWeek
+dayOfWeek = Decoder{..}
+  where
+    extract expr@(Field _ FieldSelection{ fieldSelectionLabel }) =
+        case fieldSelectionLabel of
+            "Sunday"    -> pure Time.Sunday
+            "Monday"    -> pure Time.Monday
+            "Tuesday"   -> pure Time.Tuesday
+            "Wednesday" -> pure Time.Wednesday
+            "Thursday"  -> pure Time.Thursday
+            "Friday"    -> pure Time.Friday
+            "Saturday"  -> pure Time.Saturday
+            _           -> typeError expected expr
+    extract expr =
+        typeError expected expr
+
+    expected =
+        pure
+            (Union
+                (Dhall.Map.fromList
+                    [ ("Sunday", Nothing)
+                    , ("Monday", Nothing)
+                    , ("Tuesday", Nothing)
+                    , ("Wednesday", Nothing)
+                    , ("Thursday", Nothing)
+                    , ("Friday", Nothing)
+                    , ("Saturday", Nothing)
+                    ]
+                )
+            )
 
 {-| Decode a `Maybe`.
 
