@@ -370,6 +370,37 @@ instance ToDhall Time.LocalTime where
       where
         adapt (Time.LocalTime date time) = (date, time)
 
+instance ToDhall Time.DayOfWeek where
+    injectWith _ = Encoder{..}
+      where
+        embed Time.Sunday =
+            Field declared (Core.makeFieldSelection "Sunday")
+        embed Time.Monday =
+            Field declared (Core.makeFieldSelection "Monday" )
+        embed Time.Tuesday =
+            Field declared (Core.makeFieldSelection "Tuesday")
+        embed Time.Wednesday =
+            Field declared (Core.makeFieldSelection "Wednesday")
+        embed Time.Thursday =
+            Field declared (Core.makeFieldSelection "Thursday")
+        embed Time.Friday =
+            Field declared (Core.makeFieldSelection "Friday")
+        embed Time.Saturday =
+            Field declared (Core.makeFieldSelection "Saturday")
+
+        declared =
+            Union
+                (Dhall.Map.fromList
+                    [ ("Sunday", Nothing)
+                    , ("Monday", Nothing)
+                    , ("Tuesday", Nothing)
+                    , ("Wednesday", Nothing)
+                    , ("Thursday", Nothing)
+                    , ("Friday", Nothing)
+                    , ("Saturday", Nothing)
+                    ]
+                )
+
 instance ToDhall Time.ZonedTime where
     injectWith _ = recordEncoder $
       adapt
