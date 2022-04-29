@@ -120,7 +120,9 @@ import Dhall.Core
 import Nix.Expr
     ( Antiquoted (..)
     , NExpr
-    , NExprF (NStr)
+    , NExprF (NStr, NSet)
+    , NRecordType (NNonRecursive)
+    , Binding (NamedVar)
     , NKeyName (..)
     , NString (..)
     , Params (Param)
@@ -596,7 +598,14 @@ dhallToNix e =
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse (loop . Dhall.Core.recordFieldValue) a
-        return (Nix.attrsE (Dhall.Map.toList a'))
+        return (nixAttrs (Dhall.Map.toList a'))
+      where
+        -- nonrecursive attrset that uses correctly quoted keys
+        -- see https://github.com/dhall-lang/dhall-haskell/issues/2414
+        nixAttrs pairs =
+          Fix $ NSet NNonRecursive $
+          (\(key, val) -> NamedVar (DynamicKey (Plain (DoubleQuoted [Plain key])) :| []) val Nix.nullPos)
+          <$> pairs
     loop (Union _) = return untranslatable
     loop (Combine _ _ a b) = do
         a' <- loop a
