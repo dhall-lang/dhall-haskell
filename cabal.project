@@ -2,11 +2,6 @@ packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-nix ./dhall-ope
 
 source-repository-package
     type: git
-    location: https://github.com/haskell/mtl.git
-    tag: 5d0f62b
-
-source-repository-package
-    type: git
     location: https://github.com/ekmett/exceptions.git
     tag: 28b9b49a51deb7c1343e003dafb4c69ef79f2e8b
 
