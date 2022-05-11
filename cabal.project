@@ -7,10 +7,5 @@ source-repository-package
 
 source-repository-package
     type: git
-    location: https://github.com/sjakobi/HsYAML.git
-    tag: 9117e8e806268c1ab2b6c7a1a0a2c7141f420bab
-
-source-repository-package
-    type: git
     location: https://github.com/ekmett/lens.git
     tag: 371a9410cb2876af14b9ac5864b1da420101136c
