@@ -102,7 +102,7 @@ loadFile uri_ = do
 
   expr <- case parse txt of
     Right e -> return e
-    _ -> throwE (Info, "Failed to parse Dhall file.")
+    _ -> throwE (Error, "Failed to parse Dhall file.")
 
   loaded <- liftIO $ load fileIdentifier expr cache
   (cache', expr') <- case loaded of
@@ -643,11 +643,6 @@ handleErrorWithDefault respond _default = flip catchE handler
   where
     handler (Log, _message)  = do
                     let _xtype = MtLog
-                    liftLSP $ LSP.sendNotification SWindowLogMessage LogMessageParams{..}
-                    respond (Right _default)
-
-    handler (Info, _message)  = do
-                    let _xtype = MtInfo
                     liftLSP $ LSP.sendNotification SWindowLogMessage LogMessageParams{..}
                     respond (Right _default)
 
