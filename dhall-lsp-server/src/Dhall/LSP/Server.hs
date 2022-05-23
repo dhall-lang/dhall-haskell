@@ -16,6 +16,10 @@ import Dhall.LSP.Handlers
     , documentLinkHandler
     , executeCommandHandler
     , hoverHandler
+    , initializedHandler
+    , workspaceChangeConfigurationHandler
+    , textDocumentChangeHandler
+    , cancelationHandler
     )
 import Dhall.LSP.State
 import Language.LSP.Server (Options(..), ServerDefinition(..), type (<~>)(..))
@@ -76,6 +80,10 @@ run mlog = do
           , documentFormattingHandler
           , documentLinkHandler
           , completionHandler
+          , initializedHandler
+          , workspaceChangeConfigurationHandler
+          , textDocumentChangeHandler
+          , cancelationHandler
           ]
 
   let interpretHandler environment = Iso{..}
