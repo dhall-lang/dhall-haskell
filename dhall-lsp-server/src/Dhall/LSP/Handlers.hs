@@ -132,7 +132,7 @@ rangeToJSON (Range (x1,y1) (x2,y2)) =
 
 hoverHandler :: Handlers HandlerM
 hoverHandler =
-    LSP.requestHandler STextDocumentHover \request respond -> do
+    LSP.requestHandler STextDocumentHover \request respond -> handleErrorWithDefault respond Nothing do
         let uri_ = request^.params.textDocument.uri
 
         let Position{ _line = fromIntegral -> _line, _character = fromIntegral -> _character } = request^.params.position
@@ -185,7 +185,7 @@ hoverHandler =
 
 documentLinkHandler :: Handlers HandlerM
 documentLinkHandler =
-    LSP.requestHandler STextDocumentDocumentLink \request respond -> do
+    LSP.requestHandler STextDocumentDocumentLink \request respond -> handleErrorWithDefault respond (List []) do
         let uri_ = request^.params.textDocument.uri
 
         path <- case uriToFilePath uri_ of
@@ -293,7 +293,7 @@ diagnosticsHandler _uri = do
 
 documentFormattingHandler :: Handlers HandlerM
 documentFormattingHandler =
-    LSP.requestHandler STextDocumentFormatting \request respond -> do
+    LSP.requestHandler STextDocumentFormatting \request respond -> handleErrorWithDefault respond (List []) do
         let _uri = request^.params.textDocument.uri
 
         txt <- readUri _uri
@@ -310,9 +310,10 @@ documentFormattingHandler =
 
         respond (Right (List [TextEdit{..}]))
 
+
 executeCommandHandler :: Handlers HandlerM
 executeCommandHandler =
-    LSP.requestHandler SWorkspaceExecuteCommand \request respond -> do
+    LSP.requestHandler SWorkspaceExecuteCommand \request respond -> handleErrorWithDefault respond Aeson.Null do
         let command_ = request^.params.command
         if  | command_ == "dhall.server.lint" ->
                 executeLintAndFormat request respond
@@ -504,7 +505,7 @@ executeFreezeImport request = do
 
 completionHandler :: Handlers HandlerM
 completionHandler =
-  LSP.requestHandler STextDocumentCompletion \request respond -> do
+  LSP.requestHandler STextDocumentCompletion \request respond -> handleErrorWithDefault respond (InR (CompletionList False (List []))) do
     let uri_  = request ^. params . textDocument . uri
         line_ = fromIntegral (request ^. params . position . line)
         col_  = fromIntegral (request ^. params . position . character)
@@ -612,3 +613,45 @@ didSaveTextDocumentNotificationHandler =
     LSP.notificationHandler STextDocumentDidSave \notification -> do
         let _uri = notification^.params.textDocument.uri
         diagnosticsHandler _uri
+
+
+-- this handler is a stab to prevent `lsp:no handler for:` messages.
+initializedHandler :: Handlers HandlerM
+initializedHandler = 
+    LSP.notificationHandler SInitialized \_ -> return ()
+
+-- this handler is a stab to prevent `lsp:no handler for:` messages.
+workspaceChangeConfigurationHandler :: Handlers HandlerM
+workspaceChangeConfigurationHandler = 
+    LSP.notificationHandler SWorkspaceDidChangeConfiguration \_ -> return ()
+
+-- this handler is a stab to prevent `lsp:no handler for:` messages.
+textDocumentChangeHandler :: Handlers HandlerM
+textDocumentChangeHandler =
+    LSP.notificationHandler STextDocumentDidChange \_ -> return ()
+
+-- this handler is a stab to prevent `lsp:no handler for:` messages.
+cancelationHandler :: Handlers HandlerM
+cancelationHandler =
+    LSP.notificationHandler SCancelRequest \_ -> return ()
+
+handleErrorWithDefault :: (Either a1 b -> HandlerM a2)
+ -> b
+ -> HandlerM a2
+ -> HandlerM a2
+handleErrorWithDefault respond _default = flip catchE handler  
+  where
+    handler (Log, _message)  = do
+                    let _xtype = MtLog
+                    liftLSP $ LSP.sendNotification SWindowLogMessage LogMessageParams{..}
+                    respond (Right _default)
+
+    handler (severity_, _message) = do
+                    let _xtype = case severity_ of
+                          Error   -> MtError
+                          Warning -> MtWarning
+                          Info    -> MtInfo
+                          Log     -> MtLog
+
+                    liftLSP $ LSP.sendNotification SWindowShowMessage ShowMessageParams{..}
+                    respond (Right _default)
