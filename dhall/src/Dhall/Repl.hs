@@ -294,7 +294,8 @@ hashBinding src = do
 
   normalizedExpression <- normalize loadedExpression
 
-  writeOutputHandle $ hashExpressionToCode normalizedExpression
+  writeOutputHandle
+    (hashExpressionToCode (Dhall.Core.alphaNormalize normalizedExpression))
 
 saveFilePrefix :: FilePath
 saveFilePrefix = ".dhall-repl"
