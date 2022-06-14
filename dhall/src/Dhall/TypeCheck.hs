@@ -35,7 +35,7 @@ import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
 import Data.List.NonEmpty                (NonEmpty (..))
 import Data.Monoid                       (Endo (..))
 import Data.Semigroup                    (Max (..))
-import Data.Sequence                     (Seq, ViewL (..))
+import Data.Sequence                     (ViewL (..))
 import Data.Set                          (Set)
 import Data.Text                         (Text)
 import Data.Typeable                     (Typeable)
@@ -65,6 +65,7 @@ import Dhall.Syntax
     )
 
 import qualified Data.Foldable               as Foldable
+import qualified Data.Foldable.WithIndex     as Foldable.WithIndex
 import qualified Data.List.NonEmpty          as NonEmpty
 import qualified Data.Map
 import qualified Data.Sequence
@@ -92,9 +93,6 @@ import qualified Prettyprinter.Render.String as Pretty
 -}
 type X = Void
 {-# DEPRECATED X "Use Data.Void.Void instead" #-}
-
-traverseWithIndex_ :: Applicative f => (Int -> a -> f b) -> Seq a -> f ()
-traverseWithIndex_ k xs = Foldable.sequenceA_ (Data.Sequence.mapWithIndex k xs)
 
 axiom :: Const -> Either (TypeError s a) Const
 axiom Type = return Kind
@@ -631,7 +629,7 @@ infer typer = loop
 
                                     Left (TypeError context t₁ err)
 
-                    traverseWithIndex_ process ts₁
+                    Foldable.WithIndex.itraverse_ process ts₁
 
                     return (VList _T₀')
 
