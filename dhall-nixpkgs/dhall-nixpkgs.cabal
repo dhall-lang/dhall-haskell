@@ -17,7 +17,7 @@ Build-Type:          Simple
 Executable dhall-to-nixpkgs
   Main-Is:             Main.hs
   Build-Depends:       base                 >= 4.11     && < 5
-                     , aeson                >= 1.0.0.0  && < 2.1
+                     , aeson                >= 1.0.0.0  && < 2.2
                      , base16-bytestring    >= 1.0.0.0
                      , base64-bytestring    >= 1.1.0.0
                      , bytestring                          < 0.12
