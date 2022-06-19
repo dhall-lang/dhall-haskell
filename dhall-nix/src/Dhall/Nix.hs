@@ -99,10 +99,13 @@ import Data.Fix (Fix (..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
+import qualified  Data.Text as Text
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Lens.Family (toListOf)
+import Numeric (showHex)
+import Data.Char (ord, isDigit)
 
 import Dhall.Core
     ( Binding (..)
@@ -223,7 +226,7 @@ Nix
 $_ERROR: Cannot project by type
 
 The ❰dhall-to-nix❱ compiler does not support projecting out a subset of a record
-by the expected type (i.e. ❰someRecord.(someType)❱ 
+by the expected type (i.e. ❰someRecord.(someType)❱
     |]
 
     show CannotShowConstructor =
@@ -245,7 +248,7 @@ instance Exception CompileError
 {-| Convert a Dhall expression to the equivalent Nix expression
 
 >>> :set -XOverloadedStrings
->>> dhallToNix (Lam "x" Natural (Lam "y" Natural (NaturalPlus "x" "y"))) 
+>>> dhallToNix (Lam "x" Natural (Lam "y" Natural (NaturalPlus "x" "y")))
 Right (NAbs (Param "x") (NAbs (Param "y") (NBinary NPlus (NSym "x") (NSym "y"))))
 >>> fmap Nix.Pretty.prettyNix it
 Right x: y: x + y
@@ -326,18 +329,18 @@ dhallToNix e =
         Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
 
     loop (Const _) = return untranslatable
-    loop (Var (V a 0)) = return (Nix.mkSym a)
+    loop (Var (V a 0)) = return (Nix.mkSym (zEncodeSymbol a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
         c' <- loop c
-        return (Param (VarName a) ==> c')
+        return (Param (VarName $ zEncodeSymbol a) ==> c')
     loop (Pi _ _ _ _) = return untranslatable
     loop (App None _) =
       return Nix.mkNull
     loop (App (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
         v' <- loop v
         let e0 = do
-                k' <- Dhall.Map.keys kts
+                k' <- (Dhall.Map.keys kts)
                 return (k', Nothing)
         let e2 = Nix.mkSym k @@ v'
         return (Nix.mkParamset e0 False ==> e2)
@@ -349,7 +352,7 @@ dhallToNix e =
         let MultiLet bindings b = Dhall.Core.multiLet a0 b0
         bindings' <- for bindings $ \Binding{ variable, value } -> do
           value' <- loop value
-          pure (variable, value')
+          pure (zEncodeSymbol variable, value')
         b' <- loop b
         return (Nix.letsE (toList bindings') b')
     loop (Annot a _) = loop a
@@ -696,15 +699,15 @@ dhallToNix e =
             -- This translates `< Foo : T >.Foo` to `x: { Foo }: Foo x`
             Just (Just _) -> do
                 let e0 = do
-                        k' <- Dhall.Map.keys kts
+                        k' <- map zEncodeString (Dhall.Map.keys kts)
                         return (k', Nothing)
-                return ("x" ==> Nix.mkParamset e0 False ==> (Nix.mkSym k @@ "x"))
+                return ("x" ==> Nix.mkParamset e0 False ==> (Nix.mkSym (zEncodeString k) @@ "x"))
 
             _ -> do
                 let e0 = do
-                        k' <- Dhall.Map.keys kts
+                        k' <- map zEncodeString (Dhall.Map.keys kts)
                         return (k', Nothing)
-                return (Nix.mkParamset e0 False ==> Nix.mkSym k)
+                return (Nix.mkParamset e0 False ==> Nix.mkSym (zEncodeString k))
     loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
         a' <- loop a
         return (a' @. b)
@@ -738,3 +741,106 @@ dhallToNix e =
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x
+
+
+
+-- | Nix does not support symbols like @foo/bar@, but they are allowed in dhall.
+-- So if they happen, we need to encode them with an ASCII escaping scheme.
+--
+-- This is copied/inspired by the Z-Encoding scheme from GHC, see
+-- https://hackage.haskell.org/package/zenc-0.1.2/docs/Text-Encoding-Z.html
+--
+-- Original Source is BSD-3-Clause, Copyright (c)2011, Jason Dagit
+zEncodeSymbol :: Text -> Text
+zEncodeSymbol = zEncodeString
+
+-- | The basic encoding scheme is this:
+
+--   * Alphabetic characters (upper and lower) and digits
+--         all translate to themselves;
+--         except 'Z', which translates to 'ZZ'
+--         and    'z', which translates to 'zz'
+--
+--   * Most other printable characters translate to 'zx' or 'Zx' for some
+--         alphabetic character x
+--
+--   * The others translate as 'znnnU' where 'nnn' is the decimal number
+--         of the character
+--
+-- @
+--         Before          After
+--         --------------------------
+--         Trak            Trak
+--         foo-wib         foozmwib
+--         \>               zg
+--         \>1              zg1
+--         foo\#            foozh
+--         foo\#\#           foozhzh
+--         foo\#\#1          foozhzh1
+--         fooZ            fooZZ
+--         :+              ZCzp
+-- @
+zEncodeString :: Text -> Text
+zEncodeString cs =
+  -- Small check to skip the encoding if all chars don’t need encoding.
+  -- Otherwise we have to convert to `String` and go through Char-by-char.
+  if Text.any needsEncoding cs
+  -- This could probably be sped up somehow.
+  then Text.pack (go (Text.unpack cs))
+  else cs
+          where
+                go []     = []
+                go (c:cs') = encode_digit_ch c ++ go' cs'
+                go' []     = []
+                go' (c:cs') = encode_ch c ++ go' cs'
+
+-- | Whether the given characters needs to be z-encoded.
+needsEncoding :: Char -> Bool
+needsEncoding 'Z' = True
+needsEncoding 'z' = True
+needsEncoding c   = not
+                  ( c >= 'a' && c <= 'z'
+                  || c >= 'A' && c <= 'Z'
+                  || c >= '0' && c <= '9' )
+
+-- If a digit is at the start of a symbol then we need to encode it.
+encode_digit_ch :: Char -> String
+encode_digit_ch c | c >= '0' && c <= '9' = encode_as_unicode_char c
+encode_digit_ch c | otherwise            = encode_ch c
+
+encode_ch :: Char -> String
+encode_ch c | not (needsEncoding c) = [c]     -- Common case first
+
+encode_ch '('  = "ZL"
+encode_ch ')'  = "ZR"
+encode_ch '['  = "ZM"
+encode_ch ']'  = "ZN"
+encode_ch ':'  = "ZC"
+encode_ch 'Z'  = "ZZ"
+encode_ch 'z'  = "zz"
+encode_ch '&'  = "za"
+encode_ch '|'  = "zb"
+encode_ch '^'  = "zc"
+encode_ch '$'  = "zd"
+encode_ch '='  = "ze"
+encode_ch '>'  = "zg"
+encode_ch '#'  = "zh"
+encode_ch '.'  = "zi"
+encode_ch '<'  = "zl"
+-- we can’t allow @-@, because it is not valid at the start of a symbol
+encode_ch '-'  = "zm"
+encode_ch '!'  = "zn"
+encode_ch '+'  = "zp"
+encode_ch '\'' = "zq"
+encode_ch '\\' = "zr"
+encode_ch '/'  = "zs"
+encode_ch '*'  = "zt"
+-- We can allow @_@ because it can appear anywhere in a symbol
+-- encode_ch '_'  = "zu"
+encode_ch '%'  = "zv"
+encode_ch c    = encode_as_unicode_char c
+
+encode_as_unicode_char :: Char -> String
+encode_as_unicode_char c = 'z' : if isDigit (head hex_str) then hex_str
+                                                           else '0':hex_str
+  where hex_str = showHex (ord c) "U"
