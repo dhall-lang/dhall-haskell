@@ -337,13 +337,9 @@ dhallToNix e =
     loop (Pi _ _ _ _) = return untranslatable
     loop (App None _) =
       return Nix.mkNull
-    loop (App (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
+    loop (App (Field (Union _kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
         v' <- loop v
-        let e0 = do
-                k' <- (Dhall.Map.keys kts)
-                return (k', Nothing)
-        let e2 = Nix.mkSym k @@ v'
-        return (Nix.mkParamset e0 False ==> e2)
+        return (unionChoice k (Just v'))
     loop (App a b) = do
         a' <- loop a
         b' <- loop b
@@ -608,7 +604,7 @@ dhallToNix e =
         -- see https://github.com/dhall-lang/dhall-haskell/issues/2414
         nixAttrs pairs =
           Fix $ NSet NonRecursive $
-          (\(key, val) -> NamedVar (DynamicKey (Plain (DoubleQuoted [Plain key])) :| []) val Nix.nullPos)
+          (\(key, val) -> NamedVar ((mkDoubleQuoted key) :| []) val Nix.nullPos)
           <$> pairs
     loop (Union _) = return untranslatable
     loop (Combine _ _ a b) = do
@@ -697,17 +693,8 @@ dhallToNix e =
             -- (here "x").
             --
             -- This translates `< Foo : T >.Foo` to `x: { Foo }: Foo x`
-            Just (Just _) -> do
-                let e0 = do
-                        k' <- map zEncodeString (Dhall.Map.keys kts)
-                        return (k', Nothing)
-                return ("x" ==> Nix.mkParamset e0 False ==> (Nix.mkSym (zEncodeString k) @@ "x"))
-
-            _ -> do
-                let e0 = do
-                        k' <- map zEncodeString (Dhall.Map.keys kts)
-                        return (k', Nothing)
-                return (Nix.mkParamset e0 False ==> Nix.mkSym (zEncodeString k))
+            Just (Just _) -> return ("x" ==> (unionChoice k (Just "x")))
+            _ -> return (unionChoice k Nothing)
     loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
         a' <- loop a
         return (a' @. b)
@@ -742,6 +729,29 @@ dhallToNix e =
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x
 
+-- | Previously we turned @<Foo | Bar>.Foo@ into @{ Foo, Bar }: Foo@,
+-- but this would not work with <Frob/Baz>.Frob/Baz (cause the slash is not a valid symbol char in nix)
+-- so we generate @union: union."Frob/Baz"@ instead.
+--
+-- If passArgument is @Just@, pass the argument to the union selector.
+unionChoice :: Text -> Maybe NExpr -> NExpr
+unionChoice chosenKey passArgument =
+  let selector = Fix (Nix.NSelect Nothing (Nix.mkSym "u") (mkDoubleQuoted chosenKey :| []))
+  in Nix.Param "u" ==>
+     case passArgument of
+       Nothing -> selector
+       Just arg -> selector @@ arg
+
+
+-- | Double-quote a field name (record or union). This makes sure it’s recognized as a valid name by nix, e.g. in
+--
+--  @{ "foo/bar" = 42; }."foo/bar" }@
+--
+-- where
+--
+-- @{ foo/bar = 42; }.foo/bar@ is not syntactically valid nix.
+mkDoubleQuoted :: Text -> NKeyName r
+mkDoubleQuoted key = DynamicKey (Plain (DoubleQuoted [Plain key]))
 
 
 -- | Nix does not support symbols like @foo/bar@, but they are allowed in dhall.
