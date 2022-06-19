@@ -697,7 +697,7 @@ dhallToNix e =
             _ -> return (unionChoice k Nothing)
     loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
         a' <- loop a
-        return (a' @. b)
+        return (Fix (Nix.NSelect a' (mkDoubleQuoted b :| []) Nothing))
     loop (Project a (Left b)) = do
         a' <- loop a
         return (Nix.mkNonRecSet [ Nix.inheritFrom a' (fmap VarName b) ])
