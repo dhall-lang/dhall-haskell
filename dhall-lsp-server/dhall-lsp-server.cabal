@@ -52,7 +52,8 @@ library
     , dhall                >= 1.38.0   && < 1.42
     , dhall-json           >= 1.4      && < 1.8
     , filepath             >= 1.4.2    && < 1.5
-    , lsp                  >= 1.2.0.0  && < 1.5
+    , lsp                  >= 1.2.0.0  && < 1.6
+    , lsp-types            >= 1.2.0.0  && < 1.6
     , rope-utf16-splay     >= 0.3.1.0  && < 0.5
     , hslogger             >= 1.2.10   && < 1.4
     , lens                 >= 4.16.1   && < 5.2
@@ -62,6 +63,7 @@ library
     , network-uri          >= 2.6.1.0  && < 2.7
     , prettyprinter        >= 1.7.0    && < 1.8
     , text                 >= 1.2.3.0  && < 2.1
+    , text-rope                           < 0.3
     , transformers         >= 0.5.5.0  && < 0.6
     , unordered-containers >= 0.2.9.0  && < 0.3
     , uri-encode           >= 1.5.0.5  && < 1.6
@@ -104,7 +106,7 @@ Test-Suite tests
     GHC-Options: -Wall
     Build-Depends:
         base                                    ,
-        lsp-types         >= 1.2.0.0  && < 1.5  ,
+        lsp-types         >= 1.2.0.0  && < 1.6  ,
         hspec             >= 2.7      && < 2.11 ,
         lsp-test          >= 0.13.0.0 && < 0.15 ,
         tasty             >= 0.11.2   && < 1.5  ,
