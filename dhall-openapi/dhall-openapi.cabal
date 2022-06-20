@@ -84,5 +84,5 @@ Library
     scientific              >= 0.3.0.0   && < 0.4  ,
     sort                    >= 1.0       && < 1.1  ,
     text                    >= 0.11.1.0  && < 2.1  ,
-    vector                  >= 0.11.0.0  && < 0.13
+    vector                  >= 0.11.0.0  && < 0.14
   Default-Language: Haskell2010

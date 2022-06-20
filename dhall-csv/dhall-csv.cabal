@@ -44,7 +44,7 @@ Library
         prettyprinter        >= 1.7.0     && < 1.8 ,
         text                 >= 0.11.1.0  && < 2.1 ,
         unordered-containers                 < 0.3 ,
-        vector               >= 0.12      && < 0.13
+        vector               >= 0.12      && < 0.14
     Exposed-Modules:
         Dhall.Csv
         Dhall.CsvToDhall

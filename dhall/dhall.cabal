@@ -251,7 +251,7 @@ Common common
         transformers                >= 0.5.2.0  && < 0.6 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
         uri-encode                                 < 1.6 ,
-        vector                      >= 0.11.0.0 && < 0.13
+        vector                      >= 0.11.0.0 && < 0.14
 
     if flag(with-http)
       CPP-Options:
