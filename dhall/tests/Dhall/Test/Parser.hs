@@ -152,7 +152,9 @@ shouldParse path = do
 
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
-    let expectedFailures = []
+    let expectedFailures =
+          [ parseDirectory </> "failure/spacing/LetNoSpace4.dhall"
+          ]
 
     let pathString = Text.unpack path
 

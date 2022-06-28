@@ -81,6 +81,8 @@ main = do
 
     System.Environment.setEnv "DHALL_TEST_VAR" "6 * 7"
 
+    System.Environment.setEnv "HOME" (pwd </> "dhall-lang/tests/import/home")
+
     -- Make test failures easier to find by eliding the successes.
     -- https://github.com/feuerbach/tasty/issues/273#issuecomment-657054281
     System.Environment.setEnv "TASTY_HIDE_SUCCESSES" "true"
