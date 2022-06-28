@@ -149,10 +149,12 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Natural"           -> return Natural
                     8  | sb == "Optional"          -> return Optional
                        | sb == "TimeZone"          -> return TimeZone
-                    9  | sb == "List/fold"         -> return ListFold
+                    9  | sb == "List/drop"         -> return ListDrop
+                       | sb == "List/fold"         -> return ListFold
                        | sb == "List/head"         -> return ListHead
                        | sb == "List/last"         -> return ListLast
                        | sb == "Text/show"         -> return TextShow
+                       | sb == "List/take"         -> return ListTake
                     10 | sb == "List/build"        -> return ListBuild
                     11 | sb == "Double/show"       -> return DoubleShow
                        | sb == "List/length"       -> return ListLength
@@ -716,6 +718,9 @@ encodeExpressionInternal encodeEmbed = go
         ListBuild ->
             Encoding.encodeUtf8ByteArray "List/build"
 
+        ListDrop ->
+            Encoding.encodeUtf8ByteArray "List/drop"
+
         ListFold ->
             Encoding.encodeUtf8ByteArray "List/fold"
 
@@ -733,6 +738,9 @@ encodeExpressionInternal encodeEmbed = go
 
         ListReverse ->
             Encoding.encodeUtf8ByteArray "List/reverse"
+
+        ListTake ->
+            Encoding.encodeUtf8ByteArray "List/take"
 
         Bool ->
             Encoding.encodeUtf8ByteArray "Bool"
