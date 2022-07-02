@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
+-- FIXME: Re-enable deprecation warnings after removing support for turtle < 1.6.
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Dhall.Test.Import where
