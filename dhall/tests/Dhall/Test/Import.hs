@@ -2,16 +2,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 module Dhall.Test.Import where
 
-import Control.Exception         (SomeException)
-import Data.Foldable             (fold)
-import Data.Text                 (Text, isSuffixOf)
-import Data.Void                 (Void)
-import Filesystem.Path.CurrentOS (toText)
-import Prelude                   hiding (FilePath)
-import Test.Tasty                (TestTree)
-import Turtle                    (FilePath, (</>))
+import Control.Exception (SomeException)
+import Data.Foldable     (fold)
+import Data.Text         (Text, isSuffixOf)
+import Data.Void         (Void)
+import Prelude           hiding (FilePath)
+import Test.Tasty        (TestTree)
+import Turtle            (FilePath, toText, (</>))
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad                    as Monad

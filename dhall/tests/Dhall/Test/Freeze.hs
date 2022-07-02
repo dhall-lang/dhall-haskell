@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 module Dhall.Test.Freeze where
 
 import Data.Text    (Text)
