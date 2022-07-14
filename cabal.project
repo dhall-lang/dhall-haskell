@@ -1,19 +1,1 @@
 packages: ./dhall ./dhall-bash ./dhall-json ./dhall-yaml ./dhall-openapi ./dhall-csv ./dhall-toml ./dhall-docs ./dhall-lsp-server
-
-source-repository-package
-    type: git
-    location: https://github.com/haskell/lsp.git
-    tag: 67a168319169d7cf4679869ed2e0cfe217743a96
-    subdir: lsp
-
-source-repository-package
-    type: git
-    location: https://github.com/haskell/lsp.git
-    tag: 67a168319169d7cf4679869ed2e0cfe217743a96
-    subdir: lsp-test
-
-source-repository-package
-    type: git
-    location: https://github.com/haskell/lsp.git
-    tag: 67a168319169d7cf4679869ed2e0cfe217743a96
-    subdir: lsp-types
