@@ -83,6 +83,7 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
+import qualified Data.Text.Short
 import qualified Data.Time            as Time
 import qualified Data.Vector
 import qualified Data.Void
@@ -165,6 +166,14 @@ instance ToDhall Bool where
         embed = BoolLit
 
         declared = Bool
+
+instance ToDhall Data.Text.Short.ShortText where
+    injectWith _ = Encoder {..}
+      where
+        embed text =
+            TextLit (Chunks [] (Data.Text.Short.toText text))
+
+        declared = Text
 
 instance ToDhall Data.Text.Lazy.Text where
     injectWith _ = Encoder {..}

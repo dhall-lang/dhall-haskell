@@ -55,6 +55,7 @@ module Dhall.Marshal.Decode
     , string
     , lazyText
     , strictText
+    , shortText
       -- ** Time
     , timeOfDay
     , day
@@ -176,6 +177,7 @@ import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
+import qualified Data.Text.Short
 import qualified Data.Time            as Time
 import qualified Data.Vector
 import qualified Dhall.Core           as Core
@@ -302,6 +304,9 @@ instance FromDhall Double where
 
 instance {-# OVERLAPS #-} FromDhall [Char] where
     autoWith _ = string
+
+instance FromDhall Data.Text.Short.ShortText where
+    autoWith _ = shortText
 
 instance FromDhall Data.Text.Lazy.Text where
     autoWith _ = lazyText
@@ -911,6 +916,14 @@ double = Decoder {..}
     extract  expr                       = typeError expected expr
 
     expected = pure Double
+
+{-| Decode `Data.Text.Short.ShortText`.
+
+>>> input shortText "\"Test\""
+"Test"
+-}
+shortText :: Decoder Data.Text.Short.ShortText
+shortText = fmap Data.Text.Short.fromText strictText
 
 {-| Decode lazy `Data.Text.Text`.
 

@@ -246,6 +246,7 @@ Common common
         template-haskell            >= 2.13.0.0 && < 2.19,
         text                        >= 0.11.1.0 && < 2.1 ,
         text-manipulate             >= 0.2.0.1  && < 0.4 ,
+        text-short                  >= 0.1      && < 0.2 ,
         th-lift-instances           >= 0.1.13   && < 0.2 ,
         time                        >= 1.1.4    && < 1.13,
         transformers                >= 0.5.2.0  && < 0.6 ,
