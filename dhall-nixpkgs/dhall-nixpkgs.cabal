@@ -1,4 +1,4 @@
-Version:             1.0.8
+Version:             1.0.9
 Cabal-Version:       >=1.10
 Name:                dhall-nixpkgs
 Synopsis:            Convert Dhall projects to Nix packages

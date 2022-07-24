@@ -1,3 +1,7 @@
+1.0.10
+
+* [Index non-`.dhall` files](https://github.com/dhall-lang/dhall-haskell/pull/2407)
+
 1.0.9
 
 * Build against `dhall-1.41`

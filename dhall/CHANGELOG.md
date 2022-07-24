@@ -1,3 +1,21 @@
+1.41.2
+
+* [BUG FIX: Fix `:hash` REPL command to α-normalize input](https://github.com/dhall-lang/dhall-haskell/pull/2420)
+* [Add `{From,To}Dhall` instances for `DayOfWeek`](https://github.com/dhall-lang/dhall-haskell/pull/2413)
+* [Add `{From,To}Dhall` instances for `ShortText`](https://github.com/dhall-lang/dhall-haskell/pull/2413)
+* Performance improvements
+  * [#2423](https://github.com/dhall-lang/dhall-haskell/pull/2423)
+* Fixes and improvements to haddocks
+  * [#2396](https://github.com/dhall-lang/dhall-haskell/pull/2396)
+* Fixes and improvements to test suite
+  * [#2342](https://github.com/dhall-lang/dhall-haskell/pull/2382)
+  * [#2394](https://github.com/dhall-lang/dhall-haskell/pull/2394)
+* Build against newer dependencies
+  * [`pretty-simple-4.1`](https://github.com/dhall-lang/dhall-haskell/pull/2408)
+  * [`aeson-2.1`](https://github.com/dhall-lang/dhall-haskell/pull/2424)
+  * [`vector-0.13`](https://github.com/dhall-lang/dhall-haskell/pull/2427)
+  * [`turtle-1.6`](https://github.com/dhall-lang/dhall-haskell/pull/2431)
+
 1.41.1
 
 * [BUG FIX: Don't escape `?` path component when pretty-printing `with` expressions](https://github.com/dhall-lang/dhall-haskell/pull/2392)

@@ -1,3 +1,8 @@
+1.0.3
+
+* Builds against newer dependencies
+  * [`vector-0.13`](https://github.com/dhall-lang/dhall-haskell/pull/2427)
+
 1.0.2
 
 * Build against `dhall-1.41`
