@@ -1,6 +1,12 @@
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ViewPatterns      #-}
 
 -- | Implementation of the @dhall to-directory-tree@ subcommand
@@ -12,9 +18,16 @@ module Dhall.DirectoryTree
 
 import Control.Applicative (empty)
 import Control.Exception   (Exception)
+import Control.Monad       (when, unless)
+import Data.Either         (isRight)
+import Data.Maybe          (fromMaybe)
+import Data.Functor.Identity (Identity(..))
+import Data.Sequence       (Seq)
+import Data.Text           (Text)
 import Data.Void           (Void)
-import Dhall.Syntax        (Chunks (..), Expr (..), RecordField (..))
+import Dhall.Syntax        (Chunks (..), Expr (..), FieldSelection(..), FunctionBinding(..), RecordField(..), Var(..))
 import System.FilePath     ((</>))
+import System.PosixCompat.Types (FileMode, GroupID, UserID)
 
 import qualified Control.Exception           as Exception
 import qualified Data.Foldable               as Foldable
@@ -22,10 +35,15 @@ import qualified Data.Text                   as Text
 import qualified Data.Text.IO                as Text.IO
 import qualified Dhall.Map                   as Map
 import qualified Dhall.Pretty
+import qualified Dhall.TH                    as TH
+import qualified Dhall.TypeCheck             as TypeCheck
 import qualified Dhall.Util                  as Util
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
 import qualified System.FilePath             as FilePath
+import qualified System.PosixCompat.Files    as Posix
+import qualified System.PosixCompat.Types    as Posix
+import qualified System.PosixCompat.User     as Posix
 
 {-| Attempt to transform a Dhall record into a directory tree where:
 
@@ -36,6 +54,9 @@ import qualified System.FilePath             as FilePath
     * @Text@ values or fields are translated into files
 
     * @Optional@ values are omitted if @None@
+
+    * There is a more advanced way construction directory trees using a fixpoint
+      encoding. See the documentation below on that.
 
     For example, the following Dhall record:
 
@@ -59,8 +80,7 @@ import qualified System.FilePath             as FilePath
     > Goodbye
 
     Use this in conjunction with the Prelude's support for rendering JSON/YAML
-    in "pure Dhall" so that you can generate files containing JSON.  For
-    example:
+    in "pure Dhall" so that you can generate files containing JSON. For example:
 
     > let JSON =
     >       https://prelude.dhall-lang.org/v12.0.0/JSON/package.dhall sha256:843783d29e60b558c2de431ce1206ce34bdfde375fcf06de8ec5bf77092fdef7
@@ -81,12 +101,63 @@ import qualified System.FilePath             as FilePath
     > ! "bar": null
     > ! "foo": "Hello"
 
-    This utility does not take care of type-checking and normalizing the
-    provided expression.  This will raise a `FilesystemError` exception upon
+    /Advanced construction of directory trees/
+
+    In addition to the ways described above using 'simple' Dhall values to
+    construct the directory tree there is one based on a fixpoint encoding. It
+    works by passing a value of the following type to the interpreter:
+
+    > let User = < UserId : Natural | UserName : Text >
+    >
+    > let Group = < GroupId : Natural | GroupName : Text >
+    >
+    > let Access =
+    >       { execute : Optional Bool
+    >       , read : Optional Bool
+    >       , write : Optional Bool
+    >       }
+    >
+    > let Mode =
+    >       { user : Optional Access
+    >       , group : Optional Access
+    >       , other : Optional Access
+    >       }
+    >
+    > let Entry =
+    >       \(content : Type) ->
+    >         { name : Text
+    >         , content : content
+    >         , user : Optional User
+    >         , group : Optional Group
+    >         , mode : Optional Mode
+    >         }
+    >
+    > in  forall (r : Type) ->
+    >     forall  ( make
+    >             : { directory : Entry (List r) -> r
+    >               , file : Entry Text -> r
+    >               }
+    >             ) ->
+    >       List r
+
+    The fact that the metadata for filesystem entries is modeled after the POSIX
+    permission model comes with the unfortunate downside that it might not apply
+    to other systems: There, changes to the metadata (user, group, permissions)
+    might be a no-op and __no warning will be issued__.
+    This is a leaking abstraction of the
+    [unix-compat](https://hackage.haskell.org/package/unix-compat) package used
+    internally.
+
+    __NOTE__: This utility does not take care of type-checking and normalizing
+    the provided expression. This will raise a `FilesystemError` exception upon
     encountering an expression that cannot be converted as-is.
 -}
-toDirectoryTree :: FilePath -> Expr Void Void -> IO ()
-toDirectoryTree path expression = case expression of
+toDirectoryTree
+    :: Bool -- ^ Whether to allow path separators in file names or not
+    -> FilePath
+    -> Expr Void Void
+    -> IO ()
+toDirectoryTree allowSeparators path expression = case expression of
     RecordLit keyValues ->
         Map.unorderedTraverseWithKey_ process $ recordFieldValue <$> keyValues
 
@@ -102,13 +173,17 @@ toDirectoryTree path expression = case expression of
         Text.IO.writeFile path text
 
     Some value ->
-        toDirectoryTree path value
+        toDirectoryTree allowSeparators path value
 
-    App (Field (Union _) _) value ->
-        toDirectoryTree path value
+    App (Field (Union _) _) value -> do
+        toDirectoryTree allowSeparators path value
 
     App None _ ->
         return ()
+
+    Lam _ _ (Lam _ (functionBindingVariable -> make) body)
+        | isFixpointedDirectoryTree expression
+        -> applyFilesystemEntryList allowSeparators path $ extractFilesystemEntryList make body
 
     _ ->
         die
@@ -124,17 +199,291 @@ toDirectoryTree path expression = case expression of
         empty
 
     process key value = do
-        if Text.isInfixOf (Text.pack [ FilePath.pathSeparator ]) key
-            then die
-            else return ()
+        when (not allowSeparators && Text.isInfixOf (Text.pack [ FilePath.pathSeparator ]) key) $
+            die
 
-        Directory.createDirectoryIfMissing False path
+        Directory.createDirectoryIfMissing allowSeparators path
 
-        toDirectoryTree (path </> Text.unpack key) value
+        toDirectoryTree allowSeparators (path </> Text.unpack key) value
 
     die = Exception.throwIO FilesystemError{..}
       where
         unexpectedExpression = expression
+
+isFixpointedDirectoryTree :: Expr Void Void -> Bool
+isFixpointedDirectoryTree expr = isRight $ TypeCheck.typeOf $ Annot expr $
+    [TH.dhall|
+    let User = < UserId : Natural | UserName : Text >
+
+    let Group = < GroupId : Natural | GroupName : Text >
+
+    let Access =
+          { execute : Optional Bool
+          , read : Optional Bool
+          , write : Optional Bool
+          }
+
+    let Mode =
+          { user : Optional Access
+          , group : Optional Access
+          , other : Optional Access
+          }
+
+    let Entry =
+          \(content : Type) ->
+            { name : Text
+            , content : content
+            , user : Optional User
+            , group : Optional Group
+            , mode : Optional Mode
+            }
+
+    in  forall (r : Type) ->
+        forall  ( make
+                : { directory : Entry (List r) -> r
+                  , file : Entry Text -> r
+                  }
+                ) ->
+          List r
+    |]
+
+data FilesystemEntry
+    = DirectoryEntry (Entry (Seq FilesystemEntry))
+    | FileEntry (Entry Text)
+    deriving Show
+
+extractFilesystemEntry :: Text -> Expr Void Void -> FilesystemEntry
+extractFilesystemEntry make (App (Field (Var (V make' 0)) (fieldSelectionLabel -> label)) entry)
+    | make' == make
+    , label == "directory" = DirectoryEntry $ extractEntry (extractList (extractFilesystemEntry make)) entry
+    | make' == make
+    , label == "file" = FileEntry $ extractEntry extractText entry
+extractFilesystemEntry _ expr = Exception.throw (FilesystemError expr)
+
+extractFilesystemEntryList :: Text -> Expr Void Void -> Seq FilesystemEntry
+extractFilesystemEntryList make = extractList (extractFilesystemEntry make)
+
+data Entry a = Entry
+    { entryName :: String
+    , entryContent :: a
+    , entryUser :: Maybe User
+    , entryGroup :: Maybe Group
+    , entryMode :: Maybe (Mode Maybe)
+    }
+    deriving Show
+
+extractEntry :: (Expr Void Void -> a) -> Expr Void Void -> Entry a
+extractEntry extractContent (RecordLit (Map.toList ->
+    [ ("content", recordFieldValue -> contentExpr)
+    , ("group", recordFieldValue -> groupExpr)
+    , ("mode", recordFieldValue -> modeExpr)
+    , ("name", recordFieldValue -> nameExpr)
+    , ("user", recordFieldValue -> userExpr)
+    ])) = Entry
+    { entryName = extractString nameExpr
+    , entryContent = extractContent contentExpr
+    , entryUser = extractMaybe extractUser userExpr
+    , entryGroup = extractMaybe extractGroup groupExpr
+    , entryMode = extractMaybe extractMode modeExpr
+    }
+extractEntry _ expr = Exception.throw (FilesystemError expr)
+
+data User
+    = UserId UserID
+    | UserName String
+    deriving Show
+
+pattern UserP :: Text -> Expr Void Void -> Expr Void Void
+pattern UserP label v <- App (Field (Union (Map.toList ->
+    [ ("UserId", Just Natural)
+    , ("UserName",Just Text)]))
+    (fieldSelectionLabel -> label))
+    v
+
+extractUser :: Expr Void Void -> User
+extractUser (UserP "UserId" (NaturalLit n)) = UserId $ Posix.CUid (fromIntegral n)
+extractUser (UserP "UserName" (TextLit (Chunks [] text))) = UserName $ Text.unpack text
+extractUser expr = Exception.throw (FilesystemError expr)
+
+getUser :: User -> IO UserID
+getUser (UserId uid) = return uid
+getUser (UserName name) = Posix.userID <$> Posix.getUserEntryForName name
+
+data Group
+    = GroupId GroupID
+    | GroupName String
+    deriving Show
+
+pattern GroupP :: Text -> Expr Void Void -> Expr Void Void
+pattern GroupP label v <- App (Field (Union (Map.toList ->
+    [ ("GroupId", Just Natural)
+    , ("GroupName", Just Text)]))
+    (fieldSelectionLabel -> label))
+    v
+
+extractGroup :: Expr Void Void -> Group
+extractGroup (GroupP "GroupId" (NaturalLit n)) = GroupId $ Posix.CGid (fromIntegral n)
+extractGroup (GroupP "GroupName" (TextLit (Chunks [] text))) = GroupName $ Text.unpack text
+extractGroup expr = Exception.throw (FilesystemError expr)
+
+getGroup :: Group -> IO GroupID
+getGroup (GroupId gid) = return gid
+getGroup (GroupName name) = Posix.groupID <$> Posix.getGroupEntryForName name
+
+data Mode f = Mode
+    { modeUser :: f (Access f)
+    , modeGroup :: f (Access f)
+    , modeOther :: f (Access f)
+    }
+
+deriving instance Eq (Mode Identity)
+deriving instance Eq (Mode Maybe)
+deriving instance Show (Mode Identity)
+deriving instance Show (Mode Maybe)
+
+extractMode :: Expr Void Void -> Mode Maybe
+extractMode (RecordLit (Map.toList ->
+    [ ("group", recordFieldValue -> groupExpr)
+    , ("other", recordFieldValue -> otherExpr)
+    , ("user", recordFieldValue -> userExpr)
+    ])) = Mode
+    { modeUser = extractMaybe extractAccess userExpr
+    , modeGroup = extractMaybe extractAccess groupExpr
+    , modeOther = extractMaybe extractAccess otherExpr
+    }
+extractMode expr = Exception.throw (FilesystemError expr)
+
+data Access f = Access
+    { accessExecute :: f Bool
+    , accessRead :: f Bool
+    , accessWrite :: f Bool
+    }
+
+deriving instance Eq (Access Identity)
+deriving instance Eq (Access Maybe)
+deriving instance Show (Access Identity)
+deriving instance Show (Access Maybe)
+
+extractAccess :: Expr Void Void -> Access Maybe
+extractAccess (RecordLit (Map.toList ->
+    [ ("execute", recordFieldValue -> executeExpr)
+    , ("read", recordFieldValue -> readExpr)
+    , ("write", recordFieldValue -> writeExpr)
+    ])) = Access
+    { accessExecute = extractMaybe extractBool executeExpr
+    , accessRead = extractMaybe extractBool readExpr
+    , accessWrite = extractMaybe extractBool writeExpr
+    }
+extractAccess expr = Exception.throw (FilesystemError expr)
+
+extractBool :: Expr Void Void -> Bool
+extractBool (BoolLit b) = b
+extractBool expr = Exception.throw (FilesystemError expr)
+
+extractList :: (Expr Void Void -> a) -> Expr Void Void -> Seq a
+extractList _ (ListLit (Just _) _) = mempty
+extractList f (ListLit _ xs) = fmap f xs
+extractList _ expr = Exception.throw (FilesystemError expr)
+
+extractMaybe :: (Expr Void Void -> a) -> Expr Void Void -> Maybe a
+extractMaybe _ (App None _) = Nothing
+extractMaybe f (Some expr) = Just (f expr)
+extractMaybe _ expr = Exception.throw (FilesystemError expr)
+
+extractString :: Expr Void Void -> String
+extractString = Text.unpack . extractText
+
+extractText :: Expr Void Void -> Text
+extractText (TextLit (Chunks [] text)) = text
+extractText expr = Exception.throw (FilesystemError expr)
+
+applyFilesystemEntry :: Bool -> FilePath -> FilesystemEntry -> IO ()
+applyFilesystemEntry allowSeparators path (DirectoryEntry entry) = do
+    let path' = path </> entryName entry
+    Directory.createDirectoryIfMissing allowSeparators path'
+    applyFilesystemEntryList allowSeparators path' $ entryContent entry
+    -- It is important that we write the metadata after we wrote the content of
+    -- the directories/files below this directory as we might lock ourself out
+    -- by changing ownership or permissions.
+    unsafeApplyMetadata entry path'
+applyFilesystemEntry _ path (FileEntry entry) = do
+    let path' = path </> entryName entry
+    Text.IO.writeFile path' $ entryContent entry
+    -- It is important that we write the metadata after we wrote the content of
+    -- the file as we might lock ourself out by changing ownership or
+    -- permissions.
+    unsafeApplyMetadata entry path'
+
+applyFilesystemEntryList :: Bool -> FilePath -> Seq FilesystemEntry -> IO ()
+applyFilesystemEntryList allowSeparators path = Foldable.traverse_ (applyFilesystemEntry allowSeparators path)
+
+unsafeApplyMetadata :: Entry a -> FilePath -> IO ()
+unsafeApplyMetadata entry fp = do
+    s <- Posix.getFileStatus fp
+    let user = Posix.fileOwner s
+        group = Posix.fileGroup s
+        mode = fileModeToMode $ Posix.fileMode s
+
+    user' <- getUser $ fromMaybe (UserId user) (entryUser entry)
+    group' <- getGroup $ fromMaybe (GroupId group) (entryGroup entry)
+    unless ((user', group') == (user, group)) $
+        Posix.setOwnerAndGroup fp user' group'
+
+    let mode' = maybe mode (updateModeWith mode) (entryMode entry)
+    unless (mode' == mode) $
+        Posix.setFileMode fp $ modeToFileMode mode'
+
+updateModeWith :: Mode Identity -> Mode Maybe -> Mode Identity
+updateModeWith x y = Mode
+    { modeUser = combine modeUser modeUser
+    , modeGroup = combine modeGroup modeGroup
+    , modeOther = combine modeOther modeOther
+    }
+    where
+        combine f g = maybe (f x) (Identity . updateAccessWith (runIdentity $ f x)) (g y)
+
+updateAccessWith :: Access Identity -> Access Maybe -> Access Identity
+updateAccessWith x y = Access
+    { accessExecute = combine accessExecute accessExecute
+    , accessRead = combine accessRead accessRead
+    , accessWrite = combine accessWrite accessWrite
+    }
+    where
+        combine f g = maybe (f x) Identity (g y)
+
+fileModeToMode :: FileMode -> Mode Identity
+fileModeToMode mode = Mode
+    { modeUser = Identity $ Access
+        { accessExecute = Identity $ mode `hasFileMode` Posix.ownerExecuteMode
+        , accessRead = Identity $ mode `hasFileMode` Posix.ownerReadMode
+        , accessWrite = Identity $ mode `hasFileMode` Posix.ownerReadMode
+        }
+    , modeGroup = Identity $ Access
+        { accessExecute = Identity $ mode `hasFileMode` Posix.groupExecuteMode
+        , accessRead = Identity $ mode `hasFileMode` Posix.groupReadMode
+        , accessWrite = Identity $ mode `hasFileMode` Posix.groupReadMode
+        }
+    , modeOther = Identity $ Access
+        { accessExecute = Identity $ mode `hasFileMode` Posix.otherExecuteMode
+        , accessRead = Identity $ mode `hasFileMode` Posix.otherReadMode
+        , accessWrite = Identity $ mode `hasFileMode` Posix.otherReadMode
+        }
+    }
+
+modeToFileMode :: Mode Identity -> FileMode
+modeToFileMode mode = foldr Posix.unionFileModes Posix.nullFileMode $
+    [ Posix.ownerExecuteMode | runIdentity $ accessExecute (runIdentity $ modeUser  mode) ] <>
+    [ Posix.ownerReadMode    | runIdentity $ accessRead    (runIdentity $ modeUser  mode) ] <>
+    [ Posix.ownerWriteMode   | runIdentity $ accessWrite   (runIdentity $ modeUser  mode) ] <>
+    [ Posix.groupExecuteMode | runIdentity $ accessExecute (runIdentity $ modeGroup mode) ] <>
+    [ Posix.groupReadMode    | runIdentity $ accessRead    (runIdentity $ modeGroup mode) ] <>
+    [ Posix.groupWriteMode   | runIdentity $ accessWrite   (runIdentity $ modeGroup mode) ] <>
+    [ Posix.otherExecuteMode | runIdentity $ accessExecute (runIdentity $ modeOther mode) ] <>
+    [ Posix.otherReadMode    | runIdentity $ accessRead    (runIdentity $ modeOther mode) ] <>
+    [ Posix.otherWriteMode   | runIdentity $ accessWrite   (runIdentity $ modeOther mode) ]
+
+hasFileMode :: FileMode -> FileMode -> Bool
+hasFileMode mode x = (mode `Posix.intersectFileModes` x) == Posix.nullFileMode
 
 {- | This error indicates that you supplied an invalid Dhall expression to the
      `toDirectoryTree` function.  The Dhall expression could not be translated
@@ -155,8 +504,11 @@ instance Show FilesystemError where
           \❰Text❱ literals can be converted to files, and ❰Optional❱ values are included if   \n\
           \❰Some❱ and omitted if ❰None❱.  Values of union types can also be converted if      \n\
           \they are an alternative which has a non-nullary constructor whose argument is of   \n\
-          \an otherwise convertible type.  No other type of value can be translated to a      \n\
-          \directory tree.                                                                    \n\
+          \an otherwise convertible type.  Furthermore, there is a more advanced approach to  \n\
+          \constructing a directory tree utilizing a fixpoint encoding. Consult the upstream  \n\
+          \documentation of the `toDirectoryTree` function in the Dhall.Directory module for  \n\
+          \further information on that.                                                       \n\
+          \No other type of value can be translated to a directory tree.                      \n\
           \                                                                                   \n\
           \For example, this is a valid expression that can be translated to a directory      \n\
           \tree:                                                                              \n\
