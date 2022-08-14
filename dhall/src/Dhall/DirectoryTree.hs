@@ -1,13 +1,13 @@
-{-# LANGUAGE BangPatterns      #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedLists   #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms   #-}
-{-# LANGUAGE QuasiQuotes       #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedLists    #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE PatternSynonyms    #-}
+{-# LANGUAGE QuasiQuotes        #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 -- | Implementation of the @dhall to-directory-tree@ subcommand
 module Dhall.DirectoryTree
@@ -16,17 +16,24 @@ module Dhall.DirectoryTree
     , FilesystemError(..)
     ) where
 
-import Control.Applicative (empty)
-import Control.Exception   (Exception)
-import Control.Monad       (when, unless)
-import Data.Either         (isRight)
-import Data.Maybe          (fromMaybe)
-import Data.Functor.Identity (Identity(..))
-import Data.Sequence       (Seq)
-import Data.Text           (Text)
-import Data.Void           (Void)
-import Dhall.Syntax        (Chunks (..), Expr (..), FieldSelection(..), FunctionBinding(..), RecordField(..), Var(..))
-import System.FilePath     ((</>))
+import Control.Applicative      (empty)
+import Control.Exception        (Exception)
+import Control.Monad            (unless, when)
+import Data.Either              (isRight)
+import Data.Functor.Identity    (Identity (..))
+import Data.Maybe               (fromMaybe)
+import Data.Sequence            (Seq)
+import Data.Text                (Text)
+import Data.Void                (Void)
+import Dhall.Syntax
+    ( Chunks (..)
+    , Expr (..)
+    , FieldSelection (..)
+    , FunctionBinding (..)
+    , RecordField (..)
+    , Var (..)
+    )
+import System.FilePath          ((</>))
 import System.PosixCompat.Types (FileMode, GroupID, UserID)
 
 import qualified Control.Exception           as Exception
