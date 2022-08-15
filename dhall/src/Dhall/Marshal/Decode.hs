@@ -146,6 +146,7 @@ import Data.Functor.Contravariant
     , Op (..)
     , Predicate (..)
     )
+import Data.Functor.Identity            (Identity (..))
 import Data.Hashable                    (Hashable)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Typeable                    (Proxy (..), Typeable)
@@ -313,6 +314,9 @@ instance FromDhall Data.Text.Lazy.Text where
 
 instance FromDhall Text where
     autoWith _ = strictText
+
+instance FromDhall a => FromDhall (Identity a) where
+    autoWith opts = Identity <$> autoWith opts
 
 instance FromDhall a => FromDhall (Maybe a) where
     autoWith opts = maybe (autoWith opts)

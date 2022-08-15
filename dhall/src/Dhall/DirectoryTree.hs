@@ -1,13 +1,17 @@
 {-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DerivingVia        #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE PatternSynonyms    #-}
-{-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE ViewPatterns       #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Implementation of the @dhall to-directory-tree@ subcommand
 module Dhall.DirectoryTree
@@ -19,14 +23,24 @@ module Dhall.DirectoryTree
 import Control.Applicative      (empty)
 import Control.Exception        (Exception)
 import Control.Monad            (unless, when)
-import Data.Either              (isRight)
+import Data.Either.Validation   (Validation (..))
 import Data.Functor.Identity    (Identity (..))
 import Data.Maybe               (fromMaybe)
 import Data.Sequence            (Seq)
 import Data.Text                (Text)
 import Data.Void                (Void)
+import Dhall.Marshal.Decode
+    ( Decoder (..)
+    , Expector
+    , FromDhall (..)
+    , Generic
+    , InputNormalizer
+    , InterpretOptions (..)
+    )
+import Dhall.Src                (Src)
 import Dhall.Syntax
     ( Chunks (..)
+    , Const (..)
     , Expr (..)
     , FieldSelection (..)
     , FunctionBinding (..)
@@ -40,9 +54,10 @@ import qualified Control.Exception           as Exception
 import qualified Data.Foldable               as Foldable
 import qualified Data.Text                   as Text
 import qualified Data.Text.IO                as Text.IO
+import qualified Dhall.Core                  as Core
 import qualified Dhall.Map                   as Map
+import qualified Dhall.Marshal.Decode        as Decode
 import qualified Dhall.Pretty
-import qualified Dhall.TH                    as TH
 import qualified Dhall.TypeCheck             as TypeCheck
 import qualified Dhall.Util                  as Util
 import qualified Prettyprinter.Render.String as Pretty
@@ -188,10 +203,34 @@ toDirectoryTree allowSeparators path expression = case expression of
     App None _ ->
         return ()
 
-    Lam _ _ (Lam _ (functionBindingVariable -> make) body)
-        | isFixpointedDirectoryTree expression
-        -> processFilesystemEntryList allowSeparators path $
-            extractFilesystemEntryList make body
+    -- If this pattern matches we assume the user wants to use the fixpoint
+    -- approach, hence we typecheck it and output error messages like we would
+    -- do for every other Dhall program.
+    Lam _ (functionBindingVariable -> r) (Lam _ (functionBindingVariable -> make) body) -> do
+        let body' = Core.renote body
+        let expression' = Core.renote expression
+
+        expected' <- case directoryTreeType of
+            Success x -> return x
+            Failure e -> Exception.throwIO e
+
+        _ <- Core.throws $ TypeCheck.typeOf $ Annot expression' expected'
+
+        let expr = rename r "result" $ rename make "make" body'
+
+        entries <- case Decode.extract decoder expr of
+            Success x -> return x
+            Failure e -> Exception.throwIO e
+
+        processFilesystemEntryList allowSeparators path entries
+            where
+                decoder :: Decoder (Seq FilesystemEntry)
+                decoder = Decode.auto
+
+                rename :: Text -> Text -> Expr s a -> Expr s a
+                rename a b expr
+                    | a /= b    = Core.subst (V a 0) (Var (V b 0)) (Core.shift 1 (V b 0) expr)
+                    | otherwise = expr
 
     _ ->
         die
@@ -218,43 +257,23 @@ toDirectoryTree allowSeparators path expression = case expression of
       where
         unexpectedExpression = expression
 
--- | Check if an expression is a valid fixpoint directory-tree.
-isFixpointedDirectoryTree :: Expr Void Void -> Bool
-isFixpointedDirectoryTree expr = isRight $ TypeCheck.typeOf $ Annot expr $
-    [TH.dhall|
-    let User = < UserId : Natural | UserName : Text >
+directoryTreeType :: Expector (Expr Src Void)
+directoryTreeType = Pi Nothing "result" (Const Type)
+    <$> (Pi Nothing "make" <$> makeType <*> pure (App List (Var (V "result" 0))))
 
-    let Group = < GroupId : Natural | GroupName : Text >
+makeType :: Expector (Expr Src Void)
+makeType = Record . Map.fromList <$> sequenceA
+    [ makeConstructor "directory" (Decode.auto :: Decoder DirectoryEntry)
+    , makeConstructor "file" (Decode.auto :: Decoder FileEntry)
+    ]
+    where
+        makeConstructor :: Text -> Decoder b -> Expector (Text, RecordField Src Void)
+        makeConstructor name dec = (name,) . Core.makeRecordField
+            <$> (Pi Nothing "_" <$> expected dec <*> pure (Var (V "result" 0)))
 
-    let Access =
-          { execute : Optional Bool
-          , read : Optional Bool
-          , write : Optional Bool
-          }
+type DirectoryEntry = Entry (Seq FilesystemEntry)
 
-    let Mode =
-          { user : Optional Access
-          , group : Optional Access
-          , other : Optional Access
-          }
-
-    let Entry =
-          \(content : Type) ->
-            { name : Text
-            , content : content
-            , user : Optional User
-            , group : Optional Group
-            , mode : Optional Mode
-            }
-
-    in  forall (r : Type) ->
-        forall  ( make
-                : { directory : Entry (List r) -> r
-                  , file : Entry Text -> r
-                  }
-                ) ->
-          List r
-    |]
+type FileEntry = Entry Text
 
 -- | A filesystem entry.
 data FilesystemEntry
@@ -262,18 +281,16 @@ data FilesystemEntry
     | FileEntry (Entry Text)
     deriving Show
 
--- | Extract a `FilesystemEntry` from an expression.
-extractFilesystemEntry :: Text -> Expr Void Void -> FilesystemEntry
-extractFilesystemEntry make (App (Field (Var (V make' 0)) (fieldSelectionLabel -> label)) entry)
-    | make' == make
-    , label == "directory" = DirectoryEntry $ extractEntry (extractList (extractFilesystemEntry make)) entry
-    | make' == make
-    , label == "file" = FileEntry $ extractEntry extractText entry
-extractFilesystemEntry _ expr = Exception.throw (FilesystemError expr)
-
--- | Extract a list of `FilesystemEntry`s from an expression.
-extractFilesystemEntryList :: Text -> Expr Void Void -> Seq FilesystemEntry
-extractFilesystemEntryList make = extractList (extractFilesystemEntry make)
+instance FromDhall FilesystemEntry where
+    autoWith normalizer = Decoder
+        { expected = pure $ Var (V "result" 0)
+        , extract = \case
+            App (Field (Var (V "make" 0)) (fieldSelectionLabel -> "directory")) entry ->
+                DirectoryEntry <$> extract (autoWith normalizer) entry
+            App (Field (Var (V "make" 0)) (fieldSelectionLabel -> "file")) entry ->
+                FileEntry <$> extract (autoWith normalizer) entry
+            expr -> Decode.typeError (expected (Decode.autoWith normalizer :: Decoder FilesystemEntry)) expr
+        }
 
 -- | A generic filesystem entry. This type holds the metadata that apply to all entries.
 -- It is parametric over the content of such an entry.
@@ -284,43 +301,23 @@ data Entry a = Entry
     , entryGroup :: Maybe Group
     , entryMode :: Maybe (Mode Maybe)
     }
-    deriving Show
+    deriving (Generic, Show)
 
--- | Extract an `Entry` from an expression.
-extractEntry :: (Expr Void Void -> a) -> Expr Void Void -> Entry a
-extractEntry extractContent (RecordLit (Map.toList ->
-    [ ("content", recordFieldValue -> contentExpr)
-    , ("group", recordFieldValue -> groupExpr)
-    , ("mode", recordFieldValue -> modeExpr)
-    , ("name", recordFieldValue -> nameExpr)
-    , ("user", recordFieldValue -> userExpr)
-    ])) = Entry
-    { entryName = extractString nameExpr
-    , entryContent = extractContent contentExpr
-    , entryUser = extractMaybe extractUser userExpr
-    , entryGroup = extractMaybe extractGroup groupExpr
-    , entryMode = extractMaybe extractMode modeExpr
-    }
-extractEntry _ expr = Exception.throw (FilesystemError expr)
+instance FromDhall a => FromDhall (Entry a) where
+    autoWith = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOptions
+        { fieldModifier = Text.toLower . Text.drop (Text.length "entry")
+        }
 
 -- | A user identified either by id or name.
 data User
     = UserId UserID
     | UserName String
-    deriving Show
+    deriving (Generic, Show)
 
-pattern UserP :: Text -> Expr Void Void -> Expr Void Void
-pattern UserP label v <- App (Field (Union (Map.toList ->
-    [ ("UserId", Just Natural)
-    , ("UserName",Just Text)]))
-    (fieldSelectionLabel -> label))
-    v
+instance FromDhall User
 
--- | Extract a `User` from an expression.
-extractUser :: Expr Void Void -> User
-extractUser (UserP "UserId" (NaturalLit n)) = UserId $ Posix.CUid (fromIntegral n)
-extractUser (UserP "UserName" (TextLit (Chunks [] text))) = UserName $ Text.unpack text
-extractUser expr = Exception.throw (FilesystemError expr)
+instance FromDhall Posix.CUid where
+    autoWith normalizer = Posix.CUid <$> autoWith normalizer
 
 -- | Resolve a `User` to a numerical id.
 getUser :: User -> IO UserID
@@ -331,20 +328,12 @@ getUser (UserName name) = Posix.userID <$> Posix.getUserEntryForName name
 data Group
     = GroupId GroupID
     | GroupName String
-    deriving Show
+    deriving (Generic, Show)
 
-pattern GroupP :: Text -> Expr Void Void -> Expr Void Void
-pattern GroupP label v <- App (Field (Union (Map.toList ->
-    [ ("GroupId", Just Natural)
-    , ("GroupName", Just Text)]))
-    (fieldSelectionLabel -> label))
-    v
+instance FromDhall Group
 
--- | Extract a `Group` from an expression.
-extractGroup :: Expr Void Void -> Group
-extractGroup (GroupP "GroupId" (NaturalLit n)) = GroupId $ Posix.CGid (fromIntegral n)
-extractGroup (GroupP "GroupName" (TextLit (Chunks [] text))) = GroupName $ Text.unpack text
-extractGroup expr = Exception.throw (FilesystemError expr)
+instance FromDhall Posix.CGid where
+    autoWith normalizer = Posix.CGid <$> autoWith normalizer
 
 -- | Resolve a `Group` to a numerical id.
 getGroup :: Group -> IO GroupID
@@ -362,24 +351,23 @@ data Mode f = Mode
     , modeGroup :: f (Access f)
     , modeOther :: f (Access f)
     }
+    deriving Generic
 
 deriving instance Eq (Mode Identity)
 deriving instance Eq (Mode Maybe)
 deriving instance Show (Mode Identity)
 deriving instance Show (Mode Maybe)
 
--- | Extract a `Mode` from an expression.
-extractMode :: Expr Void Void -> Mode Maybe
-extractMode (RecordLit (Map.toList ->
-    [ ("group", recordFieldValue -> groupExpr)
-    , ("other", recordFieldValue -> otherExpr)
-    , ("user", recordFieldValue -> userExpr)
-    ])) = Mode
-    { modeUser = extractMaybe extractAccess userExpr
-    , modeGroup = extractMaybe extractAccess groupExpr
-    , modeOther = extractMaybe extractAccess otherExpr
+instance FromDhall (Mode Identity) where
+    autoWith = modeDecoder
+
+instance FromDhall (Mode Maybe) where
+    autoWith = modeDecoder
+
+modeDecoder :: FromDhall (f (Access f)) => InputNormalizer -> Decoder (Mode f)
+modeDecoder = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOptions
+    { fieldModifier = Text.toLower . Text.drop (Text.length "mode")
     }
-extractMode expr = Exception.throw (FilesystemError expr)
 
 -- | The permissions for a subject (user/group/other).
 data Access f = Access
@@ -387,52 +375,23 @@ data Access f = Access
     , accessRead :: f Bool
     , accessWrite :: f Bool
     }
+    deriving Generic
 
 deriving instance Eq (Access Identity)
 deriving instance Eq (Access Maybe)
 deriving instance Show (Access Identity)
 deriving instance Show (Access Maybe)
 
--- | Extract a `Access` from an expression.
-extractAccess :: Expr Void Void -> Access Maybe
-extractAccess (RecordLit (Map.toList ->
-    [ ("execute", recordFieldValue -> executeExpr)
-    , ("read", recordFieldValue -> readExpr)
-    , ("write", recordFieldValue -> writeExpr)
-    ])) = Access
-    { accessExecute = extractMaybe extractBool executeExpr
-    , accessRead = extractMaybe extractBool readExpr
-    , accessWrite = extractMaybe extractBool writeExpr
+instance FromDhall (Access Identity) where
+    autoWith = accessDecoder
+
+instance FromDhall (Access Maybe) where
+    autoWith = accessDecoder
+
+accessDecoder :: FromDhall (f Bool) => InputNormalizer -> Decoder (Access f)
+accessDecoder = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOptions
+    { fieldModifier = Text.toLower . Text.drop (Text.length "access")
     }
-extractAccess expr = Exception.throw (FilesystemError expr)
-
--- | Helper function to extract a `Prelude.Bool` value.
-extractBool :: Expr Void Void -> Bool
-extractBool (BoolLit b) = b
-extractBool expr = Exception.throw (FilesystemError expr)
-
--- | Helper function to extract a list of some values.
--- The first argument is used to extract the items.
-extractList :: (Expr Void Void -> a) -> Expr Void Void -> Seq a
-extractList _ (ListLit (Just _) _) = mempty
-extractList f (ListLit _ xs) = fmap f xs
-extractList _ expr = Exception.throw (FilesystemError expr)
-
--- | Helper function to extract optional values.
--- The first argument is used to extract the items.
-extractMaybe :: (Expr Void Void -> a) -> Expr Void Void -> Maybe a
-extractMaybe _ (App None _) = Nothing
-extractMaybe f (Some expr) = Just (f expr)
-extractMaybe _ expr = Exception.throw (FilesystemError expr)
-
--- | Helper function to extract a `Prelude.String` value.
-extractString :: Expr Void Void -> String
-extractString = Text.unpack . extractText
-
--- | Helper function to extract a `Text.Text` value.
-extractText :: Expr Void Void -> Text
-extractText (TextLit (Chunks [] text)) = text
-extractText expr = Exception.throw (FilesystemError expr)
 
 -- | Process a `FilesystemEntry`. Writes the content to disk and apply the
 -- metadata to the newly created item.
