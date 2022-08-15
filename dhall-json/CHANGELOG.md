@@ -1,3 +1,9 @@
+1.7.11
+
+* [Add new `--preserve-header` option](https://github.com/dhall-lang/dhall-haskell/pull/2433)
+* Builds against newer dependencies
+  * [`aeson-2.1`](https://github.com/dhall-lang/dhall-haskell/pull/2424)
+
 1.7.10
 
 * [Don't use scientific notation for large integers](https://github.com/dhall-lang/dhall-haskell/pull/2352)

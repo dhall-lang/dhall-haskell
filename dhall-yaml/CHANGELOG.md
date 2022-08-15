@@ -1,3 +1,9 @@
+1.2.11
+
+* [Add new `--preserve-header` option](https://github.com/dhall-lang/dhall-haskell/pull/2410)
+* Builds against newer dependencies
+  * [`aeson-2.1`](https://github.com/dhall-lang/dhall-haskell/pull/2424)
+
 1.2.10
 
 * Build against `dhall-1.41`
