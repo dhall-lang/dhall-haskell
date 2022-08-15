@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns       #-}
 {-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingVia        #-}
@@ -18,6 +17,9 @@ module Dhall.DirectoryTree
     ( -- * Filesystem
       toDirectoryTree
     , FilesystemError(..)
+
+      -- * Exported for testing only
+    , directoryTreeType
     ) where
 
 import Control.Applicative      (empty)
@@ -257,10 +259,12 @@ toDirectoryTree allowSeparators path expression = case expression of
       where
         unexpectedExpression = expression
 
+-- | The type of a fixpoint directory tree expression.
 directoryTreeType :: Expector (Expr Src Void)
 directoryTreeType = Pi Nothing "result" (Const Type)
     <$> (Pi Nothing "make" <$> makeType <*> pure (App List (Var (V "result" 0))))
 
+-- | The type of make part of a fixpoint directory tree expression.
 makeType :: Expector (Expr Src Void)
 makeType = Record . Map.fromList <$> sequenceA
     [ makeConstructor "directory" (Decode.auto :: Decoder DirectoryEntry)
@@ -292,8 +296,8 @@ instance FromDhall FilesystemEntry where
             expr -> Decode.typeError (expected (Decode.autoWith normalizer :: Decoder FilesystemEntry)) expr
         }
 
--- | A generic filesystem entry. This type holds the metadata that apply to all entries.
--- It is parametric over the content of such an entry.
+-- | A generic filesystem entry. This type holds the metadata that apply to all
+-- entries. It is parametric over the content of such an entry.
 data Entry a = Entry
     { entryName :: String
     , entryContent :: a
@@ -434,7 +438,8 @@ applyMetadata entry fp = do
     unless (mode' == mode) $
         Posix.setFileMode fp $ modeToFileMode mode'
 
--- | Calculate the new `Mode` from the current mode and the changes specified by the user.
+-- | Calculate the new `Mode` from the current mode and the changes specified by
+-- the user.
 updateModeWith :: Mode Identity -> Mode Maybe -> Mode Identity
 updateModeWith x y = Mode
     { modeUser = combine modeUser modeUser
@@ -444,7 +449,8 @@ updateModeWith x y = Mode
     where
         combine f g = maybe (f x) (Identity . updateAccessWith (runIdentity $ f x)) (g y)
 
--- | Calculate the new `Access` from the current permissions and the changes specified by the user.
+-- | Calculate the new `Access` from the current permissions and the changes
+-- specified by the user.
 updateAccessWith :: Access Identity -> Access Maybe -> Access Identity
 updateAccessWith x y = Access
     { accessExecute = combine accessExecute accessExecute
@@ -454,7 +460,8 @@ updateAccessWith x y = Access
     where
         combine f g = maybe (f x) Identity (g y)
 
--- | Convert a filesystem mode given as a bitmask (`FileMode`) to an ADT (`Mode`).
+-- | Convert a filesystem mode given as a bitmask (`FileMode`) to an ADT
+-- (`Mode`).
 fileModeToMode :: FileMode -> Mode Identity
 fileModeToMode mode = Mode
     { modeUser = Identity $ Access
@@ -474,7 +481,8 @@ fileModeToMode mode = Mode
         }
     }
 
--- | Convert a filesystem mode given as an ADT (`Mode`) to a bitmask (`FileMode`).
+-- | Convert a filesystem mode given as an ADT (`Mode`) to a bitmask
+-- (`FileMode`).
 modeToFileMode :: Mode Identity -> FileMode
 modeToFileMode mode = foldr Posix.unionFileModes Posix.nullFileMode $
     [ Posix.ownerExecuteMode | runIdentity $ accessExecute (runIdentity $ modeUser  mode) ] <>

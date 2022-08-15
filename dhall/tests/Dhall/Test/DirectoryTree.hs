@@ -2,6 +2,7 @@ module Dhall.Test.DirectoryTree (tests) where
 
 import Control.Monad
 import Data.Either (partitionEithers)
+import Data.Either.Validation
 import Lens.Family (set)
 import System.FilePath ((</>))
 import Test.Tasty
@@ -18,11 +19,22 @@ import qualified System.PosixCompat.Files as Files
 tests :: TestTree
 tests = testGroup "to-directory-tree"
     [ testGroup "fixpointed"
-        [ fixpointedEmpty
+        [ fixpointedType
+        , fixpointedEmpty
         , fixpointedSimple
         , fixpointedMetadata
         ]
     ]
+
+fixpointedType :: TestTree
+fixpointedType = testCase "Type is as expected" $ do
+    let file = "./tests/to-directory-tree/type.dhall"
+    text <- Data.Text.IO.readFile file
+    ref <- Dhall.inputExpr text
+    expected' <- case Dhall.DirectoryTree.directoryTreeType of
+        Failure e -> assertFailure $ show e
+        Success expr -> return expr
+    assertBool "Type mismatch" $ expected' `Dhall.Core.judgmentallyEqual` ref
 
 fixpointedEmpty :: TestTree
 fixpointedEmpty = testCase "empty" $ do
