@@ -190,7 +190,8 @@ toDirectoryTree allowSeparators path expression = case expression of
 
     Lam _ _ (Lam _ (functionBindingVariable -> make) body)
         | isFixpointedDirectoryTree expression
-        -> applyFilesystemEntryList allowSeparators path $ extractFilesystemEntryList make body
+        -> processFilesystemEntryList allowSeparators path $
+            extractFilesystemEntryList make body
 
     _ ->
         die
@@ -217,6 +218,7 @@ toDirectoryTree allowSeparators path expression = case expression of
       where
         unexpectedExpression = expression
 
+-- | Check if an expression is a valid fixpoint directory-tree.
 isFixpointedDirectoryTree :: Expr Void Void -> Bool
 isFixpointedDirectoryTree expr = isRight $ TypeCheck.typeOf $ Annot expr $
     [TH.dhall|
@@ -254,11 +256,13 @@ isFixpointedDirectoryTree expr = isRight $ TypeCheck.typeOf $ Annot expr $
           List r
     |]
 
+-- | A filesystem entry.
 data FilesystemEntry
     = DirectoryEntry (Entry (Seq FilesystemEntry))
     | FileEntry (Entry Text)
     deriving Show
 
+-- | Extract a `FilesystemEntry` from an expression.
 extractFilesystemEntry :: Text -> Expr Void Void -> FilesystemEntry
 extractFilesystemEntry make (App (Field (Var (V make' 0)) (fieldSelectionLabel -> label)) entry)
     | make' == make
@@ -267,9 +271,11 @@ extractFilesystemEntry make (App (Field (Var (V make' 0)) (fieldSelectionLabel -
     , label == "file" = FileEntry $ extractEntry extractText entry
 extractFilesystemEntry _ expr = Exception.throw (FilesystemError expr)
 
+-- | Extract a list of `FilesystemEntry`s from an expression.
 extractFilesystemEntryList :: Text -> Expr Void Void -> Seq FilesystemEntry
 extractFilesystemEntryList make = extractList (extractFilesystemEntry make)
 
+-- | A generic filesystem entry parameterized over the content.
 data Entry a = Entry
     { entryName :: String
     , entryContent :: a
@@ -279,6 +285,7 @@ data Entry a = Entry
     }
     deriving Show
 
+-- | Extract an `Entry` from an expression.
 extractEntry :: (Expr Void Void -> a) -> Expr Void Void -> Entry a
 extractEntry extractContent (RecordLit (Map.toList ->
     [ ("content", recordFieldValue -> contentExpr)
@@ -295,6 +302,7 @@ extractEntry extractContent (RecordLit (Map.toList ->
     }
 extractEntry _ expr = Exception.throw (FilesystemError expr)
 
+-- | A user identified either by id or name.
 data User
     = UserId UserID
     | UserName String
@@ -307,15 +315,18 @@ pattern UserP label v <- App (Field (Union (Map.toList ->
     (fieldSelectionLabel -> label))
     v
 
+-- | Extract a `User` from an expression.
 extractUser :: Expr Void Void -> User
 extractUser (UserP "UserId" (NaturalLit n)) = UserId $ Posix.CUid (fromIntegral n)
 extractUser (UserP "UserName" (TextLit (Chunks [] text))) = UserName $ Text.unpack text
 extractUser expr = Exception.throw (FilesystemError expr)
 
+-- | Resolve a `User` to a numerical id.
 getUser :: User -> IO UserID
 getUser (UserId uid) = return uid
 getUser (UserName name) = Posix.userID <$> Posix.getUserEntryForName name
 
+-- | A group identified either by id or name.
 data Group
     = GroupId GroupID
     | GroupName String
@@ -328,15 +339,20 @@ pattern GroupP label v <- App (Field (Union (Map.toList ->
     (fieldSelectionLabel -> label))
     v
 
+-- | Extract a `Group` from an expression.
 extractGroup :: Expr Void Void -> Group
 extractGroup (GroupP "GroupId" (NaturalLit n)) = GroupId $ Posix.CGid (fromIntegral n)
 extractGroup (GroupP "GroupName" (TextLit (Chunks [] text))) = GroupName $ Text.unpack text
 extractGroup expr = Exception.throw (FilesystemError expr)
 
+-- | Resolve a `Group` to a numerical id.
 getGroup :: Group -> IO GroupID
 getGroup (GroupId gid) = return gid
 getGroup (GroupName name) = Posix.groupID <$> Posix.getGroupEntryForName name
 
+-- | A filesystem mode. See chmod(1).
+-- The parameter is meant to be instantiated by either `Identity` or `Maybe`
+-- depending on the completeness of the information.
 data Mode f = Mode
     { modeUser :: f (Access f)
     , modeGroup :: f (Access f)
@@ -348,6 +364,7 @@ deriving instance Eq (Mode Maybe)
 deriving instance Show (Mode Identity)
 deriving instance Show (Mode Maybe)
 
+-- | Extract a `Mode` from an expression.
 extractMode :: Expr Void Void -> Mode Maybe
 extractMode (RecordLit (Map.toList ->
     [ ("group", recordFieldValue -> groupExpr)
@@ -360,6 +377,7 @@ extractMode (RecordLit (Map.toList ->
     }
 extractMode expr = Exception.throw (FilesystemError expr)
 
+-- | The permissions for a subject (user/group/other).
 data Access f = Access
     { accessExecute :: f Bool
     , accessRead :: f Bool
@@ -371,6 +389,7 @@ deriving instance Eq (Access Maybe)
 deriving instance Show (Access Identity)
 deriving instance Show (Access Maybe)
 
+-- | Extract a `Access` from an expression.
 extractAccess :: Expr Void Void -> Access Maybe
 extractAccess (RecordLit (Map.toList ->
     [ ("execute", recordFieldValue -> executeExpr)
@@ -383,49 +402,61 @@ extractAccess (RecordLit (Map.toList ->
     }
 extractAccess expr = Exception.throw (FilesystemError expr)
 
+-- | Helper function to extract a `Bool` value.
 extractBool :: Expr Void Void -> Bool
 extractBool (BoolLit b) = b
 extractBool expr = Exception.throw (FilesystemError expr)
 
+-- | Helper function to extract a list of some values.
+-- The first argument is used to extract the items.
 extractList :: (Expr Void Void -> a) -> Expr Void Void -> Seq a
 extractList _ (ListLit (Just _) _) = mempty
 extractList f (ListLit _ xs) = fmap f xs
 extractList _ expr = Exception.throw (FilesystemError expr)
 
+-- | Helper function to extract optional values.
+-- The first argument is used to extract the items.
 extractMaybe :: (Expr Void Void -> a) -> Expr Void Void -> Maybe a
 extractMaybe _ (App None _) = Nothing
 extractMaybe f (Some expr) = Just (f expr)
 extractMaybe _ expr = Exception.throw (FilesystemError expr)
 
+-- | Helper function to extract a `String` value.
 extractString :: Expr Void Void -> String
 extractString = Text.unpack . extractText
 
+-- | Helper function to extract a `Text` value.
 extractText :: Expr Void Void -> Text
 extractText (TextLit (Chunks [] text)) = text
 extractText expr = Exception.throw (FilesystemError expr)
 
-applyFilesystemEntry :: Bool -> FilePath -> FilesystemEntry -> IO ()
-applyFilesystemEntry allowSeparators path (DirectoryEntry entry) = do
+-- | Process a `FilesystemEntry`. Writes the content to disk and apply the
+-- metadata to the newly created item.
+processFilesystemEntry :: Bool -> FilePath -> FilesystemEntry -> IO ()
+processFilesystemEntry allowSeparators path (DirectoryEntry entry) = do
     let path' = path </> entryName entry
     Directory.createDirectoryIfMissing allowSeparators path'
-    applyFilesystemEntryList allowSeparators path' $ entryContent entry
+    processFilesystemEntryList allowSeparators path' $ entryContent entry
     -- It is important that we write the metadata after we wrote the content of
     -- the directories/files below this directory as we might lock ourself out
     -- by changing ownership or permissions.
-    unsafeApplyMetadata entry path'
-applyFilesystemEntry _ path (FileEntry entry) = do
+    applyMetadata entry path'
+processFilesystemEntry _ path (FileEntry entry) = do
     let path' = path </> entryName entry
     Text.IO.writeFile path' $ entryContent entry
     -- It is important that we write the metadata after we wrote the content of
     -- the file as we might lock ourself out by changing ownership or
     -- permissions.
-    unsafeApplyMetadata entry path'
+    applyMetadata entry path'
 
-applyFilesystemEntryList :: Bool -> FilePath -> Seq FilesystemEntry -> IO ()
-applyFilesystemEntryList allowSeparators path = Foldable.traverse_ (applyFilesystemEntry allowSeparators path)
+-- | Process a list of `FilesystemEntry`s.
+processFilesystemEntryList :: Bool -> FilePath -> Seq FilesystemEntry -> IO ()
+processFilesystemEntryList allowSeparators path = Foldable.traverse_
+    (processFilesystemEntry allowSeparators path)
 
-unsafeApplyMetadata :: Entry a -> FilePath -> IO ()
-unsafeApplyMetadata entry fp = do
+-- | Set the metadata of an object referenced by a path.
+applyMetadata :: Entry a -> FilePath -> IO ()
+applyMetadata entry fp = do
     s <- Posix.getFileStatus fp
     let user = Posix.fileOwner s
         group = Posix.fileGroup s
@@ -440,6 +471,7 @@ unsafeApplyMetadata entry fp = do
     unless (mode' == mode) $
         Posix.setFileMode fp $ modeToFileMode mode'
 
+-- | Calculate the new `Mode` from the current mode and the changes specified by the user.
 updateModeWith :: Mode Identity -> Mode Maybe -> Mode Identity
 updateModeWith x y = Mode
     { modeUser = combine modeUser modeUser
@@ -449,6 +481,7 @@ updateModeWith x y = Mode
     where
         combine f g = maybe (f x) (Identity . updateAccessWith (runIdentity $ f x)) (g y)
 
+-- | Calculate the new `Access` from the current permissions and the changes specified by the user.
 updateAccessWith :: Access Identity -> Access Maybe -> Access Identity
 updateAccessWith x y = Access
     { accessExecute = combine accessExecute accessExecute
@@ -458,6 +491,7 @@ updateAccessWith x y = Access
     where
         combine f g = maybe (f x) Identity (g y)
 
+-- | Convert a filesystem mode given as a bitmask (`FileMode`) to an ADT (`Mode`).
 fileModeToMode :: FileMode -> Mode Identity
 fileModeToMode mode = Mode
     { modeUser = Identity $ Access
@@ -477,6 +511,7 @@ fileModeToMode mode = Mode
         }
     }
 
+-- | Convert a filesystem mode given as an ADT (`Mode`) to a bitmask (`FileMode`).
 modeToFileMode :: Mode Identity -> FileMode
 modeToFileMode mode = foldr Posix.unionFileModes Posix.nullFileMode $
     [ Posix.ownerExecuteMode | runIdentity $ accessExecute (runIdentity $ modeUser  mode) ] <>
@@ -489,8 +524,9 @@ modeToFileMode mode = foldr Posix.unionFileModes Posix.nullFileMode $
     [ Posix.otherReadMode    | runIdentity $ accessRead    (runIdentity $ modeOther mode) ] <>
     [ Posix.otherWriteMode   | runIdentity $ accessWrite   (runIdentity $ modeOther mode) ]
 
+-- | Check whether the second `FileMode` is contained in the first one.
 hasFileMode :: FileMode -> FileMode -> Bool
-hasFileMode mode x = (mode `Posix.intersectFileModes` x) == Posix.nullFileMode
+hasFileMode mode x = (mode `Posix.intersectFileModes` x) == x
 
 {- | This error indicates that you supplied an invalid Dhall expression to the
      `toDirectoryTree` function.  The Dhall expression could not be translated
