@@ -110,7 +110,7 @@ import qualified System.PosixCompat.User     as Posix
 
     /Advanced construction of directory trees/
 
-    In addition to the ways described above using 'simple' Dhall values to
+    In addition to the ways described above using "simple" Dhall values to
     construct the directory tree there is one based on a fixpoint encoding. It
     works by passing a value of the following type to the interpreter:
 
@@ -275,7 +275,8 @@ extractFilesystemEntry _ expr = Exception.throw (FilesystemError expr)
 extractFilesystemEntryList :: Text -> Expr Void Void -> Seq FilesystemEntry
 extractFilesystemEntryList make = extractList (extractFilesystemEntry make)
 
--- | A generic filesystem entry parameterized over the content.
+-- | A generic filesystem entry. This type holds the metadata that apply to all entries.
+-- It is parametric over the content of such an entry.
 data Entry a = Entry
     { entryName :: String
     , entryContent :: a
@@ -352,7 +353,10 @@ getGroup (GroupName name) = Posix.groupID <$> Posix.getGroupEntryForName name
 
 -- | A filesystem mode. See chmod(1).
 -- The parameter is meant to be instantiated by either `Identity` or `Maybe`
--- depending on the completeness of the information.
+-- depending on the completeness of the information:
+--  * For data read from the filesystem it will be `Identity`.
+--  * For user-supplied data it will be `Maybe` as we want to be able to set
+--    only specific bits.
 data Mode f = Mode
     { modeUser :: f (Access f)
     , modeGroup :: f (Access f)
@@ -402,7 +406,7 @@ extractAccess (RecordLit (Map.toList ->
     }
 extractAccess expr = Exception.throw (FilesystemError expr)
 
--- | Helper function to extract a `Bool` value.
+-- | Helper function to extract a `Prelude.Bool` value.
 extractBool :: Expr Void Void -> Bool
 extractBool (BoolLit b) = b
 extractBool expr = Exception.throw (FilesystemError expr)
@@ -421,11 +425,11 @@ extractMaybe _ (App None _) = Nothing
 extractMaybe f (Some expr) = Just (f expr)
 extractMaybe _ expr = Exception.throw (FilesystemError expr)
 
--- | Helper function to extract a `String` value.
+-- | Helper function to extract a `Prelude.String` value.
 extractString :: Expr Void Void -> String
 extractString = Text.unpack . extractText
 
--- | Helper function to extract a `Text` value.
+-- | Helper function to extract a `Text.Text` value.
 extractText :: Expr Void Void -> Text
 extractText (TextLit (Chunks [] text)) = text
 extractText expr = Exception.throw (FilesystemError expr)
