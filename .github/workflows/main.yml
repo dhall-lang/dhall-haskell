@@ -58,7 +58,7 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
-            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+            if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
 
@@ -80,7 +80,7 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
-            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+            if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
 
@@ -127,7 +127,7 @@ jobs:
           package 'dhall-docs' "bin/dhall-docs${exe}" 'share/man/man1/dhall-docs.1'
           package 'dhall-json' "bin/dhall-to-json${exe}" "bin/dhall-to-yaml${exe}" "bin/json-to-dhall${exe}"
           package 'dhall-lsp-server' "bin/dhall-lsp-server${exe}"
-          if [ '${{matrix.os.runner}}' == 'macOS-latest' ] || [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
+          if [ '${{matrix.os.runner}}' != 'windows-latest' ]; then
               package 'dhall-nix' "bin/dhall-to-nix${exe}"
           fi
           package 'dhall-openapi' "bin/openapi-to-dhall${exe}"
