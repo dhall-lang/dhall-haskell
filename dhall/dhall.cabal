@@ -360,6 +360,23 @@ Library
         Dhall.Parser.Combinators
         Dhall.Pretty.Internal
         Dhall.Syntax
+        Dhall.Syntax.Instances.Applicative
+        Dhall.Syntax.Instances.Bifunctor
+        Dhall.Syntax.Instances.Data
+        Dhall.Syntax.Instances.Eq
+        Dhall.Syntax.Instances.Foldable
+        Dhall.Syntax.Instances.Functor
+        Dhall.Syntax.Instances.Lift
+        Dhall.Syntax.Instances.Monad
+        Dhall.Syntax.Instances.Monoid
+        Dhall.Syntax.Instances.NFData
+        Dhall.Syntax.Instances.Ord
+        Dhall.Syntax.Instances.Pretty
+        Dhall.Syntax.Instances.Semigroup
+        Dhall.Syntax.Instances.Show
+        Dhall.Syntax.Instances.Traversable
+        Dhall.Syntax.Operations
+        Dhall.Syntax.Types
         Dhall.URL
         Paths_dhall
     Autogen-Modules:
