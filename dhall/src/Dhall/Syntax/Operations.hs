@@ -39,8 +39,10 @@ import Data.List.NonEmpty            (NonEmpty (..))
 import Data.Text                     (Text)
 import Data.Void                     (Void)
 import Dhall.Src                     (Src (..))
+import Dhall.Syntax.Expr
 import Dhall.Syntax.Instances.Monoid ()
 import Dhall.Syntax.Types
+import Dhall.Syntax.Var
 import Unsafe.Coerce                 (unsafeCoerce)
 
 import qualified Data.Foldable

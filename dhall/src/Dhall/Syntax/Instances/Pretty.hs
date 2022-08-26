@@ -9,7 +9,10 @@ module Dhall.Syntax.Instances.Pretty
 
 import                Data.Text             (Text)
 import {-# SOURCE #-} Dhall.Pretty.Internal
-import                Dhall.Syntax.Types
+import                Dhall.Syntax.Const
+import                Dhall.Syntax.Expr
+import                Dhall.Syntax.Import
+import                Dhall.Syntax.Var
 import                Prettyprinter         (Doc, Pretty)
 
 import qualified Data.Text

@@ -6,7 +6,10 @@
 module Dhall.Syntax.Instances.Data () where
 
 import Data.Data          (Data)
+import Dhall.Syntax.Const
+import Dhall.Syntax.Expr
 import Dhall.Syntax.Types
+import Dhall.Syntax.Var
 
 deriving instance Data Const
 deriving instance Data Var

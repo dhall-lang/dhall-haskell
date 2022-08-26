@@ -2,8 +2,8 @@
 
 module Dhall.Syntax.Instances.Monad () where
 
+import Dhall.Syntax.Expr
 import Dhall.Syntax.Instances.Applicative ()
-import Dhall.Syntax.Types
 
 import qualified Control.Monad
 

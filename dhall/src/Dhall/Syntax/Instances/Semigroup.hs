@@ -5,6 +5,7 @@
 
 module Dhall.Syntax.Instances.Semigroup () where
 
+import Dhall.Syntax.Import
 import Dhall.Syntax.Instances.Functor ()
 import Dhall.Syntax.Types
 

@@ -5,7 +5,10 @@
 
 module Dhall.Syntax.Instances.Lift () where
 
+import Dhall.Syntax.Const
+import Dhall.Syntax.Expr
 import Dhall.Syntax.Types
+import Dhall.Syntax.Var
 import Language.Haskell.TH.Syntax (Lift)
 
 import qualified Data.Fixed as Fixed

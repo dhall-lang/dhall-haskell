@@ -5,6 +5,7 @@
 
 module Dhall.Syntax.Instances.Foldable () where
 
+import Dhall.Syntax.Expr
 import Dhall.Syntax.Types
 
 deriving instance Foldable (Binding s)

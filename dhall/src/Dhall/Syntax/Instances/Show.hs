@@ -4,7 +4,11 @@
 
 module Dhall.Syntax.Instances.Show () where
 
+import Dhall.Syntax.Const
+import Dhall.Syntax.Expr
+import Dhall.Syntax.Import
 import Dhall.Syntax.Types
+import Dhall.Syntax.Var
 
 deriving instance Show Const
 deriving instance Show Var

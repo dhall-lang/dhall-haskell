@@ -2,7 +2,7 @@
 
 module Dhall.Syntax.Instances.Pretty where
 
-import Dhall.Syntax.Types (Expr)
-import                Prettyprinter              (Pretty)
+import Dhall.Syntax.Expr (Expr)
+import Prettyprinter     (Pretty)
 
 instance Pretty a => Pretty (Expr s a)

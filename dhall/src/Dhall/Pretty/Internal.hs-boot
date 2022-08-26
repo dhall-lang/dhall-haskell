@@ -7,7 +7,9 @@ import Prettyprinter (Pretty, Doc)
 import Dhall.Src (Src)
 import Language.Haskell.TH.Syntax (Lift)
 
-import {-# SOURCE #-} Dhall.Syntax.Types
+import {-# SOURCE #-} Dhall.Syntax.Expr
+import Dhall.Syntax.Const
+import Dhall.Syntax.Var
 
 data Ann
 

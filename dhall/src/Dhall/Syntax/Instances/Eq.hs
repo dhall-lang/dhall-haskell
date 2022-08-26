@@ -4,8 +4,12 @@
 
 module Dhall.Syntax.Instances.Eq () where
 
-import Data.Bits          (xor)
+import Data.Bits           (xor)
+import Dhall.Syntax.Const
+import Dhall.Syntax.Expr
+import Dhall.Syntax.Import
 import Dhall.Syntax.Types
+import Dhall.Syntax.Var
 
 deriving instance Eq Const
 deriving instance Eq Var
