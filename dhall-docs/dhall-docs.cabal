@@ -6,7 +6,7 @@ License: BSD3
 License-File: LICENSE
 Copyright: 2020 Germán Robayo
 Author: Germán Robayo
-Maintainer: Gabriel439@gmail.com
+Maintainer: GenuineGabriella@gmail.com
 Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
 Synopsis: Generate HTML docs from a dhall package
 Description:

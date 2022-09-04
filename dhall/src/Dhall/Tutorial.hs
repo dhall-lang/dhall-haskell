@@ -1644,7 +1644,7 @@ import Dhall
 -- record might be the contents of a software license:
 --
 -- > { package = "dhall"
--- > , author  = "Gabriel Gonzalez"
+-- > , author  = "Gabriella Gonzalez"
 -- > , license = ./LICENSE
 -- > }
 --
@@ -1653,7 +1653,7 @@ import Dhall
 --
 -- > $ cat LICENSE
 -- > ''
--- > Copyright (c) 2017 Gabriel Gonzalez
+-- > Copyright (c) 2017 Gabriella Gonzalez
 -- > All rights reserved.
 -- >
 -- > ...
@@ -1668,14 +1668,14 @@ import Dhall
 -- end of the import, like this:
 --
 -- > { package = "dhall"
--- > , author  = "Gabriel Gonzalez"
+-- > , author  = "Gabriella Gonzalez"
 -- > , license = ./LICENSE as Text
 -- > }
 --
 -- ... and then you can use the original text file unmodified:
 --
 -- > $ cat LICENSE
--- > Copyright (c) 2017 Gabriel Gonzalez
+-- > Copyright (c) 2017 Gabriella Gonzalez
 -- > All rights reserved.
 -- >
 -- > ...
