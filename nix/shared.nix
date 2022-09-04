@@ -236,7 +236,7 @@ let
                   [ (pkgsNew.haskell.lib.packagesFromDirectory { directory = ./packages; })
                     extension
                     doCheckExtension
-                    # doBenchmarkExtension
+                    doBenchmarkExtension
                     failOnAllWarningsExtension
                     failOnMissingHaddocksExtension
                   ];
