@@ -211,12 +211,14 @@ data Val a
     | VListLit !(Maybe (Val a)) !(Seq (Val a))
     | VListAppend !(Val a) !(Val a)
     | VListBuild   (Val a) !(Val a)
+    | VListDrop   !(Val a)  (Val a) !(Val a)
     | VListFold    (Val a) !(Val a) !(Val a) !(Val a) !(Val a)
     | VListLength  (Val a) !(Val a)
     | VListHead    (Val a) !(Val a)
     | VListLast    (Val a) !(Val a)
     | VListIndexed (Val a) !(Val a)
     | VListReverse (Val a) !(Val a)
+    | VListTake   !(Val a)  (Val a) !(Val a)
 
     | VOptional (Val a)
     | VSome (Val a)
@@ -684,7 +686,30 @@ eval !env t0 =
                            VHLam (Typed "as" (VList a)) (\as ->
                            vListAppend (VListLit Nothing (pure x)) as))
                     `vApp` VListLit (Just (VList a)) mempty
-
+        ListDrop ->
+            VPrim $ \n ->
+            VPrim $ \a ->
+            VPrim $ \list ->
+                let inert = VListDrop n a list
+                in  case n of
+                        VPrimVar -> inert
+                        _ -> case a of
+                            VPrimVar -> inert
+                            _ -> case list of
+                                VPrimVar -> inert
+                                _   | VListLit _ as <- list
+                                    , Sequence.null as ->
+                                        list
+                                    | VNaturalLit 0 <- n ->
+                                        list
+                                    | VListLit _ as <- list
+                                    , VNaturalLit m <- n ->
+                                        let as' = Sequence.drop (fromIntegral m) as
+                                        in  if Sequence.null as'
+                                            then VListLit (Just a) as'
+                                            else VListLit Nothing  as'
+                                    | otherwise ->
+                                        VListDrop n a list
         ListFold ->
             VPrim $ \a ->
             VPrim $ \as ->
@@ -759,6 +784,28 @@ eval !env t0 =
                     VListLit Nothing (Sequence.reverse as)
                 t ->
                     VListReverse a t
+        ListTake ->
+            VPrim $ \n ->
+            VPrim $ \a ->
+            VPrim $ \list ->
+                let inert = VListTake n a list
+                in  case n of
+                        VPrimVar -> inert
+                        _ -> case a of
+                            VPrimVar -> inert
+                            _ -> case list of
+                                VPrimVar -> inert
+                                _ | VListLit _ as <- list
+                                  , Sequence.null as ->
+                                      list
+                                  | VNaturalLit 0 <- n ->
+                                      VListLit (Just a) Sequence.empty
+                                  | VListLit _ as <- list
+                                  , VNaturalLit m <- n ->
+                                      let as' = Sequence.take (fromIntegral m) as
+                                      in  VListLit Nothing  as'
+                                  | otherwise ->
+                                      VListTake n a list
         Optional ->
             VPrim VOptional
         Some t ->
@@ -1022,6 +1069,10 @@ conv !env t0 t0' =
             conv env t t'
         (VListReverse _ t, VListReverse _ t') ->
             conv env t t'
+        (VListDrop n a as, VListDrop n' a' as') ->
+            conv env n n' && conv env a a' && conv env a a' && conv env as as'
+        (VListTake n a as, VListTake n' a' as') ->
+            conv env n n' && conv env a a' && conv env a a' && conv env as as'
         (VListFold a l _ t u, VListFold a' l' _ t' u') ->
             conv env a a' && conv env l l' && conv env t t' && conv env u u'
         (VOptional a, VOptional a') ->
@@ -1224,6 +1275,8 @@ quote !env !t0 =
             ListAppend (quote env t) (quote env u)
         VListBuild a t ->
             ListBuild `qApp` a `qApp` t
+        VListDrop n a as ->
+            ListDrop `qApp` n `qApp` a `qApp` as
         VListFold a l t u v ->
             ListFold `qApp` a `qApp` l `qApp` t `qApp` u `qApp` v
         VListLength a t ->
@@ -1236,6 +1289,8 @@ quote !env !t0 =
             ListIndexed `qApp` a `qApp` t
         VListReverse a t ->
             ListReverse `qApp` a `qApp` t
+        VListTake n a as ->
+            ListTake `qApp` n `qApp` a `qApp` as
         VOptional a ->
             Optional `qApp` a
         VSome t ->
@@ -1423,6 +1478,8 @@ alphaNormalize = goEnv EmptyNames
                 ListAppend (go t) (go u)
             ListBuild ->
                 ListBuild
+            ListDrop ->
+                ListDrop
             ListFold ->
                 ListFold
             ListLength ->
@@ -1435,6 +1492,8 @@ alphaNormalize = goEnv EmptyNames
                 ListIndexed
             ListReverse ->
                 ListReverse
+            ListTake ->
+                ListTake
             Optional ->
                 Optional
             Some t ->

@@ -727,12 +727,14 @@ parsers embedded = Parsers{..}
                     'L' ->
                         choice
                             [ ListBuild        <$ _ListBuild
+                            , ListDrop         <$ _ListDrop
                             , ListFold         <$ _ListFold
                             , ListLength       <$ _ListLength
                             , ListHead         <$ _ListHead
                             , ListLast         <$ _ListLast
                             , ListIndexed      <$ _ListIndexed
                             , ListReverse      <$ _ListReverse
+                            , ListTake         <$ _ListTake
                             , List             <$ _List
                             ]
                     'O' ->    Optional         <$ _Optional

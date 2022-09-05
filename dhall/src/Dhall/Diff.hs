@@ -1316,6 +1316,12 @@ diffPrimitiveExpression l@ListBuild r =
     mismatch l r
 diffPrimitiveExpression l r@ListBuild =
     mismatch l r
+diffPrimitiveExpression ListDrop ListDrop =
+    "…"
+diffPrimitiveExpression l@ListDrop r =
+    mismatch l r
+diffPrimitiveExpression l r@ListDrop =
+    mismatch l r
 diffPrimitiveExpression ListFold ListFold =
     "…"
 diffPrimitiveExpression l@ListFold r =
@@ -1351,6 +1357,12 @@ diffPrimitiveExpression ListReverse ListReverse =
 diffPrimitiveExpression l@ListReverse r =
     mismatch l r
 diffPrimitiveExpression l r@ListReverse =
+    mismatch l r
+diffPrimitiveExpression ListTake ListTake =
+    "…"
+diffPrimitiveExpression l@ListTake r =
+    mismatch l r
+diffPrimitiveExpression l r@ListTake =
     mismatch l r
 diffPrimitiveExpression Optional Optional =
     "…"

@@ -966,6 +966,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.ListBuild ->
             Core.ListBuild
 
+        Core.ListDrop ->
+            Core.ListDrop
+
         Core.ListFold ->
             Core.ListFold
 
@@ -983,6 +986,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
 
         Core.ListReverse ->
             Core.ListReverse
+
+        Core.ListTake ->
+            Core.ListTake
 
         Core.Optional ->
             Core.Optional

@@ -65,12 +65,14 @@ module Dhall.Parser.Token (
     _IntegerToDouble,
     _DoubleShow,
     _ListBuild,
+    _ListDrop,
     _ListFold,
     _ListLength,
     _ListHead,
     _ListLast,
     _ListIndexed,
     _ListReverse,
+    _ListTake,
     _Bool,
     _Natural,
     _Integer,
@@ -1083,6 +1085,13 @@ _DoubleShow = builtin "Double/show"
 _ListBuild :: Parser ()
 _ListBuild = builtin "List/build"
 
+{-| Parse the @List/drop@ built-in
+
+    This corresponds to the @List-drop@ rule from the official grammar
+-}
+_ListDrop :: Parser ()
+_ListDrop = builtin "List/drop"
+
 {-| Parse the @List/fold@ built-in
 
     This corresponds to the @List-fold@ rule from the official grammar
@@ -1124,6 +1133,13 @@ _ListIndexed = builtin "List/indexed"
 -}
 _ListReverse :: Parser ()
 _ListReverse = builtin "List/reverse"
+
+{-| Parse the @List/take@ built-in
+
+    This corresponds to the @List-take@ rule from the official grammar
+-}
+_ListTake :: Parser ()
+_ListTake = builtin "List/take"
 
 {-| Parse the @Bool@ built-in
 

@@ -519,6 +519,20 @@ dhallToNix e =
                 @@  Nix.mkList []
                 )
             )
+    loop ListDrop = do
+        return
+            (   "n"
+            ==> "a"
+            ==> "as"
+            ==> Nix.letsE
+                    [ ("maxLength", ("builtins.length" @@ "as") $- "n")
+                    , ("newLength", Nix.mkIf (Nix.mkInt 0 $<= "newLength") "newLength" (Nix.mkInt 0))
+                    ]
+                    (   "builtins.genList"
+                    @@  ("i" ==> ("builtins.elemAt" @@ "as" @@ ("n" $+ "i")))
+                    @@  "newLength"
+                    )
+            )
     loop ListFold = do
         return
             (   "t"
@@ -582,6 +596,20 @@ dhallToNix e =
                             )
                         )
                     @@  "n"
+                    )
+            )
+    loop ListTake = do
+        return
+            (   "n"
+            ==> "a"
+            ==> "as"
+            ==> Nix.letsE
+                    [ ("oldLength", "builtins.length" @@ "as")
+                    , ("newLength", Nix.mkIf ("n" $<= "oldLength") "n" "oldLength")
+                    ]
+                    (   "builtins.genList"
+                    @@  ("builtins.elemAt" @@ "as")
+                    @@  "newLength"
                     )
             )
     loop Optional = return ("t" ==> untranslatable)

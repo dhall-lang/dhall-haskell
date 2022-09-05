@@ -1368,6 +1368,8 @@ prettyPrinters characterSet =
         builtin "List"
     prettyPrimitiveExpression ListBuild =
         builtin "List/build"
+    prettyPrimitiveExpression ListDrop =
+        builtin "List/drop"
     prettyPrimitiveExpression ListFold =
         builtin "List/fold"
     prettyPrimitiveExpression ListLength =
@@ -1380,6 +1382,8 @@ prettyPrinters characterSet =
         builtin "List/indexed"
     prettyPrimitiveExpression ListReverse =
         builtin "List/reverse"
+    prettyPrimitiveExpression ListTake =
+        builtin "List/take"
     prettyPrimitiveExpression Optional =
         builtin "Optional"
     prettyPrimitiveExpression None =

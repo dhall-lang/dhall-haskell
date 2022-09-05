@@ -686,6 +686,10 @@ infer typer = loop
                     )
                 )
 
+        ListDrop ->
+            return
+                (VNatural ~> VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
+
         ListFold ->
             return
                 (   VHPi "a" (VConst Type) (\a ->
@@ -723,6 +727,10 @@ infer typer = loop
                 )
         ListReverse ->
             return (VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
+
+        ListTake ->
+            return
+                (VNatural ~> VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
 
         Optional ->
             return (VConst Type ~> VConst Type)

@@ -269,6 +269,20 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
+                    App (App (App ListDrop n) a_) as
+                        | ListLit _ as' <- as
+                        , Data.Sequence.null as' ->
+                            return as
+                        | NaturalLit 0 <- n ->
+                            return as
+                        | ListLit _ as' <- as
+                        , NaturalLit m <- n -> do
+                            let as'' = Data.Sequence.drop (fromIntegral m) as'
+                            if  Data.Sequence.null as''
+                                then return (ListLit (Just a_) as')
+                                else return (ListLit Nothing  as')
+                        | otherwise ->
+                            return (App (App (App ListDrop n) a_) as)
                     App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
@@ -315,6 +329,18 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                   ]
                     App (App ListReverse _) (ListLit t xs) ->
                         loop (ListLit t (Data.Sequence.reverse xs))
+                    App (App (App ListTake n) a_) as
+                        | ListLit _ as' <- as
+                        , Data.Sequence.null as' ->
+                            return as
+                        | NaturalLit 0 <- n ->
+                            return as
+                        | ListLit _ as' <- as
+                        , NaturalLit m <- n -> do
+                            let as'' = Data.Sequence.take (fromIntegral m) as'
+                            return (ListLit Nothing as'')
+                        | otherwise ->
+                            return (App (App (App ListTake n) a_) as)
                     App TextShow (TextLit (Chunks [] oldText)) ->
                         loop (TextLit (Chunks [] newText))
                       where
@@ -501,12 +527,14 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
         decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
         decide  l             r                                   = ListAppend l r
     ListBuild -> pure ListBuild
+    ListDrop -> pure ListDrop
     ListFold -> pure ListFold
     ListLength -> pure ListLength
     ListHead -> pure ListHead
     ListLast -> pure ListLast
     ListIndexed -> pure ListIndexed
     ListReverse -> pure ListReverse
+    ListTake -> pure ListTake
     Optional -> pure Optional
     Some a -> Some <$> a'
       where
@@ -794,12 +822,24 @@ isNormalized e0 = loop (Syntax.denote e0)
           App IntegerToDouble (IntegerLit _) -> False
           App DoubleShow (DoubleLit _) -> False
           App (App ListBuild _) _ -> False
+          App (App (App ListDrop n) _) as
+              | NaturalLit 0 <- n -> False
+              | ListLit _ as' <- as
+              , Data.Sequence.null as' -> False
+              | NaturalLit _ <- n
+              , ListLit _ _ <- as -> False
           App (App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _) _ -> False
           App (App ListLength _) (ListLit _ _) -> False
           App (App ListHead _) (ListLit _ _) -> False
           App (App ListLast _) (ListLit _ _) -> False
           App (App ListIndexed _) (ListLit _ _) -> False
           App (App ListReverse _) (ListLit _ _) -> False
+          App (App (App ListTake n) _) as
+              | NaturalLit 0 <- n -> False
+              | ListLit _ as' <- as
+              , Data.Sequence.null as' -> False
+              | NaturalLit _ <- n
+              , ListLit _ _ <- as -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
           App (App (App TextReplace (TextLit (Chunks [] ""))) _) _ ->
@@ -895,12 +935,14 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide (ListLit _ _) (ListLit _ _)                        = False
           decide  _             _                                   = True
       ListBuild -> True
+      ListDrop -> True
       ListFold -> True
       ListLength -> True
       ListHead -> True
       ListLast -> True
       ListIndexed -> True
       ListReverse -> True
+      ListTake -> True
       Optional -> True
       Some a -> loop a
       None -> True

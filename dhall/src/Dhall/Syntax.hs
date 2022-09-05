@@ -579,6 +579,8 @@ data Expr s a
     | ListAppend (Expr s a) (Expr s a)
     -- | > ListBuild                                ~  List/build
     | ListBuild
+    -- | > ListDrop                                 ~  List/drop
+    | ListDrop
     -- | > ListFold                                 ~  List/fold
     | ListFold
     -- | > ListLength                               ~  List/length
@@ -591,6 +593,8 @@ data Expr s a
     | ListIndexed
     -- | > ListReverse                              ~  List/reverse
     | ListReverse
+    -- | > ListTake                                 ~  List/take
+    | ListTake
     -- | > Optional                                 ~  Optional
     | Optional
     -- | > Some e                                   ~  Some e
@@ -861,12 +865,14 @@ unsafeSubExpressions _ List = pure List
 unsafeSubExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
 unsafeSubExpressions f (ListAppend a b) = ListAppend <$> f a <*> f b
 unsafeSubExpressions _ ListBuild = pure ListBuild
+unsafeSubExpressions _ ListDrop = pure ListDrop
 unsafeSubExpressions _ ListFold = pure ListFold
 unsafeSubExpressions _ ListLength = pure ListLength
 unsafeSubExpressions _ ListHead = pure ListHead
 unsafeSubExpressions _ ListLast = pure ListLast
 unsafeSubExpressions _ ListIndexed = pure ListIndexed
 unsafeSubExpressions _ ListReverse = pure ListReverse
+unsafeSubExpressions _ ListTake = pure ListTake
 unsafeSubExpressions _ Optional = pure Optional
 unsafeSubExpressions f (Some a) = Some <$> f a
 unsafeSubExpressions _ None = pure None
@@ -1260,12 +1266,14 @@ reservedIdentifiers = reservedKeywords <>
         , "Natural/subtract"
         , "Double/show"
         , "List/build"
+        , "List/drop"
         , "List/fold"
         , "List/length"
         , "List/head"
         , "List/last"
         , "List/indexed"
         , "List/reverse"
+        , "List/take"
         , "Text/replace"
         , "Text/show"
         , "Bool"
