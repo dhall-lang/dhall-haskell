@@ -4,9 +4,9 @@ Version: 1.41.2
 Build-Type: Simple
 License: BSD-3-Clause
 License-File: LICENSE
-Copyright: 2017 Gabriel Gonzalez
-Author: Gabriel Gonzalez
-Maintainer: Gabriel439@gmail.com
+Copyright: 2017 Gabriella Gonzalez
+Author: Gabriella Gonzalez
+Maintainer: GenuineGabriella@gmail.com
 Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
 Synopsis: A configuration language guaranteed to terminate
 Description:

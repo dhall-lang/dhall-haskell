@@ -5,9 +5,9 @@ synopsis:            Try Dhall in a browser
 homepage:            https://github.com/dhall-lang/dhall-haskell
 license:             BSD3
 license-file:        LICENSE
-author:              Gabriel Gonzalez
-maintainer:          Gabriel439@gmail.com
-copyright:           2018 Gabriel Gonzalez
+author:              Gabriella Gonzalez
+maintainer:          GenuineGabriella@gmail.com
+copyright:           2018 Gabriella Gonzalez
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
