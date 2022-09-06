@@ -99,7 +99,6 @@ import Data.Fix (Fix (..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
-import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Lens.Family (toListOf)
@@ -111,11 +110,12 @@ import Dhall.Core
     , Expr (..)
     , FieldSelection (..)
     , FunctionBinding (..)
-    , MultiLet (..)
     , PreferAnnotation (..)
     , Var (..)
     , WithComponent (..)
     )
+import Dhall.Parser  (Src)
+import Dhall.Context (Context)
 
 import Nix.Expr
     ( Antiquoted (..)
@@ -145,10 +145,12 @@ import Nix.Expr
     )
 
 import qualified Data.Text
+import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Optics
 import qualified Dhall.Pretty
+import qualified Dhall.TypeCheck
 import qualified NeatInterpolation
 import qualified Nix
 
@@ -162,6 +164,8 @@ data CompileError
     -- ^ We currently do not support threading around type information
     | CannotShowConstructor
     -- ^ We currently do not support the `showConstructor` keyword
+    | CannotTypecheck Text
+    -- ^ Typecheck failed in a merge expression
     deriving (Typeable)
 
 instance Show CompileError where
@@ -236,6 +240,14 @@ doesn't survive β-normalization, so if you see this error message there might b
 an internal error in ❰dhall-to-nix❱ that you should report.
     |]
 
+    show (CannotTypecheck txt) =
+        Data.Text.unpack [NeatInterpolation.text|
+
+$_ERROR: The compiler reported an error during type-checking:
+
+$txt
+|]
+
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
@@ -252,9 +264,9 @@ Right x: y: x + y
     Precondition: You must first type-check the Dhall expression before passing
     the expression to `dhallToNix`
 -}
-dhallToNix :: Expr s Void -> Either CompileError NExpr
+dhallToNix :: Expr Src Void -> Either CompileError NExpr
 dhallToNix e =
-    loop (rewriteShadowed (Dhall.Core.normalize e))
+    loop (Dhall.Context.empty, rewriteShadowed (Dhall.Core.normalize e))
   where
     untranslatable = Nix.attrsE []
 
@@ -320,64 +332,71 @@ dhallToNix e =
     renameShadowed _ =
         Nothing
 
+    mergeFuncFor :: Expr s Void -> NExpr -> NExpr -> NExpr
+    mergeFuncFor (App Optional _) = \a -> \b -> Nix.mkIf (b $== Nix.mkNull) (a @. "None") ((a @. "Some") @@ b)
+    mergeFuncFor _ = \a -> \b -> b @@ a
+
     -- Even higher-level utility that renames all shadowed references
     rewriteShadowed =
         Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
 
-    loop (Const _) = return untranslatable
-    loop (Var (V a 0)) = return (Nix.mkSym a)
-    loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
-    loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
-        c' <- loop c
+    loop :: (Context (Expr Src Void), Expr Src Void) -> Either CompileError NExpr
+    loop (_, Const _) = return untranslatable
+    loop (_, Var (V a 0)) = return (Nix.mkSym a)
+    loop (_, Var  a     ) = Left (CannotReferenceShadowedVariable a)
+    loop (ctx, Lam _ FunctionBinding { functionBindingVariable = a, functionBindingAnnotation = t } c) = do
+        c' <- loop (Dhall.Context.insert a t ctx, c)
         return (Param a ==> c')
-    loop (Pi _ _ _ _) = return untranslatable
-    loop (App None _) =
+    loop (_, Pi _ _ _ _) = return untranslatable
+    loop (_, App None _) =
       return Nix.mkNull
-    loop (App (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
-        v' <- loop v
+    loop (ctx, App (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
+        v' <- loop (ctx, v)
         let e0 = do
                 k' <- Dhall.Map.keys kts
                 return (k', Nothing)
         let e2 = Nix.mkSym k @@ v'
         return (Nix.mkParamset e0 False ==> e2)
-    loop (App a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, App a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' @@ b')
-    loop (Let a0 b0) = do
-        let MultiLet bindings b = Dhall.Core.multiLet a0 b0
-        bindings' <- for bindings $ \Binding{ variable, value } -> do
-          value' <- loop value
-          pure (variable, value')
-        b' <- loop b
-        return (Nix.letsE (toList bindings') b')
-    loop (Annot a _) = loop a
-    loop Bool = return untranslatable
-    loop (BoolLit b) = return (Nix.mkBool b)
-    loop (BoolAnd a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, Let (Binding { variable, value }) b) = do
+        -- TODO: use multiLet
+        case Dhall.TypeCheck.typeWith ctx value of
+          Left err -> Left (CannotTypecheck (Dhall.Core.pretty err))
+          Right ty -> do
+            let newContext = Dhall.Context.insert variable ty ctx
+            value' <- loop (ctx, value)
+            b' <- loop (newContext, b)
+            return (Nix.letE variable value' b')
+    loop (ctx, Annot a _) = loop (ctx, a)
+    loop (_, Bool) = return untranslatable
+    loop (_, BoolLit b) = return (Nix.mkBool b)
+    loop (ctx, BoolAnd a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $&& b')
-    loop (BoolOr a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, BoolOr a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $|| b')
-    loop (BoolEQ a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, BoolEQ a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $== b')
-    loop (BoolNE a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, BoolNE a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $!= b')
-    loop (BoolIf a b c) = do
-        a' <- loop a
-        b' <- loop b
-        c' <- loop c
+    loop (ctx, BoolIf a b c) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
+        c' <- loop (ctx, c)
         return (Nix.mkIf a' b' c')
-    loop Natural = return untranslatable
-    loop (NaturalLit n) = return (Nix.mkInt (fromIntegral n))
-    loop NaturalFold = do
+    loop (_, Natural) = return untranslatable
+    loop (_, NaturalLit n) = return (Nix.mkInt (fromIntegral n))
+    loop (_, NaturalFold) = do
         let naturalFold =
                     "n"
                 ==> "t"
@@ -394,7 +413,7 @@ dhallToNix e =
                             )
                         )
         return (Nix.letsE [ ("naturalFold", naturalFold) ] "naturalFold")
-    loop NaturalBuild = do
+    loop (_, NaturalBuild) = do
         return
             (   "k"
             ==> (   "k"
@@ -403,60 +422,60 @@ dhallToNix e =
                 @@  Nix.mkInt 0
                 )
             )
-    loop NaturalIsZero = do
+    loop (_, NaturalIsZero) = do
         return ("n" ==> ("n" $== Nix.mkInt 0))
-    loop NaturalEven = do
+    loop (_, NaturalEven) = do
         return ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $== "n")
-    loop NaturalOdd = do
+    loop (_, NaturalOdd) = do
         return ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $!= "n")
-    loop NaturalShow =
+    loop (_, NaturalShow) =
         return "toString"
-    loop NaturalSubtract = do
+    loop (_, NaturalSubtract) = do
         return
             (   "x"
             ==> "y"
             ==> Nix.letE "z" ("y" $- "x")
                     (Nix.mkIf ("z" $< Nix.mkInt 0) (Nix.mkInt 0) "z")
             )
-    loop NaturalToInteger =
+    loop (_, NaturalToInteger) =
         return ("n" ==> "n")
-    loop (NaturalPlus a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, NaturalPlus a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $+ b')
-    loop (NaturalTimes a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, NaturalTimes a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $* b')
-    loop Integer = return untranslatable
-    loop (IntegerLit n) = return (Nix.mkInt n)
-    loop IntegerClamp = do
+    loop (_, Integer) = return untranslatable
+    loop (_, IntegerLit n) = return (Nix.mkInt n)
+    loop (_, IntegerClamp) = do
         return ("x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") "x" (Nix.mkInt 0))
-    loop IntegerNegate = do
+    loop (_, IntegerNegate) = do
         return ("x" ==> (Nix.mkInt 0 $- "x"))
-    loop IntegerShow = do
+    loop (_, IntegerShow) = do
         let e0 = "toString" @@ "x"
         return ("x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") (Nix.mkStr "+" $+ e0) e0)
-    loop IntegerToDouble =
+    loop (_, IntegerToDouble) =
         return ("x" ==> "x")
-    loop Double = return untranslatable
-    loop (DoubleLit (DhallDouble n)) = return (Nix.mkFloat (realToFrac n))
-    loop DoubleShow =
+    loop (_, Double) = return untranslatable
+    loop (_, DoubleLit (DhallDouble n)) = return (Nix.mkFloat (realToFrac n))
+    loop (_, DoubleShow) =
         return "toString"
-    loop Text = return untranslatable
-    loop (TextLit (Chunks abs_ c)) = do
+    loop (_, Text) = return untranslatable
+    loop (ctx, TextLit (Chunks abs_ c)) = do
         let process (a, b) = do
-                b' <- loop b
+                b' <- loop (ctx, b)
                 return [Plain a, Antiquoted b']
         abs' <- mapM process abs_
 
         let chunks = concat abs' ++ [Plain c]
         return (Fix (NStr (DoubleQuoted chunks)))
-    loop (TextAppend a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, TextAppend a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $+ b')
-    loop TextReplace = do
+    loop (_, TextReplace) = do
         let from = Nix.mkList [ "needle" ]
 
         let to = Nix.mkList [ "replacement" ]
@@ -467,7 +486,7 @@ dhallToNix e =
             ==> "haystack"
             ==> ("builtins" @. "replaceStrings" @@ from @@ to @@ "haystack")
             )
-    loop TextShow = do
+    loop (_, TextShow) = do
         let from =
                 Nix.mkList
                     [ Nix.mkStr "\""
@@ -498,18 +517,18 @@ dhallToNix e =
         let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
 
         return ("t" ==> quoted)
-    loop Date = return untranslatable
-    loop Time = return untranslatable
-    loop TimeZone = return untranslatable
-    loop List = return ("t" ==> untranslatable)
-    loop (ListAppend a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (_, Date) = return untranslatable
+    loop (_, Time) = return untranslatable
+    loop (_, TimeZone) = return untranslatable
+    loop (_, List) = return ("t" ==> untranslatable)
+    loop (ctx, ListAppend a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (a' $++ b')
-    loop (ListLit _ bs) = do
-        bs' <- mapM loop (toList bs)
+    loop (ctx, ListLit _ bs) = do
+        bs' <- mapM (\v -> loop (ctx, v)) (toList bs)
         return (Nix.mkList bs')
-    loop ListBuild = do
+    loop (_, ListBuild) = do
         return
             (   "t"
             ==> "k"
@@ -519,7 +538,7 @@ dhallToNix e =
                 @@  Nix.mkList []
                 )
             )
-    loop ListFold = do
+    loop (_, ListFold) = do
         return
             (   "t"
             ==> "xs"
@@ -535,8 +554,8 @@ dhallToNix e =
                 @@  "xs"
                 )
             )
-    loop ListLength = return ("t" ==> "builtins.length")
-    loop ListHead = do
+    loop (_, ListLength) = return ("t" ==> "builtins.length")
+    loop (_, ListHead) = do
         return
             (   "t"
             ==> "xs"
@@ -544,7 +563,7 @@ dhallToNix e =
                     Nix.mkNull
                     ("builtins.head" @@ "xs")
             )
-    loop ListLast = do
+    loop (_, ListLast) = do
         return
             (   "t"
             ==> "xs"
@@ -555,7 +574,7 @@ dhallToNix e =
                     @@ (("builtins.length" @@ "xs") $- Nix.mkInt 1)
                     )
             )
-    loop ListIndexed = do
+    loop (_, ListIndexed) = do
         return
             (   "t"
             ==> "xs"
@@ -569,7 +588,7 @@ dhallToNix e =
                 @@  ("builtins.length" @@ "xs")
                 )
             )
-    loop ListReverse = do
+    loop (_, ListReverse) = do
         return
             (   "t"
             ==> "xs"
@@ -584,20 +603,20 @@ dhallToNix e =
                     @@  "n"
                     )
             )
-    loop Optional = return ("t" ==> untranslatable)
-    loop (Some a) = loop a
-    loop None = return ("t" ==> Nix.mkNull)
-    loop t
+    loop (_, Optional) = return ("t" ==> untranslatable)
+    loop (ctx, Some a) = loop (ctx, a)
+    loop (_, None) = return ("t" ==> Nix.mkNull)
+    loop (ctx, t)
         | Just text <- Dhall.Pretty.temporalToText t = do
-            loop (Dhall.Core.TextLit (Dhall.Core.Chunks [] text))
+            loop (ctx, Dhall.Core.TextLit (Dhall.Core.Chunks [] text))
     -- The next three cases are not necessary, because they are handled by the
     -- previous case
-    loop DateLiteral{} = undefined
-    loop TimeLiteral{} = undefined
-    loop TimeZoneLiteral{} = undefined
-    loop (Record _) = return untranslatable
-    loop (RecordLit a) = do
-        a' <- traverse (loop . Dhall.Core.recordFieldValue) a
+    loop (_, DateLiteral{}) = undefined
+    loop (_, TimeLiteral{}) = undefined
+    loop (_, TimeZoneLiteral{}) = undefined
+    loop (_, Record _) = return untranslatable
+    loop (ctx, RecordLit a) = do
+        a' <- traverse ((\v -> loop (ctx, v)) . Dhall.Core.recordFieldValue) a
         return (nixAttrs (Dhall.Map.toList a'))
       where
         -- nonrecursive attrset that uses correctly quoted keys
@@ -606,10 +625,10 @@ dhallToNix e =
           Fix $ NSet NNonRecursive $
           (\(key, val) -> NamedVar (DynamicKey (Plain (DoubleQuoted [Plain key])) :| []) val Nix.nullPos)
           <$> pairs
-    loop (Union _) = return untranslatable
-    loop (Combine _ _ a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (_, Union _) = return untranslatable
+    loop (ctx, Combine _ _ a b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
 
         let defL = "builtins.hasAttr" @@ "k" @@ "kvsL"
         let defR = "builtins.hasAttr" @@ "k" @@ "kvsR"
@@ -656,13 +675,15 @@ dhallToNix e =
                 )
                 ("combine" @@ a' @@ b')
             )
-    loop (CombineTypes _ _ _) = return untranslatable
-    loop (Merge a b _) = do
-        a' <- loop a
-        b' <- loop b
-        return (b' @@ a')
-    loop (ToMap a _) = do
-        a' <- loop a
+    loop (_, CombineTypes _ _ _) = return untranslatable
+    loop (ctx, Merge a b _) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
+        case Dhall.TypeCheck.typeWith ctx b of
+          Left err -> Left (CannotTypecheck (Dhall.Core.pretty err))
+          Right ty -> return (mergeFuncFor (Dhall.Core.normalize ty) a' b')
+    loop (ctx, ToMap a _) = do
+        a' <- loop (ctx, a)
         return
             (Nix.letE "kvs" a'
                 (   "map"
@@ -675,18 +696,18 @@ dhallToNix e =
                 @@  ("builtins.attrNames" @@ "kvs")
                 )
             )
-    loop (ShowConstructor _) = do
+    loop (_, ShowConstructor _) = do
         Left CannotShowConstructor
-    loop (Prefer _ _ b c) = do
-        b' <- loop b
-        c' <- loop c
+    loop (ctx, Prefer _ _ b c) = do
+        b' <- loop (ctx, b)
+        c' <- loop (ctx, c)
         return (b' $// c')
-    loop (RecordCompletion a b) =
-        loop (Annot (Prefer mempty PreferFromCompletion (Field a def) b) (Field a typ))
+    loop (ctx, RecordCompletion a b) =
+        loop (ctx, Annot (Prefer mempty PreferFromCompletion (Field a def) b) (Field a typ))
       where
         def = Dhall.Core.makeFieldSelection "default"
         typ = Dhall.Core.makeFieldSelection "Type"
-    loop (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) =
+    loop (_, Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we
             -- need introduce the partial application through an extra abstraction
@@ -704,37 +725,37 @@ dhallToNix e =
                         k' <- Dhall.Map.keys kts
                         return (k', Nothing)
                 return (Nix.mkParamset e0 False ==> Nix.mkSym k)
-    loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
-        a' <- loop a
+    loop (ctx, Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
+        a' <- loop (ctx, a)
         return (a' @. b)
-    loop (Project a (Left b)) = do
-        a' <- loop a
+    loop (ctx, Project a (Left b)) = do
+        a' <- loop (ctx, a)
         let b' = fmap StaticKey (toList b)
         return (Nix.mkNonRecSet [ Nix.inheritFrom a' b' Nix.nullPos ])
-    loop (Project _ (Right _)) =
+    loop (_, Project _ (Right _)) =
         Left CannotProjectByType
-    loop (Assert _) =
+    loop (_, Assert _) =
         return untranslatable
-    loop (Equivalent _ _ _) =
+    loop (_, Equivalent _ _ _) =
         return untranslatable
-    loop (With a (WithLabel k :| []) b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, With a (WithLabel k :| []) b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
 
         return (a' $// Nix.attrsE [(k, b')])
-    loop (With a (WithLabel k :| k' : ks) b) = do
-        a' <- loop a
-        b' <- loop (With (Field "_" (FieldSelection Nothing k Nothing)) (k' :| ks) (Dhall.Core.shift 1 "_" b))
+    loop (ctx, With a (WithLabel k :| k' : ks) b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, With (Field "_" (FieldSelection Nothing k Nothing)) (k' :| ks) (Dhall.Core.shift 1 "_" b))
 
         return (Nix.letE "_" a' ("_" $// Nix.attrsE [(k, b')]))
-    loop (With a (WithQuestion :| []) b) = do
-        a' <- loop a
-        b' <- loop b
+    loop (ctx, With a (WithQuestion :| []) b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, b)
         return (Nix.mkIf (a' $== Nix.mkNull) Nix.mkNull b')
-    loop (With a (WithQuestion :| k : ks) b) = do
-        a' <- loop a
-        b' <- loop (With "_" (k :| ks) (Dhall.Core.shift 1 "_" b))
+    loop (ctx, With a (WithQuestion :| k : ks) b) = do
+        a' <- loop (ctx, a)
+        b' <- loop (ctx, With "_" (k :| ks) (Dhall.Core.shift 1 "_" b))
         return (Nix.letE "_" a' (Nix.mkIf (a' $== Nix.mkNull) Nix.mkNull b'))
-    loop (ImportAlt a _) = loop a
-    loop (Note _ b) = loop b
-    loop (Embed x) = absurd x
+    loop (ctx, ImportAlt a _) = loop (ctx, a)
+    loop (ctx, Note _ b) = loop (ctx, b)
+    loop (_, Embed x) = absurd x
