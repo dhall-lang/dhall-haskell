@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections      #-}
@@ -45,7 +46,6 @@ import Dhall.Syntax
     , Const (..)
     , Expr (..)
     , FieldSelection (..)
-    , FunctionBinding (..)
     , RecordField (..)
     , Var (..)
     )
@@ -173,15 +173,16 @@ import qualified System.PosixCompat.User     as Posix
     internally.
 
     __NOTE__: This utility does not take care of type-checking and normalizing
-    the provided expression. This will raise a `FilesystemError` exception upon
-    encountering an expression that cannot be converted as-is.
+    the provided expression. This will raise a `FilesystemError` exception or a
+    `DhallErrors` exception upon encountering an expression that cannot be
+    converted as-is.
 -}
 toDirectoryTree
     :: Bool -- ^ Whether to allow path separators in file names or not
     -> FilePath
     -> Expr Void Void
     -> IO ()
-toDirectoryTree allowSeparators path expression = case expression of
+toDirectoryTree allowSeparators path expression = case Core.alphaNormalize expression of
     RecordLit keyValues ->
         Map.unorderedTraverseWithKey_ process $ recordFieldValue <$> keyValues
 
@@ -208,7 +209,7 @@ toDirectoryTree allowSeparators path expression = case expression of
     -- If this pattern matches we assume the user wants to use the fixpoint
     -- approach, hence we typecheck it and output error messages like we would
     -- do for every other Dhall program.
-    Lam _ (functionBindingVariable -> r) (Lam _ (functionBindingVariable -> make) body) -> do
+    Lam _ _ (Lam _ _ body) -> do
         let body' = Core.renote body
         let expression' = Core.renote expression
 
@@ -218,9 +219,7 @@ toDirectoryTree allowSeparators path expression = case expression of
 
         _ <- Core.throws $ TypeCheck.typeOf $ Annot expression' expected'
 
-        let expr = rename r "result" $ rename make "make" body'
-
-        entries <- case Decode.extract decoder expr of
+        entries <- case Decode.extract decoder body' of
             Success x -> return x
             Failure e -> Exception.throwIO e
 
@@ -228,11 +227,6 @@ toDirectoryTree allowSeparators path expression = case expression of
             where
                 decoder :: Decoder (Seq FilesystemEntry)
                 decoder = Decode.auto
-
-                rename :: Text -> Text -> Expr s a -> Expr s a
-                rename a b expr
-                    | a /= b    = Core.subst (V a 0) (Var (V b 0)) (Core.shift 1 (V b 0) expr)
-                    | otherwise = expr
 
     _ ->
         die
@@ -261,8 +255,8 @@ toDirectoryTree allowSeparators path expression = case expression of
 
 -- | The type of a fixpoint directory tree expression.
 directoryTreeType :: Expector (Expr Src Void)
-directoryTreeType = Pi Nothing "result" (Const Type)
-    <$> (Pi Nothing "make" <$> makeType <*> pure (App List (Var (V "result" 0))))
+directoryTreeType = Pi Nothing "tree" (Const Type)
+    <$> (Pi Nothing "make" <$> makeType <*> pure (App List (Var (V "tree" 0))))
 
 -- | The type of make part of a fixpoint directory tree expression.
 makeType :: Expector (Expr Src Void)
@@ -273,7 +267,11 @@ makeType = Record . Map.fromList <$> sequenceA
     where
         makeConstructor :: Text -> Decoder b -> Expector (Text, RecordField Src Void)
         makeConstructor name dec = (name,) . Core.makeRecordField
-            <$> (Pi Nothing "_" <$> expected dec <*> pure (Var (V "result" 0)))
+            <$> (Pi Nothing "_" <$> expected dec <*> pure (Var (V "tree" 0)))
+
+-- | Utility pattern synonym to match on filesystem entry constructors
+pattern Make :: Text -> Expr s a -> Expr s a
+pattern Make label entry <- App (Field (Var (V "_" 0)) (fieldSelectionLabel -> label)) entry
 
 type DirectoryEntry = Entry (Seq FilesystemEntry)
 
@@ -287,11 +285,11 @@ data FilesystemEntry
 
 instance FromDhall FilesystemEntry where
     autoWith normalizer = Decoder
-        { expected = pure $ Var (V "result" 0)
+        { expected = pure $ Var (V "tree" 0)
         , extract = \case
-            App (Field (Var (V "make" 0)) (fieldSelectionLabel -> "directory")) entry ->
+            Make "directory" entry ->
                 DirectoryEntry <$> extract (autoWith normalizer) entry
-            App (Field (Var (V "make" 0)) (fieldSelectionLabel -> "file")) entry ->
+            Make "file" entry ->
                 FileEntry <$> extract (autoWith normalizer) entry
             expr -> Decode.typeError (expected (Decode.autoWith normalizer :: Decoder FilesystemEntry)) expr
         }
