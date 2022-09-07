@@ -79,7 +79,7 @@ import qualified System.PosixCompat.User     as Posix
 
     * @Optional@ values are omitted if @None@
 
-    * There is a more advanced way construction directory trees using a fixpoint
+    * There is a more advanced way to construct directory trees using a fixpoint
       encoding. See the documentation below on that.
 
     For example, the following Dhall record:
