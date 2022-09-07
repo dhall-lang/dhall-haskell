@@ -156,13 +156,13 @@ import qualified System.PosixCompat.User     as Posix
     >         , mode : Optional Mode
     >         }
     >
-    > in  forall (r : Type) ->
+    > in  forall (tree : Type) ->
     >     forall  ( make
-    >             : { directory : Entry (List r) -> r
-    >               , file : Entry Text -> r
+    >             : { directory : Entry (List tree) -> tree
+    >               , file : Entry Text -> tree
     >               }
     >             ) ->
-    >       List r
+    >       List tree
 
     The fact that the metadata for filesystem entries is modeled after the POSIX
     permission model comes with the unfortunate downside that it might not apply
