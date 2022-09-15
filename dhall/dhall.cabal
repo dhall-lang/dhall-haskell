@@ -378,6 +378,7 @@ Library
         Dhall.Syntax.Instances.Semigroup
         Dhall.Syntax.Instances.Show
         Dhall.Syntax.Instances.Traversable
+        Dhall.Syntax.MultiLet
         Dhall.Syntax.Operations
         Dhall.Syntax.Types
         Dhall.Syntax.Var
