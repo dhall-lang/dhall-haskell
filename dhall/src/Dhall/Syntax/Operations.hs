@@ -8,7 +8,6 @@ module Dhall.Syntax.Operations (
     , subExpressionsWith
     , unsafeSubExpressions
     , chunkExprs
-    , bindingExprs
     , recordFieldExprs
     , functionBindingExprs
 
@@ -39,6 +38,7 @@ import Data.List.NonEmpty            (NonEmpty (..))
 import Data.Text                     (Text)
 import Data.Void                     (Void)
 import Dhall.Src                     (Src (..))
+import Dhall.Syntax.Binding          (Binding(..), bindingExprs)
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Instances.Monoid ()
 import Dhall.Syntax.Types
@@ -174,22 +174,6 @@ unhandledConstructor constructor =
         <>  constructor
         <>  " construtor"
         )
-
-{-| Traverse over the immediate 'Expr' children in a 'Binding'.
--}
-bindingExprs
-  :: (Applicative f)
-  => (Expr s a -> f (Expr s b))
-  -> Binding s a -> f (Binding s b)
-bindingExprs f (Binding s0 n s1 t s2 v) =
-  Binding
-    <$> pure s0
-    <*> pure n
-    <*> pure s1
-    <*> traverse (traverse f) t
-    <*> pure s2
-    <*> f v
-{-# INLINABLE bindingExprs #-}
 
 {-| Traverse over the immediate 'Expr' children in a 'RecordField'.
 -}

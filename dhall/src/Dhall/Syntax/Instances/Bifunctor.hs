@@ -3,6 +3,7 @@
 module Dhall.Syntax.Instances.Bifunctor () where
 
 import Data.Bifunctor          (Bifunctor (..))
+import Dhall.Syntax.Binding
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Operations
 import Dhall.Syntax.Types

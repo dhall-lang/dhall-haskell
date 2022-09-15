@@ -1,7 +1,5 @@
 module Dhall.Syntax.Types where
 
-data Binding s a
-
 data DhallDouble
 
 data Chunks s a

@@ -6,6 +6,7 @@
 module Dhall.Syntax.Instances.Data () where
 
 import Data.Data          (Data)
+import Dhall.Syntax.Binding
 import Dhall.Syntax.Const
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Types

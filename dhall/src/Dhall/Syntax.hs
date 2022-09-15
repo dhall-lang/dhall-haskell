@@ -2,6 +2,7 @@ module Dhall.Syntax
     ( module Export
     ) where
 
+import Dhall.Syntax.Binding               as Export
 import Dhall.Syntax.Const                 as Export
 import Dhall.Syntax.Expr                  as Export
 import Dhall.Syntax.Import                as Export

@@ -5,6 +5,7 @@
 
 module Dhall.Syntax.Instances.Functor () where
 
+import                Dhall.Syntax.Binding
 import                Dhall.Syntax.Expr
 import {-# SOURCE #-} Dhall.Syntax.Operations (unsafeSubExpressions)
 import                Dhall.Syntax.Types

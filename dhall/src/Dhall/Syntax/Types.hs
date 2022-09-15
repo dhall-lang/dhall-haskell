@@ -5,9 +5,7 @@
 
 module Dhall.Syntax.Types (
     -- * 'Expr'
-      Binding(..)
-    , makeBinding
-    , CharacterSet(..)
+      CharacterSet(..)
     , Chunks(..)
     , DhallDouble(..)
     , PreferAnnotation(..)
@@ -28,34 +26,6 @@ import                GHC.Generics          (Generic)
 
 -- $setup
 -- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
-
--- | Record the binding part of a @let@ expression.
---
--- For example,
---
--- > let {- A -} x {- B -} : {- C -} Bool = {- D -} True in x
---
--- … will be instantiated as follows:
---
--- * @bindingSrc0@ corresponds to the @A@ comment.
--- * @variable@ is @"x"@
--- * @bindingSrc1@ corresponds to the @B@ comment.
--- * @annotation@ is 'Just' a pair, corresponding to the @C@ comment and @Bool@.
--- * @bindingSrc2@ corresponds to the @D@ comment.
--- * @value@ corresponds to @True@.
-data Binding s a = Binding
-    { bindingSrc0 :: Maybe s
-    , variable    :: Text
-    , bindingSrc1 :: Maybe s
-    , annotation  :: Maybe (Maybe s, Expr s a)
-    , bindingSrc2 :: Maybe s
-    , value       :: Expr s a
-    } deriving Generic
-
-{-| Construct a 'Binding' with no source information and no type annotation.
--}
-makeBinding :: Text -> Expr s a -> Binding s a
-makeBinding name = Binding Nothing name Nothing Nothing Nothing
 
 -- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
 -- defined via the binary encoding of Dhall @Double@s.

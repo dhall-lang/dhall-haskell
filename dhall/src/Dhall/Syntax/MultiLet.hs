@@ -26,7 +26,7 @@ module Dhall.Syntax.MultiLet (
 
 import                Data.List.NonEmpty    (NonEmpty (..))
 import                Dhall.Syntax.Expr     (Expr (..))
-import                Dhall.Syntax.Types     (Binding)
+import                Dhall.Syntax.Binding  (Binding)
 
 import qualified Data.List.NonEmpty as NonEmpty
 

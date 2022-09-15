@@ -5,6 +5,7 @@
 
 module Dhall.Syntax.Instances.Lift () where
 
+import Dhall.Syntax.Binding
 import Dhall.Syntax.Const
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Types

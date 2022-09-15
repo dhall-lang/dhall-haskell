@@ -5,6 +5,7 @@
 module Dhall.Syntax.Instances.Eq () where
 
 import Data.Bits           (xor)
+import Dhall.Syntax.Binding
 import Dhall.Syntax.Const
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Import
