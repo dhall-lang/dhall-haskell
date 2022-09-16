@@ -17,7 +17,7 @@ deriving instance Eq Const
 deriving instance Eq Var
 deriving instance (Eq s, Eq a) => Eq (Binding s a)
 deriving instance (Eq s, Eq a) => Eq (Chunks s a)
-deriving instance (Eq s, Eq a) => Eq (PreferAnnotation s a)
+deriving instance Eq PreferAnnotation
 deriving instance (Eq s, Eq a) => Eq (RecordField s a)
 deriving instance (Eq s, Eq a) => Eq (FunctionBinding s a)
 deriving instance Eq s => Eq (FieldSelection s)

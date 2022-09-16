@@ -32,10 +32,8 @@ newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
 
 -- | Used to record the origin of a @//@ operator (i.e. from source code or a
 -- product of desugaring)
-data PreferAnnotation s a
+data PreferAnnotation
     = PreferFromSource
-    | PreferFromWith (Expr s a)
-      -- ^ Stores the original @with@ expression
     | PreferFromCompletion
     deriving Generic
 

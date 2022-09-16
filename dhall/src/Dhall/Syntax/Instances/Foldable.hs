@@ -12,7 +12,6 @@ import Dhall.Syntax.Types
 
 deriving instance Foldable (Binding s)
 deriving instance Foldable (Chunks s)
-deriving instance Foldable (PreferAnnotation s)
 deriving instance Foldable (RecordField s)
 deriving instance Foldable (FunctionBinding s)
 deriving instance Foldable FieldSelection

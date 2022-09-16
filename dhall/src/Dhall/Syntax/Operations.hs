@@ -132,12 +132,7 @@ unsafeSubExpressions _ None = pure None
 unsafeSubExpressions f (Union a) = Union <$> traverse (traverse f) a
 unsafeSubExpressions f (Combine cs a b c) = Combine cs a <$> f b <*> f c
 unsafeSubExpressions f (CombineTypes cs a b) = CombineTypes cs <$> f a <*> f b
-unsafeSubExpressions f (Prefer cs a b c) = Prefer cs <$> a' <*> f b <*> f c
-  where
-    a' = case a of
-        PreferFromSource     -> pure PreferFromSource
-        PreferFromWith d     -> PreferFromWith <$> f d
-        PreferFromCompletion -> pure PreferFromCompletion
+unsafeSubExpressions f (Prefer cs a b c) = Prefer cs <$> pure a <*> f b <*> f c
 unsafeSubExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 unsafeSubExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 unsafeSubExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t

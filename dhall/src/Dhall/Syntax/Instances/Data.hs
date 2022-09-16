@@ -18,7 +18,7 @@ deriving instance Data Var
 deriving instance (Data a, Data s) => Data (Binding s a)
 deriving instance Data DhallDouble
 deriving instance (Data a, Data s) => Data (Chunks s a)
-deriving instance (Data a, Data s) => Data (PreferAnnotation s a)
+deriving instance Data PreferAnnotation
 deriving instance (Data a, Data s) => Data (RecordField s a)
 deriving instance (Data a, Data s) => Data (FunctionBinding s a)
 deriving instance Data s => Data (FieldSelection s)

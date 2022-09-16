@@ -15,7 +15,6 @@ import qualified Lens.Family as Lens
 
 deriving instance Functor (Binding s)
 deriving instance Functor (Chunks s)
-deriving instance Functor (PreferAnnotation s)
 deriving instance Functor (RecordField s)
 deriving instance Functor (FunctionBinding s)
 deriving instance Functor FieldSelection

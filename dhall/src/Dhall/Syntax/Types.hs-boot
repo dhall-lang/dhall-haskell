@@ -2,7 +2,7 @@ module Dhall.Syntax.Types where
 
 data DhallDouble
 
-data PreferAnnotation s a
+data PreferAnnotation
 
 data RecordField s a
 

@@ -14,7 +14,6 @@ import Dhall.Syntax.Types
 
 deriving instance Traversable (Binding s)
 deriving instance Traversable (Chunks s)
-deriving instance Traversable (PreferAnnotation s)
 deriving instance Traversable (RecordField s)
 deriving instance Traversable (FunctionBinding s)
 deriving instance Traversable FieldSelection

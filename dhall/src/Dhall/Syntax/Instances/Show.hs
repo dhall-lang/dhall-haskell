@@ -17,7 +17,7 @@ deriving instance Show Var
 deriving instance (Show s, Show a) => Show (Binding s a)
 deriving instance Show DhallDouble
 deriving instance (Show s, Show a) => Show (Chunks s a)
-deriving instance (Show s, Show a) => Show (PreferAnnotation s a)
+deriving instance Show PreferAnnotation
 deriving instance (Show s, Show a) => Show (RecordField s a)
 deriving instance (Show s, Show a) => Show (FunctionBinding s a)
 deriving instance Show s => Show (FieldSelection s)

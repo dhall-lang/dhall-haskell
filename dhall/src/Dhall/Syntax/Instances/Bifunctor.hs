@@ -19,13 +19,6 @@ instance Bifunctor Binding where
 
     second = fmap
 
-instance Bifunctor PreferAnnotation where
-    first _  PreferFromSource      = PreferFromSource
-    first f (PreferFromWith e    ) = PreferFromWith (first f e)
-    first _  PreferFromCompletion  = PreferFromCompletion
-
-    second = fmap
-
 instance Bifunctor RecordField where
     first k (RecordField s0 value' s1 s2) =
         RecordField (k <$> s0) (first k value') (k <$> s1) (k <$> s2)

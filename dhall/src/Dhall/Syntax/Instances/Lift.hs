@@ -25,7 +25,7 @@ deriving instance Lift Var
 deriving instance (Lift s, Lift a) => Lift (Binding s a)
 deriving instance Lift DhallDouble
 deriving instance (Lift s, Lift a) => Lift (Chunks s a)
-deriving instance (Lift s, Lift a) => Lift (PreferAnnotation s a)
+deriving instance Lift PreferAnnotation
 deriving instance (Lift s, Lift a) => Lift (RecordField s a)
 deriving instance (Lift s, Lift a) => Lift (FunctionBinding s a)
 deriving instance Lift s => Lift (FieldSelection s)

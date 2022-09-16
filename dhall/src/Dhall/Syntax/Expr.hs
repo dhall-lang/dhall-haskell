@@ -217,11 +217,8 @@ data Expr s a
     | Combine (Maybe CharacterSet) (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes _ x y                       ~  x ⩓ y
     | CombineTypes (Maybe CharacterSet) (Expr s a) (Expr s a)
-    -- | > Prefer _ False x y                       ~  x ⫽ y
-    --
-    -- The first field is a `True` when the `Prefer` operator is introduced as a
-    -- result of desugaring a @with@ expression
-    | Prefer (Maybe CharacterSet) (PreferAnnotation s a) (Expr s a) (Expr s a)
+    -- | > Prefer _ _ x y                           ~  x ⫽ y
+    | Prefer (Maybe CharacterSet) PreferAnnotation (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t

@@ -17,7 +17,7 @@ deriving instance Ord Const
 deriving instance Ord Var
 deriving instance (Ord s, Ord a) => Ord (Binding s a)
 deriving instance (Ord s, Ord a) => Ord (Chunks s a)
-deriving instance (Ord s, Ord a) => Ord (PreferAnnotation s a)
+deriving instance Ord PreferAnnotation
 deriving instance (Ord s, Ord a) => Ord (RecordField s a)
 deriving instance (Ord s, Ord a) => Ord (FunctionBinding s a)
 deriving instance Ord s => Ord (FieldSelection s)
