@@ -1,11 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-{-| This module contains the core syntax types.
--}
-
-module Dhall.Syntax.Types (
-    -- * 'Expr'
-      DhallDouble(..)
+module Dhall.Syntax.Types
+    ( DhallDouble(..)
     , PreferAnnotation(..)
     , FieldSelection(..)
     , makeFieldSelection
@@ -14,9 +10,6 @@ module Dhall.Syntax.Types (
 
 import Data.Text    (Text)
 import GHC.Generics (Generic)
-
--- $setup
--- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
 
 -- | This wrapper around 'Prelude.Double' exists for its 'Eq' instance which is
 -- defined via the binary encoding of Dhall @Double@s.

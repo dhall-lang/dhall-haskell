@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Dhall.Syntax.Const (
-      Const(..)
+module Dhall.Syntax.Const
+    ( Const(..)
     ) where
 
 import GHC.Generics (Generic)

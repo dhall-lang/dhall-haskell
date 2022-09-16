@@ -18,8 +18,8 @@ https://gitlab.haskell.org/ghc/ghc/issues/17096
 This should be fixed by GHC-8.10, so it might be worth revisiting then.
 -}
 
-module Dhall.Syntax.MultiLet (
-      MultiLet(..)
+module Dhall.Syntax.MultiLet
+    ( MultiLet(..)
     , multiLet
     , wrapInLets
     ) where

@@ -2,11 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-{-| This module contains the core syntax types.
--}
-
-module Dhall.Syntax.Import (
-      Directory(..)
+module Dhall.Syntax.Import
+    ( Directory(..)
     , File(..)
     , FilePrefix(..)
     , Import(..)

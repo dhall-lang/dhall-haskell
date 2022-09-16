@@ -2,25 +2,25 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 
-module Dhall.Syntax.Operations (
-    -- ** Optics
+module Dhall.Syntax.Operations
+    ( -- * Optics
       subExpressions
     , subExpressionsWith
     , unsafeSubExpressions
 
-    -- ** Handling 'Note's
+      -- * Handling 'Note's
     , denote
     , renote
     , shallowDenote
 
-    -- * Reserved identifiers
+      -- * Reserved identifiers
     , reservedIdentifiers
     , reservedKeywords
 
-    -- * Utilities
+      -- * Utilities
     , internalError
-    -- `shift` should really be in `Dhall.Normalize`, but it's here to avoid a
-    -- module cycle
+      -- `shift` should really be in `Dhall.Normalize`, but it's here to avoid a
+      -- module cycle
     , shift
     ) where
 

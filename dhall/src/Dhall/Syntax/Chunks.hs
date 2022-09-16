@@ -1,20 +1,17 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{-| This module contains the core syntax types.
--}
-
-module Dhall.Syntax.Chunks (
-      Chunks(..)
+module Dhall.Syntax.Chunks
+    ( Chunks(..)
 
       -- * Optics
-      , chunkExprs
+    , chunkExprs
 
       -- * `Data.Text.Text` manipulation
-      , toDoubleQuoted
-      , longestSharedWhitespacePrefix
-      , linesLiteral
-      , unlinesLiteral
+    , toDoubleQuoted
+    , longestSharedWhitespacePrefix
+    , linesLiteral
+    , unlinesLiteral
     ) where
 
 import                Data.List.NonEmpty (NonEmpty (..))

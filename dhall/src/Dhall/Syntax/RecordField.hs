@@ -1,13 +1,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-{-| This module contains the core syntax types.
--}
-
-module Dhall.Syntax.RecordField (
-      RecordField(..)
+module Dhall.Syntax.RecordField
+    ( RecordField(..)
     , makeRecordField
 
-    -- * Optics
+      -- * Optics
     , recordFieldExprs
     ) where
 

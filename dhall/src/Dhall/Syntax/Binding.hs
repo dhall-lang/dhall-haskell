@@ -1,10 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-{-| This module contains the core syntax types.
--}
-
-module Dhall.Syntax.Binding (
-      Binding(..)
+module Dhall.Syntax.Binding
+    ( Binding(..)
     , makeBinding
 
       -- * Optics

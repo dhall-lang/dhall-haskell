@@ -1,11 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-{-| This module contains the core syntax types and optics for them.
-
-'reservedIdentifiers', 'denote' and friends are included because they are
-involved in a dependency circle with "Dhall.Pretty.Internal".
--}
-
 module Dhall.Syntax.Expr
     ( Expr(..)
     ) where

@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Dhall.Syntax.Var (
-      Var(..)
+module Dhall.Syntax.Var
+    ( Var(..)
     ) where
 
 import Data.String  (IsString (..))
