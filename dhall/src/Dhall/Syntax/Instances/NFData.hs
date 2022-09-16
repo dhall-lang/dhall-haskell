@@ -2,11 +2,12 @@
 
 module Dhall.Syntax.Instances.NFData () where
 
-import Control.DeepSeq          (NFData)
+import Control.DeepSeq              (NFData)
 import Dhall.Syntax.Binding
 import Dhall.Syntax.Chunks
 import Dhall.Syntax.Const
 import Dhall.Syntax.Expr
+import Dhall.Syntax.FunctionBinding
 import Dhall.Syntax.Import
 import Dhall.Syntax.RecordField
 import Dhall.Syntax.Types

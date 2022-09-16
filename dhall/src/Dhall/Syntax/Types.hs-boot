@@ -4,8 +4,6 @@ data DhallDouble
 
 data PreferAnnotation
 
-data FunctionBinding s a
-
 data FieldSelection s
 
 data WithComponent

@@ -7,7 +7,6 @@ module Dhall.Syntax.Operations (
       subExpressions
     , subExpressionsWith
     , unsafeSubExpressions
-    , functionBindingExprs
 
     -- ** Handling 'Note's
     , denote
@@ -25,16 +24,17 @@ module Dhall.Syntax.Operations (
     , shift
     ) where
 
-import Data.HashSet             (HashSet)
-import Data.Text                (Text)
-import Data.Void                (Void)
-import Dhall.Syntax.Binding     (Binding (..), bindingExprs)
-import Dhall.Syntax.Chunks      (chunkExprs)
+import Data.HashSet                 (HashSet)
+import Data.Text                    (Text)
+import Data.Void                    (Void)
+import Dhall.Syntax.Binding         (Binding (..), bindingExprs)
+import Dhall.Syntax.Chunks          (chunkExprs)
 import Dhall.Syntax.Expr
-import Dhall.Syntax.RecordField (RecordField (..), recordFieldExprs)
+import Dhall.Syntax.FunctionBinding
+import Dhall.Syntax.RecordField     (RecordField (..), recordFieldExprs)
 import Dhall.Syntax.Types
 import Dhall.Syntax.Var
-import Unsafe.Coerce            (unsafeCoerce)
+import Unsafe.Coerce                (unsafeCoerce)
 
 import qualified Data.HashSet
 import qualified Data.Text
@@ -157,21 +157,6 @@ unhandledConstructor constructor =
         <>  constructor
         <>  " construtor"
         )
-
-{-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
--}
-functionBindingExprs
-    :: Applicative f
-    => (Expr s a -> f (Expr s b))
-    -> FunctionBinding s a -> f (FunctionBinding s b)
-functionBindingExprs f (FunctionBinding s0 label s1 s2 type_) =
-    FunctionBinding
-        <$> pure s0
-        <*> pure label
-        <*> pure s1
-        <*> pure s2
-        <*> f type_
-{-# INLINABLE functionBindingExprs #-}
 
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
 --

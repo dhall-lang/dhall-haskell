@@ -9,10 +9,11 @@ import Dhall.Syntax.Binding
 import Dhall.Syntax.Chunks
 import Dhall.Syntax.Const
 import Dhall.Syntax.Expr
+import Dhall.Syntax.FunctionBinding
 import Dhall.Syntax.RecordField
 import Dhall.Syntax.Types
 import Dhall.Syntax.Var
-import Language.Haskell.TH.Syntax (Lift)
+import Language.Haskell.TH.Syntax   (Lift)
 
 import qualified Data.Fixed as Fixed
 import qualified Data.Time  as Time

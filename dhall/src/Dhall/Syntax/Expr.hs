@@ -10,21 +10,22 @@ module Dhall.Syntax.Expr
     ( Expr(..)
     ) where
 
-import                Data.List.NonEmpty       (NonEmpty (..))
-import                Data.Sequence            (Seq)
-import                Data.String              (IsString (..))
-import                Data.Text                (Text)
-import                Data.Traversable         ()
-import                Dhall.Map                (Map)
-import {-# SOURCE #-} Dhall.Pretty.Internal    (CharacterSet (..))
+import                Data.List.NonEmpty           (NonEmpty (..))
+import                Data.Sequence                (Seq)
+import                Data.String                  (IsString (..))
+import                Data.Text                    (Text)
+import                Data.Traversable             ()
+import                Dhall.Map                    (Map)
+import {-# SOURCE #-} Dhall.Pretty.Internal        (CharacterSet (..))
 import                Dhall.Syntax.Binding
 import                Dhall.Syntax.Chunks
 import                Dhall.Syntax.Const
+import                Dhall.Syntax.FunctionBinding
 import                Dhall.Syntax.RecordField
-import {-# SOURCE #-} Dhall.Syntax.Types
+import                Dhall.Syntax.Types
 import                Dhall.Syntax.Var
-import                GHC.Generics             (Generic)
-import                Numeric.Natural          (Natural)
+import                GHC.Generics                 (Generic)
+import                Numeric.Natural              (Natural)
 
 import qualified Data.Time as Time
 

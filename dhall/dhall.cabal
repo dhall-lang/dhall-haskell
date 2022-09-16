@@ -364,6 +364,7 @@ Library
         Dhall.Syntax.Chunks
         Dhall.Syntax.Const
         Dhall.Syntax.Expr
+        Dhall.Syntax.FunctionBinding
         Dhall.Syntax.Import
         Dhall.Syntax.Instances.Applicative
         Dhall.Syntax.Instances.Bifunctor

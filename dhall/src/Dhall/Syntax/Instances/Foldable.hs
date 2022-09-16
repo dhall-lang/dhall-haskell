@@ -8,6 +8,7 @@ module Dhall.Syntax.Instances.Foldable () where
 import Dhall.Syntax.Binding
 import Dhall.Syntax.Chunks
 import Dhall.Syntax.Expr
+import Dhall.Syntax.FunctionBinding
 import Dhall.Syntax.RecordField
 import Dhall.Syntax.Types
 
