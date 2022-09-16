@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase    #-}
+{-# LANGUAGE LambdaCase #-}
 
 {- | Instead of converting explicitly between 'Expr's and 'MultiLet', it might
 be nicer to use a pattern synonym:
@@ -24,9 +24,9 @@ module Dhall.Syntax.MultiLet (
     , wrapInLets
     ) where
 
-import                Data.List.NonEmpty    (NonEmpty (..))
-import                Dhall.Syntax.Expr     (Expr (..))
-import                Dhall.Syntax.Binding  (Binding)
+import Data.List.NonEmpty   (NonEmpty (..))
+import Dhall.Syntax.Binding (Binding)
+import Dhall.Syntax.Expr    (Expr (..))
 
 import qualified Data.List.NonEmpty as NonEmpty
 

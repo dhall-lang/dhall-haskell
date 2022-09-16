@@ -18,6 +18,7 @@ import                Data.Traversable      ()
 import                Dhall.Map             (Map)
 import {-# SOURCE #-} Dhall.Pretty.Internal (CharacterSet (..))
 import                Dhall.Syntax.Binding
+import                Dhall.Syntax.Chunks
 import                Dhall.Syntax.Const
 import {-# SOURCE #-} Dhall.Syntax.Types
 import                Dhall.Syntax.Var

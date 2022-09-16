@@ -38,8 +38,8 @@ import Dhall.Syntax
     , FunctionBinding (..)
     , PreferAnnotation (..)
     , RecordField (..)
-    , WithComponent (..)
     , Var (..)
+    , WithComponent (..)
     )
 
 import qualified Data.Sequence

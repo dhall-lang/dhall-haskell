@@ -11,9 +11,9 @@ module Dhall.Syntax.Binding (
     , bindingExprs
     ) where
 
-import                Data.Text             (Text)
-import {-# SOURCE #-} Dhall.Syntax.Expr     (Expr)
-import                GHC.Generics          (Generic)
+import                Data.Text         (Text)
+import {-# SOURCE #-} Dhall.Syntax.Expr (Expr)
+import                GHC.Generics      (Generic)
 
 -- | Record the binding part of a @let@ expression.
 --

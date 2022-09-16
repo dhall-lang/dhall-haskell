@@ -6,6 +6,7 @@
 module Dhall.Syntax.Instances.Traversable () where
 
 import Dhall.Syntax.Binding
+import Dhall.Syntax.Chunks
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Instances.Foldable ()
 import Dhall.Syntax.Instances.Functor  ()

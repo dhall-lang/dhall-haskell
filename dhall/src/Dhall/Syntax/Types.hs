@@ -6,7 +6,6 @@
 module Dhall.Syntax.Types (
     -- * 'Expr'
       CharacterSet(..)
-    , Chunks(..)
     , DhallDouble(..)
     , PreferAnnotation(..)
     , RecordField(..)
@@ -18,7 +17,6 @@ module Dhall.Syntax.Types (
     , WithComponent(..)
     ) where
 
-import                Data.String           (IsString (..))
 import                Data.Text             (Text)
 import {-# SOURCE #-} Dhall.Pretty.Internal (CharacterSet (..))
 import                Dhall.Syntax.Expr     (Expr (..))
@@ -31,13 +29,6 @@ import                GHC.Generics          (Generic)
 -- defined via the binary encoding of Dhall @Double@s.
 newtype DhallDouble = DhallDouble { getDhallDouble :: Double }
     deriving Generic
-
--- | The body of an interpolated @Text@ literal
-data Chunks s a = Chunks [(Text, Expr s a)] Text
-    deriving Generic
-
-instance IsString (Chunks s a) where
-    fromString str = Chunks [] (fromString str)
 
 -- | Used to record the origin of a @//@ operator (i.e. from source code or a
 -- product of desugaring)

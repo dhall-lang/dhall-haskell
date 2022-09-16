@@ -72,22 +72,25 @@ module Dhall.Pretty.Internal (
     , temporalToText
     ) where
 
-import Control.DeepSeq            (NFData)
-import Data.Aeson                 (FromJSON (..), Value (String))
-import Data.Aeson.Types           (typeMismatch, unexpected)
-import Data.Data                  (Data)
-import Data.Foldable
-import Data.List.NonEmpty         (NonEmpty (..))
-import Data.Text                  (Text)
-import Dhall.Map                  (Map)
-import Dhall.Optics               (cosmosOf, foldOf, to)
-import Dhall.Src                  (Src (..))
-import Dhall.Syntax
+import                Control.DeepSeq               (NFData)
+import                Data.Aeson
+    ( FromJSON (..)
+    , Value (String)
+    )
+import                Data.Aeson.Types              (typeMismatch, unexpected)
+import                Data.Data                     (Data)
+import                Data.Foldable
+import                Data.List.NonEmpty            (NonEmpty (..))
+import                Data.Text                     (Text)
+import                Dhall.Map                     (Map)
+import                Dhall.Optics                  (cosmosOf, foldOf, to)
+import                Dhall.Src                     (Src (..))
+import                Dhall.Syntax
 import {-# SOURCE #-} Dhall.Syntax.Instances.Pretty ()
-import GHC.Generics               (Generic)
-import Language.Haskell.TH.Syntax (Lift)
-import Numeric.Natural            (Natural)
-import Prettyprinter              (Doc, Pretty, space)
+import                GHC.Generics                  (Generic)
+import                Language.Haskell.TH.Syntax    (Lift)
+import                Numeric.Natural               (Natural)
+import                Prettyprinter                 (Doc, Pretty, space)
 
 import qualified Data.Char
 import qualified Data.HashSet
