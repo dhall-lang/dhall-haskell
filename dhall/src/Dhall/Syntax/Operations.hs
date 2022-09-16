@@ -7,7 +7,6 @@ module Dhall.Syntax.Operations (
       subExpressions
     , subExpressionsWith
     , unsafeSubExpressions
-    , recordFieldExprs
     , functionBindingExprs
 
     -- ** Handling 'Note's
@@ -26,15 +25,16 @@ module Dhall.Syntax.Operations (
     , shift
     ) where
 
-import Data.HashSet         (HashSet)
-import Data.Text            (Text)
-import Data.Void            (Void)
-import Dhall.Syntax.Binding (Binding (..), bindingExprs)
-import Dhall.Syntax.Chunks  (chunkExprs)
+import Data.HashSet             (HashSet)
+import Data.Text                (Text)
+import Data.Void                (Void)
+import Dhall.Syntax.Binding     (Binding (..), bindingExprs)
+import Dhall.Syntax.Chunks      (chunkExprs)
 import Dhall.Syntax.Expr
+import Dhall.Syntax.RecordField (RecordField (..), recordFieldExprs)
 import Dhall.Syntax.Types
 import Dhall.Syntax.Var
-import Unsafe.Coerce        (unsafeCoerce)
+import Unsafe.Coerce            (unsafeCoerce)
 
 import qualified Data.HashSet
 import qualified Data.Text
@@ -105,8 +105,7 @@ unsafeSubExpressions _ Double = pure Double
 unsafeSubExpressions _ (DoubleLit n) = pure (DoubleLit n)
 unsafeSubExpressions _ DoubleShow = pure DoubleShow
 unsafeSubExpressions _ Text = pure Text
-unsafeSubExpressions f (TextLit chunks) =
-    TextLit <$> chunkExprs f chunks
+unsafeSubExpressions f (TextLit chunks) = TextLit <$> chunkExprs f chunks
 unsafeSubExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
 unsafeSubExpressions _ TextReplace = pure TextReplace
 unsafeSubExpressions _ TextShow = pure TextShow
@@ -158,20 +157,6 @@ unhandledConstructor constructor =
         <>  constructor
         <>  " construtor"
         )
-
-{-| Traverse over the immediate 'Expr' children in a 'RecordField'.
--}
-recordFieldExprs
-    :: Applicative f
-    => (Expr s a -> f (Expr s b))
-    -> RecordField s a -> f (RecordField s b)
-recordFieldExprs f (RecordField s0 e s1 s2) =
-    RecordField
-        <$> pure s0
-        <*> f e
-        <*> pure s1
-        <*> pure s2
-{-# INLINABLE recordFieldExprs #-}
 
 {-| Traverse over the immediate 'Expr' children in a 'FunctionBinding'.
 -}

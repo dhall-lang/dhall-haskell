@@ -10,6 +10,7 @@ import Dhall.Syntax.Chunks
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Instances.Foldable ()
 import Dhall.Syntax.Instances.Functor  ()
+import Dhall.Syntax.RecordField
 import Dhall.Syntax.Types
 
 deriving instance Traversable (Binding s)

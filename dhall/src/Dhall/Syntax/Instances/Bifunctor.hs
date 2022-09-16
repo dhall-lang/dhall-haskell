@@ -7,6 +7,7 @@ import Dhall.Syntax.Binding
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Instances.Functor ()
 import Dhall.Syntax.Operations
+import Dhall.Syntax.RecordField
 import Dhall.Syntax.Types
 
 import qualified Lens.Family as Lens

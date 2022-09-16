@@ -22,5 +22,6 @@ import Dhall.Syntax.Instances.Show        as Export ()
 import Dhall.Syntax.Instances.Traversable as Export ()
 import Dhall.Syntax.MultiLet              as Export
 import Dhall.Syntax.Operations            as Export
+import Dhall.Syntax.RecordField           as Export
 import Dhall.Syntax.Types                 as Export
 import Dhall.Syntax.Var                   as Export

@@ -10,6 +10,7 @@ import Dhall.Syntax.Const
 import Dhall.Syntax.Expr
 import Dhall.Syntax.Import
 import Dhall.Syntax.Instances.Eq ()
+import Dhall.Syntax.RecordField
 import Dhall.Syntax.Types
 import Dhall.Syntax.Var
 
