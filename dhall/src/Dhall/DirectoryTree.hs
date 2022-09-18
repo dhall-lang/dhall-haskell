@@ -31,7 +31,7 @@ import qualified System.FilePath             as FilePath
 
     * Records are translated into directories
 
-    * @Map@s are also translated into directories
+    * @Map@s are translated into directory trees
 
     * @Text@ values or fields are translated into files
 
@@ -124,13 +124,20 @@ toDirectoryTree path expression = case expression of
         empty
 
     process key value = do
-        if Text.isInfixOf (Text.pack [ FilePath.pathSeparator ]) key
-            then die
-            else return ()
+        (dirPath, fileName) <- case reverse keyPathSegments of
+            h : t ->
+                return
+                  ( Foldable.foldl' (</>) path (reverse t)
+                  , h )
+            _ ->
+                die
 
-        Directory.createDirectoryIfMissing False path
+        Directory.createDirectoryIfMissing True dirPath
 
-        toDirectoryTree (path </> Text.unpack key) value
+        toDirectoryTree (dirPath </> fileName) value
+      where
+        keyPathSegments =
+            fmap Text.unpack $ Text.splitOn "/" key
 
     die = Exception.throwIO FilesystemError{..}
       where
