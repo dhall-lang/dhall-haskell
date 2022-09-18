@@ -25,7 +25,6 @@ import qualified Dhall.Pretty
 import qualified Dhall.Util                  as Util
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
-import qualified System.FilePath             as FilePath
 
 {-| Attempt to transform a Dhall record into a directory tree where:
 
