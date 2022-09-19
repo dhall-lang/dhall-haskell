@@ -35,6 +35,10 @@ import qualified System.Directory            as Directory
     * @Text@ values or fields are translated into files
 
     * @Optional@ values are omitted if @None@
+    
+    In @Map@s, the keys specify paths relative to the work dir.
+    Only forward slashes (@/@) must be used as directory separators.
+    They will be automatically transformed on Windows.
 
     For example, the following Dhall record:
 
@@ -123,6 +127,19 @@ toDirectoryTree path expression = case expression of
         empty
 
     process key value = do
+        -- Fail if path is absolute, which is a security risk.
+        case keyPathSegments of
+            "" : _ ->
+                die
+            _ ->
+                return ()
+
+        -- Fail if path contains attempts to go to container directory,
+        -- which is a security risk.
+        if elem ".." keyPathSegments
+          then die
+          else return ()
+
         (dirPath, fileName) <- case reverse keyPathSegments of
             h : t ->
                 return
