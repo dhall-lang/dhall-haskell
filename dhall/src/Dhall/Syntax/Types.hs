@@ -37,9 +37,9 @@ data PreferAnnotation
 --
 -- Given our limitation that not all expressions recover their whitespaces, the
 -- purpose of @fieldSelectionSrc1@ is to save the 'Text.Megaparsec.SourcePos'
--- where the @fieldSelectionLabel@ ends, but we /still/ use a 'Maybe Src'
--- (@s = 'Src'@) to be consistent with similar data types such as 'Binding', for
--- example.
+-- where the @fieldSelectionLabel@ ends, but we /still/ use a
+-- 'Maybe Dhall.Src.Src' (@s = 'Dhall.Src.Src'@) to be consistent with similar
+-- data types such as 'Dhall.Syntax.Binding.Binding', for example.
 data FieldSelection s = FieldSelection
     { fieldSelectionSrc0 :: Maybe s
     , fieldSelectionLabel :: !Text

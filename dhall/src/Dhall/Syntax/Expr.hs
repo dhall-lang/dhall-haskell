@@ -25,17 +25,20 @@ import qualified Data.Time as Time
 
 {-| Syntax tree for expressions
 
-    The @s@ type parameter is used to track the presence or absence of `Src`
-    spans:
+    The @s@ type parameter is used to track the presence or absence of
+    `Dhall.Src.Src` spans:
 
-    * If @s = `Src`@ then the code may contains `Src` spans (either in a `Note`
-      constructor or inline within another constructor, like `Let`)
-    * If @s = `Void`@ then the code has no `Src` spans
+    * If @s = `Dhall.Src.Src`@ then the code may contains `Dhall.Src.Src` spans
+      (either in a `Note` constructor or inline within another constructor, like
+      `Let`)
+    * If @s = `Data.Void.Void`@ then the code has no `Dhall.Src.Src` spans
 
     The @a@ type parameter is used to track the presence or absence of imports
 
-    * If @a = `Import`@ then the code may contain unresolved `Import`s
-    * If @a = `Void`@ then the code has no `Import`s
+    * If @a = `Dhall.Syntax.Import.Import`@ then the code may contain unresolved
+      `Dhall.Syntax.Import.Import`s
+    * If @a = `Data.Void.Void`@ then the code has no
+      `Dhall.Syntax.Import.Import`s
 -}
 data Expr s a
     -- | > Const c                                  ~  c
@@ -64,8 +67,8 @@ data Expr s a
     -- is only an additional 'Note' around @'Let' "y" …@ in the second
     -- example.
     --
-    -- See 'MultiLet' for a representation of let-blocks that mirrors the
-    -- source code more closely.
+    -- See `Dhall.Syntax.MultiLet.MultiLet` for a representation of let-blocks
+    -- that mirrors the source code more closely.
     | Let (Binding s a) (Expr s a)
     -- | > Annot x t                                ~  x : t
     | Annot (Expr s a) (Expr s a)
