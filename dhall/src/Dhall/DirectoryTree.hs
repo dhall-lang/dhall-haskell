@@ -131,6 +131,9 @@ toDirectoryTree path expression = case expression of
         case keyPathSegments of
             "" : _ ->
                 die
+            -- Detect Windows absolute paths like "C:".
+            [_ , ':'] : _ ->
+                die
             _ ->
                 return ()
 
