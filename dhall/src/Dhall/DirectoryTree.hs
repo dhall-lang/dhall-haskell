@@ -137,14 +137,14 @@ toDirectoryTree path expression = case expression of
         -- Fail if path contains attempts to go to container directory,
         -- which is a security risk.
         if elem ".." keyPathSegments
-          then die
-          else return ()
+            then die
+            else return ()
 
         (dirPath, fileName) <- case reverse keyPathSegments of
             h : t ->
                 return
-                  ( Foldable.foldl' (</>) path (reverse t)
-                  , h )
+                    ( Foldable.foldl' (</>) path (reverse t)
+                    , h )
             _ ->
                 die
 
