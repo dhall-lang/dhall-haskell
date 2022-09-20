@@ -39,6 +39,8 @@ import qualified System.Directory            as Directory
     In @Map@s, the keys specify paths relative to the work dir.
     Only forward slashes (@/@) must be used as directory separators.
     They will be automatically transformed on Windows.
+    Absolute paths (starting with @/@) and parent directory segments (@..@)
+    are prohibited for security concerns.
 
     For example, the following Dhall record:
 
