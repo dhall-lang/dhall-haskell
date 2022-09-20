@@ -15,6 +15,9 @@ import Dhall.Syntax.RecordField
 import Dhall.Syntax.Types
 import Dhall.Syntax.Var
 
+-- $setup
+-- >>> import Data.Void (Void)
+
 deriving instance Eq Const
 deriving instance Eq Var
 deriving instance (Eq s, Eq a) => Eq (Binding s a)
