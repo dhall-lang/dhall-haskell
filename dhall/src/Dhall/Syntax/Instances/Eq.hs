@@ -17,6 +17,7 @@ import Dhall.Syntax.Var
 
 -- $setup
 -- >>> import Data.Void (Void)
+-- >>> import Dhall.Binary () -- For the orphan instance for `Serialise (Expr Void Import)`
 
 deriving instance Eq Const
 deriving instance Eq Var
