@@ -174,8 +174,8 @@ import qualified System.PosixCompat.User     as Posix
 
     __NOTE__: This utility does not take care of type-checking and normalizing
     the provided expression. This will raise a `FilesystemError` exception or a
-    `DhallErrors` exception upon encountering an expression that cannot be
-    converted as-is.
+    `Dhall.Marshal.Decode.DhallErrors` exception upon encountering an expression
+    that cannot be converted as-is.
 -}
 toDirectoryTree
     :: Bool -- ^ Whether to allow path separators in file names or not
