@@ -45,7 +45,7 @@ import qualified Dhall.Marshal.Decode        as Decode
 #ifdef mingw32_HOST_OS
 import Data.Word (Word32)
 
-import qualified Data.Coerce
+import qualified Unsafe.Coerce
 #else
 import qualified System.PosixCompat.Types as Posix
 #endif
@@ -100,7 +100,7 @@ instance FromDhall User
 
 #ifdef mingw32_HOST_OS
 instance FromDhall UserID where
-    autoWith normalizer = Data.Coerce.coerce <$> autoWith @Word32 normalizer
+    autoWith normalizer = Unsafe.Coerce.unsafeCoerce <$> autoWith @Word32 normalizer
 #else
 instance FromDhall Posix.CUid where
     autoWith normalizer = Posix.CUid <$> autoWith normalizer
@@ -116,7 +116,7 @@ instance FromDhall Group
 
 #ifdef mingw32_HOST_OS
 instance FromDhall GroupID where
-    autoWith normalizer = Data.Coerce.coerce <$> autoWith @Word32 normalizer
+    autoWith normalizer = Unsafe.Coerce.unsafeCoerce <$> autoWith @Word32 normalizer
 #else
 instance FromDhall Posix.CGid where
     autoWith normalizer = Posix.CGid <$> autoWith normalizer
