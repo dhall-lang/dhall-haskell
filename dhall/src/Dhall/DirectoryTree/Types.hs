@@ -93,7 +93,10 @@ data User
 
 instance FromDhall User
 
-#ifndef mingw32_HOST_OS
+#ifdef mingw32_HOST_OS
+deriving instance FromDhall UserID
+deriving instance Generic UserID
+#else
 instance FromDhall Posix.CUid where
     autoWith normalizer = Posix.CUid <$> autoWith normalizer
 #endif
@@ -106,7 +109,10 @@ data Group
 
 instance FromDhall Group
 
-#ifndef mingw32_HOST_OS
+#ifdef mingw32_HOST_OS
+deriving instance FromDhall GroupID
+deriving instance Generic GroupID
+#else
 instance FromDhall Posix.CGid where
     autoWith normalizer = Posix.CGid <$> autoWith normalizer
 #endif
