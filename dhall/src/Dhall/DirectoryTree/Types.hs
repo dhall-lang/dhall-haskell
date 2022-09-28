@@ -1,12 +1,12 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving  #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE TypeApplications       #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -37,10 +37,18 @@ import Dhall.Syntax
     , FieldSelection (..)
     , Var (..)
     )
+import System.PosixCompat.Types (GroupID, UserID)
 
 import qualified Data.Text                   as Text
 import qualified Dhall.Marshal.Decode        as Decode
-import qualified System.PosixCompat.Types    as Posix
+
+#ifdef mingw32_HOST_OS
+import Data.Word (Word32)
+
+import qualified Data.Coerce
+#else
+import qualified System.PosixCompat.Types as Posix
+#endif
 
 pattern Make :: Text -> Expr s a -> Expr s a
 pattern Make label entry <- App (Field (Var (V "_" 0)) (fieldSelectionLabel -> label)) entry
@@ -84,14 +92,15 @@ instance FromDhall a => FromDhall (Entry a) where
 
 -- | A user identified either by id or name.
 data User
-    = UserId Posix.UserID
+    = UserId UserID
     | UserName String
     deriving (Generic, Show)
 
 instance FromDhall User
 
 #ifdef mingw32_HOST_OS
-deriving instance FromDhall Posix.UserID
+instance FromDhall UserID where
+    autoWith normalizer = Data.Coerce.coerce <$> autoWith @Word32 normalizer
 #else
 instance FromDhall Posix.CUid where
     autoWith normalizer = Posix.CUid <$> autoWith normalizer
@@ -99,14 +108,15 @@ instance FromDhall Posix.CUid where
 
 -- | A group identified either by id or name.
 data Group
-    = GroupId Posix.GroupID
+    = GroupId GroupID
     | GroupName String
     deriving (Generic, Show)
 
 instance FromDhall Group
 
 #ifdef mingw32_HOST_OS
-deriving instance FromDhall Posix.GroupID
+instance FromDhall GroupID where
+    autoWith normalizer = Data.Coerce.coerce <$> autoWith @Word32 normalizer
 #else
 instance FromDhall Posix.CGid where
     autoWith normalizer = Posix.CGid <$> autoWith normalizer
