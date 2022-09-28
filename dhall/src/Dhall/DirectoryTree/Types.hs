@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving  #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE PatternSynonyms    #-}
@@ -36,14 +37,10 @@ import Dhall.Syntax
     , FieldSelection (..)
     , Var (..)
     )
-import System.PosixCompat.Types (GroupID, UserID)
 
 import qualified Data.Text                   as Text
 import qualified Dhall.Marshal.Decode        as Decode
-
-#ifndef mingw32_HOST_OS
 import qualified System.PosixCompat.Types    as Posix
-#endif
 
 pattern Make :: Text -> Expr s a -> Expr s a
 pattern Make label entry <- App (Field (Var (V "_" 0)) (fieldSelectionLabel -> label)) entry
@@ -87,15 +84,14 @@ instance FromDhall a => FromDhall (Entry a) where
 
 -- | A user identified either by id or name.
 data User
-    = UserId UserID
+    = UserId Posix.UserID
     | UserName String
     deriving (Generic, Show)
 
 instance FromDhall User
 
 #ifdef mingw32_HOST_OS
-deriving instance FromDhall UserID
-deriving instance Generic UserID
+deriving instance FromDhall Posix.UserID
 #else
 instance FromDhall Posix.CUid where
     autoWith normalizer = Posix.CUid <$> autoWith normalizer
@@ -103,15 +99,14 @@ instance FromDhall Posix.CUid where
 
 -- | A group identified either by id or name.
 data Group
-    = GroupId GroupID
+    = GroupId Posix.GroupID
     | GroupName String
     deriving (Generic, Show)
 
 instance FromDhall Group
 
 #ifdef mingw32_HOST_OS
-deriving instance FromDhall GroupID
-deriving instance Generic GroupID
+deriving instance FromDhall Posix.GroupID
 #else
 instance FromDhall Posix.CGid where
     autoWith normalizer = Posix.CGid <$> autoWith normalizer
