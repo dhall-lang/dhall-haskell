@@ -57,8 +57,10 @@ import qualified System.PosixCompat.Types as Posix
 pattern Make :: Text -> Expr s a -> Expr s a
 pattern Make label entry <- App (Field (Var (V "_" 0)) (fieldSelectionLabel -> label)) entry
 
+-- | A directory in the filesystem.
 type DirectoryEntry = Entry (Seq FilesystemEntry)
 
+-- | A file in the filesystem.
 type FileEntry = Entry Text
 
 -- | A filesystem entry.
