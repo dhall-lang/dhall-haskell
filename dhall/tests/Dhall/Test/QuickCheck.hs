@@ -274,13 +274,13 @@ instance Arbitrary Directory where
 
     shrink = genericShrink
 
-instance (Arbitrary s, Arbitrary a) => Arbitrary (PreferAnnotation s a) where
-    arbitrary =
-        Test.QuickCheck.oneof
-            [ pure PreferFromSource
-            , PreferFromWith <$> arbitrary
-            , pure PreferFromCompletion
-            ]
+instance Arbitrary PreferAnnotation where
+    arbitrary = Test.QuickCheck.oneof
+        [ pure PreferFromSource
+        , pure PreferFromCompletion
+        ]
+
+    shrink = genericShrink
 
 instance (Arbitrary s, Arbitrary a) => Arbitrary (RecordField s a) where
     arbitrary = lift4 RecordField
@@ -437,8 +437,6 @@ standardizedExpression (Combine _ (Just _) _ _) =
 standardizedExpression With{} =
     False
 standardizedExpression (Prefer _ PreferFromCompletion _ _) =
-    False
-standardizedExpression (Prefer _ (PreferFromWith _) _ _) =
     False
 -- The following three expressions are valid ASTs, but they can never be parsed,
 -- because the annotation will associate with `Merge`/`ListLit`/`ToMap` with

@@ -28,3 +28,4 @@ docs
 result
 result-*
 report.html
+/dhall/tests/to-directory-tree/*.out/

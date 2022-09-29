@@ -4,10 +4,10 @@ Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
 License-File: LICENSE
-Copyright: 2017 Gabriel Gonzalez
-Author: Gabriel Gonzalez
-Maintainer: Gabriel439@gmail.com
-Bug-Reports: https://github.com/Gabriel439/Haskell-Dhall-Nix-Library/issues
+Copyright: 2017 Gabriella Gonzalez
+Author: Gabriella Gonzalez
+Maintainer: GenuineGabriella@gmail.com
+Bug-Reports: https://github.com/dhall-lang/dhall-haskell/issues
 Synopsis: Dhall to Nix compiler
 Description:
   Use this package if you want to compile Dhall expressions to the Nix language.
@@ -21,7 +21,7 @@ Description:
 Category: Compiler
 Source-Repository head
     Type: git
-    Location: https://github.com/Gabriel439/Haskell-Dhall-Nix-Library
+    Location: https://github.com/dhall-lang/dhall-haskell
 
 Library
     Hs-Source-Dirs: src

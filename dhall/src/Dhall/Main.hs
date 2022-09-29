@@ -159,7 +159,7 @@ data Mode
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
     | Text { file :: Input, output :: Output }
-    | DirectoryTree { file :: Input, path :: FilePath }
+    | DirectoryTree { allowSeparators :: Bool, file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
 
@@ -269,7 +269,7 @@ parseMode =
             Generate
             "to-directory-tree"
             "Convert nested records of Text literals into a directory tree"
-            (DirectoryTree <$> parseFile <*> parseDirectoryTreeOutput)
+            (DirectoryTree <$> parseDirectoryTreeAllowSeparators <*> parseFile <*> parseDirectoryTreeOutput)
     <|> subcommand
             Interpret
             "resolve"
@@ -531,6 +531,12 @@ parseMode =
             (   Options.Applicative.long "schemas"
             <>  Options.Applicative.help "A record of schemas"
             <>  Options.Applicative.metavar "EXPR"
+            )
+
+    parseDirectoryTreeAllowSeparators =
+        Options.Applicative.switch
+            (   Options.Applicative.long "allow-path-separators"
+            <>  Options.Applicative.help "Whether to allow path separators in file names"
             )
 
     parseDirectoryTreeOutput =
@@ -997,7 +1003,7 @@ command (Options {..}) = do
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
-            DirectoryTree.toDirectoryTree path normalizedExpression
+            DirectoryTree.toDirectoryTree allowSeparators path normalizedExpression
 
         Dhall.Main.Schemas{..} ->
             Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}
