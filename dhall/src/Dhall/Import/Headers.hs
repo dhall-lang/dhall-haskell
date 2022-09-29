@@ -9,26 +9,23 @@ module Dhall.Import.Headers
     , toOriginHeaders
     ) where
 
-import Control.Applicative     (Alternative (..), liftA2)
-import Control.Exception       (SomeException)
-import Control.Monad.Catch     (handle, throwM)
-import Data.Text               (Text)
-import Data.Void               (Void)
-import Dhall.Core
-    ( Chunks (..)
-    , Expr (..)
-    )
-import Dhall.Import.Types      (HTTPHeader , OriginHeaders)
-import Dhall.Parser            (Src (..))
+import Control.Applicative (Alternative (..), liftA2)
+import Control.Exception   (SomeException)
+import Control.Monad.Catch (handle, throwM)
+import Data.Text           (Text)
+import Data.Void           (Void)
+import Dhall.Core          (Chunks (..), Expr (..))
+import Dhall.Import.Types  (HTTPHeader, OriginHeaders)
+import Dhall.Parser        (Src (..))
 
 import qualified Data.CaseInsensitive
 import qualified Data.Foldable
-import qualified Data.HashMap.Strict    as HashMap
+import qualified Data.HashMap.Strict   as HashMap
 import qualified Data.Text.Encoding
-import qualified Dhall.Core             as Core
+import qualified Dhall.Core            as Core
 import qualified Dhall.Map
-import qualified Dhall.TypeCheck
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.TypeCheck
 
 -- | Given a well-typed (of type `List { header : Text, value Text }` or
 -- `List { mapKey : Text, mapValue Text }`) headers expressions in normal form

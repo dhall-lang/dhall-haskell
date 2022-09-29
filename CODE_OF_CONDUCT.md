@@ -57,7 +57,7 @@ further defined and clarified by project maintainers.
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported by contacting one of the following project maintainers:
 
-* Gabriel Gonzalez - Gabriel439@gmail.com
+* Gabriella Gonzalez - GenuineGabriella@gmail.com
 * Simon Jakobi - simon.jakobi@gmail.com
 
 Complaints will be reviewed and investigated and will result in a response that
