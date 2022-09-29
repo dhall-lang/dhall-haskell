@@ -42,6 +42,11 @@ jobs:
             ${{ matrix.os.runner }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      - name: Install libsodium
+        run: |
+          if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
+            sudo apt-get install -y libsodium-dev
+          fi
       - name: "Build"
         shell: bash
         run: |
