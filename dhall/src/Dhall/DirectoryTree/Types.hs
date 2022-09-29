@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE LambdaCase         #-}
@@ -12,9 +13,9 @@
 
 -- | Types used by the implementation of the @to-directory-tree@ subcommand
 module Dhall.DirectoryTree.Types
-    ( DirectoryEntry
+    ( FilesystemEntry(..)
+    , DirectoryEntry
     , FileEntry
-    , FilesystemEntry(..)
     , Entry(..)
     , User(..)
     , Group(..)
@@ -61,7 +62,7 @@ type FileEntry = Entry Text
 data FilesystemEntry
     = DirectoryEntry (Entry (Seq FilesystemEntry))
     | FileEntry (Entry Text)
-    deriving Show
+    deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall FilesystemEntry where
     autoWith normalizer = Decoder
@@ -83,7 +84,7 @@ data Entry a = Entry
     , entryGroup :: Maybe Group
     , entryMode :: Maybe (Mode Maybe)
     }
-    deriving (Generic, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall a => FromDhall (Entry a) where
     autoWith = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOptions
@@ -94,7 +95,7 @@ instance FromDhall a => FromDhall (Entry a) where
 data User
     = UserId UserID
     | UserName String
-    deriving (Generic, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall User
 
@@ -110,7 +111,7 @@ instance FromDhall Posix.CUid where
 data Group
     = GroupId GroupID
     | GroupName String
-    deriving (Generic, Show)
+    deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall Group
 
@@ -137,6 +138,8 @@ data Mode f = Mode
 
 deriving instance Eq (Mode Identity)
 deriving instance Eq (Mode Maybe)
+deriving instance Ord (Mode Identity)
+deriving instance Ord (Mode Maybe)
 deriving instance Show (Mode Identity)
 deriving instance Show (Mode Maybe)
 
@@ -161,6 +164,8 @@ data Access f = Access
 
 deriving instance Eq (Access Identity)
 deriving instance Eq (Access Maybe)
+deriving instance Ord (Access Identity)
+deriving instance Ord (Access Maybe)
 deriving instance Show (Access Identity)
 deriving instance Show (Access Maybe)
 

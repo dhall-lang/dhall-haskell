@@ -12,7 +12,9 @@ module Dhall.DirectoryTree
       toDirectoryTree
     , FilesystemError(..)
 
-      -- * Exported for testing only
+      -- * Low-level types and functions
+    , module Dhall.DirectoryTree.Types
+    , decodeDirectoryTree
     , directoryTreeType
     ) where
 
@@ -170,7 +172,7 @@ toDirectoryTree
     -> FilePath
     -> Expr Void Void
     -> IO ()
-toDirectoryTree allowSeparators path expression = case Core.alphaNormalize expression of
+toDirectoryTree allowSeparators path expression = case expression of
     RecordLit keyValues ->
         Map.unorderedTraverseWithKey_ process $ recordFieldValue <$> keyValues
 
@@ -197,24 +199,10 @@ toDirectoryTree allowSeparators path expression = case Core.alphaNormalize expre
     -- If this pattern matches we assume the user wants to use the fixpoint
     -- approach, hence we typecheck it and output error messages like we would
     -- do for every other Dhall program.
-    Lam _ _ (Lam _ _ body) -> do
-        let body' = Core.renote body
-        let expression' = Core.renote expression
-
-        expected' <- case directoryTreeType of
-            Success x -> return x
-            Failure e -> Exception.throwIO e
-
-        _ <- Core.throws $ TypeCheck.typeOf $ Annot expression' expected'
-
-        entries <- case Decode.extract decoder body' of
-            Success x -> return x
-            Failure e -> Exception.throwIO e
+    Lam _ _ (Lam _ _ _) -> do
+        entries <- decodeDirectoryTree expression
 
         processFilesystemEntryList allowSeparators path entries
-            where
-                decoder :: Decoder (Seq FilesystemEntry)
-                decoder = Decode.auto
 
     _ ->
         die
@@ -240,6 +228,23 @@ toDirectoryTree allowSeparators path expression = case Core.alphaNormalize expre
     die = Exception.throwIO FilesystemError{..}
       where
         unexpectedExpression = expression
+
+-- | Decode a fixpoint directory tree from a Dhall expression.
+decodeDirectoryTree :: Expr s Void -> IO (Seq FilesystemEntry)
+decodeDirectoryTree (Core.alphaNormalize . Core.denote -> expression@(Lam _ _ (Lam _ _ body))) = do
+    expected' <- case directoryTreeType of
+        Success x -> return x
+        Failure e -> Exception.throwIO e
+
+    _ <- Core.throws $ TypeCheck.typeOf $ Annot expression expected'
+
+    case Decode.extract decoder body of
+        Success x -> return x
+        Failure e -> Exception.throwIO e
+    where
+        decoder :: Decoder (Seq FilesystemEntry)
+        decoder = Decode.auto
+decodeDirectoryTree expr = Exception.throwIO $ FilesystemError $ Core.denote expr
 
 -- | The type of a fixpoint directory tree expression.
 directoryTreeType :: Expector (Expr Src Void)

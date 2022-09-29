@@ -2,8 +2,6 @@ let User = (./fixpoint-helper.dhall).User
 
 let Group = (./fixpoint-helper.dhall).Group
 
-let Access = (./fixpoint-helper.dhall).Access
-
 let Make = (./fixpoint-helper.dhall).Make
 
 let no-access = { execute = Some False, read = Some False, write = Some False }

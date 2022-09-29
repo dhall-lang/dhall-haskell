@@ -1,8 +1,12 @@
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Dhall.Test.DirectoryTree (tests) where
 
 import Control.Monad
 import Data.Either (partitionEithers)
 import Data.Either.Validation
+import Dhall.DirectoryTree (Entry(..), Group(..), User(..))
 import Lens.Family (set)
 import System.FilePath ((</>))
 import Test.Tasty
@@ -22,15 +26,15 @@ tests = testGroup "to-directory-tree"
         [ fixpointedType
         , fixpointedEmpty
         , fixpointedSimple
-        , fixpointedMetadata
+        , fixpointedPermissions
+        , fixpointedUserGroup
         ]
     ]
 
 fixpointedType :: TestTree
 fixpointedType = testCase "Type is as expected" $ do
     let file = "./tests/to-directory-tree/type.dhall"
-    text <- Data.Text.IO.readFile file
-    ref <- Dhall.inputExpr text
+    ref <- Dhall.inputExpr file
     expected' <- case Dhall.DirectoryTree.directoryTreeType of
         Failure e -> assertFailure $ show e
         Success expr -> return expr
@@ -54,10 +58,10 @@ fixpointedSimple = testCase "simple" $ do
         , Directory $ outDir </> "directory"
         ]
 
-fixpointedMetadata :: TestTree
-fixpointedMetadata = testCase "metadata" $ do
-    let outDir = "./tests/to-directory-tree/fixpoint-metadata.out"
-        path = "./tests/to-directory-tree/fixpoint-metadata.dhall"
+fixpointedPermissions :: TestTree
+fixpointedPermissions = testCase "permissions" $ do
+    let outDir = "./tests/to-directory-tree/fixpoint-permissions.out"
+        path = "./tests/to-directory-tree/fixpoint-permissions.dhall"
     entries <- runDirectoryTree False outDir path
     entries @?=
         [ Directory outDir
@@ -66,6 +70,28 @@ fixpointedMetadata = testCase "metadata" $ do
     s <- Files.getFileStatus $ outDir </> "file"
     let mode = Files.fileMode s `Files.intersectFileModes` Files.accessModes
     mode @?= Files.ownerModes
+
+fixpointedUserGroup :: TestTree
+fixpointedUserGroup = testCase "user and group" $ do
+    let file = "./tests/to-directory-tree/fixpoint-usergroup.dhall"
+    expr <- Dhall.inputExpr file
+    entries <- Dhall.DirectoryTree.decodeDirectoryTree expr
+    entries @?=
+        [ Dhall.DirectoryTree.FileEntry $ Entry
+            { entryName = "ids"
+            , entryContent = ""
+            , entryUser = Just (UserId 0)
+            , entryGroup = Just (GroupId 0)
+            , entryMode = Nothing
+            }
+        , Dhall.DirectoryTree.FileEntry $ Entry
+            { entryName = "names"
+            , entryContent = ""
+            , entryUser = Just (UserName "user")
+            , entryGroup = Just (GroupName "group")
+            , entryMode = Nothing
+            }
+        ]
 
 runDirectoryTree :: Bool -> FilePath -> FilePath -> IO [FilesystemEntry]
 runDirectoryTree allowSeparators outDir path = do
