@@ -62,7 +62,10 @@ jobs:
               continue
             fi
 
-            stack build --copy-bins --local-bin-path ./bin "${package}"
+            # We use --test --no-run-tests to avoid re-building all the local packages in the
+            # subsequent test step.
+            # See https://github.com/commercialhaskell/stack/issues/4977.
+            stack build --test --no-run-tests --copy-bins --local-bin-path ./bin "${package}"
           done
       - name: "Run tests"
         shell: bash
