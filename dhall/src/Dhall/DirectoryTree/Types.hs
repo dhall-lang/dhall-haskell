@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE LambdaCase         #-}
@@ -21,6 +20,8 @@ module Dhall.DirectoryTree.Types
     , Group(..)
     , Mode(..)
     , Access(..)
+
+    , setFileModeOnUnix
     ) where
 
 import Data.Functor.Identity    (Identity (..))
@@ -45,9 +46,11 @@ import qualified Dhall.Marshal.Decode        as Decode
 
 #ifdef mingw32_HOST_OS
 import Data.Word (Word32)
+import System.IO (hPutStrLn, stderr)
 
 import qualified Unsafe.Coerce
 #else
+import qualified System.PosixCompat.Files as Posix
 import qualified System.PosixCompat.Types as Posix
 #endif
 
@@ -179,3 +182,13 @@ accessDecoder :: FromDhall (f Bool) => InputNormalizer -> Decoder (Access f)
 accessDecoder = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOptions
     { fieldModifier = Text.toLower . Text.drop (Text.length "access")
     }
+
+
+
+-- | Set file permissions if we are not on Windows as it is currently not supported.
+setFileModeOnUnix :: FilePath -> Posix.FileMode -> IO ()
+#ifdef mingw32_HOST_OS
+setFileModeOnUnix fp _ = hPutStrLn stderr $ "Warning: Feature is not supported on your platform; Failed to set permissions for " <> fp
+#else
+setFileModeOnUnix fp mode = Posix.setFileMode fp mode
+#endif

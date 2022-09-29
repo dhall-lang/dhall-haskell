@@ -311,7 +311,7 @@ applyMetadata entry fp = do
 
     let mode' = maybe mode (updateModeWith mode) (entryMode entry)
     unless (mode' == mode) $
-        Posix.setFileMode fp $ modeToFileMode mode'
+        setFileModeOnUnix fp $ modeToFileMode mode'
 
 -- | Calculate the new `Mode` from the current mode and the changes specified by
 -- the user.
