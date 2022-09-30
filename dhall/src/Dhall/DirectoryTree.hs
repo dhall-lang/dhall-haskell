@@ -1,8 +1,8 @@
-{-# LANGUAGE OverloadedLists    #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TupleSections      #-}
-{-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -18,21 +18,18 @@ module Dhall.DirectoryTree
     , directoryTreeType
     ) where
 
-import Control.Applicative      (empty)
-import Control.Exception        (Exception)
-import Control.Monad            (unless, when)
-import Data.Either.Validation   (Validation (..))
-import Data.Functor.Identity    (Identity (..))
-import Data.Maybe               (fromMaybe)
-import Data.Sequence            (Seq)
-import Data.Text                (Text)
-import Data.Void                (Void)
+import Control.Applicative       (empty)
+import Control.Exception         (Exception)
+import Control.Monad             (unless, when)
+import Data.Either.Validation    (Validation (..))
+import Data.Functor.Identity     (Identity (..))
+import Data.Maybe                (fromMaybe)
+import Data.Sequence             (Seq)
+import Data.Text                 (Text)
+import Data.Void                 (Void)
 import Dhall.DirectoryTree.Types
-import Dhall.Marshal.Decode
-    ( Decoder (..)
-    , Expector
-    )
-import Dhall.Src                (Src)
+import Dhall.Marshal.Decode      (Decoder (..), Expector)
+import Dhall.Src                 (Src)
 import Dhall.Syntax
     ( Chunks (..)
     , Const (..)
@@ -40,8 +37,8 @@ import Dhall.Syntax
     , RecordField (..)
     , Var (..)
     )
-import System.FilePath          ((</>))
-import System.PosixCompat.Types (FileMode, GroupID, UserID)
+import System.FilePath           ((</>))
+import System.PosixCompat.Types  (FileMode, GroupID, UserID)
 
 import qualified Control.Exception           as Exception
 import qualified Data.Foldable               as Foldable

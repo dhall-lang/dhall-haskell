@@ -1,13 +1,13 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving  #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE PatternSynonyms    #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE ViewPatterns       #-}
-{-# LANGUAGE TypeApplications       #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -35,15 +35,11 @@ import Dhall.Marshal.Decode
     , InputNormalizer
     , InterpretOptions (..)
     )
-import Dhall.Syntax
-    ( Expr (..)
-    , FieldSelection (..)
-    , Var (..)
-    )
+import Dhall.Syntax             (Expr (..), FieldSelection (..), Var (..))
 import System.PosixCompat.Types (GroupID, UserID)
 
-import qualified Data.Text                   as Text
-import qualified Dhall.Marshal.Decode        as Decode
+import qualified Data.Text            as Text
+import qualified Dhall.Marshal.Decode as Decode
 
 #ifdef mingw32_HOST_OS
 import Data.Word (Word32)
