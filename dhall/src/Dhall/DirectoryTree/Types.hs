@@ -43,8 +43,11 @@ import qualified Dhall.Marshal.Decode as Decode
 #ifdef mingw32_HOST_OS
 import Data.Word (Word32)
 import System.IO (hPutStrLn, stderr)
+import System.PosixCompat.Types (CMode)
 
 import qualified Unsafe.Coerce
+
+type FileMode = CMode
 #else
 import System.PosixCompat.Types (FileMode)
 
@@ -189,8 +192,6 @@ accessDecoder = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOpt
 setFileModeOnUnix :: FilePath -> FileMode -> IO ()
 #ifdef mingw32_HOST_OS
 setFileModeOnUnix fp _ = hPutStrLn stderr $ "Warning: Feature is not supported on your platform; Failed to set permissions for " <> fp
-
-type FileMode = CMode
 #else
 setFileModeOnUnix fp mode = Posix.setFileMode fp mode
 #endif
