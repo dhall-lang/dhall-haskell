@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving  #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE PatternSynonyms    #-}
@@ -50,6 +51,8 @@ import System.IO (hPutStrLn, stderr)
 
 import qualified Unsafe.Coerce
 #else
+import System.PosixCompat.Types (FileMode)
+
 import qualified System.PosixCompat.Files as Posix
 import qualified System.PosixCompat.Types as Posix
 #endif
@@ -188,9 +191,14 @@ accessDecoder = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOpt
 
 
 -- | Set file permissions if we are not on Windows as it is currently not supported.
-setFileModeOnUnix :: FilePath -> Posix.FileMode -> IO ()
+setFileModeOnUnix :: FilePath -> FileMode -> IO ()
 #ifdef mingw32_HOST_OS
 setFileModeOnUnix fp _ = hPutStrLn stderr $ "Warning: Feature is not supported on your platform; Failed to set permissions for " <> fp
+
+type FileMode = CMode
+
+newtype CMode = CMode Word32
+    deriving (Eq, Ord, Enum, Num, Real, Show, Read, Bounded, Integral)
 #else
 setFileModeOnUnix fp mode = Posix.setFileMode fp mode
 #endif
