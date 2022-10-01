@@ -7,17 +7,15 @@ module Dhall.Test.DirectoryTree (tests) where
 import Control.Monad
 import Data.Either (partitionEithers)
 import Data.Either.Validation
-import Dhall.DirectoryTree (Entry(..), Group(..), User(..))
+import Dhall.DirectoryTree
 import Lens.Family (set)
 import System.FilePath ((</>))
-import System.PosixCompat.Types (FileMode)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.Core
-import qualified Dhall.DirectoryTree
 import qualified System.Directory as Directory
 import qualified System.FilePath as FilePath
 import qualified System.PosixCompat.Files as Files
@@ -39,7 +37,7 @@ fixpointedType :: TestTree
 fixpointedType = testCase "Type is as expected" $ do
     let file = "./tests/to-directory-tree/type.dhall"
     ref <- Dhall.inputExpr file
-    expected' <- case Dhall.DirectoryTree.directoryTreeType of
+    expected' <- case directoryTreeType of
         Failure e -> assertFailure $ show e
         Success expr -> return expr
     assertBool "Type mismatch" $ expected' `Dhall.Core.judgmentallyEqual` ref
@@ -63,7 +61,7 @@ fixpointedSimple = testCase "simple" $ do
         ]
 
 {-
-This test is disabled on Windows for now as it fails:
+This test is disabled on Windows as it fails due to limitations of the :
     expected: 448
     but got: 438
 -}
@@ -78,31 +76,22 @@ fixpointedPermissions = testCase "permissions" $ do
         ]
     s <- Files.getFileStatus $ outDir </> "file"
     let mode = Files.fileMode s `Files.intersectFileModes` Files.accessModes
-    prettyMode mode @?= prettyMode Files.ownerModes
-    where
-        prettyMode :: FileMode -> String
-        prettyMode m =
-            [ 'r' | isBitSet Files.ownerExecuteMode m ] <>
-            [ 'w' | isBitSet Files.ownerExecuteMode m ] <>
-            [ 'x' | isBitSet Files.ownerExecuteMode m ]
-
-        isBitSet :: FileMode -> FileMode -> Bool
-        isBitSet mask m = mask `Files.intersectFileModes` m == Files.nullFileMode
+    prettyFileMode mode @?= prettyFileMode Files.ownerModes
 
 fixpointedUserGroup :: TestTree
 fixpointedUserGroup = testCase "user and group" $ do
     let file = "./tests/to-directory-tree/fixpoint-usergroup.dhall"
     expr <- Dhall.inputExpr file
-    entries <- Dhall.DirectoryTree.decodeDirectoryTree expr
+    entries <- decodeDirectoryTree expr
     entries @?=
-        [ Dhall.DirectoryTree.FileEntry $ Entry
+        [ FileEntry $ Entry
             { entryName = "ids"
             , entryContent = ""
             , entryUser = Just (UserId 0)
             , entryGroup = Just (GroupId 0)
             , entryMode = Nothing
             }
-        , Dhall.DirectoryTree.FileEntry $ Entry
+        , FileEntry $ Entry
             { entryName = "names"
             , entryContent = ""
             , entryUser = Just (UserName "user")
@@ -111,7 +100,7 @@ fixpointedUserGroup = testCase "user and group" $ do
             }
         ]
 
-runDirectoryTree :: Bool -> FilePath -> FilePath -> IO [FilesystemEntry]
+runDirectoryTree :: Bool -> FilePath -> FilePath -> IO [WalkEntry]
 runDirectoryTree allowSeparators outDir path = do
     doesOutDirExist <- Directory.doesDirectoryExist outDir
     when doesOutDirExist $
@@ -125,16 +114,16 @@ runDirectoryTree allowSeparators outDir path = do
             $ Dhall.defaultInputSettings
     expr <- Dhall.inputExprWithSettings inputSettings text
 
-    Dhall.DirectoryTree.toDirectoryTree allowSeparators outDir $ Dhall.Core.denote expr
+    toDirectoryTree allowSeparators outDir $ Dhall.Core.denote expr
 
     walkFsTree outDir
 
-data FilesystemEntry
+data WalkEntry
     = Directory FilePath
     | File FilePath
     deriving (Eq, Show)
 
-walkFsTree :: FilePath -> IO [FilesystemEntry]
+walkFsTree :: FilePath -> IO [WalkEntry]
 walkFsTree dir = do
     entries <- Directory.listDirectory dir
     (ds, fs) <- fmap partitionEithers $ forM entries $ \path -> do

@@ -308,7 +308,7 @@ applyMetadata entry fp = do
 
     let mode' = maybe mode (updateModeWith mode) (entryMode entry)
     unless (mode' == mode) $
-        setFileModeOnUnix fp $ modeToFileMode mode'
+        setFileMode fp $ modeToFileMode mode'
 
 -- | Calculate the new `Mode` from the current mode and the changes specified by
 -- the user.

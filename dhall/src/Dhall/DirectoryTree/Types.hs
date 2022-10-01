@@ -21,7 +21,8 @@ module Dhall.DirectoryTree.Types
     , Mode(..)
     , Access(..)
 
-    , setFileModeOnUnix
+    , setFileMode
+    , prettyFileMode
     ) where
 
 import Data.Functor.Identity    (Identity (..))
@@ -188,10 +189,52 @@ accessDecoder = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOpt
 
 
 
--- | Set file permissions if we are not on Windows as it is currently not supported.
-setFileModeOnUnix :: FilePath -> FileMode -> IO ()
+-- | A wrapper around `Posix.setFileMode`. On Windows, it does check the
+-- resulting file mode of the file/directory and emits a warning if it doesn't
+-- match the desired file mode. On all other OS it is identical to
+-- `Posix.setFileMode` as it is assumed to work correctly.
+setFileMode :: FilePath -> FileMode -> IO ()
 #ifdef mingw32_HOST_OS
-setFileModeOnUnix fp _ = hPutStrLn stderr $ "Warning: Feature is not supported on your platform; Failed to set permissions for " <> fp
+setFileMode fp mode = do
+    Posix.setFileMode fp mode
+    mode' <- Posix.fileMode <$> Posix.getFileStatus fp
+    unless (mode' == mode) $ hPutStrLn stderr $
+        "Warning: Setting file mode did not succeed for " <> fp <> "\n" <>
+        "    Expected: " <> prettyFileMode mode <> "\n" <>
+        "    Actual:   " <> prettyFileMode mode'
 #else
-setFileModeOnUnix fp mode = Posix.setFileMode fp mode
+setFileMode fp mode = Posix.setFileMode fp mode
 #endif
+
+-- | Pretty-print a `FileMode`. The format is similar to the one ls(1):
+-- It is display as three blocks of three characters. The first block are the
+-- permissions of the user, the second one are the ones of the group and the
+-- third one the ones of other subjects. A 'r' denotes that the file or
+-- directory is readable by the subject, a 'w' denotes that it is writable and
+-- an 'x' denotes that it is executable. Unset permissions are represented by
+-- '-'.
+prettyFileMode :: FileMode -> String
+prettyFileMode mode = userPP <> groupPP <> otherPP
+    where
+        userPP :: String
+        userPP =
+            isBitSet 'r' Posix.ownerReadMode <>
+            isBitSet 'w' Posix.ownerWriteMode <>
+            isBitSet 'x' Posix.ownerExecuteMode
+
+        groupPP :: String
+        groupPP =
+            isBitSet 'r' Posix.groupReadMode <>
+            isBitSet 'w' Posix.groupWriteMode <>
+            isBitSet 'x' Posix.groupExecuteMode
+
+        otherPP :: String
+        otherPP =
+            isBitSet 'r' Posix.otherReadMode <>
+            isBitSet 'w' Posix.otherWriteMode <>
+            isBitSet 'x' Posix.otherExecuteMode
+
+        isBitSet :: Char -> FileMode -> String
+        isBitSet c mask = if mask `Posix.intersectFileModes` mode /= Posix.nullFileMode
+            then [c]
+            else "-"
