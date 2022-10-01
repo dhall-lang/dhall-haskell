@@ -210,10 +210,10 @@ setFileMode fp mode = Posix.setFileMode fp mode
 -- | Pretty-print a `FileMode`. The format is similar to the one ls(1):
 -- It is display as three blocks of three characters. The first block are the
 -- permissions of the user, the second one are the ones of the group and the
--- third one the ones of other subjects. A 'r' denotes that the file or
--- directory is readable by the subject, a 'w' denotes that it is writable and
--- an 'x' denotes that it is executable. Unset permissions are represented by
--- '-'.
+-- third one the ones of other subjects. A @r@ denotes that the file or
+-- directory is readable by the subject, a @w@ denotes that it is writable and
+-- an @x@ denotes that it is executable. Unset permissions are represented by
+-- @-@.
 prettyFileMode :: FileMode -> String
 prettyFileMode mode = userPP <> groupPP <> otherPP
     where
