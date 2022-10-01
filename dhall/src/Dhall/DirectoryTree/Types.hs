@@ -38,12 +38,13 @@ import Dhall.Marshal.Decode
 import Dhall.Syntax             (Expr (..), FieldSelection (..), Var (..))
 import System.PosixCompat.Types (GroupID, UserID)
 
-import qualified Data.Text            as Text
-import qualified Dhall.Marshal.Decode as Decode
+import qualified Data.Text                as Text
+import qualified Dhall.Marshal.Decode     as Decode
+import qualified System.PosixCompat.Files as Posix
 
 #ifdef mingw32_HOST_OS
-import Data.Word (Word32)
-import System.IO (hPutStrLn, stderr)
+import Data.Word                (Word32)
+import System.IO                (hPutStrLn, stderr)
 import System.PosixCompat.Types (CMode)
 
 import qualified Unsafe.Coerce
@@ -52,7 +53,6 @@ type FileMode = CMode
 #else
 import System.PosixCompat.Types (FileMode)
 
-import qualified System.PosixCompat.Files as Posix
 import qualified System.PosixCompat.Types as Posix
 #endif
 
