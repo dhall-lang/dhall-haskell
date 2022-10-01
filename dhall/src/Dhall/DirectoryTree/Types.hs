@@ -43,6 +43,7 @@ import qualified Dhall.Marshal.Decode     as Decode
 import qualified System.PosixCompat.Files as Posix
 
 #ifdef mingw32_HOST_OS
+import Control.Monad            (unless)
 import Data.Word                (Word32)
 import System.IO                (hPutStrLn, stderr)
 import System.PosixCompat.Types (CMode)
