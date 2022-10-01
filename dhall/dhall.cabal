@@ -353,6 +353,7 @@ Library
         Exposed-Modules:
           Dhall.Deriving
     Other-Modules:
+        Dhall.DirectoryTree.Types
         Dhall.Eval
         Dhall.Import.Types
         Dhall.Import.Headers
