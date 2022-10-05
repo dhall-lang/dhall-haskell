@@ -250,6 +250,7 @@ Common common
         th-lift-instances           >= 0.1.13   && < 0.2 ,
         time                        >= 1.1.4    && < 1.13,
         transformers                >= 0.5.2.0  && < 0.6 ,
+        unix-compat                 >= 0.4.2    && < 0.7 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
         uri-encode                                 < 1.6 ,
         vector                      >= 0.11.0.0 && < 0.14
@@ -352,6 +353,7 @@ Library
         Exposed-Modules:
           Dhall.Deriving
     Other-Modules:
+        Dhall.DirectoryTree.Types
         Dhall.Eval
         Dhall.Import.Types
         Dhall.Import.Headers
@@ -360,6 +362,30 @@ Library
         Dhall.Parser.Combinators
         Dhall.Pretty.Internal
         Dhall.Syntax
+        Dhall.Syntax.Binding
+        Dhall.Syntax.Chunks
+        Dhall.Syntax.Const
+        Dhall.Syntax.Expr
+        Dhall.Syntax.FunctionBinding
+        Dhall.Syntax.Import
+        Dhall.Syntax.Instances.Applicative
+        Dhall.Syntax.Instances.Bifunctor
+        Dhall.Syntax.Instances.Data
+        Dhall.Syntax.Instances.Eq
+        Dhall.Syntax.Instances.Foldable
+        Dhall.Syntax.Instances.Functor
+        Dhall.Syntax.Instances.Lift
+        Dhall.Syntax.Instances.Monad
+        Dhall.Syntax.Instances.NFData
+        Dhall.Syntax.Instances.Ord
+        Dhall.Syntax.Instances.Pretty
+        Dhall.Syntax.Instances.Show
+        Dhall.Syntax.Instances.Traversable
+        Dhall.Syntax.MultiLet
+        Dhall.Syntax.Operations
+        Dhall.Syntax.RecordField
+        Dhall.Syntax.Types
+        Dhall.Syntax.Var
         Dhall.URL
         Paths_dhall
     Autogen-Modules:
@@ -387,6 +413,7 @@ Test-Suite tasty
     Other-Modules:
         Dhall.Test.Dhall
         Dhall.Test.Diff
+        Dhall.Test.DirectoryTree
         Dhall.Test.Tags
         Dhall.Test.Format
         Dhall.Test.Freeze

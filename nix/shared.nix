@@ -81,7 +81,10 @@ let
                     drv.overrideAttrs
                     (old: {
                         postHaddock = (old.postHaddock or "") + ''
-                          ! (./Setup haddock 2>&1 | grep --quiet 'Missing documentation for:\|Warning:.*is out of scope') || (echo "Error: Incomplete haddocks"; exit 1)
+                          if ./Setup haddock 2>&1 | grep --quiet 'Missing documentation for:\|Warning:.*is out of scope'; then
+                            ./Setup haddock 2>&1
+                            echo "Error: Incomplete haddocks"; exit 1
+                          fi
                         '';
                       }
                     )

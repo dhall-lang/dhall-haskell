@@ -3,7 +3,7 @@ env:
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
-on: [push]
+on: [pull_request]
 jobs:
   build:
     strategy:
@@ -42,6 +42,12 @@ jobs:
             ${{ matrix.os.runner }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      - name: Install libsodium
+        shell: bash
+        run: |
+          if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
+            sudo apt-get install -y libsodium-dev
+          fi
       - name: "Build"
         shell: bash
         run: |
@@ -58,11 +64,14 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
-            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+            if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
 
-            stack build --copy-bins --local-bin-path ./bin "${package}"
+            # We use --test --no-run-tests to avoid re-building all the local packages in the
+            # subsequent test step.
+            # See https://github.com/commercialhaskell/stack/issues/4977.
+            stack build --test --no-run-tests --copy-bins --local-bin-path ./bin "${package}"
           done
       - name: "Run tests"
         shell: bash
@@ -80,7 +89,7 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
-            if [ '${{matrix.os.runner}}' != 'macOS-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+            if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
 
@@ -127,7 +136,7 @@ jobs:
           package 'dhall-docs' "bin/dhall-docs${exe}" 'share/man/man1/dhall-docs.1'
           package 'dhall-json' "bin/dhall-to-json${exe}" "bin/dhall-to-yaml${exe}" "bin/json-to-dhall${exe}"
           package 'dhall-lsp-server' "bin/dhall-lsp-server${exe}"
-          if [ '${{matrix.os.runner}}' == 'macOS-latest' ]; then
+          if [ '${{matrix.os.runner}}' != 'windows-latest' ]; then
               package 'dhall-nix' "bin/dhall-to-nix${exe}"
           fi
           package 'dhall-openapi' "bin/openapi-to-dhall${exe}"

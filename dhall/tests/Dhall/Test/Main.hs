@@ -5,6 +5,7 @@ import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Diff
+import qualified Dhall.Test.DirectoryTree
 import qualified Dhall.Test.Format
 import qualified Dhall.Test.Freeze
 import qualified Dhall.Test.Import
@@ -62,6 +63,7 @@ getAllTests = do
                 , tagsTests
                 , freezeTests
                 , schemaTests
+                , Dhall.Test.DirectoryTree.tests
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
