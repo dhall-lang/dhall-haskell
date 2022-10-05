@@ -172,7 +172,7 @@ import qualified System.PosixCompat.User     as Posix
     that cannot be converted as-is.
 -}
 toDirectoryTree
-    :: Bool
+    :: Bool -- ^ Whether to allow path separators in file names or not
     -> FilePath
     -> Expr Void Void
     -> IO ()
