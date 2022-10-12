@@ -1,3 +1,7 @@
+Unreleased
+
+* [Add `Data` instances for `Import` and various other types](https://github.com/dhall-lang/dhall-haskell/pull/2462)
+
 1.41.2
 
 * [BUG FIX: Fix `:hash` REPL command to α-normalize input](https://github.com/dhall-lang/dhall-haskell/pull/2420)
@@ -1049,7 +1053,7 @@
     * This allows the `dhall` package to be built without using
       `TemplateHaskell`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/928
-* Increase lines of context for error messages 
+* Increase lines of context for error messages
     * Error messages now provide at least 20 lines of context instead of 3
       before truncating large expressions
     * See: https://github.com/dhall-lang/dhall-haskell/pull/916
@@ -1432,7 +1436,7 @@
       expression
     * You can pin the new hashes by supplying the `--protocol-version 1.0`
       option on the command line until you need support for newer language
-      features 
+      features
     * This also includes a breaking change to `ImportType` in the API
 * BREAKING CHANGE TO THE LANGUAGE: Disallow combining records of terms and
   types
