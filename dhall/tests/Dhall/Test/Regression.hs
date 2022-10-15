@@ -7,6 +7,7 @@ module Dhall.Test.Regression where
 
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
+import Dhall.Core             (Expr(..), ReifiedNormalizer(..))
 import Dhall.Import           (Imported, MissingImports (..))
 import Dhall.Parser           (SourcedException (..), Src)
 import Dhall.TypeCheck        (TypeError)
@@ -17,13 +18,14 @@ import qualified Control.Exception
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy.IO
 import qualified Dhall
-import qualified Dhall.Context
+import qualified Dhall.Context             as Context
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Test.Util           as Util
 import qualified Dhall.TypeCheck
+import qualified Lens.Family               as Lens
 import qualified Prettyprinter
 import qualified Prettyprinter.Render.Text
 import qualified System.Timeout
@@ -48,6 +50,7 @@ tests =
         , issue1732
         , issue1884
         , issue2088
+        , issue2463
         , parsing0
         , typeChecking0
         , typeChecking1
@@ -173,7 +176,7 @@ issue216 = Test.Tasty.HUnit.testCase "Issue #216" (do
 issue253 :: TestTree
 issue253 = Test.Tasty.HUnit.testCase "Issue #253" (do
     -- Verify that type-checking rejects ill-formed custom contexts
-    let context = Dhall.Context.insert "x" "x" Dhall.Context.empty
+    let context = Context.insert "x" "x" Context.empty
     let result = Dhall.TypeCheck.typeWith context "x"
 
     -- If the context is not validated correctly then type-checking will
@@ -230,6 +233,24 @@ issue2088 = Test.Tasty.HUnit.testCase "Issue #2088" (do
     -- accidentally swallow trailing commas OUTSIDE of the projection
     _ <- Util.code "./tests/regression/issue2088.dhall"
     return () )
+
+issue2463 :: TestTree
+issue2463 = Test.Tasty.HUnit.testCase "Issue #2463" (do
+    let startingContext = Context.insert "foo" Integer Context.empty
+
+    let normalizer (Var "foo") = Just (IntegerLit 0)
+        normalizer  _          = Nothing
+
+    let inputSettings = transform Dhall.defaultInputSettings
+          where
+            transform =
+                  Lens.set Dhall.normalizer
+                      (Just (ReifiedNormalizer (pure . normalizer)))
+                . Lens.set Dhall.startingContext startingContext
+
+    x <- Dhall.inputWithSettings inputSettings Dhall.auto "foo"
+
+    Test.Tasty.HUnit.assertEqual "" (0 :: Integer) x )
 
 parsing0 :: TestTree
 parsing0 = Test.Tasty.HUnit.testCase "Parsing regression #0" (
