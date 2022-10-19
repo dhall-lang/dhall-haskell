@@ -469,7 +469,7 @@ enclose beginShort beginLong sepShort sepLong endShort endLong docs =
     combineShort x y = x <> y
 
 {-| Format an expression that holds a variable number of elements without a
-    trailing document such as nested `let`, nested lambdas, or nested `forall`s
+    trailing document such as nested @let@, nested lambdas, or nested @forall@s
 -}
 enclose'
     :: Doc ann
