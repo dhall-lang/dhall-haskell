@@ -55,7 +55,7 @@ module Dhall.Pretty.Internal (
     , comma
     , dot
     , equals
-    , forall
+    , forall_
     , label
     , lambda
     , langle
@@ -310,9 +310,9 @@ lambda :: CharacterSet -> Doc Ann
 lambda Unicode = syntax "λ"
 lambda ASCII   = syntax "\\"
 
-forall :: CharacterSet -> Doc Ann
-forall Unicode = syntax "∀"
-forall ASCII   = syntax "forall "
+forall_ :: CharacterSet -> Doc Ann
+forall_ Unicode = syntax "∀"
+forall_ ASCII   = syntax "forall "
 
 rarrow :: CharacterSet -> Doc Ann
 rarrow Unicode = syntax "→"
@@ -469,7 +469,7 @@ enclose beginShort beginLong sepShort sepLong endShort endLong docs =
     combineShort x y = x <> y
 
 {-| Format an expression that holds a variable number of elements without a
-    trailing document such as nested `let`, nested lambdas, or nested `forall`s
+    trailing document such as nested @let@, nested lambdas, or nested @forall@s
 -}
 enclose'
     :: Doc ann
@@ -798,7 +798,7 @@ prettyPrinters characterSet =
         docs (Pi _ "_" b c) = prettyOperatorExpression b : docs c
         docs (Pi _ a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c
           where
-            long =  forall characterSet <> space
+            long =  forall_ characterSet <> space
                 <>  Pretty.align
                     (   lparen <> space
                     <>  prettyLabel a
@@ -809,7 +809,7 @@ prettyPrinters characterSet =
                     <>  rparen
                     )
 
-            short = forall characterSet <> lparen
+            short = forall_ characterSet <> lparen
                 <>  prettyLabel a
                 <>  space <> colon <> space
                 <>  prettyExpression b
