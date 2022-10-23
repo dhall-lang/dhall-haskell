@@ -1354,7 +1354,7 @@ prettyPrinters characterSet =
 
         suffix
             | precision == 0 = ""
-            | otherwise      = "." <> Pretty.pretty fraction
+            | otherwise      = "." <> Pretty.pretty (Printf.printf "%0*d" precision fraction :: String)
     prettyPrimitiveExpression TimeZone =
         builtin "TimeZone"
     prettyPrimitiveExpression (TimeZoneLiteral (Time.TimeZone minutes _ _)) =
