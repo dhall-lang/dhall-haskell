@@ -124,8 +124,8 @@ dot = token Internal.dot
 equals :: Diff
 equals = token Internal.equals
 
-forall :: Diff
-forall = token (Internal.forall Internal.Unicode)
+forall_ :: Diff
+forall_ = token (Internal.forall_ Internal.Unicode)
 
 lambda :: Diff
 lambda = token (Internal.lambda Internal.Unicode)
@@ -737,7 +737,7 @@ diff l@(Pi {}) r@(Pi {}) =
             | same docA =
                 format mempty docB
             | otherwise =
-                    forall
+                    forall_
                 <>  lparen
                 <>  format " " docA
                 <>  colon
