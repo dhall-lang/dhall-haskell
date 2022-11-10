@@ -171,6 +171,7 @@ tomlToDhall schema toml = toDhall (Core.normalize schema) (tomlToObject toml)
 tomlValueToDhall :: Expr Src Void -> Value t -> Either CompileError (Expr Src Void)
 tomlValueToDhall exprType v = case (exprType, v) of
     (Core.Bool                , Value.Bool a   ) -> Right $ Core.BoolLit a
+    (Core.Integer             , Value.Integer a) -> Right $ Core.IntegerLit a
     (Core.Natural             , Value.Integer a) -> Right $ Core.NaturalLit $ fromInteger a
     (Core.Double              , Value.Double a ) -> Right $ Core.DoubleLit $ DhallDouble a
     (Core.Text                , Value.Text a   ) -> Right $ Core.TextLit $ Core.Chunks [] a

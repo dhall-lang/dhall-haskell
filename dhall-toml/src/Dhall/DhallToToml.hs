@@ -265,6 +265,7 @@ toToml :: TOML -> Key -> Expr Void Void -> Either CompileError TOML
 toToml toml key expr  = case expr of
     Core.BoolLit a -> return $ insertPrim (Toml.Value.Bool a)
     Core.NaturalLit a -> return $ insertPrim (Toml.Value.Integer $ toInteger a)
+    Core.IntegerLit a -> return $ insertPrim (Toml.Value.Integer a)
     Core.DoubleLit (DhallDouble a) -> return $ insertPrim (Toml.Value.Double a)
     Core.TextLit (Core.Chunks [] a) -> return $ insertPrim (Toml.Value.Text a)
     Core.App Core.None _ -> return toml
@@ -327,6 +328,7 @@ toToml toml key expr  = case expr of
         -- be represented as inline tables.
         isInline v = case v of
             Core.BoolLit _    -> True
+            Core.IntegerLit _ -> True
             Core.NaturalLit _ -> True
             Core.DoubleLit _  -> True
             Core.TextLit _    -> True
@@ -348,6 +350,7 @@ toToml toml key expr  = case expr of
         toAny :: Expr Void Void -> Either CompileError Toml.AnyValue.AnyValue
         toAny e = case e of
             Core.BoolLit x                  -> rightAny $ Toml.Value.Bool x
+            Core.IntegerLit x               -> rightAny $ Toml.Value.Integer x
             Core.NaturalLit x               -> rightAny $ Toml.Value.Integer $ toInteger x
             Core.DoubleLit (DhallDouble x)  -> rightAny $ Toml.Value.Double x
             Core.TextLit (Core.Chunks [] x) -> rightAny $ Toml.Value.Text x

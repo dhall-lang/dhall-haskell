@@ -3,6 +3,7 @@
 , lists : List (List Natural)
 , nested :
     { floats : List Double
+    , ints : List Integer
     , moreLists : List (List Natural)
     }
 , nested1 :
