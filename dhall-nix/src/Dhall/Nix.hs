@@ -121,11 +121,12 @@ import Nix.Expr
     ( Antiquoted (..)
     , NExpr
     , NExprF (NStr, NSet)
-    , NRecordType (NNonRecursive)
+    , Recursivity (NonRecursive)
     , Binding (NamedVar)
     , NKeyName (..)
     , NString (..)
     , Params (Param)
+    , VarName(..)
     , ($!=)
     , ($&&)
     , ($*)
@@ -329,7 +330,7 @@ dhallToNix e =
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
         c' <- loop c
-        return (Param a ==> c')
+        return (Param (VarName a) ==> c')
     loop (Pi _ _ _ _) = return untranslatable
     loop (App None _) =
       return Nix.mkNull
@@ -603,7 +604,7 @@ dhallToNix e =
         -- nonrecursive attrset that uses correctly quoted keys
         -- see https://github.com/dhall-lang/dhall-haskell/issues/2414
         nixAttrs pairs =
-          Fix $ NSet NNonRecursive $
+          Fix $ NSet NonRecursive $
           (\(key, val) -> NamedVar (DynamicKey (Plain (DoubleQuoted [Plain key])) :| []) val Nix.nullPos)
           <$> pairs
     loop (Union _) = return untranslatable
@@ -709,8 +710,7 @@ dhallToNix e =
         return (a' @. b)
     loop (Project a (Left b)) = do
         a' <- loop a
-        let b' = fmap StaticKey (toList b)
-        return (Nix.mkNonRecSet [ Nix.inheritFrom a' b' Nix.nullPos ])
+        return (Nix.mkNonRecSet [ Nix.inheritFrom a' (fmap VarName b) ])
     loop (Project _ (Right _)) =
         Left CannotProjectByType
     loop (Assert _) =
