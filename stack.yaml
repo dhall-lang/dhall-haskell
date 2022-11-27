@@ -11,7 +11,7 @@ packages:
   - dhall-toml
   - dhall-yaml
 extra-deps:
-  - hnix-0.13.1@sha256:50748fdddbdb2dc04c2d0b71fe708cde3c50258291c5db8839f76c85d9fdb505,21066
+  - hnix-0.16.0
   - hnix-store-core-0.4.3.0@sha256:82397e5afb9b095626fd72e92d0ae42df02b2107df2de275d99e9968fa41ed65,2766
   - hnix-store-remote-0.4.3.1@sha256:1ec3ce04cbe381b4dcba736f10b1bf30812533cffc1e7997571ee0d377f1df78,2263
   - lucid-2.11.0
