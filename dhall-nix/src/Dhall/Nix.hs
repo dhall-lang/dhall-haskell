@@ -791,18 +791,11 @@ zEncodeSymbol = zEncodeString
 --         :+              ZCzp
 -- @
 zEncodeString :: Text -> Text
-zEncodeString cs =
-  -- Small check to skip the encoding if all chars don’t need encoding.
-  -- Otherwise we have to convert to `String` and go through Char-by-char.
-  if Text.any needsEncoding cs
-  -- This could probably be sped up somehow.
-  then go (Text.unpack cs)
-  else cs
-          where
-                go []     = []
-                go (c:cs') = encodeDigitChar c <> go' cs'
-                go' []     = []
-                go' (c:cs') = encodeChar c <> go' cs'
+zEncodeString cs = case Text.uncons cs of
+    Nothing -> Text.empty
+    Just (c, cs') ->
+        encodeDigitChar c
+        <> Text.concatMap encodeChar cs'
 
 -- | Whether the given characters needs to be z-encoded.
 needsEncoding :: Char -> Bool
