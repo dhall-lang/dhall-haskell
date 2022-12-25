@@ -339,7 +339,7 @@ dhallToNix e =
       return Nix.mkNull
     loop (App (Field (Union _kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
         v' <- loop v
-        return (unionChoice k (Just v'))
+        return (unionChoice (VarName k) (Just v'))
     loop (App a b) = do
         a' <- loop a
         b' <- loop b
@@ -604,7 +604,7 @@ dhallToNix e =
         -- see https://github.com/dhall-lang/dhall-haskell/issues/2414
         nixAttrs pairs =
           Fix $ NSet NonRecursive $
-          (\(key, val) -> NamedVar ((mkDoubleQuoted key) :| []) val Nix.nullPos)
+          (\(key, val) -> NamedVar ((mkDoubleQuotedIfNecessary (VarName key)) :| []) val Nix.nullPos)
           <$> pairs
     loop (Union _) = return untranslatable
     loop (Combine _ _ a b) = do
@@ -693,11 +693,11 @@ dhallToNix e =
             -- (here "x").
             --
             -- This translates `< Foo : T >.Foo` to `x: { Foo }: Foo x`
-            Just (Just _) -> return ("x" ==> (unionChoice k (Just "x")))
-            _ -> return (unionChoice k Nothing)
+            Just (Just _) -> return ("x" ==> (unionChoice (VarName k) (Just "x")))
+            _ -> return (unionChoice (VarName k) Nothing)
     loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
         a' <- loop a
-        return (Fix (Nix.NSelect a' (mkDoubleQuoted b :| []) Nothing))
+        return (Fix (Nix.NSelect Nothing a' (mkDoubleQuotedIfNecessary (VarName b) :| [])))
     loop (Project a (Left b)) = do
         a' <- loop a
         return (Nix.mkNonRecSet [ Nix.inheritFrom a' (fmap VarName b) ])
@@ -734,9 +734,9 @@ dhallToNix e =
 -- so we generate @union: union."Frob/Baz"@ instead.
 --
 -- If passArgument is @Just@, pass the argument to the union selector.
-unionChoice :: Text -> Maybe NExpr -> NExpr
+unionChoice :: VarName -> Maybe NExpr -> NExpr
 unionChoice chosenKey passArgument =
-  let selector = Fix (Nix.NSelect Nothing (Nix.mkSym "u") (mkDoubleQuoted chosenKey :| []))
+  let selector = Fix (Nix.NSelect Nothing (Nix.mkSym "u") (mkDoubleQuotedIfNecessary chosenKey :| []))
   in Nix.Param "u" ==>
      case passArgument of
        Nothing -> selector
@@ -750,8 +750,15 @@ unionChoice chosenKey passArgument =
 -- where
 --
 -- @{ foo/bar = 42; }.foo/bar@ is not syntactically valid nix.
-mkDoubleQuoted :: Text -> NKeyName r
-mkDoubleQuoted key = DynamicKey (Plain (DoubleQuoted [Plain key]))
+--
+-- This is only done if necessary (where “necessary” is not super defined right now).
+mkDoubleQuotedIfNecessary :: VarName -> NKeyName r
+mkDoubleQuotedIfNecessary key@(VarName keyName) =
+    if Text.all simpleChar keyName
+    then StaticKey key
+    else DynamicKey (Plain (DoubleQuoted [Plain keyName]))
+    where
+        simpleChar c = isAsciiLower c || isAsciiUpper c
 
 
 -- | Nix does not support symbols like @foo/bar@, but they are allowed in dhall.
