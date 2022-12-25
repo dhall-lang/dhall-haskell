@@ -105,7 +105,7 @@ import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Lens.Family (toListOf)
 import Numeric (showHex)
-import Data.Char (ord, isDigit)
+import Data.Char (ord, isDigit, isAsciiLower, isAsciiUpper)
 
 import Dhall.Core
     ( Binding (..)
@@ -796,61 +796,61 @@ zEncodeString cs =
   -- Otherwise we have to convert to `String` and go through Char-by-char.
   if Text.any needsEncoding cs
   -- This could probably be sped up somehow.
-  then Text.pack (go (Text.unpack cs))
+  then go (Text.unpack cs)
   else cs
           where
                 go []     = []
-                go (c:cs') = encode_digit_ch c ++ go' cs'
+                go (c:cs') = encodeDigitChar c <> go' cs'
                 go' []     = []
-                go' (c:cs') = encode_ch c ++ go' cs'
+                go' (c:cs') = encodeChar c <> go' cs'
 
 -- | Whether the given characters needs to be z-encoded.
 needsEncoding :: Char -> Bool
 needsEncoding 'Z' = True
 needsEncoding 'z' = True
 needsEncoding c   = not
-                  ( c >= 'a' && c <= 'z'
-                  || c >= 'A' && c <= 'Z'
-                  || c >= '0' && c <= '9' )
+                  ( isAsciiLower c
+                  || isAsciiUpper c
+                  || isDigit c )
 
 -- If a digit is at the start of a symbol then we need to encode it.
-encode_digit_ch :: Char -> String
-encode_digit_ch c | c >= '0' && c <= '9' = encode_as_unicode_char c
-encode_digit_ch c | otherwise            = encode_ch c
+encodeDigitChar :: Char -> Text
+encodeDigitChar c | isDigit c = encodeAsUnicodeChar c
+encodeDigitChar c             = encodeChar c
 
-encode_ch :: Char -> String
-encode_ch c | not (needsEncoding c) = [c]     -- Common case first
+encodeChar :: Char -> Text
+encodeChar c | not (needsEncoding c) = [c]     -- Common case first
 
-encode_ch '('  = "ZL"
-encode_ch ')'  = "ZR"
-encode_ch '['  = "ZM"
-encode_ch ']'  = "ZN"
-encode_ch ':'  = "ZC"
-encode_ch 'Z'  = "ZZ"
-encode_ch 'z'  = "zz"
-encode_ch '&'  = "za"
-encode_ch '|'  = "zb"
-encode_ch '^'  = "zc"
-encode_ch '$'  = "zd"
-encode_ch '='  = "ze"
-encode_ch '>'  = "zg"
-encode_ch '#'  = "zh"
-encode_ch '.'  = "zi"
-encode_ch '<'  = "zl"
+encodeChar '('  = "ZL"
+encodeChar ')'  = "ZR"
+encodeChar '['  = "ZM"
+encodeChar ']'  = "ZN"
+encodeChar ':'  = "ZC"
+encodeChar 'Z'  = "ZZ"
+encodeChar 'z'  = "zz"
+encodeChar '&'  = "za"
+encodeChar '|'  = "zb"
+encodeChar '^'  = "zc"
+encodeChar '$'  = "zd"
+encodeChar '='  = "ze"
+encodeChar '>'  = "zg"
+encodeChar '#'  = "zh"
+encodeChar '.'  = "zi"
+encodeChar '<'  = "zl"
 -- we can’t allow @-@, because it is not valid at the start of a symbol
-encode_ch '-'  = "zm"
-encode_ch '!'  = "zn"
-encode_ch '+'  = "zp"
-encode_ch '\'' = "zq"
-encode_ch '\\' = "zr"
-encode_ch '/'  = "zs"
-encode_ch '*'  = "zt"
+encodeChar '-'  = "zm"
+encodeChar '!'  = "zn"
+encodeChar '+'  = "zp"
+encodeChar '\'' = "zq"
+encodeChar '\\' = "zr"
+encodeChar '/'  = "zs"
+encodeChar '*'  = "zt"
 -- We can allow @_@ because it can appear anywhere in a symbol
--- encode_ch '_'  = "zu"
-encode_ch '%'  = "zv"
-encode_ch c    = encode_as_unicode_char c
+-- encodeChar '_'  = "zu"
+encodeChar '%'  = "zv"
+encodeChar c    = encodeAsUnicodeChar c
 
-encode_as_unicode_char :: Char -> String
-encode_as_unicode_char c = 'z' : if isDigit (head hex_str) then hex_str
-                                                           else '0':hex_str
-  where hex_str = showHex (ord c) "U"
+encodeAsUnicodeChar :: Char -> Text
+encodeAsUnicodeChar c = 'z' `Text.cons` if isDigit (Text.head hex_str) then hex_str
+                                                           else '0' `Text.cons` hex_str
+  where hex_str = Text.pack $ showHex (ord c) "U"
