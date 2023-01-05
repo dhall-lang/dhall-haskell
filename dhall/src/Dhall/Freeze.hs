@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
@@ -7,22 +8,31 @@
 module Dhall.Freeze
     ( -- * Freeze
       freeze
-    , freezeWithManager
     , freezeExpression
-    , freezeExpressionWithManager
     , freezeImport
-    , freezeImportWithManager
     , freezeRemoteImport
-    , freezeRemoteImportWithManager
+
+      -- * Freeze with custom evaluation settings
+    , freezeWithSettings
+    , freezeExpressionWithSettings
+    , freezeImportWithSettings
+    , freezeRemoteImportWithSettings
 
       -- * Types
     , Scope(..)
     , Intent(..)
+
+      -- * Deprecated functions
+    , freezeWithManager
+    , freezeExpressionWithManager
+    , freezeImportWithManager
+    , freezeRemoteImportWithManager
     ) where
 
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty)
 import Data.Maybe          (fromMaybe)
+import Dhall               (EvaluateSettings)
 import Dhall.Pretty        (CharacterSet, detectCharacterSet)
 import Dhall.Syntax
     ( Expr (..)
@@ -39,11 +49,13 @@ import Dhall.Util
     , Transitivity (..)
     , handleMultipleChecksFailed
     )
+import Lens.Family         (set, view)
 import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception                  as Exception
 import qualified Control.Monad.Trans.State.Strict   as State
 import qualified Data.Text.IO                       as Text.IO
+import qualified Dhall
 import qualified Dhall.Core                         as Core
 import qualified Dhall.Import
 import qualified Dhall.Optics
@@ -56,69 +68,6 @@ import qualified Prettyprinter.Render.Text          as Pretty.Text
 import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
 import qualified System.FilePath
 import qualified System.IO
-
--- | Retrieve an `Import` and update the hash to match the latest contents
-freezeImport
-    :: FilePath
-    -- ^ Current working directory
-    -> Import
-    -> IO Import
-freezeImport = freezeImportWithManager Dhall.Import.defaultNewManager
-
--- | See 'freezeImport'.
-freezeImportWithManager
-    :: IO Dhall.Import.Manager
-    -> FilePath
-    -> Import
-    -> IO Import
-freezeImportWithManager newManager directory import_ = do
-    let unprotectedImport =
-            import_
-                { importHashed =
-                    (importHashed import_)
-                        { hash = Nothing
-                        }
-                }
-
-    let status = Dhall.Import.emptyStatusWithManager newManager directory
-
-    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
-
-    case Dhall.TypeCheck.typeOf expression of
-        Left  exception -> Exception.throwIO exception
-        Right _         -> return ()
-
-    let normalizedExpression = Core.alphaNormalize (Core.normalize expression)
-
-    -- make sure the frozen import is present in the semantic cache
-    Dhall.Import.writeExpressionToSemanticCache (Core.denote expression)
-
-    let expressionHash = Dhall.Import.hashExpression normalizedExpression
-
-    let newImportHashed = (importHashed import_) { hash = Just expressionHash }
-
-    let newImport = import_ { importHashed = newImportHashed }
-
-    return newImport
-
--- | Freeze an import only if the import is a `Remote` import
-freezeRemoteImport
-    :: FilePath
-    -- ^ Current working directory
-    -> Import
-    -> IO Import
-freezeRemoteImport = freezeRemoteImportWithManager Dhall.Import.defaultNewManager
-
--- | See 'freezeRemoteImport'.
-freezeRemoteImportWithManager
-    :: IO Dhall.Import.Manager
-    -> FilePath
-    -> Import
-    -> IO Import
-freezeRemoteImportWithManager newManager directory import_ =
-    case importType (importHashed import_) of
-        Remote {} -> freezeImportWithManager newManager directory import_
-        _         -> return import_
 
 -- | Specifies which imports to freeze
 data Scope
@@ -138,6 +87,40 @@ data Intent
     --   cache imports when possible but still gracefully degrade to resolving
     --   them if the semantic integrity check has changed.
 
+-- | Retrieve an `Import` and update the hash to match the latest contents
+freezeImport
+    :: FilePath
+    -- ^ Current working directory
+    -> Import
+    -> IO Import
+freezeImport = freezeImportWithSettings Dhall.defaultEvaluateSettings
+
+-- | See 'freezeImport'.
+freezeImportWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeImportWithManager newManager = freezeImportWithSettings (set Dhall.newManager newManager Dhall.defaultEvaluateSettings)
+{-# DEPRECATED freezeImportWithManager "Use freezeImportWithSettings directly" #-}
+
+-- | Freeze an import only if the import is a `Remote` import
+freezeRemoteImport
+    :: FilePath
+    -- ^ Current working directory
+    -> Import
+    -> IO Import
+freezeRemoteImport = freezeRemoteImportWithSettings Dhall.defaultEvaluateSettings
+
+-- | See 'freezeRemoteImport'.
+freezeRemoteImportWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeRemoteImportWithManager newManager = freezeRemoteImportWithSettings (set Dhall.newManager newManager Dhall.defaultEvaluateSettings)
+{-# DEPRECATED freezeRemoteImportWithManager "Use freezeRemoteImportWithSettings directly" #-}
+
 -- | Implementation of the @dhall freeze@ subcommand
 freeze
     :: OutputMode
@@ -148,7 +131,7 @@ freeze
     -> Maybe CharacterSet
     -> Censor
     -> IO ()
-freeze = freezeWithManager Dhall.Import.defaultNewManager
+freeze = freezeWithSettings Dhall.defaultEvaluateSettings
 
 -- | See 'freeze'.
 freezeWithManager
@@ -161,7 +144,97 @@ freezeWithManager
     -> Maybe CharacterSet
     -> Censor
     -> IO ()
-freezeWithManager newManager outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
+freezeWithManager newManager = freezeWithSettings (set Dhall.newManager newManager Dhall.defaultEvaluateSettings)
+{-# DEPRECATED freezeWithManager "Use freezeWithSettings directly" #-}
+
+{-| Slightly more pure version of the `freeze` function
+
+    This still requires `IO` to freeze the import, but now the input and output
+    expression are passed in explicitly
+-}
+freezeExpression
+    :: FilePath
+    -- ^ Starting directory
+    -> Scope
+    -> Intent
+    -> Expr s Import
+    -> IO (Expr s Import)
+freezeExpression = freezeExpressionWithSettings Dhall.defaultEvaluateSettings
+
+-- | See 'freezeExpression'.
+freezeExpressionWithManager
+    :: IO Dhall.Import.Manager
+    -> FilePath
+    -> Scope
+    -> Intent
+    -> Expr s Import
+    -> IO (Expr s Import)
+freezeExpressionWithManager newManager = freezeExpressionWithSettings (set Dhall.newManager newManager Dhall.defaultEvaluateSettings)
+{-# DEPRECATED freezeExpressionWithManager "Use freezeExpressionWithSettings directly" #-}
+
+--------------------------------------------------------------------------------
+-- Versions that take EvaluateSettings
+--------------------------------------------------------------------------------
+
+-- | See 'freezeImport'.
+freezeImportWithSettings
+    :: EvaluateSettings
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeImportWithSettings settings directory import_ = do
+    let unprotectedImport =
+            import_
+                { importHashed =
+                    (importHashed import_)
+                        { hash = Nothing
+                        }
+                }
+
+    let status = Dhall.Import.emptyStatusWithManager (view Dhall.newManager settings) directory
+
+    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
+
+    case Dhall.TypeCheck.typeWith (view Dhall.startingContext settings) expression of
+        Left  exception -> Exception.throwIO exception
+        Right _         -> return ()
+
+    let normalizedExpression = Core.alphaNormalize (Core.normalizeWith (view Dhall.normalizer settings) expression)
+
+    -- make sure the frozen import is present in the semantic cache
+    Dhall.Import.writeExpressionToSemanticCache (Core.denote expression)
+
+    let expressionHash = Dhall.Import.hashExpression normalizedExpression
+
+    let newImportHashed = (importHashed import_) { hash = Just expressionHash }
+
+    let newImport = import_ { importHashed = newImportHashed }
+
+    return newImport
+
+-- | See 'freezeRemoteImport'.
+freezeRemoteImportWithSettings
+    :: EvaluateSettings
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeRemoteImportWithSettings settings directory import_ =
+    case importType (importHashed import_) of
+        Remote {} -> freezeImportWithSettings settings directory import_
+        _         -> return import_
+
+-- | See 'freeze'.
+freezeWithSettings
+    :: EvaluateSettings
+    -> OutputMode
+    -> Transitivity
+    -> NonEmpty Input
+    -> Scope
+    -> Intent
+    -> Maybe CharacterSet
+    -> Censor
+    -> IO ()
+freezeWithSettings settings outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
     handleMultipleChecksFailed "freeze" "frozen" go inputs
   where
     go input = do
@@ -171,7 +244,7 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
                 InputFile file ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatusWithManager newManager directory
+        let status = Dhall.Import.emptyStatusWithManager (view Dhall.newManager settings) directory
 
         (inputName, originalText, transitivity) <- case input of
             InputFile file -> do
@@ -199,7 +272,7 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
             NonTransitive ->
                 return ()
 
-        frozenExpression <- freezeExpressionWithManager newManager directory scope intent parsedExpression
+        frozenExpression <- freezeExpressionWithSettings settings directory scope intent parsedExpression
 
         let doc =  Pretty.pretty header
                 <> Dhall.Pretty.prettyCharacterSet characterSet frozenExpression
@@ -238,41 +311,21 @@ freezeWithManager newManager outputMode transitivity0 inputs scope intent chosen
                         then Right ()
                         else Left CheckFailed{..}
 
-{-| Slightly more pure version of the `freeze` function
-
-    This still requires `IO` to freeze the import, but now the input and output
-    expression are passed in explicitly
--}
-freezeExpression
-    :: FilePath
-    -- ^ Starting directory
-    -> Scope
-    -> Intent
-    -> Expr s Import
-    -> IO (Expr s Import)
-freezeExpression = freezeExpressionWithManager Dhall.Import.defaultNewManager
-
--- https://github.com/dhall-lang/dhall-haskell/issues/2347
-toMissing :: Import -> Import
-toMissing import_ =
-    import_ { importHashed = (importHashed import_) { importType = Missing } }
-
-
 -- | See 'freezeExpression'.
-freezeExpressionWithManager
-    :: IO Dhall.Import.Manager
+freezeExpressionWithSettings
+    :: EvaluateSettings
     -> FilePath
     -> Scope
     -> Intent
     -> Expr s Import
     -> IO (Expr s Import)
-freezeExpressionWithManager newManager directory scope intent expression = do
+freezeExpressionWithSettings settings directory scope intent expression = do
     let freezeScope =
             case scope of
-                AllImports        -> freezeImportWithManager
-                OnlyRemoteImports -> freezeRemoteImportWithManager
+                AllImports        -> freezeImportWithSettings
+                OnlyRemoteImports -> freezeRemoteImportWithSettings
 
-    let freezeFunction = freezeScope newManager directory
+    let freezeFunction = freezeScope settings directory
 
     let cache
             -- This case is necessary because `transformOf` is a bottom-up
@@ -353,3 +406,8 @@ freezeExpressionWithManager newManager directory scope intent expression = do
             traverse freezeFunction expression
         Cache  ->
             Dhall.Optics.transformMOf Core.subExpressions cache expression
+
+-- https://github.com/dhall-lang/dhall-haskell/issues/2347
+toMissing :: Import -> Import
+toMissing import_ =
+    import_ { importHashed = (importHashed import_) { importType = Missing } }
