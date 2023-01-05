@@ -130,7 +130,7 @@ import Dhall
 -- >
 -- > main :: IO ()
 -- > main = do
--- >     x <- input auto "./config.dhall"
+-- >     x <- inputFile auto "./config.dhall"
 -- >     print (x :: Example)
 --
 -- __WARNING__: You must not instantiate FromDhall with a recursive type. See [Limitations](#limitations).
