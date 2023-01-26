@@ -1,6 +1,7 @@
 Unreleased
 
 * [Add `Data` instances for `Import` and various other types](https://github.com/dhall-lang/dhall-haskell/pull/2462)
+* [Add `Eq` instances for `InvalidDecoder` and `ExtractError`](https://github.com/dhall-lang/dhall-haskell/pull/2482)
 
 1.41.2
 

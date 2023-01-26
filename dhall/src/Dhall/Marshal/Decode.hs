@@ -1554,6 +1554,7 @@ data ExtractError s a =
     TypeMismatch (InvalidDecoder s a)
   | ExpectedTypeError ExpectedTypeError
   | ExtractError Text
+  deriving (Eq)
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a) where
   show (TypeMismatch e)      = show e
@@ -1618,7 +1619,7 @@ data InvalidDecoder s a = InvalidDecoder
   { invalidDecoderExpected   :: Expr s a
   , invalidDecoderExpression :: Expr s a
   }
-  deriving (Typeable)
+  deriving (Eq, Typeable)
 
 instance (Pretty s, Typeable s, Pretty a, Typeable a) => Exception (InvalidDecoder s a)
 
