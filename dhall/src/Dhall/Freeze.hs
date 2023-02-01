@@ -401,9 +401,26 @@ freezeExpressionWithSettings settings directory scope intent expression = do
         cache expression_ =
             return expression_
 
+    let uncache
+            (ImportAlt
+                (Core.shallowDenote -> Embed
+                    Import{ importHashed = ImportHashed { hash = Just expectedHash, importType = Missing } }
+                )
+                (Core.shallowDenote -> Embed
+                    import_@Import{ importHashed = ImportHashed{ hash = Nothing } }
+                )
+            ) = Embed
+                (import_
+                    { importHashed = (importHashed import_)
+                        { hash = Just expectedHash
+                        }
+                    }
+                )
+        uncache expression_ = expression_
+
     case intent of
         Secure ->
-            traverse freezeFunction expression
+            traverse freezeFunction (Dhall.Optics.transformOf Core.subExpressions uncache expression)
         Cache  ->
             Dhall.Optics.transformMOf Core.subExpressions cache expression
 
