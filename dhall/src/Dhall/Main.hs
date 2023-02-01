@@ -36,6 +36,7 @@ import Dhall.Import
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )
+import Dhall.Package       (writePackage)
 import Dhall.Parser        (Src)
 import Dhall.Pretty
     ( Ann
@@ -162,6 +163,7 @@ data Mode
     | DirectoryTree { allowSeparators :: Bool, file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
+    | Package { output :: Output, inputs :: NonEmpty Input }
 
 -- | This specifies how to resolve transitive dependencies
 data ResolveMode
@@ -310,6 +312,11 @@ parseMode =
             "hash"
             "Compute semantic hashes for Dhall expressions"
             (Hash <$> parseFile <*> parseCache)
+    <|> subcommand
+            Miscellaneous
+            "package"
+            "Create a package.dhall referencing the provided paths"
+            (Package <$> parseOutput <*> parsePackageFiles)
     <|> subcommand
             Miscellaneous
             "tags"
@@ -558,6 +565,21 @@ parseMode =
             (   Options.Applicative.long "cache"
             <>  Options.Applicative.help "Cache the hashed expression"
             )
+
+    parsePackageFiles = fmap f (Options.Applicative.many p)
+      where
+        -- Parse explicit stdin in the input filepaths
+        parseStdin inputs
+            | InputFile "-" `elem` inputs = StandardInput : filter (/= InputFile "-") inputs
+            | otherwise = inputs
+
+        f = fromMaybe (pure StandardInput) . nonEmpty . parseStdin . fmap InputFile
+
+        p = Options.Applicative.strArgument
+                (   Options.Applicative.help "Paths that may either point to files or directories. If the latter is the case all *.dhall files in the directory will be included."
+                <>  Options.Applicative.metavar "PATH"
+                <>  Options.Applicative.action "file"
+                )
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
@@ -1017,6 +1039,8 @@ command (Options {..}) = do
                 let denoted :: Expr Void Import
                     denoted = Dhall.Core.denote expression
                 in Text.Pretty.Simple.pPrintNoColor denoted
+
+        Package {..} -> writePackage (fromMaybe Unicode chosenCharacterSet) plain output inputs
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

@@ -332,6 +332,7 @@ Library
         Dhall.Marshal.Encode
         Dhall.Map
         Dhall.Optics
+        Dhall.Package
         Dhall.Parser
         Dhall.Parser.Expression
         Dhall.Parser.Token
@@ -420,6 +421,7 @@ Test-Suite tasty
         Dhall.Test.Import
         Dhall.Test.Lint
         Dhall.Test.Normalization
+        Dhall.Test.Package
         Dhall.Test.Parser
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
