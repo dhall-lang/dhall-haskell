@@ -418,7 +418,11 @@ freezeExpressionWithSettings settings directory scope intent expression = do
                 )
         uncache expression_ = expression_
 
-    case intent of
+    let simplify (ImportAlt (Core.shallowDenote -> Embed import1) (Core.shallowDenote -> Embed import2))
+            | import1 == import2 = Embed import1
+        simplify expression_ = expression_
+
+    Dhall.Optics.transformOf Core.subExpressions simplify <$> case intent of
         Secure ->
             traverse freezeFunction (Dhall.Optics.transformOf Core.subExpressions uncache expression)
         Cache  ->
