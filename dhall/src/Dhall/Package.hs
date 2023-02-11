@@ -1,16 +1,18 @@
-{-# LANGUAGE BangPatterns    #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MultiWayIf   #-}
 
 -- | Create a package.dhall from files and directory contents.
 
 module Dhall.Package
     ( writePackage
-    , getPackageExpression
+    , getPackagePathAndContent
+    , PackageError(..)
     ) where
 
+import           Control.Exception  (Exception, throwIO)
 import           Control.Monad
-import           Data.List.NonEmpty (NonEmpty)
-import qualified Data.List.NonEmpty as NonEmpty
+import           Data.List.NonEmpty (NonEmpty (..))
+import           Data.Maybe         (fromMaybe)
 import           Data.Text          (Text)
 import qualified Data.Text          as Text
 import           Dhall.Core
@@ -28,102 +30,100 @@ import           Dhall.Core
 import           Dhall.Map          (Map)
 import qualified Dhall.Map          as Map
 import           Dhall.Pretty       (CharacterSet (..))
-import           Dhall.Util         (Input (..), Output (..), renderExpression)
+import           Dhall.Util         (_ERROR, renderExpression)
 import           System.Directory
 import           System.FilePath
 
 -- | Create a package.dhall from files and directory contents.
--- For a description of how the package.dhall is constructed see 'getPackageExpression'.
-writePackage :: CharacterSet -> Bool -> Output -> NonEmpty Input -> IO ()
-writePackage characterSet plain output inputs = do
-    let output' = case output of
-            StandardOutput -> Nothing
-            OutputFile path -> Just path
-    expr <- getPackageExpression output inputs
-    renderExpression characterSet plain output' expr
+-- For a description of how the package file is constructed see
+-- 'getPackagePathAndExpression'.
+writePackage :: CharacterSet -> Maybe String -> NonEmpty FilePath -> IO ()
+writePackage characterSet outputFn inputs = do
+    (outputPath, expr) <- getPackagePathAndContent (fromMaybe "package.dhall" outputFn) inputs
+    renderExpression characterSet True (Just outputPath) expr
 
--- | Get the Dhall expression for a package.dhall file.
+-- | Get the path and the Dhall expression for a package file.
 --
--- If the 'Output' provided as the first argument is 'StandardOutput' the paths
--- of the imports are constructed as if the package.dhall would reside in the
--- same directory. That means, if you feed files from different directories as
--- 'Input' to this function the resulting expression may have unresolvable
--- imports!
+-- The inputs provided as the second argument are processed depending on whether
+-- the path points to a directory or a file:
 --
--- If one of the 'Input' is 'StandardInput' then additional paths with be read
--- from stdin (newline separated). If a path provided as 'Input' is a directory
--- then all files with a ".dhall" extension will be included in the package. An
--- exception to this is the output file; It will be excluded from package.
-getPackageExpression :: Output -> NonEmpty Input -> IO (Expr s Import)
-getPackageExpression output inputs = do
-    output' <- case output of
-        StandardOutput -> pure Nothing
-        OutputFile path -> Just . normaliseWithParent <$> makeAbsolute path
-    RecordLit <$> getInputsMap output' (NonEmpty.toList inputs)
+--   * If the path points to a directory, all files with a @.dhall@ extensions
+--     in that directory are included in the package.
+--     The package file will be located in that directory.
+--
+--   * If the path points to a regular file, it is included in the package
+--     unless it is the path of the package file itself.
+--     All files passed as input must reside in the same directory.
+--     The package file will be located in the (shared) parent directory of the
+--     files passed as input to this function.
+--
+getPackagePathAndContent :: String -> NonEmpty FilePath -> IO (FilePath, Expr s Import)
+getPackagePathAndContent outputFn (path :| paths) = do
+    outputDir <- do
+        isDirectory <- doesDirectoryExist path
+        return $ if isDirectory then path else takeDirectory path
+    outputDir' <- makeAbsolute $ normalise outputDir
 
-getInputsMap :: Maybe FilePath -> [Input] -> IO (Map Text (RecordField s Import))
-getInputsMap output = foldMap (getInputMap output)
+    let checkOutputDir dir = do
+            dir' <- makeAbsolute $ normalise dir
+            when (dir' /= outputDir') $
+                throwIO $ AmbiguousOutputDirectory outputDir dir
 
-getInputMap :: Maybe FilePath -> Input -> IO (Map Text (RecordField s Import))
-getInputMap output StandardInput = do
-    inputs <- map InputFile . lines <$> getContents
-    getInputsMap output inputs
-getInputMap output (InputFile path) = do
-    isDirectory <- doesDirectoryExist path
-    if isDirectory
-        then do
-            entries <- listDirectory path
-            paths <- traverse (fmap normaliseWithParent . makeAbsolute . (path </>)) entries
-            include <- filterM (\entry -> do
-                isFile <- doesFileExist entry
-                let hasDhallExtension = takeExtension entry == ".dhall"
-                let isNotOutputFile = Just entry /= output
-                return $ isFile && hasDhallExtension && isNotOutputFile
-                ) paths
-            getInputsMap output $ map InputFile include
-        else do
-            path' <- normaliseWithParent <$> makeAbsolute path
-
-            let key = Text.pack $ dropExtension $ takeFileName path
-
-            let importType = getImportType output path'
-
-            let import_ = Import
-                    { importHashed = ImportHashed
-                        { hash = Nothing
-                        , ..
-                        }
-                    , importMode = Code
-                    }
-            return $ Map.singleton key (makeRecordField $ Embed import_)
-
-getImportType :: Maybe FilePath -> FilePath -> ImportType
-getImportType output path = let
-    (prefix, base', path') = case output of
-        Nothing -> (Here, [], [])
-        Just output' -> goFilePrefix
-            (splitDirectories $ takeDirectory output')
-            (splitDirectories $ takeDirectory path)
-    directory = goDirectory [] base' path'
-    file = Text.pack $ takeFileName path
-    in Local prefix File{..}
+    resultMap <- go Map.empty checkOutputDir (path:paths)
+    return (outputDir </> outputFn, RecordLit resultMap)
     where
-        goFilePrefix [] yss = (Here, [], yss)
-        goFilePrefix (_:xs) [] = (Parent, xs, [])
-        goFilePrefix (x:xs) yss@(y:ys)
-            | x == y = goFilePrefix xs ys
-            | otherwise = (Parent, xs, yss)
+        go :: Map Text (RecordField s Import) -> (FilePath -> IO ()) -> [FilePath] -> IO (Map Text (RecordField s Import))
+        go !acc _checkOutputDir [] = return acc
+        go !acc checkOutputDir (p:ps) = do
+            isDirectory <- doesDirectoryExist p
+            isFile <- doesFileExist p
+            if | isDirectory -> do
+                    checkOutputDir p
+                    entries <- listDirectory p
+                    let entries' = filter (\entry -> takeExtension entry == ".dhall") entries
+                    go acc checkOutputDir (map (p </>) entries' <> ps)
+               | isFile -> do
+                    checkOutputDir $ takeDirectory p
 
-        goDirectory !acc [] [] = Directory (map Text.pack acc)
-        goDirectory !acc [] (y:ys) = goDirectory (y:acc) [] ys
-        goDirectory !acc (_:xs) [] = goDirectory ("..":acc) xs []
-        goDirectory !acc (x:xs) yss@(y:ys)
-            | x == y = goDirectory acc xs ys
-            | otherwise = goDirectory ("..":acc) xs yss
+                    let key = Text.pack $ dropExtension $ takeFileName p
 
-normaliseWithParent :: FilePath -> FilePath
-normaliseWithParent = go [] . splitPath . normalise
-    where
-        go !acc [] = joinPath (reverse acc)
-        go (_:acc) ("../":xs) = go acc xs
-        go !acc (x:xs) = go (x:acc) xs
+                    let import_ = Import
+                            { importHashed = ImportHashed
+                                { hash = Nothing
+                                , importType = Local Here File
+                                    { directory = Directory []
+                                    , file = Text.pack (takeFileName p)
+                                    }
+                                }
+                            , importMode = Code
+                            }
+
+                    let resultMap = if takeFileName p == outputFn
+                            then Map.empty
+                            else Map.singleton key (makeRecordField $ Embed import_)
+
+                    go (resultMap <> acc) checkOutputDir ps
+                | otherwise -> throwIO $ InvalidPath p
+
+-- | Exception thrown when creating a package file.
+data PackageError
+    = AmbiguousOutputDirectory FilePath FilePath
+    | InvalidPath FilePath
+
+instance Exception PackageError
+
+instance Show PackageError where
+    show (AmbiguousOutputDirectory dir1 dir2) =
+        _ERROR <> ": ❰dhall package❱ failed because the inputs make it impossible to\n\
+        \determine the output directory of the package file. You asked to include files\n\
+        \from the following directories in the package:\n\
+        \\n" <> dir1 <>
+        "\n" <> dir2 <>
+        "\n\n\
+        \Although those paths might point to the same location they are not lexically the\n\
+        \same."
+
+    show (InvalidPath fp) =
+        _ERROR <> ": ❰dhall package❱ failed because the input does not exist or is\n\
+        \neither a directory nor a regular file:\n\
+        \\n" <> fp

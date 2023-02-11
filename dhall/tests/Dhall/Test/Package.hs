@@ -1,7 +1,9 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Dhall.Test.Package where
 
+import           Control.Exception  (Exception, displayException, try)
 import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Void          (Void)
 import           Dhall.Core
@@ -17,19 +19,56 @@ import           Dhall.Core
     )
 import qualified Dhall.Map          as Map
 import           Dhall.Package
-import           Dhall.Util         (Input (..), Output (..))
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "Package"
-    [ packageInSameDir
-    , packageInParentDir
-    , packageInSiblingDir
+    [ packagePackageFile
+    , packageCustomPackageFile
+    , packageSingleFile
+    , packageEmptyDirectory
+    , packageSingleDirectory
+    , packageMissingFile
+    , packageFilesDifferentDirs
     ]
 
-packageInSameDir :: TestTree
-packageInSameDir = testCase "package in same directory" $ do
+packagePackageFile :: TestTree
+packagePackageFile = testCase "package file" $ do
+    let path = "./tests/package/package.dhall"
+
+    let package :: Expr Void Import
+        package = RecordLit Map.empty
+
+    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/package.dhall" :| [])
+    assertEqual "path" path output
+    assertEqual "content" package expr
+
+packageCustomPackageFile :: TestTree
+packageCustomPackageFile = testCase "package file" $ do
+    let path = "./tests/package/custom.dhall"
+
+    let package :: Expr Void Import
+        package = RecordLit $ Map.singleton "package" $
+            makeRecordField $ Embed Import
+                { importHashed = ImportHashed
+                    { hash = Nothing
+                    , importType = Local Here File
+                        { directory = Directory []
+                        , file = "package.dhall"
+                        }
+                    }
+                , importMode = Code
+                }
+
+    (output, expr) <- getPackagePathAndContent "custom.dhall" ("./tests/package/package.dhall" :| [])
+    assertEqual "path" path output
+    assertEqual "content" package expr
+
+packageSingleFile :: TestTree
+packageSingleFile = testCase "single file" $ do
+    let path = "./tests/package/dir/package.dhall"
+
     let package :: Expr Void Import
         package = RecordLit $ Map.singleton "test" $
             makeRecordField $ Embed Import
@@ -42,39 +81,65 @@ packageInSameDir = testCase "package in same directory" $ do
                     }
                 , importMode = Code
                 }
-    expr <- getPackageExpression (OutputFile "/dir/package.dhall") (InputFile "/dir/test.dhall" :| [])
-    assertEqual "" package expr
 
-packageInParentDir :: TestTree
-packageInParentDir = testCase "package in parent directory" $ do
+    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/dir/test.dhall" :| [])
+    assertEqual "path" path output
+    assertEqual "content" package expr
+
+packageEmptyDirectory :: TestTree
+packageEmptyDirectory = testCase "empty directory" $ do
+    let path = "./tests/package/empty/package.dhall"
+
+    let package :: Expr Void Import
+        package = RecordLit Map.empty
+
+    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/empty" :| [])
+    assertEqual "path" path output
+    assertEqual "content" package expr
+
+packageSingleDirectory :: TestTree
+packageSingleDirectory = testCase "single directory" $ do
+    let path = "./tests/package/dir/package.dhall"
+
     let package :: Expr Void Import
         package = RecordLit $ Map.singleton "test" $
             makeRecordField $ Embed Import
                 { importHashed = ImportHashed
                     { hash = Nothing
                     , importType = Local Here File
-                        { directory = Directory ["dir"]
+                        { directory = Directory []
                         , file = "test.dhall"
                         }
                     }
                 , importMode = Code
                 }
-    expr <- getPackageExpression (OutputFile "/package.dhall") (InputFile "/dir/test.dhall" :| [])
-    assertEqual "" package expr
 
-packageInSiblingDir :: TestTree
-packageInSiblingDir = testCase "package in sibling directory" $ do
-    let package :: Expr Void Import
-        package = RecordLit $ Map.singleton "test" $
-            makeRecordField $ Embed Import
-                { importHashed = ImportHashed
-                    { hash = Nothing
-                    , importType = Local Parent File
-                        { directory = Directory ["other", ".."]
-                        , file = "test.dhall"
-                        }
-                    }
-                , importMode = Code
-                }
-    expr <- getPackageExpression (OutputFile "/some/dir/package.dhall") (InputFile "/other/test.dhall" :| [])
-    assertEqual "" package expr
+    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/dir" :| [])
+    assertEqual "path" path output
+    assertEqual "content" package expr
+
+packageMissingFile :: TestTree
+packageMissingFile = testCase "missing file" $ do
+    let action :: IO (FilePath, Expr Void Import)
+        action = getPackagePathAndContent "package.dhall" ("./tests/package/missing.dhall" :| [])
+
+    assertThrow action $ \case
+        InvalidPath "./tests/package/missing.dhall" -> True
+        _ -> False
+
+packageFilesDifferentDirs :: TestTree
+packageFilesDifferentDirs = testCase "files from different directories" $ do
+    let action :: IO (FilePath, Expr Void Import)
+        action = getPackagePathAndContent "package.dhall" ("./tests/package/test.dhall" :| ["./tests/package/dir/test.dhall"])
+
+    assertThrow action $ \case
+        AmbiguousOutputDirectory "./tests/package" "./tests/package/dir" -> True
+        _ -> False
+
+assertThrow :: (Exception e, Show a) => IO a -> (e -> Bool) -> IO ()
+assertThrow k p = do
+    result <- try k
+    case result of
+        Left e | p e -> return ()
+        Left e -> assertFailure $ "Predicate did not match: " <> displayException e
+        Right result' -> assertFailure $ "Expected exception, but got: " <> show result'

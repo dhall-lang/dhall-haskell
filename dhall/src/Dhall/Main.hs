@@ -163,7 +163,7 @@ data Mode
     | DirectoryTree { allowSeparators :: Bool, file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
-    | Package { output :: Output, inputs :: NonEmpty Input }
+    | Package { name :: Maybe String, files :: NonEmpty FilePath }
 
 -- | This specifies how to resolve transitive dependencies
 data ResolveMode
@@ -316,7 +316,7 @@ parseMode =
             Miscellaneous
             "package"
             "Create a package.dhall referencing the provided paths"
-            (Package <$> parseOutput <*> parsePackageFiles)
+            (Package <$> parsePackageName <*> parsePackageFiles)
     <|> subcommand
             Miscellaneous
             "tags"
@@ -566,15 +566,16 @@ parseMode =
             <>  Options.Applicative.help "Cache the hashed expression"
             )
 
-    parsePackageFiles = fmap f (Options.Applicative.many p)
+    parsePackageName = optional $
+        Options.Applicative.strOption
+            (   Options.Applicative.long "name"
+            <>  Options.Applicative.help "The filename of the package"
+            <>  Options.Applicative.metavar "NAME"
+            <>  Options.Applicative.action "file"
+            )
+
+    parsePackageFiles = (:|) <$> p <*> Options.Applicative.many p
       where
-        -- Parse explicit stdin in the input filepaths
-        parseStdin inputs
-            | InputFile "-" `elem` inputs = StandardInput : filter (/= InputFile "-") inputs
-            | otherwise = inputs
-
-        f = fromMaybe (pure StandardInput) . nonEmpty . parseStdin . fmap InputFile
-
         p = Options.Applicative.strArgument
                 (   Options.Applicative.help "Paths that may either point to files or directories. If the latter is the case all *.dhall files in the directory will be included."
                 <>  Options.Applicative.metavar "PATH"
@@ -1040,7 +1041,7 @@ command (Options {..}) = do
                     denoted = Dhall.Core.denote expression
                 in Text.Pretty.Simple.pPrintNoColor denoted
 
-        Package {..} -> writePackage (fromMaybe Unicode chosenCharacterSet) plain output inputs
+        Package {..} -> writePackage (fromMaybe Unicode chosenCharacterSet) name files
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()
