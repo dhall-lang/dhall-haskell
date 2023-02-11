@@ -40,7 +40,7 @@ packagePackageFile = testCase "package file" $ do
     let package :: Expr Void Import
         package = RecordLit Map.empty
 
-    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/package.dhall" :| [])
+    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/package.dhall" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -61,7 +61,7 @@ packageCustomPackageFile = testCase "package file" $ do
                 , importMode = Code
                 }
 
-    (output, expr) <- getPackagePathAndContent "custom.dhall" ("./tests/package/package.dhall" :| [])
+    (output, expr) <- getPackagePathAndContent (Just "custom.dhall") ("./tests/package/package.dhall" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -82,7 +82,7 @@ packageSingleFile = testCase "single file" $ do
                 , importMode = Code
                 }
 
-    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/dir/test.dhall" :| [])
+    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/dir/test.dhall" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -93,7 +93,7 @@ packageEmptyDirectory = testCase "empty directory" $ do
     let package :: Expr Void Import
         package = RecordLit Map.empty
 
-    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/empty" :| [])
+    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/empty" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -114,14 +114,14 @@ packageSingleDirectory = testCase "single directory" $ do
                 , importMode = Code
                 }
 
-    (output, expr) <- getPackagePathAndContent "package.dhall" ("./tests/package/dir" :| [])
+    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/dir" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
 packageMissingFile :: TestTree
 packageMissingFile = testCase "missing file" $ do
     let action :: IO (FilePath, Expr Void Import)
-        action = getPackagePathAndContent "package.dhall" ("./tests/package/missing.dhall" :| [])
+        action = getPackagePathAndContent Nothing ("./tests/package/missing.dhall" :| [])
 
     assertThrow action $ \case
         InvalidPath "./tests/package/missing.dhall" -> True
@@ -130,7 +130,7 @@ packageMissingFile = testCase "missing file" $ do
 packageFilesDifferentDirs :: TestTree
 packageFilesDifferentDirs = testCase "files from different directories" $ do
     let action :: IO (FilePath, Expr Void Import)
-        action = getPackagePathAndContent "package.dhall" ("./tests/package/test.dhall" :| ["./tests/package/dir/test.dhall"])
+        action = getPackagePathAndContent Nothing ("./tests/package/test.dhall" :| ["./tests/package/dir/test.dhall"])
 
     assertThrow action $ \case
         AmbiguousOutputDirectory "./tests/package" "./tests/package/dir" -> True

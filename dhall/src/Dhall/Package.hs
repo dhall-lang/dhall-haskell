@@ -39,7 +39,7 @@ import           System.FilePath
 -- 'getPackagePathAndExpression'.
 writePackage :: CharacterSet -> Maybe String -> NonEmpty FilePath -> IO ()
 writePackage characterSet outputFn inputs = do
-    (outputPath, expr) <- getPackagePathAndContent (fromMaybe "package.dhall" outputFn) inputs
+    (outputPath, expr) <- getPackagePathAndContent outputFn inputs
     renderExpression characterSet True (Just outputPath) expr
 
 -- | Get the path and the Dhall expression for a package file.
@@ -57,7 +57,7 @@ writePackage characterSet outputFn inputs = do
 --     The package file will be located in the (shared) parent directory of the
 --     files passed as input to this function.
 --
-getPackagePathAndContent :: String -> NonEmpty FilePath -> IO (FilePath, Expr s Import)
+getPackagePathAndContent :: Maybe String -> NonEmpty FilePath -> IO (FilePath, Expr s Import)
 getPackagePathAndContent outputFn (path :| paths) = do
     outputDir <- do
         isDirectory <- doesDirectoryExist path
@@ -70,7 +70,7 @@ getPackagePathAndContent outputFn (path :| paths) = do
                 throwIO $ AmbiguousOutputDirectory outputDir dir
 
     resultMap <- go Map.empty checkOutputDir (path:paths)
-    return (outputDir </> outputFn, RecordLit resultMap)
+    return (outputDir </> outputFn', RecordLit resultMap)
     where
         go :: Map Text (RecordField s Import) -> (FilePath -> IO ()) -> [FilePath] -> IO (Map Text (RecordField s Import))
         go !acc _checkOutputDir [] = return acc
@@ -98,12 +98,14 @@ getPackagePathAndContent outputFn (path :| paths) = do
                             , importMode = Code
                             }
 
-                    let resultMap = if takeFileName p == outputFn
+                    let resultMap = if takeFileName p == outputFn'
                             then Map.empty
                             else Map.singleton key (makeRecordField $ Embed import_)
 
                     go (resultMap <> acc) checkOutputDir ps
                 | otherwise -> throwIO $ InvalidPath p
+
+        outputFn' = fromMaybe "package.dhall" outputFn
 
 -- | Exception thrown when creating a package file.
 data PackageError
