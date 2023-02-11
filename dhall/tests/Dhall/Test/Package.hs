@@ -19,6 +19,7 @@ import           Dhall.Core
     )
 import qualified Dhall.Map          as Map
 import           Dhall.Package
+import           System.FilePath    ((</>))
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -35,7 +36,7 @@ tests = testGroup "Package"
 
 packagePackageFile :: TestTree
 packagePackageFile = testCase "package file" $ do
-    let path = "./tests/package/package.dhall"
+    let path = "./tests/package" </> "package.dhall"
 
     let package :: Expr Void Import
         package = RecordLit Map.empty
@@ -45,8 +46,8 @@ packagePackageFile = testCase "package file" $ do
     assertEqual "content" package expr
 
 packageCustomPackageFile :: TestTree
-packageCustomPackageFile = testCase "package file" $ do
-    let path = "./tests/package/custom.dhall"
+packageCustomPackageFile = testCase "custom package file" $ do
+    let path = "./tests/package" </> "custom.dhall"
 
     let package :: Expr Void Import
         package = RecordLit $ Map.singleton "package" $
@@ -67,7 +68,7 @@ packageCustomPackageFile = testCase "package file" $ do
 
 packageSingleFile :: TestTree
 packageSingleFile = testCase "single file" $ do
-    let path = "./tests/package/dir/package.dhall"
+    let path = "./tests/package/dir" </> "package.dhall"
 
     let package :: Expr Void Import
         package = RecordLit $ Map.singleton "test" $
@@ -88,7 +89,7 @@ packageSingleFile = testCase "single file" $ do
 
 packageEmptyDirectory :: TestTree
 packageEmptyDirectory = testCase "empty directory" $ do
-    let path = "./tests/package/empty/package.dhall"
+    let path = "./tests/package/empty" </> "package.dhall"
 
     let package :: Expr Void Import
         package = RecordLit Map.empty
@@ -99,7 +100,7 @@ packageEmptyDirectory = testCase "empty directory" $ do
 
 packageSingleDirectory :: TestTree
 packageSingleDirectory = testCase "single directory" $ do
-    let path = "./tests/package/dir/package.dhall"
+    let path = "./tests/package/dir" </> "package.dhall"
 
     let package :: Expr Void Import
         package = RecordLit $ Map.singleton "test" $
