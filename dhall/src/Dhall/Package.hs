@@ -36,7 +36,7 @@ import           System.FilePath
 
 -- | Create a package.dhall from files and directory contents.
 -- For a description of how the package file is constructed see
--- 'getPackagePathAndExpression'.
+-- 'getPackagePathAndContent'.
 writePackage :: CharacterSet -> Maybe String -> NonEmpty FilePath -> IO ()
 writePackage characterSet outputFn inputs = do
     (outputPath, expr) <- getPackagePathAndContent outputFn inputs
