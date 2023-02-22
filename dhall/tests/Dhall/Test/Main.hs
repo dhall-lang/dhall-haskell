@@ -11,6 +11,7 @@ import qualified Dhall.Test.Freeze
 import qualified Dhall.Test.Import
 import qualified Dhall.Test.Lint
 import qualified Dhall.Test.Normalization
+import qualified Dhall.Test.Package
 import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
@@ -69,6 +70,7 @@ getAllTests = do
                 , Dhall.Test.QuickCheck.tests
                 , Dhall.Test.Dhall.tests
                 , Dhall.Test.TH.tests
+                , Dhall.Test.Package.tests
                 ]
 
     return testTree
