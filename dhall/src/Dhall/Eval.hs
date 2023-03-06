@@ -46,6 +46,9 @@ module Dhall.Eval (
   , Val(..)
   , (~>)
   , textShow
+  , dateShow
+  , timeShow
+  , timezoneShow
   ) where
 
 import Data.Bifunctor     (first)
@@ -53,6 +56,7 @@ import Data.Foldable      (foldr', toList)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
 import Data.Text          (Text)
+import Data.Time          (Day, TimeOfDay(..), TimeZone)
 import Data.Void          (Void)
 import Dhall.Map          (Map)
 import Dhall.Set          (Set)
@@ -80,7 +84,7 @@ import qualified Data.Time     as Time
 import qualified Dhall.Map     as Map
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
-import qualified Text.Printf
+import qualified Text.Printf   as Printf
 
 data Environment a
     = Empty
@@ -202,10 +206,13 @@ data Val a
 
     | VDate
     | VDateLiteral Time.Day
+    | VDateShow !(Val a)
     | VTime
     | VTimeLiteral Time.TimeOfDay Word
+    | VTimeShow !(Val a)
     | VTimeZone
     | VTimeZoneLiteral Time.TimeZone
+    | VTimeZoneShow !(Val a)
 
     | VList !(Val a)
     | VListLit !(Maybe (Val a)) !(Seq (Val a))
@@ -659,14 +666,26 @@ eval !env t0 =
             VDate
         DateLiteral d ->
             VDateLiteral d
+        DateShow ->
+            VPrim $ \case
+                VDateLiteral d -> VTextLit (VChunks [] (dateShow d))
+                t              -> VDateShow t
         Time ->
             VTime
         TimeLiteral t p ->
             VTimeLiteral t p
+        TimeShow ->
+            VPrim $ \case
+                VTimeLiteral d p -> VTextLit (VChunks [] (timeShow d p))
+                t                -> VTimeShow t
         TimeZone ->
             VTimeZone
         TimeZoneLiteral z ->
             VTimeZoneLiteral z
+        TimeZoneShow ->
+            VPrim $ \case
+                VTimeZoneLiteral d -> VTextLit (VChunks [] (timezoneShow d))
+                t                  -> VTimeZoneShow t
         List ->
             VPrim VList
         ListLit ma ts ->
@@ -890,8 +909,31 @@ textShow text = "\"" <> Text.concatMap f text <> "\""
     f '\r' = "\\r"
     f '\t' = "\\t"
     f '\f' = "\\f"
-    f c | c <= '\x1F' = Text.pack (Text.Printf.printf "\\u%04x" (Data.Char.ord c))
+    f c | c <= '\x1F' = Text.pack (Printf.printf "\\u%04x" (Data.Char.ord c))
         | otherwise   = Text.singleton c
+
+-- | Utility that powers the @Date/show@ built-in
+dateShow :: Day -> Text
+dateShow = Text.pack . Time.formatTime Time.defaultTimeLocale "%0Y-%m-%d"
+
+-- | Utility that powers the @Time/show@ built-in
+timeShow :: TimeOfDay -> Word -> Text
+timeShow (TimeOfDay hh mm seconds) precision =
+    Text.pack (Printf.printf "%02d:%02d:%02d" hh mm ss <> suffix)
+  where
+    magnitude :: Integer
+    magnitude = 10 ^ precision
+
+    (ss, fraction) =
+        truncate (seconds * fromInteger magnitude) `divMod` magnitude
+
+    suffix
+        | precision == 0 = ""
+        | otherwise      = Printf.printf ".%0*d" precision fraction
+
+-- | Utility that powers the @TimeZone/show@ built-in
+timezoneShow :: TimeZone -> Text
+timezoneShow = Text.pack . Time.formatTime Time.defaultTimeLocale "%Ez"
 
 conv :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 conv !env t0 t0' =
@@ -996,14 +1038,20 @@ conv !env t0 t0' =
             True
         (VDateLiteral l, VDateLiteral r) ->
             l == r
+        (VDateShow t, VDateShow t') ->
+            conv env t t'
         (VTime, VTime) ->
             True
         (VTimeLiteral tl pl, VTimeLiteral tr pr) ->
             tl == tr && pl == pr
+        (VTimeShow t, VTimeShow t') ->
+            conv env t t'
         (VTimeZone, VTimeZone) ->
             True
         (VTimeZoneLiteral l, VTimeZoneLiteral r) ->
             l == r
+        (VTimeZoneShow t, VTimeZoneShow t') ->
+            conv env t t'
         (VList a, VList a') ->
             conv env a a'
         (VListLit _ xs, VListLit _ xs') ->
@@ -1208,14 +1256,20 @@ quote !env !t0 =
             Date
         VDateLiteral d ->
             DateLiteral d
+        VDateShow t ->
+            DateShow `qApp` t
         VTime ->
             Time
         VTimeLiteral t p ->
             TimeLiteral t p
+        VTimeShow t ->
+            TimeShow `qApp` t
         VTimeZone ->
             TimeZone
         VTimeZoneLiteral z ->
             TimeZoneLiteral z
+        VTimeZoneShow t ->
+            TimeZoneShow `qApp` t
         VList t ->
             List `qApp` t
         VListLit ma ts ->
@@ -1407,14 +1461,20 @@ alphaNormalize = goEnv EmptyNames
                 Date
             DateLiteral d ->
                 DateLiteral d
+            DateShow ->
+                DateShow
             Time ->
                 Time
             TimeLiteral t p ->
                 TimeLiteral t p
+            TimeShow ->
+                TimeShow
             TimeZone ->
                 TimeZone
             TimeZoneLiteral z ->
                 TimeZoneLiteral z
+            TimeZoneShow ->
+                TimeZoneShow
             List ->
                 List
             ListLit ma ts ->

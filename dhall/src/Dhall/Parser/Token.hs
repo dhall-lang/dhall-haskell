@@ -79,8 +79,11 @@ module Dhall.Parser.Token (
     _TextReplace,
     _TextShow,
     _Date,
+    _DateShow,
     _Time,
+    _TimeShow,
     _TimeZone,
+    _TimeZoneShow,
     _List,
     _True,
     _False,
@@ -1188,6 +1191,13 @@ _TextShow = builtin "Text/show"
 _Date :: Parser ()
 _Date = builtin "Date"
 
+{-| Parse the @Date/show@ built-in
+
+    This corresponds to the @Date-show@ rule from the official grammar
+-}
+_DateShow :: Parser ()
+_DateShow = builtin "Date/show"
+
 {-| Parse the @Time@ bult-in
 
     This corresponds to the @Time@ rule from the official grammar
@@ -1195,12 +1205,26 @@ _Date = builtin "Date"
 _Time :: Parser ()
 _Time = builtin "Time"
 
+{-| Parse the @Time/show@ built-in
+
+    This corresponds to the @Time-show@ rule from the official grammar
+-}
+_TimeShow :: Parser ()
+_TimeShow = builtin "Time/show"
+
 {-| Parse the @TimeZone@ bult-in
 
     This corresponds to the @TimeZone@ rule from the official grammar
 -}
 _TimeZone :: Parser ()
 _TimeZone = builtin "TimeZone"
+
+{-| Parse the @TimeZone/show@ built-in
+
+    This corresponds to the @TimeZone-show@ rule from the official grammar
+-}
+_TimeZoneShow :: Parser ()
+_TimeZoneShow = builtin "TimeZone/show"
 
 {-| Parse the @List@ built-in
 

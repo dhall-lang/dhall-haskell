@@ -142,6 +142,8 @@ data Expr s a
     | Date
     -- | > DateLiteral (fromGregorian _YYYY _MM _DD) ~ YYYY-MM-DD
     | DateLiteral Time.Day
+    -- | > DateShow                                 ~  Date/show
+    | DateShow
     -- | > Time                                     ~  Time
     | Time
     -- | > TimeLiteral (TimeOfDay hh mm ss) _       ~  hh:mm:ss
@@ -149,11 +151,15 @@ data Expr s a
         Time.TimeOfDay
         Word
         -- ^ Precision
+    -- | > TimeShow                                 ~  Time/show
+    | TimeShow
     -- | > TimeZone                                 ~  TimeZone
     | TimeZone
     -- | > TimeZoneLiteral (TimeZone ( 60 * _HH + _MM) _ _) ~ +HH:MM
     -- | > TimeZoneLiteral (TimeZone (-60 * _HH + _MM) _ _) ~ -HH:MM
     | TimeZoneLiteral Time.TimeZone
+    -- | > TimeZoneShow                             ~  TimeZone/Show
+    | TimeZoneShow
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) []                     ~  [] : t
