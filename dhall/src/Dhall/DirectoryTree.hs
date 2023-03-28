@@ -53,8 +53,8 @@ import qualified Dhall.Util                  as Util
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
 import qualified System.FilePath             as FilePath
+import qualified System.Posix.User           as Posix
 import qualified System.PosixCompat.Files    as Posix
-import qualified System.PosixCompat.User     as Posix
 
 {-| Attempt to transform a Dhall record into a directory tree where:
 
