@@ -28,12 +28,12 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
-        bytestring                               < 0.12,
+        bytestring                               < 0.13,
         containers                               < 0.7 ,
         dhall                     >= 1.42.0   && < 1.43,
         neat-interpolation                       < 0.6 ,
         shell-escape                             < 0.3 ,
-        text                      >= 0.2      && < 2.1
+        text                      >= 0.2      && < 2.2
     Exposed-Modules: Dhall.Bash
     GHC-Options: -Wall
     Default-Language: Haskell2010
