@@ -14,13 +14,14 @@ import Dhall.Import.Types               (Import, Status)
 import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
 
-import qualified Data.Text      as Text
+import qualified Data.Text          as Text
+import qualified Data.Text.Encoding as Encoding
 import qualified JavaScript.XHR
 
 fetchFromHttpUrl
     :: URL
     -> Maybe [(CI ByteString, ByteString)]
-    -> StateT Status IO Text.Text
+    -> StateT Status IO ByteString
 fetchFromHttpUrl childURL Nothing = do
     let childURLText = renderURL childURL
 
@@ -34,7 +35,7 @@ fetchFromHttpUrl childURL Nothing = do
         200 -> return ()
         _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
 
-    return body
+    return (Encoding.encodeUtf8 body)
 fetchFromHttpUrl _ _ =
     fail "Dhall does not yet support custom headers when built using GHCJS"
 

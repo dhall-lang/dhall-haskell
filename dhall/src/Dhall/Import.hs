@@ -221,7 +221,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
-import qualified Data.Text.IO
+import qualified Data.Text.Encoding                          as Encoding
 import qualified Dhall.Binary
 import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
@@ -702,13 +702,19 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
 
     return (ImportSemantics {..})
 
--- `as Text` imports aren't cached since they are well-typed and normal by
--- construction
+-- `as Text` and `as Bytes` imports aren't cached since they are well-typed and
+-- normal by construction
 loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawText)) = do
     text <- fetchFresh importType
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = TextLit (Chunks [] text)
+    return (ImportSemantics {..})
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawBytes)) = do
+    bytes <- fetchBytes importType
+
+    -- importSemantics is alpha-beta-normal by construction!
+    let importSemantics = BytesLit bytes
     return (ImportSemantics {..})
 
 -- `as Location` imports aren't cached since they are well-typed and normal by
@@ -765,32 +771,39 @@ writeToSemisemanticCache semisemanticHash bytes = do
     return ()
 
 -- Fetch source code directly from disk/network
-fetchFresh :: ImportType -> StateT Status IO Text
-fetchFresh (Local prefix file) = do
+fetchBytes :: ImportType -> StateT Status IO ByteString
+fetchBytes (Local prefix file) = do
     Status { _stack } <- State.get
     path <- liftIO $ localToPath prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
-        then liftIO $ Data.Text.IO.readFile path
+        then liftIO $ Data.ByteString.readFile path
         else throwMissingImport (Imported _stack (MissingFile path))
 
-fetchFresh (Remote url) = do
+fetchBytes (Remote url) = do
     Status { _remote } <- State.get
     _remote url
 
-fetchFresh (Env env) = do
+fetchBytes (Env env) = do
     Status { _stack } <- State.get
     x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
         Just string ->
-            return (Text.pack string)
+            return (Encoding.encodeUtf8 (Text.pack string))
         Nothing ->
-                throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+            throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+fetchBytes Missing = throwM (MissingImports [])
 
-fetchFresh Missing = throwM (MissingImports [])
+fetchFresh :: ImportType -> StateT Status IO Text
+fetchFresh importType = do
+    bytes <- fetchBytes importType
+
+    case Encoding.decodeUtf8' bytes of
+        Left exception -> liftIO (Exception.throwIO exception)
+        Right text -> return text
 
 -- | Fetch the text contents of a URL
-fetchRemote :: URL -> StateT Status IO Data.Text.Text
+fetchRemote :: URL -> StateT Status IO Data.ByteString.ByteString
 #ifndef WITH_HTTP
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
@@ -802,7 +815,7 @@ fetchRemote url = do
     zoom remote (State.put fetchFromHTTP)
     fetchFromHTTP url
   where
-    fetchFromHTTP :: URL -> StateT Status IO Data.Text.Text
+    fetchFromHTTP :: URL -> StateT Status IO Data.ByteString.ByteString
     fetchFromHTTP (url'@URL { headers = maybeHeadersExpression }) = do
         let maybeHeaders = fmap toHeaders maybeHeadersExpression
         fetchFromHttpUrl url' maybeHeaders
@@ -1323,6 +1336,9 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
     -- types are not interpreted and therefore don't need to be modified
     case importMode child of
         RawText ->
+            ignore
+
+        RawBytes ->
             ignore
 
         Location ->
