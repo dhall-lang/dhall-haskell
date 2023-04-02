@@ -4,6 +4,7 @@
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
+    , fetchFromHttpUrlBytes
     , originHeadersFileExpr
     ) where
 
@@ -38,11 +39,10 @@ import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..))
 
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.ByteString.Lazy             as ByteString.Lazy
 import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
-import qualified Data.Text.Lazy
-import qualified Data.Text.Lazy.Encoding
 import qualified Dhall.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Types
@@ -266,8 +266,9 @@ addHeaders originHeaders urlHeaders request =
         matchesKey :: CI ByteString -> HTTPHeader -> Bool
         matchesKey key (candidate, _value) = key == candidate
 
-fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
-fetchFromHttpUrl childURL mheaders = do
+fetchFromHttpUrlBytes
+    :: URL -> Maybe [HTTPHeader] -> StateT Status IO ByteString
+fetchFromHttpUrlBytes childURL mheaders = do
     Status { _loadOriginHeaders } <- State.get
 
     originHeaders <- _loadOriginHeaders
@@ -300,11 +301,15 @@ fetchFromHttpUrl childURL mheaders = do
         _ -> do
             return ()
 
-    let bytes = HTTP.responseBody response
+    return (ByteString.Lazy.toStrict (HTTP.responseBody response))
 
-    case Data.Text.Lazy.Encoding.decodeUtf8' bytes of
+fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
+fetchFromHttpUrl childURL mheaders = do
+    bytes <- fetchFromHttpUrlBytes childURL mheaders
+
+    case Data.Text.Encoding.decodeUtf8' bytes of
         Left  err  -> liftIO (Control.Exception.throwIO err)
-        Right text -> return (Data.Text.Lazy.toStrict text)
+        Right text -> return text
 
 originHeadersFileExpr :: IO (Expr Src Import)
 originHeadersFileExpr = do

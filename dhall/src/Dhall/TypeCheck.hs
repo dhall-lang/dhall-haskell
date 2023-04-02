@@ -429,6 +429,12 @@ infer typer = loop
 
             return _L'
 
+        Bytes ->
+            return (VConst Type)
+
+        BytesLit _ ->
+            return VBytes
+
         Natural ->
             return (VConst Type)
 

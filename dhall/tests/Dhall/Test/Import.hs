@@ -105,8 +105,11 @@ successTest prefix = do
 
     let expectedFailures =
             [
+              -- Importing relative to the home directory works, but I'm too
+              -- lazy to mock the home directory for testing purposes
+              importDirectory </> "success/unit/ImportRelativeToHome"
 #if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
-              importDirectory </> "success/originHeadersImportFromEnv"
+            , importDirectory </> "success/originHeadersImportFromEnv"
             , importDirectory </> "success/originHeadersImport"
             , importDirectory </> "success/originHeadersOverride"
             , importDirectory </> "success/unit/asLocation/RemoteChainEnv"

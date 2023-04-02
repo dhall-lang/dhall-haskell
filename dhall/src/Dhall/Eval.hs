@@ -49,6 +49,7 @@ module Dhall.Eval (
   ) where
 
 import Data.Bifunctor     (first)
+import Data.ByteString    (ByteString)
 import Data.Foldable      (foldr', toList)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
@@ -169,6 +170,9 @@ data Val a
     | VBoolEQ !(Val a) !(Val a)
     | VBoolNE !(Val a) !(Val a)
     | VBoolIf !(Val a) !(Val a) !(Val a)
+
+    | VBytes
+    | VBytesLit ByteString
 
     | VNatural
     | VNaturalLit !Natural
@@ -490,6 +494,10 @@ eval !env t0 =
                 (b', VBoolLit True, VBoolLit False) -> b'
                 (_, t', f') | conv env t' f'        -> t'
                 (b', t', f')                        -> VBoolIf b' t' f'
+        Bytes ->
+            VBytes
+        BytesLit b ->
+            VBytesLit b
         Natural ->
             VNatural
         NaturalLit n ->
@@ -940,6 +948,10 @@ conv !env t0 t0' =
             conv env t t' && conv env u u'
         (VBoolIf t u v, VBoolIf t' u' v') ->
             conv env t t' && conv env u u' && conv env v v'
+        (VBytes, VBytes) ->
+            True
+        (VBytesLit l, VBytesLit r) ->
+            l == r
         (VNatural, VNatural) ->
             True
         (VNaturalLit n, VNaturalLit n') ->
@@ -1152,6 +1164,10 @@ quote !env !t0 =
             BoolNE (quote env t) (quote env u)
         VBoolIf t u v ->
             BoolIf (quote env t) (quote env u) (quote env v)
+        VBytes ->
+            Bytes
+        VBytesLit b ->
+            BytesLit b
         VNatural ->
             Natural
         VNaturalLit n ->
@@ -1351,6 +1367,10 @@ alphaNormalize = goEnv EmptyNames
                 BoolNE  (go t) (go u)
             BoolIf b t f ->
                 BoolIf  (go b) (go t) (go f)
+            Bytes ->
+                Bytes
+            BytesLit b ->
+                BytesLit b
             Natural ->
                 Natural
             NaturalLit n ->
