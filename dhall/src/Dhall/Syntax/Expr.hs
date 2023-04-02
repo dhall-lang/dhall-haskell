@@ -4,6 +4,7 @@ module Dhall.Syntax.Expr
     ( Expr(..)
     ) where
 
+import                Data.ByteString              (ByteString)
 import                Data.List.NonEmpty           (NonEmpty (..))
 import                Data.Sequence                (Seq)
 import                Data.String                  (IsString (..))
@@ -86,6 +87,10 @@ data Expr s a
     | BoolNE  (Expr s a) (Expr s a)
     -- | > BoolIf x y z                             ~  if x then y else z
     | BoolIf (Expr s a) (Expr s a) (Expr s a)
+    -- | > Bytes                                    ~ Bytes
+    | Bytes
+    -- | > BytesLit "\x00\xFF"                      ~ 0x"00FF"
+    | BytesLit ByteString
     -- | > Natural                                  ~  Natural
     | Natural
     -- | > NaturalLit n                             ~  n

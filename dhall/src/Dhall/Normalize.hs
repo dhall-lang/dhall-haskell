@@ -440,6 +440,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
               decide  b               l              r
                   | Eval.judgmentallyEqual l r = l
                   | otherwise                  = BoolIf b l r
+          Bytes -> pure Bytes
+          BytesLit b -> pure (BytesLit b)
           Natural -> pure Natural
           NaturalLit n -> pure (NaturalLit n)
           NaturalFold -> pure NaturalFold
@@ -850,6 +852,8 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide (BoolLit _)  _              _              = False
           decide  _          (BoolLit True) (BoolLit False) = False
           decide  _           l              r              = not (Eval.judgmentallyEqual l r)
+      Bytes -> True
+      BytesLit _ -> True
       Natural -> True
       NaturalLit _ -> True
       NaturalFold -> True

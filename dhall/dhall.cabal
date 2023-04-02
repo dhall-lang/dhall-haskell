@@ -170,6 +170,7 @@ Extra-Source-Files:
     dhall-lang/tests/**/*.dhallb
     dhall-lang/tests/**/*.hash
     dhall-lang/tests/**/*.txt
+    dhall-lang/tests/**/*.bin
     dhall-lang/tests/import/cache/dhall/12203871180b87ecaba8b53fffb2a8b52d3fce98098fab09a6f759358b9e8042eedc
     dhall-lang/tests/import/cache/dhall/1220618f785ce8f3930a9144398f576f0a992544b51212bc9108c31b4e670dc6ed21
     tests/**/*.dhall

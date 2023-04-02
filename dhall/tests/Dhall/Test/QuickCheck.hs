@@ -358,6 +358,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "BoolEQ")
             % (1 :: W "BoolNE")
             % (1 :: W "BoolIf")
+            % (1 :: W "Bytes")
+            % (1 :: W "BytesLit")
             % (1 :: W "Natural")
             % (7 :: W "NaturalLit")
             % (1 :: W "NaturalFold")
@@ -527,7 +529,7 @@ instance Arbitrary ImportHashed where
 -- The standard does not yet specify how to encode `as Text`, so don't test it
 -- yet
 instance Arbitrary ImportMode where
-    arbitrary = Test.QuickCheck.elements [ Code, RawText, Location ]
+    arbitrary = Test.QuickCheck.elements [ Code, RawText, Location, RawBytes ]
 
     shrink = genericShrink
 

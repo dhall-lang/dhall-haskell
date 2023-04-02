@@ -72,6 +72,7 @@ module Dhall.Parser.Token (
     _ListIndexed,
     _ListReverse,
     _Bool,
+    _Bytes,
     _Natural,
     _Integer,
     _Double,
@@ -1134,6 +1135,13 @@ _ListReverse = builtin "List/reverse"
 -}
 _Bool :: Parser ()
 _Bool = builtin "Bool"
+
+{-| Parse the @Bytes@ built-in
+
+    This corresponds to the @Bytes@ rule from the official grammar
+-}
+_Bytes :: Parser ()
+_Bytes = builtin "Bytes"
 
 {-| Parse the @Optional@ built-in
 

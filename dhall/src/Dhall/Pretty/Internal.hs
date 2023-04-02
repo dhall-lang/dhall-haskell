@@ -41,6 +41,7 @@ module Dhall.Pretty.Internal (
     , prettyDouble
     , prettyToStrictText
     , prettyToString
+    , prettyBase16
     , layout
     , layoutOpts
 
@@ -78,6 +79,7 @@ import                Data.Aeson
     , Value (String)
     )
 import                Data.Aeson.Types              (typeMismatch, unexpected)
+import                Data.ByteString               (ByteString)
 import                Data.Data                     (Data)
 import                Data.Foldable
 import                Data.List.NonEmpty            (NonEmpty (..))
@@ -92,14 +94,18 @@ import                Language.Haskell.TH.Syntax    (Lift)
 import                Numeric.Natural               (Natural)
 import                Prettyprinter                 (Doc, Pretty, space)
 
+import qualified Control.Exception             as Exception
+import qualified Data.ByteString.Base16        as Base16
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List                     as List
 import qualified Data.List.NonEmpty            as NonEmpty
 import qualified Data.Maybe
 import qualified Data.Text                     as Text
+import qualified Data.Text.Encoding            as Encoding
 import qualified Data.Time                     as Time
 import qualified Dhall.Map                     as Map
+import qualified Dhall.Syntax.Operations       as Operations
 import qualified Prettyprinter                 as Pretty
 import qualified Prettyprinter.Render.String   as Pretty
 import qualified Prettyprinter.Render.Terminal as Terminal
@@ -1285,6 +1291,8 @@ prettyPrinters characterSet =
         prettyConst k
     prettyPrimitiveExpression Bool =
         builtin "Bool"
+    prettyPrimitiveExpression Bytes =
+        builtin "Bytes"
     prettyPrimitiveExpression Natural =
         builtin "Natural"
     prettyPrimitiveExpression NaturalFold =
@@ -1407,6 +1415,8 @@ prettyPrinters characterSet =
         prettyDouble a
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a
+    prettyPrimitiveExpression (BytesLit a) =
+        prettyBytes a
     prettyPrimitiveExpression (Record a) =
         prettyRecord a
     prettyPrimitiveExpression (RecordLit a) =
@@ -1617,6 +1627,10 @@ prettyPrinters characterSet =
     prettyUnion :: Pretty a => Map Text (Maybe (Expr Src a)) -> Doc Ann
     prettyUnion =
         angles . map prettyAlternative . Map.toList
+
+    prettyBytes :: ByteString -> Doc Ann
+    prettyBytes bytes =
+        literal (Pretty.pretty ("0x\"" <> prettyBase16 bytes <> "\""))
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
     prettyChunks chunks@(Chunks a b)
@@ -1937,6 +1951,15 @@ temporalToText e = case e of
     field = Dhall.Syntax.shallowDenote . recordFieldValue
 
     rendered = Just (prettyToStrictText e)
+
+prettyBase16 :: ByteString -> Text
+prettyBase16 bytes =
+    case Encoding.decodeUtf8' (Base16.encode bytes) of
+        Left exception ->
+            Operations.internalError
+                ("prettyBase16: base16-encoded bytes could not be decoded as UTF-8 text: " <> Text.pack (Exception.displayException exception))
+        Right text ->
+            Text.toUpper text
 
 {- $setup
 >>> import Test.QuickCheck (Fun(..))

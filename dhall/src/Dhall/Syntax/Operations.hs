@@ -83,6 +83,8 @@ unsafeSubExpressions f (BoolOr a b) = BoolOr <$> f a <*> f b
 unsafeSubExpressions f (BoolEQ a b) = BoolEQ <$> f a <*> f b
 unsafeSubExpressions f (BoolNE a b) = BoolNE <$> f a <*> f b
 unsafeSubExpressions f (BoolIf a b c) = BoolIf <$> f a <*> f b <*> f c
+unsafeSubExpressions _ Bytes = pure Bytes
+unsafeSubExpressions _ (BytesLit a) = pure (BytesLit a)
 unsafeSubExpressions _ Natural = pure Natural
 unsafeSubExpressions _ (NaturalLit n) = pure (NaturalLit n)
 unsafeSubExpressions _ NaturalFold = pure NaturalFold
@@ -261,6 +263,7 @@ reservedIdentifiers = reservedKeywords <>
         , "Time/show"
         , "TimeZone/show"
         , "Bool"
+        , "Bytes"
         , "True"
         , "False"
         , "Optional"

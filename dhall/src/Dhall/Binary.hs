@@ -144,6 +144,7 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Type"              -> return (Const Type)
                        | sb == "Kind"              -> return (Const Kind)
                        | sb == "Sort"              -> return (Const Sort)
+                    5  | sb == "Bytes"             -> return Bytes
                     6  | sb == "Double"            -> return Double
                     7  | sb == "Integer"           -> return Integer
                        | sb == "Natural"           -> return Natural
@@ -653,6 +654,12 @@ decodeExpressionInternal decodeEmbed = go
                                 let minutes = sign (_HH * 60 + _MM)
 
                                 return (TimeZoneLiteral (Time.TimeZone minutes False ""))
+
+                            33 -> do
+                                b <- Decoding.decodeBytes
+
+                                return (BytesLit b)
+
                             34 -> do
                                 t <- go
                                 return (ShowConstructor t)
@@ -739,6 +746,9 @@ encodeExpressionInternal encodeEmbed = go
 
         Bool ->
             Encoding.encodeUtf8ByteArray "Bool"
+
+        Bytes ->
+            Encoding.encodeUtf8ByteArray "Bytes"
 
         Optional ->
             Encoding.encodeUtf8ByteArray "Optional"
@@ -841,6 +851,11 @@ encodeExpressionInternal encodeEmbed = go
 
         BoolNE l r ->
             encodeOperator 3 l r
+
+        BytesLit b ->
+            encodeList2
+                (Encoding.encodeInt 33)
+                (Encoding.encodeBytes b)
 
         NaturalPlus l r ->
             encodeOperator 4 l r
@@ -1169,6 +1184,7 @@ decodeImport len = do
         0 -> return Code
         1 -> return RawText
         2 -> return Location
+        3 -> return RawBytes
         _ -> die ("Unexpected code for import mode: " <> show m)
 
     let remote scheme = do
@@ -1307,7 +1323,11 @@ encodeImport import_ =
             Just digest ->
                 Encoding.encodeBytes ("\x12\x20" <> Dhall.Crypto.unSHA256Digest digest)
 
-        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
+        m = Encoding.encodeInt (case importMode of
+            Code -> 0
+            RawText -> 1
+            Location -> 2
+            RawBytes -> 3 )
 
     Import{..} = import_
 

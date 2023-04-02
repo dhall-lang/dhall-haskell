@@ -797,6 +797,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             b' = loop b
             c' = loop c
 
+        Core.Bytes ->
+            Core.Bytes
+
+        Core.BytesLit a ->
+            Core.BytesLit a
+
         Core.Natural ->
             Core.Natural
 

@@ -17,6 +17,7 @@ module Dhall.Diff (
     , diff
     ) where
 
+import Data.ByteString       (ByteString)
 import Data.Foldable         (fold, toList)
 import Data.List.NonEmpty    (NonEmpty (..))
 import Data.Monoid           (Any (..))
@@ -40,16 +41,16 @@ import Dhall.Syntax
 import Numeric.Natural       (Natural)
 import Prettyprinter         (Doc, Pretty)
 
-import qualified Data.Algorithm.Diff   as Algo.Diff
+import qualified Data.Algorithm.Diff    as Algo.Diff
 import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Time             as Time
+import qualified Data.Time              as Time
 import qualified Dhall.Map
-import qualified Dhall.Normalize       as Normalize
-import qualified Dhall.Pretty.Internal as Internal
-import qualified Dhall.Syntax          as Syntax
-import qualified Prettyprinter         as Pretty
+import qualified Dhall.Normalize        as Normalize
+import qualified Dhall.Pretty.Internal  as Internal
+import qualified Dhall.Syntax           as Syntax
+import qualified Prettyprinter          as Pretty
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
     any difference was detected
@@ -383,6 +384,10 @@ diffChunks cL cR
         (Right x, Right y) -> diff x y
         _                  -> diffTextSkeleton
 
+diffBytes :: ByteString -> ByteString -> Diff
+diffBytes l r =
+    "0x" <> diffText (Internal.prettyBase16 l) (Internal.prettyBase16 r)
+
 diffList
     :: (Eq a, Pretty a)
     => Seq (Expr Void a) -> Seq (Expr Void a) -> Diff
@@ -532,6 +537,10 @@ skeleton (BoolIf {}) =
     <>  keyword "else"
     <>  " "
     <>  ignore
+skeleton (BytesLit {}) =
+        "0x\""
+    <>  ignore
+    <>  "\""
 skeleton (NaturalPlus {}) =
         ignore
     <>  " "
@@ -1168,6 +1177,18 @@ diffPrimitiveExpression Bool Bool =
 diffPrimitiveExpression l@Bool r =
     mismatch l r
 diffPrimitiveExpression l r@Bool =
+    mismatch l r
+diffPrimitiveExpression Bytes Bytes =
+    "…"
+diffPrimitiveExpression l@Bytes r =
+    mismatch l r
+diffPrimitiveExpression l r@Bytes =
+    mismatch l r
+diffPrimitiveExpression (BytesLit l) (BytesLit r) =
+    diffBytes l r
+diffPrimitiveExpression l@(BytesLit {}) r =
+    mismatch l r
+diffPrimitiveExpression l r@(BytesLit {}) =
     mismatch l r
 diffPrimitiveExpression Natural Natural =
     "…"
