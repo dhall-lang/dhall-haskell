@@ -798,9 +798,9 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
-          App DateShow _ -> False
-          App TimeShow _ -> False
-          App TimeZoneShow _ -> False
+          App DateShow (DateLiteral _) -> False
+          App TimeShow (TimeLiteral _ _) -> False
+          App TimeZoneShow (TimeZoneLiteral _) -> False
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
           App (App NaturalSubtract _) (NaturalLit 0) -> False
