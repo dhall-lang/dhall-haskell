@@ -513,7 +513,7 @@ parseMode =
     parseAllFlag =
         Options.Applicative.switch
         (   Options.Applicative.long "all"
-        <>  Options.Applicative.help "Add integrity checks to all imports (not just remote imports)"
+        <>  Options.Applicative.help "Add integrity checks to all imports (not just remote imports) except for missing imports"
         )
 
     parseCacheFlag =
