@@ -609,6 +609,14 @@ dhallToNix e =
     loop DateLiteral{} = undefined
     loop TimeLiteral{} = undefined
     loop TimeZoneLiteral{} = undefined
+    -- We currently model `Date`/`Time`/`TimeZone` literals as strings in Nix,
+    -- so the corresponding show functions are the identity function
+    loop DateShow =
+        return ("date" ==> "date")
+    loop TimeShow =
+        return ("time" ==> "time")
+    loop TimeZoneShow =
+        return ("timeZone" ==> "timeZone")
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse (loop . Dhall.Core.recordFieldValue) a
