@@ -114,8 +114,11 @@ data Status = Status
     -- ^ Load the origin headers from environment or configuration file.
     --   After loading once, further evaluations return the cached version.
 
-    , _remote :: URL -> StateT Status IO Data.ByteString.ByteString
+    , _remote :: URL -> StateT Status IO Data.Text.Text
     -- ^ The remote resolver, fetches the content at the given URL.
+
+    , _remoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
+    -- ^ Like `_remote`, except for `Bytes`
 
     , _substitutions :: Dhall.Substitution.Substitutions Src Void
 
@@ -136,10 +139,11 @@ data Status = Status
 emptyStatusWith
     :: IO Manager
     -> StateT Status IO OriginHeaders
+    -> (URL -> StateT Status IO Data.Text.Text)
     -> (URL -> StateT Status IO Data.ByteString.ByteString)
     -> Import
     -> Status
-emptyStatusWith _newManager _loadOriginHeaders _remote rootImport = Status {..}
+emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport = Status {..}
   where
     _stack = pure (Chained rootImport)
 
@@ -174,8 +178,14 @@ cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
 -- | Lens from a `Status` to its `_remote` field
 remote
     :: Functor f
-    => LensLike' f Status (URL -> StateT Status IO Data.ByteString.ByteString)
+    => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
 remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
+
+-- | Lens from a `Status` to its `_remote` field
+remoteBytes
+    :: Functor f
+    => LensLike' f Status (URL -> StateT Status IO Data.ByteString.ByteString)
+remoteBytes k s = fmap (\x -> s { _remoteBytes = x }) (k (_remoteBytes s))
 
 -- | Lens from a `Status` to its `_substitutions` field
 substitutions :: Functor f => LensLike' f Status (Dhall.Substitution.Substitutions Src Void)

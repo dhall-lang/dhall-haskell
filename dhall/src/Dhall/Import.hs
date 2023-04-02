@@ -222,6 +222,7 @@ import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding                          as Encoding
+import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
@@ -770,7 +771,32 @@ writeToSemisemanticCache semisemanticHash bytes = do
         liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
     return ()
 
--- Fetch source code directly from disk/network
+-- | Fetch source code directly from disk/network
+fetchFresh :: ImportType -> StateT Status IO Text
+fetchFresh (Local prefix file) = do
+    Status { _stack } <- State.get
+    path <- liftIO $ localToPath prefix file
+    exists <- liftIO $ Directory.doesFileExist path
+    if exists
+        then liftIO $ Data.Text.IO.readFile path
+        else throwMissingImport (Imported _stack (MissingFile path))
+
+fetchFresh (Remote url) = do
+    Status { _remote } <- State.get
+    _remote url
+
+fetchFresh (Env env) = do
+    Status { _stack } <- State.get
+    x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
+    case x of
+        Just string ->
+            return (Text.pack string)
+        Nothing ->
+                throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+
+fetchFresh Missing = throwM (MissingImports [])
+
+-- | Like `fetchFresh`, except for `Bytes`
 fetchBytes :: ImportType -> StateT Status IO ByteString
 fetchBytes (Local prefix file) = do
     Status { _stack } <- State.get
@@ -781,8 +807,8 @@ fetchBytes (Local prefix file) = do
         else throwMissingImport (Imported _stack (MissingFile path))
 
 fetchBytes (Remote url) = do
-    Status { _remote } <- State.get
-    _remote url
+    Status { _remoteBytes } <- State.get
+    _remoteBytes url
 
 fetchBytes (Env env) = do
     Status { _stack } <- State.get
@@ -794,16 +820,8 @@ fetchBytes (Env env) = do
             throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
 fetchBytes Missing = throwM (MissingImports [])
 
-fetchFresh :: ImportType -> StateT Status IO Text
-fetchFresh importType = do
-    bytes <- fetchBytes importType
-
-    case Encoding.decodeUtf8' bytes of
-        Left exception -> liftIO (Exception.throwIO exception)
-        Right text -> return text
-
 -- | Fetch the text contents of a URL
-fetchRemote :: URL -> StateT Status IO Data.ByteString.ByteString
+fetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
@@ -815,10 +833,29 @@ fetchRemote url = do
     zoom remote (State.put fetchFromHTTP)
     fetchFromHTTP url
   where
-    fetchFromHTTP :: URL -> StateT Status IO Data.ByteString.ByteString
+    fetchFromHTTP :: URL -> StateT Status IO Data.Text.Text
     fetchFromHTTP (url'@URL { headers = maybeHeadersExpression }) = do
         let maybeHeaders = fmap toHeaders maybeHeadersExpression
         fetchFromHttpUrl url' maybeHeaders
+#endif
+
+-- | Fetch the text contents of a URL
+fetchRemoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
+#ifndef WITH_HTTP
+fetchRemoteBytes (url@URL { headers = maybeHeadersExpression }) = do
+    let maybeHeaders = fmap toHeaders maybeHeadersExpression
+    let urlString = Text.unpack (Core.pretty url)
+    Status { _stack } <- State.get
+    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+#else
+fetchRemoteBytes url = do
+    zoom remoteBytes (State.put fetchFromHTTP)
+    fetchFromHTTP url
+  where
+    fetchFromHTTP :: URL -> StateT Status IO Data.ByteString.ByteString
+    fetchFromHTTP (url'@URL { headers = maybeHeadersExpression }) = do
+        let maybeHeaders = fmap toHeaders maybeHeadersExpression
+        fetchFromHttpUrlBytes url' maybeHeaders
 #endif
 
 getCacheFile
@@ -1107,7 +1144,7 @@ makeEmptyStatus
     -> FilePath
     -> Status
 makeEmptyStatus newManager headersExpr rootDirectory =
-    emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote fetchRemoteBytes rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1140,7 +1177,7 @@ remoteStatus = remoteStatusWithManager defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote fetchRemoteBytes rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed

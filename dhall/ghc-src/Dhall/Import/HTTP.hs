@@ -4,6 +4,7 @@
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
+    , fetchFromHttpUrlBytes
     , originHeadersFileExpr
     ) where
 
@@ -265,8 +266,9 @@ addHeaders originHeaders urlHeaders request =
         matchesKey :: CI ByteString -> HTTPHeader -> Bool
         matchesKey key (candidate, _value) = key == candidate
 
-fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO ByteString
-fetchFromHttpUrl childURL mheaders = do
+fetchFromHttpUrlBytes
+    :: URL -> Maybe [HTTPHeader] -> StateT Status IO ByteString
+fetchFromHttpUrlBytes childURL mheaders = do
     Status { _loadOriginHeaders } <- State.get
 
     originHeaders <- _loadOriginHeaders
@@ -300,6 +302,14 @@ fetchFromHttpUrl childURL mheaders = do
             return ()
 
     return (ByteString.Lazy.toStrict (HTTP.responseBody response))
+
+fetchFromHttpUrl :: URL -> Maybe [HTTPHeader] -> StateT Status IO Text.Text
+fetchFromHttpUrl childURL mheaders = do
+    bytes <- fetchFromHttpUrlBytes childURL mheaders
+
+    case Data.Text.Encoding.decodeUtf8' bytes of
+        Left  err  -> liftIO (Control.Exception.throwIO err)
+        Right text -> return text
 
 originHeadersFileExpr :: IO (Expr Src Import)
 originHeadersFileExpr = do

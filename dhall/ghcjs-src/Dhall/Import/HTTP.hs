@@ -2,6 +2,7 @@
 
 module Dhall.Import.HTTP
     ( fetchFromHttpUrl
+    , fetchFromHttpUrlBytes
     , originHeadersFileExpr
     ) where
 
@@ -15,13 +16,13 @@ import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
 
 import qualified Data.Text          as Text
-import qualified Data.Text.Encoding as Encoding
+import qualified Data.Text.Encoding as Text.Encoding
 import qualified JavaScript.XHR
 
 fetchFromHttpUrl
     :: URL
     -> Maybe [(CI ByteString, ByteString)]
-    -> StateT Status IO ByteString
+    -> StateT Status IO Text.Text
 fetchFromHttpUrl childURL Nothing = do
     let childURLText = renderURL childURL
 
@@ -35,9 +36,17 @@ fetchFromHttpUrl childURL Nothing = do
         200 -> return ()
         _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
 
-    return (Encoding.encodeUtf8 body)
+    return body
 fetchFromHttpUrl _ _ =
     fail "Dhall does not yet support custom headers when built using GHCJS"
+
+fetchFromHTTPUrlBytes
+    :: URL
+    -> Maybe [(CI ByteString, ByteString)]
+    -> StateT Status IO ByteString
+fetchFromHTTPUrlBytes childUrl mheader = do
+    text <- fetchFromHTTPUrl childUrl mheader
+    return (Text.Encoding.encodeUtf8 text)
 
 originHeadersFileExpr :: IO (Expr Src Import)
 originHeadersFileExpr = return Missing
