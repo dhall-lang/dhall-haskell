@@ -796,7 +796,7 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
--- | Like `fetchFresh`, except for `Bytes`
+-- | Like `fetchFresh`, except for `Dhall.Syntax.Expr.Bytes`
 fetchBytes :: ImportType -> StateT Status IO ByteString
 fetchBytes (Local prefix file) = do
     Status { _stack } <- State.get

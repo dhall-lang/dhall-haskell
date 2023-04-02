@@ -118,7 +118,7 @@ data Status = Status
     -- ^ The remote resolver, fetches the content at the given URL.
 
     , _remoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
-    -- ^ Like `_remote`, except for `Bytes`
+    -- ^ Like `_remote`, except for `Dhall.Syntax.Expr.Bytes`
 
     , _substitutions :: Dhall.Substitution.Substitutions Src Void
 
