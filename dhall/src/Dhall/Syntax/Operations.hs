@@ -113,10 +113,13 @@ unsafeSubExpressions _ TextReplace = pure TextReplace
 unsafeSubExpressions _ TextShow = pure TextShow
 unsafeSubExpressions _ Date = pure Date
 unsafeSubExpressions _ (DateLiteral a) = pure (DateLiteral a)
+unsafeSubExpressions _ DateShow = pure DateShow
 unsafeSubExpressions _ Time = pure Time
 unsafeSubExpressions _ (TimeLiteral a b) = pure (TimeLiteral a b)
+unsafeSubExpressions _ TimeShow = pure TimeShow
 unsafeSubExpressions _ TimeZone = pure TimeZone
 unsafeSubExpressions _ (TimeZoneLiteral a) = pure (TimeZoneLiteral a)
+unsafeSubExpressions _ TimeZoneShow = pure TimeZoneShow
 unsafeSubExpressions _ List = pure List
 unsafeSubExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
 unsafeSubExpressions f (ListAppend a b) = ListAppend <$> f a <*> f b
@@ -256,6 +259,9 @@ reservedIdentifiers = reservedKeywords <>
         , "List/reverse"
         , "Text/replace"
         , "Text/show"
+        , "Date/show"
+        , "Time/show"
+        , "TimeZone/show"
         , "Bool"
         , "Bytes"
         , "True"

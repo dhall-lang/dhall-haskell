@@ -375,6 +375,18 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                                 suffix
 
                                     loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks ((remainder, firstInterpolation) : chunks) lastText))))
+                    App DateShow (DateLiteral date) ->
+                        loop (TextLit (Chunks [] text))
+                      where
+                        text = Eval.dateShow date
+                    App TimeShow (TimeLiteral time precision) ->
+                        loop (TextLit (Chunks [] text))
+                      where
+                        text = Eval.timeShow time precision
+                    App TimeZoneShow (TimeZoneLiteral timezone) ->
+                        loop (TextLit (Chunks [] text))
+                      where
+                        text = Eval.timezoneShow timezone
                     _ -> do
                         res2 <- ctx (App f' a')
                         case res2 of
@@ -483,10 +495,13 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
           TextShow -> pure TextShow
           Date -> pure Date
           DateLiteral d -> pure (DateLiteral d)
+          DateShow -> pure DateShow
           Time -> pure Time
           TimeLiteral t p -> pure (TimeLiteral t p)
+          TimeShow -> pure TimeShow
           TimeZone -> pure TimeZone
           TimeZoneLiteral z -> pure (TimeZoneLiteral z)
+          TimeZoneShow -> pure TimeZoneShow
           List -> pure List
           ListLit t es
               | Data.Sequence.null es -> ListLit <$> t' <*> pure Data.Sequence.empty
@@ -783,6 +798,9 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
+          App DateShow (DateLiteral _) -> False
+          App TimeShow (TimeLiteral _ _) -> False
+          App TimeZoneShow (TimeZoneLiteral _) -> False
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
           App (App NaturalSubtract _) (NaturalLit 0) -> False
@@ -884,10 +902,13 @@ isNormalized e0 = loop (Syntax.denote e0)
       TextShow -> True
       Date -> True
       DateLiteral _ -> True
+      DateShow -> True
       Time -> True
       TimeLiteral _ _ -> True
+      TimeShow -> True
       TimeZone -> True
       TimeZoneLiteral _ -> True
+      TimeZoneShow -> True
       List -> True
       ListLit t es -> all loop t && all loop es
       ListAppend x y -> loop x && loop y && decide x y
