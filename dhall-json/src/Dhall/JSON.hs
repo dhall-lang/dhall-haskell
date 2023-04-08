@@ -797,6 +797,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             b' = loop b
             c' = loop c
 
+        Core.Bytes ->
+            Core.Bytes
+
+        Core.BytesLit a ->
+            Core.BytesLit a
+
         Core.Natural ->
             Core.Natural
 
@@ -892,17 +898,26 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.DateLiteral d ->
             Core.DateLiteral d
 
+        Core.DateShow ->
+            Core.DateShow
+
         Core.Time ->
             Core.Time
 
         Core.TimeLiteral t p ->
             Core.TimeLiteral t p
 
+        Core.TimeShow ->
+            Core.TimeShow
+
         Core.TimeZone ->
             Core.TimeZone
 
         Core.TimeZoneLiteral z ->
             Core.TimeZoneLiteral z
+
+        Core.TimeZoneShow ->
+            Core.TimeZoneShow
 
         Core.List ->
             Core.List

@@ -223,6 +223,17 @@ freezeRemoteImportWithSettings settings directory import_ =
         Remote {} -> freezeImportWithSettings settings directory import_
         _         -> return import_
 
+-- | See 'freezeRemoteImport'.
+freezeNonMissingImportWithSettings
+    :: EvaluateSettings
+    -> FilePath
+    -> Import
+    -> IO Import
+freezeNonMissingImportWithSettings settings directory import_ =
+    case importType (importHashed import_) of
+        Missing -> return import_
+        _ -> freezeImportWithSettings settings directory import_
+
 -- | See 'freeze'.
 freezeWithSettings
     :: EvaluateSettings
@@ -322,7 +333,7 @@ freezeExpressionWithSettings
 freezeExpressionWithSettings settings directory scope intent expression = do
     let freezeScope =
             case scope of
-                AllImports        -> freezeImportWithSettings
+                AllImports        -> freezeNonMissingImportWithSettings
                 OnlyRemoteImports -> freezeRemoteImportWithSettings
 
     let freezeFunction = freezeScope settings directory
