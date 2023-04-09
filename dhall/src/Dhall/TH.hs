@@ -245,91 +245,91 @@ toDeclaration
     -> HaskellType (Expr s a)
     -> Q [Dec]
 toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
-  case typ of
-    SingleConstructor{..} -> uncurry (fromSingle typeName constructorName) $ getTypeParams code
-    MultipleConstructors{..} -> uncurry (fromMulti typeName) $ getTypeParams code
-  where
-    getTypeParams = first numberConsecutive .  getTypeParams_ []
+    case typ of
+        SingleConstructor{..} -> uncurry (fromSingle typeName constructorName) $ getTypeParams code
+        MultipleConstructors{..} -> uncurry (fromMulti typeName) $ getTypeParams code
+    where
+        getTypeParams = first numberConsecutive .  getTypeParams_ []
+    
+        getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ (Const Type)) rest) = getTypeParams_ (v:acc) rest
+        getTypeParams_ acc rest = (acc, rest)
 
-    getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ (Const Type)) rest) = getTypeParams_ (v:acc) rest
-    getTypeParams_ acc rest = (acc, rest)
+        derivingClauses = [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
-    derivingClauses = [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
+        interpretOptions = generateToInterpretOptions generateOptions typ
 
-    interpretOptions = generateToInterpretOptions generateOptions typ
+        toTypeVar n i = Syntax.PlainTV $ Syntax.mkName (Text.unpack n ++ show i)
 
-    toTypeVar n i = Syntax.PlainTV $ Syntax.mkName (Text.unpack n ++ show i)
+        toDataD typeName typeParams constructors = do
+            let name = Syntax.mkName (Text.unpack typeName)
 
-    toDataD typeName typeParams constructors = do
-      let name = Syntax.mkName (Text.unpack typeName)
+            let params = fmap (uncurry toTypeVar) typeParams
 
-      let params = fmap (uncurry toTypeVar) typeParams
+            fmap concat . sequence $
+                [pure [DataD [] name params Nothing constructors derivingClauses]] <>
+                [ fromDhallInstance name interpretOptions | generateFromDhallInstance ] <>
+                [ toDhallInstance name interpretOptions | generateToDhallInstance ]
 
-      fmap concat . sequence $
-          [pure [DataD [] name params Nothing constructors derivingClauses]] <>
-          [ fromDhallInstance name interpretOptions | generateFromDhallInstance ] <>
-          [ toDhallInstance name interpretOptions | generateToDhallInstance ]
+        fromSingle typeName constructorName typeParams dhallType = do
+            constructor <- toConstructor typeParams generateOptions haskellTypes typeName (constructorName, Just dhallType)
+    
+            toDataD typeName typeParams [constructor]
+    
+        fromMulti typeName typeParams dhallType = case dhallType of
+            Union kts -> do
+                constructors <- traverse (toConstructor typeParams generateOptions haskellTypes typeName) (Dhall.Map.toList kts)
 
-    fromSingle typeName constructorName typeParams dhallType = do
-      constructor <- toConstructor typeParams generateOptions haskellTypes typeName (constructorName, Just dhallType)
-  
-      toDataD typeName typeParams [constructor]
-  
-    fromMulti typeName typeParams dhallType = case dhallType of
-      Union kts -> do
-        constructors <- traverse (toConstructor typeParams generateOptions haskellTypes typeName) (Dhall.Map.toList kts)
+                toDataD typeName typeParams constructors
+    
+            _ -> fail $ message dhallType 
 
-        toDataD typeName typeParams constructors
-  
-      _ -> fail $ message dhallType 
+        message dhallType = Pretty.renderString (Dhall.Pretty.layout $ document dhallType)
 
-    message dhallType = Pretty.renderString (Dhall.Pretty.layout $ document dhallType)
-
-    document dhallType =
-      mconcat
-       [ "Dhall.TH.makeHaskellTypes: Not a union type\n"
-       , "                                                                                \n"
-       , "Explanation: This function expects the ❰code❱ field of ❰MultipleConstructors❱ to\n"
-       , "evaluate to a union type.                                                       \n"
-       , "                                                                                \n"
-       , "For example, this is a valid Dhall union type that this function would accept:  \n"
-       , "                                                                                \n"
-       , "                                                                                \n"
-       , "    ┌──────────────────────────────────────────────────────────────────┐        \n"
-       , "    │ Dhall.TH.makeHaskellTypes (MultipleConstructors \"T\" \"< A | B >\") │        \n"
-       , "    └──────────────────────────────────────────────────────────────────┘        \n"
-       , "                                                                                \n"
-       , "                                                                                \n"
-       , "... which corresponds to this Haskell type declaration:                         \n"
-       , "                                                                                \n"
-       , "                                                                                \n"
-       , "    ┌────────────────┐                                                          \n"
-       , "    │ data T = A | B │                                                          \n"
-       , "    └────────────────┘                                                          \n"
-       , "                                                                                \n"
-       , "                                                                                \n"
-       , "... but the following Dhall type is rejected due to being a bare record type:   \n"
-       , "                                                                                \n"
-       , "                                                                                \n"
-       , "    ┌──────────────────────────────────────────────┐                            \n"
-       , "    │ Dhall.TH.makeHaskellTypes \"T\" \"{ x : Bool }\" │  Not valid                 \n"
-       , "    └──────────────────────────────────────────────┘                            \n"
-       , "                                                                                \n"
-       , "                                                                                \n"
-       , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
-       , "                                                                                \n"
-       , " " <> Dhall.Util.insert dhallType <> "\n"
-       , "                                                                                \n"
-       , "... which is not a union type."
-       ]
+        document dhallType =
+            mconcat
+                [ "Dhall.TH.makeHaskellTypes: Not a union type\n"
+                , "                                                                                \n"
+                , "Explanation: This function expects the ❰code❱ field of ❰MultipleConstructors❱ to\n"
+                , "evaluate to a union type.                                                       \n"
+                , "                                                                                \n"
+                , "For example, this is a valid Dhall union type that this function would accept:  \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "    ┌──────────────────────────────────────────────────────────────────┐        \n"
+                , "    │ Dhall.TH.makeHaskellTypes (MultipleConstructors \"T\" \"< A | B >\") │        \n"
+                , "    └──────────────────────────────────────────────────────────────────┘        \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "... which corresponds to this Haskell type declaration:                         \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "    ┌────────────────┐                                                          \n"
+                , "    │ data T = A | B │                                                          \n"
+                , "    └────────────────┘                                                          \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "... but the following Dhall type is rejected due to being a bare record type:   \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "    ┌──────────────────────────────────────────────┐                            \n"
+                , "    │ Dhall.TH.makeHaskellTypes \"T\" \"{ x : Bool }\" │  Not valid                 \n"
+                , "    └──────────────────────────────────────────────┘                            \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
+                , "                                                                                \n"
+                , " " <> Dhall.Util.insert dhallType <> "\n"
+                , "                                                                                \n"
+                , "... which is not a union type."
+                ]
 
 -- | Number each distinct member in a list, starting at 0
 numberConsecutive :: Ord a => [a] -> [(a, Int)]
 numberConsecutive = snd . List.mapAccumR go Map.empty . reverse
   where
-    go m k =
-      let (i, m') = Map.updateLookupWithKey (\_ j -> Just $ j + 1) k m
-      in maybe ((Map.insert k 0 m'), (k, 0)) (\i' -> (m', (k, i'))) i
+      go m k =
+          let (i, m') = Map.updateLookupWithKey (\_ j -> Just $ j + 1) k m
+          in maybe ((Map.insert k 0 m'), (k, 0)) (\i' -> (m', (k, i'))) i
 
 -- | Convert a Dhall type to the corresponding Haskell constructor
 toConstructor
