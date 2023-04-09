@@ -450,6 +450,9 @@ data GenerateOptions = GenerateOptions
 --
 --     * Constructors and fields are passed unmodified.
 --     * Both `FromDhall` and `ToDhall` instances are generated.
+--
+--   Note: `From/ToDhall` should be `False` if importing higher-kinded types.
+--   In these cases one should use a standalone declaration.
 defaultGenerateOptions :: GenerateOptions
 defaultGenerateOptions = GenerateOptions
     { constructorModifier = id
