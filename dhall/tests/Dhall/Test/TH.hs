@@ -7,10 +7,10 @@
 
 module Dhall.Test.TH where
 
-import Control.Exception (throwIO)
-import Data.Either.Validation (Validation(..))
-import Dhall.TH   (HaskellType (..))
-import Test.Tasty (TestTree)
+import Control.Exception      (throwIO)
+import Data.Either.Validation (Validation (..))
+import Dhall.TH               (HaskellType (..))
+import Test.Tasty             (TestTree)
 
 import qualified Data.Text
 import qualified Dhall
@@ -153,3 +153,11 @@ Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
 deriving instance Dhall.Generic NoInstancesT
 instance Dhall.FromDhall NoInstancesT
 instance Dhall.ToDhall NoInstancesT
+
+Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
+    { Dhall.TH.constructorModifier = ("Strict" <>)
+    , Dhall.TH.fieldModifier = ("strict" <>) . Data.Text.toTitle
+    , Dhall.TH.makeStrict = True
+    })
+    [ MultipleConstructors "StrictFields" "./tests/th/example.dhall"
+    ]

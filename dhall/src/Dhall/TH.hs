@@ -305,7 +305,9 @@ toConstructor
 toConstructor GenerateOptions{..} haskellTypes outerTypeName (constructorName, maybeAlternativeType) = do
     let name = Syntax.mkName (Text.unpack $ constructorModifier constructorName)
 
-    let bang = Bang NoSourceUnpackedness NoSourceStrictness
+    let strictness = if makeStrict then SourceStrict else NoSourceStrictness
+
+    let bang = Bang NoSourceUnpackedness strictness
 
     case maybeAlternativeType of
         Just dhallType
@@ -400,6 +402,8 @@ data GenerateOptions = GenerateOptions
     -- ^ Generate a `FromDhall` instance for the Haskell type
     , generateToDhallInstance :: Bool
     -- ^ Generate a `ToDhall` instance for the Haskell type
+    , makeStrict :: Bool
+    -- ^ Make all fields strict.
     }
 
 -- | A default set of options used by `makeHaskellTypes`. That means:
@@ -412,6 +416,7 @@ defaultGenerateOptions = GenerateOptions
     , fieldModifier = id
     , generateFromDhallInstance = True
     , generateToDhallInstance = True
+    , makeStrict = False
     }
 
 -- | This function generates `Dhall.InterpretOptions` that can be used for the
