@@ -7,10 +7,8 @@ import Data.Text (Text)
 
 import Dhall.Syntax (Directory (..), File (..), Scheme (..), URL (..))
 
-import qualified Network.URI.Encode as URI.Encode
-
 renderComponent :: Text -> Text
-renderComponent component = "/" <> URI.Encode.encodeText component
+renderComponent component = "/" <> component
 
 renderQuery :: Text -> Text
 renderQuery query = "?" <> query
