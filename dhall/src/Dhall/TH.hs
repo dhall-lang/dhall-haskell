@@ -22,12 +22,7 @@ module Dhall.TH
 import Data.Bifunctor            (first)
 import Data.Text                 (Text)
 import Dhall                     (FromDhall, ToDhall)
-import Dhall.Syntax
-    ( Const (..)
-    , Expr (..)
-    , FunctionBinding (..)
-    , Var (..)
-    )
+import Dhall.Syntax              (Expr (..), FunctionBinding (..), Var (..))
 import GHC.Generics              (Generic)
 import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
 import Prettyprinter             (Pretty)
@@ -124,7 +119,7 @@ dhall = QuasiQuoter
 -}
 toNestedHaskellType
     :: (Eq a, Pretty a)
-    => [(Text, Int)]
+    => [Var]
     -> [HaskellType (Expr s a)]
     -- ^ All Dhall-derived data declarations
     --
@@ -153,6 +148,7 @@ toNestedHaskellType typeParams haskellTypes = loop
       , "• ❰List a❱     (where ❰a❱ is also a valid nested type)                          \n"
       , "• ❰Optional a❱ (where ❰a❱ is also a valid nested type)                          \n"
       , "• Another matching datatype declaration                                         \n"
+      , "• A bound type variable                                                         \n"
       , "                                                                                \n"
       , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
       , "                                                                                \n"
@@ -189,23 +185,19 @@ toNestedHaskellType typeParams haskellTypes = loop
 
             return (AppT (ConT ''Maybe) haskellElementType)
 
-        App dhallAppType dhallElementType
-          | Just haskellAppType <- List.find (predicate dhallAppType) haskellTypes -> do
-              haskellElementType <- loop dhallElementType
-              let name = Syntax.mkName (Text.unpack (typeName haskellAppType))
+        App dhallAppType dhallElementType -> do
+            haskellAppType <- loop dhallAppType
+            haskellElementType <- loop dhallElementType
 
-              return (AppT (ConT name) haskellElementType)
-
-          | otherwise -> fail $ message dhallAppType
-
-        Var (V n i)
-          | Just (param, index) <- List.find (== (n, i)) typeParams -> do
+            return (AppT haskellAppType haskellElementType)
+          
+        Var v
+            | Just (V param index) <- List.find (v ==) typeParams -> do
                 let name = Syntax.mkName $ (Text.unpack param) ++ (show index)
 
                 return (VarT name)
 
-          -- TODO make this message useful
-          | otherwise -> fail $ "could not fine type"
+            | otherwise -> fail $ message v
 
         _   | Just haskellType <- List.find (predicate dhallType) haskellTypes -> do
                 let name = Syntax.mkName (Text.unpack (typeName haskellType))
@@ -251,19 +243,19 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
     where
         getTypeParams = first numberConsecutive .  getTypeParams_ []
     
-        getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ (Const Type)) rest) = getTypeParams_ (v:acc) rest
+        getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ _) rest) = getTypeParams_ (v:acc) rest
         getTypeParams_ acc rest = (acc, rest)
 
         derivingClauses = [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
         interpretOptions = generateToInterpretOptions generateOptions typ
 
-        toTypeVar n i = Syntax.PlainTV $ Syntax.mkName (Text.unpack n ++ show i)
+        toTypeVar (V n i) = Syntax.PlainTV $ Syntax.mkName (Text.unpack n ++ show i)
 
         toDataD typeName typeParams constructors = do
             let name = Syntax.mkName (Text.unpack typeName)
 
-            let params = fmap (uncurry toTypeVar) typeParams
+            let params = fmap toTypeVar typeParams
 
             fmap concat . sequence $
                 [pure [DataD [] name params Nothing constructors derivingClauses]] <>
@@ -323,18 +315,18 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
                 , "... which is not a union type."
                 ]
 
--- | Number each distinct member in a list, starting at 0
-numberConsecutive :: Ord a => [a] -> [(a, Int)]
+-- | Number each variable, starting at 0
+numberConsecutive :: [Text.Text] -> [Var]
 numberConsecutive = snd . List.mapAccumR go Map.empty . reverse
   where
       go m k =
           let (i, m') = Map.updateLookupWithKey (\_ j -> Just $ j + 1) k m
-          in maybe ((Map.insert k 0 m'), (k, 0)) (\i' -> (m', (k, i'))) i
+          in maybe ((Map.insert k 0 m'), (V k 0)) (\i' -> (m', (V k i'))) i
 
 -- | Convert a Dhall type to the corresponding Haskell constructor
 toConstructor
     :: (Eq a, Pretty a)
-    => [(Text, Int)]
+    => [Var]
     -> GenerateOptions
     -> [HaskellType (Expr s a)]
     -> Text

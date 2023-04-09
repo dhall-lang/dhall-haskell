@@ -103,7 +103,7 @@ Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     , MultipleConstructors "MyHKUnion" "./tests/th/HigherKindUnion.dhall"
     ]
 
-type MyHKSingle_ = MyHKSingle Bool Int
+type MyHKSingle_ = MyHKSingle Maybe Int
 type MyHKUnion_ = MyHKUnion Bool Int
 
 deriving instance Eq MyHKSingle_
@@ -140,8 +140,8 @@ testMakeHaskellTypesWith = Tasty.HUnit.testCase "makeHaskellTypesWith" $ do
         refEmployee = MyEmployee{ myName = "", myDepartment = MySales }
     myTest textEmployee refEmployee
 
-    let textHKSingle = "let T = (./tests/th/HigherKindSingle.dhall) Bool Int in T { foo = +1, bar = True, bam = \"\" }"
-        refHKSingle = MyHKSingle { myFoo = 1, myBar = True, myBam = "" } :: MyHKSingle_
+    let textHKSingle = "let T = (./tests/th/HigherKindSingle.dhall) Optional Int in T { foo = +1, bar = Some +2, bam = \"\" }"
+        refHKSingle = MyHKSingle { myFoo = 1, myBar = Just 2, myBam = "" } :: MyHKSingle_
     myTest textHKSingle refHKSingle
 
     let textHKUnion0 = "let T = (./tests/th/HigherKindUnion.dhall) Bool Int in T.Foo True"
