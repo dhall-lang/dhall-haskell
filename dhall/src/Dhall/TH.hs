@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards     #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -18,9 +19,10 @@ module Dhall.TH
     , defaultGenerateOptions
     ) where
 
+import Data.Bifunctor            (first)
 import Data.Text                 (Text)
 import Dhall                     (FromDhall, ToDhall)
-import Dhall.Syntax              (Expr (..))
+import Dhall.Syntax              (Expr (..), FunctionBinding (..), Var (..))
 import GHC.Generics              (Generic)
 import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
 import Prettyprinter             (Pretty)
@@ -42,6 +44,7 @@ import Language.Haskell.TH.Syntax
 import Language.Haskell.TH.Syntax (DerivClause (..), DerivStrategy (..))
 
 import qualified Data.List                   as List
+import qualified Data.Map                    as Map
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as Text
 import qualified Data.Typeable               as Typeable
@@ -56,6 +59,7 @@ import qualified Numeric.Natural
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.IO
 
+  
 {-| This fully resolves, type checks, and normalizes the expression, so the
     resulting AST is self-contained.
 
@@ -115,7 +119,8 @@ dhall = QuasiQuoter
 -}
 toNestedHaskellType
     :: (Eq a, Pretty a)
-    => [HaskellType (Expr s a)]
+    => [Var]
+    -> [HaskellType (Expr s a)]
     -- ^ All Dhall-derived data declarations
     --
     -- Used to replace complex types with references to one of these
@@ -123,8 +128,37 @@ toNestedHaskellType
     -> Expr s a
     -- ^ Dhall expression to convert to a simple Haskell type
     -> Q Type
-toNestedHaskellType haskellTypes = loop
+toNestedHaskellType typeParams haskellTypes = loop
   where
+    predicate dhallType haskellType = Core.judgmentallyEqual (code haskellType) dhallType
+
+    document dhallType =
+      mconcat
+      [ "Unsupported nested type\n"
+      , "                                                                                \n"
+      , "Explanation: Not all Dhall types can be nested within Haskell datatype          \n"
+      , "declarations.  Specifically, only the following simple Dhall types are supported\n"
+      , "as a nested type inside of a data declaration:                                  \n"
+      , "                                                                                \n"
+      , "• ❰Bool❱                                                                        \n"
+      , "• ❰Double❱                                                                      \n"
+      , "• ❰Integer❱                                                                     \n"
+      , "• ❰Natural❱                                                                     \n"
+      , "• ❰Text❱                                                                        \n"
+      , "• ❰List a❱     (where ❰a❱ is also a valid nested type)                          \n"
+      , "• ❰Optional a❱ (where ❰a❱ is also a valid nested type)                          \n"
+      , "• Another matching datatype declaration                                         \n"
+      , "• A bound type variable                                                         \n"
+      , "                                                                                \n"
+      , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
+      , "                                                                                \n"
+      , " " <> Dhall.Util.insert dhallType <> "\n"
+      , "                                                                                \n"
+      , "... which did not fit any of the above criteria."
+      ]
+  
+    message dhallType = Pretty.renderString (Dhall.Pretty.layout (document dhallType))
+  
     loop dhallType = case dhallType of
         Bool ->
             return (ConT ''Bool)
@@ -151,41 +185,25 @@ toNestedHaskellType haskellTypes = loop
 
             return (AppT (ConT ''Maybe) haskellElementType)
 
-        _   | Just haskellType <- List.find predicate haskellTypes -> do
+        App dhallAppType dhallElementType -> do
+            haskellAppType <- loop dhallAppType
+            haskellElementType <- loop dhallElementType
+
+            return (AppT haskellAppType haskellElementType)
+          
+        Var v
+            | Just (V param index) <- List.find (v ==) typeParams -> do
+                let name = Syntax.mkName $ (Text.unpack param) ++ (show index)
+
+                return (VarT name)
+
+            | otherwise -> fail $ message v
+
+        _   | Just haskellType <- List.find (predicate dhallType) haskellTypes -> do
                 let name = Syntax.mkName (Text.unpack (typeName haskellType))
 
                 return (ConT name)
-            | otherwise -> do
-            let document =
-                    mconcat
-                    [ "Unsupported nested type\n"
-                    , "                                                                                \n"
-                    , "Explanation: Not all Dhall types can be nested within Haskell datatype          \n"
-                    , "declarations.  Specifically, only the following simple Dhall types are supported\n"
-                    , "as a nested type inside of a data declaration:                                  \n"
-                    , "                                                                                \n"
-                    , "• ❰Bool❱                                                                        \n"
-                    , "• ❰Double❱                                                                      \n"
-                    , "• ❰Integer❱                                                                     \n"
-                    , "• ❰Natural❱                                                                     \n"
-                    , "• ❰Text❱                                                                        \n"
-                    , "• ❰List a❱     (where ❰a❱ is also a valid nested type)                          \n"
-                    , "• ❰Optional a❱ (where ❰a❱ is also a valid nested type)                          \n"
-                    , "• Another matching datatype declaration                                         \n"
-                    , "                                                                                \n"
-                    , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
-                    , "                                                                                \n"
-                    , " " <> Dhall.Util.insert dhallType <> "\n"
-                    , "                                                                                \n"
-                    , "... which did not fit any of the above criteria."
-                    ]
-
-            let message = Pretty.renderString (Dhall.Pretty.layout document)
-
-            fail message
-          where
-            predicate haskellType =
-                Core.judgmentallyEqual (code haskellType) dhallType
+            | otherwise -> fail $ message dhallType
 
 -- | A deriving clause for `Generic`.
 derivingGenericClause :: DerivClause
@@ -218,91 +236,105 @@ toDeclaration
     -> [HaskellType (Expr s a)]
     -> HaskellType (Expr s a)
     -> Q [Dec]
-toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ@MultipleConstructors{..} =
-    case code of
-        Union kts -> do
+toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
+    case typ of
+        SingleConstructor{..} -> uncurry (fromSingle typeName constructorName) $ getTypeParams code
+        MultipleConstructors{..} -> uncurry (fromMulti typeName) $ getTypeParams code
+    where
+        getTypeParams = first numberConsecutive .  getTypeParams_ []
+    
+        getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ _) rest) = getTypeParams_ (v:acc) rest
+        getTypeParams_ acc rest = (acc, rest)
+
+        derivingClauses = [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
+
+        interpretOptions = generateToInterpretOptions generateOptions typ
+
+        toTypeVar (V n i) = Syntax.PlainTV $ Syntax.mkName (Text.unpack n ++ show i)
+
+        toDataD typeName typeParams constructors = do
             let name = Syntax.mkName (Text.unpack typeName)
 
-            let derivingClauses =
-                    [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
-
-            constructors <- traverse (toConstructor generateOptions haskellTypes typeName) (Dhall.Map.toList kts)
-
-            let interpretOptions = generateToInterpretOptions generateOptions typ
+            let params = fmap toTypeVar typeParams
 
             fmap concat . sequence $
-                [pure [DataD [] name [] Nothing constructors derivingClauses]] <>
+                [pure [DataD [] name params Nothing constructors derivingClauses]] <>
                 [ fromDhallInstance name interpretOptions | generateFromDhallInstance ] <>
                 [ toDhallInstance name interpretOptions | generateToDhallInstance ]
 
-        _ -> do
-            let document =
-                    mconcat
-                    [ "Dhall.TH.makeHaskellTypes: Not a union type\n"
-                    , "                                                                                \n"
-                    , "Explanation: This function expects the ❰code❱ field of ❰MultipleConstructors❱ to\n"
-                    , "evaluate to a union type.                                                       \n"
-                    , "                                                                                \n"
-                    , "For example, this is a valid Dhall union type that this function would accept:  \n"
-                    , "                                                                                \n"
-                    , "                                                                                \n"
-                    , "    ┌──────────────────────────────────────────────────────────────────┐        \n"
-                    , "    │ Dhall.TH.makeHaskellTypes (MultipleConstructors \"T\" \"< A | B >\") │        \n"
-                    , "    └──────────────────────────────────────────────────────────────────┘        \n"
-                    , "                                                                                \n"
-                    , "                                                                                \n"
-                    , "... which corresponds to this Haskell type declaration:                         \n"
-                    , "                                                                                \n"
-                    , "                                                                                \n"
-                    , "    ┌────────────────┐                                                          \n"
-                    , "    │ data T = A | B │                                                          \n"
-                    , "    └────────────────┘                                                          \n"
-                    , "                                                                                \n"
-                    , "                                                                                \n"
-                    , "... but the following Dhall type is rejected due to being a bare record type:   \n"
-                    , "                                                                                \n"
-                    , "                                                                                \n"
-                    , "    ┌──────────────────────────────────────────────┐                            \n"
-                    , "    │ Dhall.TH.makeHaskellTypes \"T\" \"{ x : Bool }\" │  Not valid                 \n"
-                    , "    └──────────────────────────────────────────────┘                            \n"
-                    , "                                                                                \n"
-                    , "                                                                                \n"
-                    , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
-                    , "                                                                                \n"
-                    , " " <> Dhall.Util.insert code <> "\n"
-                    , "                                                                                \n"
-                    , "... which is not a union type."
-                    ]
+        fromSingle typeName constructorName typeParams dhallType = do
+            constructor <- toConstructor typeParams generateOptions haskellTypes typeName (constructorName, Just dhallType)
+    
+            toDataD typeName typeParams [constructor]
+    
+        fromMulti typeName typeParams dhallType = case dhallType of
+            Union kts -> do
+                constructors <- traverse (toConstructor typeParams generateOptions haskellTypes typeName) (Dhall.Map.toList kts)
 
-            let message = Pretty.renderString (Dhall.Pretty.layout document)
+                toDataD typeName typeParams constructors
+    
+            _ -> fail $ message dhallType 
 
-            fail message
-toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ@SingleConstructor{..} = do
-    let name = Syntax.mkName (Text.unpack typeName)
+        message dhallType = Pretty.renderString (Dhall.Pretty.layout $ document dhallType)
 
-    let derivingClauses =
-            [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
+        document dhallType =
+            mconcat
+                [ "Dhall.TH.makeHaskellTypes: Not a union type\n"
+                , "                                                                                \n"
+                , "Explanation: This function expects the ❰code❱ field of ❰MultipleConstructors❱ to\n"
+                , "evaluate to a union type.                                                       \n"
+                , "                                                                                \n"
+                , "For example, this is a valid Dhall union type that this function would accept:  \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "    ┌──────────────────────────────────────────────────────────────────┐        \n"
+                , "    │ Dhall.TH.makeHaskellTypes (MultipleConstructors \"T\" \"< A | B >\") │        \n"
+                , "    └──────────────────────────────────────────────────────────────────┘        \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "... which corresponds to this Haskell type declaration:                         \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "    ┌────────────────┐                                                          \n"
+                , "    │ data T = A | B │                                                          \n"
+                , "    └────────────────┘                                                          \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "... but the following Dhall type is rejected due to being a bare record type:   \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "    ┌──────────────────────────────────────────────┐                            \n"
+                , "    │ Dhall.TH.makeHaskellTypes \"T\" \"{ x : Bool }\" │  Not valid                 \n"
+                , "    └──────────────────────────────────────────────┘                            \n"
+                , "                                                                                \n"
+                , "                                                                                \n"
+                , "The Haskell datatype generation logic encountered the following Dhall type:     \n"
+                , "                                                                                \n"
+                , " " <> Dhall.Util.insert dhallType <> "\n"
+                , "                                                                                \n"
+                , "... which is not a union type."
+                ]
 
-    let interpretOptions = generateToInterpretOptions generateOptions typ
-
-    constructor <- toConstructor generateOptions haskellTypes typeName (constructorName, Just code)
-
-    fmap concat . sequence $
-        [pure [DataD [] name [] Nothing [constructor] derivingClauses]] <>
-        [ fromDhallInstance name interpretOptions | generateFromDhallInstance ] <>
-        [ toDhallInstance name interpretOptions | generateToDhallInstance ]
+-- | Number each variable, starting at 0
+numberConsecutive :: [Text.Text] -> [Var]
+numberConsecutive = snd . List.mapAccumR go Map.empty . reverse
+  where
+      go m k =
+          let (i, m') = Map.updateLookupWithKey (\_ j -> Just $ j + 1) k m
+          in maybe ((Map.insert k 0 m'), (V k 0)) (\i' -> (m', (V k i'))) i
 
 -- | Convert a Dhall type to the corresponding Haskell constructor
 toConstructor
     :: (Eq a, Pretty a)
-    => GenerateOptions
+    => [Var]
+    -> GenerateOptions
     -> [HaskellType (Expr s a)]
     -> Text
     -- ^ typeName
     -> (Text, Maybe (Expr s a))
     -- ^ @(constructorName, fieldType)@
     -> Q Con
-toConstructor GenerateOptions{..} haskellTypes outerTypeName (constructorName, maybeAlternativeType) = do
+toConstructor typeParams GenerateOptions{..} haskellTypes outerTypeName (constructorName, maybeAlternativeType) = do
     let name = Syntax.mkName (Text.unpack $ constructorModifier constructorName)
 
     let strictness = if makeStrict then SourceStrict else NoSourceStrictness
@@ -322,7 +354,7 @@ toConstructor GenerateOptions{..} haskellTypes outerTypeName (constructorName, m
 
         Just (Record kts) -> do
             let process (key, dhallFieldType) = do
-                    haskellFieldType <- toNestedHaskellType haskellTypes dhallFieldType
+                    haskellFieldType <- toNestedHaskellType typeParams haskellTypes dhallFieldType
 
                     return (Syntax.mkName (Text.unpack $ fieldModifier key), bang, haskellFieldType)
 
@@ -331,7 +363,7 @@ toConstructor GenerateOptions{..} haskellTypes outerTypeName (constructorName, m
             return (RecC name varBangTypes)
 
         Just dhallAlternativeType -> do
-            haskellAlternativeType <- toNestedHaskellType haskellTypes dhallAlternativeType
+            haskellAlternativeType <- toNestedHaskellType typeParams haskellTypes dhallAlternativeType
 
             return (NormalC name [ (bang, haskellAlternativeType) ])
 
@@ -410,6 +442,9 @@ data GenerateOptions = GenerateOptions
 --
 --     * Constructors and fields are passed unmodified.
 --     * Both `FromDhall` and `ToDhall` instances are generated.
+--
+--   Note: `From/ToDhall` should be `False` if importing higher-kinded types.
+--   In these cases one should use a standalone declaration.
 defaultGenerateOptions :: GenerateOptions
 defaultGenerateOptions = GenerateOptions
     { constructorModifier = id
