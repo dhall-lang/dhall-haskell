@@ -23,6 +23,8 @@ module Dhall.DirectoryTree.Types
 
     , setFileMode
     , prettyFileMode
+
+    , isMetadataSupported
     ) where
 
 import Data.Functor.Identity    (Identity (..))
@@ -239,3 +241,11 @@ prettyFileMode mode = userPP <> groupPP <> otherPP
         isBitSet c mask = if mask `Posix.intersectFileModes` mode /= Posix.nullFileMode
             then [c]
             else "-"
+
+-- | Is setting metadata supported on this platform or not.
+isMetadataSupported :: Bool
+#ifdef mingw32_HOST_OS
+isMetadataSupported = False
+#else
+isMetadataSupported = True
+#endif
