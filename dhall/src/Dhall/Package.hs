@@ -136,7 +136,7 @@ getPackagePathAndContent outputFn (path :| paths) = do
 filepathToMap :: FilePath -> FilePath -> Map Text (RecordField s Import)
 filepathToMap outputFn = go [] . splitDirectories
     where
-        go _acc [] = error "filepathToMap: Path is empty"
+        go acc [] = go acc ["."]
         go !acc [x] =
                     let import_ = Import
                             { importHashed = ImportHashed
