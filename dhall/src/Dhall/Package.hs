@@ -172,8 +172,8 @@ filepathToMap outputFn = go [] . splitDirectories
 --
 mergeMaps :: Map Text (RecordField s Import) -> Map Text (RecordField s Import) -> IO (Map Text (RecordField s Import))
 mergeMaps x y = do
-    let x' = fmap ((:| [])) x
-        y' = fmap ((:| [])) y
+    let x' = fmap (:| []) x
+        y' = fmap (:| []) y
         z = Map.unionWith (<>) x' y'
     for z $ \case
         v@RecordField{recordFieldValue = Embed{}} :| [] -> return v
