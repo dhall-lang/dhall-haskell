@@ -51,6 +51,10 @@ module Dhall.Marshal.Decode
     , int64
     , scientific
     , double
+      -- ** Bytes
+    , lazyBytes
+    , strictBytes
+    , shortBytes
       -- ** Textual
     , string
     , lazyText
@@ -164,6 +168,9 @@ import Prelude                          hiding (maybe, sequence)
 import Prettyprinter                    (Pretty)
 
 import qualified Control.Applicative
+import qualified Data.ByteString
+import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Short
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
@@ -302,6 +309,15 @@ instance FromDhall Scientific where
 
 instance FromDhall Double where
     autoWith _ = double
+
+instance FromDhall Data.ByteString.Short.ShortByteString where
+    autoWith _ = shortBytes
+
+instance FromDhall Data.ByteString.Lazy.ByteString where
+    autoWith _ = lazyBytes
+
+instance FromDhall Data.ByteString.ByteString where
+    autoWith _ = strictBytes
 
 instance {-# OVERLAPS #-} FromDhall [Char] where
     autoWith _ = string
@@ -921,6 +937,35 @@ double = Decoder {..}
 
     expected = pure Double
 
+{-| Decode a `Data.ByteString.Short.ShortByteString`
+
+>>> input shortBytes "0x\"00FF\""
+"\NUL\255"
+-}
+shortBytes :: Decoder Data.ByteString.Short.ShortByteString
+shortBytes = fmap Data.ByteString.Short.toShort strictBytes
+
+{-| Decode a lazy `Data.ByteString.Lazy.ByteString`.
+
+>>> input lazyBytes "0x\"00FF\""
+"\NUL\255"
+-}
+lazyBytes :: Decoder Data.ByteString.Lazy.ByteString
+lazyBytes = fmap Data.ByteString.Lazy.fromStrict strictBytes
+
+{-| Decode a strict `Data.ByteString.ByteString`
+
+>>> input strictBytes "0x\"00FF\""
+"\NUL\255"
+-}
+strictBytes :: Decoder Data.ByteString.ByteString
+strictBytes = Decoder {..}
+  where
+    extract (BytesLit b) = pure b
+    extract  expr        = typeError expected expr
+
+    expected = pure Bytes
+
 {-| Decode `Data.Text.Short.ShortText`.
 
 >>> input shortText "\"Test\""
@@ -929,7 +974,7 @@ double = Decoder {..}
 shortText :: Decoder Data.Text.Short.ShortText
 shortText = fmap Data.Text.Short.fromText strictText
 
-{-| Decode lazy `Data.Text.Text`.
+{-| Decode lazy `Data.Text.Lazy.Text`.
 
 >>> input lazyText "\"Test\""
 "Test"

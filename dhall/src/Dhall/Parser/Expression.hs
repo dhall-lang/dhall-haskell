@@ -18,6 +18,7 @@ import Text.Parser.Combinators (choice, try, (<?>))
 import qualified Control.Monad
 import qualified Control.Monad.Combinators          as Combinators
 import qualified Control.Monad.Combinators.NonEmpty as Combinators.NonEmpty
+import qualified Data.ByteString                    as ByteString
 import qualified Data.ByteString.Base16             as Base16
 import qualified Data.Char                          as Char
 import qualified Data.List
@@ -623,7 +624,8 @@ parsers embedded = Parsers{..}
     primitiveExpression =
             noted
                 ( choice
-                    [ temporalLiteral
+                    [ bytesLiteral
+                    , temporalLiteral
                     , alternative00
                     , alternative01
                     , alternative02
@@ -720,7 +722,8 @@ parsers embedded = Parsers{..}
 
                     'D' ->
                         choice
-                            [ Date             <$ _Date
+                            [ DateShow         <$ _DateShow
+                            , Date             <$ _Date
                             , DoubleShow       <$ _DoubleShow
                             , Double           <$ _Double
                             ]
@@ -736,14 +739,20 @@ parsers embedded = Parsers{..}
                             , List             <$ _List
                             ]
                     'O' ->    Optional         <$ _Optional
-                    'B' ->    Bool             <$ _Bool
+                    'B' ->
+                        choice
+                            [ Bool             <$ _Bool
+                            , Bytes            <$ _Bytes
+                            ]
                     'S' ->    Const Sort       <$ _Sort
                     'T' ->
                         choice
                             [ TextReplace      <$ _TextReplace
                             , TextShow         <$ _TextShow
                             , Text             <$ _Text
+                            , TimeZoneShow     <$ _TimeZoneShow
                             , TimeZone         <$ _TimeZone
+                            , TimeShow         <$ _TimeShow
                             , Time             <$ _Time
                             , BoolLit True     <$ _True
                             , Const Type       <$ _Type
@@ -932,8 +941,22 @@ parsers embedded = Parsers{..}
             return (Dhall.Syntax.toDoubleQuoted a)
 
     textLiteral = (do
-            literal <- doubleQuotedLiteral <|> singleQuoteLiteral
-            return (TextLit literal) ) <?> "literal"
+        literal <- doubleQuotedLiteral <|> singleQuoteLiteral
+        return (TextLit literal) ) <?> "literal"
+
+    bytesLiteral = (do
+        _ <- text "0x\""
+
+        let byte = do
+                nibble0 <- Text.Megaparsec.satisfy hexdig
+                nibble1 <- Text.Megaparsec.satisfy hexdig
+                return ([nibble0, nibble1] `base` 16)
+
+        bytes <- Text.Megaparsec.many byte
+
+        _ <- char '"'
+
+        return (BytesLit (ByteString.pack bytes)) ) <?> "literal"
 
     recordTypeOrLiteral firstSrc0 =
             choice
@@ -1240,7 +1263,9 @@ import_ = (do
     alternative = do
       try (whitespace *> _as *> nonemptyWhitespace)
 
-      (_Text >> pure RawText) <|> (_Location >> pure Location)
+      (_Text >> pure RawText)
+          <|> (_Location >> pure Location)
+          <|> (_Bytes >> pure RawBytes)
 
 -- | 'ApplicationExprInfo' distinguishes certain subtypes of application
 -- expressions.

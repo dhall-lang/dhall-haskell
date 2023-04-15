@@ -4,6 +4,7 @@ module Dhall.Syntax.Expr
     ( Expr(..)
     ) where
 
+import                Data.ByteString              (ByteString)
 import                Data.List.NonEmpty           (NonEmpty (..))
 import                Data.Sequence                (Seq)
 import                Data.String                  (IsString (..))
@@ -86,6 +87,10 @@ data Expr s a
     | BoolNE  (Expr s a) (Expr s a)
     -- | > BoolIf x y z                             ~  if x then y else z
     | BoolIf (Expr s a) (Expr s a) (Expr s a)
+    -- | > Bytes                                    ~ Bytes
+    | Bytes
+    -- | > BytesLit "\x00\xFF"                      ~ 0x"00FF"
+    | BytesLit ByteString
     -- | > Natural                                  ~  Natural
     | Natural
     -- | > NaturalLit n                             ~  n
@@ -142,6 +147,8 @@ data Expr s a
     | Date
     -- | > DateLiteral (fromGregorian _YYYY _MM _DD) ~ YYYY-MM-DD
     | DateLiteral Time.Day
+    -- | > DateShow                                 ~  Date/show
+    | DateShow
     -- | > Time                                     ~  Time
     | Time
     -- | > TimeLiteral (TimeOfDay hh mm ss) _       ~  hh:mm:ss
@@ -149,11 +156,15 @@ data Expr s a
         Time.TimeOfDay
         Word
         -- ^ Precision
+    -- | > TimeShow                                 ~  Time/show
+    | TimeShow
     -- | > TimeZone                                 ~  TimeZone
     | TimeZone
     -- | > TimeZoneLiteral (TimeZone ( 60 * _HH + _MM) _ _) ~ +HH:MM
     -- | > TimeZoneLiteral (TimeZone (-60 * _HH + _MM) _ _) ~ -HH:MM
     | TimeZoneLiteral Time.TimeZone
+    -- | > TimeZoneShow                             ~  TimeZone/Show
+    | TimeZoneShow
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) []                     ~  [] : t

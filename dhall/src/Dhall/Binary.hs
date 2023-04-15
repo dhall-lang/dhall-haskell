@@ -144,15 +144,18 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Type"              -> return (Const Type)
                        | sb == "Kind"              -> return (Const Kind)
                        | sb == "Sort"              -> return (Const Sort)
+                    5  | sb == "Bytes"             -> return Bytes
                     6  | sb == "Double"            -> return Double
                     7  | sb == "Integer"           -> return Integer
                        | sb == "Natural"           -> return Natural
                     8  | sb == "Optional"          -> return Optional
                        | sb == "TimeZone"          -> return TimeZone
-                    9  | sb == "List/fold"         -> return ListFold
+                    9  | sb == "Date/show"         -> return DateShow
+                       | sb == "List/fold"         -> return ListFold
                        | sb == "List/head"         -> return ListHead
                        | sb == "List/last"         -> return ListLast
                        | sb == "Text/show"         -> return TextShow
+                       | sb == "Time/show"         -> return TimeShow
                     10 | sb == "List/build"        -> return ListBuild
                     11 | sb == "Double/show"       -> return DoubleShow
                        | sb == "List/length"       -> return ListLength
@@ -166,6 +169,7 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Text/replace"      -> return TextReplace
                     13 | sb == "Integer/clamp"     -> return IntegerClamp
                        | sb == "Natural/build"     -> return NaturalBuild
+                       | sb == "TimeZone/show"     -> return TimeZoneShow
                     14 | sb == "Integer/negate"    -> return IntegerNegate
                        | sb == "Natural/isZero"    -> return NaturalIsZero
                     16 | sb == "Integer/toDouble"  -> return IntegerToDouble
@@ -650,6 +654,12 @@ decodeExpressionInternal decodeEmbed = go
                                 let minutes = sign (_HH * 60 + _MM)
 
                                 return (TimeZoneLiteral (Time.TimeZone minutes False ""))
+
+                            33 -> do
+                                b <- Decoding.decodeBytes
+
+                                return (BytesLit b)
+
                             34 -> do
                                 t <- go
                                 return (ShowConstructor t)
@@ -737,6 +747,9 @@ encodeExpressionInternal encodeEmbed = go
         Bool ->
             Encoding.encodeUtf8ByteArray "Bool"
 
+        Bytes ->
+            Encoding.encodeUtf8ByteArray "Bytes"
+
         Optional ->
             Encoding.encodeUtf8ByteArray "Optional"
 
@@ -764,11 +777,20 @@ encodeExpressionInternal encodeEmbed = go
         Date ->
             Encoding.encodeUtf8ByteArray "Date"
 
+        DateShow ->
+            Encoding.encodeUtf8ByteArray "Date/show"
+
         Time ->
             Encoding.encodeUtf8ByteArray "Time"
 
+        TimeShow ->
+            Encoding.encodeUtf8ByteArray "Time/show"
+
         TimeZone ->
             Encoding.encodeUtf8ByteArray "TimeZone"
+
+        TimeZoneShow ->
+            Encoding.encodeUtf8ByteArray "TimeZone/show"
 
         List ->
             Encoding.encodeUtf8ByteArray "List"
@@ -829,6 +851,11 @@ encodeExpressionInternal encodeEmbed = go
 
         BoolNE l r ->
             encodeOperator 3 l r
+
+        BytesLit b ->
+            encodeList2
+                (Encoding.encodeInt 33)
+                (Encoding.encodeBytes b)
 
         NaturalPlus l r ->
             encodeOperator 4 l r
@@ -1157,6 +1184,7 @@ decodeImport len = do
         0 -> return Code
         1 -> return RawText
         2 -> return Location
+        3 -> return RawBytes
         _ -> die ("Unexpected code for import mode: " <> show m)
 
     let remote scheme = do
@@ -1295,7 +1323,11 @@ encodeImport import_ =
             Just digest ->
                 Encoding.encodeBytes ("\x12\x20" <> Dhall.Crypto.unSHA256Digest digest)
 
-        m = Encoding.encodeInt (case importMode of Code -> 0; RawText -> 1; Location -> 2;)
+        m = Encoding.encodeInt (case importMode of
+            Code -> 0
+            RawText -> 1
+            Location -> 2
+            RawBytes -> 3 )
 
     Import{..} = import_
 

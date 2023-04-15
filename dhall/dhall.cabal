@@ -170,6 +170,7 @@ Extra-Source-Files:
     dhall-lang/tests/**/*.dhallb
     dhall-lang/tests/**/*.hash
     dhall-lang/tests/**/*.txt
+    dhall-lang/tests/**/*.bin
     dhall-lang/tests/import/cache/dhall/12203871180b87ecaba8b53fffb2a8b52d3fce98098fab09a6f759358b9e8042eedc
     dhall-lang/tests/import/cache/dhall/1220618f785ce8f3930a9144398f576f0a992544b51212bc9108c31b4e670dc6ed21
     tests/**/*.dhall
@@ -253,7 +254,6 @@ Common common
         unix                        >= 2.7      && < 2.9 ,
         unix-compat                 >= 0.4.2    && < 0.7 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
-        uri-encode                                 < 1.6 ,
         vector                      >= 0.11.0.0 && < 0.14
 
     if flag(with-http)
@@ -443,7 +443,6 @@ Test-Suite tasty
         quickcheck-instances      >= 0.3.12   && < 0.4 ,
         special-values                           < 0.2 ,
         spoon                                    < 0.4 ,
-        system-filepath                                ,
         tasty                     >= 0.11.2   && < 1.5 ,
         tasty-expected-failure                   < 0.13,
         tasty-hunit               >= 0.10     && < 0.11,

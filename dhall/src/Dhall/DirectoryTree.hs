@@ -23,7 +23,7 @@ import Control.Exception         (Exception)
 import Control.Monad             (unless, when)
 import Data.Either.Validation    (Validation (..))
 import Data.Functor.Identity     (Identity (..))
-import Data.Maybe                (fromMaybe)
+import Data.Maybe                (fromMaybe, isJust)
 import Data.Sequence             (Seq)
 import Data.Text                 (Text)
 import Data.Void                 (Void)
@@ -50,6 +50,7 @@ import qualified Dhall.Marshal.Decode        as Decode
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck             as TypeCheck
 import qualified Dhall.Util                  as Util
+import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
 import qualified System.FilePath             as FilePath
@@ -274,6 +275,8 @@ getGroup (GroupName name) = Posix.groupID <$> Posix.getGroupEntryForName name
 processFilesystemEntry :: Bool -> FilePath -> FilesystemEntry -> IO ()
 processFilesystemEntry allowSeparators path (DirectoryEntry entry) = do
     let path' = path </> entryName entry
+    when (hasMetadata entry && not isMetadataSupported) $
+        Exception.throwIO $ MetadataUnsupportedError path'
     Directory.createDirectoryIfMissing allowSeparators path'
     processFilesystemEntryList allowSeparators path' $ entryContent entry
     -- It is important that we write the metadata after we wrote the content of
@@ -282,6 +285,8 @@ processFilesystemEntry allowSeparators path (DirectoryEntry entry) = do
     applyMetadata entry path'
 processFilesystemEntry _ path (FileEntry entry) = do
     let path' = path </> entryName entry
+    when (hasMetadata entry && not isMetadataSupported) $
+        Exception.throwIO $ MetadataUnsupportedError path'
     Text.IO.writeFile path' $ entryContent entry
     -- It is important that we write the metadata after we wrote the content of
     -- the file as we might lock ourself out by changing ownership or
@@ -292,6 +297,25 @@ processFilesystemEntry _ path (FileEntry entry) = do
 processFilesystemEntryList :: Bool -> FilePath -> Seq FilesystemEntry -> IO ()
 processFilesystemEntryList allowSeparators path = Foldable.traverse_
     (processFilesystemEntry allowSeparators path)
+
+-- | Does this entry have some metadata set?
+hasMetadata :: Entry a -> Bool
+hasMetadata entry
+    =  isJust (entryUser entry)
+    || isJust (entryGroup entry)
+    || maybe False hasMode (entryMode entry)
+    where
+        hasMode :: Mode Maybe -> Bool
+        hasMode mode
+            =  maybe False hasAccess (modeUser mode)
+            || maybe False hasAccess (modeGroup mode)
+            || maybe False hasAccess (modeOther mode)
+
+        hasAccess :: Access Maybe -> Bool
+        hasAccess access
+            =  isJust (accessExecute access)
+            || isJust (accessRead access)
+            || isJust (accessWrite access)
 
 -- | Set the metadata of an object referenced by a path.
 applyMetadata :: Entry a -> FilePath -> IO ()
@@ -378,6 +402,8 @@ hasFileMode mode x = (mode `Posix.intersectFileModes` x) == x
 newtype FilesystemError =
     FilesystemError { unexpectedExpression :: Expr Void Void }
 
+instance Exception FilesystemError
+
 instance Show FilesystemError where
     show FilesystemError{..} =
         Pretty.renderString (Dhall.Pretty.layout message)
@@ -436,4 +462,24 @@ instance Show FilesystemError where
           \                                                                                   \n\
           \... which is not an expression that can be translated to a directory tree.         \n"
 
-instance Exception FilesystemError
+{- | This error indicates that you want to set some metadata for a file or
+     directory, but that operation is not supported  on your platform.
+-}
+newtype MetadataUnsupportedError =
+    MetadataUnsupportedError { metadataForPath :: FilePath }
+
+instance Exception MetadataUnsupportedError
+
+instance Show MetadataUnsupportedError where
+    show MetadataUnsupportedError{..} =
+        Pretty.renderString (Dhall.Pretty.layout message)
+      where
+        message =
+          Util._ERROR <> ": Setting metadata is not supported on this platform.               \n\
+          \                                                                                   \n\
+          \Explanation: Your Dhall expression indicates that you intend to set some metadata  \n\
+          \like ownership or permissions for the following file or directory:                 \n\
+          \                                                                                   \n\
+          \" <> Pretty.pretty metadataForPath <> "\n\
+          \                                                                                   \n\
+          \... which is not supported on your platform.                                       \n"
