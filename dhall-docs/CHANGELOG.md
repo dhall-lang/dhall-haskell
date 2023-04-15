@@ -1,3 +1,9 @@
+1.0.11
+
+* Build against `dhall-1.42`
+* [Build against `turtle-1.6`](https://github.com/dhall-lang/dhall-haskell/pull/2465)
+* [Build against `transformers-0.6` and `mtl-2.3`](https://github.com/dhall-lang/dhall-haskell/pull/2471)
+
 1.0.10
 
 * [Index non-`.dhall` files](https://github.com/dhall-lang/dhall-haskell/pull/2407)

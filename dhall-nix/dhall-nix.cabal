@@ -1,5 +1,5 @@
 Name: dhall-nix
-Version: 1.1.25
+Version: 1.1.26
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -29,7 +29,7 @@ Library
         base                      >= 4.11.0.0 && < 5   ,
         containers                               < 0.7 ,
         data-fix                                 < 0.4 ,
-        dhall                     >= 1.41     && < 1.42,
+        dhall                     >= 1.42     && < 1.43,
         hnix                      >= 0.16     && < 0.17,
         lens-family-core          >= 1.0.0    && < 2.2 ,
         neat-interpolation                       < 0.6 ,

@@ -1,5 +1,5 @@
 Name: dhall-docs
-Version: 1.0.10
+Version: 1.0.11
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -69,7 +69,7 @@ Library
         containers                                 ,
         cryptohash-sha256                          ,
         directory            >= 1.3.0.0   && < 1.4 ,
-        dhall                >= 1.38.0    && < 1.42,
+        dhall                >= 1.38.0    && < 1.43,
         file-embed           >= 0.0.10.0           ,
         filepath             >= 1.4       && < 1.5 ,
         lens-family-core     >= 1.0.0     && < 2.2 ,
