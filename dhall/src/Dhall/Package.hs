@@ -164,7 +164,7 @@ filepathToMap outputFn = go [] . splitDirectories
         go !acc (x:xs) = Map.singleton (Text.pack x) $ makeRecordField $ RecordLit $ go (Text.pack x : acc) xs
 
 -- | Merge two 'Map's constructed with 'filepathToMap'.
--- It will throw an ... error if the arguments are not compatible with each other, e.g.
+-- It will throw an error if the arguments are not compatible with each other, e.g.
 -- we cannot merge the following two maps:
 --
 -- > fromList [ ("file", ./file.dhall) ]
