@@ -30,8 +30,10 @@ tests = testGroup "Package"
     , packageSingleFile
     , packageEmptyDirectory
     , packageSingleDirectory
+    , packageNested
     , packageMissingFile
     , packageFilesDifferentDirs
+    , packageIncompatibleFiles
     ]
 
 packagePackageFile :: TestTree
@@ -50,17 +52,8 @@ packageCustomPackageFile = testCase "custom package file" $ do
     let path = "./tests/package" </> "custom.dhall"
 
     let package :: Expr Void Import
-        package = RecordLit $ Map.singleton "package" $
-            makeRecordField $ Embed Import
-                { importHashed = ImportHashed
-                    { hash = Nothing
-                    , importType = Local Here File
-                        { directory = Directory []
-                        , file = "package.dhall"
-                        }
-                    }
-                , importMode = Code
-                }
+        package = RecordLit $
+            Map.singleton "package" $ makeRecordField $ Embed packageDhall
 
     (output, expr) <- getPackagePathAndContent (Just "custom.dhall") ("./tests/package/package.dhall" :| [])
     assertEqual "path" path output
@@ -71,17 +64,8 @@ packageSingleFile = testCase "single file" $ do
     let path = "./tests/package/dir" </> "package.dhall"
 
     let package :: Expr Void Import
-        package = RecordLit $ Map.singleton "test" $
-            makeRecordField $ Embed Import
-                { importHashed = ImportHashed
-                    { hash = Nothing
-                    , importType = Local Here File
-                        { directory = Directory []
-                        , file = "test.dhall"
-                        }
-                    }
-                , importMode = Code
-                }
+        package = RecordLit $
+            Map.singleton "test" $ makeRecordField $ Embed testDhall
 
     (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/dir/test.dhall" :| [])
     assertEqual "path" path output
@@ -104,18 +88,31 @@ packageSingleDirectory = testCase "single directory" $ do
 
     let package :: Expr Void Import
         package = RecordLit $ Map.singleton "test" $
-            makeRecordField $ Embed Import
-                { importHashed = ImportHashed
-                    { hash = Nothing
-                    , importType = Local Here File
-                        { directory = Directory []
-                        , file = "test.dhall"
-                        }
-                    }
-                , importMode = Code
-                }
+            makeRecordField $ Embed testDhall
 
     (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/dir" :| [])
+    assertEqual "path" path output
+    assertEqual "content" package expr
+
+packageNested :: TestTree
+packageNested = testCase "nested files" $ do
+    let path = "./tests/package" </> "package.dhall"
+
+    let package :: Expr Void Import
+        package = RecordLit $ Map.fromList
+            [ ("dir", makeRecordField $ RecordLit $ Map.fromList
+                [ ("test", makeRecordField $ Embed dirTestDhall)
+                ]
+              )
+            , ("other", makeRecordField $ Embed otherPackageDhall)
+            , ("test", makeRecordField $ Embed testDhall)
+            ]
+
+    (output, expr) <- getPackagePathAndContent Nothing
+        ( "./tests/package/test.dhall" :|
+        [ "./tests/package/dir/test.dhall"
+        , "./tests/package/other/package.dhall"
+        ])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -131,11 +128,80 @@ packageMissingFile = testCase "missing file" $ do
 packageFilesDifferentDirs :: TestTree
 packageFilesDifferentDirs = testCase "files from different directories" $ do
     let action :: IO (FilePath, Expr Void Import)
-        action = getPackagePathAndContent Nothing ("./tests/package/test.dhall" :| ["./tests/package/dir/test.dhall"])
+        action = getPackagePathAndContent Nothing ("./tests/package/dir/test.dhall" :| ["./tests/package/test/test.dhall"])
 
     assertThrow action $ \case
-        AmbiguousOutputDirectory "./tests/package" "./tests/package/dir" -> True
+        AmbiguousOutputDirectory "./tests/package/dir" "./tests/package/test" -> True
         _ -> False
+
+packageIncompatibleFiles :: TestTree
+packageIncompatibleFiles = testCase "files that are incompatible" $ do
+    let action :: IO (FilePath, Expr Void Import)
+        action = getPackagePathAndContent Nothing ("./tests/package/test.dhall" :| ["./tests/package/test/test.dhall"])
+
+    assertThrow action $ \case
+        IncompatiblePaths xs -> xs == [ testDhall , testTestDhall ]
+        _ -> False
+
+packageDhall :: Import
+packageDhall = Import
+    { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local Here File
+            { directory = Directory []
+            , file = "package.dhall"
+            }
+        }
+    , importMode = Code
+    }
+
+testDhall :: Import
+testDhall = Import
+    { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local Here File
+            { directory = Directory []
+            , file = "test.dhall"
+            }
+        }
+    , importMode = Code
+    }
+
+dirTestDhall :: Import
+dirTestDhall = Import
+    { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local Here $ File
+            { directory = Directory {components = ["dir"]}
+            , file = "test.dhall"
+            }
+        }
+    , importMode = Code
+    }
+
+otherPackageDhall :: Import
+otherPackageDhall = Import
+    { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local Here $ File
+            { directory = Directory {components = ["other"]}
+            , file = "package.dhall"
+            }
+        }
+    , importMode = Code
+    }
+
+testTestDhall :: Import
+testTestDhall = Import
+    { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local Here (File
+            { directory = Directory {components = ["test"]}
+            , file = "test.dhall"
+            })
+        }
+    , importMode = Code
+    }
 
 assertThrow :: (Exception e, Show a) => IO a -> (e -> Bool) -> IO ()
 assertThrow k p = do
