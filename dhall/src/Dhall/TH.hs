@@ -47,6 +47,7 @@ import qualified Data.List                   as List
 import qualified Data.Map                    as Map
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as Text
+import qualified Data.Time                   as Time
 import qualified Data.Typeable               as Typeable
 import qualified Dhall
 import qualified Dhall.Core                  as Core
@@ -145,6 +146,9 @@ toNestedHaskellType typeParams haskellTypes = loop
       , "• ❰Integer❱                                                                     \n"
       , "• ❰Natural❱                                                                     \n"
       , "• ❰Text❱                                                                        \n"
+      , "• ❰Date❱                                                                        \n"
+      , "• ❰TimeOfDay❱                                                                   \n"
+      , "• ❰TimeZone❱                                                                    \n"
       , "• ❰List a❱     (where ❰a❱ is also a valid nested type)                          \n"
       , "• ❰Optional a❱ (where ❰a❱ is also a valid nested type)                          \n"
       , "• Another matching datatype declaration                                         \n"
@@ -174,6 +178,15 @@ toNestedHaskellType typeParams haskellTypes = loop
 
         Text ->
             return (ConT ''Text)
+
+        Date ->
+            return (ConT ''Time.Day)
+
+        Time ->
+            return (ConT ''Time.TimeOfDay)
+
+        TimeZone ->
+            return (ConT ''Time.TimeZone)
 
         App List dhallElementType -> do
             haskellElementType <- loop dhallElementType
