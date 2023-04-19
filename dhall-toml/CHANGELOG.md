@@ -1,3 +1,7 @@
+1.0.3
+
+* [Support `Integer`s](https://github.com/dhall-lang/dhall-haskell/pull/2469)
+
 1.0.2
 
 * [Improve command-line interface](https://github.com/dhall-lang/dhall-haskell/pull/2355)

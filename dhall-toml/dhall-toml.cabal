@@ -1,5 +1,5 @@
 Name:               dhall-toml
-Version:            1.0.2
+Version:            1.0.3
 Cabal-Version:      >=1.10
 Build-Type:         Simple
 License:            BSD3
@@ -35,7 +35,7 @@ Library
     Hs-Source-Dirs:   src
     Build-Depends:
         base                 >= 4.12     && < 5    ,
-        dhall                >= 1.39.0   && < 1.42 ,
+        dhall                >= 1.39.0   && < 1.43 ,
         tomland              >= 1.3.2.0  && < 1.4  ,
         text                 >= 0.11.1.0 && < 2.1  ,
         containers           >= 0.5.9    && < 0.7  ,
