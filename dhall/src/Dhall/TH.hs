@@ -133,6 +133,7 @@ toNestedHaskellType
     -> Q Type
 toNestedHaskellType typeParams haskellTypes = loop
   where
+    predicate _ Scoped{} = False
     predicate dhallType haskellType = Core.judgmentallyEqual (code haskellType) dhallType
 
     document dhallType =
@@ -262,6 +263,10 @@ toDeclaration globalGenerateOptions haskellTypes typ =
         MultipleConstructors{..} -> uncurry (fromMulti globalGenerateOptions typeName) $ getTypeParams code
         MultipleConstructorsWith{..} -> uncurry (fromMulti options typeName) $ getTypeParams code
         Predefined{} -> return []
+        Scoped scopedHaskellTypes ->
+            let haskellTypes' = haskellTypes <> scopedHaskellTypes
+            in
+            concat <$> traverse (toDeclaration globalGenerateOptions haskellTypes') scopedHaskellTypes
     where
 #if MIN_VERSION_template_haskell(2,21,0)
         toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) Syntax.BndrInvis
@@ -374,7 +379,8 @@ toConstructor typeParams GenerateOptions{..} haskellTypes outerTypeName (constru
 
     case maybeAlternativeType of
         Just dhallType
-            | let predicate haskellType =
+            | let predicate Scoped{} = False
+                  predicate haskellType =
                     Core.judgmentallyEqual (code haskellType) dhallType
                     && typeName haskellType /= outerTypeName
             , Just haskellType <- List.find predicate haskellTypes -> do
@@ -478,6 +484,8 @@ data HaskellType code
         , code :: code
         -- ^ Dhall code that evaluates to a type
         }
+    -- | Generate some Haskell types within a restricted scope.
+    | Scoped [HaskellType code]
     deriving (Functor, Foldable, Traversable)
 
 -- | This data type holds various options that let you control several aspects
@@ -520,6 +528,8 @@ defaultGenerateOptions = GenerateOptions
 --   I.e. those `Dhall.InterpretOptions` reflect the mapping done by
 --   `constructorModifier` and `fieldModifier` on the value level.
 generateToInterpretOptions :: GenerateOptions -> HaskellType (Expr s a) -> Q Exp
+generateToInterpretOptions _ SingleConstructorWith{..} = generateToInterpretOptions options SingleConstructor{..}
+generateToInterpretOptions _ MultipleConstructorsWith{..} = generateToInterpretOptions options MultipleConstructors{..}
 generateToInterpretOptions GenerateOptions{..} haskellType = [| Dhall.InterpretOptions
     { Dhall.fieldModifier = \ $(pure nameP) ->
         $(toCases fieldModifier $ fields haskellType)
