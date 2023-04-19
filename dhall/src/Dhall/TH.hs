@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts  #-}
@@ -20,7 +21,7 @@ module Dhall.TH
     , defaultGenerateOptions
     ) where
 
-import Data.Bifunctor            (first)
+import Data.Map                  (Map)
 import Data.Text                 (Text)
 import Dhall                     (FromDhall, ToDhall)
 import Dhall.Syntax              (Expr (..), FunctionBinding (..), Var (..))
@@ -165,6 +166,22 @@ toNestedHaskellType typeParams haskellTypes = loop
     message dhallType = Pretty.renderString (Dhall.Pretty.layout (document dhallType))
 
     loop dhallType = case dhallType of
+        Var v
+            | Just (V param index) <- List.find (v ==) typeParams -> do
+                let name = Syntax.mkName $ (Text.unpack param) ++ (show index)
+
+                return (VarT name)
+
+            | otherwise -> fail $ message v
+
+        _   | Just haskellType <- List.find (predicate dhallType) haskellTypes ->
+                case haskellType of
+                    Predefined{..} -> return haskellSplice
+                    _ -> do
+                        let name = Syntax.mkName (Text.unpack (typeName haskellType))
+
+                        return (ConT name)
+
         Bool ->
             return (ConT ''Bool)
 
@@ -205,19 +222,7 @@ toNestedHaskellType typeParams haskellTypes = loop
 
             return (AppT haskellAppType haskellElementType)
 
-        Var v
-            | Just (V param index) <- List.find (v ==) typeParams -> do
-                let name = Syntax.mkName $ (Text.unpack param) ++ (show index)
-
-                return (VarT name)
-
-            | otherwise -> fail $ message v
-
-        _   | Just haskellType <- List.find (predicate dhallType) haskellTypes -> do
-                let name = Syntax.mkName (Text.unpack (typeName haskellType))
-
-                return (ConT name)
-            | otherwise -> fail $ message dhallType
+        _ -> fail $ message dhallType
 
 -- | A deriving clause for `Generic`.
 derivingGenericClause :: DerivClause
@@ -256,12 +261,8 @@ toDeclaration globalGenerateOptions haskellTypes typ =
         SingleConstructorWith{..} -> uncurry (fromSingle options typeName constructorName) $ getTypeParams code
         MultipleConstructors{..} -> uncurry (fromMulti globalGenerateOptions typeName) $ getTypeParams code
         MultipleConstructorsWith{..} -> uncurry (fromMulti options typeName) $ getTypeParams code
+        Predefined{} -> return []
     where
-        getTypeParams = first numberConsecutive .  getTypeParams_ []
-
-        getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ _) rest) = getTypeParams_ (v:acc) rest
-        getTypeParams_ acc rest = (acc, rest)
-
 #if MIN_VERSION_template_haskell(2,21,0)
         toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) Syntax.BndrInvis
 #elif MIN_VERSION_template_haskell(2,17,0)
@@ -337,13 +338,21 @@ toDeclaration globalGenerateOptions haskellTypes typ =
                 , "... which is not a union type."
                 ]
 
--- | Number each variable, starting at 0
-numberConsecutive :: [Text.Text] -> [Var]
-numberConsecutive = snd . List.mapAccumR go Map.empty . reverse
+getTypeParams :: Expr s a -> ([Var], Expr s a)
+getTypeParams = go []
   where
-      go m k =
-          let (i, m') = Map.updateLookupWithKey (\_ j -> Just $ j + 1) k m
-          in maybe ((Map.insert k 0 m'), (V k 0)) (\i' -> (m', (V k i'))) i
+    go :: [Text] -> Expr s a -> ([Var], Expr s a)
+    go !acc (Lam _ (FunctionBinding _ v _ _ _) rest) = go (v:acc) rest
+    go !acc rest = (numberConsecutive $ reverse acc, rest)
+
+    -- | Number each variable, starting at 0
+    numberConsecutive :: [Text.Text] -> [Var]
+    numberConsecutive = snd . List.mapAccumR numberVar Map.empty
+
+    numberVar :: Map Text Int -> Text -> (Map Text Int, Var)
+    numberVar m k =
+        let (i, m') = Map.updateLookupWithKey (\_ j -> Just $ j + 1) k m
+        in maybe ((Map.insert k 0 m'), (V k 0)) (\i' -> (m', (V k i'))) i
 
 -- | Convert a Dhall type to the corresponding Haskell constructor
 toConstructor
@@ -439,8 +448,8 @@ data HaskellType code
         , code :: code
         -- ^ Dhall code that evaluates to a type
         }
-    -- | Generate a Haskell type with more than one constructor from a Dhall
-    -- union type.
+    -- | Like 'MultipleConstructors', but also takes some 'GenerateOptions' to
+    -- use for the generation of the Haskell type.
     | MultipleConstructorsWith
         { options :: GenerateOptions
         -- ^ The 'GenerateOptions' to use then generating the Haskell type.
@@ -449,10 +458,8 @@ data HaskellType code
         , code :: code
         -- ^ Dhall code that evaluates to a union type
         }
-    -- | Generate a Haskell type with one constructor from any Dhall type.
-    --
-    -- To generate a constructor with multiple named fields, supply a Dhall
-    -- record type.  This does not support more than one anonymous field.
+    -- | Like 'SingleConstructor', but also takes some 'GenerateOptions' to use
+    -- for the generation of the Haskell type.
     | SingleConstructorWith
         { options :: GenerateOptions
         -- ^ The 'GenerateOptions' to use then generating the Haskell type.
@@ -460,6 +467,14 @@ data HaskellType code
         -- ^ Name of the generated Haskell type
         , constructorName :: Text
         -- ^ Name of the constructor
+        , code :: code
+        -- ^ Dhall code that evaluates to a type
+        }
+    -- | Declare a predefined mapping from a Dhall type to an existing Haskell
+    -- type.
+    | Predefined
+        { haskellSplice :: Type
+        -- ^ An existing Haskell type
         , code :: code
         -- ^ Dhall code that evaluates to a type
         }
