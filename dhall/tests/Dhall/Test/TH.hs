@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
 
@@ -14,11 +15,14 @@ import Data.Time              (TimeOfDay (..), TimeZone (..), fromGregorian)
 import Dhall.TH               (HaskellType (..))
 import Test.Tasty             (TestTree)
 
+import qualified Data.Map
+import qualified Data.Sequence
 import qualified Data.Text
 import qualified Dhall
 import qualified Dhall.TH
-import qualified Test.Tasty       as Tasty
-import qualified Test.Tasty.HUnit as Tasty.HUnit
+import qualified Language.Haskell.TH as TH
+import qualified Test.Tasty          as Tasty
+import qualified Test.Tasty.HUnit    as Tasty.HUnit
 
 Dhall.TH.makeHaskellTypeFromUnion "T" "./tests/th/example.dhall"
 
@@ -88,7 +92,7 @@ makeHaskellTypeFromUnion = Tasty.HUnit.testCase "makeHaskellTypeFromUnion" $ do
       tod = TimeOfDay { todHour = 21, todMin = 12, todSec = 0 }
       day = fromGregorian 1976 4 1
       tz = TimeZone { timeZoneMinutes = 300, timeZoneSummerOnly = False, timeZoneName = "" }
-  
+
 
 Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     { Dhall.TH.constructorModifier = ("My" <>)
@@ -99,7 +103,7 @@ Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     , SingleConstructor "MyEmployee" "Employee" "./tests/th/Employee.dhall"
     ]
 
-  
+
 deriving instance Eq   MyT
 deriving instance Eq   MyDepartment
 deriving instance Eq   MyEmployee
@@ -107,7 +111,7 @@ deriving instance Show MyT
 deriving instance Show MyDepartment
 deriving instance Show MyEmployee
 
-  
+
 Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     { Dhall.TH.constructorModifier = ("My" <>)
     , Dhall.TH.fieldModifier = ("my" <>) . Data.Text.toTitle
@@ -217,3 +221,57 @@ Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     })
     [ MultipleConstructors "StrictFields" "./tests/th/example.dhall"
     ]
+
+Dhall.TH.makeHaskellTypes
+    [ let options = Dhall.TH.defaultGenerateOptions
+              { Dhall.TH.fieldModifier = ("singleConstructorWithTest_" <>)
+              }
+          expr = "{ field : Bool }"
+      in
+      SingleConstructorWith options "SingleConstructorWithTest" "SingleConstructorWithTest" expr
+    , let options = Dhall.TH.defaultGenerateOptions
+              { Dhall.TH.fieldModifier = ("multipleConstructorsWithTest_" <>)
+              }
+          expr = "< MultipleConstructorsWithTest1 : { field1 : Bool } | MultipleConstructorsWithTest2 : { field2 : Bool } >"
+      in
+      MultipleConstructorsWith options "MultipleConstructorsWithTest" expr
+    ]
+
+singleConstructorWithTest :: SingleConstructorWithTest -> Bool
+singleConstructorWithTest = singleConstructorWithTest_field
+
+multipleConstructorsWithTest :: MultipleConstructorsWithTest -> Bool
+multipleConstructorsWithTest MultipleConstructorsWithTest1{..} = multipleConstructorsWithTest_field1
+multipleConstructorsWithTest MultipleConstructorsWithTest2{..} = multipleConstructorsWithTest_field2
+
+Dhall.TH.makeHaskellTypes
+    [ Predefined (TH.ConT ''Data.Sequence.Seq `TH.AppT` TH.ConT ''Bool) "List Bool"
+    , SingleConstructor "PredefinedTest1" "PredefinedTest1" "{ predefinedField1 : List Bool }"
+    , Predefined (TH.ConT ''Data.Map.Map `TH.AppT` TH.ConT ''Data.Text.Text `TH.AppT` TH.ConT ''Bool) "List { mapKey : Text, mapValue : Bool }"
+    , SingleConstructor "PredefinedTest2" "PredefinedTest2" "{ predefinedField2 : List { mapKey : Text, mapValue : Bool } }"
+    ]
+
+predefinedTest1 :: PredefinedTest1 -> Data.Sequence.Seq Bool
+predefinedTest1 (PredefinedTest1 xs) = xs
+
+predefinedTest2 :: PredefinedTest2 -> Data.Map.Map Data.Text.Text Bool
+predefinedTest2 (PredefinedTest2 xs) = xs
+
+Dhall.TH.makeHaskellTypes
+    [ SingleConstructor "ScopedTestEmbedded1" "ScopedTestEmbedded1" "{ scopedTestField : Bool }"
+    , SingleConstructor "ScopedTest1" "ScopedTest1" "{ scopedTestField1 : { scopedTestField : Bool } }"
+    , Scoped
+        [ SingleConstructor "ScopedTestEmbedded2" "ScopedTestEmbedded2" "{ scopedTestField : Bool }"
+        , SingleConstructor "ScopedTest2" "ScopedTest2" "{ scopedTestField2 : { scopedTestField : Bool } }"
+        ]
+    , SingleConstructor "ScopedTest3" "ScopedTest3" "{ scopedField3 : { scopedTestField : Bool } }"
+    ]
+
+scopedTest1 :: ScopedTest1 -> ScopedTestEmbedded1
+scopedTest1 (ScopedTest1 xs) = xs
+
+scopedTest2 :: ScopedTest2 -> ScopedTestEmbedded2
+scopedTest2 (ScopedTest2 xs) = xs
+
+scopedTest3 :: ScopedTest3 -> ScopedTestEmbedded1
+scopedTest3 (ScopedTest3 xs) = xs

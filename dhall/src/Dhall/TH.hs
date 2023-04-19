@@ -264,7 +264,7 @@ toDeclaration globalGenerateOptions haskellTypes typ =
         MultipleConstructorsWith{..} -> uncurry (fromMulti options typeName) $ getTypeParams code
         Predefined{} -> return []
         Scoped scopedHaskellTypes ->
-            let haskellTypes' = haskellTypes <> scopedHaskellTypes
+            let haskellTypes' = scopedHaskellTypes <> haskellTypes
             in
             concat <$> traverse (toDeclaration globalGenerateOptions haskellTypes') scopedHaskellTypes
     where
