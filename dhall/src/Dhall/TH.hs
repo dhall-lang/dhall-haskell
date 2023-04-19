@@ -250,19 +250,17 @@ toDeclaration
     -> [HaskellType (Expr s a)]
     -> HaskellType (Expr s a)
     -> Q [Dec]
-toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
+toDeclaration globalGenerateOptions haskellTypes typ =
     case typ of
-        SingleConstructor{..} -> uncurry (fromSingle typeName constructorName) $ getTypeParams code
-        MultipleConstructors{..} -> uncurry (fromMulti typeName) $ getTypeParams code
+        SingleConstructor{..} -> uncurry (fromSingle globalGenerateOptions typeName constructorName) $ getTypeParams code
+        SingleConstructorWith{..} -> uncurry (fromSingle options typeName constructorName) $ getTypeParams code
+        MultipleConstructors{..} -> uncurry (fromMulti globalGenerateOptions typeName) $ getTypeParams code
+        MultipleConstructorsWith{..} -> uncurry (fromMulti options typeName) $ getTypeParams code
     where
         getTypeParams = first numberConsecutive .  getTypeParams_ []
 
         getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ _) rest) = getTypeParams_ (v:acc) rest
         getTypeParams_ acc rest = (acc, rest)
-
-        derivingClauses = [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
-
-        interpretOptions = generateToInterpretOptions generateOptions typ
 
 #if MIN_VERSION_template_haskell(2,21,0)
         toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) Syntax.BndrInvis
@@ -272,26 +270,30 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
         toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i))
 #endif
 
-        toDataD typeName typeParams constructors = do
+        toDataD generateOptions@GenerateOptions{..} typeName typeParams constructors = do
             let name = Syntax.mkName (Text.unpack typeName)
 
             let params = fmap toTypeVar typeParams
+
+            let interpretOptions = generateToInterpretOptions generateOptions typ
+
+            let derivingClauses = [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
             fmap concat . sequence $
                 [pure [DataD [] name params Nothing constructors derivingClauses]] <>
                 [ fromDhallInstance name interpretOptions | generateFromDhallInstance ] <>
                 [ toDhallInstance name interpretOptions | generateToDhallInstance ]
 
-        fromSingle typeName constructorName typeParams dhallType = do
+        fromSingle generateOptions typeName constructorName typeParams dhallType = do
             constructor <- toConstructor typeParams generateOptions haskellTypes typeName (constructorName, Just dhallType)
 
-            toDataD typeName typeParams [constructor]
+            toDataD generateOptions typeName typeParams [constructor]
 
-        fromMulti typeName typeParams dhallType = case dhallType of
+        fromMulti generateOptions typeName typeParams dhallType = case dhallType of
             Union kts -> do
                 constructors <- traverse (toConstructor typeParams generateOptions haskellTypes typeName) (Dhall.Map.toList kts)
 
-                toDataD typeName typeParams constructors
+                toDataD generateOptions typeName typeParams constructors
 
             _ -> fail $ message dhallType
 
@@ -431,6 +433,30 @@ data HaskellType code
     -- record type.  This does not support more than one anonymous field.
     | SingleConstructor
         { typeName :: Text
+        -- ^ Name of the generated Haskell type
+        , constructorName :: Text
+        -- ^ Name of the constructor
+        , code :: code
+        -- ^ Dhall code that evaluates to a type
+        }
+    -- | Generate a Haskell type with more than one constructor from a Dhall
+    -- union type.
+    | MultipleConstructorsWith
+        { options :: GenerateOptions
+        -- ^ The 'GenerateOptions' to use then generating the Haskell type.
+        , typeName :: Text
+        -- ^ Name of the generated Haskell type
+        , code :: code
+        -- ^ Dhall code that evaluates to a union type
+        }
+    -- | Generate a Haskell type with one constructor from any Dhall type.
+    --
+    -- To generate a constructor with multiple named fields, supply a Dhall
+    -- record type.  This does not support more than one anonymous field.
+    | SingleConstructorWith
+        { options :: GenerateOptions
+        -- ^ The 'GenerateOptions' to use then generating the Haskell type.
+        , typeName :: Text
         -- ^ Name of the generated Haskell type
         , constructorName :: Text
         -- ^ Name of the constructor
