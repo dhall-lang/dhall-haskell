@@ -116,10 +116,16 @@ Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     })
     [ SingleConstructor "MyHKSingle" "HKSingle" "./tests/th/HigherKindSingle.dhall"
     , MultipleConstructors "MyHKUnion" "./tests/th/HigherKindUnion.dhall"
+    , SingleConstructor "MyHKInnerS" "HKInnerS" "(./tests/th/HigherKindNested.dhall).InnerS"
+    , MultipleConstructors "MyHKInnerU" "(./tests/th/HigherKindNested.dhall).InnerU"
+    , SingleConstructor "MyHKOuter" "HKOuter" "(./tests/th/HigherKindNested.dhall).Outer"
     ]
 
 type MyHKSingle_ = MyHKSingle Maybe Int
 type MyHKUnion_ = MyHKUnion Bool Int
+type MyHKInnerS_ = MyHKInnerS Bool Data.Text.Text
+type MyHKInnerU_ = MyHKInnerU Int Data.Text.Text
+type MyHKOuter_ = MyHKOuter Bool Int
 
 deriving instance Eq MyHKSingle_
 deriving instance Show MyHKSingle_
@@ -132,6 +138,24 @@ deriving instance Show MyHKUnion_
 deriving instance Dhall.Generic MyHKUnion_
 instance Dhall.FromDhall MyHKUnion_
 instance Dhall.ToDhall MyHKUnion_
+
+deriving instance Eq MyHKInnerS_
+deriving instance Show MyHKInnerS_
+deriving instance Dhall.Generic MyHKInnerS_
+instance Dhall.FromDhall MyHKInnerS_
+instance Dhall.ToDhall MyHKInnerS_
+
+deriving instance Eq MyHKInnerU_
+deriving instance Show MyHKInnerU_
+deriving instance Dhall.Generic MyHKInnerU_
+instance Dhall.FromDhall MyHKInnerU_
+instance Dhall.ToDhall MyHKInnerU_
+
+deriving instance Eq MyHKOuter_
+deriving instance Show MyHKOuter_
+deriving instance Dhall.Generic MyHKOuter_
+instance Dhall.FromDhall MyHKOuter_
+instance Dhall.ToDhall MyHKOuter_
 
 testMakeHaskellTypesWith :: TestTree
 testMakeHaskellTypesWith = Tasty.HUnit.testCase "makeHaskellTypesWith" $ do
@@ -166,6 +190,10 @@ testMakeHaskellTypesWith = Tasty.HUnit.testCase "makeHaskellTypesWith" $ do
     let textHKUnion1 = "let T = (./tests/th/HigherKindUnion.dhall) Bool Int in T.Bar +1"
         refHKUnion1 = MyBar 1 :: MyHKUnion_
     myTest textHKUnion1 refHKUnion1
+
+    let textHKOuter = "let T = (./tests/th/HigherKindNested.dhall) in T.Outer Bool Int { oFoo = { iFoo = True, iBar = \"\" }, oBar = T.InnerU.Ifoo +1 }"
+        refHKOuter = MyHKOuter { myObar = MyIfoo 1, myOfoo = (MyHKInnerS { myIbar = "", myIfoo = True }) } :: MyHKOuter_
+    myTest textHKOuter refHKOuter
 
     where
         myTest text ref = do
