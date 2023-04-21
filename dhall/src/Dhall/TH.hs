@@ -379,15 +379,17 @@ toConstructor typeParams GenerateOptions{..} haskellTypes outerTypeName (constru
 
     case maybeAlternativeType of
         Just dhallType
-            | let predicate Scoped{} = False
+            | let predicate haskellType@Predefined{} = Core.judgmentallyEqual (code haskellType) dhallType
+                  predicate Scoped{} = False
                   predicate haskellType =
                     Core.judgmentallyEqual (code haskellType) dhallType
                     && typeName haskellType /= outerTypeName
             , Just haskellType <- List.find predicate haskellTypes -> do
-                let innerName =
-                        Syntax.mkName (Text.unpack (typeName haskellType))
+                let inner = case haskellType of
+                        Predefined{..} -> haskellSplice
+                        _ -> ConT (Syntax.mkName (Text.unpack (typeName haskellType)))
 
-                return (NormalC name [ (bang, ConT innerName) ])
+                return (NormalC name [ (bang, inner) ])
 
         Just (Record kts) -> do
             let process (key, dhallFieldType) = do
