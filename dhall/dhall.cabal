@@ -207,7 +207,7 @@ Common common
         base                        >= 4.11.0.0 && < 5   ,
         aeson                       >= 1.0.0.0  && < 2.2 ,
         aeson-pretty                               < 0.9 ,
-        ansi-terminal               >= 0.6.3.1  && < 0.12,
+        ansi-terminal               >= 0.6.3.1  && < 1.1 ,
         atomic-write                >= 0.2.0.7  && < 0.3 ,
         base16-bytestring           >= 1.0.0.0           ,
         bytestring                                 < 0.12,
