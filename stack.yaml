@@ -1,4 +1,4 @@
-resolver: lts-18.18
+resolver: lts-19.33
 packages:
   - dhall
   - dhall-bash
@@ -11,12 +11,12 @@ packages:
   - dhall-toml
   - dhall-yaml
 extra-deps:
-  - hnix-0.16.0
-  - hnix-store-core-0.5.0.0
-  - hnix-store-remote-0.5.0.0
-  - lucid-2.11.0
-  - relude-1.0.0.1@sha256:35bcdaf14018e79f11e712b0e2314c1aac79976f28f4adc179985457493557d5,11569
-  - semialign-1.2@sha256:9afb6eb7e50db7ca34d7c4108aec0f643dae2caaaa80394b44ffdd643315685c,2721
+  - github: haskell-nix/hnix
+    commit: 2adbc502e62e755ca0372c913e6278ebe564d7d2
+  - hnix-store-core-0.6.1.0
+  - hnix-store-remote-0.6.0.0
+  - tomland-1.3.3.2
+  - validation-selective-0.1.0.2
 nix:
   packages:
     - ncurses

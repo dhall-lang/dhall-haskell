@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -60,7 +61,7 @@ import qualified Numeric.Natural
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.IO
 
-  
+
 {-| This fully resolves, type checks, and normalizes the expression, so the
     resulting AST is self-contained.
 
@@ -160,9 +161,9 @@ toNestedHaskellType typeParams haskellTypes = loop
       , "                                                                                \n"
       , "... which did not fit any of the above criteria."
       ]
-  
+
     message dhallType = Pretty.renderString (Dhall.Pretty.layout (document dhallType))
-  
+
     loop dhallType = case dhallType of
         Bool ->
             return (ConT ''Bool)
@@ -203,7 +204,7 @@ toNestedHaskellType typeParams haskellTypes = loop
             haskellElementType <- loop dhallElementType
 
             return (AppT haskellAppType haskellElementType)
-          
+
         Var v
             | Just (V param index) <- List.find (v ==) typeParams -> do
                 let name = Syntax.mkName $ (Text.unpack param) ++ (show index)
@@ -255,7 +256,7 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
         MultipleConstructors{..} -> uncurry (fromMulti typeName) $ getTypeParams code
     where
         getTypeParams = first numberConsecutive .  getTypeParams_ []
-    
+
         getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ _) rest) = getTypeParams_ (v:acc) rest
         getTypeParams_ acc rest = (acc, rest)
 
@@ -263,7 +264,13 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
 
         interpretOptions = generateToInterpretOptions generateOptions typ
 
-        toTypeVar (V n i) = Syntax.PlainTV $ Syntax.mkName (Text.unpack n ++ show i)
+#if MIN_VERSION_template_haskell(2,17,0)
+        toTypeVar :: Var -> Syntax.TyVarBndr ()
+        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) ()
+#else
+        toTypeVar :: Var -> Syntax.TyVarBndr
+        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i))
+#endif
 
         toDataD typeName typeParams constructors = do
             let name = Syntax.mkName (Text.unpack typeName)
@@ -277,16 +284,16 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
 
         fromSingle typeName constructorName typeParams dhallType = do
             constructor <- toConstructor typeParams generateOptions haskellTypes typeName (constructorName, Just dhallType)
-    
+
             toDataD typeName typeParams [constructor]
-    
+
         fromMulti typeName typeParams dhallType = case dhallType of
             Union kts -> do
                 constructors <- traverse (toConstructor typeParams generateOptions haskellTypes typeName) (Dhall.Map.toList kts)
 
                 toDataD typeName typeParams constructors
-    
-            _ -> fail $ message dhallType 
+
+            _ -> fail $ message dhallType
 
         message dhallType = Pretty.renderString (Dhall.Pretty.layout $ document dhallType)
 
