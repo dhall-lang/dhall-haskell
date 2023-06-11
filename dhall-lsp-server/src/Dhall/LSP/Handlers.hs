@@ -75,7 +75,7 @@ import Text.Megaparsec                  (SourcePos (..), unPos)
 import qualified Data.Aeson              as Aeson
 import qualified Data.HashMap.Strict     as HashMap
 import qualified Data.Map.Strict         as Map
-import qualified Data.Rope.UTF16         as Rope
+import qualified Data.Text.Utf16.Rope    as Rope
 import qualified Data.Text               as Text
 import qualified Language.LSP.Server     as LSP
 import qualified Language.LSP.Types      as LSP.Types
@@ -617,12 +617,12 @@ didSaveTextDocumentNotificationHandler =
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 initializedHandler :: Handlers HandlerM
-initializedHandler = 
+initializedHandler =
     LSP.notificationHandler SInitialized \_ -> return ()
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 workspaceChangeConfigurationHandler :: Handlers HandlerM
-workspaceChangeConfigurationHandler = 
+workspaceChangeConfigurationHandler =
     LSP.notificationHandler SWorkspaceDidChangeConfiguration \_ -> return ()
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
@@ -639,7 +639,7 @@ handleErrorWithDefault :: (Either a1 b -> HandlerM a2)
  -> b
  -> HandlerM a2
  -> HandlerM a2
-handleErrorWithDefault respond _default = flip catchE handler  
+handleErrorWithDefault respond _default = flip catchE handler
   where
     handler (Log, _message)  = do
                     let _xtype = MtLog
