@@ -1,5 +1,6 @@
 env:
-  cache_generation: 2021-06-22
+  cache_generation: 2023-06-12
+  ghc_version: 9.0.2
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
@@ -37,11 +38,11 @@ jobs:
       - name: "Cache"
         uses: actions/cache@v3
         with:
-          key: ${{ matrix.os.runner }}-${{ hashFiles('stack.yaml') }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{ env.ghc_version }}-${{ hashFiles('**/cabal.project', '**/cabal.project.freeze', '**/*.cabal') }}-${{ env.cache_generation }}
           restore-keys: |
-            ${{ matrix.os.runner }}-
+            ${{ matrix.os.runner }}-${{ env.ghc_version }}-
           path: |
-            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+            ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
       - name: Install libsodium
         shell: bash
         run: |
@@ -68,10 +69,7 @@ jobs:
               continue
             fi
 
-            # We use --test --no-run-tests to avoid re-building all the local packages in the
-            # subsequent test step.
-            # See https://github.com/commercialhaskell/stack/issues/4977.
-            stack build --test --no-run-tests --copy-bins --local-bin-path ./bin "${package}"
+            cabal install --enable-test --install-method=copy --installdir=./bin "${package}"
           done
       - name: "Run tests"
         shell: bash
@@ -93,7 +91,7 @@ jobs:
               continue
             fi
 
-            stack test "${package}"
+            cabal test "${package}"
           done
       - name: "Prepare packaging"
         shell: bash
@@ -122,7 +120,7 @@ jobs:
 
           function package() (
             local package="${1}"
-            local version="$(stack query locals "${package}" version)"
+            local version="$(jq -r ".\"install-plan\"[] | select(.\"pkg-name\" == \"${package}\") | .\"pkg-version\"" < dist-newstyle/cache/plan.json | head -n 1)"
             shift
             local assets=("${@}")
             local package_file="${package}-${version}-${architecture}-${{runner.os}}.${{ matrix.os.file-extension }}"
