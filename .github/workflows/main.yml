@@ -69,7 +69,7 @@ jobs:
               continue
             fi
 
-            cabal install --enable-test --install-method=copy --installdir=./bin "${package}"
+            cabal install --install-method=copy --installdir=./bin "${package}"
           done
       - name: "Run tests"
         shell: bash
