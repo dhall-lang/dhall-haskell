@@ -1,6 +1,6 @@
 env:
   cache_generation: 2023-06-12
-  ghc_version: 9.0.2
+  ghc_version: 8.10.7
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
@@ -34,7 +34,8 @@ jobs:
         name: "Setup Haskell environment"
         uses: haskell/actions/setup@v2
         with:
-          enable-stack: true
+          ghc-version: ${{ env.ghc_version }}
+          cabal-version: '3.10.1.0'
       - name: "Cache"
         uses: actions/cache@v3
         with:
