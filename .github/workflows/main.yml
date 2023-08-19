@@ -21,6 +21,11 @@ jobs:
             archive-command: '7z a -tzip'
             file-extension: 'zip'
             executable-extension: '.exe'
+        stack-yaml:
+          - "stack.yaml"
+        include:
+          - runner: "ubuntu-latest"
+            stack-yaml: "stack.ghc-8.10.yaml"
       fail-fast: false
     name: ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
@@ -37,7 +42,7 @@ jobs:
       - name: "Cache"
         uses: actions/cache@v3
         with:
-          key: ${{ matrix.os.runner }}-${{ hashFiles('stack.yaml') }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
           restore-keys: |
             ${{ matrix.os.runner }}-
           path: |
@@ -71,7 +76,7 @@ jobs:
             # We use --test --no-run-tests to avoid re-building all the local packages in the
             # subsequent test step.
             # See https://github.com/commercialhaskell/stack/issues/4977.
-            stack build --test --no-run-tests --copy-bins --local-bin-path ./bin "${package}"
+            stack --stack-yaml "${{matrix.stack-yaml}}" build --test --no-run-tests --copy-bins --local-bin-path ./bin "${package}"
           done
       - name: "Run tests"
         shell: bash
@@ -93,7 +98,7 @@ jobs:
               continue
             fi
 
-            stack test "${package}"
+            stack --stack-yaml "${{matrix.stack-yaml}}" test "${package}"
           done
       - name: "Prepare packaging"
         shell: bash
@@ -103,6 +108,7 @@ jobs:
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
       - id: package
         name: "Create packages"
+        if: ${{ matrix.stack-yaml == "stack.yaml" }}
         shell: bash
         run: |
           packages=(
@@ -143,6 +149,7 @@ jobs:
           package 'dhall-toml' "bin/dhall-to-toml${exe}" "bin/toml-to-dhall${exe}"
           package 'dhall-yaml' "bin/dhall-to-yaml-ng${exe}" "bin/yaml-to-dhall${exe}"
       - name: "Upload package"
+        if: ${{ matrix.stack-yaml == "stack.yaml" }}
         uses: actions/upload-artifact@v3
         with:
           name: 'dhall-${{runner.os}}.${{matrix.os.file-extension}}'
