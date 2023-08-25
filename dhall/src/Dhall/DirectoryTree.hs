@@ -55,8 +55,12 @@ import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
 import qualified System.FilePath             as FilePath
+#ifdef mingw32_HOST_OS
+import System.IO.Error           (illegalOperationErrorType, mkIOError)
+#else
+import qualified System.Posix.User           as Posix
+#endif
 import qualified System.PosixCompat.Files    as Posix
-import qualified System.PosixCompat.User     as Posix
 
 {-| Attempt to transform a Dhall record into a directory tree where:
 
@@ -264,7 +268,13 @@ makeType = Record . Map.fromList <$> sequenceA
 -- | Resolve a `User` to a numerical id.
 getUser :: User -> IO UserID
 getUser (UserId uid) = return uid
-getUser (UserName name) = Posix.userID <$> Posix.getUserEntryForName name
+getUser (UserName name) =
+#ifdef mingw32_HOST_OS
+    ioError $ mkIOError illegalOperationErrorType x Nothing Nothing
+    where x = "System.Posix.User.getUserEntryForName: not supported"
+#else
+    Posix.userID <$> Posix.getUserEntryForName name
+#endif
 
 -- | Resolve a `Group` to a numerical id.
 getGroup :: Group -> IO GroupID
