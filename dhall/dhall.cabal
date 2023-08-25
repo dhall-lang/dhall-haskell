@@ -244,7 +244,7 @@ Common common
         repline                     >= 0.4.0.0  && < 0.5 ,
         serialise                   >= 0.2.0.0  && < 0.3 ,
         scientific                  >= 0.3.0.0  && < 0.4 ,
-        template-haskell            >= 2.13.0.0 && < 2.17,
+        template-haskell            >= 2.13.0.0 && < 2.20,
         text                        >= 0.11.1.0 && < 2.1 ,
         text-manipulate             >= 0.2.0.1  && < 0.4 ,
         text-short                  >= 0.1      && < 0.2 ,
