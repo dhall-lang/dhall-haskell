@@ -279,7 +279,13 @@ getUser (UserName name) =
 -- | Resolve a `Group` to a numerical id.
 getGroup :: Group -> IO GroupID
 getGroup (GroupId gid) = return gid
-getGroup (GroupName name) = Posix.groupID <$> Posix.getGroupEntryForName name
+getGroup (GroupName name) = 
+#ifdef mingw32_HOST_OS
+    ioError $ mkIOError illegalOperationErrorType x Nothing Nothing
+    where x = "System.Posix.User.getGroupEntryForName: not supported"
+#else
+    Posix.groupID <$> Posix.getGroupEntryForName name
+#endif
 
 -- | Process a `FilesystemEntry`. Writes the content to disk and apply the
 -- metadata to the newly created item.
