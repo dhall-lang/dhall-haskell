@@ -31,7 +31,7 @@ jobs:
           submodules: true
       - id: setup-haskell-cabal
         name: "Setup Haskell environment"
-        uses: haskell/actions/setup@v2.4.3
+        uses: haskell/actions/setup@v2.4.6
         with:
           enable-stack: true
       - name: "Cache"

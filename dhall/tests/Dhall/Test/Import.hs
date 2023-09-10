@@ -54,6 +54,24 @@ getTests = do
             , importDirectory </> "success/unit/asLocation/RemoteChain2A.dhall"
             , importDirectory </> "success/unit/asLocation/RemoteChain3A.dhall"
             , importDirectory </> "success/unit/asLocation/RemoteChainMissingA.dhall"
+
+              -- Skip all tests that reference httpbin.org to avoid clobbering
+              -- their servers.  These should eventually be replaced by tests
+              -- that depend on an equivalent endpoint on test.dhall-lang.org
+              -- instead of httpbin.org.
+            , importDirectory </> "failure/customHeadersUsingBoundVariable.dhall"
+            , importDirectory </> "failure/originHeadersFromRemote.dhall"
+            , importDirectory </> "failure/originHeadersFromRemoteENV.dhall"
+            , importDirectory </> "success/customHeadersA.dhall"
+            , importDirectory </> "success/noHeaderForwardingA.dhall"
+            , importDirectory </> "success/success/originHeadersA.dhall"
+            , importDirectory </> "success/originHeadersENV.dhall"
+            , importDirectory </> "success/originHeadersImportA.dhall"
+            , importDirectory </> "success/originHeadersImportENV.dhall"
+            , importDirectory </> "success/originHeadersImportFromEnvA.dhall"
+            , importDirectory </> "success/originHeadersImportFromEnvENV.dhall"
+            , importDirectory </> "success/originHeadersOverrideA.dhall"
+            , importDirectory </> "success/originHeadersOverrideENV.dhall"
             ]
 
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
