@@ -20,7 +20,7 @@ module Dhall.DirectoryTree
 
 import Control.Applicative       (empty)
 import Control.Exception         (Exception)
-import Control.Monad             (unless, when)
+import Control.Monad             (unless)
 import Data.Either.Validation    (Validation (..))
 import Data.Functor.Identity     (Identity (..))
 import Data.Maybe                (fromMaybe, isJust)
@@ -53,7 +53,6 @@ import qualified Dhall.Util                  as Util
 import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
-import qualified System.FilePath             as FilePath
 import qualified System.PosixCompat.Files    as Posix
 import qualified System.PosixCompat.User     as Posix
 
@@ -61,7 +60,7 @@ import qualified System.PosixCompat.User     as Posix
 
     * Records are translated into directories
 
-    * @Map@s are also translated into directories
+    * @Map@s are translated into directory trees, if allowSeparators option is enabled
 
     * @Text@ values or fields are translated into files
 
@@ -69,7 +68,7 @@ import qualified System.PosixCompat.User     as Posix
 
     * There is a more advanced way to construct directory trees using a fixpoint
       encoding. See the documentation below on that.
-
+    
     For example, the following Dhall record:
 
     > { dir = { `hello.txt` = "Hello\n" }
@@ -112,6 +111,14 @@ import qualified System.PosixCompat.User     as Posix
     > $ cat result/example.yaml
     > ! "bar": null
     > ! "foo": "Hello"
+
+    /Construction of directory trees from maps/
+
+    In @Map@s, the keys specify paths relative to the work dir.
+    Only forward slashes (@/@) must be used as directory separators.
+    They will be automatically transformed on Windows.
+    Absolute paths (starting with @/@) and parent directory segments (@..@)
+    are prohibited for security concerns.
 
     /Advanced construction of directory trees/
 
@@ -216,12 +223,39 @@ toDirectoryTree allowSeparators path expression = case expression of
         empty
 
     process key value = do
-        when (not allowSeparators && Text.isInfixOf (Text.pack [ FilePath.pathSeparator ]) key) $
-            die
+        case keyPathSegments of
+            -- Fail if path is absolute, which is a security risk.
+            "" : _ ->
+                die
+            -- Detect Windows absolute paths like "C:".
+            [_ , ':'] : _ ->
+                die
+            -- Fail if separators are not allowed by the option.
+            _ : _ | not allowSeparators ->
+                die
+            _ ->
+                return ()
 
-        Directory.createDirectoryIfMissing allowSeparators path
+        -- Fail if path contains attempts to go to container directory,
+        -- which is a security risk.
+        if elem ".." keyPathSegments
+            then die
+            else return ()
 
-        toDirectoryTree allowSeparators (path </> Text.unpack key) value
+        (dirPath, fileName) <- case reverse keyPathSegments of
+            h : t ->
+                return
+                    ( Foldable.foldl' (</>) path (reverse t)
+                    , h )
+            _ ->
+                die
+
+        Directory.createDirectoryIfMissing True dirPath
+
+        toDirectoryTree allowSeparators (dirPath </> fileName) value
+      where
+        keyPathSegments =
+            fmap Text.unpack $ Text.splitOn "/" key
 
     die = Exception.throwIO FilesystemError{..}
       where
