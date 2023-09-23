@@ -487,6 +487,30 @@ data HaskellType code
         -- ^ Dhall code that evaluates to a type
         }
     -- | Generate some Haskell types within a restricted scope.
+    --
+    -- Suppose generate your types using the following code:
+    --
+    -- > data MyBool = MyFalse | MyTrue
+    -- >
+    -- > Dhall.TH.makeHaskellTypes
+    -- >   [ SingleConstructor "ListOfBool" "ListOfBool" "List Bool"
+    -- >   , Scoped
+    -- >       [ Predefined (TH.ConT ''MyBool) "Bool"
+    -- >       , SingleConstructor "ListOfMyBool" "ListOfMyBool" "List Bool"
+    -- >       ]
+    -- >   , SingleConstructor "ListOfBoolAgain" "ListOfBoolAgain" "List Bool"
+    -- >   ]
+    --
+    -- This generates the following Haskell types:
+    --
+    -- > data ListOfBool = ListOfBool Bool
+    -- > data ListOfMyBool = ListOfMyBool MyBool
+    -- > data ListOfBoolAgain = ListOfBoolAgain Bool
+    --
+    -- Therefore @Scoped@ allows you to override the type mapping locally. This
+    -- is especially handy in conjunction with @Predefined@, as it allows you to
+    -- use different representations of a Dhall type, e.g. a Dhall @List@ can be
+    -- a Haskell @Vector@, @Seq@ or a good old linked list.
     | Scoped [HaskellType code]
     deriving (Functor, Foldable, Traversable)
 
