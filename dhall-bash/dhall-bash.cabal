@@ -48,7 +48,7 @@ Executable dhall-to-bash
         bytestring                            ,
         dhall                                 ,
         dhall-bash                            ,
-        optparse-generic >= 1.1.1    && < 1.5 ,
+        optparse-generic >= 1.1.1    && < 1.6 ,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010
