@@ -49,6 +49,7 @@ module Dhall.Eval (
   , dateShow
   , timeShow
   , timezoneShow
+  , naturalShowHex
   ) where
 
 import Data.Bifunctor     (first)
@@ -187,6 +188,7 @@ data Val a
     | VNaturalOdd !(Val a)
     | VNaturalToInteger !(Val a)
     | VNaturalShow !(Val a)
+    | VNaturalShowHex !(Val a)
     | VNaturalSubtract !(Val a) !(Val a)
     | VNaturalPlus !(Val a) !(Val a)
     | VNaturalTimes !(Val a) !(Val a)
@@ -555,6 +557,9 @@ eval !env t0 =
         NaturalShow -> VPrim $ \case
             VNaturalLit n -> VTextLit (VChunks [] (Text.pack (show n)))
             n             -> VNaturalShow n
+        NaturalShowHex -> VPrim $ \case
+            VNaturalLit n -> VTextLit (VChunks [] (naturalShowHex n))
+            n             -> VNaturalShowHex n
         NaturalSubtract -> VPrim $ \case
             VNaturalLit 0 ->
                 VHLam NaturalSubtractZero id
@@ -943,6 +948,10 @@ timeShow (TimeOfDay hh mm seconds) precision =
 timezoneShow :: TimeZone -> Text
 timezoneShow = Text.pack . Time.formatTime Time.defaultTimeLocale "%Ez"
 
+-- | Utility that powers the @Natural/showHex@ built-in
+naturalShowHex :: Natural -> Text
+naturalShowHex = Text.pack . Printf.printf "0x%X"
+
 conv :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 conv !env t0 t0' =
     case (t0, t0') of
@@ -1011,6 +1020,8 @@ conv !env t0 t0' =
         (VNaturalToInteger t, VNaturalToInteger t') ->
             conv env t t'
         (VNaturalShow t, VNaturalShow t') ->
+            conv env t t'
+        (VNaturalShowHex t, VNaturalShowHex t') ->
             conv env t t'
         (VNaturalSubtract x y, VNaturalSubtract x' y') ->
             conv env x x' && conv env y y'
@@ -1234,6 +1245,8 @@ quote !env !t0 =
             NaturalToInteger `qApp` t
         VNaturalShow t ->
             NaturalShow `qApp` t
+        VNaturalShowHex t ->
+            NaturalShowHex `qApp` t
         VNaturalPlus t u ->
             NaturalPlus (quote env t) (quote env u)
         VNaturalTimes t u ->
@@ -1443,6 +1456,8 @@ alphaNormalize = goEnv EmptyNames
                 NaturalToInteger
             NaturalShow ->
                 NaturalShow
+            NaturalShowHex ->
+                NaturalShowHex
             NaturalSubtract ->
                 NaturalSubtract
             NaturalPlus t u ->

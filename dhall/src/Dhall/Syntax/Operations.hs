@@ -94,6 +94,7 @@ unsafeSubExpressions _ NaturalEven = pure NaturalEven
 unsafeSubExpressions _ NaturalOdd = pure NaturalOdd
 unsafeSubExpressions _ NaturalToInteger = pure NaturalToInteger
 unsafeSubExpressions _ NaturalShow = pure NaturalShow
+unsafeSubExpressions _ NaturalShowHex = pure NaturalShowHex
 unsafeSubExpressions _ NaturalSubtract = pure NaturalSubtract
 unsafeSubExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
 unsafeSubExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
@@ -241,6 +242,7 @@ reservedIdentifiers = reservedKeywords <>
         , "Natural/odd"
         , "Natural/toInteger"
         , "Natural/show"
+        , "Natural/showHex"
         , "Natural/subtract"
         , "Integer"
         , "Integer/clamp"

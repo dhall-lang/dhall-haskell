@@ -172,6 +172,7 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "TimeZone/show"     -> return TimeZoneShow
                     14 | sb == "Integer/negate"    -> return IntegerNegate
                        | sb == "Natural/isZero"    -> return NaturalIsZero
+                    15 | sb == "Natural/showHex"   -> return NaturalShowHex
                     16 | sb == "Integer/toDouble"  -> return IntegerToDouble
                        | sb == "Natural/subtract"  -> return NaturalSubtract
                     17 | sb == "Natural/toInteger" -> return NaturalToInteger
@@ -704,6 +705,9 @@ encodeExpressionInternal encodeEmbed = go
 
         NaturalShow ->
             Encoding.encodeUtf8ByteArray "Natural/show"
+
+        NaturalShowHex ->
+            Encoding.encodeUtf8ByteArray "Natural/showHex"
 
         NaturalSubtract ->
             Encoding.encodeUtf8ByteArray "Natural/subtract"

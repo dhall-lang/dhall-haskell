@@ -425,6 +425,8 @@ dhallToNix e =
         return ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $!= "n")
     loop NaturalShow =
         return "toString"
+    loop NaturalShowHex =
+        return "?????????????????????" -- lib.trivial.toHexString ?
     loop NaturalSubtract = do
         return
             (   "x"

@@ -706,6 +706,7 @@ parsers embedded = Parsers{..}
                             , NaturalOdd       <$ _NaturalOdd
                             , NaturalSubtract  <$ _NaturalSubtract
                             , NaturalToInteger <$ _NaturalToInteger
+                            , NaturalShowHex   <$ _NaturalShowHex
                             , NaturalShow      <$ _NaturalShow
                             , Natural          <$ _Natural
                             , None             <$ _None

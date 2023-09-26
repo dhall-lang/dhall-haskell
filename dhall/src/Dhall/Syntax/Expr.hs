@@ -109,6 +109,8 @@ data Expr s a
     | NaturalToInteger
     -- | > NaturalShow                              ~  Natural/show
     | NaturalShow
+    -- | > NaturalShowHex                           ~  Natural/showHex
+    | NaturalShowHex
     -- | > NaturalSubtract                          ~  Natural/subtract
     | NaturalSubtract
     -- | > NaturalPlus x y                          ~  x + y

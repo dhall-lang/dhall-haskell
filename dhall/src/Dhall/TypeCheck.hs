@@ -480,6 +480,9 @@ infer typer = loop
         NaturalShow ->
             return (VNatural ~> VText)
 
+        NaturalShowHex ->
+            return (VNatural ~> VText)
+
         NaturalSubtract ->
             return (VNatural ~> VNatural ~> VNatural)
 

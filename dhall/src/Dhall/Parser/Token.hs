@@ -58,6 +58,7 @@ module Dhall.Parser.Token (
     _NaturalOdd,
     _NaturalToInteger,
     _NaturalShow,
+    _NaturalShowHex,
     _NaturalSubtract,
     _IntegerClamp,
     _IntegerNegate,
@@ -1037,6 +1038,13 @@ _NaturalToInteger = builtin "Natural/toInteger"
 -}
 _NaturalShow :: Parser ()
 _NaturalShow = builtin "Natural/show"
+
+{-| Parse the @Natural/showHex@ built-in
+
+    This corresponds to the @Natural-showHex@ rule from the official grammar
+-}
+_NaturalShowHex :: Parser ()
+_NaturalShowHex = builtin "Natural/showHex"
 
 {-| Parse the @Natural/subtract@ built-in
 

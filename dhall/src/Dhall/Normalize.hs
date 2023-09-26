@@ -227,6 +227,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Text.pack (show n))))
+                    App NaturalShowHex (NaturalLit n) ->
+                        pure (TextLit (Chunks [] (Eval.naturalShowHex n)))
                     App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
                         -- Use an `Integer` for the subtraction, due to the
                         -- following issue:
@@ -451,6 +453,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
           NaturalOdd -> pure NaturalOdd
           NaturalToInteger -> pure NaturalToInteger
           NaturalShow -> pure NaturalShow
+          NaturalShowHex -> pure NaturalShowHex
           NaturalSubtract -> pure NaturalSubtract
           NaturalPlus x y -> decide <$> loop x <*> loop y
             where
@@ -798,6 +801,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
+          App NaturalShowHex (NaturalLit _) -> False
           App DateShow (DateLiteral _) -> False
           App TimeShow (TimeLiteral _ _) -> False
           App TimeZoneShow (TimeZoneLiteral _) -> False
@@ -865,6 +869,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       NaturalEven -> True
       NaturalOdd -> True
       NaturalShow -> True
+      NaturalShowHex -> True
       NaturalSubtract -> True
       NaturalToInteger -> True
       NaturalPlus x y -> loop x && loop y && decide x y

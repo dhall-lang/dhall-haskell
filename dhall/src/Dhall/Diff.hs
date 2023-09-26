@@ -1238,6 +1238,12 @@ diffPrimitiveExpression l@NaturalShow r =
     mismatch l r
 diffPrimitiveExpression l r@NaturalShow =
     mismatch l r
+diffPrimitiveExpression NaturalShowHex NaturalShowHex =
+    "…"
+diffPrimitiveExpression l@NaturalShowHex r =
+    mismatch l r
+diffPrimitiveExpression l r@NaturalShowHex =
+    mismatch l r
 diffPrimitiveExpression NaturalSubtract NaturalSubtract =
     "…"
 diffPrimitiveExpression l@NaturalSubtract r =

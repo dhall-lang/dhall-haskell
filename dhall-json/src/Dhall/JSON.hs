@@ -830,6 +830,9 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.NaturalShow ->
             Core.NaturalShow
 
+        Core.NaturalShowHex ->
+            Core.NaturalShowHex
+
         Core.NaturalSubtract ->
             Core.NaturalSubtract
 

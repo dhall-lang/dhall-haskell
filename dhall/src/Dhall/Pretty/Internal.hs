@@ -1309,6 +1309,8 @@ prettyPrinters characterSet =
         builtin "Natural/toInteger"
     prettyPrimitiveExpression NaturalShow =
         builtin "Natural/show"
+    prettyPrimitiveExpression NaturalShowHex =
+        builtin "Natural/showHex"
     prettyPrimitiveExpression NaturalSubtract =
         builtin "Natural/subtract"
     prettyPrimitiveExpression Integer =
