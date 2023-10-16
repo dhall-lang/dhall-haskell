@@ -426,7 +426,29 @@ dhallToNix e =
     loop NaturalShow =
         return "toString"
     loop NaturalShowHex =
-        return "?????????????????????" -- lib.trivial.toHexString ?
+        return
+            (
+                "n"
+            ==> Nix.letsE
+                [
+                 ("b", Nix.mkInt 16)
+                ,("toHexDigit", "builtins" @. "elemAt" @@ Nix.mkList (Nix.mkStr . Data.Text.singleton <$> ['0'..'9']<>['A'..'F']))
+                ,("toHexString",
+                        "i"
+                    ==>  Nix.mkIf
+                            ("i" $<= "b")
+                            (Nix.mkStr "0x" $+ "toHexDigit" @@ "i")
+                            (Nix.letsE
+                                [
+                                 ("r", "i" $- (("i" $/ "b") $* "b"))
+                                ,("q", ("i" $- "r") $/ "b")
+                                ]
+                                (("toHexString" @@ "q") $+ ("toHexDigit" @@ "r"))
+                            )
+                 )
+                ]
+                ("toHexString" @@ "n")
+            )
     loop NaturalSubtract = do
         return
             (   "x"
