@@ -45,8 +45,8 @@ Executable openapi-to-dhall
     filepath                >= 1.4       && < 1.5  ,
     -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
     megaparsec              >= 7.0       && < 10   ,
-    optparse-applicative    >= 0.14.3.0  && < 0.18 ,
-    parser-combinators                             , 
+    optparse-applicative    >= 0.14.3.0  && < 0.19 ,
+    parser-combinators                             ,
     prettyprinter                                  ,
     sort                                           ,
     text                                           ,
