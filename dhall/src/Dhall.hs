@@ -51,6 +51,7 @@ module Dhall
     , parseWithSettings
     , resolveWithSettings
     , typecheckWithSettings
+    , checkWithSettings
     , expectWithSettings
     , normalizeWithSettings
 
@@ -218,8 +219,36 @@ typecheckWithSettings settings expression = do
 
     return ()
 
+{-| Type-check an expression against a type provided as a Dhall expreession,
+    using the supplied `InputSettings`
+-}
+checkWithSettings ::
+    -- | The input settings
+    InputSettings ->
+    -- | The expected type of the expression
+    Expr Src Void ->
+    -- | The expression to check
+    Expr Src Void ->
+    IO ()
+checkWithSettings settings type_ expression = do
+    let suffix = Dhall.Pretty.Internal.prettyToStrictText type_
+
+    let annotated = case expression of
+            Note (Src begin end bytes) _ ->
+                Note (Src begin end bytes') (Annot expression type_)
+              where
+                bytes' = bytes <> " : " <> suffix
+            _ ->
+                Annot expression type_
+
+    typecheckWithSettings settings annotated
+
+    return ()
+
 {-| Type-check an expression against a `Decoder`'s expected type, using the
-    supplied `InputSettings`
+    supplied `InputSettings`.
+    This is equivalent of using the 'expected' type of a @Decoder@ as the second
+    argument to 'checkWithSettings'.
 -}
 expectWithSettings :: InputSettings -> Decoder a -> Expr Src Void -> IO ()
 expectWithSettings settings Decoder{..} expression = do
@@ -227,19 +256,7 @@ expectWithSettings settings Decoder{..} expression = do
         Success x -> return x
         Failure e -> Control.Exception.throwIO e
 
-    let suffix = Dhall.Pretty.Internal.prettyToStrictText expected'
-
-    let annotated = case expression of
-            Note (Src begin end bytes) _ ->
-                Note (Src begin end bytes') (Annot expression expected')
-              where
-                bytes' = bytes <> " : " <> suffix
-            _ ->
-                Annot expression expected'
-
-    typecheckWithSettings settings annotated
-
-    return ()
+    checkWithSettings settings expected' expression
 
 {-| Resolve an expression, using the supplied `InputSettings`
 
