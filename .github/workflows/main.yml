@@ -32,14 +32,15 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: "Checkout repository"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - id: setup-haskell-cabal
         name: "Setup Haskell environment"
-        uses: haskell/actions/setup@v2.4.6
+        uses: haskell-actions/setup@v2.5
         with:
           enable-stack: true
+          stack-version: "latest"
       - name: "Cache"
         uses: actions/cache@v3
         with:
