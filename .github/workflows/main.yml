@@ -24,7 +24,8 @@ jobs:
         stack-yaml:
           - "stack.yaml"
         include:
-          - runner: "ubuntu-latest"
+          - os:
+              runner: "ubuntu-latest"
             stack-yaml: "stack.ghc-8.10.yaml"
       fail-fast: false
     name: ${{ matrix.os.runner }}
