@@ -102,6 +102,7 @@ jobs:
             stack --stack-yaml "${{matrix.stack-yaml}}" test "${package}"
           done
       - name: "Prepare packaging"
+        if: ${{ matrix.stack-yaml == 'stack.yaml' }}
         shell: bash
         run: |
           mkdir -p share/man/man1
