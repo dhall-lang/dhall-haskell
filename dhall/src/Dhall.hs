@@ -60,6 +60,7 @@ module Dhall
     ) where
 
 import Control.Applicative    (Alternative, empty)
+import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
 import Dhall.Import           (Imported (..))
@@ -208,28 +209,27 @@ instance HasEvaluateSettings EvaluateSettings where
   evaluateSettings = id
 
 -- | Parse an expression, using the supplied `InputSettings`
-parseWithSettings :: InputSettings -> Text -> IO (Expr Src Import)
-parseWithSettings settings text = do
-    Core.throws (Dhall.Parser.exprFromText (view sourceName settings) text)
+parseWithSettings :: MonadThrow m => InputSettings -> Text -> m (Expr Src Import)
+parseWithSettings settings text =
+    either throwM return (Dhall.Parser.exprFromText (view sourceName settings) text)
 
 -- | Type-check an expression, using the supplied `InputSettings`
-typecheckWithSettings :: InputSettings -> Expr Src Void -> IO ()
-typecheckWithSettings settings expression = do
-    _ <- Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) expression)
-
-    return ()
+typecheckWithSettings :: MonadThrow m => InputSettings -> Expr Src Void -> m ()
+typecheckWithSettings settings expression =
+    either throwM (return . const ()) (Dhall.TypeCheck.typeWith (view startingContext settings) expression)
 
 {-| Type-check an expression against a type provided as a Dhall expreession,
     using the supplied `InputSettings`
 -}
 checkWithSettings ::
+    MonadThrow m =>
     -- | The input settings
     InputSettings ->
     -- | The expected type of the expression
     Expr Src Void ->
     -- | The expression to check
     Expr Src Void ->
-    IO ()
+    m ()
 checkWithSettings settings type_ expression = do
     let suffix = Dhall.Pretty.Internal.prettyToStrictText type_
 
@@ -243,18 +243,16 @@ checkWithSettings settings type_ expression = do
 
     typecheckWithSettings settings annotated
 
-    return ()
-
 {-| Type-check an expression against a `Decoder`'s expected type, using the
     supplied `InputSettings`.
     This is equivalent of using the 'expected' type of a @Decoder@ as the second
     argument to 'checkWithSettings'.
 -}
-expectWithSettings :: InputSettings -> Decoder a -> Expr Src Void -> IO ()
+expectWithSettings :: MonadThrow m => InputSettings -> Decoder a -> Expr Src Void -> m ()
 expectWithSettings settings Decoder{..} expression = do
     expected' <- case expected of
         Success x -> return x
-        Failure e -> Control.Exception.throwIO e
+        Failure e -> throwM e
 
     checkWithSettings settings expected' expression
 
