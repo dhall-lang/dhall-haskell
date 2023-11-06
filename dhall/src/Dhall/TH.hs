@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -263,7 +264,13 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
 
         interpretOptions = generateToInterpretOptions generateOptions typ
 
-        toTypeVar (V n i) = Syntax.PlainTV $ Syntax.mkName (Text.unpack n ++ show i)
+#if MIN_VERSION_template_haskell(2,21,0)
+        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) Syntax.BndrInvis
+#elif MIN_VERSION_template_haskell(2,17,0)
+        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) ()
+#else
+        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i))
+#endif
 
         toDataD typeName typeParams constructors = do
             let name = Syntax.mkName (Text.unpack typeName)
