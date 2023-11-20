@@ -299,11 +299,14 @@ integerLiteral = (do
 -}
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
-    a <-    try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
+    a <-    binary
+        <|> hexadecimal
         <|> decimal
         <|> (char '0' $> 0)
     return a ) <?> "literal"
   where
+    binary = try (char '0' >> char 'b' >> Text.Megaparsec.Char.Lexer.binary)
+    hexadecimal = try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
     decimal = do
         n <- headDigit
         ns <- many tailDigit
