@@ -1882,9 +1882,13 @@ import Dhall
 -- >
 -- > (input):1:1
 --
--- In fact, there are no built-in functions for @Integer@s (or @Double@s) other
--- than @Integer/show@ and @Double/show@.  As far as the language is concerned
--- they are opaque values that can only be shuffled around but not used in any
+-- There are no built-in functions for @Integer@ arithmetic; however, conversion
+-- to and from @Natural@s is possible usinng @Integer/clamp@, @Integer/negate@
+-- and @Natural/toInteger@.
+--
+-- For @Double@s the situation is even more extreme: there are no built-in
+-- functions other than @Double/show@. As far as the language is concerned they
+-- are opaque values that can only be shuffled around but not used in any
 -- meaningful way until they have been loaded into Haskell.
 --
 -- Second, the equality @(==)@ and inequality @(!=)@ operators only work on
