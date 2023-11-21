@@ -12,7 +12,7 @@ fileAnIssue titleName =
     error $ "\ESC[1;31mError\ESC[0m Documentation generator bug\n\n" <>
 
             "Explanation: This error message means that there is a bug in the " <>
-            "Dhall Documentation generator. You didn't did anything wrong, but " <>
+            "Dhall Documentation generator. You didn't do anything wrong, but " <>
             "if you would like to see this problem fixed then you should report " <>
             "the bug at:\n\n" <>
 

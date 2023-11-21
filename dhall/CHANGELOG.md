@@ -1,3 +1,13 @@
+1.42.1
+
+* Add several new entrypoints to `Dhall` module [[#2534](https://github.com/dhall-lang/dhall-haskell/pull/2534)] / [[#2544](https://github.com/dhall-lang/dhall-haskell/pull/2544)]
+* Build against latest versions of:
+  * [`ansi-terminal`](https://github.com/dhall-lang/dhall-haskell/pull/2521)
+  * [`optparse-applicative`](https://github.com/dhall-lang/dhall-haskell/pull/2543)
+  * [`optparse-generic`](https://github.com/dhall-lang/dhall-haskell/pull/2519)
+  * [`lens`](https://github.com/dhall-lang/dhall-haskell/pull/2539)
+  * `template-haskell` [[#2532](https://github.com/dhall-lang/dhall-haskell/pull/2532)] / [[#2542](https://github.com/dhall-lang/dhall-haskell/pull/2542)]
+  * [`unix-compat`](https://github.com/dhall-lang/dhall-haskell/pull/2532)
 1.42.0
 
 * [Supports standard version 23.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v23.0.0)
