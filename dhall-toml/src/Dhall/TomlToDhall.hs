@@ -1,7 +1,10 @@
-{-# LANGUAGE ApplicativeDo   #-}
-{-# LANGUAGE GADTs           #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE BlockArguments    #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| This module exports the `tomlToDhall` function for translating a
     TOML syntax tree from @tomland@ to a Dhall syntax tree. For now,
@@ -250,13 +253,6 @@ objectToDhall type_ object = case (type_, object) of
             []    -> Left (Incompatible type_ object)
             x : _ -> Right x
 
-    (Core.App Core.List t, Array []) ->
-        Right (Core.ListLit (Just t) [])
-
-    (Core.App Core.List t, Array elements) -> do
-        expressions <- mapM (objectToDhall t) elements
-        return (Core.ListLit Nothing (Seq.fromList expressions))
-
     (Core.Record record, Table table) -> do
         let process key fieldType
                 | Just nestedObject <- HashMap.lookup (Piece key) table =
@@ -271,6 +267,30 @@ objectToDhall type_ object = case (type_, object) of
         expressions <- Map.traverseWithKey process (fmap Core.recordFieldValue record)
 
         return (Core.RecordLit (fmap Core.makeRecordField expressions))
+
+    (Core.App Core.List (Core.Record [("mapKey", Core.recordFieldValue -> Core.Text), ("mapValue", Core.recordFieldValue -> valueType)]), Table table) -> do
+        hashMap <- traverse (objectToDhall valueType) table
+
+        let expressions = Seq.fromList do
+                (Piece key, value) <- HashMap.toList hashMap
+
+                let newKey =
+                        Core.makeRecordField (Core.TextLit (Core.Chunks [] key))
+
+                let newValue = Core.makeRecordField value
+
+                pure (Core.RecordLit [("mapKey", newKey), ("mapValue", newValue)])
+
+        let listType = if Seq.null expressions then Just type_ else Nothing
+
+        return (Core.ListLit listType expressions)
+
+    (Core.App Core.List t, Array []) ->
+        Right (Core.ListLit (Just t) [])
+
+    (Core.App Core.List t, Array elements) -> do
+        expressions <- mapM (objectToDhall t) elements
+        return (Core.ListLit Nothing (Seq.fromList expressions))
 
     (_, Prim (AnyValue value)) ->
         valueToDhall type_ value
