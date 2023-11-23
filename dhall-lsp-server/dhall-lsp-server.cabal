@@ -1,5 +1,5 @@
 name:           dhall-lsp-server
-Version:        1.1.2
+Version:        1.1.3
 cabal-version:  1.12
 synopsis:       Language Server Protocol (LSP) server for Dhall
 homepage:       https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server#readme
@@ -49,13 +49,13 @@ library
     , containers           >= 0.5.11.0 && < 0.7
     , data-default         >= 0.7.1.1  && < 0.8
     , directory            >= 1.2.2.0  && < 1.4
-    , dhall                >= 1.38.0   && < 1.42
+    , dhall                >= 1.38.0   && < 1.43
     , dhall-json           >= 1.4      && < 1.8
     , filepath             >= 1.4.2    && < 1.5
     , lsp                  >= 1.2.0.0  && < 1.5
     , rope-utf16-splay     >= 0.3.1.0  && < 0.5
     , hslogger             >= 1.2.10   && < 1.4
-    , lens                 >= 4.16.1   && < 5.2
+    , lens                 >= 4.16.1   && < 5.3
     -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
     , megaparsec           >= 7.0.2    && < 10
     , mtl                  >= 2.2.2    && < 2.3

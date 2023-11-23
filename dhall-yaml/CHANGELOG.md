@@ -1,3 +1,5 @@
+* Build against `dhall-1.42`
+
 1.2.11
 
 * [Add new `--preserve-header` option](https://github.com/dhall-lang/dhall-haskell/pull/2410)

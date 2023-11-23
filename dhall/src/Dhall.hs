@@ -24,6 +24,10 @@ module Dhall
     , inputFileWithSettings
     , inputExpr
     , inputExprWithSettings
+    , interpretExpr
+    , interpretExprWithSettings
+    , fromExpr
+    , fromExprWithSettings
     , rootDirectory
     , sourceName
     , startingContext
@@ -43,16 +47,25 @@ module Dhall
     -- * Encoders
     , module Dhall.Marshal.Encode
 
+    -- * Individual phases
+    , parseWithSettings
+    , resolveWithSettings
+    , typecheckWithSettings
+    , checkWithSettings
+    , expectWithSettings
+    , normalizeWithSettings
+
     -- * Miscellaneous
     , rawInput
     ) where
 
 import Control.Applicative    (Alternative, empty)
+import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
 import Dhall.Import           (Imported (..))
 import Dhall.Parser           (Src (..))
-import Dhall.Syntax           (Expr (..))
+import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
 import Lens.Family            (LensLike', view)
@@ -195,6 +208,81 @@ instance HasEvaluateSettings InputSettings where
 instance HasEvaluateSettings EvaluateSettings where
   evaluateSettings = id
 
+-- | Parse an expression, using the supplied `InputSettings`
+parseWithSettings :: MonadThrow m => InputSettings -> Text -> m (Expr Src Import)
+parseWithSettings settings text =
+    either throwM return (Dhall.Parser.exprFromText (view sourceName settings) text)
+
+-- | Type-check an expression, using the supplied `InputSettings`
+typecheckWithSettings :: MonadThrow m => InputSettings -> Expr Src Void -> m ()
+typecheckWithSettings settings expression =
+    either throwM (return . const ()) (Dhall.TypeCheck.typeWith (view startingContext settings) expression)
+
+{-| Type-check an expression against a type provided as a Dhall expreession,
+    using the supplied `InputSettings`
+-}
+checkWithSettings ::
+    MonadThrow m =>
+    -- | The input settings
+    InputSettings ->
+    -- | The expected type of the expression
+    Expr Src Void ->
+    -- | The expression to check
+    Expr Src Void ->
+    m ()
+checkWithSettings settings type_ expression = do
+    let suffix = Dhall.Pretty.Internal.prettyToStrictText type_
+
+    let annotated = case expression of
+            Note (Src begin end bytes) _ ->
+                Note (Src begin end bytes') (Annot expression type_)
+              where
+                bytes' = bytes <> " : " <> suffix
+            _ ->
+                Annot expression type_
+
+    typecheckWithSettings settings annotated
+
+{-| Type-check an expression against a `Decoder`'s expected type, using the
+    supplied `InputSettings`.
+    This is equivalent of using the 'expected' type of a @Decoder@ as the second
+    argument to 'checkWithSettings'.
+-}
+expectWithSettings :: MonadThrow m => InputSettings -> Decoder a -> Expr Src Void -> m ()
+expectWithSettings settings Decoder{..} expression = do
+    expected' <- case expected of
+        Success x -> return x
+        Failure e -> throwM e
+
+    checkWithSettings settings expected' expression
+
+{-| Resolve an expression, using the supplied `InputSettings`
+
+    Note that this also applies any substitutions specified in the
+    `InputSettings`
+-}
+resolveWithSettings :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
+resolveWithSettings settings expression = do
+    let InputSettings{..} = settings
+
+    let EvaluateSettings{..} = _evaluateSettings
+
+    let transform =
+               Lens.Family.set Dhall.Import.substitutions   _substitutions
+            .  Lens.Family.set Dhall.Import.normalizer      _normalizer
+            .  Lens.Family.set Dhall.Import.startingContext _startingContext
+
+    let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
+
+    resolved <- State.evalStateT (Dhall.Import.loadWith expression) status
+
+    pure (Dhall.Substitution.substitute resolved (view substitutions settings))
+
+-- | Normalize an expression, using the supplied `InputSettings`
+normalizeWithSettings :: InputSettings -> Expr Src Void -> Expr Src Void
+normalizeWithSettings settings =
+    Core.normalizeWith (view normalizer settings)
+
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
 
     The first argument determines the type of value that you decode:
@@ -236,24 +324,17 @@ inputWithSettings
     -- ^ The Dhall program
     -> IO a
     -- ^ The decoded value in Haskell
-inputWithSettings settings (Decoder {..}) txt = do
-    expected' <- case expected of
+inputWithSettings settings decoder@Decoder{..} text = do
+    parsed <- parseWithSettings settings text
+
+    resolved <- resolveWithSettings settings parsed
+
+    expectWithSettings settings decoder resolved
+
+    let normalized = normalizeWithSettings settings resolved
+
+    case extract normalized of
         Success x -> return x
-        Failure e -> Control.Exception.throwIO e
-
-    let suffix = Dhall.Pretty.Internal.prettyToStrictText expected'
-    let annotate substituted = case substituted of
-            Note (Src begin end bytes) _ ->
-                Note (Src begin end bytes') (Annot substituted expected')
-              where
-                bytes' = bytes <> " : " <> suffix
-            _ ->
-                Annot substituted expected'
-
-    normExpr <- inputHelper annotate settings txt
-
-    case extract normExpr  of
-        Success x  -> return x
         Failure e -> Control.Exception.throwIO e
 
 {-| Type-check and evaluate a Dhall program that is read from the
@@ -320,39 +401,51 @@ inputExprWithSettings
     -- ^ The Dhall program
     -> IO (Expr Src Void)
     -- ^ The fully normalized AST
-inputExprWithSettings = inputHelper id
+inputExprWithSettings settings text = do
+    parsed <- parseWithSettings settings text
 
-{-| Helper function for the input* function family
+    resolved <- resolveWithSettings settings parsed
 
-@since 1.30
+    _ <- typecheckWithSettings settings resolved
+
+    pure (Core.normalizeWith (view normalizer settings) resolved)
+
+{-| Interpret a Dhall Expression
+
+    This takes care of import resolution, type-checking, and normalization
 -}
-inputHelper
-    :: (Expr Src Void -> Expr Src Void)
-    -> InputSettings
-    -> Text
-    -- ^ The Dhall program
-    -> IO (Expr Src Void)
-    -- ^ The fully normalized AST
-inputHelper annotate settings txt = do
-    expr  <- Core.throws (Dhall.Parser.exprFromText (view sourceName settings) txt)
+interpretExpr :: Expr Src Import -> IO (Expr Src Void)
+interpretExpr = interpretExprWithSettings defaultInputSettings
 
-    let InputSettings {..} = settings
+-- | Like `interpretExpr`, but customizable using `InputSettings`
+interpretExprWithSettings
+    :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
+interpretExprWithSettings settings parsed = do
+    resolved <- resolveWithSettings settings parsed
 
-    let EvaluateSettings {..} = _evaluateSettings
+    typecheckWithSettings settings resolved
 
-    let transform =
-               Lens.Family.set Dhall.Import.substitutions   _substitutions
-            .  Lens.Family.set Dhall.Import.normalizer      _normalizer
-            .  Lens.Family.set Dhall.Import.startingContext _startingContext
+    pure (Core.normalizeWith (view normalizer settings) resolved)
 
-    let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
+{- | Decode a Dhall expression
 
-    expr' <- State.evalStateT (Dhall.Import.loadWith expr) status
+    This takes care of import resolution, type-checking and normalization
+-}
+fromExpr :: Decoder a -> Expr Src Import -> IO a
+fromExpr = fromExprWithSettings defaultInputSettings
 
-    let substituted = Dhall.Substitution.substitute expr' $ view substitutions settings
-    let annot = annotate substituted
-    _ <- Core.throws (Dhall.TypeCheck.typeWith (view startingContext settings) annot)
-    pure (Core.normalizeWith (view normalizer settings) substituted)
+-- | Like `fromExpr`, but customizable using `InputSettings`
+fromExprWithSettings :: InputSettings -> Decoder a -> Expr Src Import -> IO a
+fromExprWithSettings settings decoder@Decoder{..} expression = do
+    resolved <- resolveWithSettings settings expression
+
+    expectWithSettings settings decoder resolved
+
+    let normalized = Core.normalizeWith (view normalizer settings) resolved
+
+    case extract normalized of
+        Success x -> return x
+        Failure e -> Control.Exception.throwIO e
 
 -- | Use this function to extract Haskell values directly from Dhall AST.
 --   The intended use case is to allow easy extraction of Dhall values for

@@ -1,5 +1,5 @@
 Name: dhall-json
-Version: 1.7.11
+Version: 1.7.12
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -43,11 +43,11 @@ Library
         aeson-yaml                >= 1.1.0     && < 1.2 ,
         bytestring                                < 0.12,
         containers                >= 0.5.9     && < 0.7 ,
-        dhall                     >= 1.41.0    && < 1.42,
+        dhall                     >= 1.42.0    && < 1.43,
         exceptions                >= 0.8.3     && < 0.11,
         filepath                                  < 1.5 ,
         lens-family-core          >= 1.0.0     && < 2.2 ,
-        optparse-applicative      >= 0.14.0.0  && < 0.18,
+        optparse-applicative      >= 0.14.0.0  && < 0.19,
         prettyprinter             >= 1.7.0     && < 1.8 ,
         scientific                >= 0.3.0.0   && < 0.4 ,
         text                      >= 0.11.1.0  && < 2.1 ,
@@ -98,7 +98,7 @@ Executable json-to-dhall
     Build-Depends:
         base                                             ,
         aeson                                            ,
-        ansi-terminal               >= 0.6.3.1  && < 0.12,
+        ansi-terminal               >= 0.6.3.1  && < 1.1 ,
         bytestring                                       ,
         dhall                                            ,
         dhall-json                                       ,

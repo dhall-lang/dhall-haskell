@@ -1,5 +1,48 @@
-Unreleased
+1.42.1
 
+* Add several new entrypoints to `Dhall` module [[#2534](https://github.com/dhall-lang/dhall-haskell/pull/2534)] / [[#2544](https://github.com/dhall-lang/dhall-haskell/pull/2544)]
+* Build against latest versions of:
+  * [`ansi-terminal`](https://github.com/dhall-lang/dhall-haskell/pull/2521)
+  * [`optparse-applicative`](https://github.com/dhall-lang/dhall-haskell/pull/2543)
+  * [`optparse-generic`](https://github.com/dhall-lang/dhall-haskell/pull/2519)
+  * [`lens`](https://github.com/dhall-lang/dhall-haskell/pull/2539)
+  * `template-haskell` [[#2532](https://github.com/dhall-lang/dhall-haskell/pull/2532)] / [[#2542](https://github.com/dhall-lang/dhall-haskell/pull/2542)]
+  * [`unix-compat`](https://github.com/dhall-lang/dhall-haskell/pull/2532)
+1.42.0
+
+* [Supports standard version 23.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v23.0.0)
+  * [BREAKING CHANGE TO THE API AND LANGUAGE: Language support for `Bytes` literals](https://github.com/dhall-lang/dhall-haskell/pull/2499)
+    * This is a breaking change to the API due to adding new `Bytes` and `BytesLiteral` constructors to the `Expr` type
+    * This is a breaking change to the language now that `Bytes` is a reserved identifier
+  * [BREAKING CHANGE TO THE API AND LANGUAGE: New `{Date,Time,TimeZone}/show` builtins](https://github.com/dhall-lang/dhall-haskell/pull/2493)
+    * This is a breaking change to the API due to adding new `{Date,Time,TimeZone}Show` constructors to the `Expr` type
+    * This is a breaking change to the language now that `{Date,Time,TimeZone}/show` are not reserved identifiers
+* [BREAKING CHANGE: `dhall lint` no longer sorts `let` bindings](https://github.com/dhall-lang/dhall-haskell/pull/2503)
+  * This had to be removed because the old behavior was not always correct
+  * The old behavior would sometimes change the behavior of a Dhall program or break the program
+  * Out of an abundance of caution we're disabling the feature until it can be properly fixed (which is't trivial)
+* [BUG FIX: Fix pretty-printing of `Time` literals](https://github.com/dhall-lang/dhall-haskell/pull/2466)
+  * The pretty-printer was stripping leading zeros from the fractional component
+    of seconds
+* [BUG FIX: Fix custom normalizers to work for things other than functions](https://github.com/dhall-lang/dhall-haskell/pull/2464)
+  * Before this change you could extend the language with custom functions, but
+    not custom values (e.g. `foo = 1`)
+* [BUG FIX: Don't URL encode path components](https://github.com/dhall-lang/dhall-haskell/pull/2505)
+  * The pretty-printer was URL-encoding path components, which is not correct (according to the standard)
+  * URL path components are supposed to be already URL-encoded by the user and left undisturbed by the interpreter (which is now what it correctly does)
+* New `dhall package` command: [#2478](https://github.com/dhall-lang/dhall-haskell/pull/2487), [#2508](https://github.com/dhall-lang/dhall-haskell/pull/2508)
+  * This command makes it easier to turn a directory full of Dhall expressions
+    into a dhall package (e.g. `package.dhall`)
+* [Improved `dhall to-directory-tree` subcommand](https://github.com/dhall-lang/dhall-haskell/pull/2437)
+  * The `dhall to-directory-tree` subcommand now optionally supports specifying
+    metadata for generated paths
+  * For a worked example, see: https://github.com/dhall-lang/dhall-haskell/blob/main/dhall/examples/to-directory-tree.dhall
+* `dhall freeze --cache --all` is now idempotent: [#2486](https://github.com/dhall-lang/dhall-haskell/pull/2486), [#2500](https://github.com/dhall-lang/dhall-haskell/pull/2500)
+  * Before this change a second run would fail due to attempting to resolve
+    the `missing` import it would generate
+* [New Template Haskell options for adding strictness annotations to generated Haskell types](https://github.com/dhall-lang/dhall-haskell/pull/2504)
+* [Template Haskell can now generate higher-kinded Haskell types from higher-kinded Dhall types](https://github.com/dhall-lang/dhall-haskell/pull/2506)
+* [New `Dhall.Freeze` utilities for working with custom evaluators](https://github.com/dhall-lang/dhall-haskell/pull/2478)
 * [Add `Data` instances for `Import` and various other types](https://github.com/dhall-lang/dhall-haskell/pull/2462)
 * [Add `Eq` instances for `InvalidDecoder` and `ExtractError`](https://github.com/dhall-lang/dhall-haskell/pull/2482)
 
