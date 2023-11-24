@@ -361,6 +361,12 @@
     * If you really don't want to handle the new error-related wrapper, you can
       get the old behavior using a partial pattern match (which will be partial,
       still an improvement over the previous behavior, which was hanging)
+* BREAKING CHANGE: [Records can no longer contain attributes named after language keywords](https://github.com/dhall-lang/dhall-haskell/pull/1801)
+    * This is a bugfix, because the language standard disallows using
+      keywords as record labels. However, some users were relying on
+      this bug.
+    * If you need to use a keyword as a record label, enclose it in backticks:
+      ``{ `assert` = 1 }``.
 * [Fix invalid cache entries](https://github.com/dhall-lang/dhall-haskell/pull/1793)
     * The interpreter will now correct cached expressions that are incorrect
       and warn you when this happens
