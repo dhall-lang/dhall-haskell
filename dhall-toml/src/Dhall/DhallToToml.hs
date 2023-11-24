@@ -1,6 +1,9 @@
-{-# LANGUAGE ApplicativeDo   #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| This module exports the `dhallToToml` function for translating a
     Dhall syntax tree to a TOML syntax tree (`TOML`) for the @tomland@
@@ -80,6 +83,11 @@
 >
 >   [r.nested]
 >     c = 3
+
+    … and @Prelude.Map.Type@ also translates to a TOML table:
+
+> $ dhall-to-toml <<< '[ { mapKey = "foo", mapValue = 1 } ]'
+> foo = 1
 
     Dhall unions translate to the wrapped value, or a string if the alternative is empty:
 
@@ -248,9 +256,21 @@ pattern UnionApp x <- Core.App (Core.Field (Core.Union _) _) x
 assertRecordLit
     :: Expr Void Void
     -> Either CompileError (Map Text (Core.RecordField Void Void))
-assertRecordLit (Core.RecordLit r) = Right r
-assertRecordLit (UnionApp x)       = assertRecordLit x
-assertRecordLit e                  = Left $ NotARecord e
+assertRecordLit (Core.RecordLit r) =
+    Right r
+assertRecordLit (UnionApp x) =
+    assertRecordLit x
+assertRecordLit (Core.ListLit _ expressions)
+    | Just keyValues <- traverse toKeyValue (toList expressions) =
+        Right (Map.fromList keyValues)
+  where
+    toKeyValue
+       (Core.RecordLit [ ("mapKey", Core.recordFieldValue -> Core.TextLit (Core.Chunks [] key)), ("mapValue", value) ]) =
+       Just (key, value)
+    toKeyValue _ =
+       Nothing
+assertRecordLit e =
+    Left (NotARecord e)
 
 toTomlTable :: Map Text (Core.RecordField Void Void) -> Either CompileError TOML
 toTomlTable r = foldM (toTomlRecordFold []) (mempty :: TOML) (Map.toList r)
@@ -292,24 +312,6 @@ toToml toml pieces expr  = case expr of
     Core.App Core.None _ ->
         return toml
 
-    Core.ListLit _ a -> case toList a of
-        -- TODO: unions need to be handled here as well, it's a bit tricky
-        -- because they also have to be probed for being a "simple"
-        -- array of table
-        union@(UnionApp (Core.RecordLit _)) : unions -> do
-            insertTables (union :| unions)
-
-        record@(Core.RecordLit _) : records -> do
-            insertTables (record :| records)
-
-        -- inline array
-        expressions -> do
-            anyValues <- mapM toAnyValue expressions
-
-            case AnyValue.toMArray anyValues of
-                Left _ -> Left (HeterogeneousArray expr)
-                Right array -> insertPrim array
-
     Core.RecordLit r -> do
         let (inline, nested) =
                 Map.partition (isInline . Core.recordFieldValue) r
@@ -331,6 +333,28 @@ toToml toml pieces expr  = case expr of
         else do
             newPairs <- foldM (toTomlRecordFold []) mempty pairs
             return (TOML.insertTable key newPairs toml)
+
+    _ | Right keyValues <- assertRecordLit expr ->
+        toToml toml pieces (Core.RecordLit keyValues)
+
+    Core.ListLit _ a -> case toList a of
+        -- TODO: unions need to be handled here as well, it's a bit tricky
+        -- because they also have to be probed for being a "simple"
+        -- array of table
+        union@(UnionApp (Core.RecordLit _)) : unions -> do
+            insertTables (union :| unions)
+
+        record@(Core.RecordLit _) : records -> do
+            insertTables (record :| records)
+
+        -- inline array
+        expressions -> do
+            anyValues <- mapM toAnyValue expressions
+
+            case AnyValue.toMArray anyValues of
+                Left _ -> Left (HeterogeneousArray expr)
+                Right array -> insertPrim array
+
     _ ->
         Left (Unsupported expr)
   where
