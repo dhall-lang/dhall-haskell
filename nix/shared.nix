@@ -378,7 +378,7 @@ let
         releaseName=${name}
         ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/bin" -D $src/bin/*
         ${pkgs.lib.optionalString (manDir != null) ''
-          ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/share/man" -D ${manDir}/*
+          ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/share/man/man1" -D ${manDir}/*.1
         ''}
       '';
     };
