@@ -9,18 +9,10 @@ jobs:
     strategy:
       matrix:
         os:
-          - runner: 'macOS-latest'
-            archive-command: 'tar --create --bzip2 --file'
-            file-extension: 'tar.bz2'
-            executable-extension: ''
           - runner: 'ubuntu-latest'
             archive-command: 'tar --create --bzip2 --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
-          - runner: 'windows-latest'
-            archive-command: '7z a -tzip'
-            file-extension: 'zip'
-            executable-extension: '.exe'
       fail-fast: false
     name: ${{ matrix.os.runner }}
     runs-on: ${{ matrix.os.runner }}
@@ -29,6 +21,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           submodules: true
+      - uses: pguyot/arm-runner-action@v2
       - id: setup-haskell-cabal
         name: "Setup Haskell environment"
         uses: haskell/actions/setup@v2.4.6
