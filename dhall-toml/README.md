@@ -7,9 +7,9 @@ For installation or development instructions, see:
 
 * [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md)
 
-Full documentation here:
+Full documentation is available on Hackage:
 
-* [`dhall-toml` instructions](https://hackage.haskell.org/package/dhall-toml/docs/Dhall-Toml.html)
+* [`dhall-toml` on Hackage](https://hackage.haskell.org/package/dhall-toml)
 
 ## Introduction
 
