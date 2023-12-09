@@ -46,6 +46,7 @@ import Language.Haskell.TH.Syntax (DerivClause (..), DerivStrategy (..))
 
 import qualified Data.List                   as List
 import qualified Data.Map                    as Map
+import qualified Data.Maybe                  as Maybe
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as Text
 import qualified Data.Time                   as Time
@@ -132,8 +133,6 @@ toNestedHaskellType
     -> Q Type
 toNestedHaskellType typeParams haskellTypes = loop
   where
-    predicate dhallType haskellType = Core.judgmentallyEqual (code haskellType) dhallType
-
     document dhallType =
       mconcat
       [ "Unsupported nested type\n"
@@ -207,17 +206,91 @@ toNestedHaskellType typeParams haskellTypes = loop
           
         Var v
             | Just (V param index) <- List.find (v ==) typeParams -> do
-                let name = Syntax.mkName $ (Text.unpack param) ++ (show index)
-
-                return (VarT name)
+                return $ VarT $ Syntax.mkName $ (Text.unpack param) ++ (show index)
 
             | otherwise -> fail $ message v
 
-        _   | Just haskellType <- List.find (predicate dhallType) haskellTypes -> do
-                let name = Syntax.mkName (Text.unpack (typeName haskellType))
+        _ -> do
+          res <- mapM (judgementallyEqualNested dhallType) haskellTypes
 
-                return (ConT name)
-            | otherwise -> fail $ message dhallType
+          maybe (fail $ message dhallType) return $ Maybe.listToMaybe $ Maybe.catMaybes res
+
+    haskellTypeToConT haskellType = ConT $ Syntax.mkName (Text.unpack (typeName haskellType))
+
+    judgementallyEqualNested dhallType haskellType = case partitionTypeVars (code haskellType) of
+        ([], haskellType')
+            | Core.judgmentallyEqual haskellType' dhallType -> 
+                return $ Just $ haskellTypeToConT haskellType
+
+            | otherwise -> return Nothing 
+
+        (params, bareHaskellType)
+            | Just nested <- gatherNestedVars Map.empty bareHaskellType dhallType -> do
+                let con = haskellTypeToConT haskellType
+
+                nestedTypes <- mapM (toNestedHaskellType typeParams haskellTypes)
+                    $ Maybe.mapMaybe (`Map.lookup` nested) params
+
+                return $ Just $ foldr (flip AppT) con $ reverse nestedTypes
+
+            | otherwise -> return Nothing
+  
+    gatherNestedVars nested haskellType dhallType = case (haskellType, dhallType) of
+
+        -- if haskellType has a typevar, store whatever the dhallType has unless
+        -- this typevar already has an existing dhalltype which doesn't match
+        ((Var v), newDhallType) -> case Map.lookup v nested of
+            Just oldDhallType
+                | Core.judgmentallyEqual oldDhallType newDhallType -> Just nested
+
+                | otherwise -> Nothing
+
+            Nothing -> Just $ Map.insert v newDhallType nested
+
+        -- iterate through all records one level down
+        (Record m1, Record m2)
+            | Dhall.Map.keysSet m1 == Dhall.Map.keysSet m2
+                -> gatherNestedVarsAcross (Just nested)
+                    $ Dhall.Map.elems
+                    $ Dhall.Map.intersectionWith combineRec m1 m2
+
+            | otherwise -> Nothing
+
+        -- ditto for unions, except here we need to check if each alternate
+        -- has either no type or a matching type
+        (Union m1, Union m2) 
+            | Dhall.Map.keysSet m1 == Dhall.Map.keysSet m2 -> do
+                es <- sequence $ Dhall.Map.elems $ Dhall.Map.intersectionWith combineUnion m1 m2
+                gatherNestedVarsAcross (Just nested) $ Maybe.catMaybes es
+
+            | otherwise -> Nothing
+
+        -- otherwise there is nothing to store and no further levels into which
+        -- to drill futher, so compare directly
+        (i, j)
+            | Core.judgmentallyEqual i j -> Just nested
+
+            | otherwise -> Nothing
+
+    gatherNestedVarsAcross nested [] = nested
+    gatherNestedVarsAcross Nothing _ = Nothing
+    gatherNestedVarsAcross (Just nested) ((ht, dt):rest) =
+        gatherNestedVarsAcross (gatherNestedVars nested ht dt) rest
+
+    combineRec x y = (Core.recordFieldValue x, Core.recordFieldValue y)
+
+    combineUnion (Just x) (Just y) = Just (Just (x, y)) -- two alts with types (valid)
+    combineUnion Nothing Nothing   = Just Nothing       -- two alts with no types (valid)
+    combineUnion _ _               = Nothing            -- anything else (invalid)
+
+
+-- | Split expression into type variables (from leading lambdas if present) and
+-- its nested expression.
+partitionTypeVars :: Expr s a -> ([Var], Expr s a)
+partitionTypeVars = first (reverse . numberConsecutive) . go []
+    where
+      go acc (Lam _ (FunctionBinding _ v _ _ _) rest) = go (v:acc) rest
+      go acc rest = (acc, rest)
 
 -- | A deriving clause for `Generic`.
 derivingGenericClause :: DerivClause
@@ -252,14 +325,9 @@ toDeclaration
     -> Q [Dec]
 toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
     case typ of
-        SingleConstructor{..} -> uncurry (fromSingle typeName constructorName) $ getTypeParams code
-        MultipleConstructors{..} -> uncurry (fromMulti typeName) $ getTypeParams code
+        SingleConstructor{..} -> uncurry (fromSingle typeName constructorName) $ partitionTypeVars code
+        MultipleConstructors{..} -> uncurry (fromMulti typeName) $ partitionTypeVars code
     where
-        getTypeParams = first numberConsecutive .  getTypeParams_ []
-    
-        getTypeParams_ acc (Lam _ (FunctionBinding _ v _ _ _) rest) = getTypeParams_ (v:acc) rest
-        getTypeParams_ acc rest = (acc, rest)
-
         derivingClauses = [ derivingGenericClause | generateFromDhallInstance || generateToDhallInstance ]
 
         interpretOptions = generateToInterpretOptions generateOptions typ
@@ -337,7 +405,7 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
 
 -- | Number each variable, starting at 0
 numberConsecutive :: [Text.Text] -> [Var]
-numberConsecutive = snd . List.mapAccumR go Map.empty . reverse
+numberConsecutive = reverse . snd . List.mapAccumR go Map.empty . reverse
   where
       go m k =
           let (i, m') = Map.updateLookupWithKey (\_ j -> Just $ j + 1) k m
