@@ -75,8 +75,12 @@ import Text.Megaparsec                  (SourcePos (..), unPos)
 import qualified Data.Aeson              as Aeson
 import qualified Data.HashMap.Strict     as HashMap
 import qualified Data.Map.Strict         as Map
-import qualified Data.Rope.UTF16         as Rope
 import qualified Data.Text               as Text
+#if MIN_VERSION_lsp_types(1,5,0)
+import qualified Data.Text.Utf16.Rope    as Rope
+#else
+import qualified Data.Rope.UTF16         as Rope
+#endif
 import qualified Language.LSP.Server     as LSP
 import qualified Language.LSP.Types      as LSP.Types
 import qualified Language.LSP.VFS        as LSP
