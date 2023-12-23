@@ -4,6 +4,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE MultiWayIf     #-}
 {-# LANGUAGE ViewPatterns   #-}
+{-# LANGUAGE TypeOperators  #-}
 
 module Dhall.LSP.Handlers where
 
@@ -67,18 +68,18 @@ import Data.Aeson                       (FromJSON(..), Value(..))
 import Data.Maybe                       (maybeToList)
 import Data.Text                        (Text, isPrefixOf)
 import Language.LSP.Server              (Handlers, LspT)
-import Language.LSP.Types               hiding (Range(..), line)
-import Language.LSP.Types.Lens
+import Language.LSP.Protocol.Types      hiding (Range(..))
+import Language.LSP.Protocol.Message
+import Language.LSP.Protocol.Lens
 import System.FilePath
 import Text.Megaparsec                  (SourcePos (..), unPos)
 
 import qualified Data.Aeson              as Aeson
-import qualified Data.HashMap.Strict     as HashMap
 import qualified Data.Map.Strict         as Map
 import qualified Data.Text.Utf16.Rope    as Rope
 import qualified Data.Text               as Text
 import qualified Language.LSP.Server     as LSP
-import qualified Language.LSP.Types      as LSP.Types
+import qualified Language.LSP.Protocol.Types as LSP.Types
 import qualified Language.LSP.VFS        as LSP
 import qualified Network.URI             as URI
 import qualified Network.URI.Encode      as URI
@@ -132,7 +133,7 @@ rangeToJSON (Range (x1,y1) (x2,y2)) =
 
 hoverHandler :: Handlers HandlerM
 hoverHandler =
-    LSP.requestHandler STextDocumentHover \request respond -> handleErrorWithDefault respond Nothing do
+    LSP.requestHandler SMethod_TextDocumentHover \request respond -> handleErrorWithDefault respond (InR LSP.Types.Null) do
         let uri_ = request^.params.textDocument.uri
 
         let Position{ _line = fromIntegral -> _line, _character = fromIntegral -> _character } = request^.params.position
@@ -150,8 +151,8 @@ hoverHandler =
                     Right (mSrc, typ) -> do
                         let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
 
-                        let _contents = HoverContents (MarkupContent MkPlainText (pretty typ))
-                        respond (Right (Just Hover{ _contents, _range }))
+                        let _contents = InL (mkPlainText (pretty typ))
+                        respond (Right (InL Hover{ _contents, _range }))
             Just err -> do
                 let isHovered (Diagnosis _ (Just (Range left right)) _) =
                         left <= (_line, _character) && (_line, _character) <= right
@@ -162,14 +163,14 @@ hoverHandler =
                         let _range = Just (rangeToJSON (Range left right))
                             encodedDiag = URI.encode (Text.unpack diagnosis)
 
-                            _kind = MkMarkdown
+                            _kind = MarkupKind_Markdown
 
                             _value =
                                     "[Explain error](dhall-explain:?"
                                 <>  Text.pack encodedDiag
                                 <>  " )"
 
-                            _contents = HoverContents MarkupContent{..}
+                            _contents = InL MarkupContent{..}
                         Just Hover{ _contents, _range }
                     hoverFromDiagnosis _ =
                         Nothing
@@ -181,11 +182,11 @@ hoverHandler =
 
                         hoverFromDiagnosis explanation
 
-                respond (Right mHover)
+                respond (Right (maybeToNull mHover))
 
 documentLinkHandler :: Handlers HandlerM
 documentLinkHandler =
-    LSP.requestHandler STextDocumentDocumentLink \request respond -> handleErrorWithDefault respond (List []) do
+    LSP.requestHandler SMethod_TextDocumentDocumentLink \request respond -> handleErrorWithDefault respond (InL []) do
         let uri_ = request^.params.textDocument.uri
 
         path <- case uriToFilePath uri_ of
@@ -211,23 +212,23 @@ documentLinkHandler =
               filePath <- localToPath prefix file
               let filePath' = basePath </> filePath  -- absolute file path
               let _range = rangeToJSON range_
-              let _target = Just (filePathToUri filePath')
+              let _target = Just (getUri (filePathToUri filePath'))
               let _tooltip = Nothing
-              let _xdata = Nothing
+              let _data_ = Nothing
               return [DocumentLink {..}]
 
             go (range_, Import (ImportHashed _ (Remote url)) _) = do
               let _range = rangeToJSON range_
               let url' = url { headers = Nothing }
-              let _target = Just (Uri (pretty url'))
+              let _target = Just (pretty url')
               let _tooltip = Nothing
-              let _xdata = Nothing
+              let _data_ = Nothing
               return [DocumentLink {..}]
 
             go _ = return []
 
         links <- liftIO $ mapM go imports
-        respond (Right (List (concat links)))
+        respond (Right (InL (concat links)))
 
 
 diagnosticsHandler :: Uri -> HandlerM ()
@@ -259,41 +260,44 @@ diagnosticsHandler _uri = do
 
       suggestionToDiagnostic Suggestion { range = range_, .. } =
         let _range = rangeToJSON range_
-            _severity = Just DsHint
+            _severity = Just DiagnosticSeverity_Hint
             _source = Just "Dhall.Lint"
             _code = Nothing
+            _codeDescription = Nothing
             _message = suggestion
             _tags = Nothing
             _relatedInformation = Nothing
+            _data_ = Nothing
         in Diagnostic {..}
 
       diagnosisToDiagnostic Diagnosis { range = range_, .. } =
         let _range = case range_ of
               Just range' -> rangeToJSON range'
               Nothing     -> LSP.Types.Range (Position 0 0) (Position 0 0)
-            _severity = Just DsError
+            _severity = Just DiagnosticSeverity_Error
             _source = Just doctor
             _code = Nothing
+            _codeDescription = Nothing
             _tags = Nothing
             _message = diagnosis
             _relatedInformation = Nothing
+            _data_ = Nothing
         in Diagnostic {..}
 
   modifying errors (Map.alter (const errs) _uri)  -- cache errors
 
   let _version = Nothing
   let _diagnostics =
-          List
               (   concatMap (map diagnosisToDiagnostic . diagnose) (maybeToList errs)
               ++  map suggestionToDiagnostic suggestions
               )
 
 
-  liftLSP (LSP.sendNotification STextDocumentPublishDiagnostics PublishDiagnosticsParams{ _uri, _version, _diagnostics })
+  liftLSP (LSP.sendNotification SMethod_TextDocumentPublishDiagnostics PublishDiagnosticsParams{ _uri, _version, _diagnostics })
 
 documentFormattingHandler :: Handlers HandlerM
 documentFormattingHandler =
-    LSP.requestHandler STextDocumentFormatting \request respond -> handleErrorWithDefault respond (List []) do
+    LSP.requestHandler SMethod_TextDocumentFormatting \request respond -> handleErrorWithDefault respond (InL []) do
         let _uri = request^.params.textDocument.uri
 
         txt <- readUri _uri
@@ -308,12 +312,12 @@ documentFormattingHandler =
         let _newText= formatExprWithHeader chosenCharacterSet expr header
         let _range = LSP.Types.Range (Position 0 0) (Position numLines 0)
 
-        respond (Right (List [TextEdit{..}]))
+        respond (Right (InL [TextEdit{..}]))
 
 
 executeCommandHandler :: Handlers HandlerM
 executeCommandHandler =
-    LSP.requestHandler SWorkspaceExecuteCommand \request respond -> handleErrorWithDefault respond Aeson.Null do
+    LSP.requestHandler SMethod_WorkspaceExecuteCommand \request respond -> handleErrorWithDefault respond (InL Aeson.Null) do
         let command_ = request^.params.command
         if  | command_ == "dhall.server.lint" ->
                 executeLintAndFormat request respond
@@ -330,11 +334,11 @@ executeCommandHandler =
                     )
 
 getCommandArguments
-    :: FromJSON a => RequestMessage 'WorkspaceExecuteCommand -> HandlerM a
+    :: FromJSON a => TRequestMessage 'Method_WorkspaceExecuteCommand -> HandlerM a
 -- (HasParams s a, FromJSON a) => s -> HandlerM a
 getCommandArguments request = do
   json <- case request ^. params . arguments of
-    Just (List (x : _)) -> return x
+    Just (x : _) -> return x
     _ -> throwE (Error, "Failed to execute command; arguments missing.")
   case Aeson.fromJSON json of
     Aeson.Success args ->
@@ -344,8 +348,8 @@ getCommandArguments request = do
 
 -- implements dhall.server.lint
 executeLintAndFormat
-    :: RequestMessage 'WorkspaceExecuteCommand
-    -> (Either a Value -> HandlerM b)
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    -> (Either a (Value |? Null) -> HandlerM b)
     -> HandlerM ()
 executeLintAndFormat request respond = do
   uri_ <- getCommandArguments request
@@ -365,21 +369,21 @@ executeLintAndFormat request respond = do
 
   let _edit =
           WorkspaceEdit
-              { _changes = Just (HashMap.singleton uri_ (List [TextEdit{..}]))
+              { _changes = Just (Map.singleton uri_ [TextEdit{..}])
               , _documentChanges = Nothing
               , _changeAnnotations = Nothing
               }
 
   let _label = Nothing
 
-  _ <- respond (Right Aeson.Null)
+  _ <- respond (Right (InL Aeson.Null))
 
-  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _label, _edit } nullHandler)
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _label, _edit } nullHandler)
 
   return ()
 
 executeAnnotateLet
-    :: RequestMessage 'WorkspaceExecuteCommand
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
     -> HandlerM ()
 executeAnnotateLet request = do
   args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
@@ -405,19 +409,19 @@ executeAnnotateLet request = do
   let _newText= formatExpr chosenCharacterSet annotExpr
 
   let _edit = WorkspaceEdit
-          { _changes = Just (HashMap.singleton uri_ (List [TextEdit{..}]))
+          { _changes = Just (Map.singleton uri_ [TextEdit{..}])
           , _documentChanges = Nothing
           , _changeAnnotations = Nothing
           }
 
   let _label = Nothing
 
-  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _label, _edit } nullHandler)
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _label, _edit } nullHandler)
 
   return ()
 
 executeFreezeAllImports
-    :: RequestMessage 'WorkspaceExecuteCommand
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
     -> HandlerM ()
 executeFreezeAllImports request = do
   uri_ <- getCommandArguments request
@@ -444,19 +448,19 @@ executeFreezeAllImports request = do
     return TextEdit{..}
 
   let _edit = WorkspaceEdit
-          { _changes = Just (HashMap.singleton uri_ (List edits_))
+          { _changes = Just (Map.singleton uri_ edits_)
           , _documentChanges = Nothing
           , _changeAnnotations = Nothing
           }
 
   let _label = Nothing
 
-  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
 
   return ()
 
 executeFreezeImport
-    :: RequestMessage 'WorkspaceExecuteCommand
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
     -> HandlerM ()
 executeFreezeImport request = do
   args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
@@ -492,20 +496,20 @@ executeFreezeImport request = do
   let _newText = " " <> hash
 
   let _edit = WorkspaceEdit
-          { _changes = Just (HashMap.singleton uri_ (List [TextEdit{..}]))
+          { _changes = Just (Map.singleton uri_ [TextEdit{..}])
           , _documentChanges = Nothing
           , _changeAnnotations = Nothing
           }
 
   let _label = Nothing
 
-  _ <- liftLSP (LSP.sendRequest SWorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
 
   return ()
 
 completionHandler :: Handlers HandlerM
 completionHandler =
-  LSP.requestHandler STextDocumentCompletion \request respond -> handleErrorWithDefault respond (InR (CompletionList False (List []))) do
+  LSP.requestHandler SMethod_TextDocumentCompletion \request respond -> handleErrorWithDefault respond (InR (InL (CompletionList False Nothing []))) do
     let uri_  = request ^. params . textDocument . uri
         line_ = fromIntegral (request ^. params . position . line)
         col_  = fromIntegral (request ^. params . position . character)
@@ -576,6 +580,7 @@ completionHandler =
     let toCompletionItem (Completion {..}) = CompletionItem {..}
          where
           _label = completeText
+          _labelDetails = Nothing
           _kind = Nothing
           _tags = mempty
           _detail = fmap pretty completeType
@@ -588,29 +593,30 @@ completionHandler =
           _insertTextFormat = Nothing
           _insertTextMode = Nothing
           _textEdit = Nothing
+          _textEditText = Nothing
           _additionalTextEdits = Nothing
           _commitCharacters = Nothing
           _command = Nothing
-          _xdata = Nothing
+          _data_ = Nothing
 
-    let _items = List (map toCompletionItem completions)
-
+    let _items = (map toCompletionItem completions)
+    let _itemDefaults = Nothing
     let _isIncomplete = False
 
-    respond (Right (InR CompletionList{..}))
+    respond (Right (InR (InL CompletionList{..})))
 
 nullHandler :: a -> LspT ServerConfig IO ()
 nullHandler _ = return ()
 
 didOpenTextDocumentNotificationHandler :: Handlers HandlerM
 didOpenTextDocumentNotificationHandler =
-    LSP.notificationHandler STextDocumentDidOpen \notification -> do
+    LSP.notificationHandler SMethod_TextDocumentDidOpen \notification -> do
         let _uri = notification^.params.textDocument.uri
         diagnosticsHandler _uri
 
 didSaveTextDocumentNotificationHandler :: Handlers HandlerM
 didSaveTextDocumentNotificationHandler =
-    LSP.notificationHandler STextDocumentDidSave \notification -> do
+    LSP.notificationHandler SMethod_TextDocumentDidSave \notification -> do
         let _uri = notification^.params.textDocument.uri
         diagnosticsHandler _uri
 
@@ -618,22 +624,22 @@ didSaveTextDocumentNotificationHandler =
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 initializedHandler :: Handlers HandlerM
 initializedHandler =
-    LSP.notificationHandler SInitialized \_ -> return ()
+    LSP.notificationHandler SMethod_Initialized \_ -> return ()
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 workspaceChangeConfigurationHandler :: Handlers HandlerM
 workspaceChangeConfigurationHandler =
-    LSP.notificationHandler SWorkspaceDidChangeConfiguration \_ -> return ()
+    LSP.notificationHandler SMethod_WorkspaceDidChangeConfiguration \_ -> return ()
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 textDocumentChangeHandler :: Handlers HandlerM
 textDocumentChangeHandler =
-    LSP.notificationHandler STextDocumentDidChange \_ -> return ()
+    LSP.notificationHandler SMethod_TextDocumentDidChange \_ -> return ()
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 cancelationHandler :: Handlers HandlerM
 cancelationHandler =
-    LSP.notificationHandler SCancelRequest \_ -> return ()
+    LSP.notificationHandler SMethod_CancelRequest \_ -> return ()
 
 handleErrorWithDefault :: (Either a1 b -> HandlerM a2)
  -> b
@@ -642,16 +648,16 @@ handleErrorWithDefault :: (Either a1 b -> HandlerM a2)
 handleErrorWithDefault respond _default = flip catchE handler
   where
     handler (Log, _message)  = do
-                    let _xtype = MtLog
-                    liftLSP $ LSP.sendNotification SWindowLogMessage LogMessageParams{..}
+                    let _type_ = MessageType_Log
+                    liftLSP $ LSP.sendNotification SMethod_WindowLogMessage LogMessageParams{..}
                     respond (Right _default)
 
     handler (severity_, _message) = do
-                    let _xtype = case severity_ of
-                          Error   -> MtError
-                          Warning -> MtWarning
-                          Info    -> MtInfo
-                          Log     -> MtLog
+                    let _type_ = case severity_ of
+                          Error   -> MessageType_Error
+                          Warning -> MessageType_Warning
+                          Info    -> MessageType_Info
+                          Log     -> MessageType_Log
 
-                    liftLSP $ LSP.sendNotification SWindowShowMessage ShowMessageParams{..}
+                    liftLSP $ LSP.sendNotification SMethod_WindowShowMessage ShowMessageParams{..}
                     respond (Right _default)
