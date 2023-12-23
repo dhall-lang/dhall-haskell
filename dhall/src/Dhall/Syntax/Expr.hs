@@ -1,10 +1,12 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 
 module Dhall.Syntax.Expr
     ( Expr(..)
     ) where
 
 import                Data.ByteString              (ByteString)
+import                Data.Kind                    (Type)
 import                Data.List.NonEmpty           (NonEmpty (..))
 import                Data.Sequence                (Seq)
 import                Data.String                  (IsString (..))
@@ -41,6 +43,7 @@ import qualified Data.Time as Time
     * If @a = `Data.Void.Void`@ then the code has no
       `Dhall.Syntax.Import.Import`s
 -}
+type Expr :: Type -> Type -> Type
 data Expr s a
     -- | > Const c                                  ~  c
     = Const Const

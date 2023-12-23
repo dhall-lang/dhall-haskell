@@ -1,10 +1,12 @@
 {-# LANGUAGE BlockArguments     #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RecordWildCards    #-}
 
 {-| This is the entry point for the LSP server. -}
 module Dhall.LSP.Server(run) where
 
+import Colog.Core (LogAction, WithSeverity)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (fromJSON)
 import Data.Default
@@ -22,23 +24,28 @@ import Dhall.LSP.Handlers
     , cancelationHandler
     )
 import Dhall.LSP.State
-import Language.LSP.Server (Options(..), ServerDefinition(..), type (<~>)(..))
+import Language.LSP.Server (LspServerLog, Options(..), ServerDefinition(..), type (<~>)(..))
 import Language.LSP.Types
+import Prettyprinter (Doc, Pretty, pretty, viaShow)
 import System.Exit (ExitCode(..))
+import System.IO (stdin, stdout)
 
+import qualified Colog.Core as Colog
 import qualified Control.Concurrent.MVar as MVar
 import qualified Control.Monad.Trans.Except as Except
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
+import qualified Language.LSP.Logging as LSP
 import qualified Language.LSP.Server as LSP
 import qualified System.Exit as Exit
-import qualified System.Log.Logger
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
-run mlog = do
-  setupLogger mlog
+run = withLogger $ \ioLogger -> do
+  let clientLogger = Colog.cmap (fmap (Text.pack . show . pretty)) LSP.defaultClientLogger
+
+  let lspLogger = clientLogger <> Colog.hoistLogAction liftIO ioLogger
 
   state <- MVar.newMVar initialState
 
@@ -117,20 +124,26 @@ run mlog = do
 
           backward = liftIO
 
-  exitCode <- LSP.runServer ServerDefinition{..}
+  exitCode <- LSP.runServerWithHandles ioLogger lspLogger stdin stdout ServerDefinition{..}
 
   case exitCode of
       0 -> return ()
       n -> Exit.exitWith (ExitFailure n)
 
--- | sets the output logger.
--- | if no filename is provided then logger is disabled, if input is string `[OUTPUT]` then log goes to stderr,
--- | which then redirects inside VSCode to the output pane of the plugin.
-setupLogger :: Maybe FilePath -> IO () -- TODO: ADD verbosity
-setupLogger  Nothing          = pure ()
-setupLogger (Just "[OUTPUT]") = LSP.setupLogger Nothing [] System.Log.Logger.DEBUG
-setupLogger file              = LSP.setupLogger file [] System.Log.Logger.DEBUG
+-- | Retrieve the output logger.
+-- If no filename is provided then logger is disabled, if input is the string
+-- `[OUTPUT]` then we log to stderr.
+-- TODO: ADD verbosity
+withLogger :: (LogAction IO (WithSeverity LspServerLog) -> IO ()) -> Maybe FilePath -> IO ()
+withLogger k = \case
+  Nothing -> k (Colog.LogAction (const (pure ())))
+  Just "[OUTPUT]" -> k' Colog.logStringStderr
+  Just fp -> Colog.withLogStringFile fp k'
+  where
+    k' = k . Colog.cmap (show . prettyMsg)
 
+    prettyMsg :: Pretty a => WithSeverity a -> Doc ann
+    prettyMsg l = "[" <> viaShow (Colog.getSeverity l) <> "] " <> pretty (Colog.getMsg l)
 
 -- Tells the LSP client to notify us about file changes. Handled behind the
 -- scenes by haskell-lsp (in Language.Haskell.LSP.VFS); we don't handle the
