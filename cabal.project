@@ -10,8 +10,3 @@ packages:
   ./dhall-openapi
   ./dhall-toml
   ./dhall-yaml
-
-source-repository-package
-  type: git
-  location: https://github.com/haskell-nix/hnix.git
-  tag: 2adbc502e62e755ca0372c913e6278ebe564d7d2
