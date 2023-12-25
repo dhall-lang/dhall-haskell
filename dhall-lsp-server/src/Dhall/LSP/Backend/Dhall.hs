@@ -44,7 +44,7 @@ import qualified Dhall.Import       as Dhall
 import qualified Dhall.Map
 import qualified Dhall.Parser       as Dhall
 import qualified Dhall.TypeCheck    as Dhall
-import qualified Language.LSP.Types as LSP.Types
+import qualified Language.LSP.Protocol.Types as LSP.Types
 import qualified Network.URI        as URI
 
 
