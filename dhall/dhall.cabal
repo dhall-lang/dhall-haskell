@@ -269,7 +269,7 @@ Common common
         CPP-Options:
           -DNETWORK_TESTS
 
-    GHC-Options: -Wall -Wcompat -Wincomplete-uni-patterns
+    GHC-Options: -Wall -Wcompat -Wincomplete-uni-patterns -optP-Wno-unicode-homoglyph
 
 Library
     Import: common
