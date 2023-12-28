@@ -144,29 +144,28 @@ getVersion ModelName{..} =
         Right version -> Just version
 
 -- https://github.com/dhall-lang/dhall-kubernetes/issues/112
-data Autoscaling = AutoscalingV1 | AutoscalingV2beta1 | AutoscalingV2beta2
-    deriving (Eq, Ord)
-
-getAutoscaling :: ModelName -> Maybe Autoscaling
-getAutoscaling ModelName{..}
-    | Text.isPrefixOf "io.k8s.api.autoscaling.v1"      unModelName =
-        Just AutoscalingV1
-    | Text.isPrefixOf "io.k8s.api.autoscaling.v2beta1" unModelName =
-        Just AutoscalingV2beta1
-    | Text.isPrefixOf "io.k8s.api.autoscaling.v2beta2" unModelName =
-        Just AutoscalingV2beta2
+-- https://github.com/dhall-lang/dhall-kubernetes/issues/191
+comparingAutoscaling :: ModelName -> ModelName -> Ordering
+comparingAutoscaling modelNameL modelNameR
+    | isAutoscaling modelNameL && isAutoscaling modelNameR =
+        case (getVersion modelNameL, getVersion modelNameR) of
+            (Just (Version Production 1), Just (Version (Beta _)   2)) -> LT
+            (Just (Version (Beta _)   2), Just (Version Production 1)) -> GT
+            _ -> mempty
     | otherwise =
-        Nothing
+        mempty
+  where
+    isAutoscaling ModelName{..} =
+        Text.isPrefixOf "io.k8s.api.autoscaling." unModelName
 
 isK8sNative :: ModelName -> Bool
 isK8sNative ModelName{..} = Text.isPrefixOf "io.k8s." unModelName
 
 preferStableResource :: DuplicateHandler
 preferStableResource (_, names) = do
-    let issue112 = Ord.comparing getAutoscaling
     let k8sOverCrd = Ord.comparing isK8sNative
     let defaultComparison = Ord.comparing getVersion
-    let comparison = issue112 <> k8sOverCrd <> defaultComparison
+    let comparison = comparingAutoscaling <> k8sOverCrd <> defaultComparison
     return (List.maximumBy comparison names)
 
 skipDuplicatesHandler :: DuplicateHandler
