@@ -77,7 +77,7 @@ dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
     htmlTitle = breadCrumbsToText breadcrumb
     clipboardText = fold baseImportUrl <> htmlTitle
 
--- | Generates an @`Html` ()@ with all the information about a dhall file
+-- | Generates an @`Html` ()@ with all the information about a non-dhall text file
 textFileToHtml
     :: Path Rel File            -- ^ Source file name, used to extract the title
     -> Text                     -- ^ Contents of the file
@@ -93,7 +93,7 @@ textFileToHtml filePath contents params@DocParams{..} =
                 copyToClipboardButton clipboardText
                 br_ []
                 h3_ "Source"
-                div_ [class_ "source-code"] (toHtml contents)
+                div_ [class_ "source-code"] $ pre_ (toHtml contents)
   where
     breadcrumb = relPathToBreadcrumb filePath
     htmlTitle = breadCrumbsToText breadcrumb
