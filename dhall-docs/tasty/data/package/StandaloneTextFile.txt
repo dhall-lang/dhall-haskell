@@ -1,0 +1,7 @@
+This is a text file that is not referenced by any dhall file.
+
++---------------------------------------------------+
+| It should be displayed as <pre>preformatted</pre> |
+|   text, with horizontal and vertical whitespace   |
+|          preserved, to keep it readable.          |
++---------------------------------------------------+
