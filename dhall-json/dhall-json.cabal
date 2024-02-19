@@ -41,7 +41,7 @@ Library
         aeson                     >= 1.4.6.0   && < 2.2 ,
         aeson-pretty              >= 0.8.0     && < 0.9 ,
         aeson-yaml                >= 1.1.0     && < 1.2 ,
-        bytestring                                < 0.12,
+        bytestring                                < 0.13,
         containers                >= 0.5.9     && < 0.7 ,
         dhall                     >= 1.42.0    && < 1.43,
         exceptions                >= 0.8.3     && < 0.11,
@@ -50,7 +50,7 @@ Library
         optparse-applicative      >= 0.14.0.0  && < 0.19,
         prettyprinter             >= 1.7.0     && < 1.8 ,
         scientific                >= 0.3.0.0   && < 0.4 ,
-        text                      >= 0.11.1.0  && < 2.1 ,
+        text                      >= 0.11.1.0  && < 2.2 ,
         unordered-containers                      < 0.3 ,
         vector
     Exposed-Modules:
