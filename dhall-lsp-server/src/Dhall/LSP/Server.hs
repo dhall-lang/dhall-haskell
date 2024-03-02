@@ -52,10 +52,14 @@ run = withLogger $ \ioLogger -> do
 
   let defaultConfig = def
 
-  let onConfigurationChange _oldConfig json =
+  let configSection = "dhall"
+
+  let parseConfig _oldConfig json =
         case fromJSON json of
             Aeson.Success config -> Right config
             Aeson.Error   string -> Left (Text.pack string)
+
+  let onConfigChange _config = return ()
 
   let doInitialize environment _request = do
           return (Right environment)

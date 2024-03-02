@@ -1,19 +1,23 @@
 { mkDerivation, aeson, base, binary, containers, data-default
 , deepseq, Diff, directory, dlist, exceptions, file-embed, filepath
-, hashable, hspec, hspec-discover, lens, lib, mod, mtl, network-uri
-, prettyprinter, QuickCheck, quickcheck-instances, regex, row-types
-, safe, some, template-haskell, text, unordered-containers
+, generic-arbitrary, hashable, hspec, hspec-discover
+, indexed-traversable, indexed-traversable-instances, lens
+, lens-aeson, lib, mod, mtl, network-uri, prettyprinter, QuickCheck
+, quickcheck-instances, regex, row-types, safe, some
+, template-haskell, text
 }:
 mkDerivation {
   pname = "lsp-types";
-  version = "2.0.1.0";
-  sha256 = "57406c159d14aa30b3d8e5f48ca713186b340f668c93e940e884387fe561ffe0";
+  version = "2.1.1.0";
+  sha256 = "409b0831a27f0c579f2ef792ae14ae5603c5921f8334826d3b5bb91ec206593f";
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
     aeson base binary containers data-default deepseq Diff dlist
-    exceptions file-embed filepath hashable lens mod mtl network-uri
-    row-types safe some template-haskell text unordered-containers
+    exceptions file-embed filepath generic-arbitrary hashable
+    indexed-traversable indexed-traversable-instances lens lens-aeson
+    mod mtl network-uri prettyprinter QuickCheck quickcheck-instances
+    row-types safe some template-haskell text
   ];
   executableHaskellDepends = [
     base containers directory filepath mtl prettyprinter regex text
