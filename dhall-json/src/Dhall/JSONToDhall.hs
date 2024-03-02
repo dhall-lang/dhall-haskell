@@ -344,6 +344,7 @@ module Dhall.JSONToDhall (
       parseConversion
     , Conversion(..)
     , defaultConversion
+    , UnionConv(..)
     , resolveSchemaExpr
     , typeCheckSchemaExpr
     , dhallFromJSON
