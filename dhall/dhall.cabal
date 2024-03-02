@@ -381,6 +381,7 @@ Library
         Dhall.Syntax.Instances.Functor
         Dhall.Syntax.Instances.Lift
         Dhall.Syntax.Instances.Monad
+        Dhall.Syntax.Instances.Monoid
         Dhall.Syntax.Instances.NFData
         Dhall.Syntax.Instances.Ord
         Dhall.Syntax.Instances.Pretty

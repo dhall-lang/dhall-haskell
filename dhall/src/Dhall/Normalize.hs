@@ -664,6 +664,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                       case Dhall.Map.lookup x kvs of
                           Just v  -> pure $ recordFieldValue v
                           Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure k
+                  Record kTs ->
+                      case Dhall.Map.lookup x kTs of
+                          Just _T -> pure $ recordFieldValue _T
+                          Nothing -> Field <$> (Record <$> traverse (Syntax.recordFieldExprs loop) kTs) <*> pure k
+
                   Project r_ _ -> loop (Field r_ k)
                   Prefer cs _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
                       Just v -> pure (Field (Prefer cs PreferFromSource (singletonRecordLit v) r_) k)
@@ -684,6 +689,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
               case x' of
                   RecordLit kvs ->
                       pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
+                  Record kTs ->
+                      pure (Record (Dhall.Map.restrictKeys kTs fieldsSet))
                   Project y _ ->
                       loop (Project y (Left fields))
                   Prefer cs _ l (RecordLit rKvs) -> do
@@ -980,6 +987,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           _ -> True
       Field r (FieldSelection Nothing k Nothing) -> case r of
           RecordLit _ -> False
+          Record    _ -> False
           Project _ _ -> False
           Prefer _ _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
           Prefer _ _ _ (RecordLit _) -> False
@@ -991,6 +999,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           case p of
               Left s -> case r of
                   RecordLit _ -> False
+                  Record    _ -> False
                   Project _ _ -> False
                   Prefer _ _ _ (RecordLit _) -> False
                   _ -> not (null s) && Data.Set.toList (Data.Set.fromList s) == s
