@@ -136,9 +136,9 @@ instance Show DocsGenWarning where
                 "must be aligned"
 
             BadPrefixesOnSingleLineComments -> ": dhall-docs's single line comments " <>
-                "must have specific prefixes:" <>
+                "must have specific prefixes:\n" <>
                 "* For the first line: \"--| \"\n" <>
-                "* For the rest of the linse: \"--  \""
+                "* For the rest of the lines: \"--  \""
 
 -- | Extracted text from from Dhall file's comments
 newtype FileComments = FileComments
