@@ -141,7 +141,9 @@ codeCompletionSpec fixtureDir =
         docId <- openDoc "ImportedFunctions.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 0, _character = 33})
         liftIO $ do
-          let [ firstItem, secondItem ] = cs
+          (firstItem, secondItem) <- case cs of
+              [x, y] -> pure (x, y)
+              _      -> fail "Unexpected number of items"
           _label firstItem `shouldBe` "`make user`"
           _label secondItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
@@ -152,7 +154,9 @@ codeCompletionSpec fixtureDir =
         docId <- openDoc "Union.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 2, _character = 10})
         liftIO $ do
-          let [ firstItem, secondItem ] = cs
+          (firstItem, secondItem) <- case cs of
+              [x, y] -> pure (x, y)
+              _      -> fail "Unexpected number of items"
           _label firstItem `shouldBe` "A"
           _label secondItem `shouldBe` "`B C`"
           _detail firstItem `shouldBe` Just "\8704(A : Text) \8594 < A : Text | `B C` >"
