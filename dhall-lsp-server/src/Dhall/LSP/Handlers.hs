@@ -657,7 +657,6 @@ handleErrorWithDefault respond _default = flip catchE handler
                           Error   -> MessageType_Error
                           Warning -> MessageType_Warning
                           Info    -> MessageType_Info
-                          Log     -> MessageType_Log
 
                     liftLSP $ LSP.sendNotification SMethod_WindowShowMessage ShowMessageParams{..}
                     respond (Right _default)
