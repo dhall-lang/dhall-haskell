@@ -187,7 +187,7 @@ span.of-type-token {
     color: #EBEBEB;
 }
 
-body.dark-mode {
+.dark-mode body {
     background-color: #484848;
 }
 
@@ -214,7 +214,6 @@ body.dark-mode {
 .dark-mode .source-code span {
     color: #D4D4D4;
 }
-
 
 .dark-mode a.copy-to-clipboard {
     color: #bdbdbd !important;
