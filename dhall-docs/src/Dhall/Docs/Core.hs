@@ -105,7 +105,8 @@ instance MonadWriter [DocsGenWarning] GeneratedDocs where
 
 data DocsGenWarning
     = InvalidDhall (Text.Megaparsec.ParseErrorBundle Text Void)
-    | InvalidMarkdown MarkdownParseError
+    | InvalidMarkdownHeader MarkdownParseError
+    | InvalidMarkdownFile MarkdownParseError
     | DhallDocsCommentError (Path Rel File) CommentParseError
 
 warn :: String
@@ -117,10 +118,15 @@ instance Show DocsGenWarning where
         Text.Megaparsec.errorBundlePretty err <>
         "... documentation won't be generated for this file"
 
-    show (InvalidMarkdown MarkdownParseError{..}) =
+    show (InvalidMarkdownHeader MarkdownParseError{..}) =
         warn <>"Header comment is not markdown\n\n" <>
         Text.Megaparsec.errorBundlePretty unwrap <>
         "The original non-markdown text will be pasted in the documentation"
+
+    show (InvalidMarkdownFile MarkdownParseError{..}) =
+        warn <>"Failed to parse file as markdown\n\n" <>
+        Text.Megaparsec.errorBundlePretty unwrap <>
+        "The original file contents will be pasted in the documentation"
 
     show (DhallDocsCommentError path err) =
         warn <> Path.fromRelFile path <> specificError
@@ -167,8 +173,14 @@ data FileType
           -- ^ Examples extracted from assertions in the file
         , fileComments :: FileComments
         }
+    | MarkdownFile
+        { mmark :: MMark
+          -- ^ Parsed Markdown from 'contents'
+        }
     | TextFile
     deriving (Show)
+
+data FileExtension = DhallExtension | MarkdownExtension | OtherExtension deriving (Show)
 
 {-| Takes a list of files paths with their contents and returns the list of
     valid `RenderedFile`s.
@@ -182,10 +194,12 @@ getAllRenderedFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [RenderedF
 getAllRenderedFiles =
     fmap Maybe.catMaybes . mapM toRenderedFile . foldr validFiles []
   where
-    hasDhallExtension :: Path Rel File -> Bool
-    hasDhallExtension absFile = case Path.splitExtension absFile of
-        Nothing -> False
-        Just (_, ext) -> ext == ".dhall"
+    getFileExtension :: Path Rel File -> FileExtension
+    getFileExtension absFile =
+        case snd <$> Path.splitExtension absFile of
+            Just ".dhall" -> DhallExtension
+            Just ".md" -> MarkdownExtension
+            _ -> OtherExtension
 
     validFiles :: (Path Rel File, ByteString) -> [(Path Rel File, Text)] -> [(Path Rel File, Text)]
     validFiles (relFile, content) xs = case Data.Text.Encoding.decodeUtf8' content of
@@ -195,8 +209,8 @@ getAllRenderedFiles =
     toRenderedFile
         :: (Path Rel File, Text) -> GeneratedDocs (Maybe RenderedFile)
     toRenderedFile (relFile, contents) =
-        case exprAndHeaderFromText (Path.fromRelFile relFile) contents of
-            Right (Header header, expr) -> do
+        case (exprAndHeaderFromText (Path.fromRelFile relFile) contents, getFileExtension relFile) of
+            (Right (Header header, expr), _) -> do
                 let denoted = denote expr :: Expr Void Import
 
                 headerContents <-
@@ -217,11 +231,27 @@ getAllRenderedFiles =
                         , fileComments = FileComments headerContents
                         }
                     }
-            Left ParseError{..} | hasDhallExtension relFile -> do
+            (Left ParseError{..}, DhallExtension) -> do
                 Writer.tell [InvalidDhall unwrap]
                 return Nothing
 
-            Left _ -> do
+            (Left ParseError{}, MarkdownExtension) ->
+                case parseMarkdown relFile contents of
+                    Right mmark ->
+                        return $ Just $ RenderedFile
+                            { contents
+                            , path = relFile
+                            , fileType = MarkdownFile mmark
+                            }
+                    Left err -> do
+                        Writer.tell [InvalidMarkdownFile err]
+                        return $ Just $ RenderedFile
+                            { contents
+                            , path = relFile
+                            , fileType = TextFile
+                            }
+
+            _ -> do
                 return $ Just $ RenderedFile
                     { contents
                     , path = relFile
@@ -330,7 +360,7 @@ makeHtml baseImportUrl packageName characterSet RenderedFile{..} = do
             headerAsHtml <-
                 case markdownToHtml path strippedHeader of
                     Left err -> do
-                        Writer.tell [InvalidMarkdown err]
+                        Writer.tell [InvalidMarkdownHeader err]
                         return $ Lucid.toHtml strippedHeader
                     Right html -> return html
 
@@ -344,6 +374,16 @@ makeHtml baseImportUrl packageName characterSet RenderedFile{..} = do
                         DocParams{ relativeResourcesPath, packageName, characterSet, baseImportUrl }
 
             return htmlAsText
+
+        MarkdownFile mmark -> do
+            let htmlAsText =
+                    Text.Lazy.toStrict $ Lucid.renderText $ markdownFileToHtml
+                        path
+                        contents
+                        (render mmark)
+                        DocParams{ relativeResourcesPath, packageName, characterSet, baseImportUrl }
+            return htmlAsText
+
         TextFile -> do
             let htmlAsText =
                     Text.Lazy.toStrict $ Lucid.renderText $ textFileToHtml
@@ -420,8 +460,9 @@ createIndexes baseImportUrl packageName characterSet renderedFiles = map toIndex
         adapt RenderedFile{..} = (stripPrefix (addHtmlExt path), m)
           where
             m = case fileType of
-                DhallFile{..} -> mType
-                TextFile      -> Nothing
+                DhallFile{..}  -> mType
+                MarkdownFile _ -> Nothing
+                TextFile       -> Nothing
 
         html = indexToHtml
             indexDir

@@ -6,4 +6,6 @@
 dhall-csv/tasty/data/* binary
 dhall-docs/tasty/data/golden/**/*.html binary
 dhall-docs/tasty/data/package/StandaloneTextFile.txt binary
+dhall-docs/tasty/data/package/MarkdownFile.md binary
+dhall-docs/tasty/data/package/InvalidMarkdownFile.md binary
 dhall-yaml/tasty/data/* binary
