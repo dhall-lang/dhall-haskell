@@ -241,6 +241,7 @@ navBar DocParams{..} = div_ [class_ "nav-bar"] $ do
 
     -- Left side of the nav-bar
     img_ [ class_ "dhall-icon"
+         , alt_ "Dhall logo."
          , src_ $ Data.Text.pack $ relativeResourcesPath <> "dhall-icon.svg"
          ]
     p_ [class_ "package-title"] $ toHtml packageName
