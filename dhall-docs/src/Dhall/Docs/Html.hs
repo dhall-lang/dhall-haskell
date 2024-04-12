@@ -278,8 +278,7 @@ stylesheet path =
 script :: FilePath -> Html ()
 script relativeResourcesPath =
     script_
-        [ type_ "text/javascript"
-        , src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
+        [ src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
         ("" :: Text)
 
 toUnixPath :: String -> Text
