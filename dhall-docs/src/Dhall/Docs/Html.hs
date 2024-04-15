@@ -241,6 +241,7 @@ navBar DocParams{..} = div_ [class_ "nav-bar"] $ do
 
     -- Left side of the nav-bar
     img_ [ class_ "dhall-icon"
+         , alt_ "Dhall logo."
          , src_ $ Data.Text.pack $ relativeResourcesPath <> "dhall-icon.svg"
          ]
     p_ [class_ "package-title"] $ toHtml packageName
@@ -277,8 +278,7 @@ stylesheet path =
 script :: FilePath -> Html ()
 script relativeResourcesPath =
     script_
-        [ type_ "text/javascript"
-        , src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
+        [ src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
         ("" :: Text)
 
 toUnixPath :: String -> Text
