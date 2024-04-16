@@ -100,4 +100,4 @@ https://docs.dhall-lang.org/howtos/Text-Editor-Configuration.html
 # BUGS
 
 Please report any bugs you may come across to
-https://github.com/dhall-language/dhall-haskell/issues.
+https://github.com/dhall-lang/dhall-haskell/issues.
