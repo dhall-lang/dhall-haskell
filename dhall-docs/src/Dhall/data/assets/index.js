@@ -2,7 +2,8 @@ const DARK_MODE_OPT = 'dark-mode'
 const DARK_MODE_ACTIVE = 'dark-mode-active'
 const DARK_MODE_INACTIVE = 'dark-mode-inactive'
 
-if (localStorage.getItem(DARK_MODE_OPT) == DARK_MODE_ACTIVE) {
+if (!localStorage.hasOwnProperty(DARK_MODE_OPT) && window.matchMedia('(prefers-color-scheme: dark)').matches
+    || localStorage.getItem(DARK_MODE_OPT) == DARK_MODE_ACTIVE) {
   document.documentElement.classList.add('dark-mode')
 }
 
