@@ -77,7 +77,7 @@ Library
   Ghc-Options: -Wall
   Build-Depends:
     base                    >= 4.11.0.0  && < 5    ,
-    aeson                   >= 1.0.0.0   && < 2.2  ,
+    aeson                   >= 1.0.0.0   && < 2.3  ,
     containers              >= 0.5.8.0   && < 0.7  ,
     dhall                   >= 1.38.0    && < 1.43 ,
     prettyprinter           >= 1.7.0     && < 1.8  ,
