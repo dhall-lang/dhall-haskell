@@ -8,7 +8,7 @@ module Dhall.Tags
     ) where
 
 import Control.Exception  (SomeException (..), handle)
-import Data.List          (foldl', isSuffixOf)
+import Data.List          (foldl', isPrefixOf, isSuffixOf)
 import Data.Maybe         (fromMaybe)
 import Data.Text          (Text)
 import Data.Text.Encoding (encodeUtf8)
@@ -261,9 +261,10 @@ inputToFiles followSyms suffixes (InputFile path) = go path
                             then return []
                             else do
                                    -- filter . .. and hidden files .*
-                                   contents <- fmap (filter ((/=) '.' . head))
+                                   contents <- fmap (filter (not . isHiddenOrSpecialDirectoryLinkName))
                                                     (SD.getDirectoryContents p)
                                    concat <$> mapM (go . (</>) p) contents
                      else return [p | matchingSuffix || p == path]
                where matchingSuffix = maybe True (any (`isSuffixOf` p)) suffixes
                      isSymLink = SD.pathIsSymbolicLink p
+                     isHiddenOrSpecialDirectoryLinkName filename = "." `isPrefixOf` filename

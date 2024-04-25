@@ -23,7 +23,11 @@ module Dhall.Parser.Combinators
     ) where
 
 
+#if (MIN_VERSION_base(4,10,0))
+import Control.Applicative     (Alternative (..))
+#else
 import Control.Applicative     (Alternative (..), liftA2)
+#endif
 import Control.Exception       (Exception)
 import Control.Monad           (MonadPlus (..))
 import Data.String             (IsString (..))
@@ -168,6 +172,10 @@ instance Text.Megaparsec.MonadParsec Void Text Parser where
     {-# INLINE getParserState #-}
 
     updateParserState f = Parser (Text.Megaparsec.updateParserState f)
+
+#if (MIN_VERSION_megaparsec(9,4,0))
+    mkParsec f = Parser (Text.Megaparsec.mkParsec f)
+#endif
 
 instance Semigroup a => Semigroup (Parser a) where
     (<>) = liftA2 (<>)

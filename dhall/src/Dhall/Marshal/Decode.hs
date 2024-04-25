@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DerivingStrategies         #-}
@@ -135,7 +136,11 @@ module Dhall.Marshal.Decode
     ) where
 
 
+#if (MIN_VERSION_base(4,10,0))
+import Control.Applicative              (empty)
+#else
 import Control.Applicative              (empty, liftA2)
+#endif
 import Control.Exception                (Exception)
 import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict
@@ -1291,14 +1296,19 @@ setHelper size toSet (Decoder extractIn expectedIn) = Decoder extractOut expecte
             vSet = toSet vList
             sameSize = size vSet == Data.Sequence.length vSeq
             duplicates = vList List.\\ Data.Foldable.toList vSet
-            err | length duplicates == 1 =
+            err =
+              case duplicates of
+                (duplicate : []) ->
                      "One duplicate element in the list: "
-                     <> (Data.Text.pack $ show $ head duplicates)
-                | otherwise              = Data.Text.pack $ unwords
+                     <> (Data.Text.pack $ show duplicate)
+                (duplicate : _) ->
+                   Data.Text.pack $ unwords
                      [ show $ length duplicates
                      , "duplicates were found in the list, including"
-                     , show $ head duplicates
+                     , show duplicate
                      ]
+                ([]) ->
+                     "No duplicate (code branch assumed to be unreachable)."
         Failure f -> Failure f
     extractOut expr = typeError expectedOut expr
 
@@ -1605,13 +1615,15 @@ instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a)
   show (TypeMismatch e)      = show e
   show (ExpectedTypeError e) = show e
   show (ExtractError es)     =
-      _ERROR <> ": Failed extraction                                                   \n\
-      \                                                                                \n\
-      \The expression type-checked successfully but the transformation to the target   \n\
-      \type failed with the following error:                                           \n\
-      \                                                                                \n\
-      \" <> Data.Text.unpack es <> "\n\
-      \                                                                                \n"
+    unlines
+      [ _ERROR <> ": Failed extraction                                                   "
+      , "                                                                                "
+      , "The expression type-checked successfully but the transformation to the target   "
+      , "type failed with the following error:                                           "
+      , "                                                                                "
+      , Data.Text.unpack es
+      , "                                                                                "
+      ]
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError s a)
 
@@ -1670,20 +1682,22 @@ instance (Pretty s, Typeable s, Pretty a, Typeable a) => Exception (InvalidDecod
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidDecoder s a) where
     show InvalidDecoder { .. } =
-        _ERROR <> ": Invalid Dhall.Decoder                                               \n\
-        \                                                                                \n\
-        \Every Decoder must provide an extract function that does not fail with a type   \n\
-        \error if an expression matches the expected type.  You provided a Decoder that  \n\
-        \disobeys this contract                                                          \n\
-        \                                                                                \n\
-        \The Decoder provided has the expected dhall type:                               \n\
-        \                                                                                \n\
-        \" <> show txt0 <> "\n\
-        \                                                                                \n\
-        \and it threw a type error during extraction from the well-typed expression:     \n\
-        \                                                                                \n\
-        \" <> show txt1 <> "\n\
-        \                                                                                \n"
+      unlines
+        [ _ERROR <> ": Invalid Dhall.Decoder                                               "
+        , "                                                                                "
+        , "Every Decoder must provide an extract function that does not fail with a type   "
+        , "error if an expression matches the expected type.  You provided a Decoder that  "
+        , "disobeys this contract                                                          "
+        , "                                                                                "
+        , "The Decoder provided has the expected dhall type:                               "
+        , "                                                                                "
+        , show txt0
+        , "                                                                                "
+        , "and it threw a type error during extraction from the well-typed expression:     "
+        , "                                                                                "
+        , show txt1
+        , "                                                                                "
+        ]
         where
           txt0 = Dhall.Util.insert invalidDecoderExpected
           txt1 = Dhall.Util.insert invalidDecoderExpression

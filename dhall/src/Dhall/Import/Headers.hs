@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns        #-}
@@ -9,7 +10,11 @@ module Dhall.Import.Headers
     , toOriginHeaders
     ) where
 
+#if (MIN_VERSION_base(4,10,0))
+import Control.Applicative (Alternative (..))
+#else
 import Control.Applicative (Alternative (..), liftA2)
+#endif
 import Control.Exception   (SomeException)
 import Control.Monad.Catch (handle, throwM)
 import Data.Text           (Text)
