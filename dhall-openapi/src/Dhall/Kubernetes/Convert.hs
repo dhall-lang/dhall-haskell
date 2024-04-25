@@ -22,15 +22,16 @@ import Data.Text              (Text)
 import Dhall.Kubernetes.Types
 import GHC.Generics           (Generic, Rep)
 
-import qualified Data.Char       as Char
-import qualified Data.List       as List
-import qualified Data.Map.Strict as Data.Map
-import qualified Data.Maybe      as Maybe
-import qualified Data.Set        as Set
-import qualified Data.Sort       as Sort
-import qualified Data.Text       as Text
-import qualified Data.Tuple      as Tuple
-import qualified Dhall.Core      as Dhall
+import qualified Data.Char          as Char
+import qualified Data.List          as List
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Map.Strict    as Data.Map
+import qualified Data.Maybe         as Maybe
+import qualified Data.Set           as Set
+import qualified Data.Sort          as Sort
+import qualified Data.Text          as Text
+import qualified Data.Tuple         as Tuple
+import qualified Dhall.Core         as Dhall
 import qualified Dhall.Map
 import qualified Dhall.Optics
 import qualified Data.Map as Map
@@ -112,7 +113,7 @@ mkImport :: Data.Map.Map Prefix Dhall.Import -> [Text] -> Text -> Dhall.Import
 mkImport prefixMap components file =
   case Data.Map.toList filteredPrefixMap of
     []    -> localImport
-    xs    -> (snd . head $ Sort.sortOn (Text.length . fst) xs) <> localImport
+    xs    -> (snd . NonEmpty.head . NonEmpty.fromList $ Sort.sortOn (Text.length . fst) xs) <> localImport
   where
     localImport = Dhall.Import{..}
     importMode = Dhall.Code
@@ -206,7 +207,7 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
           case hierarchy of
             [] -> ""
             [ModelName{..}] -> Text.unpack (last $ Text.splitOn "." unModelName)
-            _ -> getModelName (tail hierarchy)
+            _ -> getModelName (NonEmpty.tail . NonEmpty.fromList $ hierarchy)
 
         convertAndAccumWithKey :: ModelHierarchy -> Data.Map.Map ModelName Definition -> ModelName -> Definition -> (Data.Map.Map ModelName Definition, Expr)
         convertAndAccumWithKey modelHierarchy accDefs k v = (mergeNoConflicts equalsIgnoringDescription accDefs leftOverDefs, expr)

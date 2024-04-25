@@ -56,6 +56,7 @@ import Text.Megaparsec.Pos               (SourcePos (..))
 
 import qualified Control.Monad.Trans.Writer.Strict as Writer
 import qualified Data.List
+import qualified Data.List.NonEmpty                as NonEmpty
 import qualified Data.Maybe                        as Maybe
 import qualified Data.Set                          as Set
 import qualified Data.Text                         as Text
@@ -374,7 +375,7 @@ renderCodeWithHyperLinks contents expr = pre_ $ go (1, 1) lines_ imports
 
         -- calls to `head` and `last` here should never fail since `importLines`
         -- have at least one element
-        let (firstImportLine, lastImportLine) = (head importLines, last importLines)
+        let (firstImportLine, lastImportLine) = (NonEmpty.head . NonEmpty.fromList $ importLines, last importLines)
         let prefixCols = Text.take (importStartCol - currCol) firstImportLine
         let suffixCols = Text.drop (importEndCol - currCol) lastImportLine
 
