@@ -10,7 +10,7 @@ module Dhall.Import.Headers
     , toOriginHeaders
     ) where
 
-#if (MIN_VERSION_base(4,10,0))
+#if (MIN_VERSION_base(4,19,0))
 import Control.Applicative (Alternative (..))
 #else
 import Control.Applicative (Alternative (..), liftA2)

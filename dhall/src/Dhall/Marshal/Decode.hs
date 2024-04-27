@@ -136,7 +136,7 @@ module Dhall.Marshal.Decode
     ) where
 
 
-#if (MIN_VERSION_base(4,10,0))
+#if (MIN_VERSION_base(4,19,0))
 import Control.Applicative              (empty)
 #else
 import Control.Applicative              (empty, liftA2)

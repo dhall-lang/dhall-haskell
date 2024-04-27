@@ -8,7 +8,7 @@
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
-#if (MIN_VERSION_base(4,10,0))
+#if (MIN_VERSION_base(4,19,0))
 import Control.Applicative     (Alternative (..), optional)
 #else
 import Control.Applicative     (Alternative (..), liftA2, optional)
