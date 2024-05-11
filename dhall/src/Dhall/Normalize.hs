@@ -215,7 +215,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         strictLoopShortcut 0 !res = res
                         strictLoopShortcut !n !res = do
                             x <- res
-                            next_res = App succ' <$> res >>= loop
+                            let next_res = App succ' <$> res >>= loop
                             y <- next_res
                             if judgmentallyEqual x y then res else strictLoopShortcut (n - 1) next_res
 
