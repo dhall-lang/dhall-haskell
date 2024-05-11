@@ -212,12 +212,12 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         lazy   = loop (  lazyLoop (fromIntegral n0 :: Integer))
 
                         strictLoop !n = strictLoopShortcut n (loop zero)
-			strictLoopShortcut 0 !res = res
-			strictLoopShortcut !n !res = do
-                                                      x <- res
-                                                      next_res = App succ' <$> res >>= loop
-                                                      y <- next_res
-                                                      if judgmentallyEqual x y then res else strictLoopShortcut (n - 1) next_res
+                        strictLoopShortcut 0 !res = res
+                        strictLoopShortcut !n !res = do
+                            x <- res
+                            next_res = App succ' <$> res >>= loop
+                            y <- next_res
+                            if judgmentallyEqual x y then res else strictLoopShortcut (n - 1) next_res
 
                         lazyLoop 0 = zero
                         lazyLoop !n = App succ' (lazyLoop (n - 1))
