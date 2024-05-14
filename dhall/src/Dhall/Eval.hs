@@ -527,9 +527,13 @@ eval !env t0 =
                                 -- following issue:
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
-                                let go !acc 0 = acc
-                                    go  acc m = go (vApp succ acc) (m - 1)
-                                in  go zero (fromIntegral n' :: Integer)
+                                go zero (fromIntegral n' :: Integer) where
+                                  go !acc 0 = acc
+                                  go (VNaturalLit n) m =
+                                    case vApp succ (VNaturalLit n) of
+                                      VNaturalLit n' | n == n' -> VNaturalLit n
+                                      next -> go next (m - 1) 
+                                  go acc m = go (vApp succ acc) (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
