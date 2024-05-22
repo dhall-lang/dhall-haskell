@@ -56,7 +56,7 @@ jobs:
             sudo apt-get install -y libsodium-dev
           fi
           if [ '${{matrix.os.runner}}' == 'macOS-latest' ]; then
-            arch -x86_64 /usr/local/bin/brew install libsodium
+            arch -x86_64 brew install libsodium
           fi
       - name: "Build"
         shell: bash
