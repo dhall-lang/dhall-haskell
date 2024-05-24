@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - runner: 'macos-14-large'
+          - runner: 'macOS-latest-large'
             archive-command: 'tar --create --bzip2 --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
