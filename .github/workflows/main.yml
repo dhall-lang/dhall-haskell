@@ -55,9 +55,6 @@ jobs:
           if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
             sudo apt-get install -y libsodium-dev
           fi
-          if [ '${{matrix.os.runner}}' == 'macOS-latest' ]; then
-            arch -x86_64 brew reinstall libsodium
-          fi
       - name: "Build"
         shell: bash
         run: |
