@@ -4,7 +4,7 @@ queue_rules:
   - check-success=hydra
   # Mergify explicitly recommends listing each status check separately:
   # https://docs.mergify.io/conditions/#validating-all-status-checks
-  - check-success=macOS-latest-large - stack.yaml
+  - check-success=macos-14-large - stack.yaml
   - check-success=ubuntu-latest - stack.yaml
   - check-success=windows-latest - stack.yaml
 pull_request_rules:
