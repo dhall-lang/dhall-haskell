@@ -32,7 +32,7 @@ jobs:
               runner: "ubuntu-latest"
             stack-yaml: "stack.ghc-8.10.yaml"
       fail-fast: false
-    name: ${{ matrix.os.runner }} - ${{runner.arch}} - ${{ matrix.stack-yaml }}
+    name: ${{ matrix.os.runner }} - ${{matrix.os.runner.arch}} - ${{ matrix.stack-yaml }}
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: "Checkout repository"
@@ -48,9 +48,9 @@ jobs:
       - name: "Cache"
         uses: actions/cache@v3
         with:
-          key: ${{ matrix.os.runner }}-${{runner.arch}}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{matrix.os.runner.arch}}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
           restore-keys: |
-            ${{ matrix.os.runner }}-${{runner.arch}}-
+            ${{ matrix.os.runner }}-${{matrix.os.runner.arch}}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
       - name: Install libsodium
