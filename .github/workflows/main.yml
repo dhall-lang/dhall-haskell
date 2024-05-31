@@ -136,7 +136,7 @@ disablejobs:
             local version="$(stack query locals "${package}" version)"
             shift
             local assets=("${@}")
-            local package_file="${package}-${version}-${runner.arch}-${{runner.os}}.${{ matrix.os.file-extension }}"
+            local package_file="${package}-${version}-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}"
             ${{matrix.os.archive-command}} "${package_file}" "${assets[@]}"
           )
 
