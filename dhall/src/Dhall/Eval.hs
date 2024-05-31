@@ -122,7 +122,7 @@ instance Semigroup (VChunks a) where
   VChunks xys z <> VChunks [] z' = VChunks xys (z <> z')
   VChunks xys z <> VChunks ((x', y'):xys') z' = VChunks (xys ++ (z <> x', y'):xys') z'
 
-instance Monoid (VChunks b) where
+instance Monoid (VChunks a) where
   mempty = VChunks [] mempty
 
 {-| Some information is lost when `eval` converts a `Lam` or a built-in function
