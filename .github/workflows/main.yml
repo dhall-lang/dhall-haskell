@@ -48,7 +48,7 @@ disablejobs:
       - name: "Cache"
         uses: actions/cache@v3
         with:
-          key: ${{ matrix.os.runner }}-${{matrix.os.runner.arch}}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{ runner.arch }}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
           restore-keys: |
             ${{ matrix.os.runner }}-${{matrix.os.runner.arch}}-
           path: |
