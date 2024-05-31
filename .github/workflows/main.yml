@@ -32,7 +32,7 @@ disablejobs:
               runner: "ubuntu-latest"
             stack-yaml: "stack.ghc-8.10.yaml"
       fail-fast: false
-    name: ${{ matrix.os.runner }} - ${{matrix.os.runner.arch}} - ${{ matrix.stack-yaml }}
+    name: ${{ matrix.os.runner }} - ${{ matrix.stack-yaml }}
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: "Checkout repository"
