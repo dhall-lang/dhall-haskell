@@ -218,7 +218,7 @@ Common common
         contravariant                              < 1.6 ,
         data-fix                                   < 0.4 ,
         deepseq                                    < 1.6 ,
-        Diff                        >= 0.2      && < 0.5 ,
+        Diff                        >= 0.2      && < 0.6 ,
         directory                   >= 1.3.0.0  && < 1.4 ,
         dotgen                      >= 0.4.2    && < 0.5 ,
         either                      >= 5        && < 5.1,
