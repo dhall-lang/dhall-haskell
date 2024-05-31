@@ -23,7 +23,12 @@ module Dhall.Parser.Combinators
     ) where
 
 
-import Control.Applicative     (Alternative (..), liftA2)
+import Control.Applicative
+    ( Alternative (..)
+#if !MIN_VERSION_base(4,18,0)
+    , liftA2
+#endif
+    )
 import Control.Exception       (Exception)
 import Control.Monad           (MonadPlus (..))
 import Data.String             (IsString (..))
