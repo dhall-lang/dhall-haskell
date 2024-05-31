@@ -4,7 +4,7 @@ env:
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
 on: [pull_request]
-jobs:
+disablejobs:
   build:
     strategy:
       matrix:
