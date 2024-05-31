@@ -37,7 +37,7 @@ jobs:
           submodules: true
       - id: setup-haskell-cabal
         name: "Setup Haskell environment"
-        uses: haskell-actions/setup@v2.5
+        uses: haskell-actions/setup@v2.7
         with:
           enable-stack: true
           stack-version: "latest"
@@ -49,7 +49,7 @@ jobs:
             ${{ matrix.os.runner }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
-      - name: Install libsodium x86_64
+      - name: Install libsodium
         shell: bash
         run: |
           if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
