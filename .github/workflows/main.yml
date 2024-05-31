@@ -157,5 +157,5 @@ disablejobs:
         if: ${{ matrix.stack-yaml == 'stack.yaml' }}
         uses: actions/upload-artifact@v3
         with:
-          name: 'dhall-${{runner.os}}.${{runner.arch}}.${{matrix.os.file-extension}}'
-          path: 'dhall-*${{runner.os}}.${{runner.arch}}.${{matrix.os.file-extension}}'
+          name: 'dhall-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
+          path: 'dhall-*${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
