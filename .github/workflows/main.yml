@@ -48,9 +48,9 @@ jobs:
       - name: "Cache"
         uses: actions/cache@v3
         with:
-          key: ${{ matrix.os.runner }}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{ runner.arch }}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
           restore-keys: |
-            ${{ matrix.os.runner }}-
+            ${{ matrix.os.runner }}-${{ runner.arch }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
       - name: Install libsodium
@@ -131,14 +131,12 @@ jobs:
             dhall-yaml
           )
 
-          architecture="$(uname -m)"
-
           function package() (
             local package="${1}"
             local version="$(stack query locals "${package}" version)"
             shift
             local assets=("${@}")
-            local package_file="${package}-${version}-${architecture}-${{runner.os}}.${{ matrix.os.file-extension }}"
+            local package_file="${package}-${version}-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}"
             ${{matrix.os.archive-command}} "${package_file}" "${assets[@]}"
           )
 
@@ -159,5 +157,5 @@ jobs:
         if: ${{ matrix.stack-yaml == 'stack.yaml' }}
         uses: actions/upload-artifact@v3
         with:
-          name: 'dhall-${{runner.os}}.${{matrix.os.file-extension}}'
-          path: 'dhall-*${{runner.os}}.${{matrix.os.file-extension}}'
+          name: 'dhall-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
+          path: 'dhall-*${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
