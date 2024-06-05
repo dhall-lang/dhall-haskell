@@ -54,6 +54,7 @@ import qualified Control.Exception
 import qualified Control.Foldl                    as Foldl
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Functor
+import qualified Data.List                        as List
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Context
@@ -69,7 +70,6 @@ import qualified Turtle
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 import qualified Data.Foldable
-import qualified Data.List as List
 #else
 import Control.Monad.IO.Class   (MonadIO (..))
 import Dhall.Core               (URL (..), File (..), Directory (..))
