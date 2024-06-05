@@ -46,9 +46,9 @@ getTests = do
 
     let testTree =
             Tasty.testGroup "normalization"
-                [ betaNormalizationTests
-                , unitTests
-                , alphaNormalizationTests
+                [ Tasty.testGroup "beta-normalization" [ betaNormalizationTests ]
+                , Tasty.testGroup "unit tests" [ unitTests ]
+                , Tasty.testGroup "alpha-normalization" [ alphaNormalizationTests ]
                 , customization
                 ]
 
@@ -127,7 +127,7 @@ alphaNormalizationTest prefix = do
         let expectedNormalized = Core.denote expectedResolved :: Expr Void Void
 
         let message =
-                "The normalized expression did not match the expected output"
+                "The alpha-normalized expression did not match the expected output"
 
         Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
 
@@ -199,6 +199,6 @@ betaNormalizationTest prefix = do
                 Core.alphaNormalize (Core.denote expectedResolved)
 
         let message =
-                "The normalized expression did not match the expected output"
+                "The beta-normalized expression did not match the expected output"
 
         Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
