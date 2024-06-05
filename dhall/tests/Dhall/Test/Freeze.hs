@@ -1,8 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- FIXME: Re-enable deprecation warnings after removing support for turtle < 1.6.
-{-# OPTIONS_GHC -Wno-deprecations #-}
-
 module Dhall.Test.Freeze where
 
 import Data.Text    (Text)
@@ -53,7 +50,7 @@ freezeTest dir intent prefix =
 
         parsedInput <- Core.throws (Parser.exprFromText mempty inputText)
 
-        actualExpression <- Freeze.freezeExpression (Turtle.encodeString dir) AllImports intent parsedInput
+        actualExpression <- Freeze.freezeExpression dir AllImports intent parsedInput
 
         let actualText = Core.pretty actualExpression <> "\n"
 
