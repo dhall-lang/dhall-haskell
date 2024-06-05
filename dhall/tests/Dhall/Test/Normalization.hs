@@ -8,6 +8,8 @@ import Dhall.Core (Expr (..), Var (..), throws)
 import System.FilePath ((</>))
 import Test.Tasty (TestTree)
 
+import qualified Control.Monad    as Monad
+import qualified Data.List        as List
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
 import qualified Dhall.Context    as Context
@@ -16,6 +18,7 @@ import qualified Dhall.Import     as Import
 import qualified Dhall.Parser     as Parser
 import qualified Dhall.Test.Util  as Test.Util
 import qualified Dhall.TypeCheck  as TypeCheck
+import qualified System.FilePath  as FilePath
 import qualified Test.Tasty       as Tasty
 import qualified Test.Tasty.HUnit as Tasty.HUnit
 import qualified Turtle
@@ -23,32 +26,41 @@ import qualified Turtle
 normalizationDirectory :: FilePath
 normalizationDirectory = "./dhall-lang/tests/normalization/success"
 
+unitDirectory :: FilePath
+unitDirectory = normalizationDirectory </> "unit/"
+
 getTests :: IO TestTree
 getTests = do
     let pattern = Turtle.chars <* "A.dhall"
 
     let normalizationFiles = do
-            path <- Turtle.lstree normalizationDirectory
+            path <- FilePath.normalise <$> Turtle.lstree normalizationDirectory
 
-            Nothing <- return (Turtle.stripPrefix (normalizationDirectory </> "unit/") path)
+            Monad.guard (not (FilePath.normalise unitDirectory `List.isPrefixOf` path))
 
             return path
 
     betaNormalizationTests <- Test.Util.discover pattern betaNormalizationTest normalizationFiles
 
-    alphaNormalizationTests <- do
+    alphaNormalizationTests <-
         Test.Util.discover pattern alphaNormalizationTest
             (Turtle.lstree "./dhall-lang/tests/alpha-normalization/success/")
 
-    let unitTestFiles = Turtle.lstree (normalizationDirectory </> "unit/")
+    let unitTestFiles = Turtle.lstree unitDirectory
 
     unitTests <- Test.Util.discover pattern unitTest unitTestFiles
 
     let testTree =
             Tasty.testGroup "normalization"
-                [ Tasty.testGroup "beta-normalization" [ betaNormalizationTests ]
-                , Tasty.testGroup "unit tests" [ unitTests ]
-                , Tasty.testGroup "alpha-normalization" [ alphaNormalizationTests ]
+                [ Tasty.testGroup "beta-normalization"
+                    [ betaNormalizationTests
+                    ]
+                , Tasty.testGroup "unit tests"
+                    [ unitTests
+                    ]
+                , Tasty.testGroup "alpha-normalization"
+                    [ alphaNormalizationTests
+                    ]
                 , customization
                 ]
 
