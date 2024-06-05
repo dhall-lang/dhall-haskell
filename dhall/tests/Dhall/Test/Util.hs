@@ -20,12 +20,15 @@ module Dhall.Test.Util
     , assertDoesntTypeCheck
     , discover
     , Dhall.Test.Util.testCase
-    , pathNotElem
+    , pathIn
+    , pathNotIn
+    , pathNotPrefixOf
+    , pathNotSuffixOf
     , toDhallPath
     , managedTestEnvironment
     ) where
 
-import Control.Applicative              (liftA2, (<|>))
+import Control.Applicative              (Alternative, liftA2, (<|>))
 import Control.Exception                (tryJust)
 import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict (StateT)
@@ -66,6 +69,7 @@ import qualified Turtle
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 import qualified Data.Foldable
+import qualified Data.List as List
 #else
 import Control.Monad.IO.Class   (MonadIO (..))
 import Dhall.Core               (URL (..), File (..), Directory (..))
@@ -307,8 +311,17 @@ testCase prefix expectedFailures assertion =
   where
     test = Test.Tasty.HUnit.testCase (Text.unpack prefix) assertion
 
-pathNotElem :: FilePath -> [FilePath] -> Bool
-pathNotElem this = not . any (FilePath.equalFilePath this)
+pathIn :: Alternative f => FilePath -> [FilePath] -> f ()
+pathIn this = guard . any (FilePath.equalFilePath this)
+
+pathNotIn :: Alternative f => FilePath -> [FilePath] -> f ()
+pathNotIn this = guard . not . any (FilePath.equalFilePath this)
+
+pathNotPrefixOf :: Alternative f => FilePath -> FilePath -> f ()
+pathNotPrefixOf this = guard . not . List.isPrefixOf this
+
+pathNotSuffixOf :: Alternative f => FilePath -> FilePath -> f ()
+pathNotSuffixOf this = guard . not . List.isSuffixOf this
 
 {-| Path names on Windows are not valid Dhall paths due to using backslashes
     instead of forwardslashes to separate path components.  This utility fixes

@@ -5,13 +5,12 @@
 module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
-import Data.Text         (Text, isSuffixOf)
+import Data.Text         (Text)
 import Data.Void         (Void)
 import System.FilePath   ((</>))
 import Test.Tasty        (TestTree)
 
 import qualified Control.Exception                as Exception
-import qualified Control.Monad                    as Monad
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
@@ -72,7 +71,7 @@ getTests = do
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
 
-        Monad.guard (path `Test.Util.pathNotElem` flakyTests)
+        path `Test.Util.pathNotIn` flakyTests
 
         return path )
 
@@ -96,8 +95,9 @@ getTests = do
 #endif
                 ]
 
-        _ <- Monad.guard (path `Test.Util.pathNotElem` expectedSuccesses)
-        _ <- Monad.guard (not ("ENV.dhall" `isSuffixOf` Text.pack path))
+        path `Test.Util.pathNotIn` expectedSuccesses
+        "ENV.dhall" `Test.Util.pathNotSuffixOf` path
+
         return path )
 
     let testTree =

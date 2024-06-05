@@ -8,8 +8,6 @@ import Dhall.Core (Expr (..), Var (..), throws)
 import System.FilePath ((</>))
 import Test.Tasty (TestTree)
 
-import qualified Control.Monad    as Monad
-import qualified Data.List        as List
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
 import qualified Dhall.Context    as Context
@@ -36,7 +34,7 @@ getTests = do
     let normalizationFiles = do
             path <- FilePath.normalise <$> Turtle.lstree normalizationDirectory
 
-            Monad.guard (not (FilePath.normalise unitDirectory `List.isPrefixOf` path))
+            unitDirectory `Test.Util.pathNotPrefixOf` path
 
             return path
 
