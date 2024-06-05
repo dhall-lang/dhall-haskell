@@ -20,6 +20,7 @@ module Dhall.Test.Util
     , assertDoesntTypeCheck
     , discover
     , Dhall.Test.Util.testCase
+    , pathNotElem
     , toDhallPath
     , managedTestEnvironment
     ) where
@@ -41,11 +42,10 @@ import Dhall.Core
     )
 import Dhall.Import                     (SemanticCacheMode (..), Status (..))
 import Dhall.Parser                     (Src)
-import Prelude                          hiding (FilePath)
 import System.IO.Error                  (isDoesNotExistError)
 import Test.Tasty                       (TestTree)
 import Test.Tasty.HUnit
-import Turtle                           (FilePath, Pattern, Shell, fp)
+import Turtle                           (Pattern, Shell, fp)
 
 import qualified Control.Exception
 import qualified Control.Foldl                    as Foldl
@@ -289,7 +289,7 @@ discover pattern buildTest paths = do
     let shell = do
             path_ <- paths
 
-            let pathText = Turtle.format fp path_
+            let pathText = Turtle.format fp (FilePath.normalise path_)
 
             prefix : _ <- return (Turtle.match pattern pathText)
 
@@ -301,15 +301,18 @@ discover pattern buildTest paths = do
 
 testCase :: Text -> [ FilePath ] -> Assertion -> TestTree
 testCase prefix expectedFailures assertion =
-    if prefix `elem` map (Turtle.format fp) expectedFailures
+    if prefix `elem` map (Turtle.format fp . FilePath.normalise) expectedFailures
     then Tasty.ExpectedFailure.expectFail test
     else test
   where
     test = Test.Tasty.HUnit.testCase (Text.unpack prefix) assertion
+
+pathNotElem :: FilePath -> [FilePath] -> Bool
+pathNotElem this = not . any (FilePath.equalFilePath this)
 
 {-| Path names on Windows are not valid Dhall paths due to using backslashes
     instead of forwardslashes to separate path components.  This utility fixes
     them if necessary
 -}
 toDhallPath :: Text -> Text
-toDhallPath = Text.replace "\\" "/"
+toDhallPath = ("./" <>) . Text.replace "\\" "/"

@@ -5,9 +5,8 @@ module Dhall.Test.Parser where
 import Data.Text  (Text)
 import Data.Void  (Void)
 import Dhall.Core (Binding (..), Expr (..), Import, Var (..))
-import Prelude    hiding (FilePath)
+import System.FilePath ((</>))
 import Test.Tasty (TestTree)
-import Turtle     (FilePath, (</>))
 
 import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor

@@ -4,9 +4,8 @@ module Dhall.Test.Tags where
 
 import Data.Text  (Text)
 import Dhall.Util (Input (..))
-import Prelude    hiding (FilePath)
+import System.FilePath ((</>))
 import Test.Tasty (TestTree)
-import Turtle     (FilePath)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
@@ -30,7 +29,7 @@ getTests = do
 tagsTest :: Text -> TestTree
 tagsTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
-        let inputFile  = Text.unpack (prefix <> ".dhall")
+        let inputFile  = Text.unpack (Test.Util.toDhallPath prefix <> ".dhall")
         let outputFile = Text.unpack (prefix <> ".tags")
 
         actualTags <- fixPathSeparators <$> Tags.generate (InputFile inputFile) Nothing False
@@ -44,7 +43,7 @@ tagsTest prefix =
 tagsDirTest :: TestTree
 tagsDirTest =
     Tasty.HUnit.testCase "all" $ do
-        let outputFile = Text.unpack . Turtle.format Turtle.fp $ tagsDirectory Turtle.</> "all.tags"
+        let outputFile = Text.unpack . Turtle.format Turtle.fp $ tagsDirectory </> "all.tags"
 
         actualTags <- fmap fixPathSeparators
                       (Tags.generate

@@ -72,7 +72,7 @@ getTests = do
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
 
-        Monad.guard (path `notElem` flakyTests)
+        Monad.guard (path `Test.Util.pathNotElem` flakyTests)
 
         return path )
 
@@ -96,7 +96,7 @@ getTests = do
 #endif
                 ]
 
-        _ <- Monad.guard (path `notElem` expectedSuccesses)
+        _ <- Monad.guard (path `Test.Util.pathNotElem` expectedSuccesses)
         _ <- Monad.guard (not ("ENV.dhall" `isSuffixOf` Text.pack path))
         return path )
 

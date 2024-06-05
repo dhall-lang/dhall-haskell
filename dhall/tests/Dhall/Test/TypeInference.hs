@@ -5,9 +5,8 @@ module Dhall.Test.TypeInference where
 
 import Control.Exception (SomeException (..))
 import Data.Text         (Text)
-import Prelude           hiding (FilePath)
+import System.FilePath   ((</>))
 import Test.Tasty        (TestTree)
-import Turtle            (FilePath, (</>))
 
 import qualified Control.Exception as Exception
 import qualified Control.Monad     as Monad
