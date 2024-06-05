@@ -318,10 +318,12 @@ pathNotIn :: Alternative f => FilePath -> [FilePath] -> f ()
 pathNotIn this = guard . not . any (FilePath.equalFilePath this)
 
 pathNotPrefixOf :: Alternative f => FilePath -> FilePath -> f ()
-pathNotPrefixOf this = guard . not . List.isPrefixOf this
+pathNotPrefixOf this =
+    guard . not . List.isPrefixOf (FilePath.normalise this) . FilePath.normalise
 
 pathNotSuffixOf :: Alternative f => FilePath -> FilePath -> f ()
-pathNotSuffixOf this = guard . not . List.isSuffixOf this
+pathNotSuffixOf this =
+    guard . not . List.isSuffixOf (FilePath.normalise this) . FilePath.normalise
 
 {-| Path names on Windows are not valid Dhall paths due to using backslashes
     instead of forwardslashes to separate path components.  This utility fixes
