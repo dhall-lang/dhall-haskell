@@ -11,12 +11,11 @@ packages:
   - dhall-toml
   - dhall-yaml
 extra-deps:
-  - github: haskell-nix/hnix
-    commit: 2adbc502e62e755ca0372c913e6278ebe564d7d2
   - chronos-1.1.5
   - hashing-0.1.1.0
-  - hnix-store-core-0.6.1.0
-  - hnix-store-remote-0.6.0.0
+  - hnix-0.17.0@sha256:57e172f915d70be2dd88c6377caebe8bd63337123ffef42df49b05dc0b1f168b,19224
+  - hnix-store-core-0.6.1.0@sha256:0171c3a571ab263c3e3aa3e6daca15602f2030a6862cb032038017e6d0265898,3882
+  - hnix-store-remote-0.6.0.0@sha256:a8ea18bb355164bfd357fac12b0c5d32c95ffd455260f8b6c7fcaeddebf5918c,3270
   - logict-0.7.0.3
   - lsp-2.1.0.0
   - lsp-types-2.0.1.0
