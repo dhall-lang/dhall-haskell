@@ -29,6 +29,8 @@ getTests = do
 tagsTest :: Text -> TestTree
 tagsTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
+        -- The use of toDhallPah is a hack to ensure we always get the same file
+        -- paths, i.e. ones with a '.' prefixed and UNIX path separators.
         let inputFile  = Text.unpack (Test.Util.toDhallPath prefix <> ".dhall")
         let outputFile = Text.unpack (prefix <> ".tags")
 
