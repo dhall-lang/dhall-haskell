@@ -122,7 +122,7 @@ instance Semigroup (VChunks a) where
   VChunks xys z <> VChunks [] z' = VChunks xys (z <> z')
   VChunks xys z <> VChunks ((x', y'):xys') z' = VChunks (xys ++ (z <> x', y'):xys') z'
 
-instance Monoid (VChunks b) where
+instance Monoid (VChunks a) where
   mempty = VChunks [] mempty
 
 {-| Some information is lost when `eval` converts a `Lam` or a built-in function
@@ -527,9 +527,13 @@ eval !env t0 =
                                 -- following issue:
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
-                                let go !acc 0 = acc
-                                    go  acc m = go (vApp succ acc) (m - 1)
-                                in  go zero (fromIntegral n' :: Integer)
+                                go zero (fromIntegral n' :: Integer) where
+                                  go !acc 0 = acc
+                                  go (VNaturalLit x) m =
+                                    case vApp succ (VNaturalLit x) of
+                                      VNaturalLit y | x == y -> VNaturalLit x
+                                      notNaturalLit -> go notNaturalLit (m - 1)
+                                  go acc m = go (vApp succ acc) (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
