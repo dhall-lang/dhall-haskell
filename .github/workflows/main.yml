@@ -59,7 +59,7 @@ jobs:
           if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
             sudo apt-get install -y libsodium-dev
           fi
-          pkg-config --path sodium || true
+          pkg-config --libs --modversion sodium || true
       - name: "Build"
         shell: bash
         run: |
