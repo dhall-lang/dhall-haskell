@@ -623,8 +623,8 @@ traverseWithKey
     :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
 traverseWithKey f (Map m Sorted) =
     fmap (\m' -> Map m' Sorted) (Data.Map.traverseWithKey f m)
-traverseWithKey f m =
-    fmap fromList (traverse f' (toList m))
+traverseWithKey f m@(Map _ ks) =
+    flip Map ks . Data.Map.fromList <$> traverse f' (toList m)
   where
     f' (k, a) = fmap ((,) k) (f k a)
 {-# INLINABLE traverseWithKey #-}
