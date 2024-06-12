@@ -1,5 +1,5 @@
 env:
-  cache_generation: 2021-06-22
+  cache_generation: 2024-06-13
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
@@ -60,7 +60,7 @@ jobs:
           if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
             sudo apt-get install -y libsodium-dev
           fi
-          pkg-config --print-errors --libs --exists libsodium || true
+          pkg-config --print-errors --libs libsodium || true
       - name: "Build"
         shell: bash
         run: |
