@@ -1,7 +1,7 @@
 let
   pinned = import ./pinnedNixpkgs.nix;
   
-  defaultCompiler = "ghc8107";
+  defaultCompiler = "ghc94";
 
 in
 
@@ -226,19 +226,51 @@ let
                         )
                         (old: {
                             postInstall = (old.postInstall or "") + ''
-                              ${pkgsNew.closurecompiler}/bin/closure-compiler $out/bin/dhall-try.jsexe/all.js --jscomp_off=checkVars --externs=$out/bin/dhall-try.jsexe/all.js.externs > $out/bin/dhall-try.jsexe/all.min.js
+                              ${pkgsNew.closurecompiler}/bin/closure-compiler $out/bin/dhall-try.jsexe/all.js --jscomp_off=checkVars --jscomp_off=uselessCode --externs=$out/bin/dhall-try.jsexe/all.js.externs > $out/bin/dhall-try.jsexe/all.min.js
                             '';
                           }
                         );
 
-                    gauge =
+                    cborg =
                       pkgsNew.haskell.lib.appendPatch
-                        haskellPackagesOld.gauge
+                        haskellPackagesOld.cborg
                         (pkgsNew.fetchpatch {
-                          url = "https://github.com/vincenthz/hs-gauge/commit/303a6b611804c85b9a6bc1cea5de4e6ce3429d24.patch";
+                          url = "https://patch-diff.githubusercontent.com/raw/well-typed/cborg/pull/322.patch";
+                          stripLen = 1;
+                          hash = "sha256-YEaB8cilDx56uaAQODsTdFoQAbFfD+/q/23Rkdpxcp0=";
+                        })
+                        ;
 
-                          sha256 = "sha256-4osUMo0cvTvyDTXF8lY9tQbFqLywRwsc3RkHIhqSriQ=";
-                        });
+                    haskeline =
+                      if compiler == "ghcjs"
+                      then haskellPackagesNew.haskeline_0_8_2_1
+                      else haskellPackagesOld.haskeline;
+
+                    terminfo =
+                      if compiler == "ghcjs"
+                      then haskellPackagesNew.terminfo_0_4_1_6
+                      else haskellPackagesOld.terminfo;
+
+                    # `aeson-1.5.6.0` doesn't build against the default versions
+                    # of its dependencies, but it's only used in one place
+                    # (where `ghcjs-base` unnecessarily downgrades `aeson`), so
+                    # the simplest solution is to globally undo that downgrade
+                    # here, because we don't want anything depending on this
+                    # version of `aeson`.
+                    aeson_1_5_6_0 =
+                      if compiler == "ghcjs"
+                      then haskellPackagesNew.aeson
+                      else haskellPackagesOld.aeson_1_5_6_0;
+
+                    # The `aeson` test suite takes way too long to build and
+                    # run using `ghcjs`.
+                    aeson =
+                      if compiler == "ghcjs"
+                      then pkgsNew.haskell.lib.dontCheck haskellPackagesOld.aeson
+                      else haskellPackagesOld.aeson;
+
+                    ghcjs-base =
+                      pkgsNew.haskell.lib.doJailbreak haskellPackagesOld.ghcjs-base;
                   };
 
               in

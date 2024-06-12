@@ -1,3 +1,5 @@
+{-# LANGUAGE NoPolyKinds #-}
+
 module Dhall.Syntax.Types where
 
 data DhallDouble

@@ -10,10 +10,18 @@ import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Dhall.Core                       (URL (..), Expr (..))
-import Dhall.Import.Types               (Import, Status)
+import Dhall.Import.Types               (Status)
 import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
+
+import Dhall.Core
+    ( Import(..)
+    , ImportHashed(..)
+    , ImportMode(..)
+    , ImportType(..)
+    , URL (..)
+    , Expr (..)
+    )
 
 import qualified Data.Text          as Text
 import qualified Data.Text.Encoding as Text.Encoding
@@ -40,13 +48,14 @@ fetchFromHttpUrl childURL Nothing = do
 fetchFromHttpUrl _ _ =
     fail "Dhall does not yet support custom headers when built using GHCJS"
 
-fetchFromHTTPUrlBytes
+fetchFromHttpUrlBytes
     :: URL
     -> Maybe [(CI ByteString, ByteString)]
     -> StateT Status IO ByteString
-fetchFromHTTPUrlBytes childUrl mheader = do
-    text <- fetchFromHTTPUrl childUrl mheader
+fetchFromHttpUrlBytes childUrl mheader = do
+    text <- fetchFromHttpUrl childUrl mheader
     return (Text.Encoding.encodeUtf8 text)
 
 originHeadersFileExpr :: IO (Expr Src Import)
-originHeadersFileExpr = return Missing
+originHeadersFileExpr =
+    return (Embed (Import (ImportHashed Nothing Missing) Code))
