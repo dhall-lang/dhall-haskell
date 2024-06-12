@@ -2,10 +2,10 @@
 
 module Dhall.Test.Tags where
 
-import Data.Text  (Text)
-import Dhall.Util (Input (..))
+import Data.Text       (Text)
+import Dhall.Util      (Input (..))
 import System.FilePath ((</>))
-import Test.Tasty (TestTree)
+import Test.Tasty      (TestTree)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO

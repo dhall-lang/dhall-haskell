@@ -25,8 +25,8 @@ import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
-import qualified Network.HTTP.Client              as HTTP
-import qualified Network.HTTP.Client.TLS          as HTTP
+import qualified Network.HTTP.Client     as HTTP
+import qualified Network.HTTP.Client.TLS as HTTP
 #endif
 
 

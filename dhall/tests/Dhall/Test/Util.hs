@@ -72,7 +72,7 @@ import qualified Turtle
 import qualified Data.Foldable
 #else
 import Control.Monad.IO.Class   (MonadIO (..))
-import Dhall.Core               (URL (..), File (..), Directory (..))
+import Dhall.Core               (Directory (..), File (..), URL (..))
 import Lens.Family.State.Strict (zoom)
 
 import qualified Data.Foldable

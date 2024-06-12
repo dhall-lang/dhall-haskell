@@ -2,11 +2,11 @@
 
 module Dhall.Test.Parser where
 
-import Data.Text  (Text)
-import Data.Void  (Void)
-import Dhall.Core (Binding (..), Expr (..), Import, Var (..))
+import Data.Text       (Text)
+import Data.Void       (Void)
+import Dhall.Core      (Binding (..), Expr (..), Import, Var (..))
 import System.FilePath ((</>))
-import Test.Tasty (TestTree)
+import Test.Tasty      (TestTree)
 
 import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor

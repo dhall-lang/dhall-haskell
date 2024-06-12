@@ -2,11 +2,11 @@
 
 module Dhall.Test.Normalization where
 
-import Data.Text  (Text)
-import Data.Void  (Void)
-import Dhall.Core (Expr (..), Var (..), throws)
+import Data.Text       (Text)
+import Data.Void       (Void)
+import Dhall.Core      (Expr (..), Var (..), throws)
 import System.FilePath ((</>))
-import Test.Tasty (TestTree)
+import Test.Tasty      (TestTree)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
