@@ -252,6 +252,26 @@ data Val a
 -- | For use with "Text.Show.Functions".
 deriving instance (Show a, Show (Val a -> Val a)) => Show (Val a)
 
+valEq :: Val a -> Val a -> Bool
+valEq (VConst x1) (VConst x2) = x1 == x2
+valEq (VVar t1 i1) (VVar t2 i2) = t1 == t2 && i1 == i2
+valEq VPrimVar VPrimVar = True
+valEq (VApp f1 x1) (VApp f2 x2) = valEq f1 f2 && valEq x1 x2
+valEq VBool VBool = True
+valEq (VBoolLit x1) (VBoolLit x2) = x1 == x2
+valEq (VBytesLit x1) (VBytesLit x2) = x1 == x2
+valEq (VNaturalLit x1) (VNaturalLit x2) = x1 == x2
+valEq (VNaturalFold t1 x1 y1 z1) (VNaturalFold t2 x2 y2 z2) = valEq t1 t2 && valEq x1 x2 && valEq y1 y2 && valEq z1 z2
+valEq (VNaturalIsZero x1) (VNaturalIsZero x2) = valEq x1 x2
+valEq (VIntegerLit x1) (VIntegerLit x2) = x1 == x2
+valEq (VDoubleLit x1) (VDoubleLit x2) = x1 == x2
+valEq (VList _) (VList _) = True
+valEq (VListLit _ x1) (VListLit _ x2) = all (uncurry valEq) (zip (toList x1) (toList x2))
+valEq (VSome x1) (VSome x2) = valEq x1 x2
+valEq (VNone _) (VNone _) = True
+valEq (VRecordLit x1) (VRecordLit x2) = (length x1 == length x2) && (all (uncurry valEq) (zip (Map.elems x1) (Map.elems x2)))
+valEq _ _ = False
+
 (~>) :: Val a -> Val a -> Val a
 (~>) a b = VHPi "_" a (\_ -> b)
 {-# INLINE (~>) #-}
@@ -529,11 +549,9 @@ eval !env t0 =
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 go zero (fromIntegral n' :: Integer) where
                                   go !acc 0 = acc
-                                  go (VNaturalLit x) m =
-                                    case vApp succ (VNaturalLit x) of
-                                      VNaturalLit y | x == y -> VNaturalLit x
-                                      notNaturalLit -> go notNaturalLit (m - 1)
-                                  go acc m = go (vApp succ acc) (m - 1)
+                                  go acc m =
+                                    let next = vApp succ acc in
+                                    if valEq next acc then acc else go next (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
