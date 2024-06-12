@@ -530,8 +530,9 @@ eval !env t0 =
                                 go zero (fromIntegral n' :: Integer) where
                                   go !acc 0 = acc
                                   go acc m =
-                                    let next = vApp succ acc in
-                                    if conv env next acc then acc else go next (m - 1)
+                                  -- Detect a shortcut: if succ acc == acc then return acc immediately.
+                                    let next = vApp succ acc
+                                    in  if conv env next acc then acc else go next (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
