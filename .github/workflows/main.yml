@@ -45,6 +45,7 @@ jobs:
         with:
           enable-stack: true
           stack-version: "latest"
+          stack-no-global: true
       - name: "Cache"
         uses: actions/cache@v3
         with:
