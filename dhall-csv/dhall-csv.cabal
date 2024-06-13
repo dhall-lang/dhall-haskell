@@ -33,7 +33,7 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                 >= 4.12.0.0  && < 5   ,
-        bytestring                           < 0.12,
+        bytestring                           < 0.13,
         cassava              >= 0.5.0.0   && < 0.6 ,
         containers           >= 0.5.9     && < 0.7 ,
         either                                     ,

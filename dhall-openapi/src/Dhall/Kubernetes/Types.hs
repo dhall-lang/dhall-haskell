@@ -105,10 +105,14 @@ data BaseData = BaseData
   } deriving (Generic, Show, Eq)
 
 instance FromJSON BaseData where
-  parseJSON = withArray "array of values" $ \arr -> withObject "baseData" (\o -> do
-    group   <- o .:? "group" .!= ""
-    kind    <- o .: "kind"
-    version <- o .: "version"
-    let apiVersion = (if Text.null group then "" else group <> "/") <> version
-    pure BaseData{..})
-    (head $ Vector.toList arr)
+  parseJSON = withArray "array of values" $ \arr -> do
+    case Vector.toList arr of
+      [] -> fail "missing baseData object in array"
+      (item:_) ->
+        withObject "baseData" (\o -> do
+          group   <- o .:? "group" .!= ""
+          kind    <- o .: "kind"
+          version <- o .: "version"
+          let apiVersion = (if Text.null group then "" else group <> "/") <> version
+          pure BaseData{..})
+          item

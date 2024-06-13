@@ -159,6 +159,7 @@ import Prettyprinter            (Pretty)
 
 import qualified Data.Csv
 import qualified Data.HashMap.Strict       as HashMap
+import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Sequence             as Sequence
 import qualified Data.Text
 import qualified Dhall.Core                as Core
@@ -273,7 +274,7 @@ dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
     recordConvert (Core.Record record) csvRecord
         | badKeys <- lefts (map decodeUtf8' (HashMap.keys csvRecord))
         , not (null badKeys)
-        = Left $ UnicodeError (head badKeys) -- Only report first key that failed to be decoded
+        = Left $ UnicodeError (NonEmpty.head . NonEmpty.fromList $ badKeys) -- Only report first key that failed to be decoded
         | extraKeys <- (map decodeUtf8 $ HashMap.keys csvRecord) \\ Map.keys record
         , strictRecs && not (null extraKeys)
         = Left $ UnhandledFields extraKeys
