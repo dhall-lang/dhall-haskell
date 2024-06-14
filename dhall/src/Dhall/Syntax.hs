@@ -19,6 +19,7 @@ import                Dhall.Syntax.Instances.Foldable    as Export ()
 import                Dhall.Syntax.Instances.Functor     as Export ()
 import                Dhall.Syntax.Instances.Lift        as Export ()
 import                Dhall.Syntax.Instances.Monad       as Export ()
+import                Dhall.Syntax.Instances.Monoid      as Export ()
 import                Dhall.Syntax.Instances.NFData      as Export ()
 import                Dhall.Syntax.Instances.Ord         as Export ()
 import                Dhall.Syntax.Instances.Pretty      as Export

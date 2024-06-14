@@ -1158,22 +1158,26 @@ infer typer = loop
                     case Dhall.Map.lookup x xTs' of
                         Just _T' -> return _T'
                         Nothing  -> die (MissingField x _E'')
-                _ -> do
-                    let e' = eval values e
+                _   | VRecord xTs' <- eval values e ->
+                        case Dhall.Map.lookup x xTs' of
+                            Just _T' -> loop ctx (quote names _T')
+                            Nothing  -> die (MissingField x _E'')
+                    | otherwise -> do
+                        let e' = eval values e
 
-                    let e'' = quote names e'
+                        let e'' = quote names e'
 
-                    case e' of
-                        VUnion xTs' ->
-                            case Dhall.Map.lookup x xTs' of
-                                Just (Just _T') -> return (VHPi x _T' (\_ -> e'))
-                                Just  Nothing   -> return e'
-                                Nothing         -> die (MissingConstructor x e)
+                        case e' of
+                            VUnion xTs' ->
+                                case Dhall.Map.lookup x xTs' of
+                                    Just (Just _T') -> return (VHPi x _T' (\_ -> e'))
+                                    Just  Nothing   -> return e'
+                                    Nothing         -> die (MissingConstructor x e)
 
-                        _ -> do
-                            let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
+                            _ -> do
+                                let text = Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabel x)
 
-                            die (CantAccess text e'' _E'')
+                                die (CantAccess text e'' _E'')
         Project e (Left xs) -> do
             case duplicateElement xs of
                 Just x -> do
@@ -1184,6 +1188,9 @@ infer typer = loop
             _E' <- loop ctx e
 
             let _E'' = quote names _E'
+
+            let text =
+                    Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
 
             case _E' of
                 VRecord xTs' -> do
@@ -1196,11 +1203,25 @@ infer typer = loop
 
                     fmap adapt (traverse process xs)
 
-                _ -> do
-                    let text =
-                            Dhall.Pretty.Internal.docToStrictText (Dhall.Pretty.Internal.prettyLabels xs)
+                _   | VRecord xTs' <- eval values e -> do
+                        let process x =
+                                case Dhall.Map.lookup x xTs' of
+                                    Just _T' -> do
+                                        _T'' <- loop ctx (quote names _T')
 
-                    die (CantProject text e _E'')
+                                        case _T'' of
+                                            VConst c -> pure c
+                                            _        -> die (CantProject text e _E'')
+
+                                    Nothing -> do
+                                        die (MissingField x _E'')
+
+                        cs <- traverse process xs
+
+                        return (VConst (mconcat cs))
+
+                    | otherwise -> do
+                        die (CantProject text e _E'')
 
         Project e (Right s) -> do
             _E' <- loop ctx e

@@ -367,6 +367,9 @@ vField t0 k = go t0
             Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
             Just Nothing  -> VInject m k Nothing
             _             -> error errorMsg
+        VRecord m
+            | Just v <- Map.lookup k m -> v
+            | otherwise -> error errorMsg
         VRecordLit m
             | Just v <- Map.lookup k m -> v
             | otherwise -> error errorMsg
@@ -414,6 +417,9 @@ vProjectByFields env t ks =
             VRecordLit kvs ->
                 let kvs' = Map.restrictKeys kvs (Dhall.Set.toSet ks)
                 in  VRecordLit kvs'
+            VRecord kTs ->
+                let kTs' = Map.restrictKeys kTs (Dhall.Set.toSet ks)
+                in  VRecord kTs'
             VProject t' _ ->
                 vProjectByFields env t' ks
             VPrefer l (VRecordLit kvs) ->
