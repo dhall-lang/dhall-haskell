@@ -529,11 +529,10 @@ eval !env t0 =
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 go zero (fromIntegral n' :: Integer) where
                                   go !acc 0 = acc
-                                  go (VNaturalLit x) m =
-                                    case vApp succ (VNaturalLit x) of
-                                      VNaturalLit y | x == y -> VNaturalLit x
-                                      notNaturalLit -> go notNaturalLit (m - 1)
-                                  go acc m = go (vApp succ acc) (m - 1)
+                                  go acc m =
+                                  -- Detect a shortcut: if succ acc == acc then return acc immediately.
+                                    let next = vApp succ acc
+                                    in  if conv env next acc then acc else go next (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
