@@ -17,7 +17,7 @@ Build-Type:          Simple
 Executable dhall-to-nixpkgs
   Main-Is:             Main.hs
   Build-Depends:       base                 >= 4.11     && < 5
-                     , aeson                >= 1.0.0.0  && < 2.2
+                     , aeson                >= 1.0.0.0  && < 2.3
                      , base16-bytestring    >= 1.0.0.0
                      , base64-bytestring    >= 1.1.0.0
                      , bytestring                          < 0.12
@@ -33,7 +33,7 @@ Executable dhall-to-nixpkgs
                      , optparse-applicative >= 0.14.0.0 && < 0.19
                      , prettyprinter        >= 1.7.0    && < 1.8
                      , text                 >= 0.11.1.0 && < 2.1
-                     , transformers         >= 0.2.0.0  && < 0.6
+                     , transformers         >= 0.2.0.0  && < 0.7
                      , turtle               >= 1.6      && < 1.7
                      , network-uri                         < 2.8
   Default-Language:    Haskell2010

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedLists     #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -7,7 +8,13 @@
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
-import Control.Applicative     (Alternative (..), liftA2, optional)
+import Control.Applicative
+    ( Alternative (..)
+#if !MIN_VERSION_base(4,18,0)
+    , liftA2
+#endif
+    , optional
+    )
 import Data.Foldable           (foldl')
 import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
