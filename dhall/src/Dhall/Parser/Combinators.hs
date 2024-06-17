@@ -169,6 +169,10 @@ instance Text.Megaparsec.MonadParsec Void Text Parser where
 
     updateParserState f = Parser (Text.Megaparsec.updateParserState f)
 
+#if MIN_VERSION_megaparsec(9,4,0)
+    mkParsec f = Parser (Text.Megaparsec.mkParsec f)
+#endif
+
 instance Semigroup a => Semigroup (Parser a) where
     (<>) = liftA2 (<>)
 

@@ -4,9 +4,7 @@ module Dhall.Test.Lint where
 
 import Data.Text    (Text)
 import Dhall.Parser (Header (..))
-import Prelude      hiding (FilePath)
 import Test.Tasty   (TestTree)
-import Turtle       (FilePath)
 
 import qualified Data.Text                 as Text
 import qualified Data.Text.IO              as Text.IO

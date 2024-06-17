@@ -41,16 +41,16 @@ import Dhall.Syntax
 import Numeric.Natural       (Natural)
 import Prettyprinter         (Doc, Pretty)
 
-import qualified Data.Algorithm.Diff    as Algo.Diff
+import qualified Data.Algorithm.Diff   as Algo.Diff
 import qualified Data.List.NonEmpty
 import qualified Data.Set
 import qualified Data.Text
-import qualified Data.Time              as Time
+import qualified Data.Time             as Time
 import qualified Dhall.Map
-import qualified Dhall.Normalize        as Normalize
-import qualified Dhall.Pretty.Internal  as Internal
-import qualified Dhall.Syntax           as Syntax
-import qualified Prettyprinter          as Pretty
+import qualified Dhall.Normalize       as Normalize
+import qualified Dhall.Pretty.Internal as Internal
+import qualified Dhall.Syntax          as Syntax
+import qualified Prettyprinter         as Pretty
 
 {-| This type is a `Doc` enriched with a `same` flag to efficiently track if
     any difference was detected

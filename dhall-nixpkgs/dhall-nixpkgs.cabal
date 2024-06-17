@@ -34,7 +34,7 @@ Executable dhall-to-nixpkgs
                      , prettyprinter        >= 1.7.0    && < 1.8
                      , text                 >= 0.11.1.0 && < 2.1
                      , transformers         >= 0.2.0.0  && < 0.6
-                     , turtle                              < 1.6
+                     , turtle               >= 1.6      && < 1.7
                      , network-uri                         < 2.8
   Default-Language:    Haskell2010
   GHC-Options:         -Wall -threaded

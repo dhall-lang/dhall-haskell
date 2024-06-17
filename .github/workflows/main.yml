@@ -1,5 +1,5 @@
 env:
-  cache_generation: 2021-06-22
+  cache_generation: 2024-06-13
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
@@ -45,20 +45,23 @@ jobs:
         with:
           enable-stack: true
           stack-version: "latest"
+          stack-no-global: true
       - name: "Cache"
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          key: ${{ matrix.os.runner }}-${{ runner.arch }}-${{ hashFiles(matrix.stack-yaml) }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-${{ hashFiles(matrix.stack-yaml) }}
           restore-keys: |
-            ${{ matrix.os.runner }}-${{ runner.arch }}-
+            ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
-      - name: Install libsodium
+      - name: "Install libsodium"
         shell: bash
         run: |
           if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
             sudo apt-get install -y libsodium-dev
           fi
+          echo "::debug::'pkg-config libsodium' output:"
+          pkg-config --print-errors --libs libsodium || true
       - name: "Build"
         shell: bash
         run: |
@@ -155,7 +158,7 @@ jobs:
           package 'dhall-yaml' "bin/dhall-to-yaml-ng${exe}" "bin/yaml-to-dhall${exe}"
       - name: "Upload package"
         if: ${{ matrix.stack-yaml == 'stack.yaml' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: 'dhall-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
           path: 'dhall-*${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'

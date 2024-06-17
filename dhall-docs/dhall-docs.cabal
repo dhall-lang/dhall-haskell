@@ -152,7 +152,7 @@ Test-Suite tasty
         tasty        < 1.5                ,
         tasty-silver < 3.4                ,
         tasty-hunit  >= 0.10     && < 0.11,
-        turtle       < 1.7                ,
+        turtle       >= 1.6      && < 1.7 ,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010
