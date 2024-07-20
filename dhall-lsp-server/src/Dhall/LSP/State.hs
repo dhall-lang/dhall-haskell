@@ -21,7 +21,7 @@ import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
 import Dhall.Pretty                     (CharacterSet)
 import Language.LSP.Server              (LspT)
 
-import qualified Language.LSP.Types as J
+import qualified Language.LSP.Protocol.Types as J
 
 -- Inside a handler we have access to the ServerState. The exception layer
 -- allows us to fail gracefully, displaying a message to the user via the

@@ -1,5 +1,5 @@
 Name: dhall-nix
-Version: 1.1.25
+Version: 1.1.26
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -29,8 +29,8 @@ Library
         base                      >= 4.11.0.0 && < 5   ,
         containers                               < 0.7 ,
         data-fix                                 < 0.4 ,
-        dhall                     >= 1.41     && < 1.42,
-        hnix                      >= 0.16     && < 0.17,
+        dhall                     >= 1.42     && < 1.43,
+        hnix                      >= 0.16     && < 0.18,
         lens-family-core          >= 1.0.0    && < 2.2 ,
         neat-interpolation                       < 0.6 ,
         text                      >= 0.8.0.0  && < 2.1
@@ -40,7 +40,7 @@ Library
     Default-Language: Haskell2010
     if os(windows)
         Buildable: False
-        
+
 Executable dhall-to-nix
     if os(windows)
         Buildable: False
@@ -53,7 +53,7 @@ Executable dhall-to-nix
         dhall                               ,
         dhall-nix                           ,
         hnix                                ,
-        optparse-generic >= 1.1.1   && < 1.5,
+        optparse-generic >= 1.1.1   && < 1.6,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010

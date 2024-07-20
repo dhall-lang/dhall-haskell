@@ -19,6 +19,7 @@ cabal.sandbox.config
 cabal.project.local
 cabal.project.local~
 .HTF/
+.envrc
 .ghc.environment.*
 .cache
 .history

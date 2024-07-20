@@ -44,6 +44,7 @@ import Dhall.Docs.Embedded
 import Dhall.Docs.Html
 import Dhall.Docs.Markdown
 import Dhall.Docs.Store
+import Dhall.Docs.Util            (fileAnIssue)
 import Dhall.Parser
     ( Header (..)
     , ParseError (..)
@@ -104,7 +105,8 @@ instance MonadWriter [DocsGenWarning] GeneratedDocs where
 
 data DocsGenWarning
     = InvalidDhall (Text.Megaparsec.ParseErrorBundle Text Void)
-    | InvalidMarkdown MarkdownParseError
+    | InvalidMarkdownHeader MarkdownParseError
+    | InvalidMarkdownFile MarkdownParseError
     | DhallDocsCommentError (Path Rel File) CommentParseError
 
 warn :: String
@@ -116,10 +118,15 @@ instance Show DocsGenWarning where
         Text.Megaparsec.errorBundlePretty err <>
         "... documentation won't be generated for this file"
 
-    show (InvalidMarkdown MarkdownParseError{..}) =
+    show (InvalidMarkdownHeader MarkdownParseError{..}) =
         warn <>"Header comment is not markdown\n\n" <>
         Text.Megaparsec.errorBundlePretty unwrap <>
         "The original non-markdown text will be pasted in the documentation"
+
+    show (InvalidMarkdownFile MarkdownParseError{..}) =
+        warn <>"Failed to parse file as markdown\n\n" <>
+        Text.Megaparsec.errorBundlePretty unwrap <>
+        "The original file contents will be pasted in the documentation"
 
     show (DhallDocsCommentError path err) =
         warn <> Path.fromRelFile path <> specificError
@@ -135,9 +142,9 @@ instance Show DocsGenWarning where
                 "must be aligned"
 
             BadPrefixesOnSingleLineComments -> ": dhall-docs's single line comments " <>
-                "must have specific prefixes:" <>
+                "must have specific prefixes:\n" <>
                 "* For the first line: \"--| \"\n" <>
-                "* For the rest of the linse: \"--  \""
+                "* For the rest of the lines: \"--  \""
 
 -- | Extracted text from from Dhall file's comments
 newtype FileComments = FileComments
@@ -166,8 +173,14 @@ data FileType
           -- ^ Examples extracted from assertions in the file
         , fileComments :: FileComments
         }
+    | MarkdownFile
+        { mmark :: MMark
+          -- ^ Parsed Markdown from 'contents'
+        }
     | TextFile
     deriving (Show)
+
+data FileExtension = DhallExtension | MarkdownExtension | OtherExtension deriving (Show)
 
 {-| Takes a list of files paths with their contents and returns the list of
     valid `RenderedFile`s.
@@ -181,10 +194,12 @@ getAllRenderedFiles :: [(Path Rel File, ByteString)] -> GeneratedDocs [RenderedF
 getAllRenderedFiles =
     fmap Maybe.catMaybes . mapM toRenderedFile . foldr validFiles []
   where
-    hasDhallExtension :: Path Rel File -> Bool
-    hasDhallExtension absFile = case Path.splitExtension absFile of
-        Nothing -> False
-        Just (_, ext) -> ext == ".dhall"
+    getFileExtension :: Path Rel File -> FileExtension
+    getFileExtension absFile =
+        case snd <$> Path.splitExtension absFile of
+            Just ".dhall" -> DhallExtension
+            Just ".md" -> MarkdownExtension
+            _ -> OtherExtension
 
     validFiles :: (Path Rel File, ByteString) -> [(Path Rel File, Text)] -> [(Path Rel File, Text)]
     validFiles (relFile, content) xs = case Data.Text.Encoding.decodeUtf8' content of
@@ -194,8 +209,8 @@ getAllRenderedFiles =
     toRenderedFile
         :: (Path Rel File, Text) -> GeneratedDocs (Maybe RenderedFile)
     toRenderedFile (relFile, contents) =
-        case exprAndHeaderFromText (Path.fromRelFile relFile) contents of
-            Right (Header header, expr) -> do
+        case (exprAndHeaderFromText (Path.fromRelFile relFile) contents, getFileExtension relFile) of
+            (Right (Header header, expr), _) -> do
                 let denoted = denote expr :: Expr Void Import
 
                 headerContents <-
@@ -216,11 +231,27 @@ getAllRenderedFiles =
                         , fileComments = FileComments headerContents
                         }
                     }
-            Left ParseError{..} | hasDhallExtension relFile -> do
+            (Left ParseError{..}, DhallExtension) -> do
                 Writer.tell [InvalidDhall unwrap]
                 return Nothing
 
-            Left _ -> do
+            (Left ParseError{}, MarkdownExtension) ->
+                case parseMarkdown relFile contents of
+                    Right mmark ->
+                        return $ Just $ RenderedFile
+                            { contents
+                            , path = relFile
+                            , fileType = MarkdownFile mmark
+                            }
+                    Left err -> do
+                        Writer.tell [InvalidMarkdownFile err]
+                        return $ Just $ RenderedFile
+                            { contents
+                            , path = relFile
+                            , fileType = TextFile
+                            }
+
+            _ -> do
                 return $ Just $ RenderedFile
                     { contents
                     , path = relFile
@@ -329,7 +360,7 @@ makeHtml baseImportUrl packageName characterSet RenderedFile{..} = do
             headerAsHtml <-
                 case markdownToHtml path strippedHeader of
                     Left err -> do
-                        Writer.tell [InvalidMarkdown err]
+                        Writer.tell [InvalidMarkdownHeader err]
                         return $ Lucid.toHtml strippedHeader
                     Right html -> return html
 
@@ -343,6 +374,16 @@ makeHtml baseImportUrl packageName characterSet RenderedFile{..} = do
                         DocParams{ relativeResourcesPath, packageName, characterSet, baseImportUrl }
 
             return htmlAsText
+
+        MarkdownFile mmark -> do
+            let htmlAsText =
+                    Text.Lazy.toStrict $ Lucid.renderText $ markdownFileToHtml
+                        path
+                        contents
+                        (render mmark)
+                        DocParams{ relativeResourcesPath, packageName, characterSet, baseImportUrl }
+            return htmlAsText
+
         TextFile -> do
             let htmlAsText =
                     Text.Lazy.toStrict $ Lucid.renderText $ textFileToHtml
@@ -419,8 +460,9 @@ createIndexes baseImportUrl packageName characterSet renderedFiles = map toIndex
         adapt RenderedFile{..} = (stripPrefix (addHtmlExt path), m)
           where
             m = case fileType of
-                DhallFile{..} -> mType
-                TextFile      -> Nothing
+                DhallFile{..}  -> mType
+                MarkdownFile _ -> Nothing
+                TextFile       -> Nothing
 
         html = indexToHtml
             indexDir
@@ -438,26 +480,6 @@ createIndexes baseImportUrl packageName characterSet renderedFiles = map toIndex
 addHtmlExt :: Path Rel File -> Path Rel File
 addHtmlExt relFile =
     Data.Maybe.fromMaybe (fileAnIssue "addHtmlExt") $ Path.addExtension ".html" relFile
-
--- | If you're wondering the GitHub query params for issue creation:
--- https://docs.github.com/en/github/managing-your-work-on-github/about-automation-for-issues-and-pull-requests-with-query-parameters
-fileAnIssue :: Text -> a
-fileAnIssue titleName =
-    error $ "\ESC[1;31mError\ESC[0m Documentation generator bug\n\n" <>
-
-            "Explanation: This error message means that there is a bug in the " <>
-            "Dhall Documentation generator. You didn't did anything wrong, but " <>
-            "if you would like to see this problem fixed then you should report " <>
-            "the bug at:\n\n" <>
-
-            "https://github.com/dhall-lang/dhall-haskell/issues/new?labels=dhall-docs,bug\n\n" <>
-
-            "explaining your issue and add \"" <> Data.Text.unpack titleName <> "\" as error code " <>
-            "so we can find the proper location in the source code where the error happened\n\n" <>
-
-            "Please, also include your package in the issue. It can be in:\n\n" <>
-            "* A compressed archive (zip, tar, etc)\n" <>
-            "* A git repository, preferably with a commit reference"
 
 {-| Generate all of the docs for a package. This function does all the `IO ()`
     related tasks to call `generateDocsPure`

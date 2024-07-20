@@ -28,8 +28,8 @@ tests = testGroup "to-directory-tree"
         , fixpointedSimple
 #ifndef mingw32_HOST_OS
         , fixpointedPermissions
-#endif
         , fixpointedUserGroup
+#endif
         ]
     ]
 

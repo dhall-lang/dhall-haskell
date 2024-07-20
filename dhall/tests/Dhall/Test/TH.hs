@@ -1,16 +1,18 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
 
 module Dhall.Test.TH where
 
-import Control.Exception (throwIO)
-import Data.Either.Validation (Validation(..))
-import Dhall.TH   (HaskellType (..))
-import Test.Tasty (TestTree)
+import Control.Exception      (throwIO)
+import Data.Either.Validation (Validation (..))
+import Data.Time              (TimeOfDay (..), TimeZone (..), fromGregorian)
+import Dhall.TH               (HaskellType (..))
+import Test.Tasty             (TestTree)
 
 import qualified Data.Text
 import qualified Dhall
@@ -26,6 +28,7 @@ deriving instance Show T
 Dhall.TH.makeHaskellTypes
     [ MultipleConstructors "Department" "./tests/th/Department.dhall"
     , SingleConstructor "Employee" "MakeEmployee" "./tests/th/Employee.dhall"
+    , SingleConstructor "TimeExample" "TimeExample" "./tests/th/Time.dhall"
     ]
 
 deriving instance Eq   Department
@@ -33,6 +36,9 @@ deriving instance Show Department
 
 deriving instance Eq   Employee
 deriving instance Show Employee
+
+deriving instance Eq   TimeExample
+deriving instance Show TimeExample
 
 Dhall.TH.makeHaskellTypes
   [ SingleConstructor "Bar" "MakeBar" "(./tests/th/issue2066.dhall).Bar"
@@ -74,6 +80,16 @@ makeHaskellTypeFromUnion = Tasty.HUnit.testCase "makeHaskellTypeFromUnion" $ do
 
     Tasty.HUnit.assertEqual "" qux (Foo MakeFoo{ foo = 2, bar = MakeBar{ baz = 3 } })
 
+    timex <- Dhall.input Dhall.auto "let T = ./tests/th/Time.dhall in { txTime = 21:12:00, txDate = 1976-04-01, txTimeZone = +05:00 } : T"
+
+    Tasty.HUnit.assertEqual "" timex TimeExample { txTime = tod, txDate = day, txTimeZone = tz}
+
+    where
+      tod = TimeOfDay { todHour = 21, todMin = 12, todSec = 0 }
+      day = fromGregorian 1976 4 1
+      tz = TimeZone { timeZoneMinutes = 300, timeZoneSummerOnly = False, timeZoneName = "" }
+  
+
 Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     { Dhall.TH.constructorModifier = ("My" <>)
     , Dhall.TH.fieldModifier = ("my" <>) . Data.Text.toTitle
@@ -83,12 +99,39 @@ Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
     , SingleConstructor "MyEmployee" "Employee" "./tests/th/Employee.dhall"
     ]
 
+  
 deriving instance Eq   MyT
 deriving instance Eq   MyDepartment
 deriving instance Eq   MyEmployee
 deriving instance Show MyT
 deriving instance Show MyDepartment
 deriving instance Show MyEmployee
+
+  
+Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
+    { Dhall.TH.constructorModifier = ("My" <>)
+    , Dhall.TH.fieldModifier = ("my" <>) . Data.Text.toTitle
+    , Dhall.TH.generateFromDhallInstance = False
+    , Dhall.TH.generateToDhallInstance = False
+    })
+    [ SingleConstructor "MyHKSingle" "HKSingle" "./tests/th/HigherKindSingle.dhall"
+    , MultipleConstructors "MyHKUnion" "./tests/th/HigherKindUnion.dhall"
+    ]
+
+type MyHKSingle_ = MyHKSingle Maybe Int
+type MyHKUnion_ = MyHKUnion Bool Int
+
+deriving instance Eq MyHKSingle_
+deriving instance Show MyHKSingle_
+deriving instance Dhall.Generic MyHKSingle_
+instance Dhall.FromDhall MyHKSingle_
+instance Dhall.ToDhall MyHKSingle_
+
+deriving instance Eq MyHKUnion_
+deriving instance Show MyHKUnion_
+deriving instance Dhall.Generic MyHKUnion_
+instance Dhall.FromDhall MyHKUnion_
+instance Dhall.ToDhall MyHKUnion_
 
 testMakeHaskellTypesWith :: TestTree
 testMakeHaskellTypesWith = Tasty.HUnit.testCase "makeHaskellTypesWith" $ do
@@ -111,6 +154,19 @@ testMakeHaskellTypesWith = Tasty.HUnit.testCase "makeHaskellTypesWith" $ do
     let textEmployee = "let T = ./tests/th/Department.dhall in T.Sales"
         refEmployee = MyEmployee{ myName = "", myDepartment = MySales }
     myTest textEmployee refEmployee
+
+    let textHKSingle = "let T = (./tests/th/HigherKindSingle.dhall) Optional Int in T { foo = +1, bar = Some +2, bam = \"\" }"
+        refHKSingle = MyHKSingle { myFoo = 1, myBar = Just 2, myBam = "" } :: MyHKSingle_
+    myTest textHKSingle refHKSingle
+
+    let textHKUnion0 = "let T = (./tests/th/HigherKindUnion.dhall) Bool Int in T.Foo True"
+        refHKUnion0 = MyFoo True :: MyHKUnion_
+    myTest textHKUnion0 refHKUnion0
+
+    let textHKUnion1 = "let T = (./tests/th/HigherKindUnion.dhall) Bool Int in T.Bar +1"
+        refHKUnion1 = MyBar 1 :: MyHKUnion_
+    myTest textHKUnion1 refHKUnion1
+
     where
         myTest text ref = do
             expr <- Dhall.inputExpr text
@@ -153,3 +209,11 @@ Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
 deriving instance Dhall.Generic NoInstancesT
 instance Dhall.FromDhall NoInstancesT
 instance Dhall.ToDhall NoInstancesT
+
+Dhall.TH.makeHaskellTypesWith (Dhall.TH.defaultGenerateOptions
+    { Dhall.TH.constructorModifier = ("Strict" <>)
+    , Dhall.TH.fieldModifier = ("strict" <>) . Data.Text.toTitle
+    , Dhall.TH.makeStrict = True
+    })
+    [ MultipleConstructors "StrictFields" "./tests/th/example.dhall"
+    ]

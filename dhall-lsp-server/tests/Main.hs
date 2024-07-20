@@ -5,15 +5,15 @@
 import Control.Monad.IO.Class     (liftIO)
 import Data.Maybe                 (fromJust)
 import Language.LSP.Test
-import Language.LSP.Types
+import Language.LSP.Protocol.Types
     ( CompletionItem (..)
     , Diagnostic (..)
     , DiagnosticSeverity (..)
     , Hover (..)
-    , HoverContents (..)
     , MarkupContent (..)
     , Position (..)
     , Range (..)
+    , toEither
     )
 import Test.Tasty
 import Test.Tasty.Hspec
@@ -37,13 +37,13 @@ hoveringSpec dir =
       docId <- openDoc "Types.dhall" "dhall"
       let typePos = Position 0 5
           functionPos = Position 2 7
-          extractContents = _contents . fromJust
+          extractContents = toEither . _contents . fromJust
           getValue = T.unpack . _value
       typeHover <- getHover docId typePos
       funcHover <- getHover docId functionPos
       liftIO $ do
         case (extractContents typeHover, extractContents funcHover) of
-          (HoverContents typeContent, HoverContents functionContent) -> do
+          (Left typeContent, Left functionContent) -> do
             getValue typeContent `shouldBe` "Type"
             getValue functionContent `shouldBe` "\8704(_isAdmin : Bool) \8594 { home : Text, name : Text }"
           _ -> error "test failed"
@@ -65,24 +65,28 @@ lintingSpec fixtureDir =
                     {_start = Position { _line = 2, _character = 10 }
                     , _end = Position { _line = 2, _character = 36 }
                     }
-                , _severity = Just DsHint
+                , _severity = Just DiagnosticSeverity_Hint
                 , _code = Nothing
+                , _codeDescription = Nothing
                 , _source = Just "Dhall.Lint"
                 , _message = "Unused let binding 'bob'"
                 , _tags = Nothing
                 , _relatedInformation = Nothing
+                , _data_ = Nothing
                 }
             , Diagnostic
                 { _range = Range
                     { _start = Position { _line = 4, _character = 11 }
                     , _end = Position { _line = 4, _character = 38 }
                     }
-                , _severity = Just DsHint
+                , _severity = Just DiagnosticSeverity_Hint
                 , _code = Nothing
+                , _codeDescription = Nothing
                 , _source = Just "Dhall.Lint"
                 , _message = "Unused let binding 'carl'"
                 , _tags = Nothing
                 , _relatedInformation = Nothing
+                , _data_ = Nothing
                 }
             ]
 
@@ -96,9 +100,9 @@ lintingSpec fixtureDir =
         let diag1 = head diags
             diag2 = diags !! 1
         liftIO $ do
-          _severity diag1 `shouldBe` Just DsHint
+          _severity diag1 `shouldBe` Just DiagnosticSeverity_Hint
           T.unpack (_message diag1) `shouldContain` "Superfluous 'in'"
-          _severity diag2 `shouldBe` Just DsHint
+          _severity diag2 `shouldBe` Just DiagnosticSeverity_Hint
           T.unpack (_message diag2) `shouldContain` "Unused let binding"
 
 codeCompletionSpec :: FilePath -> Spec
@@ -163,7 +167,7 @@ diagnosticsSpec fixtureDir = do
         _ <- openDoc "UnboundVar.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
         liftIO $ do
-          _severity diag `shouldBe` Just DsError
+          _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Unbound variable"
     it "reports wrong type"
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
@@ -171,7 +175,7 @@ diagnosticsSpec fixtureDir = do
         _ <- openDoc "WrongType.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
         liftIO $ do
-          _severity diag `shouldBe` Just DsError
+          _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Expression doesn't match annotation"
   describe "Dhall.Import" $ do
     it "reports invalid imports"
@@ -180,7 +184,7 @@ diagnosticsSpec fixtureDir = do
         _ <- openDoc "InvalidImport.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.Import"
         liftIO $ do
-          _severity diag `shouldBe` Just DsError
+          _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Invalid input"
     it "reports missing imports"
       $ runSession "dhall-lsp-server" fullCaps fixtureDir
@@ -188,7 +192,7 @@ diagnosticsSpec fixtureDir = do
         _ <- openDoc "MissingImport.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.Import"
         liftIO $ do
-          _severity diag `shouldBe` Just DsError
+          _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Missing file"
   describe "Dhall.Parser"
     $ it "reports invalid syntax"
@@ -196,7 +200,7 @@ diagnosticsSpec fixtureDir = do
     $ do
       _ <- openDoc "InvalidSyntax.dhall" "dhall"
       [diag] <- waitForDiagnosticsSource "Dhall.Parser"
-      liftIO $ _severity diag `shouldBe` Just DsError
+      liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
 
 main :: IO ()
 main = do

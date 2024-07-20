@@ -429,6 +429,12 @@ infer typer = loop
 
             return _L'
 
+        Bytes ->
+            return (VConst Type)
+
+        BytesLit _ ->
+            return VBytes
+
         Natural ->
             return (VConst Type)
 
@@ -583,17 +589,26 @@ infer typer = loop
         DateLiteral _ ->
             return VDate
 
+        DateShow ->
+            return (VDate ~> VText)
+
         Time ->
             return (VConst Type)
 
         TimeLiteral _ _ ->
             return VTime
 
+        TimeShow ->
+            return (VTime ~> VText)
+
         TimeZone ->
             return (VConst Type)
 
         TimeZoneLiteral _ ->
             return VTimeZone
+
+        TimeZoneShow ->
+            return (VTimeZone ~> VText)
 
         List ->
             return (VConst Type ~> VConst Type)
@@ -1300,15 +1315,11 @@ infer typer = loop
 
                   VOptional _O' -> do
                     case ks of
-                      WithQuestion  :| [] -> do
+                      WithQuestion  :| _ -> do
                         tV' <- loop ctx v
                         if Eval.conv values _O' tV'
                           then return (VOptional _O')
                           else die OptionalWithTypeMismatch
-
-                      WithQuestion :| k₁ : ks' -> do
-                        tV' <- with _O' (k₁ :| ks') v
-                        return (VOptional tV')
 
                       WithLabel k :| _ -> die (NotAQuestionPath k)
 

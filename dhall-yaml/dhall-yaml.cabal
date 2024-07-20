@@ -1,5 +1,5 @@
 Name: dhall-yaml
-Version: 1.2.11
+Version: 1.2.12
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: GPL-3
@@ -34,12 +34,12 @@ Library
         HsYAML                    >= 0.2       && < 0.3 ,
         HsYAML-aeson              >= 0.2       && < 0.3 ,
         base                      >= 4.11.0.0  && < 5   ,
-        aeson                     >= 1.0.0.0   && < 2.2 ,
-        bytestring                                < 0.12,
-        dhall                     >= 1.31.0    && < 1.42,
+        aeson                     >= 1.0.0.0   && < 2.3 ,
+        bytestring                                < 0.13,
+        dhall                     >= 1.31.0    && < 1.43,
         dhall-json                >= 1.6.0     && < 1.8 ,
-        optparse-applicative      >= 0.14.0.0  && < 0.18,
-        text                      >= 0.11.1.0  && < 2.1 ,
+        optparse-applicative      >= 0.14.0.0  && < 0.19,
+        text                      >= 0.11.1.0  && < 2.2 ,
         vector
     Exposed-Modules:
         Dhall.Yaml
@@ -65,7 +65,7 @@ Executable yaml-to-dhall
     Build-Depends:
         base                                             ,
         aeson                                            ,
-        ansi-terminal               >= 0.6.3.1  && < 0.12,
+        ansi-terminal               >= 0.6.3.1  && < 1.1 ,
         bytestring                                       ,
         dhall                                            ,
         dhall-json                                       ,

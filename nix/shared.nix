@@ -230,6 +230,15 @@ let
                             '';
                           }
                         );
+
+                    gauge =
+                      pkgsNew.haskell.lib.appendPatch
+                        haskellPackagesOld.gauge
+                        (pkgsNew.fetchpatch {
+                          url = "https://github.com/vincenthz/hs-gauge/commit/303a6b611804c85b9a6bc1cea5de4e6ce3429d24.patch";
+
+                          sha256 = "sha256-4osUMo0cvTvyDTXF8lY9tQbFqLywRwsc3RkHIhqSriQ=";
+                        });
                   };
 
               in
@@ -369,7 +378,7 @@ let
         releaseName=${name}
         ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/bin" -D $src/bin/*
         ${pkgs.lib.optionalString (manDir != null) ''
-          ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/share/man" -D ${manDir}/*
+          ${pkgsStaticLinux.coreutils}/bin/install --target-directory "$TMPDIR/inst/share/man/man1" -D ${manDir}/*.1
         ''}
       '';
     };

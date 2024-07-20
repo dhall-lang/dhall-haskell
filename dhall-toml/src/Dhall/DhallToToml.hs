@@ -1,6 +1,9 @@
-{-# LANGUAGE ApplicativeDo   #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| This module exports the `dhallToToml` function for translating a
     Dhall syntax tree to a TOML syntax tree (`TOML`) for the @tomland@
@@ -81,6 +84,11 @@
 >   [r.nested]
 >     c = 3
 
+    … and @Prelude.Map.Type@ also translates to a TOML table:
+
+> $ dhall-to-toml <<< '[ { mapKey = "foo", mapValue = 1 } ]'
+> foo = 1
+
     Dhall unions translate to the wrapped value, or a string if the alternative is empty:
 
 > $ dhall-to-toml <<< '{ u = < A | B >.A }'
@@ -103,7 +111,7 @@ module Dhall.DhallToToml
     , CompileError
     ) where
 
-import Control.Exception  (Exception, throwIO)
+import Control.Exception  (Exception)
 import Control.Monad      (foldM)
 import Data.Foldable      (toList)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -111,13 +119,14 @@ import Data.Text          (Text)
 import Data.Version       (showVersion)
 import Data.Void          (Void)
 import Dhall.Core         (DhallDouble (..), Expr)
+import Dhall.Map          (Map)
 import Dhall.Toml.Utils   (fileToDhall, inputToDhall)
 import Prettyprinter      (Pretty)
-import Toml.Type.Key      (Key (Key, unKey), Piece (Piece))
-import Toml.Type.Printer  (pretty)
+import Toml.Type.Key      (Key(..), Piece (Piece))
+import Toml.Type.AnyValue (AnyValue(..))
 import Toml.Type.TOML     (TOML)
 
-import qualified Data.Bifunctor            as Bifunctor
+import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Sequence             as Seq
 import qualified Data.Text                 as Text
 import qualified Data.Text.IO              as Text.IO
@@ -125,12 +134,13 @@ import qualified Dhall.Core                as Core
 import qualified Dhall.Map                 as Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
-import qualified Options.Applicative       as OA
+import qualified Options.Applicative       as Options
 import qualified Paths_dhall_toml          as Meta
 import qualified Prettyprinter.Render.Text as Pretty
-import qualified Toml.Type.AnyValue        as Toml.AnyValue
-import qualified Toml.Type.TOML            as Toml.TOML
-import qualified Toml.Type.Value           as Toml.Value
+import qualified Toml.Type.AnyValue        as AnyValue
+import qualified Toml.Type.Printer         as Printer
+import qualified Toml.Type.TOML            as TOML
+import qualified Toml.Type.Value           as Value
 
 -- $setup
 --
@@ -226,15 +236,15 @@ insert = Text.unpack . Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.in
 >>> import Toml.Type.Printer
 >>> f = makeRecordField
 >>> let toml = dhallToToml $ RecordLit [("foo", f $ NaturalLit 1), ("bar", f $ TextLit "ABC")]
->>> toml == Right (TOML {tomlPairs = HashMap.fromList [("foo",AnyValue (Toml.Value.Integer 1)),("bar",AnyValue (Toml.Value.Text "ABC"))], tomlTables = HashMap.fromList [], tomlTableArrays = HashMap.fromList []})
+>>> toml == Right (TOML {tomlPairs = HashMap.fromList [("foo",AnyValue (Value.Integer 1)),("bar",AnyValue (Value.Text "ABC"))], tomlTables = HashMap.fromList [], tomlTableArrays = HashMap.fromList []})
 True
 >>> fmap Toml.Type.Printer.pretty toml
 Right "bar = \"ABC\"\nfoo = 1\n"
 -}
 dhallToToml :: Expr s Void -> Either CompileError TOML
-dhallToToml e0 = do
-    r <- assertRecordLit (Core.normalize e0)
-    toTomlTable r
+dhallToToml expression = do
+    record <- assertRecordLit (Core.normalize expression)
+    toTomlTable record
 
 -- empty union alternative like < A | B >.A
 pattern UnionEmpty :: Text -> Expr s a
@@ -243,158 +253,217 @@ pattern UnionEmpty x <- Core.Field (Core.Union _) (Core.FieldSelection _ x _)
 pattern UnionApp :: Expr s a -> Expr s a
 pattern UnionApp x <- Core.App (Core.Field (Core.Union _) _) x
 
-assertRecordLit :: Expr Void Void -> Either CompileError (Map.Map Text (Core.RecordField Void Void))
-assertRecordLit (Core.RecordLit r) = Right r
-assertRecordLit (UnionApp x)       = assertRecordLit x
-assertRecordLit e                  = Left $ NotARecord e
+assertRecordLit
+    :: Expr Void Void
+    -> Either CompileError (Map Text (Core.RecordField Void Void))
+assertRecordLit (Core.RecordLit r) =
+    Right r
+assertRecordLit (UnionApp x) =
+    assertRecordLit x
+assertRecordLit (Core.ListLit _ expressions)
+    | Just keyValues <- traverse toKeyValue (toList expressions) =
+        Right (Map.fromList keyValues)
+  where
+    toKeyValue
+       (Core.RecordLit [ ("mapKey", Core.recordFieldValue -> Core.TextLit (Core.Chunks [] key)), ("mapValue", value) ]) =
+       Just (key, value)
+    toKeyValue _ =
+       Nothing
+assertRecordLit e =
+    Left (NotARecord e)
 
-toTomlTable :: Map.Map Text (Core.RecordField Void Void) -> Either CompileError TOML
+toTomlTable :: Map Text (Core.RecordField Void Void) -> Either CompileError TOML
 toTomlTable r = foldM (toTomlRecordFold []) (mempty :: TOML) (Map.toList r)
 
-toTomlRecordFold :: [Piece] -> TOML -> (Text, Core.RecordField Void Void) -> Either CompileError TOML
-toTomlRecordFold curKey toml' (key', val) = toToml toml' newKey (Core.recordFieldValue val)
-    where
-        append :: [Piece] -> Piece -> NonEmpty Piece
-        append []     y = y :| []
-        append (x:xs) y = x :| xs ++ [y]
-        newKey = Key $ append curKey $ Piece key'
+toTomlRecordFold
+    :: [Piece]
+    -> TOML
+    -> (Text, Core.RecordField Void Void)
+    -> Either CompileError TOML
+toTomlRecordFold curKey toml (key, val) =
+    toToml toml (Piece key :| curKey) (Core.recordFieldValue val)
 
+toToml :: TOML -> NonEmpty Piece -> Expr Void Void -> Either CompileError TOML
+toToml toml pieces expr  = case expr of
+    Core.BoolLit a ->
+        insertPrim (Value.Bool a)
 
+    Core.NaturalLit a ->
+        insertPrim (Value.Integer (toInteger a))
 
-toToml :: TOML -> Key -> Expr Void Void -> Either CompileError TOML
-toToml toml key expr  = case expr of
-    Core.BoolLit a -> return $ insertPrim (Toml.Value.Bool a)
-    Core.NaturalLit a -> return $ insertPrim (Toml.Value.Integer $ toInteger a)
-    Core.IntegerLit a -> return $ insertPrim (Toml.Value.Integer a)
-    Core.DoubleLit (DhallDouble a) -> return $ insertPrim (Toml.Value.Double a)
-    Core.TextLit (Core.Chunks [] a) -> return $ insertPrim (Toml.Value.Text a)
-    Core.App Core.None _ -> return toml
-    Core.Some a -> toToml toml key a
-    UnionEmpty a -> return $ insertPrim (Toml.Value.Text a)
-    UnionApp a -> toToml toml key a
+    Core.IntegerLit a ->
+        insertPrim (Value.Integer a)
+
+    Core.DoubleLit (DhallDouble a) ->
+        insertPrim (Value.Double a)
+
+    Core.TextLit (Core.Chunks [] a) ->
+        insertPrim (Value.Text a)
+
+    UnionEmpty a ->
+        insertPrim (Value.Text a)
+
+    UnionApp a ->
+        toToml toml pieces a
+
+    Core.Some a ->
+        toToml toml pieces a
+
+    Core.App Core.None _ ->
+        return toml
+
+    Core.RecordLit r -> do
+        let (inline, nested) =
+                Map.partition (isInline . Core.recordFieldValue) r
+
+        -- the order here is important, at least for testing, because the
+        -- PrefixMap inside TOML is dependent on insert order
+        let pairs = Map.toList inline <> Map.toList nested
+
+        if null inline
+        -- if the table doesn't have inline elements, don't register the table,
+        -- only its non-inlined children. Ex:
+        -- [a] # bad
+        --   [b]
+        --     c = 1
+        -- [a.b] # good
+        --   c = 1
+        then do
+            foldM (toTomlRecordFold (toList pieces)) toml pairs
+        else do
+            newPairs <- foldM (toTomlRecordFold []) mempty pairs
+            return (TOML.insertTable key newPairs toml)
+
+    _ | Right keyValues <- assertRecordLit expr ->
+        toToml toml pieces (Core.RecordLit keyValues)
+
     Core.ListLit _ a -> case toList a of
-        -- empty array
-        [] -> return $ insertPrim (Toml.Value.Array [])
         -- TODO: unions need to be handled here as well, it's a bit tricky
         -- because they also have to be probed for being a "simple"
         -- array of table
         union@(UnionApp (Core.RecordLit _)) : unions -> do
-            tables' <- case mapM assertRecordLit (union :| unions) of
-                Right x -> mapM toTomlTable x
-                Left (NotARecord e) -> Left (HeterogeneousArray e)
-                Left x -> Left x
-            return $ Toml.TOML.insertTableArrays key tables' toml
+            insertTables (union :| unions)
 
         record@(Core.RecordLit _) : records -> do
-            tables' <- case mapM assertRecordLit (record :| records)  of
-                Right x -> mapM toTomlTable x
-                Left (NotARecord e) -> Left (HeterogeneousArray e)
-                Left x -> Left x
-            return $ Toml.TOML.insertTableArrays key tables' toml
+            insertTables (record :| records)
+
         -- inline array
-        a' -> do
-            anyList <- mapM toAny a'
-            let arrayEither = Toml.AnyValue.toMArray anyList
-            array <- Bifunctor.first (const $ HeterogeneousArray expr) arrayEither
-            return $ insertPrim array
-    Core.RecordLit r ->
-        let
-            (inline, nested) = Map.partition (isInline . Core.recordFieldValue) r
-        in
-            if null inline
-            -- if the table doesn't have inline elements, don't register
-            -- the table, only its non-inlined children. Ex:
-            -- [a] # bad
-            --   [b]
-            --     c = 1
-            -- [a.b] # good
-            --   c = 1
-            then foldM (toTomlRecordFold $ toList $ unKey key) toml (Map.toList nested)
-            else do
-                -- the order here is important, at least for testing, because
-                -- the PrefixMap inside TOML is dependent on insert order
-                inlinePairs <- foldM (toTomlRecordFold []) mempty      (Map.toList inline)
-                nestedPairs <- foldM (toTomlRecordFold []) inlinePairs (Map.toList nested)
-                return $ Toml.TOML.insertTable key nestedPairs toml
-    _ -> Left $ Unsupported expr
-    where
-        insertPrim :: Toml.Value.Value a -> TOML
-        insertPrim val = Toml.TOML.insertKeyVal key val toml
+        expressions -> do
+            anyValues <- mapM toAnyValue expressions
 
-        -- checks if the value should be represented as an inline key/value
-        -- pair. Elements that are inlined are those that do not have a
-        -- [header] or [[header]]. One edge case is tables within multiple
-        -- arrays, though not currently supported by tomland, can only
-        -- be represented as inline tables.
-        isInline v = case v of
-            Core.BoolLit _    -> True
-            Core.IntegerLit _ -> True
-            Core.NaturalLit _ -> True
-            Core.DoubleLit _  -> True
-            Core.TextLit _    -> True
-            Core.ListLit _ s  -> case Seq.lookup 0 s of
-                Nothing                  -> True
-                Just (Core.BoolLit _)    -> True
-                Just (Core.NaturalLit _) -> True
-                Just (Core.DoubleLit _)  -> True
-                Just (Core.TextLit _)    -> True
-                Just (Core.ListLit _ _)  -> True
-                _                        -> False
-            _ -> False
+            case AnyValue.toMArray anyValues of
+                Left _ -> Left (HeterogeneousArray expr)
+                Right array -> insertPrim array
 
-        rightAny = Right . Toml.AnyValue.AnyValue
+    _ ->
+        Left (Unsupported expr)
+  where
+    key :: Key
+    key = Key (NonEmpty.reverse pieces)
 
-        -- toAny is a helper function for making lists so it returns a list
-        -- specific error, in particular tomland's inability to represent
-        -- tables in multi-dimensional arrays
-        toAny :: Expr Void Void -> Either CompileError Toml.AnyValue.AnyValue
-        toAny e = case e of
-            Core.BoolLit x                  -> rightAny $ Toml.Value.Bool x
-            Core.IntegerLit x               -> rightAny $ Toml.Value.Integer x
-            Core.NaturalLit x               -> rightAny $ Toml.Value.Integer $ toInteger x
-            Core.DoubleLit (DhallDouble x)  -> rightAny $ Toml.Value.Double x
-            Core.TextLit (Core.Chunks [] x) -> rightAny $ Toml.Value.Text x
-            UnionEmpty x                    -> rightAny $ Toml.Value.Text x
-            UnionApp x                      -> toAny x
-            Core.ListLit _ x                -> do
-                anyList <- mapM toAny $ toList x
-                case Toml.AnyValue.toMArray anyList of
-                    Right x' -> rightAny x'
-                    Left _ -> Left $ HeterogeneousArray expr
-            Core.RecordLit _ -> Left $ UnsupportedArray e
-            _ -> Left $ Unsupported e
+    insertPrim :: Value.Value a -> Either CompileError TOML
+    insertPrim val = return (TOML.insertKeyVal key val toml)
+
+    insertTables :: NonEmpty (Expr Void Void) -> Either CompileError TOML
+    insertTables expressions = do
+        tables <- case mapM assertRecordLit expressions of
+            Right x -> mapM toTomlTable x
+            Left (NotARecord e) -> Left (HeterogeneousArray e)
+            Left x -> Left x
+        return (TOML.insertTableArrays key tables toml)
+
+    -- checks if the value should be represented as an inline key/value pair.
+    -- Elements that are inlined are those that do not have a [header] or
+    -- [[header]]. One edge case is tables within multiple arrays, though not
+    -- currently supported by tomland, can only be represented as inline tables.
+    isInline v = case v of
+        Core.BoolLit _    -> True
+        Core.IntegerLit _ -> True
+        Core.NaturalLit _ -> True
+        Core.DoubleLit _  -> True
+        Core.TextLit _    -> True
+        Core.ListLit _ s  -> case Seq.lookup 0 s of
+            Nothing                  -> True
+            Just (Core.BoolLit _)    -> True
+            Just (Core.NaturalLit _) -> True
+            Just (Core.DoubleLit _)  -> True
+            Just (Core.TextLit _)    -> True
+            Just (Core.ListLit _ _)  -> True
+            _                        -> False
+        _ -> False
+
+    -- toAnyValue is a helper function for making lists so it returns a list
+    -- specific error, in particular tomland's inability to represent tables in
+    -- multi-dimensional arrays
+    toAnyValue :: Expr Void Void -> Either CompileError AnyValue
+    toAnyValue expression = case expression of
+        Core.BoolLit x ->
+            Right (AnyValue (Value.Bool x))
+        Core.IntegerLit x ->
+            Right (AnyValue (Value.Integer x))
+        Core.NaturalLit x ->
+            Right (AnyValue (Value.Integer (toInteger x)))
+        Core.DoubleLit (DhallDouble x) ->
+            Right (AnyValue (Value.Double x))
+        Core.TextLit (Core.Chunks [] x) ->
+            Right (AnyValue (Value.Text x))
+        UnionEmpty x ->
+            Right (AnyValue (Value.Text x))
+        UnionApp x ->
+            toAnyValue x
+        Core.ListLit _ x -> do
+            anyList <- mapM toAnyValue (toList x)
+            case AnyValue.toMArray anyList of
+                Right x' -> Right (AnyValue x')
+                Left _   -> Left (HeterogeneousArray expr)
+        Core.RecordLit _ ->
+            Left (UnsupportedArray expression)
+        _ ->
+            Left (Unsupported expression)
 
 data Options = Options
     { input :: Maybe FilePath
     , output :: Maybe FilePath
     }
 
-parserInfo :: OA.ParserInfo Options
-parserInfo = OA.info
-    (OA.helper <*> versionOption <*> optionsParser)
-    (OA.fullDesc <> OA.progDesc "Convert Dhall to TOML")
+parserInfo :: Options.ParserInfo Options
+parserInfo = Options.info
+    (Options.helper <*> versionOption <*> optionsParser)
+    (Options.fullDesc <> Options.progDesc "Convert Dhall to TOML")
   where
-    versionOption = OA.infoOption (showVersion Meta.version) $
-        OA.long "version" <> OA.help "Display version"
+    versionOption =
+        Options.infoOption (showVersion Meta.version)
+            (Options.long "version" <> Options.help "Display version")
+
     optionsParser = do
-        input <- OA.optional . OA.strOption $
-               OA.long "file"
-            <> OA.help "Read Dhall from file instead of standard input"
-            <> fileOpts
-        output <- OA.optional . OA.strOption $
-               OA.long "output"
-            <> OA.help "Write TOML to a file instead of standard output"
-            <> fileOpts
-        pure Options {..}
-    fileOpts = OA.metavar "FILE" <> OA.action "file"
+        input <- (Options.optional . Options.strOption)
+            (  Options.long "file"
+            <> Options.help "Read Dhall from file instead of standard input"
+            <> Options.metavar "FILE"
+            <> Options.action "file"
+            )
+
+        output <- (Options.optional . Options.strOption)
+            (  Options.long "output"
+            <> Options.help "Write TOML to a file instead of standard output"
+            <> Options.metavar "FILE"
+            <> Options.action "file"
+            )
+
+        pure Options{..}
 
 {-| Runs the @dhall-to-toml@ command
 -}
 dhallToTomlMain :: IO ()
 dhallToTomlMain = do
-    Options {..} <- OA.execParser parserInfo
+    Options{..} <- Options.execParser parserInfo
+
     resolvedExpression <- maybe inputToDhall fileToDhall input
-    toml <- case dhallToToml resolvedExpression of
-        Left err -> throwIO err
-        Right toml -> return toml
-    maybe Text.IO.putStrLn Text.IO.writeFile output $ pretty toml
+
+    toml <- Core.throws (dhallToToml resolvedExpression)
+
+    let text = Printer.pretty toml
+
+    case output of
+        Just file -> Text.IO.writeFile file text
+        Nothing   -> Text.IO.putStrLn text

@@ -125,6 +125,13 @@ h2.doc-title {
     margin-bottom: 0;
 }
 
+summary.part-summary {
+    cursor: pointer;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-top: 1rem;
+}
+
 /******** Source code **********/
 
 
@@ -187,7 +194,7 @@ span.of-type-token {
     color: #EBEBEB;
 }
 
-body.dark-mode {
+.dark-mode body {
     background-color: #484848;
 }
 
@@ -214,7 +221,6 @@ body.dark-mode {
 .dark-mode .source-code span {
     color: #D4D4D4;
 }
-
 
 .dark-mode a.copy-to-clipboard {
     color: #bdbdbd !important;

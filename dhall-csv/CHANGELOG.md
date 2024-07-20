@@ -1,3 +1,7 @@
+1.0.4
+
+* Build against `dhall-1.42.0`
+
 1.0.3
 
 * Builds against newer dependencies

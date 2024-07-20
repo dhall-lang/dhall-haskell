@@ -72,6 +72,7 @@ module Dhall.Parser.Token (
     _ListIndexed,
     _ListReverse,
     _Bool,
+    _Bytes,
     _Natural,
     _Integer,
     _Double,
@@ -79,8 +80,11 @@ module Dhall.Parser.Token (
     _TextReplace,
     _TextShow,
     _Date,
+    _DateShow,
     _Time,
+    _TimeShow,
     _TimeZone,
+    _TimeZoneShow,
     _List,
     _True,
     _False,
@@ -295,11 +299,14 @@ integerLiteral = (do
 -}
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
-    a <-    try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
+    a <-    binary
+        <|> hexadecimal
         <|> decimal
         <|> (char '0' $> 0)
     return a ) <?> "literal"
   where
+    binary = try (char '0' >> char 'b' >> Text.Megaparsec.Char.Lexer.binary)
+    hexadecimal = try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
     decimal = do
         n <- headDigit
         ns <- many tailDigit
@@ -1132,6 +1139,13 @@ _ListReverse = builtin "List/reverse"
 _Bool :: Parser ()
 _Bool = builtin "Bool"
 
+{-| Parse the @Bytes@ built-in
+
+    This corresponds to the @Bytes@ rule from the official grammar
+-}
+_Bytes :: Parser ()
+_Bytes = builtin "Bytes"
+
 {-| Parse the @Optional@ built-in
 
     This corresponds to the @Optional@ rule from the official grammar
@@ -1188,6 +1202,13 @@ _TextShow = builtin "Text/show"
 _Date :: Parser ()
 _Date = builtin "Date"
 
+{-| Parse the @Date/show@ built-in
+
+    This corresponds to the @Date-show@ rule from the official grammar
+-}
+_DateShow :: Parser ()
+_DateShow = builtin "Date/show"
+
 {-| Parse the @Time@ bult-in
 
     This corresponds to the @Time@ rule from the official grammar
@@ -1195,12 +1216,26 @@ _Date = builtin "Date"
 _Time :: Parser ()
 _Time = builtin "Time"
 
+{-| Parse the @Time/show@ built-in
+
+    This corresponds to the @Time-show@ rule from the official grammar
+-}
+_TimeShow :: Parser ()
+_TimeShow = builtin "Time/show"
+
 {-| Parse the @TimeZone@ bult-in
 
     This corresponds to the @TimeZone@ rule from the official grammar
 -}
 _TimeZone :: Parser ()
 _TimeZone = builtin "TimeZone"
+
+{-| Parse the @TimeZone/show@ built-in
+
+    This corresponds to the @TimeZone-show@ rule from the official grammar
+-}
+_TimeZoneShow :: Parser ()
+_TimeZoneShow = builtin "TimeZone/show"
 
 {-| Parse the @List@ built-in
 

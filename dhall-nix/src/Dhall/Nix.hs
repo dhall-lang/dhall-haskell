@@ -166,6 +166,9 @@ data CompileError
     -- ^ We currently do not support threading around type information
     | CannotShowConstructor
     -- ^ We currently do not support the `showConstructor` keyword
+    | BytesUnsupported
+    -- ^ The Nix language does not support arbitrary bytes (most notably: null
+    --   bytes)
     deriving (Typeable)
 
 instance Show CompileError where
@@ -238,6 +241,13 @@ The ❰dhall-to-nix❱ compiler does not support the ❰showConstructor❱ keywo
 In theory this keyword shouldn't need to be translated anyway since the keyword
 doesn't survive β-normalization, so if you see this error message there might be
 an internal error in ❰dhall-to-nix❱ that you should report.
+    |]
+
+    show BytesUnsupported =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Cannot translate ❰Bytes❱ to Nix
+
+Explanation: The Nix language does not support bytes literals
     |]
 
 _ERROR :: Data.Text.Text
@@ -375,6 +385,9 @@ dhallToNix e =
         b' <- loop b
         c' <- loop c
         return (Nix.mkIf a' b' c')
+    loop Bytes = return untranslatable
+    loop (BytesLit _) = do
+        Left BytesUnsupported
     loop Natural = return untranslatable
     loop (NaturalLit n) = return (Nix.mkInt (fromIntegral n))
     loop NaturalFold = do
@@ -595,6 +608,14 @@ dhallToNix e =
     loop DateLiteral{} = undefined
     loop TimeLiteral{} = undefined
     loop TimeZoneLiteral{} = undefined
+    -- We currently model `Date`/`Time`/`TimeZone` literals as strings in Nix,
+    -- so the corresponding show functions are the identity function
+    loop DateShow =
+        return ("date" ==> "date")
+    loop TimeShow =
+        return ("time" ==> "time")
+    loop TimeZoneShow =
+        return ("timeZone" ==> "timeZone")
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse (loop . Dhall.Core.recordFieldValue) a

@@ -1,5 +1,5 @@
 env:
-  cache_generation: 2021-06-22
+  cache_generation: 2024-06-13
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
@@ -13,6 +13,10 @@ jobs:
             archive-command: 'tar --create --bzip2 --file'
             file-extension: 'tar.bz2'
             executable-extension: ''
+          - runner: 'macos-13'
+            archive-command: 'tar --create --bzip2 --file'
+            file-extension: 'tar.bz2'
+            executable-extension: ''
           - runner: 'ubuntu-latest'
             archive-command: 'tar --create --bzip2 --file'
             file-extension: 'tar.bz2'
@@ -21,33 +25,49 @@ jobs:
             archive-command: '7z a -tzip'
             file-extension: 'zip'
             executable-extension: '.exe'
+        stack-yaml:
+          - "stack.yaml"
+        include:
+          - os:
+              runner: "ubuntu-latest"
+            stack-yaml: "stack.ghc-8.10.yaml"
+          - os:
+              runner: "ubuntu-latest"
+            stack-yaml: "stack.ghc-9.2.yaml"
+          - os:
+              runner: "ubuntu-latest"
+            stack-yaml: "stack.ghc-9.4.yaml"
       fail-fast: false
-    name: ${{ matrix.os.runner }}
+    name: ${{ matrix.os.runner }} - ${{ matrix.stack-yaml }}
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: "Checkout repository"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: true
       - id: setup-haskell-cabal
         name: "Setup Haskell environment"
-        uses: haskell/actions/setup@v1.2.1
+        uses: haskell-actions/setup@v2.7
         with:
           enable-stack: true
+          stack-version: "latest"
+          stack-no-global: true
       - name: "Cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
-          key: ${{ matrix.os.runner }}-${{ hashFiles('stack.yaml') }}-${{ env.cache_generation }}
+          key: ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-${{ hashFiles(matrix.stack-yaml) }}
           restore-keys: |
-            ${{ matrix.os.runner }}-
+            ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
-      - name: Install libsodium
+      - name: "Install libsodium"
         shell: bash
         run: |
           if [ '${{matrix.os.runner}}' == 'ubuntu-latest' ]; then
             sudo apt-get install -y libsodium-dev
           fi
+          echo "::debug::'pkg-config libsodium' output:"
+          pkg-config --print-errors --libs libsodium || true
       - name: "Build"
         shell: bash
         run: |
@@ -71,7 +91,7 @@ jobs:
             # We use --test --no-run-tests to avoid re-building all the local packages in the
             # subsequent test step.
             # See https://github.com/commercialhaskell/stack/issues/4977.
-            stack build --test --no-run-tests --copy-bins --local-bin-path ./bin "${package}"
+            stack --stack-yaml "${{matrix.stack-yaml}}" build --test --no-run-tests --copy-bins --local-bin-path ./bin "${package}"
           done
       - name: "Run tests"
         shell: bash
@@ -93,9 +113,10 @@ jobs:
               continue
             fi
 
-            stack test "${package}"
+            stack --stack-yaml "${{matrix.stack-yaml}}" test "${package}"
           done
       - name: "Prepare packaging"
+        if: ${{ matrix.stack-yaml == 'stack.yaml' }}
         shell: bash
         run: |
           mkdir -p share/man/man1
@@ -103,6 +124,7 @@ jobs:
           cp dhall-docs/src/Dhall/data/man/dhall-docs.1 share/man/man1/
       - id: package
         name: "Create packages"
+        if: ${{ matrix.stack-yaml == 'stack.yaml' }}
         shell: bash
         run: |
           packages=(
@@ -118,14 +140,12 @@ jobs:
             dhall-yaml
           )
 
-          architecture="$(uname -m)"
-
           function package() (
             local package="${1}"
             local version="$(stack query locals "${package}" version)"
             shift
             local assets=("${@}")
-            local package_file="${package}-${version}-${architecture}-${{runner.os}}.${{ matrix.os.file-extension }}"
+            local package_file="${package}-${version}-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}"
             ${{matrix.os.archive-command}} "${package_file}" "${assets[@]}"
           )
 
@@ -143,7 +163,8 @@ jobs:
           package 'dhall-toml' "bin/dhall-to-toml${exe}" "bin/toml-to-dhall${exe}"
           package 'dhall-yaml' "bin/dhall-to-yaml-ng${exe}" "bin/yaml-to-dhall${exe}"
       - name: "Upload package"
-        uses: actions/upload-artifact@v2
+        if: ${{ matrix.stack-yaml == 'stack.yaml' }}
+        uses: actions/upload-artifact@v4
         with:
-          name: 'dhall-${{runner.os}}.${{matrix.os.file-extension}}'
-          path: 'dhall-*${{runner.os}}.${{matrix.os.file-extension}}'
+          name: 'dhall-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
+          path: 'dhall-*${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'

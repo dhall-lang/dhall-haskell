@@ -2,12 +2,11 @@
 
 module Dhall.Test.Parser where
 
-import Data.Text  (Text)
-import Data.Void  (Void)
-import Dhall.Core (Binding (..), Expr (..), Import, Var (..))
-import Prelude    hiding (FilePath)
-import Test.Tasty (TestTree)
-import Turtle     (FilePath, (</>))
+import Data.Text       (Text)
+import Data.Void       (Void)
+import Dhall.Core      (Binding (..), Expr (..), Import, Var (..))
+import System.FilePath ((</>))
+import Test.Tasty      (TestTree)
 
 import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor
@@ -152,7 +151,9 @@ shouldParse path = do
 
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
-    let expectedFailures = []
+    let expectedFailures =
+            [ parseDirectory </> "failure/spacing/LetNoSpace4.dhall"
+            ]
 
     let pathString = Text.unpack path
 

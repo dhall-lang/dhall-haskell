@@ -5,12 +5,10 @@ module Dhall.Test.TypeInference where
 
 import Control.Exception (SomeException (..))
 import Data.Text         (Text)
-import Prelude           hiding (FilePath)
+import System.FilePath   ((</>))
 import Test.Tasty        (TestTree)
-import Turtle            (FilePath, (</>))
 
 import qualified Control.Exception as Exception
-import qualified Control.Monad     as Monad
 import qualified Data.Text         as Text
 import qualified Data.Text.IO      as Text.IO
 import qualified Dhall.Core        as Core
@@ -38,7 +36,7 @@ getTests = do
                     , typeInferenceDirectory </> "success/CacheImportsCanonicalizeA.dhall"
                     ]
 
-            Monad.guard (path `notElem` skip)
+            path `Test.Util.pathNotIn` skip
 
             return path
 

@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module Main where
+module Main (main) where
 
 import System.FilePath ((</>))
 
@@ -13,10 +13,11 @@ import qualified Test.Mockery.Directory
 
 main :: IO ()
 main = do
-
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
-    pwd    <- System.Directory.getCurrentDirectory
+    args <- System.Environment.getArgs
+    pwd <- System.Directory.getCurrentDirectory
     prefix <- System.Directory.makeAbsolute pwd
+    let src = prefix </> "src"
 
     System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
 
@@ -34,11 +35,12 @@ main = do
           , "in  { name = \"Simon\", favoriteFont = Font.`Comic Sans` } : Person"
           ]
 
-        Test.DocTest.doctest
+        Test.DocTest.doctest $
             [ "-DWITH_HTTP"
             , "-DUSE_HTTP_CLIENT_TLS"
             , "--fast"
-            , prefix </> "ghc-src"
+            ] <> args <>
+            [ prefix </> "ghc-src"
 
             -- Unfortunately we cannot target the entire @src@ directory.
             -- The reason is that src/Dhall/Version.hs depends on
@@ -47,11 +49,11 @@ main = do
             -- Instead, we target a selection of modules whose combined module
             -- dependency tree covers all modules that contain doctests.
 
-            -- , prefix </> "src"
-            , "-i" <> (prefix </> "src")
+            -- , src
+            , "-i" <> src
 #if __GLASGOW_HASKELL__ >= 806
-            , prefix </> "src/Dhall/Deriving.hs"
+            , src </> "Dhall/Deriving.hs"
 #endif
-            , prefix </> "src/Dhall/Tags.hs"
-            , prefix </> "src/Dhall/Tutorial.hs"
+            , src </> "Dhall/Tags.hs"
+            , src </> "Dhall/Tutorial.hs"
             ]

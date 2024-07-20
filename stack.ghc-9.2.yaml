@@ -1,0 +1,39 @@
+resolver: lts-20.26
+packages:
+  - dhall
+  - dhall-bash
+  - dhall-csv
+  - dhall-docs
+  - dhall-json
+  - dhall-lsp-server
+  - dhall-nix
+  - dhall-openapi
+  - dhall-toml
+  - dhall-yaml
+extra-deps:
+  - ansi-wl-pprint-1.0.2@sha256:b817853b5310b8e7847469847608b664c3e75b4b30c332f2cb8c0d00751ef9c1,1915
+  - chronos-1.1.5
+  - hashing-0.1.1.0
+  - hnix-0.17.0@sha256:57e172f915d70be2dd88c6377caebe8bd63337123ffef42df49b05dc0b1f168b,19224
+  - hnix-store-core-0.6.1.0@sha256:0171c3a571ab263c3e3aa3e6daca15602f2030a6862cb032038017e6d0265898,3882
+  - hnix-store-remote-0.6.0.0@sha256:a8ea18bb355164bfd357fac12b0c5d32c95ffd455260f8b6c7fcaeddebf5918c,3270
+  - logict-0.7.0.3
+  - lsp-2.1.0.0
+  - lsp-types-2.0.1.0
+  - lsp-test-0.15.0.1
+  - optparse-applicative-0.18.1.0@sha256:b4cf8d9018e5e67cb1f14edb5130b6d05ad8bc1b5f6bd4efaa6ec0b7f28f559d,5132
+  - optparse-generic-1.5.2
+  - row-types-1.0.1.2@sha256:4d4c7cb95d06a32b28ba977852d52a26b4c1f695ef083a6fd874ab6d79933b64,3071
+  - saltine-0.2.1.0
+  - tomland-1.3.3.2
+  - turtle-1.6.2@sha256:75710c60388e572bc17cbb08a81cbb4537f2207f8dcf187e9b1928d1e0b023a6,5767
+  - typerep-map-0.5.0.0
+  - validation-selective-0.1.0.2
+nix:
+  packages:
+    - ncurses
+    - zlib
+flags:
+  # https://github.com/RyanGlScott/mintty/issues/4
+  mintty:
+    Win32-2-13-1: false

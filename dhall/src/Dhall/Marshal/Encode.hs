@@ -74,6 +74,9 @@ import GHC.Generics
 import Prelude                              hiding (maybe, sequence)
 
 import qualified Control.Applicative
+import qualified Data.ByteString
+import qualified Data.ByteString.Lazy
+import qualified Data.ByteString.Short
 import qualified Data.Functor.Product
 import qualified Data.HashMap.Strict  as HashMap
 import qualified Data.HashSet
@@ -166,6 +169,21 @@ instance ToDhall Bool where
         embed = BoolLit
 
         declared = Bool
+
+instance ToDhall Data.ByteString.Short.ShortByteString where
+    injectWith options =
+        contramap Data.ByteString.Short.fromShort (injectWith options)
+
+instance ToDhall Data.ByteString.Lazy.ByteString where
+    injectWith options =
+        contramap Data.ByteString.Lazy.toStrict (injectWith options)
+
+instance ToDhall Data.ByteString.ByteString where
+    injectWith _ = Encoder {..}
+      where
+        embed bytes = BytesLit bytes
+
+        declared = Bytes
 
 instance ToDhall Data.Text.Short.ShortText where
     injectWith _ = Encoder {..}
