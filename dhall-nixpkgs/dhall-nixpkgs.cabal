@@ -20,7 +20,7 @@ Executable dhall-to-nixpkgs
                      , aeson                >= 1.0.0.0  && < 2.3
                      , base16-bytestring    >= 1.0.0.0
                      , base64-bytestring    >= 1.1.0.0
-                     , bytestring                          < 0.12
+                     , bytestring                          < 0.13
                      , data-fix
                      , dhall                >= 1.42.0   && < 1.43
                      , foldl                               < 1.5
@@ -32,7 +32,7 @@ Executable dhall-to-nixpkgs
                      , neat-interpolation                  < 0.6
                      , optparse-applicative >= 0.14.0.0 && < 0.19
                      , prettyprinter        >= 1.7.0    && < 1.8
-                     , text                 >= 0.11.1.0 && < 2.1
+                     , text                 >= 0.11.1.0 && < 2.2
                      , transformers         >= 0.2.0.0  && < 0.7
                      , turtle               >= 1.6      && < 1.7
                      , network-uri                         < 2.8
