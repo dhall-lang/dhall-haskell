@@ -27,13 +27,13 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
-        containers                               < 0.7 ,
+        containers                               < 0.8 ,
         data-fix                                 < 0.4 ,
         dhall                     >= 1.42     && < 1.43,
         hnix                      >= 0.16     && < 0.18,
         lens-family-core          >= 1.0.0    && < 2.2 ,
         neat-interpolation                       < 0.6 ,
-        text                      >= 0.8.0.0  && < 2.1
+        text                      >= 0.8.0.0  && < 2.2
     Exposed-Modules:
         Dhall.Nix
     GHC-Options: -Wall
