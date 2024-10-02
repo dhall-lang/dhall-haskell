@@ -77,7 +77,7 @@ import Language.Haskell.TH.Syntax (Lift)
 import Prelude                    hiding (filter, lookup)
 
 import qualified Data.List
-import qualified Data.Map
+import qualified Data.Map.Strict
 import qualified Data.Set
 import qualified GHC.Exts
 import qualified Prelude
@@ -89,7 +89,7 @@ import qualified Prelude
     This is done primarily to avoid a dependency on @insert-ordered-containers@
     and also to improve performance
 -}
-data Map k v = Map (Data.Map.Map k v) (Keys k)
+data Map k v = Map (Data.Map.Strict.Map k v) (Keys k)
     deriving (Data, Generic, Lift, NFData)
 
 data Keys a
@@ -99,7 +99,7 @@ data Keys a
 
 instance (Ord k, Eq v) => Eq (Map k v) where
   m1 == m2 =
-      Data.Map.size (toMap m1) == Data.Map.size (toMap m2)
+      Data.Map.Strict.size (toMap m1) == Data.Map.Strict.size (toMap m2)
       && toList m1 == toList m2
   {-# INLINABLE (==) #-}
 
@@ -142,7 +142,7 @@ prop> \x -> x <> mempty == (x :: Map Int Int)
 prop> \x -> mempty <> x == (x :: Map Int Int)
 -}
 instance Ord k => Monoid (Map k v) where
-    mempty = Map Data.Map.empty (Original [])
+    mempty = Map Data.Map.Strict.empty (Original [])
     {-# INLINABLE mempty #-}
 
 instance (Show k, Show v, Ord k) => Show (Map k v) where
@@ -170,7 +170,7 @@ fromList [("A",1)]
 singleton :: k -> v -> Map k v
 singleton k v = Map m ks
   where
-    m = Data.Map.singleton k v
+    m = Data.Map.Strict.singleton k v
 
     ks = Original [k]
 {-# INLINABLE singleton #-}
@@ -194,7 +194,7 @@ fromList [(1,False)]
 fromList :: Ord k => [(k, v)] -> Map k v
 fromList kvs = Map m ks
   where
-    m = Data.Map.fromList kvs
+    m = Data.Map.Strict.fromList kvs
 
     ks = Original (nubOrd (map fst kvs))
 {-# INLINABLE fromList #-}
@@ -207,13 +207,13 @@ fromList [("B","Bv3v1"),("A","v2")]
 fromListWithKey :: Ord k => (k -> v -> v -> v) -> [(k, v)] -> Map k v
 fromListWithKey f kvs = Map m ks
   where
-    m = Data.Map.fromListWithKey f kvs
+    m = Data.Map.Strict.fromListWithKey f kvs
 
     ks = Original (nubOrd (map fst kvs))
 {-# INLINABLE fromListWithKey #-}
 
--- | Create a `Map` from a @"Data.Map".`Data.Map.Map`@
-fromMap :: Data.Map.Map k v -> Map k v
+-- | Create a `Map` from a @"Data.Map.Strict".`Data.Map.Strict.Map`@
+fromMap :: Data.Map.Strict.Map k v -> Map k v
 fromMap m = Map m Sorted
 
 {-| Remove duplicates from a  list
@@ -242,7 +242,7 @@ fromList [("A",1)]
 unorderedSingleton :: k -> v -> Map k v
 unorderedSingleton k v = Map m Sorted
   where
-    m = Data.Map.singleton k v
+    m = Data.Map.Strict.singleton k v
 {-# INLINABLE unorderedSingleton #-}
 
 {-| Create a `Map` from a list of key-value pairs
@@ -259,7 +259,7 @@ fromList [("A",2)]
 unorderedFromList :: Ord k => [(k, v)] -> Map k v
 unorderedFromList kvs = Map m Sorted
   where
-    m = Data.Map.fromList kvs
+    m = Data.Map.Strict.fromList kvs
 {-# INLINABLE unorderedFromList #-}
 
 {-| Sort the keys of a `Map`, forgetting the original ordering
@@ -284,7 +284,7 @@ True
 -}
 isSorted :: Eq k => Map k v -> Bool
 isSorted (Map _ Sorted)        = True
-isSorted (Map m (Original ks)) = Data.Map.keys m == ks -- Or shortcut to False here?
+isSorted (Map m (Original ks)) = Data.Map.Strict.keys m == ks -- Or shortcut to False here?
 {-# INLINABLE isSorted #-}
 
 {-| Insert a key-value pair into a `Map`, overriding any previous value stored
@@ -298,10 +298,10 @@ fromList [("C",1),("B",2),("A",3)]
 fromList [("C",1),("A",3)]
 -}
 insert :: Ord k => k -> v -> Map k v -> Map k v
-insert k v (Map m Sorted)        = Map (Data.Map.insert k v m) Sorted
+insert k v (Map m Sorted)        = Map (Data.Map.Strict.insert k v m) Sorted
 insert k v (Map m (Original ks)) = Map m' (Original ks')
   where
-    (mayOldV, m') = Data.Map.insertLookupWithKey (\_k new _old -> new) k v m
+    (mayOldV, m') = Data.Map.Strict.insertLookupWithKey (\_k new _old -> new) k v m
 
     ks' | Just _ <- mayOldV = ks
         | otherwise         = k : ks
@@ -316,10 +316,10 @@ fromList [("C",1),("B",2),("A",3)]
 fromList [("C",3),("A",3)]
 -}
 insertWith :: Ord k => (v -> v -> v) -> k -> v -> Map k v -> Map k v
-insertWith f k v (Map m Sorted)        = Map (Data.Map.insertWith f k v m) Sorted
+insertWith f k v (Map m Sorted)        = Map (Data.Map.Strict.insertWith f k v m) Sorted
 insertWith f k v (Map m (Original ks)) = Map m' (Original ks')
   where
-    (mayOldV, m') = Data.Map.insertLookupWithKey (\_k new old -> f new old) k v m
+    (mayOldV, m') = Data.Map.Strict.insertLookupWithKey (\_k new old -> f new old) k v m
 
     ks' | Just _ <- mayOldV = ks
         | otherwise         = k : ks
@@ -335,7 +335,7 @@ fromList [("C",1),("B",2),("A",3)]
 delete :: Ord k => k -> Map k v -> Map k v
 delete k (Map m ks) = Map m' ks'
   where
-    m' = Data.Map.delete k m
+    m' = Data.Map.Strict.delete k m
 
     ks' = case ks of
         Sorted        -> Sorted
@@ -352,9 +352,9 @@ fromList [("C",3),("A",1)]
 filter :: Ord k => (a -> Bool) -> Map k a -> Map k a
 filter predicate (Map m ks) = Map m' ks'
   where
-    m' = Data.Map.filter predicate m
+    m' = Data.Map.Strict.filter predicate m
 
-    ks' = filterKeys (\k -> Data.Map.member k m') ks
+    ks' = filterKeys (\k -> Data.Map.Strict.member k m') ks
 {-# INLINABLE filter #-}
 
 {-| Split the map into values that do and don't satisfy the predicate
@@ -367,9 +367,9 @@ filter predicate (Map m ks) = Map m' ks'
 partition :: Ord k => (a -> Bool) -> Map k a -> (Map k a, Map k a)
 partition predicate (Map m ks) = (Map mpass kpass, Map mfail kfail)
   where
-    (mpass, mfail) = Data.Map.partition predicate m
+    (mpass, mfail) = Data.Map.Strict.partition predicate m
 
-    (kpass, kfail) = partitionKeys (\k -> Data.Map.member k mpass) ks
+    (kpass, kfail) = partitionKeys (\k -> Data.Map.Strict.member k mpass) ks
 {-# INLINABLE partition #-}
 
 {-| Restrict a 'Map' to only those keys found in a @"Data.Set".'Data.Set.Set'@.
@@ -380,7 +380,7 @@ fromList [("A",1)]
 restrictKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
 restrictKeys (Map m ks) s = Map m' ks'
   where
-    m' = Data.Map.restrictKeys m s
+    m' = Data.Map.Strict.restrictKeys m s
 
     ks' = filterKeys (\k -> Data.Set.member k s) ks
 {-# INLINABLE restrictKeys #-}
@@ -393,7 +393,7 @@ fromList [("B",2)]
 withoutKeys :: Ord k => Map k a -> Data.Set.Set k -> Map k a
 withoutKeys (Map m ks) s = Map m' ks'
   where
-    m' = Data.Map.withoutKeys m s
+    m' = Data.Map.Strict.withoutKeys m s
 
     ks' = filterKeys (\k -> Data.Set.notMember k s) ks
 {-# INLINABLE withoutKeys #-}
@@ -407,9 +407,9 @@ fromList [("C",1),("A",3)]
 mapMaybe :: Ord k => (a -> Maybe b) -> Map k a -> Map k b
 mapMaybe f (Map m ks) = Map m' ks'
   where
-    m' = Data.Map.mapMaybe f m
+    m' = Data.Map.Strict.mapMaybe f m
 
-    ks' = filterKeys (\k -> Data.Map.member k m') ks
+    ks' = filterKeys (\k -> Data.Map.Strict.member k m') ks
 {-# INLINABLE mapMaybe #-}
 
 {-| Retrieve a key from a `Map`
@@ -424,7 +424,7 @@ Just 2
 Nothing
 -}
 lookup :: Ord k => k -> Map k v -> Maybe v
-lookup k (Map m _) = Data.Map.lookup k m
+lookup k (Map m _) = Data.Map.Strict.lookup k m
 {-# INLINABLE lookup #-}
 
 {-| Retrieve the first key, value of the 'Map', if present,
@@ -442,9 +442,9 @@ Nothing
 uncons :: Ord k => Map k v -> Maybe (k, v, Map k v)
 uncons (Map _ (Original []))     = Nothing
 uncons (Map m (Original (k:ks))) =
-    Just (k, m Data.Map.! k, Map (Data.Map.delete k m) (Original ks))
+    Just (k, m Data.Map.Strict.! k, Map (Data.Map.Strict.delete k m) (Original ks))
 uncons (Map m Sorted)
-  | Just ((k, v), m') <- Data.Map.minViewWithKey m = Just (k, v, Map m' Sorted)
+  | Just ((k, v), m') <- Data.Map.Strict.minViewWithKey m = Just (k, v, Map m' Sorted)
   | otherwise                                      = Nothing
 {-# INLINABLE uncons #-}
 
@@ -460,7 +460,7 @@ True
 False
 -}
 member :: Ord k => k -> Map k v -> Bool
-member k (Map m _) = Data.Map.member k m
+member k (Map m _) = Data.Map.Strict.member k m
 {-# INLINABLE member #-}
 
 {-|
@@ -468,7 +468,7 @@ member k (Map m _) = Data.Map.member k m
 1
 -}
 size :: Map k v -> Int
-size (Map m _) = Data.Map.size m
+size (Map m _) = Data.Map.Strict.size m
 {-# INLINABLE size #-}
 
 {-| Combine two `Map`s, preferring keys from the first `Map`
@@ -483,11 +483,11 @@ fromList [("D",1),("C",2),("A",4)]
 union :: Ord k => Map k v -> Map k v -> Map k v
 union (Map mL ksL) (Map mR ksR) = Map m ks
   where
-    m = Data.Map.union mL mR
+    m = Data.Map.Strict.union mL mR
 
     ks = case (ksL, ksR) of
         (Original l, Original r) -> Original $
-            l <|> Prelude.filter (\k -> Data.Map.notMember k mL) r
+            l <|> Prelude.filter (\k -> Data.Map.Strict.notMember k mL) r
         _                        -> Sorted
 {-# INLINABLE union #-}
 
@@ -501,11 +501,11 @@ fromList [("D",1),("C",5),("A",4)]
 unionWith :: Ord k => (v -> v -> v) -> Map k v -> Map k v -> Map k v
 unionWith combine (Map mL ksL) (Map mR ksR) = Map m ks
   where
-    m = Data.Map.unionWith combine mL mR
+    m = Data.Map.Strict.unionWith combine mL mR
 
     ks = case (ksL, ksR) of
         (Original l, Original r) -> Original $
-            l <|> Prelude.filter (\k -> Data.Map.notMember k mL) r
+            l <|> Prelude.filter (\k -> Data.Map.Strict.notMember k mL) r
         _                        -> Sorted
 {-# INLINABLE unionWith #-}
 
@@ -526,7 +526,7 @@ outerJoin
     -> Map k c
 outerJoin fa fb fab (Map ma ksA) (Map mb ksB) = Map m ks
   where
-    m = Data.Map.mergeWithKey
+    m = Data.Map.Strict.mergeWithKey
             (\k a b -> Just (fab k a b))
             (fmap fa)
             (fmap fb)
@@ -535,7 +535,7 @@ outerJoin fa fb fab (Map ma ksA) (Map mb ksB) = Map m ks
 
     ks = case (ksA, ksB) of
         (Original l, Original r) -> Original $
-            l <|> Prelude.filter (\k -> Data.Map.notMember k ma) r
+            l <|> Prelude.filter (\k -> Data.Map.Strict.notMember k ma) r
         _                        -> Sorted
 {-# INLINABLE outerJoin #-}
 
@@ -550,10 +550,10 @@ fromList [("B",2)]
 intersection :: Ord k => Map k a -> Map k b -> Map k a
 intersection (Map mL ksL) (Map mR _) = Map m ks
   where
-    m = Data.Map.intersection mL mR
+    m = Data.Map.Strict.intersection mL mR
 
     -- Or forget order unless both maps are ordered?!
-    ks = filterKeys (\k -> Data.Map.member k m) ksL
+    ks = filterKeys (\k -> Data.Map.Strict.member k m) ksL
 {-# INLINABLE intersection #-}
 
 {-| Combine two `Map`s on their shared keys, using the supplied function to
@@ -565,10 +565,10 @@ fromList [("B",5)]
 intersectionWith :: Ord k => (a -> b -> c) -> Map k a -> Map k b -> Map k c
 intersectionWith combine (Map mL ksL) (Map mR _) = Map m ks
   where
-    m = Data.Map.intersectionWith combine mL mR
+    m = Data.Map.Strict.intersectionWith combine mL mR
 
     -- Or forget order unless both maps are ordered?!
-    ks = filterKeys (\k -> Data.Map.member k m) ksL
+    ks = filterKeys (\k -> Data.Map.Strict.member k m) ksL
 {-# INLINABLE intersectionWith #-}
 
 {-| Compute the difference of two `Map`s by subtracting all keys from the
@@ -580,9 +580,9 @@ fromList [("C",1)]
 difference :: Ord k => Map k a -> Map k b -> Map k a
 difference (Map mL ksL) (Map mR _) = Map m ks
   where
-    m = Data.Map.difference mL mR
+    m = Data.Map.Strict.difference mL mR
 
-    ks = filterKeys (\k -> Data.Map.notMember k mR) ksL
+    ks = filterKeys (\k -> Data.Map.Strict.notMember k mR) ksL
 {-# INLINABLE difference #-}
 
 {-| Fold all of the key-value pairs in a `Map`, in their original order
@@ -591,7 +591,7 @@ difference (Map mL ksL) (Map mR _) = Map m ks
 ("BA",[1,2])
 -}
 foldMapWithKey :: (Monoid m, Ord k) => (k -> a -> m) -> Map k a -> m
-foldMapWithKey f (Map m Sorted) = Data.Map.foldMapWithKey f m
+foldMapWithKey f (Map m Sorted) = Data.Map.Strict.foldMapWithKey f m
 foldMapWithKey f m              = foldMap (uncurry f) (toList m)
 {-# INLINABLE foldMapWithKey #-}
 
@@ -611,7 +611,7 @@ fromList [("B",("B",1)),("A",("A",2))]
 mapWithKey :: (k -> a -> b) -> Map k a -> Map k b
 mapWithKey f (Map m ks) = Map m' ks
   where
-    m' = Data.Map.mapWithKey f m
+    m' = Data.Map.Strict.mapWithKey f m
 {-# INLINABLE mapWithKey #-}
 
 {-| Traverse all of the key-value pairs in a `Map`, in their original order
@@ -622,9 +622,9 @@ mapWithKey f (Map m ks) = Map m' ks
 traverseWithKey
     :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
 traverseWithKey f (Map m Sorted) =
-    fmap (\m' -> Map m' Sorted) (Data.Map.traverseWithKey f m)
+    fmap (\m' -> Map m' Sorted) (Data.Map.Strict.traverseWithKey f m)
 traverseWithKey f m@(Map _ ks) =
-    flip Map ks . Data.Map.fromList <$> traverse f' (toList m)
+    flip Map ks . Data.Map.Strict.fromList <$> traverse f' (toList m)
   where
     f' (k, a) = fmap ((,) k) (f k a)
 {-# INLINABLE traverseWithKey #-}
@@ -635,7 +635,7 @@ traverseWithKey f m@(Map _ ks) =
 unorderedTraverseWithKey
     :: Ord k => Applicative f => (k -> a -> f b) -> Map k a -> f (Map k b)
 unorderedTraverseWithKey f (Map m ks) =
-    fmap (\m' -> Map m' ks) (Data.Map.traverseWithKey f m)
+    fmap (\m' -> Map m' ks) (Data.Map.Strict.traverseWithKey f m)
 {-# INLINABLE unorderedTraverseWithKey #-}
 
 {-| Traverse all of the key-value pairs in a 'Map', not preserving their
@@ -647,7 +647,7 @@ unorderedTraverseWithKey f (Map m ks) =
 unorderedTraverseWithKey_
     :: Ord k => Applicative f => (k -> a -> f ()) -> Map k a -> f ()
 unorderedTraverseWithKey_ f (Map m _) =
-    Data.Map.foldlWithKey' (\acc k v -> acc *> f k v) (pure ()) m
+    Data.Map.Strict.foldlWithKey' (\acc k v -> acc *> f k v) (pure ()) m
 {-# INLINABLE unorderedTraverseWithKey_ #-}
 
 {-| Convert a `Map` to a list of key-value pairs in the original order of keys
@@ -656,22 +656,22 @@ unorderedTraverseWithKey_ f (Map m _) =
 [("B",1),("A",2)]
 -}
 toList :: Ord k => Map k v -> [(k, v)]
-toList (Map m Sorted)        = Data.Map.toList m
-toList (Map m (Original ks)) = fmap (\k -> (k, m Data.Map.! k)) ks
+toList (Map m Sorted)        = Data.Map.Strict.toList m
+toList (Map m (Original ks)) = fmap (\k -> (k, m Data.Map.Strict.! k)) ks
 {-# INLINABLE toList #-}
 
 {-| Convert a `Map` to a list of key-value pairs in ascending order of keys
 -}
 toAscList :: Map k v -> [(k, v)]
-toAscList (Map m _) = Data.Map.toAscList m
+toAscList (Map m _) = Data.Map.Strict.toAscList m
 {-# INLINABLE toAscList #-}
 
-{-| Convert a @"Dhall.Map".`Map`@ to a @"Data.Map".`Data.Map.Map`@
+{-| Convert a @"Dhall.Map".`Map`@ to a @"Data.Map.Strict".`Data.Map.Strict.Map`@
 
 >>> toMap (fromList [("B",1),("A",2)]) -- Order is lost upon conversion
 fromList [("A",2),("B",1)]
 -}
-toMap :: Map k v -> Data.Map.Map k v
+toMap :: Map k v -> Data.Map.Strict.Map k v
 toMap (Map m _) = m
 {-# INLINABLE toMap #-}
 
@@ -681,7 +681,7 @@ toMap (Map m _) = m
 ["B","A"]
 -}
 keys :: Map k v -> [k]
-keys (Map m Sorted)        = Data.Map.keys m
+keys (Map m Sorted)        = Data.Map.Strict.keys m
 keys (Map _ (Original ks)) = ks
 {-# INLINABLE keys #-}
 
@@ -691,8 +691,8 @@ keys (Map _ (Original ks)) = ks
 [1,2]
 -}
 elems :: Ord k => Map k v -> [v]
-elems (Map m Sorted)        = Data.Map.elems m
-elems (Map m (Original ks)) = fmap (\k -> m Data.Map.! k) ks
+elems (Map m Sorted)        = Data.Map.Strict.elems m
+elems (Map m (Original ks)) = fmap (\k -> m Data.Map.Strict.! k) ks
 {-# INLINABLE elems #-}
 
 {-| Return the @"Data.Set".'Data.Set.Set'@ of the keys
@@ -701,7 +701,7 @@ elems (Map m (Original ks)) = fmap (\k -> m Data.Map.! k) ks
 fromList ["A","B"]
 -}
 keysSet :: Map k v -> Data.Set.Set k
-keysSet (Map m _) = Data.Map.keysSet m
+keysSet (Map m _) = Data.Map.Strict.keysSet m
 {-# INLINABLE keysSet #-}
 
 filterKeys :: (a -> Bool) -> Keys a -> Keys a
