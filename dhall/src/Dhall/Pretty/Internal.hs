@@ -31,6 +31,7 @@ module Dhall.Pretty.Internal (
     , prettyEnvironmentVariable
 
     , prettyConst
+    , UnescapedLabel(..)
     , escapeLabel
     , prettyLabel
     , prettyAnyLabel
@@ -518,26 +519,44 @@ headCharacter c = alpha c || c == '_'
 tailCharacter :: Char -> Bool
 tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
+-- | The set of labels which do not need to be escaped
+data UnescapedLabel
+    = NonReservedLabel
+    -- ^ This corresponds to the `nonreserved-label` rule in the grammar
+    | AnyLabel
+    -- ^ This corresponds to the `any-label` rule in the grammar
+    | AnyLabelOrSome
+    -- ^ This corresponds to the `any-label-or-some` rule in the grammar
+
 -- | Escape a label if it is not valid when unquoted
-escapeLabel :: Bool -> Text -> Text
-escapeLabel allowReserved l =
+escapeLabel :: UnescapedLabel -> Text -> Text
+escapeLabel allowedLabel l =
     case Text.uncons l of
         Just (h, t)
-            | headCharacter h && Text.all tailCharacter t && (notReservedIdentifier || (allowReserved && someOrNotLanguageKeyword)) && l /= "?"
+            | headCharacter h && Text.all tailCharacter t && allowed && l /= "?"
                 -> l
         _       -> "`" <> l <> "`"
-    where
-        notReservedIdentifier = not (Data.HashSet.member l reservedIdentifiers)
-        someOrNotLanguageKeyword = l == "Some" || not (Data.HashSet.member l reservedKeywords)
+  where
+    allowed = case allowedLabel of
+        NonReservedLabel -> notReservedIdentifier
+        AnyLabel         -> notReservedKeyword
+        AnyLabelOrSome   -> notReservedKeyword || l == "Some"
 
-prettyLabelShared :: Bool -> Text -> Doc Ann
+    notReservedIdentifier = not (Data.HashSet.member l reservedIdentifiers)
+
+    notReservedKeyword = not (Data.HashSet.member l reservedKeywords)
+
+prettyLabelShared :: UnescapedLabel -> Text -> Doc Ann
 prettyLabelShared b l = label (Pretty.pretty (escapeLabel b l))
 
 prettyLabel :: Text -> Doc Ann
-prettyLabel = prettyLabelShared False
+prettyLabel = prettyLabelShared NonReservedLabel
 
 prettyAnyLabel :: Text -> Doc Ann
-prettyAnyLabel = prettyLabelShared True
+prettyAnyLabel = prettyLabelShared AnyLabel
+
+prettyAnyLabelOrSome :: Text -> Doc Ann
+prettyAnyLabelOrSome = prettyLabelShared AnyLabelOrSome
 
 prettyKeys
     :: Foldable list
@@ -571,7 +590,7 @@ prettyKeys prettyK keys = Pretty.group (Pretty.flatAlt long short)
 prettyLabels :: [Text] -> Doc Ann
 prettyLabels a
     | null a    = lbrace <> rbrace
-    | otherwise = braces (map (duplicate . prettyAnyLabel) a)
+    | otherwise = braces (map (duplicate . prettyAnyLabelOrSome) a)
 
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty
@@ -846,7 +865,7 @@ prettyPrinters characterSet =
             prettyKeyValue prettyKey prettyOperatorExpression equals
                 (makeKeyValue b c)
 
-        prettyKey (WithLabel text) = prettyAnyLabel text
+        prettyKey (WithLabel text) = prettyAnyLabelOrSome text
         prettyKey  WithQuestion    = syntax "?"
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
@@ -1558,7 +1577,7 @@ prettyPrinters characterSet =
     prettyRecord :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecord =
         ( braces
-        . map (prettyKeyValue prettyAnyLabel prettyExpression colon . adapt)
+        . map (prettyKeyValue prettyAnyLabelOrSome prettyExpression colon . adapt)
         . Map.toList
         )
       where
@@ -1615,14 +1634,14 @@ prettyPrinters characterSet =
                     | Var (V key' 0) <- Dhall.Syntax.shallowDenote val
                     , key == key'
                     , not (containsComment mSrc2) ->
-                        duplicate (prettyKeys prettyAnyLabel [(mSrc0, key, mSrc1)])
+                        duplicate (prettyKeys prettyAnyLabelOrSome [(mSrc0, key, mSrc1)])
                 _ ->
-                    prettyKeyValue prettyAnyLabel prettyExpression equals kv
+                    prettyKeyValue prettyAnyLabelOrSome prettyExpression equals kv
 
     prettyAlternative (key, Just val) =
-        prettyKeyValue prettyAnyLabel prettyExpression colon (makeKeyValue (pure key) val)
+        prettyKeyValue prettyAnyLabelOrSome prettyExpression colon (makeKeyValue (pure key) val)
     prettyAlternative (key, Nothing) =
-        duplicate (prettyAnyLabel key)
+        duplicate (prettyAnyLabelOrSome key)
 
     prettyUnion :: Pretty a => Map Text (Maybe (Expr Src a)) -> Doc Ann
     prettyUnion =
