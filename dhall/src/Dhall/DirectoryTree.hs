@@ -179,8 +179,8 @@ toDirectoryTree allowSeparators path expression = case expression of
     RecordLit keyValues ->
         Map.unorderedTraverseWithKey_ process $ recordFieldValue <$> keyValues
 
-    ListLit (Just (Record [ ("mapKey", recordFieldValue -> Text), ("mapValue", _) ])) [] ->
-        return ()
+    ListLit (Just (App List (Record [ ("mapKey", recordFieldValue -> Text), ("mapValue", _) ]))) [] ->
+        Directory.createDirectoryIfMissing allowSeparators path
 
     ListLit _ records
         | not (null records)
