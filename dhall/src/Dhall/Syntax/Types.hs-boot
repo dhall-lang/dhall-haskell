@@ -1,3 +1,4 @@
+{-# LANGUAGE NoPolyKinds #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 
 module Dhall.Syntax.Types where

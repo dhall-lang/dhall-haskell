@@ -22,8 +22,9 @@ import Test.Tasty.Hspec
 import Test.Hspec
 #endif
 
-import qualified Data.Text       as T
+import qualified Data.Text as T
 import qualified GHC.IO.Encoding
+import qualified System.Environment as Environment
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
@@ -141,7 +142,9 @@ codeCompletionSpec fixtureDir =
         docId <- openDoc "ImportedFunctions.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 0, _character = 33})
         liftIO $ do
-          let [ firstItem, secondItem ] = cs
+          (firstItem, secondItem) <- case cs of
+              [x, y] -> pure (x, y)
+              _      -> fail "Unexpected number of items"
           _label firstItem `shouldBe` "`make user`"
           _label secondItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
@@ -152,7 +155,9 @@ codeCompletionSpec fixtureDir =
         docId <- openDoc "Union.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 2, _character = 10})
         liftIO $ do
-          let [ firstItem, secondItem ] = cs
+          (firstItem, secondItem) <- case cs of
+              [x, y] -> pure (x, y)
+              _      -> fail "Unexpected number of items"
           _label firstItem `shouldBe` "A"
           _label secondItem `shouldBe` "`B C`"
           _detail firstItem `shouldBe` Just "\8704(A : Text) \8594 < A : Text | `B C` >"
@@ -205,6 +210,7 @@ diagnosticsSpec fixtureDir = do
 main :: IO ()
 main = do
   GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
+  Environment.setEnv "TASTY_NUM_THREADS" "1"
   diagnostics <- testSpec "Diagnostics" (diagnosticsSpec (baseDir "diagnostics"))
   linting <- testSpec "Linting" (lintingSpec (baseDir "linting"))
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))

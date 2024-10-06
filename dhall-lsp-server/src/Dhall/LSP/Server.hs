@@ -52,10 +52,14 @@ run = withLogger $ \ioLogger -> do
 
   let defaultConfig = def
 
-  let onConfigurationChange _oldConfig json =
+  let configSection = "dhall-lsp-server"
+
+  let parseConfig _oldConfig json =
         case fromJSON json of
             Aeson.Success config -> Right config
             Aeson.Error   string -> Left (Text.pack string)
+
+  let onConfigChange _ = pure ()
 
   let doInitialize environment _request = do
           return (Right environment)
@@ -114,7 +118,6 @@ run = withLogger $ \ioLogger -> do
                           Error   -> MessageType_Error
                           Warning -> MessageType_Warning
                           Info    -> MessageType_Info
-                          Log     -> MessageType_Log
 
                     LSP.sendNotification SMethod_WindowShowMessage ShowMessageParams{..}
                     liftIO (fail (Text.unpack _message))
