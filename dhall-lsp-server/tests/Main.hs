@@ -22,8 +22,9 @@ import Test.Tasty.Hspec
 import Test.Hspec
 #endif
 
-import qualified Data.Text       as T
+import qualified Data.Text as T
 import qualified GHC.IO.Encoding
+import qualified System.Environment as Environment
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
@@ -209,6 +210,7 @@ diagnosticsSpec fixtureDir = do
 main :: IO ()
 main = do
   GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
+  Environment.setEnv "TASTY_NUM_THREADS" "1"
   diagnostics <- testSpec "Diagnostics" (diagnosticsSpec (baseDir "diagnostics"))
   linting <- testSpec "Linting" (lintingSpec (baseDir "linting"))
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))
