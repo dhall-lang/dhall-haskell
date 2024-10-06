@@ -22,12 +22,14 @@ Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
     README.md
+    tasty/data/package/*.md
     tasty/data/package/*.txt
     tasty/data/package/*.dhall
     tasty/data/package/a/*.dhall
     tasty/data/package/a/b/*.dhall
     tasty/data/package/a/b/c/*.dhall
     tasty/data/package/deep/nested/folder/*.dhall
+    tasty/data/golden/*.md.html
     tasty/data/golden/*.txt.html
     tasty/data/golden/*.dhall.html
     tasty/data/golden/a/*.dhall.html
@@ -71,7 +73,7 @@ Library
         directory            >= 1.3.0.0   && < 1.4 ,
         dhall                >= 1.38.0    && < 1.43,
         file-embed           >= 0.0.10.0           ,
-        filepath             >= 1.4       && < 1.5 ,
+        filepath             >= 1.4       && < 1.6 ,
         lens-family-core     >= 1.0.0     && < 2.2 ,
         lucid                >= 2.9.12    && < 2.12,
         mmark                >= 0.0.7.0   && < 0.8 ,
@@ -124,7 +126,7 @@ Test-Suite doctest
     Build-Depends:
         base                           ,
         directory,
-        filepath                 < 1.5 ,
+        filepath                 < 1.6 ,
         doctest    >= 0.7.0
     Other-Extensions: OverloadedStrings RecordWildCards
     Default-Language: Haskell2010
@@ -147,10 +149,10 @@ Test-Suite tasty
         path                              ,
         path-io                           ,
         pretty       >= 1.1.1.1           ,
-        tasty        < 1.5                ,
+        tasty        < 1.6                ,
         tasty-silver < 3.4                ,
         tasty-hunit  >= 0.10     && < 0.11,
-        turtle       < 1.7                ,
+        turtle       >= 1.6      && < 1.7 ,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010

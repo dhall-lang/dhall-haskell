@@ -2,21 +2,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
--- FIXME: Re-enable deprecation warnings after removing support for turtle < 1.6.
-{-# OPTIONS_GHC -Wno-deprecations #-}
-
 module Dhall.Test.Import where
 
 import Control.Exception (SomeException)
-import Data.Foldable     (fold)
-import Data.Text         (Text, isSuffixOf)
+import Data.Text         (Text)
 import Data.Void         (Void)
-import Prelude           hiding (FilePath)
+import System.FilePath   ((</>))
 import Test.Tasty        (TestTree)
-import Turtle            (FilePath, toText, (</>))
 
 import qualified Control.Exception                as Exception
-import qualified Control.Monad                    as Monad
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
@@ -31,8 +25,8 @@ import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
-import qualified Network.HTTP.Client              as HTTP
-import qualified Network.HTTP.Client.TLS          as HTTP
+import qualified Network.HTTP.Client     as HTTP
+import qualified Network.HTTP.Client.TLS as HTTP
 #endif
 
 
@@ -77,7 +71,7 @@ getTests = do
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
 
-        Monad.guard (path `notElem` flakyTests)
+        path `Test.Util.pathNotIn` flakyTests
 
         return path )
 
@@ -101,8 +95,9 @@ getTests = do
 #endif
                 ]
 
-        _ <- Monad.guard (path `notElem` expectedSuccesses)
-        _ <- Monad.guard (not ("ENV.dhall" `isSuffixOf` (fold (toText path))))
+        path `Test.Util.pathNotIn` expectedSuccesses
+        "ENV.dhall" `Test.Util.pathNotSuffixOf` path
+
         return path )
 
     let testTree =
@@ -176,7 +171,7 @@ successTest prefix = do
                 not (null (Turtle.match (Turtle.ends path') (Test.Util.toDhallPath prefix)))
 
         let buildNewCache = do
-                tempdir <- fmap Turtle.decodeString (Turtle.managed (Temp.withSystemTempDirectory "dhall-cache"))
+                tempdir <- Turtle.managed (Temp.withSystemTempDirectory "dhall-cache")
                 Turtle.liftIO (Turtle.cptree originalCache tempdir)
                 return tempdir
 

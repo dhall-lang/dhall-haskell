@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DerivingStrategies         #-}
@@ -135,7 +136,12 @@ module Dhall.Marshal.Decode
     ) where
 
 
-import Control.Applicative              (empty, liftA2)
+import Control.Applicative
+    ( empty
+#if !MIN_VERSION_base(4,18,0)
+    , liftA2
+#endif
+    )
 import Control.Exception                (Exception)
 import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict
@@ -1604,14 +1610,15 @@ data ExtractError s a =
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (ExtractError s a) where
   show (TypeMismatch e)      = show e
   show (ExpectedTypeError e) = show e
-  show (ExtractError es)     =
-      _ERROR <> ": Failed extraction                                                   \n\
-      \                                                                                \n\
-      \The expression type-checked successfully but the transformation to the target   \n\
-      \type failed with the following error:                                           \n\
-      \                                                                                \n\
-      \" <> Data.Text.unpack es <> "\n\
-      \                                                                                \n"
+  show (ExtractError es)     = unlines
+      [ _ERROR <> ": Failed extraction                                                   "
+      , "                                                                                "
+      , "The expression type-checked successfully but the transformation to the target   "
+      , "type failed with the following error:                                           "
+      , "                                                                                "
+      , Data.Text.unpack es
+      , "                                                                                "
+      ]
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Exception (ExtractError s a)
 
@@ -1669,24 +1676,22 @@ data InvalidDecoder s a = InvalidDecoder
 instance (Pretty s, Typeable s, Pretty a, Typeable a) => Exception (InvalidDecoder s a)
 
 instance (Pretty s, Pretty a, Typeable s, Typeable a) => Show (InvalidDecoder s a) where
-    show InvalidDecoder { .. } =
-        _ERROR <> ": Invalid Dhall.Decoder                                               \n\
-        \                                                                                \n\
-        \Every Decoder must provide an extract function that does not fail with a type   \n\
-        \error if an expression matches the expected type.  You provided a Decoder that  \n\
-        \disobeys this contract                                                          \n\
-        \                                                                                \n\
-        \The Decoder provided has the expected dhall type:                               \n\
-        \                                                                                \n\
-        \" <> show txt0 <> "\n\
-        \                                                                                \n\
-        \and it threw a type error during extraction from the well-typed expression:     \n\
-        \                                                                                \n\
-        \" <> show txt1 <> "\n\
-        \                                                                                \n"
-        where
-          txt0 = Dhall.Util.insert invalidDecoderExpected
-          txt1 = Dhall.Util.insert invalidDecoderExpression
+    show InvalidDecoder { .. } = unlines
+        [ _ERROR <> ": Invalid Dhall.Decoder                                               "
+        , "                                                                                "
+        , "Every Decoder must provide an extract function that does not fail with a type   "
+        , "error if an expression matches the expected type.  You provided a Decoder that  "
+        , "disobeys this contract                                                          "
+        , "                                                                                "
+        , "The Decoder provided has the expected dhall type:                               "
+        , "                                                                                "
+        , show (Dhall.Util.insert invalidDecoderExpected)
+        , "                                                                                "
+        , "and it threw a type error during extraction from the well-typed expression:     "
+        , "                                                                                "
+        , show (Dhall.Util.insert invalidDecoderExpression)
+        , "                                                                                "
+        ]
 
 {-| Useful synonym for the `Validation` type used when marshalling Dhall
     expressions.

@@ -15,6 +15,7 @@ module Dhall.Pretty
     , Dhall.Pretty.Internal.layoutOpts
 
     , escapeEnvironmentVariable
+    , UnescapedLabel(..)
     , escapeLabel
 
     , temporalToText

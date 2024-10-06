@@ -47,7 +47,7 @@ import Dhall.Eval
     , Val (..)
     , (~>)
     )
-import Dhall.Pretty                      (Ann)
+import Dhall.Pretty                      (Ann, UnescapedLabel(..))
 import Dhall.Src                         (Src)
 import Lens.Family                       (over)
 import Prettyprinter                     (Doc, Pretty (..), vsep)
@@ -2915,7 +2915,7 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \                                                                                \n\
         \... which is not a record type                                                  \n"
       where
-        txt0 = insert (Dhall.Pretty.Internal.escapeLabel True k)
+        txt0 = insert (Dhall.Pretty.Internal.escapeLabel AnyLabelOrSome k)
         txt1 = insert expr0
         txt2 = insert expr1
 
@@ -3073,7 +3073,7 @@ prettyTypeMessage (DuplicateFieldCannotBeMerged ks) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
-        txt0 = insert (Dhall.Pretty.Internal.escapeLabel True (NonEmpty.head ks))
+        txt0 = insert (Dhall.Pretty.Internal.escapeLabel AnyLabelOrSome (NonEmpty.head ks))
 
         txt1 = insert (toPath ks)
 
@@ -5055,7 +5055,7 @@ checkContext context =
 toPath :: (Functor list, Foldable list) => list Text -> Text
 toPath ks =
     Text.intercalate "."
-        (Foldable.toList (fmap (Dhall.Pretty.Internal.escapeLabel True) ks))
+        (Foldable.toList (fmap (Dhall.Pretty.Internal.escapeLabel AnyLabelOrSome) ks))
 
 duplicateElement :: Ord a => [a] -> Maybe a
 duplicateElement = go Data.Set.empty

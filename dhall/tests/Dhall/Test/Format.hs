@@ -7,7 +7,6 @@ import Dhall.Parser (Header (..))
 import Dhall.Pretty (CharacterSet (..))
 import Test.Tasty   (TestTree)
 
-import qualified Control.Monad             as Monad
 import qualified Data.Text                 as Text
 import qualified Data.Text.IO              as Text.IO
 import qualified Dhall.Core                as Core
@@ -27,7 +26,7 @@ getTests = do
 
             let skip = [ "./tests/format/asciiA.dhall" ]
 
-            Monad.guard (path `notElem` skip)
+            path `Test.Util.pathNotIn` skip
 
             return path
 

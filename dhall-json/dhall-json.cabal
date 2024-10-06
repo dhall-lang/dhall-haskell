@@ -38,14 +38,14 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0  && < 5   ,
-        aeson                     >= 1.4.6.0   && < 2.2 ,
+        aeson                     >= 1.4.6.0   && < 2.3 ,
         aeson-pretty              >= 0.8.0     && < 0.9 ,
         aeson-yaml                >= 1.1.0     && < 1.2 ,
         bytestring                                < 0.13,
-        containers                >= 0.5.9     && < 0.7 ,
+        containers                >= 0.5.9     && < 0.8 ,
         dhall                     >= 1.42.0    && < 1.43,
         exceptions                >= 0.8.3     && < 0.11,
-        filepath                                  < 1.5 ,
+        filepath                                  < 1.6 ,
         lens-family-core          >= 1.0.0     && < 2.2 ,
         optparse-applicative      >= 0.14.0.0  && < 0.19,
         prettyprinter             >= 1.7.0     && < 1.8 ,
@@ -98,7 +98,7 @@ Executable json-to-dhall
     Build-Depends:
         base                                             ,
         aeson                                            ,
-        ansi-terminal               >= 0.6.3.1  && < 1.1 ,
+        ansi-terminal               >= 0.6.3.1  && < 1.2 ,
         bytestring                                       ,
         dhall                                            ,
         dhall-json                                       ,
@@ -122,7 +122,7 @@ Test-Suite tasty
         bytestring         ,
         dhall              ,
         dhall-json         ,
-        tasty        <  1.5,
+        tasty        <  1.6,
         text               ,
         tasty-hunit  >= 0.2,
         tasty-silver >= 3.0

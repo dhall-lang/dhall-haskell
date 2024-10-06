@@ -3,9 +3,7 @@
 module Dhall.Test.Diff where
 
 import Data.Text  (Text)
-import Prelude    hiding (FilePath)
 import Test.Tasty (TestTree)
-import Turtle     (FilePath)
 
 import qualified Data.Text                 as Text
 import qualified Data.Text.IO              as Text.IO

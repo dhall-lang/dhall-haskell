@@ -34,7 +34,7 @@ Library
         HsYAML                    >= 0.2       && < 0.3 ,
         HsYAML-aeson              >= 0.2       && < 0.3 ,
         base                      >= 4.11.0.0  && < 5   ,
-        aeson                     >= 1.0.0.0   && < 2.2 ,
+        aeson                     >= 1.0.0.0   && < 2.3 ,
         bytestring                                < 0.13,
         dhall                     >= 1.31.0    && < 1.43,
         dhall-json                >= 1.6.0     && < 1.8 ,
@@ -65,7 +65,7 @@ Executable yaml-to-dhall
     Build-Depends:
         base                                             ,
         aeson                                            ,
-        ansi-terminal               >= 0.6.3.1  && < 1.1 ,
+        ansi-terminal               >= 0.6.3.1  && < 1.2 ,
         bytestring                                       ,
         dhall                                            ,
         dhall-json                                       ,
@@ -90,7 +90,7 @@ Test-Suite tasty
         dhall                        ,
         dhall-json                   ,
         dhall-yaml                   ,
-        tasty                  <  1.5,
+        tasty                  <  1.6,
         tasty-expected-failure < 0.13,
         text                                    ,
         tasty-hunit            >= 0.2

@@ -781,9 +781,7 @@ directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutp
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFile expressionText)
 
-    let status = Dhall.Import.emptyStatus dir
-          where
-            dir = Turtle.directory expressionFile
+    let status = Dhall.Import.emptyStatus (Turtle.directory expressionFile)
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -843,7 +841,7 @@ data Error
     | FailedToCloneRepository [Text]
     | FailedToParseNixPrefetchGit [Text] String
     | MissingFile FilePath
-    
+
 renderError :: Error -> Text
 renderError e = case e of
     MissingSemanticIntegrityCheck url ->

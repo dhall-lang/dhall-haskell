@@ -10,6 +10,7 @@ module Dhall.Toml.Utils
 
 import Data.Text    (Text)
 import Data.Void    (Void)
+import Dhall.Import (SemanticCacheMode(..))
 import Dhall.Parser (Src)
 
 import qualified Data.Text.IO    as Text.IO
@@ -17,6 +18,7 @@ import qualified Dhall.Core      as Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
+import qualified System.FilePath as FilePath
 
 -- | Read the file fileName and return the normalized Dhall AST
 fileToDhall :: String -> IO (Core.Expr Src Void)
@@ -35,9 +37,15 @@ inputToDhall = do
 --   by the parser for generating error messages.
 textToDhall :: String -> Text -> IO (Core.Expr Src Void)
 textToDhall fileName text = do
-    parsedExpression <-
+    parsedExpression <- do
         Core.throws (Dhall.Parser.exprFromText fileName text)
-    resolvedExpression <- Dhall.Import.load parsedExpression
+
+    let directory = FilePath.takeDirectory fileName
+
+    resolvedExpression <- do
+        Dhall.Import.loadRelativeTo directory UseSemanticCache parsedExpression
+
     _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
     return resolvedExpression
 

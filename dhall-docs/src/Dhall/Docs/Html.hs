@@ -13,6 +13,7 @@
 
 module Dhall.Docs.Html
     ( dhallFileToHtml
+    , markdownFileToHtml
     , textFileToHtml
     , indexToHtml
     , DocParams(..)
@@ -47,6 +48,29 @@ data DocParams = DocParams
     , baseImportUrl :: Maybe Text       -- ^ Base import URL
     }
 
+-- | Generates an @`Html` ()@ containing standard elements like title,
+--   navbar, breadcrumbs, and the provided content.
+htmlTemplate
+    :: Path Rel a               -- ^ Source file name or index directory, used to extract the title
+    -> DocParams                -- ^ Parameters for the documentation
+    -> HtmlFileType             -- ^ Are we rendering an index page?
+    -> Html ()                  -- ^ Content to be included
+    -> Html ()
+htmlTemplate filePath params@DocParams{..} isIndex html =
+    doctypehtml_ $ do
+        headContents htmlTitle params
+        body_ $ do
+            navBar params
+            mainContainer $ do
+                setPageTitle params isIndex breadcrumb
+                copyToClipboardButton clipboardText
+                br_ []
+                html
+  where
+    breadcrumb = relPathToBreadcrumb filePath
+    htmlTitle = breadCrumbsToText breadcrumb
+    clipboardText = fold baseImportUrl <> htmlTitle
+
 -- | Generates an @`Html` ()@ with all the information about a dhall file
 dhallFileToHtml
     :: Path Rel File            -- ^ Source file name, used to extract the title
@@ -57,47 +81,42 @@ dhallFileToHtml
     -> DocParams                -- ^ Parameters for the documentation
     -> Html ()
 dhallFileToHtml filePath contents expr examples header params@DocParams{..} =
-    doctypehtml_ $ do
-        headContents htmlTitle params
-        body_ $ do
-            navBar params
-            mainContainer $ do
-                setPageTitle params NotIndex breadcrumb
-                copyToClipboardButton clipboardText
-                br_ []
-                div_ [class_ "doc-contents"] header
-                Control.Monad.unless (null examples) $ do
-                    h3_ "Examples"
-                    div_ [class_ "source-code code-examples"] $
-                        mapM_ (renderCodeSnippet characterSet AssertionExample) examples
-                h3_ "Source"
-                div_ [class_ "source-code"] $ renderCodeWithHyperLinks contents expr
-  where
-    breadcrumb = relPathToBreadcrumb filePath
-    htmlTitle = breadCrumbsToText breadcrumb
-    clipboardText = fold baseImportUrl <> htmlTitle
+    htmlTemplate filePath params NotIndex $ do
+        div_ [class_ "doc-contents"] header
+        Control.Monad.unless (null examples) $ do
+            h3_ "Examples"
+            div_ [class_ "source-code code-examples"] $
+                mapM_ (renderCodeSnippet characterSet AssertionExample) examples
+        h3_ "Source"
+        div_ [class_ "source-code"] $ renderCodeWithHyperLinks contents expr
 
--- | Generates an @`Html` ()@ with all the information about a non-dhall text file
+-- | Generates an @`Html` ()@ with all the information about a Markdown file
+markdownFileToHtml
+    :: Path Rel File            -- ^ Source file name, used to extract the title
+    -> Text                     -- ^ Original text contents of the file
+    -> Html ()                  -- ^ Contents converted to HTML
+    -> DocParams                -- ^ Parameters for the documentation
+    -> Html ()
+markdownFileToHtml filePath contents html params =
+    htmlTemplate filePath params NotIndex $ do
+        details_ [open_ ""] $ do
+            summary_ [class_ "part-summary"] "Rendered content"
+            div_ [class_ "doc-contents"] html
+        details_ $ do
+            summary_ [class_ "part-summary"] "Source"
+            div_ [class_ "source-code"] $ pre_ (toHtml contents)
+
+
+-- | Generates an @`Html` ()@ with all the information about a text file
 textFileToHtml
     :: Path Rel File            -- ^ Source file name, used to extract the title
     -> Text                     -- ^ Contents of the file
     -> DocParams                -- ^ Parameters for the documentation
     -> Html ()
-textFileToHtml filePath contents params@DocParams{..} =
-    doctypehtml_ $ do
-        headContents htmlTitle params
-        body_ $ do
-            navBar params
-            mainContainer $ do
-                setPageTitle params NotIndex breadcrumb
-                copyToClipboardButton clipboardText
-                br_ []
-                h3_ "Source"
-                div_ [class_ "source-code"] $ pre_ (toHtml contents)
-  where
-    breadcrumb = relPathToBreadcrumb filePath
-    htmlTitle = breadCrumbsToText breadcrumb
-    clipboardText = fold baseImportUrl <> htmlTitle
+textFileToHtml filePath contents params =
+    htmlTemplate filePath params NotIndex $ do
+        h3_ "Source"
+        div_ [class_ "source-code"] $ pre_ (toHtml contents)
 
 -- | Generates an index @`Html` ()@ that list all the dhall files in that folder
 indexToHtml
@@ -106,21 +125,15 @@ indexToHtml
     -> [Path Rel Dir]                              -- ^ Generated directories in that directory
     -> DocParams                                   -- ^ Parameters for the documentation
     -> Html ()
-indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
-    headContents htmlTitle params
-    body_ $ do
-        navBar params
-        mainContainer $ do
-            setPageTitle params Index breadcrumbs
-            copyToClipboardButton clipboardText
-            br_ []
-            Control.Monad.unless (null files) $ do
-                h3_ "Exported files: "
-                ul_ $ mconcat $ map listFile files
+indexToHtml indexDir files dirs params@DocParams{..} =
+    htmlTemplate indexDir params Index $ do
+        Control.Monad.unless (null files) $ do
+            h3_ "Exported files: "
+            ul_ $ mconcat $ map listFile files
 
-            Control.Monad.unless (null dirs) $ do
-                h3_ "Exported packages: "
-                ul_ $ mconcat $ map listDir dirs
+        Control.Monad.unless (null dirs) $ do
+            h3_ "Exported packages: "
+            ul_ $ mconcat $ map listDir dirs
 
   where
     listFile :: (Path Rel File, Maybe (Expr Void Import)) -> Html ()
@@ -144,10 +157,6 @@ indexToHtml indexDir files dirs params@DocParams{..} = doctypehtml_ $ do
     tryToTakeExt file = Path.fromRelFile $ case Path.splitExtension file of
         Nothing -> file
         Just (f, _) -> f
-
-    breadcrumbs = relPathToBreadcrumb indexDir
-    htmlTitle = breadCrumbsToText breadcrumbs
-    clipboardText = fold baseImportUrl <> htmlTitle
 
 copyToClipboardButton :: Text -> Html ()
 copyToClipboardButton filePath =
@@ -232,6 +241,7 @@ navBar DocParams{..} = div_ [class_ "nav-bar"] $ do
 
     -- Left side of the nav-bar
     img_ [ class_ "dhall-icon"
+         , alt_ "Dhall logo."
          , src_ $ Data.Text.pack $ relativeResourcesPath <> "dhall-icon.svg"
          ]
     p_ [class_ "package-title"] $ toHtml packageName
@@ -268,8 +278,7 @@ stylesheet path =
 script :: FilePath -> Html ()
 script relativeResourcesPath =
     script_
-        [ type_ "text/javascript"
-        , src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
+        [ src_ $ Data.Text.pack $ relativeResourcesPath <> "index.js"]
         ("" :: Text)
 
 toUnixPath :: String -> Text
