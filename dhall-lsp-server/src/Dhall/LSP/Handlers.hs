@@ -641,6 +641,11 @@ cancelationHandler :: Handlers HandlerM
 cancelationHandler =
     LSP.notificationHandler SMethod_CancelRequest \_ -> return ()
 
+-- this handler is a stab to prevent `lsp:no handler for:` messages.
+documentDidCloseHandler :: Handlers HandlerM
+documentDidCloseHandler =
+    LSP.notificationHandler SMethod_TextDocumentDidClose \_ -> return ()
+
 handleErrorWithDefault :: (Either a1 b -> HandlerM a2)
  -> b
  -> HandlerM a2
