@@ -22,6 +22,7 @@ import Dhall.LSP.Handlers
     , workspaceChangeConfigurationHandler
     , textDocumentChangeHandler
     , cancelationHandler
+    , documentDidCloseHandler
     )
 import Dhall.LSP.State
 import Language.LSP.Server (LspServerLog, Options(..), ServerDefinition(..), type (<~>)(..))
@@ -92,6 +93,7 @@ run = withLogger $ \ioLogger -> do
           , workspaceChangeConfigurationHandler
           , textDocumentChangeHandler
           , cancelationHandler
+          , documentDidCloseHandler
           ]
 
   let interpretHandler environment = Iso{..}
