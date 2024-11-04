@@ -10,6 +10,7 @@ import Colog.Core (LogAction, WithSeverity)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (fromJSON)
 import Data.Default
+import Dhall (EvaluateSettings, defaultEvaluateSettings)
 import Dhall.LSP.Handlers
     ( completionHandler
     , didOpenTextDocumentNotificationHandler
@@ -44,7 +45,11 @@ import qualified System.Exit as Exit
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
-run = withLogger $ \ioLogger -> do
+run = runWith defaultEvaluateSettings
+
+-- | The main entry point for the LSP server.
+runWith :: EvaluateSettings -> Maybe FilePath -> IO ()
+runWith settings = withLogger $ \ioLogger -> do
   let clientLogger = Colog.cmap (fmap (Text.pack . show . pretty)) LSP.defaultClientLogger
 
   let lspLogger = clientLogger <> Colog.hoistLogAction liftIO ioLogger
@@ -82,13 +87,13 @@ run = withLogger $ \ioLogger -> do
 
   let staticHandlers _clientCapabilities =
         mconcat
-          [ hoverHandler
-          , didOpenTextDocumentNotificationHandler
-          , didSaveTextDocumentNotificationHandler
-          , executeCommandHandler
+          [ hoverHandler settings
+          , didOpenTextDocumentNotificationHandler settings
+          , didSaveTextDocumentNotificationHandler settings
+          , executeCommandHandler settings
           , documentFormattingHandler
           , documentLinkHandler
-          , completionHandler
+          , completionHandler settings
           , initializedHandler
           , workspaceChangeConfigurationHandler
           , textDocumentChangeHandler
@@ -116,7 +121,6 @@ run = withLogger $ \ioLogger -> do
                           Error   -> MessageType_Error
                           Warning -> MessageType_Warning
                           Info    -> MessageType_Info
-                          Log     -> MessageType_Log
 
                     LSP.sendNotification SMethod_WindowShowMessage ShowMessageParams{..}
                     liftIO (fail (Text.unpack _message))

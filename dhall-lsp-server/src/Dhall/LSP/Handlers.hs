@@ -9,6 +9,7 @@
 module Dhall.LSP.Handlers where
 
 import Data.Void    (Void)
+import Dhall        (EvaluateSettings)
 import Dhall.Core
     ( Expr (Embed, Note)
     , Import (..)
@@ -69,9 +70,9 @@ import Data.Maybe                       (maybeToList)
 import Data.Text                        (Text, isPrefixOf)
 import Language.LSP.Server              (Handlers, LspT)
 import Language.LSP.Protocol.Types      hiding (Range(..))
-import Language.LSP.Protocol.Message
-import Language.LSP.Protocol.Lens
-import System.FilePath
+import Language.LSP.Protocol.Message    (TRequestMessage, Method(..), SMethod(..))
+import Language.LSP.Protocol.Lens       (textDocument, uri, params, position, character, line, command, arguments)
+import System.FilePath                  ((</>), takeDirectory)
 import Text.Megaparsec                  (SourcePos (..), unPos)
 
 import qualified Data.Aeson              as Aeson
@@ -95,8 +96,8 @@ readUri uri_ = do
     Just (LSP.VirtualFile _ _ rope) -> return (Rope.toText rope)
     Nothing -> throwE (Error, "Could not find " <> Text.pack (show uri_) <> " in VFS.")
 
-loadFile :: Uri -> HandlerM (Expr Src Void)
-loadFile uri_ = do
+loadFile :: EvaluateSettings -> Uri -> HandlerM (Expr Src Void)
+loadFile settings uri_ = do
   txt <- readUri uri_
   fileIdentifier <- fileIdentifierFromUri uri_
   cache <- use importCache
@@ -105,7 +106,7 @@ loadFile uri_ = do
     Right e -> return e
     _ -> throwE (Error, "Failed to parse Dhall file.")
 
-  loaded <- liftIO $ load fileIdentifier expr cache
+  loaded <- liftIO $ load settings fileIdentifier expr cache
   (cache', expr') <- case loaded of
     Right x -> return x
     _ -> throwE (Error, "Failed to resolve imports.")
@@ -131,8 +132,8 @@ rangeToJSON (Range (x1,y1) (x2,y2)) =
       (Position (fromIntegral x1) (fromIntegral y1))
       (Position (fromIntegral x2) (fromIntegral y2))
 
-hoverHandler :: Handlers HandlerM
-hoverHandler =
+hoverHandler :: EvaluateSettings -> Handlers HandlerM
+hoverHandler settings =
     LSP.requestHandler SMethod_TextDocumentHover \request respond -> handleErrorWithDefault respond (InR LSP.Types.Null) do
         let uri_ = request^.params.textDocument.uri
 
@@ -142,8 +143,8 @@ hoverHandler =
 
         case Map.lookup uri_ errorMap of
             Nothing -> do
-                expr <- loadFile uri_
-                (welltyped, _) <- case typecheck expr of
+                expr <- loadFile settings uri_
+                (welltyped, _) <- case typecheck settings expr of
                     Left  _  -> throwE (Info, "Can't infer type; code does not type-check.")
                     Right wt -> return wt
                 case typeAt (_line, _character) welltyped of
@@ -231,8 +232,8 @@ documentLinkHandler =
         respond (Right (InL (concat links)))
 
 
-diagnosticsHandler :: Uri -> HandlerM ()
-diagnosticsHandler _uri = do
+diagnosticsHandler :: EvaluateSettings -> Uri -> HandlerM ()
+diagnosticsHandler settings _uri = do
   txt <- readUri _uri
   fileIdentifier <- fileIdentifierFromUri _uri
   -- make sure we don't keep a stale version around
@@ -243,11 +244,11 @@ diagnosticsHandler _uri = do
       expr <- case parse txt of
         Right e -> return e
         Left err -> throwE err
-      loaded <- liftIO $ load fileIdentifier expr cache
+      loaded <- liftIO $ load settings fileIdentifier expr cache
       (cache', expr') <- case loaded of
         Right x -> return x
         Left err -> throwE err
-      _ <- case typecheck expr' of
+      _ <- case typecheck settings expr' of
         Right (wt, _typ) -> return wt
         Left err -> throwE err
       assign importCache cache'
@@ -315,18 +316,18 @@ documentFormattingHandler =
         respond (Right (InL [TextEdit{..}]))
 
 
-executeCommandHandler :: Handlers HandlerM
-executeCommandHandler =
+executeCommandHandler :: EvaluateSettings -> Handlers HandlerM
+executeCommandHandler settings =
     LSP.requestHandler SMethod_WorkspaceExecuteCommand \request respond -> handleErrorWithDefault respond (InL Aeson.Null) do
         let command_ = request^.params.command
         if  | command_ == "dhall.server.lint" ->
                 executeLintAndFormat request respond
             | command_ == "dhall.server.annotateLet" ->
-                executeAnnotateLet request
+                executeAnnotateLet settings request
             | command_ == "dhall.server.freezeImport" ->
-                executeFreezeImport request
+                executeFreezeImport settings request
             | command_ == "dhall.server.freezeAllImports" ->
-                executeFreezeAllImports request
+                executeFreezeAllImports settings request
             | otherwise -> do
                 throwE
                     ( Warning
@@ -383,16 +384,17 @@ executeLintAndFormat request respond = do
   return ()
 
 executeAnnotateLet
-    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    :: EvaluateSettings
+    -> TRequestMessage 'Method_WorkspaceExecuteCommand
     -> HandlerM ()
-executeAnnotateLet request = do
+executeAnnotateLet settings request = do
   args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
   let uri_ = args ^. textDocument . uri
       line_ = fromIntegral (args ^. position . line)
       col_ = fromIntegral (args ^. position . character)
 
-  expr <- loadFile uri_
-  (welltyped, _) <- case typecheck expr of
+  expr <- loadFile settings uri_
+  (welltyped, _) <- case typecheck settings expr of
     Left _ -> throwE (Warning, "Failed to annotate let binding; not well-typed.")
     Right e -> return e
 
@@ -421,9 +423,10 @@ executeAnnotateLet request = do
   return ()
 
 executeFreezeAllImports
-    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    :: EvaluateSettings
+    -> TRequestMessage 'Method_WorkspaceExecuteCommand
     -> HandlerM ()
-executeFreezeAllImports request = do
+executeFreezeAllImports settings request = do
   uri_ <- getCommandArguments request
 
   fileIdentifier <- fileIdentifierFromUri uri_
@@ -437,7 +440,7 @@ executeFreezeAllImports request = do
     cache <- use importCache
     let importExpr = Embed (stripHash import_)
 
-    hashResult <- liftIO $ computeSemanticHash fileIdentifier importExpr cache
+    hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
     (cache', hash) <- case hashResult of
       Right (c, t) -> return (c, t)
       Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
@@ -460,9 +463,10 @@ executeFreezeAllImports request = do
   return ()
 
 executeFreezeImport
-    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    :: EvaluateSettings
+    -> TRequestMessage 'Method_WorkspaceExecuteCommand
     -> HandlerM ()
-executeFreezeImport request = do
+executeFreezeImport settings request = do
   args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
   let uri_  = args ^. textDocument . uri
   let line_ = fromIntegral (args ^. position . line)
@@ -486,7 +490,7 @@ executeFreezeImport request = do
   cache <- use importCache
   let importExpr = Embed (stripHash import_)
 
-  hashResult <- liftIO $ computeSemanticHash fileIdentifier importExpr cache
+  hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
   (cache', hash) <- case hashResult of
     Right (c, t) -> return (c, t)
     Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
@@ -507,8 +511,8 @@ executeFreezeImport request = do
 
   return ()
 
-completionHandler :: Handlers HandlerM
-completionHandler =
+completionHandler :: EvaluateSettings -> Handlers HandlerM
+completionHandler settings =
   LSP.requestHandler SMethod_TextDocumentCompletion \request respond -> handleErrorWithDefault respond (InR (InL (CompletionList False Nothing []))) do
     let uri_  = request ^. params . textDocument . uri
         line_ = fromIntegral (request ^. params . position . line)
@@ -535,7 +539,7 @@ completionHandler =
 
             fileIdentifier <- fileIdentifierFromUri uri_
             cache <- use importCache
-            loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+            loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
 
             (cache', bindersExpr') <-
               case loadedBinders of
@@ -549,7 +553,7 @@ completionHandler =
               Right e -> return e
               Left _ -> throwE (Log, "Could not complete projection; prefix did not parse.")
 
-            loaded' <- liftIO $ load fileIdentifier targetExpr cache'
+            loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
             case loaded' of
               Right (cache'', targetExpr') -> do
                 assign importCache cache''
@@ -562,7 +566,7 @@ completionHandler =
 
             fileIdentifier <- fileIdentifierFromUri uri_
             cache <- use importCache  -- todo save cache afterwards
-            loadedBinders <- liftIO $ load fileIdentifier bindersExpr cache
+            loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
 
             bindersExpr' <-
               case loadedBinders of
@@ -608,17 +612,17 @@ completionHandler =
 nullHandler :: a -> LspT ServerConfig IO ()
 nullHandler _ = return ()
 
-didOpenTextDocumentNotificationHandler :: Handlers HandlerM
-didOpenTextDocumentNotificationHandler =
+didOpenTextDocumentNotificationHandler :: EvaluateSettings -> Handlers HandlerM
+didOpenTextDocumentNotificationHandler settings =
     LSP.notificationHandler SMethod_TextDocumentDidOpen \notification -> do
         let _uri = notification^.params.textDocument.uri
-        diagnosticsHandler _uri
+        diagnosticsHandler settings _uri
 
-didSaveTextDocumentNotificationHandler :: Handlers HandlerM
-didSaveTextDocumentNotificationHandler =
+didSaveTextDocumentNotificationHandler :: EvaluateSettings -> Handlers HandlerM
+didSaveTextDocumentNotificationHandler settings =
     LSP.notificationHandler SMethod_TextDocumentDidSave \notification -> do
         let _uri = notification^.params.textDocument.uri
-        diagnosticsHandler _uri
+        diagnosticsHandler settings _uri
 
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
@@ -662,7 +666,6 @@ handleErrorWithDefault respond _default = flip catchE handler
                           Error   -> MessageType_Error
                           Warning -> MessageType_Warning
                           Info    -> MessageType_Info
-                          Log     -> MessageType_Log
 
                     liftLSP $ LSP.sendNotification SMethod_WindowShowMessage ShowMessageParams{..}
                     respond (Right _default)
