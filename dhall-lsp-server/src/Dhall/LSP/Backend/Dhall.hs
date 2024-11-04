@@ -36,18 +36,18 @@ import System.FilePath
     , takeFileName
     )
 
-import qualified Data.Graph         as Graph
-import qualified Data.Map.Strict    as Map
-import qualified Data.Set           as Set
-import qualified Data.Text          as Text
+import qualified Data.Graph                  as Graph
+import qualified Data.Map.Strict             as Map
+import qualified Data.Set                    as Set
+import qualified Data.Text                   as Text
 import qualified Dhall
-import qualified Dhall.Core         as Dhall
-import qualified Dhall.Import       as Import
+import qualified Dhall.Core                  as Dhall
+import qualified Dhall.Import                as Import
 import qualified Dhall.Map
-import qualified Dhall.Parser       as Dhall
-import qualified Dhall.TypeCheck    as Dhall
+import qualified Dhall.Parser                as Dhall
+import qualified Dhall.TypeCheck             as Dhall
 import qualified Language.LSP.Protocol.Types as LSP.Types
-import qualified Network.URI        as URI
+import qualified Network.URI                 as URI
 
 
 -- | A @FileIdentifier@ represents either a local file or a remote url.

@@ -1,10 +1,10 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE CPP            #-}
 {-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE MultiWayIf     #-}
-{-# LANGUAGE ViewPatterns   #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeOperators  #-}
+{-# LANGUAGE ViewPatterns   #-}
 
 module Dhall.LSP.Handlers where
 
@@ -60,30 +60,43 @@ import Dhall.LSP.Backend.Parsing     (binderExprFromText)
 import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
 import Dhall.LSP.State
 
-import Control.Applicative              ((<|>))
-import Control.Lens                     (assign, modifying, use, (^.))
-import Control.Monad                    (forM, guard)
-import Control.Monad.Trans              (lift, liftIO)
-import Control.Monad.Trans.Except       (catchE, throwE)
-import Data.Aeson                       (FromJSON(..), Value(..))
-import Data.Maybe                       (maybeToList)
-import Data.Text                        (Text, isPrefixOf)
-import Language.LSP.Server              (Handlers, LspT)
-import Language.LSP.Protocol.Types      hiding (Range(..))
-import Language.LSP.Protocol.Message    (TRequestMessage, Method(..), SMethod(..))
-import Language.LSP.Protocol.Lens       (textDocument, uri, params, position, character, line, command, arguments)
-import System.FilePath                  ((</>), takeDirectory)
-import Text.Megaparsec                  (SourcePos (..), unPos)
+import Control.Applicative           ((<|>))
+import Control.Lens                  (assign, modifying, use, (^.))
+import Control.Monad                 (forM, guard)
+import Control.Monad.Trans           (lift, liftIO)
+import Control.Monad.Trans.Except    (catchE, throwE)
+import Data.Aeson                    (FromJSON (..), Value (..))
+import Data.Maybe                    (maybeToList)
+import Data.Text                     (Text, isPrefixOf)
+import Language.LSP.Protocol.Lens
+    ( arguments
+    , character
+    , command
+    , line
+    , params
+    , position
+    , textDocument
+    , uri
+    )
+import Language.LSP.Protocol.Message
+    ( Method (..)
+    , SMethod (..)
+    , TRequestMessage
+    )
+import Language.LSP.Protocol.Types   hiding (Range (..))
+import Language.LSP.Server           (Handlers, LspT)
+import System.FilePath               (takeDirectory, (</>))
+import Text.Megaparsec               (SourcePos (..), unPos)
 
-import qualified Data.Aeson              as Aeson
-import qualified Data.Map.Strict         as Map
-import qualified Data.Text.Utf16.Rope    as Rope
-import qualified Data.Text               as Text
-import qualified Language.LSP.Server     as LSP
+import qualified Data.Aeson                  as Aeson
+import qualified Data.Map.Strict             as Map
+import qualified Data.Text                   as Text
+import qualified Data.Text.Utf16.Rope        as Rope
 import qualified Language.LSP.Protocol.Types as LSP.Types
-import qualified Language.LSP.VFS        as LSP
-import qualified Network.URI             as URI
-import qualified Network.URI.Encode      as URI
+import qualified Language.LSP.Server         as LSP
+import qualified Language.LSP.VFS            as LSP
+import qualified Network.URI                 as URI
+import qualified Network.URI.Encode          as URI
 
 liftLSP :: LspT ServerConfig IO a -> HandlerM a
 liftLSP m = lift (lift m)
