@@ -26,6 +26,7 @@ Data-Files:
 Extra-Source-Files:
     CHANGELOG.md
     benchmark/**/*.dhall
+    benchmark/**/*.dhallb
     dhall-lang/Prelude/**/*.dhall
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
