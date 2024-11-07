@@ -2,9 +2,8 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
-import Control.Monad.IO.Class     (liftIO)
-import Data.Maybe                 (fromJust)
-import Language.LSP.Test
+import Control.Monad.IO.Class      (liftIO)
+import Data.Maybe                  (fromJust)
 import Language.LSP.Protocol.Types
     ( CompletionItem (..)
     , Diagnostic (..)
@@ -15,6 +14,7 @@ import Language.LSP.Protocol.Types
     , Range (..)
     , toEither
     )
+import Language.LSP.Test
 import Test.Tasty
 import Test.Tasty.Hspec
 

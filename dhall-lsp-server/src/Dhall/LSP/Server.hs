@@ -1,50 +1,64 @@
 {-# LANGUAGE BlockArguments     #-}
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RecordWildCards    #-}
 
 {-| This is the entry point for the LSP server. -}
-module Dhall.LSP.Server(run) where
+module Dhall.LSP.Server (
+      run
+    , runWith
+    ) where
 
-import Colog.Core (LogAction, WithSeverity)
-import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (fromJSON)
+import Colog.Core                    (LogAction, WithSeverity)
+import Control.Monad.IO.Class        (liftIO)
+import Data.Aeson                    (fromJSON)
 import Data.Default
+import Dhall                         (EvaluateSettings, defaultEvaluateSettings)
 import Dhall.LSP.Handlers
-    ( completionHandler
+    ( cancelationHandler
+    , completionHandler
     , didOpenTextDocumentNotificationHandler
     , didSaveTextDocumentNotificationHandler
+    , documentDidCloseHandler
     , documentFormattingHandler
     , documentLinkHandler
     , executeCommandHandler
     , hoverHandler
     , initializedHandler
-    , workspaceChangeConfigurationHandler
     , textDocumentChangeHandler
-    , cancelationHandler
-    , documentDidCloseHandler
+    , workspaceChangeConfigurationHandler
     )
 import Dhall.LSP.State
-import Language.LSP.Server (LspServerLog, Options(..), ServerDefinition(..), type (<~>)(..))
-import Language.LSP.Protocol.Types
 import Language.LSP.Protocol.Message
-import Prettyprinter (Doc, Pretty, pretty, viaShow)
-import System.Exit (ExitCode(..))
-import System.IO (stdin, stdout)
+import Language.LSP.Protocol.Types
+import Language.LSP.Server
+    ( LspServerLog
+    , Options (..)
+    , ServerDefinition (..)
+    , type (<~>) (..)
+    )
+import Prettyprinter                 (Doc, Pretty, pretty, viaShow)
+import System.Exit                   (ExitCode (..))
+import System.IO                     (stdin, stdout)
 
-import qualified Colog.Core as Colog
-import qualified Control.Concurrent.MVar as MVar
-import qualified Control.Monad.Trans.Except as Except
+import qualified Colog.Core                       as Colog
+import qualified Control.Concurrent.MVar          as MVar
+import qualified Control.Monad.Trans.Except       as Except
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.Aeson as Aeson
-import qualified Data.Text as Text
-import qualified Language.LSP.Logging as LSP
-import qualified Language.LSP.Server as LSP
-import qualified System.Exit as Exit
+import qualified Data.Aeson                       as Aeson
+import qualified Data.Text                        as Text
+import qualified Language.LSP.Logging             as LSP
+import qualified Language.LSP.Server              as LSP
+import qualified System.Exit                      as Exit
 
 -- | The main entry point for the LSP server.
 run :: Maybe FilePath -> IO ()
-run = withLogger $ \ioLogger -> do
+run = runWith defaultEvaluateSettings
+
+-- | The main entry point for the LSP server.
+runWith :: EvaluateSettings -> Maybe FilePath -> IO ()
+runWith settings = withLogger $ \ioLogger -> do
   let clientLogger = Colog.cmap (fmap (Text.pack . show . pretty)) LSP.defaultClientLogger
 
   let lspLogger = clientLogger <> Colog.hoistLogAction liftIO ioLogger
@@ -82,13 +96,13 @@ run = withLogger $ \ioLogger -> do
 
   let staticHandlers _clientCapabilities =
         mconcat
-          [ hoverHandler
-          , didOpenTextDocumentNotificationHandler
-          , didSaveTextDocumentNotificationHandler
-          , executeCommandHandler
+          [ hoverHandler settings
+          , didOpenTextDocumentNotificationHandler settings
+          , didSaveTextDocumentNotificationHandler settings
+          , executeCommandHandler settings
           , documentFormattingHandler
           , documentLinkHandler
-          , completionHandler
+          , completionHandler settings
           , initializedHandler
           , workspaceChangeConfigurationHandler
           , textDocumentChangeHandler
@@ -116,7 +130,9 @@ run = withLogger $ \ioLogger -> do
                           Error   -> MessageType_Error
                           Warning -> MessageType_Warning
                           Info    -> MessageType_Info
+#if !MIN_TOOL_VERSION_ghc(9,2,0)
                           Log     -> MessageType_Log
+#endif
 
                     LSP.sendNotification SMethod_WindowShowMessage ShowMessageParams{..}
                     liftIO (fail (Text.unpack _message))
