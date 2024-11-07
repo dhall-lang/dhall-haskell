@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments     #-}
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -126,6 +127,9 @@ runWith settings = withLogger $ \ioLogger -> do
                           Error   -> MessageType_Error
                           Warning -> MessageType_Warning
                           Info    -> MessageType_Info
+#if !MIN_TOOL_VERSION_ghc(9,2,0)
+                          Log     -> MessageType_Log
+#endif
 
                     LSP.sendNotification SMethod_WindowShowMessage ShowMessageParams{..}
                     liftIO (fail (Text.unpack _message))
