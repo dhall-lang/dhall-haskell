@@ -475,7 +475,7 @@ Benchmark dhall-parser
     Main-Is: Main.hs
     Build-Depends:
         dhall                                         ,
-        gauge                     >= 0.2.3    && < 0.3,
+        tasty-bench               >= 0.4      && < 0.5,
     Default-Language: Haskell2010
     Other-Extensions:
         TypeApplications
@@ -488,5 +488,5 @@ Benchmark deep-nested-large-record
     Main-Is: Main.hs
     Build-Depends:
         dhall                                         ,
-        gauge                     >= 0.2.3    && < 0.3
+        tasty-bench               >= 0.4      && < 0.5,
     Default-Language: Haskell2010
