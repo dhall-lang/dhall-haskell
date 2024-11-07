@@ -5,7 +5,10 @@
 {-# LANGUAGE RecordWildCards    #-}
 
 {-| This is the entry point for the LSP server. -}
-module Dhall.LSP.Server(run) where
+module Dhall.LSP.Server (
+      run
+    , runWith
+    ) where
 
 import Colog.Core                    (LogAction, WithSeverity)
 import Control.Monad.IO.Class        (liftIO)
