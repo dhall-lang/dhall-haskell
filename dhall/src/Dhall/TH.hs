@@ -393,7 +393,9 @@ toConstructor typeParams GenerateOptions{..} haskellTypes outerTypeName (constru
 
         Just (Record kts) -> do
             let process (key, dhallFieldType) = do
-                    haskellFieldType <- toNestedHaskellType typeParams haskellTypes dhallFieldType
+                    haskellFieldType <- case fieldType key of
+                        Nothing -> toNestedHaskellType typeParams haskellTypes dhallFieldType
+                        Just haskellFieldType -> return haskellFieldType
 
                     return (Syntax.mkName (Text.unpack $ fieldModifier key), bang, haskellFieldType)
 
@@ -525,6 +527,8 @@ data GenerateOptions = GenerateOptions
     -- Note: The `constructorName` of `SingleConstructor` will be passed to this function, too.
     , fieldModifier :: Text -> Text
     -- ^ How to map a Dhall record field names to a Haskell record field names.
+    , fieldType :: Text -> Maybe Type
+    -- ^ Override the Haskell type used for a particular field of a Dhall record.
     , generateFromDhallInstance :: Bool
     -- ^ Generate a `FromDhall` instance for the Haskell type
     , generateToDhallInstance :: Bool
@@ -544,6 +548,7 @@ defaultGenerateOptions :: GenerateOptions
 defaultGenerateOptions = GenerateOptions
     { constructorModifier = id
     , fieldModifier = id
+    , fieldType = const Nothing
     , generateFromDhallInstance = True
     , generateToDhallInstance = True
     , makeStrict = False
