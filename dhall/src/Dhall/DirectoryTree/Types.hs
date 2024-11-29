@@ -27,6 +27,7 @@ module Dhall.DirectoryTree.Types
     , isMetadataSupported
     ) where
 
+import Data.ByteString          (ByteString)
 import Data.Functor.Identity    (Identity (..))
 import Data.Sequence            (Seq)
 import Data.Text                (Text)
@@ -72,6 +73,8 @@ type FileEntry = Entry Text
 data FilesystemEntry
     = DirectoryEntry (Entry (Seq FilesystemEntry))
     | FileEntry (Entry Text)
+    | BinaryFileEntry (Entry ByteString)
+    | TextFileEntry (Entry Text)
     deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall FilesystemEntry where
@@ -82,6 +85,10 @@ instance FromDhall FilesystemEntry where
                 DirectoryEntry <$> extract (autoWith normalizer) entry
             Make "file" entry ->
                 FileEntry <$> extract (autoWith normalizer) entry
+            Make "binary-file" entry ->
+                BinaryFileEntry <$> extract (autoWith normalizer) entry
+            Make "text-file" entry ->
+                TextFileEntry <$> extract (autoWith normalizer) entry
             expr -> Decode.typeError (expected (Decode.autoWith normalizer :: Decoder FilesystemEntry)) expr
         }
 

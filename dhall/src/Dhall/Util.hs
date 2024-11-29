@@ -9,6 +9,8 @@ module Dhall.Util
     , snipDoc
     , insert
     , _ERROR
+    , _WARNING
+    , printWarning
     , Censor(..)
     , Input(..)
     , Transitivity(..)
@@ -110,6 +112,21 @@ insert expression =
 -- | Prefix used for error messages
 _ERROR :: IsString string => string
 _ERROR = "\ESC[1;31mError\ESC[0m"
+
+-- | Prefix used for error messages
+_WARNING :: IsString string => string
+_WARNING = "\ESC[1;33mWarning\ESC[0m"
+
+-- | Output a warning message on stderr.
+printWarning :: (MonadIO m) => String -> m ()
+printWarning message = do
+    let warning =
+                "\n"
+            <> _WARNING
+            <> ": "
+            <> message
+
+    liftIO $ IO.hPutStrLn IO.stderr warning
 
 get
     :: (String -> Text -> Either ParseError a)

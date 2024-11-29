@@ -42,6 +42,7 @@ import System.FilePath           ((</>))
 import System.PosixCompat.Types  (FileMode, GroupID, UserID)
 
 import qualified Control.Exception           as Exception
+import qualified Data.ByteString             as ByteString
 import qualified Data.Foldable               as Foldable
 import qualified Data.Text                   as Text
 import qualified Data.Text.IO                as Text.IO
@@ -279,7 +280,7 @@ getUser (UserName name) =
 -- | Resolve a `Group` to a numerical id.
 getGroup :: Group -> IO GroupID
 getGroup (GroupId gid) = return gid
-getGroup (GroupName name) = 
+getGroup (GroupName name) =
 #ifdef mingw32_HOST_OS
     ioError $ mkIOError illegalOperationErrorType x Nothing Nothing
     where x = "System.Posix.User.getGroupEntryForName: not supported"
@@ -290,21 +291,29 @@ getGroup (GroupName name) =
 -- | Process a `FilesystemEntry`. Writes the content to disk and apply the
 -- metadata to the newly created item.
 processFilesystemEntry :: Bool -> FilePath -> FilesystemEntry -> IO ()
-processFilesystemEntry allowSeparators path (DirectoryEntry entry) = do
+processFilesystemEntry allowSeparators path (DirectoryEntry entry) =
+    processEntryWith path entry $ \path' content -> do
+        Directory.createDirectoryIfMissing allowSeparators path'
+        processFilesystemEntryList allowSeparators path' content
+processFilesystemEntry allowSeparators path (FileEntry entry) = do
+    Util.printWarning "`file` is deprecated and will be removed eventually. Please use `text-file` instead."
+    processFilesystemEntry allowSeparators path (TextFileEntry entry)
+processFilesystemEntry _ path (BinaryFileEntry entry) =
+    processEntryWith path entry ByteString.writeFile
+processFilesystemEntry _ path (TextFileEntry entry) =
+    processEntryWith path entry  Text.IO.writeFile
+
+-- | A helper function used by 'processFilesystemEntry'.
+processEntryWith
+    :: FilePath
+    -> Entry a
+    -> (FilePath -> a -> IO ())
+    -> IO ()
+processEntryWith path entry f = do
     let path' = path </> entryName entry
     when (hasMetadata entry && not isMetadataSupported) $
-        Exception.throwIO $ MetadataUnsupportedError path'
-    Directory.createDirectoryIfMissing allowSeparators path'
-    processFilesystemEntryList allowSeparators path' $ entryContent entry
-    -- It is important that we write the metadata after we wrote the content of
-    -- the directories/files below this directory as we might lock ourself out
-    -- by changing ownership or permissions.
-    applyMetadata entry path'
-processFilesystemEntry _ path (FileEntry entry) = do
-    let path' = path </> entryName entry
-    when (hasMetadata entry && not isMetadataSupported) $
-        Exception.throwIO $ MetadataUnsupportedError path'
-    Text.IO.writeFile path' $ entryContent entry
+        Exception.throwIO (MetadataUnsupportedError path')
+    f path' (entryContent entry)
     -- It is important that we write the metadata after we wrote the content of
     -- the file as we might lock ourself out by changing ownership or
     -- permissions.
