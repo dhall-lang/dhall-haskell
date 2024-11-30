@@ -1,24 +1,25 @@
 queue_rules:
-- name: default
-  conditions:
-  - check-success=hydra
+  - name: default
+    queue_conditions:
+      - label=merge me
+      - '#approved-reviews-by>=1'
+      - '#changes-requested-reviews-by=0'
+    merge_conditions:
+      - check-success=hydra
   # Mergify explicitly recommends listing each status check separately:
   # https://docs.mergify.io/conditions/#validating-all-status-checks
-  - check-success=macOS-latest - stack.yaml
-  - check-success=ubuntu-latest - stack.yaml
-  - check-success=windows-latest - stack.yaml
+      - check-success=macOS-latest - stack.yaml
+      - check-success=ubuntu-latest - stack.yaml
+      - check-success=windows-latest - stack.yaml
+    merge_method: squash
+
 pull_request_rules:
-- actions:
-    queue:
-      name: default
-      method: squash
-  name: Automatically merge pull requests
-  conditions:
-  - label=merge me
-  - ! '#approved-reviews-by>=1'
-  - ! '#changes-requested-reviews-by=0'
-- actions:
-    delete_head_branch: {}
-  name: Delete head branch after merge
-  conditions:
-  - merged
+  - actions:
+      delete_head_branch: {}
+    name: Delete head branch after merge
+    conditions:
+      - merged
+  - name: Automatically merge pull requests
+    conditions: []
+    actions:
+      queue:
