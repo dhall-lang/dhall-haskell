@@ -20,12 +20,14 @@ module Dhall.TH
     , defaultGenerateOptions
     ) where
 
+import Control.Monad             (forM_)
 import Data.Bifunctor            (first)
 import Data.Text                 (Text)
 import Dhall                     (FromDhall, ToDhall)
 import Dhall.Syntax              (Expr (..), FunctionBinding (..), Var (..))
 import GHC.Generics              (Generic)
 import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
+import Lens.Family               (view)
 import Prettyprinter             (Pretty)
 
 import Language.Haskell.TH.Syntax
@@ -52,6 +54,7 @@ import qualified Data.Time                   as Time
 import qualified Data.Typeable               as Typeable
 import qualified Dhall
 import qualified Dhall.Core                  as Core
+import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
@@ -90,7 +93,27 @@ staticDhallExpression :: Text -> Q Exp
 staticDhallExpression text = do
     TH.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
 
-    expression <- TH.runIO (Dhall.inputExpr text)
+    (expression, status) <- TH.runIO $ do
+        parsed <- Dhall.parseWithSettings Dhall.defaultInputSettings text
+
+        (resolved, status) <- Dhall.resolveAndStatusWithSettings Dhall.defaultInputSettings parsed
+
+        _ <- Dhall.typecheckWithSettings Dhall.defaultInputSettings resolved
+
+        let normalized = Dhall.normalizeWithSettings Dhall.defaultInputSettings resolved
+
+        pure (normalized, status)
+
+    forM_ (Dhall.Map.keys (view Dhall.Import.cache status)) $ \chained ->
+        case Dhall.Import.chainedImport chained of
+            Core.Import
+                { importHashed = Core.ImportHashed
+                    { importType = Core.Local prefix file
+                    }
+                } -> do
+                    fp <- Dhall.Import.localToPath prefix file
+                    TH.addDependentFile fp
+            _ -> return ()
 
     dataToExpQ (fmap liftText . Typeable.cast) expression
   where
