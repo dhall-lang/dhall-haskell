@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 import System.FilePath ((</>))
@@ -17,7 +18,9 @@ import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Schemas
 import qualified Dhall.Test.SemanticHash
+#ifndef CROSS
 import qualified Dhall.Test.TH
+#endif
 import qualified Dhall.Test.Tags
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeInference
@@ -69,7 +72,9 @@ getAllTests = do
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
                 , Dhall.Test.Dhall.tests
+#ifndef CROSS
                 , Dhall.Test.TH.tests
+#endif
                 , Dhall.Test.Package.tests
                 ]
 
