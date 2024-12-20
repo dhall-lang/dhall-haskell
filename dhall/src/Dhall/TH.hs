@@ -20,12 +20,14 @@ module Dhall.TH
     , defaultGenerateOptions
     ) where
 
+import Control.Monad             (forM_)
 import Data.Bifunctor            (first)
 import Data.Text                 (Text)
 import Dhall                     (FromDhall, ToDhall)
 import Dhall.Syntax              (Expr (..), FunctionBinding (..), Var (..))
 import GHC.Generics              (Generic)
 import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
+import Lens.Family               (view)
 import Prettyprinter             (Pretty)
 
 import Language.Haskell.TH.Syntax
@@ -52,11 +54,12 @@ import qualified Data.Time                   as Time
 import qualified Data.Typeable               as Typeable
 import qualified Dhall
 import qualified Dhall.Core                  as Core
+import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Pretty
 import qualified Dhall.Util
 import qualified GHC.IO.Encoding
-import qualified Language.Haskell.TH.Syntax  as Syntax
+import qualified Language.Haskell.TH.Syntax  as TH
 import qualified Numeric.Natural
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.IO
@@ -88,15 +91,35 @@ import qualified System.IO
 -}
 staticDhallExpression :: Text -> Q Exp
 staticDhallExpression text = do
-    Syntax.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
+    TH.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
 
-    expression <- Syntax.runIO (Dhall.inputExpr text)
+    (expression, status) <- TH.runIO $ do
+        parsed <- Dhall.parseWithSettings Dhall.defaultInputSettings text
+
+        (resolved, status) <- Dhall.resolveAndStatusWithSettings Dhall.defaultInputSettings parsed
+
+        _ <- Dhall.typecheckWithSettings Dhall.defaultInputSettings resolved
+
+        let normalized = Dhall.normalizeWithSettings Dhall.defaultInputSettings resolved
+
+        pure (normalized, status)
+
+    forM_ (Dhall.Map.keys (view Dhall.Import.cache status)) $ \chained ->
+        case Dhall.Import.chainedImport chained of
+            Core.Import
+                { importHashed = Core.ImportHashed
+                    { importType = Core.Local prefix file
+                    }
+                } -> do
+                    fp <- Dhall.Import.localToPath prefix file
+                    TH.addDependentFile fp
+            _ -> return ()
 
     dataToExpQ (fmap liftText . Typeable.cast) expression
   where
     -- A workaround for a problem in TemplateHaskell (see
     -- https://stackoverflow.com/questions/38143464/cant-find-inerface-file-declaration-for-variable)
-    liftText = fmap (AppE (VarE 'Text.pack)) . Syntax.lift . Text.unpack
+    liftText = fmap (AppE (VarE 'Text.pack)) . TH.lift . Text.unpack
 
 {-| A quasi-quoter for Dhall expressions.
 
@@ -207,14 +230,14 @@ toNestedHaskellType typeParams haskellTypes = loop
 
         Var v
             | Just (V param index) <- List.find (v ==) typeParams -> do
-                let name = Syntax.mkName $ (Text.unpack param) ++ (show index)
+                let name = TH.mkName $ (Text.unpack param) ++ (show index)
 
                 return (VarT name)
 
             | otherwise -> fail $ message v
 
         _   | Just haskellType <- List.find (predicate dhallType) haskellTypes -> do
-                let name = Syntax.mkName (Text.unpack (typeName haskellType))
+                let name = TH.mkName (Text.unpack (typeName haskellType))
 
                 return (ConT name)
             | otherwise -> fail $ message dhallType
@@ -225,7 +248,7 @@ derivingGenericClause = DerivClause (Just StockStrategy) [ ConT ''Generic ]
 
 -- | Generates a `FromDhall` instances.
 fromDhallInstance
-    :: Syntax.Name -- ^ The name of the type the instances is for
+    :: TH.Name -- ^ The name of the type the instances is for
     -> Q Exp       -- ^ A TH splice generating some `Dhall.InterpretOptions`
     -> Q [Dec]
 fromDhallInstance n interpretOptions = [d|
@@ -235,7 +258,7 @@ fromDhallInstance n interpretOptions = [d|
 
 -- | Generates a `ToDhall` instances.
 toDhallInstance
-    :: Syntax.Name -- ^ The name of the type the instances is for
+    :: TH.Name -- ^ The name of the type the instances is for
     -> Q Exp       -- ^ A TH splice generating some `Dhall.InterpretOptions`
     -> Q [Dec]
 toDhallInstance n interpretOptions = [d|
@@ -265,15 +288,15 @@ toDeclaration generateOptions@GenerateOptions{..} haskellTypes typ =
         interpretOptions = generateToInterpretOptions generateOptions typ
 
 #if MIN_VERSION_template_haskell(2,21,0)
-        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) Syntax.BndrReq
+        toTypeVar (V n i) = TH.PlainTV (TH.mkName (Text.unpack n ++ show i)) TH.BndrReq
 #elif MIN_VERSION_template_haskell(2,17,0)
-        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i)) ()
+        toTypeVar (V n i) = TH.PlainTV (TH.mkName (Text.unpack n ++ show i)) ()
 #else
-        toTypeVar (V n i) = Syntax.PlainTV (Syntax.mkName (Text.unpack n ++ show i))
+        toTypeVar (V n i) = TH.PlainTV (TH.mkName (Text.unpack n ++ show i))
 #endif
 
         toDataD typeName typeParams constructors = do
-            let name = Syntax.mkName (Text.unpack typeName)
+            let name = TH.mkName (Text.unpack typeName)
 
             let params = fmap toTypeVar typeParams
 
@@ -355,7 +378,7 @@ toConstructor
     -- ^ @(constructorName, fieldType)@
     -> Q Con
 toConstructor typeParams GenerateOptions{..} haskellTypes outerTypeName (constructorName, maybeAlternativeType) = do
-    let name = Syntax.mkName (Text.unpack $ constructorModifier constructorName)
+    let name = TH.mkName (Text.unpack $ constructorModifier constructorName)
 
     let strictness = if makeStrict then SourceStrict else NoSourceStrictness
 
@@ -368,7 +391,7 @@ toConstructor typeParams GenerateOptions{..} haskellTypes outerTypeName (constru
                     && typeName haskellType /= outerTypeName
             , Just haskellType <- List.find predicate haskellTypes -> do
                 let innerName =
-                        Syntax.mkName (Text.unpack (typeName haskellType))
+                        TH.mkName (Text.unpack (typeName haskellType))
 
                 return (NormalC name [ (bang, ConT innerName) ])
 
@@ -376,7 +399,7 @@ toConstructor typeParams GenerateOptions{..} haskellTypes outerTypeName (constru
             let process (key, dhallFieldType) = do
                     haskellFieldType <- toNestedHaskellType typeParams haskellTypes dhallFieldType
 
-                    return (Syntax.mkName (Text.unpack $ fieldModifier key), bang, haskellFieldType)
+                    return (TH.mkName (Text.unpack $ fieldModifier key), bang, haskellFieldType)
 
             varBangTypes <- traverse process (Dhall.Map.toList $ Core.recordFieldValue <$> kts)
 
@@ -508,16 +531,16 @@ generateToInterpretOptions GenerateOptions{..} haskellType = [| Dhall.InterpretO
                 mkMatch n = Match (textToPat $ f n) (NormalB $ textToExp n) []
 
         nameE :: Exp
-        nameE = Syntax.VarE $ Syntax.mkName "n"
+        nameE = TH.VarE $ TH.mkName "n"
 
         nameP :: Pat
-        nameP = Syntax.VarP $ Syntax.mkName "n"
+        nameP = TH.VarP $ TH.mkName "n"
 
         textToExp :: Text -> Exp
-        textToExp = Syntax.LitE . Syntax.StringL . Text.unpack
+        textToExp = TH.LitE . TH.StringL . Text.unpack
 
         textToPat :: Text -> Pat
-        textToPat = Syntax.LitP . Syntax.StringL . Text.unpack
+        textToPat = TH.LitP . TH.StringL . Text.unpack
 
 -- | Generate a Haskell datatype declaration with one constructor from a Dhall
 -- type.
@@ -605,8 +628,8 @@ makeHaskellTypes = makeHaskellTypesWith defaultGenerateOptions
 -- > makeHaskellTypes = makeHaskellTypesWith defaultGenerateOptions
 makeHaskellTypesWith :: GenerateOptions -> [HaskellType Text] -> Q [Dec]
 makeHaskellTypesWith generateOptions haskellTypes = do
-    Syntax.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
+    TH.runIO (GHC.IO.Encoding.setLocaleEncoding System.IO.utf8)
 
-    haskellTypes' <- traverse (traverse (Syntax.runIO . Dhall.inputExpr)) haskellTypes
+    haskellTypes' <- traverse (traverse (TH.runIO . Dhall.inputExpr)) haskellTypes
 
     concat <$> traverse (toDeclaration generateOptions haskellTypes') haskellTypes'
