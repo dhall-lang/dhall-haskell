@@ -269,6 +269,8 @@ Common common
       if flag(network-tests)
         CPP-Options:
           -DNETWORK_TESTS
+    if flag(cross)
+      CPP-Options: -DCROSS
 
     GHC-Options: -Wall -Wcompat -Wincomplete-uni-patterns -optP-Wno-unicode-homoglyph
 
@@ -433,10 +435,12 @@ Test-Suite tasty
         Dhall.Test.Schemas
         Dhall.Test.SemanticHash
         Dhall.Test.Substitution
-        Dhall.Test.TH
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference
         Dhall.Test.Util
+    if !flag(cross)
+        Other-Modules:
+            Dhall.Test.TH
     Build-Depends:
         dhall                                          ,
         foldl                                    < 1.5 ,
