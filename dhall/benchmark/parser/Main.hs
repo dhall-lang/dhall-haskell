@@ -1,54 +1,54 @@
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
 import Control.Exception (throw)
 import Control.Monad     (forM)
-import Data.Map          (Map, foldrWithKey, singleton, unions)
+import Data.Map          (Map)
+import Data.Text         (Text)
 import Data.Void         (Void)
-import Gauge             (bench, bgroup, defaultMain, env, nf, whnf)
-
-import System.Directory
+import Test.Tasty.Bench
 
 import qualified Data.ByteString.Lazy
-import qualified Data.Text            as T
-import qualified Data.Text.IO         as TIO
+import qualified Data.Map             as Map
+import qualified Data.Text            as Text
+import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core           as Dhall
 import qualified Dhall.Parser         as Dhall
-import qualified Gauge
+import qualified System.Directory     as Directory
 
-type PreludeFiles = Map FilePath T.Text
+type PreludeFiles = Map FilePath Text
 
 loadPreludeFiles :: IO PreludeFiles
 loadPreludeFiles = loadDirectory "./dhall-lang/Prelude"
     where
         loadDirectory :: FilePath -> IO PreludeFiles
         loadDirectory dir =
-            withCurrentDirectory dir $ do
-                files <- getCurrentDirectory >>= listDirectory
+            Directory.withCurrentDirectory dir $ do
+                files <- Directory.getCurrentDirectory >>= Directory.listDirectory
                 results <- forM files $ \file -> do
-                    file' <- makeAbsolute file
-                    doesExist <- doesFileExist file'
+                    file' <- Directory.makeAbsolute file
+                    doesExist <- Directory.doesFileExist file'
                     if doesExist
                        then loadFile file'
                        else loadDirectory file'
-                pure $ unions results
+                pure $ Map.unions results
 
         loadFile :: FilePath -> IO PreludeFiles
-        loadFile path = singleton path <$> TIO.readFile path
+        loadFile path = Map.singleton path <$> Data.Text.IO.readFile path
 
-benchParser :: PreludeFiles -> Gauge.Benchmark
+benchParser :: PreludeFiles -> Benchmark
 benchParser =
       bgroup "exprFromText"
-    . foldrWithKey (\name expr -> (benchExprFromText name expr :)) []
+    . Map.foldrWithKey (\name expr -> (benchExprFromText name expr :)) []
 
-benchExprFromText :: String -> T.Text -> Gauge.Benchmark
-benchExprFromText name expr =
+benchExprFromText :: String -> Text -> Benchmark
+benchExprFromText name !expr =
     bench name $ whnf (Dhall.exprFromText "(input)") expr
 
-benchExprFromBytes
-    :: String -> Data.ByteString.Lazy.ByteString -> Gauge.Benchmark
+benchExprFromBytes :: String -> Data.ByteString.Lazy.ByteString -> Benchmark
 benchExprFromBytes name bs = bench name (nf f bs)
   where
     f bytes =
@@ -56,8 +56,8 @@ benchExprFromBytes name bs = bench name (nf f bs)
             Left  exception  -> error (show exception)
             Right expression -> expression :: Dhall.Expr Void Dhall.Import
 
-benchNfExprFromText :: String -> T.Text -> Gauge.Benchmark
-benchNfExprFromText name expr =
+benchNfExprFromText :: String -> Text -> Benchmark
+benchNfExprFromText name !expr =
     bench name $ nf (either throw id . Dhall.exprFromText "(input)") expr
 
 main :: IO ()
@@ -71,20 +71,21 @@ main = do
                 ]
         , env kubernetesExample $
             benchExprFromBytes "Kubernetes/Binary"
-        , benchExprFromText "Long variable names" (T.replicate 1000000 "x")
-        , benchExprFromText "Large number of function arguments" (T.replicate 10000 "x ")
-        , benchExprFromText "Long double-quoted strings" ("\"" <> T.replicate 1000000 "x" <> "\"")
-        , benchExprFromText "Long single-quoted strings" ("''" <> T.replicate 1000000 "x" <> "''")
-        , benchExprFromText "Whitespace" (T.replicate 1000000 " " <> "x")
-        , benchExprFromText "Line comment" ("x -- " <> T.replicate 1000000 " ")
-        , benchExprFromText "Block comment" ("x {- " <> T.replicate 1000000 " " <> "-}")
+        , benchExprFromText "Long variable names" (Text.replicate 1000000 "x")
+        , benchExprFromText "Large number of function arguments" (Text.replicate 10000 "x ")
+        , benchExprFromText "Long double-quoted strings" ("\"" <> Text.replicate 1000000 "x" <> "\"")
+        , benchExprFromText "Long single-quoted strings" ("''" <> Text.replicate 1000000 "x" <> "''")
+        , benchExprFromText "Whitespace" (Text.replicate 1000000 " " <> "x")
+        , benchExprFromText "Line comment" ("x -- " <> Text.replicate 1000000 " ")
+        , benchExprFromText "Block comment" ("x {- " <> Text.replicate 1000000 " " <> "-}")
         , benchExprFromText "Deeply nested parentheses" "((((((((((((((((x))))))))))))))))"
         , benchParser prelude
         , env cpkgExample $
             benchNfExprFromText "CPkg/Text"
         ]
-    where cpkgExample = TIO.readFile "benchmark/examples/cpkg.dhall"
-          issue108Text = TIO.readFile "benchmark/examples/issue108.dhall"
-          issue108Bytes = Data.ByteString.Lazy.readFile "benchmark/examples/issue108.dhall.bin"
-          issues = (,) <$> issue108Text <*> issue108Bytes
-          kubernetesExample = Data.ByteString.Lazy.readFile "benchmark/examples/kubernetes.dhall.bin"
+    where
+        cpkgExample = Data.Text.IO.readFile "benchmark/parser/examples/cpkg.dhall"
+        issue108Text = Data.Text.IO.readFile "benchmark/parser/examples/issue108.dhall"
+        issue108Bytes = Data.ByteString.Lazy.readFile "benchmark/parser/examples/issue108.dhallb"
+        issues = (,) <$> issue108Text <*> issue108Bytes
+        kubernetesExample = Data.ByteString.Lazy.readFile "benchmark/parser/examples/kubernetes.dhallb"

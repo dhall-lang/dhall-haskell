@@ -1,14 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
-import Data.Void (Void)
-import Gauge     (defaultMain)
+import Data.Void        (Void)
+import Test.Tasty.Bench
 
 import qualified Data.Sequence   as Seq
 import qualified Dhall.Core      as Core
 import qualified Dhall.Import    as Import
 import qualified Dhall.TypeCheck as TypeCheck
-import qualified Gauge
 
 dhallPreludeImport :: Core.Import
 dhallPreludeImport = Core.Import
@@ -22,8 +21,8 @@ dhallPreludeImport = Core.Import
     }
   }
 
-issue412 :: Core.Expr s Void -> Gauge.Benchmarkable
-issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
+issue412 :: Core.Expr s Void -> Benchmarkable
+issue412 prelude = whnf TypeCheck.typeOf expr
   where
     expr
       = Core.Let (Core.Binding Nothing "prelude" Nothing Nothing Nothing prelude)
@@ -34,8 +33,8 @@ issue412 prelude = Gauge.whnf TypeCheck.typeOf expr
     little = Core.makeFieldSelection "little"
     foo = Core.makeFieldSelection "Foo"
 
-unionPerformance :: Core.Expr s Void -> Gauge.Benchmarkable
-unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
+unionPerformance :: Core.Expr s Void -> Benchmarkable
+unionPerformance prelude = whnf TypeCheck.typeOf expr
   where
     expr =
         Core.Let
@@ -64,10 +63,10 @@ unionPerformance prelude = Gauge.whnf TypeCheck.typeOf expr
 main :: IO ()
 main =
   defaultMain
-    [ Gauge.env prelude $ \p ->
-      Gauge.bgroup "Prelude"
-        [ Gauge.bench "issue 412" (issue412 p)
-        , Gauge.bench "union performance" (unionPerformance p)
+    [ env prelude $ \p ->
+      bgroup "Prelude"
+        [ bench "issue 412" (issue412 p)
+        , bench "union performance" (unionPerformance p)
         ]
     ]
   where prelude = Import.load (Core.Embed dhallPreludeImport)
