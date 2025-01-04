@@ -26,7 +26,7 @@ error-prone and difficult to maintain/migrate.
 This post explains in more detail the motivation behind programmable
 configuration files:
 
-* [Programmable configuration files](https://github.com/dhall-lang/dhall-lang/wiki/Programmable-configuration-files)
+* [Programmable configuration files](https://docs.dhall-lang.org/discussions/Programmable-configuration-files.html)
 
 *"Why not configure my program using Haskell code?"*
 
