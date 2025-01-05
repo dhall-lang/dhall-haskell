@@ -1857,7 +1857,7 @@ import Dhall
 -- You can find an up-to-date list of available built-in functions and operators
 -- here:
 --
--- <https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators Built-in types, functions, and operators>
+-- <https://docs.dhall-lang.org/references/Built-in-types.html>
 
 -- $caveats
 --
@@ -2316,4 +2316,4 @@ import Dhall
 
 -- $faq
 --
--- <https://github.com/dhall-lang/dhall-lang/wiki/Frequently-Asked-Questions-(FAQ) Frequently Asked Questions (FAQ)>
+-- <https://docs.dhall-lang.org/howtos/FAQ.html>
