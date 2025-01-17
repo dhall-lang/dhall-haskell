@@ -1,3 +1,23 @@
+1.42.2
+
+* [Supports standard version 23.1.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v23.1.0)
+  * [Allow `Natural` and `Integer` literals in binary notation](https://github.com/dhall-lang/dhall-haskell/pull/2540)
+* Fix macOS build [[#2561](https://github.com/dhall-lang/dhall-haskell/pull/2561)] / [[#2586](https://github.com/dhall-lang/dhall-haskell/pull/2586)]
+* [`dhall to-directory-tree`: Fix support for empty `Map`s](https://github.com/dhall-lang/dhall-haskell/pull/2609)
+* [`Dhall.TH`: Improve recompilation checking](https://github.com/dhall-lang/dhall-haskell/pull/2620)
+  * `Dhall.TH` utilities now use `addDependentFile` internally so that GHC will recompile if any Dhall dependencies change
+* Performance improvements
+  * Optimize `Natural/fold`: [[#2585](https://github.com/dhall-lang/dhall-haskell/pull/2585)] / [[#2596](https://github.com/dhall-lang/dhall-haskell/pull/2596)]
+  * [Improve `Dhall.Map.traverseWithKey` performance](https://github.com/dhall-lang/dhall-haskell/pull/2589)
+    * The fold will now short-circuit if it reaches a fixed point
+  * [#2611](https://github.com/dhall-lang/dhall-haskell/pull/2611)
+* Fixes and improvements to test suite
+  * [#2593](https://github.com/dhall-lang/dhall-haskell/pull/2593)
+* Fixes and improvements to haddocks
+  * [#2546](https://github.com/dhall-lang/dhall-haskell/pull/2546)
+* Fixes and improvements to code formatting
+  * [#2608](https://github.com/dhall-lang/dhall-haskell/pull/2608)
+
 1.42.1
 
 * Add several new entrypoints to `Dhall` module [[#2534](https://github.com/dhall-lang/dhall-haskell/pull/2534)] / [[#2544](https://github.com/dhall-lang/dhall-haskell/pull/2544)]
