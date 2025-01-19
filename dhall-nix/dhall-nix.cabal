@@ -49,7 +49,7 @@ Executable dhall-to-nix
     Other-Modules:
         Paths_dhall_nix
     Build-Depends:
-        base                                ,
+        base             >= 4.11.0.0 && < 5 ,
         dhall                               ,
         dhall-nix                           ,
         hnix                                ,
