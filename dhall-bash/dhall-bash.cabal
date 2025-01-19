@@ -44,11 +44,11 @@ Executable dhall-to-bash
     Other-Modules:
         Paths_dhall_bash
     Build-Depends:
-        base                                  ,
-        bytestring                            ,
-        dhall                                 ,
-        dhall-bash                            ,
-        optparse-generic >= 1.1.1    && < 1.6 ,
+        base             >= 4.11.0.0 && < 5  ,
+        bytestring                           ,
+        dhall                                ,
+        dhall-bash                           ,
+        optparse-generic >= 1.1.1    && < 1.6,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010
