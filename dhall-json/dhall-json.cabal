@@ -68,13 +68,13 @@ Executable dhall-to-json
     Hs-Source-Dirs: dhall-to-json
     Main-Is: Main.hs
     Build-Depends:
-        base                                   ,
-        aeson                                  ,
-        aeson-pretty         >= 0.8.5 && < 0.9 ,
-        bytestring                             ,
-        dhall                                  ,
-        dhall-json                             ,
-        optparse-applicative                   ,
+        base                 >= 4.11.0.0 && < 5  ,
+        aeson                                    ,
+        aeson-pretty         >= 0.8.5    && < 0.9,
+        bytestring                               ,
+        dhall                                    ,
+        dhall-json                               ,
+        optparse-applicative                     ,
         text
     Other-Modules:
         Paths_dhall_json
@@ -85,7 +85,7 @@ Executable dhall-to-yaml
     Hs-Source-Dirs: dhall-to-yaml
     Main-Is: Main.hs
     Build-Depends:
-        base      ,
+        base       >= 4.11.0.0 && < 5,
         dhall-json
     Other-Modules:
         Paths_dhall_json
@@ -96,7 +96,7 @@ Executable json-to-dhall
     Hs-Source-Dirs: json-to-dhall
     Main-Is: Main.hs
     Build-Depends:
-        base                                             ,
+        base                        >= 4.11.0.0 && < 5   ,
         aeson                                            ,
         ansi-terminal               >= 0.6.3.1  && < 1.2 ,
         bytestring                                       ,
@@ -117,14 +117,14 @@ Test-Suite tasty
     Hs-Source-Dirs: tasty
     Main-Is: Main.hs
     Build-Depends:
-        base               ,
-        aeson              ,
-        bytestring         ,
-        dhall              ,
-        dhall-json         ,
-        tasty        <  1.6,
-        text               ,
-        tasty-hunit  >= 0.2,
+        base         >= 4.11.0.0 && < 5   ,
+        aeson                             ,
+        bytestring                        ,
+        dhall                             ,
+        dhall-json                        ,
+        tasty                       <  1.6,
+        text                              ,
+        tasty-hunit  >= 0.2               ,
         tasty-silver >= 3.0
     GHC-Options: -Wall
     Default-Language: Haskell2010
