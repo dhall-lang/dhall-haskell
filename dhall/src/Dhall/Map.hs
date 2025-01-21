@@ -1,9 +1,11 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveLift         #-}
-{-# LANGUAGE ExplicitForAll     #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DeriveLift            #-}
+{-# LANGUAGE ExplicitForAll        #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 -- | `Map` type used to represent records and unions
 
@@ -76,9 +78,12 @@ import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
 import Prelude                    hiding (filter, lookup)
 
+import qualified Data.Foldable.WithIndex as Foldable.WithIndex
+import qualified Data.Functor.WithIndex as Functor.WithIndex
 import qualified Data.List
 import qualified Data.Map.Strict
 import qualified Data.Set
+import qualified Data.Traversable.WithIndex as Traversable.WithIndex
 import qualified GHC.Exts
 import qualified Prelude
 
@@ -157,6 +162,18 @@ instance Ord k => GHC.Exts.IsList (Map k v) where
     fromList = Dhall.Map.fromList
 
     toList = Dhall.Map.toList
+
+instance Ord k => Foldable.WithIndex.FoldableWithIndex k (Map k) where
+    ifoldMap = foldMapWithKey
+    {-# INLINABLE ifoldMap #-}
+
+instance Functor.WithIndex.FunctorWithIndex k (Map k) where
+    imap = mapWithKey
+    {-# INLINABLE imap #-}
+
+instance Ord k => Traversable.WithIndex.TraversableWithIndex k (Map k) where
+    itraverse = traverseWithKey
+    {-# INLINABLE itraverse #-}
 
 -- | Create an empty `Map`
 empty :: Ord k => Map k v
