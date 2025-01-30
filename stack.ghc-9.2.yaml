@@ -18,9 +18,10 @@ extra-deps:
   - hnix-store-core-0.6.1.0@sha256:0171c3a571ab263c3e3aa3e6daca15602f2030a6862cb032038017e6d0265898,3882
   - hnix-store-remote-0.6.0.0@sha256:a8ea18bb355164bfd357fac12b0c5d32c95ffd455260f8b6c7fcaeddebf5918c,3270
   - logict-0.7.0.3
-  - lsp-2.1.0.0
-  - lsp-types-2.0.1.0
-  - lsp-test-0.15.0.1
+  - lsp-2.7.0.1@sha256:239f926026b6181ca5b35874f5458415baba46164444df434e0df6c4a586361c,3868
+  - lsp-test-0.17.1.1@sha256:0eb5df735429ec88579c11ca1a8d8c20734ff049dc839ceeb697e53c845f701f,4422
+  - lsp-types-2.3.0.1@sha256:a5497aa4ae7b27d956df8dab701495d3062b88eee52e3a6c65fc13fa28b7b191,34230
+  - mod-0.2.0.1@sha256:eeb316fef3a8c12f4e83bbeeea748e74d75fca54d4498d574ace92e464adb05a,2409
   - optparse-applicative-0.18.1.0@sha256:b4cf8d9018e5e67cb1f14edb5130b6d05ad8bc1b5f6bd4efaa6ec0b7f28f559d,5132
   - optparse-generic-1.5.2
   - row-types-1.0.1.2@sha256:4d4c7cb95d06a32b28ba977852d52a26b4c1f695ef083a6fd874ab6d79933b64,3071
