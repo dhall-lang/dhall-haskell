@@ -67,7 +67,15 @@ runWith settings = withLogger $ \ioLogger -> do
 
   let defaultConfig = def
 
+#if MIN_VERSION_lsp(2,2,0)
+  let configSection = "dhall"
+
+  let onConfigChange _newConfig = return ()
+
+  let parseConfig _oldConfig json =
+#else
   let onConfigurationChange _oldConfig json =
+#endif
         case fromJSON json of
             Aeson.Success config -> Right config
             Aeson.Error   string -> Left (Text.pack string)
