@@ -91,12 +91,17 @@ import Text.Megaparsec               (SourcePos (..), unPos)
 import qualified Data.Aeson                  as Aeson
 import qualified Data.Map.Strict             as Map
 import qualified Data.Text                   as Text
-import qualified Data.Text.Utf16.Rope        as Rope
 import qualified Language.LSP.Protocol.Types as LSP.Types
 import qualified Language.LSP.Server         as LSP
 import qualified Language.LSP.VFS            as LSP
 import qualified Network.URI                 as URI
 import qualified Network.URI.Encode          as URI
+
+#if MIN_VERSION_lsp(2,4,0)
+import qualified Data.Text.Utf16.Rope.Mixed as Rope
+#else
+import qualified Data.Text.Utf16.Rope as Rope
+#endif
 
 liftLSP :: LspT ServerConfig IO a -> HandlerM a
 liftLSP m = lift (lift m)
@@ -226,7 +231,11 @@ documentLinkHandler =
               filePath <- localToPath prefix file
               let filePath' = basePath </> filePath  -- absolute file path
               let _range = rangeToJSON range_
+#if MIN_VERSION_lsp(2,5,0)
+              let _target = Just (filePathToUri filePath')
+#else
               let _target = Just (getUri (filePathToUri filePath'))
+#endif
               let _tooltip = Nothing
               let _data_ = Nothing
               return [DocumentLink {..}]
@@ -234,7 +243,11 @@ documentLinkHandler =
             go (range_, Import (ImportHashed _ (Remote url)) _) = do
               let _range = rangeToJSON range_
               let url' = url { headers = Nothing }
+#if MIN_VERSION_lsp(2,5,0)
+              let _target = Just (Uri (pretty url'))
+#else
               let _target = Just (pretty url')
+#endif
               let _tooltip = Nothing
               let _data_ = Nothing
               return [DocumentLink {..}]
