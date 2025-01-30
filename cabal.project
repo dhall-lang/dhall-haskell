@@ -5,8 +5,11 @@ packages:
   ./dhall-docs
   ./dhall-json
   ./dhall-lsp-server
-  ./dhall-nix
-  ./dhall-nixpkgs
   ./dhall-openapi
   ./dhall-toml
   ./dhall-yaml
+
+if impl(ghc < 9.8)
+  packages:
+    ./dhall-nix
+    ./dhall-nixpkgs
