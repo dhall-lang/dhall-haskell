@@ -1,5 +1,5 @@
 Name: dhall-docs
-Version: 1.0.11
+Version: 1.0.12
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -110,8 +110,8 @@ Executable dhall-docs
     Hs-Source-Dirs: dhall-docs
     Main-Is: Main.hs
     Build-Depends:
-        base      ,
-        dhall     ,
+        base       >= 4.11.0.0 && < 5,
+        dhall                        ,
         dhall-docs
     Other-Modules:
         Paths_dhall_docs
@@ -124,10 +124,10 @@ Test-Suite doctest
     Main-Is: Main.hs
     GHC-Options: -Wall
     Build-Depends:
-        base                           ,
-        directory,
-        filepath                 < 1.6 ,
-        doctest    >= 0.7.0
+        base      >= 4.11.0.0 && < 5  ,
+        directory                     ,
+        filepath                 < 1.6,
+        doctest   >= 0.7.0
     Other-Extensions: OverloadedStrings RecordWildCards
     Default-Language: Haskell2010
 
@@ -136,12 +136,12 @@ Test-Suite tasty
     Hs-Source-Dirs: tasty
     Main-Is: Main.hs
     Build-Depends:
-        base                              ,
-        bytestring                        ,
-        containers                        ,
-        dhall                             ,
-        dhall-docs                        ,
-        foldl        < 1.5                ,
+        base       >= 4.11.0.0 && < 5   ,
+        bytestring                      ,
+        containers                      ,
+        dhall                           ,
+        dhall-docs                      ,
+        foldl                     < 1.5 ,
 
         -- lucid preserves input attribute order since v2.11.0
         lucid        >= 2.11.0            ,

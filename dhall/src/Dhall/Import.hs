@@ -172,6 +172,7 @@ import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
 import Dhall.TypeCheck            (TypeError)
+import Dhall.Util                 (printWarning)
 
 import Dhall.Syntax
     ( Chunks (..)
@@ -1279,15 +1280,6 @@ loadWithManager newManager =
     loadWithStatus
         (makeEmptyStatus newManager defaultOriginHeaders ".")
         UseSemanticCache
-
-printWarning :: (MonadIO m) => String -> m ()
-printWarning message = do
-    let warning =
-                "\n"
-            <> "\ESC[1;33mWarning\ESC[0m: "
-            <> message
-
-    liftIO $ System.IO.hPutStrLn System.IO.stderr warning
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.

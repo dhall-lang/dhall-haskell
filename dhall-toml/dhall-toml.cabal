@@ -1,5 +1,5 @@
 Name:               dhall-toml
-Version:            1.0.3
+Version:            1.0.4
 Cabal-Version:      >=1.10
 Build-Type:         Simple
 License:            BSD3
@@ -56,7 +56,7 @@ Executable dhall-to-toml
     Hs-Source-Dirs:   dhall-to-toml
     Main-Is:          Main.hs
     Build-Depends:
-        base       ,
+        base       >= 4.12 && < 5,
         dhall-toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
@@ -65,7 +65,7 @@ Executable toml-to-dhall
     Hs-Source-Dirs:   toml-to-dhall
     Main-Is:          Main.hs
     Build-Depends:
-        base       ,
+        base       >= 4.12 && < 5,
         dhall-toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
@@ -75,12 +75,12 @@ Test-Suite dhall-toml-test
     Hs-Source-Dirs:   tasty
     Main-Is:          Main.hs
     Build-Depends:
-        base               ,
-        dhall              ,
-        dhall-toml         ,
-        tasty       <  1.6 ,
-        tasty-hunit >= 0.2 ,
-        text               ,
+        base        >= 4.12 && < 5  ,
+        dhall                       ,
+        dhall-toml                  ,
+        tasty                  < 1.6,
+        tasty-hunit >= 0.2          ,
+        text                        ,
         tomland
     GHC-Options:      -Wall
     Default-Language: Haskell2010
@@ -90,9 +90,9 @@ Test-Suite doctest
     Hs-Source-Dirs:   doctest
     Main-Is:          Main.hs
     Build-Depends:
-        base      ,
-        directory ,
-        filepath  ,
+        base      >= 4.12 && < 5,
+        directory               ,
+        filepath                ,
         doctest
     GHC-Options:      -Wall
     Default-Language: Haskell2010

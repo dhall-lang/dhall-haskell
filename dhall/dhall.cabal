@@ -1,6 +1,6 @@
 Cabal-Version: 2.4
 Name: dhall
-Version: 1.42.1
+Version: 1.42.2
 Build-Type: Simple
 License: BSD-3-Clause
 License-File: LICENSE
@@ -26,6 +26,7 @@ Data-Files:
 Extra-Source-Files:
     CHANGELOG.md
     benchmark/**/*.dhall
+    benchmark/**/*.dhallb
     dhall-lang/Prelude/**/*.dhall
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
@@ -218,7 +219,7 @@ Common common
         contravariant                              < 1.6 ,
         data-fix                                   < 0.4 ,
         deepseq                                    < 1.6 ,
-        Diff                        >= 0.2      && < 0.6 ,
+        Diff                        >= 0.2      && < 1.1 ,
         directory                   >= 1.3.0.0  && < 1.4 ,
         dotgen                      >= 0.4.2    && < 0.5 ,
         either                      >= 5        && < 5.1,
@@ -268,6 +269,8 @@ Common common
       if flag(network-tests)
         CPP-Options:
           -DNETWORK_TESTS
+    if flag(cross)
+      CPP-Options: -DCROSS
 
     GHC-Options: -Wall -Wcompat -Wincomplete-uni-patterns -optP-Wno-unicode-homoglyph
 
@@ -432,10 +435,12 @@ Test-Suite tasty
         Dhall.Test.Schemas
         Dhall.Test.SemanticHash
         Dhall.Test.Substitution
-        Dhall.Test.TH
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference
         Dhall.Test.Util
+    if !flag(cross)
+        Other-Modules:
+            Dhall.Test.TH
     Build-Depends:
         dhall                                          ,
         foldl                                    < 1.5 ,
@@ -475,7 +480,7 @@ Benchmark dhall-parser
     Main-Is: Main.hs
     Build-Depends:
         dhall                                         ,
-        gauge                     >= 0.2.3    && < 0.3,
+        tasty-bench               >= 0.4      && < 0.5,
     Default-Language: Haskell2010
     Other-Extensions:
         TypeApplications
@@ -488,5 +493,5 @@ Benchmark deep-nested-large-record
     Main-Is: Main.hs
     Build-Depends:
         dhall                                         ,
-        gauge                     >= 0.2.3    && < 0.3
+        tasty-bench               >= 0.4      && < 0.5,
     Default-Language: Haskell2010

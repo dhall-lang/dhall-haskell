@@ -50,6 +50,7 @@ module Dhall
     -- * Individual phases
     , parseWithSettings
     , resolveWithSettings
+    , resolveAndStatusWithSettings
     , typecheckWithSettings
     , checkWithSettings
     , expectWithSettings
@@ -63,7 +64,7 @@ import Control.Applicative    (Alternative, empty)
 import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
-import Dhall.Import           (Imported (..))
+import Dhall.Import           (Imported (..), Status)
 import Dhall.Parser           (Src (..))
 import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
@@ -262,7 +263,16 @@ expectWithSettings settings Decoder{..} expression = do
     `InputSettings`
 -}
 resolveWithSettings :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
-resolveWithSettings settings expression = do
+resolveWithSettings settings expression =
+    fst <$> resolveAndStatusWithSettings settings expression
+
+-- | A version of 'resolveWithSettings' that also returns the import 'Status'
+-- together with the resolved expression.
+resolveAndStatusWithSettings
+    :: InputSettings
+    -> Expr Src Import
+    -> IO (Expr Src Void, Status)
+resolveAndStatusWithSettings settings expression = do
     let InputSettings{..} = settings
 
     let EvaluateSettings{..} = _evaluateSettings
@@ -274,9 +284,11 @@ resolveWithSettings settings expression = do
 
     let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
 
-    resolved <- State.evalStateT (Dhall.Import.loadWith expression) status
+    (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression) status
 
-    pure (Dhall.Substitution.substitute resolved (view substitutions settings))
+    let substituted = Dhall.Substitution.substitute resolved (view substitutions settings)
+
+    pure (substituted, status')
 
 -- | Normalize an expression, using the supplied `InputSettings`
 normalizeWithSettings :: InputSettings -> Expr Src Void -> Expr Src Void

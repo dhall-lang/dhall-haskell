@@ -2,10 +2,13 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 import Control.Monad.IO.Class      (liftIO)
 import Data.Maybe                  (fromJust)
 import Language.LSP.Protocol.Types
-    ( CompletionItem (..)
+    ( ClientCapabilities
+    , CompletionItem (..)
     , Diagnostic (..)
     , DiagnosticSeverity (..)
     , Hover (..)
@@ -14,9 +17,14 @@ import Language.LSP.Protocol.Types
     , Range (..)
     , toEither
     )
-import Language.LSP.Test
 import Test.Tasty
 import Test.Tasty.Hspec
+
+#if MIN_VERSION_lsp_types(2,3,0)
+import Language.LSP.Test hiding (fullLatestClientCaps)
+#else
+import Language.LSP.Test
+#endif
 
 #if MIN_VERSION_tasty_hspec(1,1,7)
 import Test.Hspec
@@ -24,15 +32,23 @@ import Test.Hspec
 
 import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
+import qualified Language.LSP.Protocol.Capabilities
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
+
+fullLatestClientCaps :: ClientCapabilities
+#if MIN_VERSION_lsp_types(2,3,0)
+fullLatestClientCaps = Language.LSP.Protocol.Capabilities.fullLatestClientCaps
+#else
+fullLatestClientCaps = Language.LSP.Protocol.Capabilities.fullCaps
+#endif
 
 hoveringSpec :: FilePath -> Spec
 hoveringSpec dir =
   describe "Dhall.Hover"
     $ it "reports types on hover"
-    $ runSession "dhall-lsp-server" fullCaps dir
+    $ runSession "dhall-lsp-server" fullLatestClientCaps dir
     $ do
       docId <- openDoc "Types.dhall" "dhall"
       let typePos = Position 0 5
@@ -53,7 +69,7 @@ lintingSpec :: FilePath -> Spec
 lintingSpec fixtureDir =
   describe "Dhall.Lint" $ do
     it "reports unused bindings"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         _ <- openDoc "UnusedBindings.dhall" "dhall"
 
@@ -92,7 +108,7 @@ lintingSpec fixtureDir =
 
         pure ()
     it "reports multiple hints"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         _ <- openDoc "SuperfluousIn.dhall" "dhall"
         diags <- waitForDiagnosticsSource "Dhall.Lint"
@@ -109,7 +125,7 @@ codeCompletionSpec :: FilePath -> Spec
 codeCompletionSpec fixtureDir =
   describe "Dhall.Completion" $ do
     it "suggests user defined types"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         docId <- openDoc "CustomTypes.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 2, _character = 35})
@@ -118,7 +134,7 @@ codeCompletionSpec fixtureDir =
           _label firstItem `shouldBe` "Config"
           _detail firstItem `shouldBe` Just "Type"
     it "suggests user defined functions"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         docId <- openDoc "CustomFunctions.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 6, _character = 7})
@@ -127,7 +143,7 @@ codeCompletionSpec fixtureDir =
           _label firstItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
     it "suggests user defined bindings"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         docId <- openDoc "Bindings.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 0, _character = 59})
@@ -136,7 +152,7 @@ codeCompletionSpec fixtureDir =
           _label firstItem `shouldBe` "bob"
           _detail firstItem `shouldBe` Just "Text"
     it "suggests functions from imports"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         docId <- openDoc "ImportedFunctions.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 0, _character = 33})
@@ -147,7 +163,7 @@ codeCompletionSpec fixtureDir =
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
           _detail secondItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
     it "suggests union alternatives"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         docId <- openDoc "Union.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 2, _character = 10})
@@ -162,7 +178,7 @@ diagnosticsSpec :: FilePath -> Spec
 diagnosticsSpec fixtureDir = do
   describe "Dhall.TypeCheck" $ do
     it "reports unbound variables"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         _ <- openDoc "UnboundVar.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
@@ -170,7 +186,7 @@ diagnosticsSpec fixtureDir = do
           _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Unbound variable"
     it "reports wrong type"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         _ <- openDoc "WrongType.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
@@ -179,7 +195,7 @@ diagnosticsSpec fixtureDir = do
           T.unpack (_message diag) `shouldContain` "Expression doesn't match annotation"
   describe "Dhall.Import" $ do
     it "reports invalid imports"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         _ <- openDoc "InvalidImport.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.Import"
@@ -187,7 +203,7 @@ diagnosticsSpec fixtureDir = do
           _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Invalid input"
     it "reports missing imports"
-      $ runSession "dhall-lsp-server" fullCaps fixtureDir
+      $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
       $ do
         _ <- openDoc "MissingImport.dhall" "dhall"
         [diag] <- waitForDiagnosticsSource "Dhall.Import"
@@ -196,7 +212,7 @@ diagnosticsSpec fixtureDir = do
           T.unpack (_message diag) `shouldContain` "Missing file"
   describe "Dhall.Parser"
     $ it "reports invalid syntax"
-    $ runSession "dhall-lsp-server" fullCaps fixtureDir
+    $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
     $ do
       _ <- openDoc "InvalidSyntax.dhall" "dhall"
       [diag] <- waitForDiagnosticsSource "Dhall.Parser"
