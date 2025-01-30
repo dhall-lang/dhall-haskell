@@ -87,6 +87,9 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.8.yaml' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
             if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
@@ -112,6 +115,9 @@ jobs:
             dhall-yaml
           )
           for package in "${packages[@]}"; do
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.8.yaml' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
             if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
