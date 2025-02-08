@@ -36,7 +36,7 @@ import Dhall.Import
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )
-import Dhall.Package       (writePackage)
+import Dhall.Package       (Recurse(..), writePackage)
 import Dhall.Parser        (Src)
 import Dhall.Pretty
     ( Ann
@@ -163,7 +163,7 @@ data Mode
     | DirectoryTree { allowSeparators :: Bool, file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
-    | Package { name :: Maybe String, files :: NonEmpty FilePath }
+    | Package { recurse :: Recurse, name :: Maybe String, files :: NonEmpty FilePath }
 
 -- | This specifies how to resolve transitive dependencies
 data ResolveMode
@@ -316,7 +316,7 @@ parseMode =
             Miscellaneous
             "package"
             "Create a package.dhall referencing the provided paths"
-            (Package <$> parsePackageName <*> parsePackageFiles)
+            (Package <$> parseRecurse <*> parsePackageName <*> parsePackageFiles)
     <|> subcommand
             Miscellaneous
             "tags"
@@ -581,6 +581,15 @@ parseMode =
                 <>  Options.Applicative.metavar "PATH"
                 <>  Options.Applicative.action "file"
                 )
+
+    parseRecurse = adjust <$> Options.Applicative.switch
+        ( Options.Applicative.short 'r'
+        <> Options.Applicative.long "recurse"
+        <> Options.Applicative.help "Create packages for all subdirectories first."
+        )
+        where
+            adjust True = Recurse
+            adjust False = Exact
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
@@ -1041,7 +1050,7 @@ command (Options {..}) = do
                     denoted = Dhall.Core.denote expression
                 in Text.Pretty.Simple.pPrintNoColor denoted
 
-        Package {..} -> writePackage (fromMaybe Unicode chosenCharacterSet) name files
+        Package {..} -> writePackage (fromMaybe Unicode chosenCharacterSet) recurse name files
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

@@ -5,7 +5,8 @@
 -- | Create a package.dhall from files and directory contents.
 
 module Dhall.Package
-    ( writePackage
+    ( Recurse(..)
+    , writePackage
     , getPackagePathAndContent
     , PackageError(..)
     ) where
@@ -37,12 +38,16 @@ import           Dhall.Util         (_ERROR, renderExpression)
 import           System.Directory
 import           System.FilePath
 
+data Recurse
+    = Recurse
+    | Exact
+
 -- | Create a package.dhall from files and directory contents.
 -- For a description of how the package file is constructed see
 -- 'getPackagePathAndContent'.
-writePackage :: CharacterSet -> Maybe String -> NonEmpty FilePath -> IO ()
-writePackage characterSet outputFn inputs = do
-    (outputPath, expr) <- getPackagePathAndContent outputFn inputs
+writePackage :: CharacterSet -> Recurse -> Maybe String -> NonEmpty FilePath -> IO ()
+writePackage characterSet doRecurse outputFn inputs = do
+    (outputPath, expr) <- getPackagePathAndContent characterSet doRecurse outputFn inputs
     renderExpression characterSet True (Just outputPath) expr
 
 -- | Get the path and the Dhall expression for a package file.
@@ -62,11 +67,15 @@ writePackage characterSet outputFn inputs = do
 --   * If the path points to a directory, all files with a @.dhall@ extensions
 --     in that directory are included in the package.
 --
+--     If you passed `Recurse` to the this function, then in addition to these
+--     files all subdirectories are traversed and a sub-package created for each
+--     one. That sub-package will be included in the package too.
+--
 --   * If the path points to a regular file, it is included in the package
 --     unless it is the path of the package file itself.
 --
-getPackagePathAndContent :: Maybe String -> NonEmpty FilePath -> IO (FilePath, Expr s Import)
-getPackagePathAndContent outputFn (path :| paths) = do
+getPackagePathAndContent :: CharacterSet -> Recurse -> Maybe String -> NonEmpty FilePath -> IO (FilePath, Expr s Import)
+getPackagePathAndContent characterSet doRecurse outputFn (path :| paths) = do
     outputDir <- do
         isDirectory <- doesDirectoryExist path
         return $ if isDirectory then path else takeDirectory path
@@ -92,8 +101,23 @@ getPackagePathAndContent outputFn (path :| paths) = do
             if | isDirectory -> do
                     void $ checkOutputDir p
                     entries <- listDirectory p
-                    let entries' = filter (\entry -> takeExtension entry == ".dhall") entries
-                    go acc checkOutputDir (map (p </>) entries' <> ps)
+                    (dhallFiles, subdirectories) <- foldMap
+                        ( \entry -> do
+                            let entry' = p </> entry
+                            isDirectoryEntry <- doesDirectoryExist entry'
+                            return $ if isDirectoryEntry
+                                then (mempty, [entry'])
+                                else if hasDhallExtension entry
+                                    then ([entry'], mempty)
+                                    else mempty
+                        ) entries
+                    subpackages <- case doRecurse of
+                        Recurse ->
+                            for subdirectories $ \subdirectory -> do
+                                writePackage characterSet Recurse outputFn (subdirectory :| [])
+                                return (subdirectory </> outputFn')
+                        Exact -> return []
+                    go acc checkOutputDir (dhallFiles <> subpackages <> ps)
                | isFile -> do
                     dir <- checkOutputDir $ takeDirectory p
 
@@ -106,6 +130,8 @@ getPackagePathAndContent outputFn (path :| paths) = do
                     acc' <- mergeMaps acc resultMap
                     go acc' checkOutputDir ps
                 | otherwise -> throwIO $ InvalidPath p
+
+        hasDhallExtension entry = takeExtension entry == ".dhall"
 
         outputFn' = fromMaybe "package.dhall" outputFn
 
