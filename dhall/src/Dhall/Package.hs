@@ -38,6 +38,8 @@ import           Dhall.Util         (_ERROR, renderExpression)
 import           System.Directory
 import           System.FilePath
 
+-- | Whether to recursively create a package for each subdirectory or not.
+-- See the documentation of 'getPackagePathAndContent'.
 data Recurse
     = Recurse
     | Exact
