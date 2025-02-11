@@ -23,9 +23,11 @@ let Entry =
 in  forall (result : Type) ->
       let DirectoryEntry = Entry (List result)
 
-      let FileEntry = Entry Text
+      let BinaryFileEntry = Entry Bytes
+
+      let TextFileEntry = Entry Text
 
       let Make =
-            { directory : DirectoryEntry -> result, file : FileEntry -> result }
+            { directory : DirectoryEntry -> result, binary-file : BinaryFileEntry -> result, text-file : TextFileEntry -> result }
 
       in  forall (make : Make) -> List result

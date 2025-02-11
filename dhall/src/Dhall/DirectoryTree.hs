@@ -5,6 +5,7 @@
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE ViewPatterns      #-}
 
+{-# OPTIONS_GHC -Wno-deprecations #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Implementation of the @dhall to-directory-tree@ subcommand
@@ -259,7 +260,8 @@ directoryTreeType = Pi Nothing "tree" (Const Type)
 makeType :: Expector (Expr Src Void)
 makeType = Record . Map.fromList <$> sequenceA
     [ makeConstructor "directory" (Decode.auto :: Decoder DirectoryEntry)
-    , makeConstructor "file" (Decode.auto :: Decoder FileEntry)
+    , makeConstructor "binary-file" (Decode.auto :: Decoder BinaryFileEntry)
+    , makeConstructor "text-file" (Decode.auto :: Decoder TextFileEntry)
     ]
     where
         makeConstructor :: Text -> Decoder b -> Expector (Text, RecordField Src Void)
