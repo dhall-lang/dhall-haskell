@@ -20,6 +20,7 @@ module Dhall.Pretty.Internal (
     , prettySrcExpr
 
     , CharacterSet(..)
+    , defaultCharacterSet
     , detectCharacterSet
     , prettyCharacterSet
     , prettyImportExpression
@@ -155,6 +156,11 @@ instance FromJSON CharacterSet where
   parseJSON v@(String _) = unexpected v
   parseJSON v = typeMismatch "String" v
 
+-- | The character set used by default in functions throughout the Dhall code
+-- base.
+defaultCharacterSet :: CharacterSet
+defaultCharacterSet = Unicode
+
 -- | Detect which character set is used for the syntax of an expression
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
@@ -176,7 +182,7 @@ prettyExpr :: Pretty a => Expr s a -> Doc Ann
 prettyExpr = prettySrcExpr . denote
 
 prettySrcExpr :: Pretty a => Expr Src a -> Doc Ann
-prettySrcExpr = prettyCharacterSet Unicode
+prettySrcExpr = prettyCharacterSet defaultCharacterSet
 
 {-| Internal utility for pretty-printing, used when generating element lists
     to supply to `enclose` or `enclose'`.  This utility indicates that the
