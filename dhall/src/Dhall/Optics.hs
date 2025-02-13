@@ -29,6 +29,7 @@ import Lens.Micro.Internal        (foldMapOf, (#.))
 import qualified Lens.Micro
 
 -- | Identical to @"Control.Lens.Getter".`Control.Lens.Getter.Getting`@
+{-# DEPRECATED Getting "Use Lens.Micro.Getting directly." #-}
 type Getting r s a = (a -> Const r a) -> s -> Const r s
 
 -- | Identical to @"Control.Lens.Type".`Control.Lens.Type.Optic`@
