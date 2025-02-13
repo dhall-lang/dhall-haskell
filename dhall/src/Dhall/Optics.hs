@@ -3,6 +3,8 @@
     for convenience
 -}
 
+{-# LANGUAGE RankNTypes #-}
+
 module Dhall.Optics
     ( Optic
     , Optic'
@@ -23,7 +25,7 @@ import Data.Coerce                (coerce)
 import Data.Monoid                (Any (..))
 import Data.Functor.Contravariant (Contravariant (contramap))
 import Data.Profunctor            (Profunctor (dimap))
-import Lens.Micro                 (ASetter, LensLike, LensLike')
+import Lens.Micro                 (ASetter, LensLike, Traversal)
 import Lens.Micro.Internal        (foldMapOf, (#.))
 
 import qualified Lens.Micro
@@ -78,7 +80,7 @@ mapMOf = coerce
 {-# INLINE mapMOf #-}
 
 -- | Identical to @"Control.Lens.Plated".`Control.Lens.Plated.cosmosOf`@
-cosmosOf :: (Applicative f, Contravariant f) => LensLike' f a a -> LensLike' f a a
+cosmosOf :: Traversal s t s t -> Traversal s t s b
 cosmosOf d f s = f s *> d (cosmosOf d f) s
 {-# INLINE cosmosOf #-}
 

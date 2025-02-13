@@ -69,7 +69,7 @@ import Dhall.Parser           (Src (..))
 import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
-import Lens.Micro             (LensLike')
+import Lens.Micro             (Lens', lens)
 import Lens.Micro.Extras      (view)
 import Prelude                hiding (maybe, sequence)
 import System.FilePath        (takeDirectory)
@@ -112,22 +112,16 @@ defaultInputSettings = InputSettings
 -- | Access the directory to resolve imports relative to.
 --
 -- @since 1.16
-rootDirectory
-  :: (Functor f)
-  => LensLike' f InputSettings FilePath
-rootDirectory k s =
-  fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
+rootDirectory :: Lens' InputSettings FilePath
+rootDirectory = lens _rootDirectory (\s x -> s { _rootDirectory = x })
 
 -- | Access the name of the source to report locations from; this is
 -- only used in error messages, so it's okay if this is a best guess
 -- or something symbolic.
 --
 -- @since 1.16
-sourceName
-  :: (Functor f)
-  => LensLike' f InputSettings FilePath
-sourceName k s =
-  fmap (\x -> s { _sourceName = x}) (k (_sourceName s))
+sourceName :: Lens' InputSettings FilePath
+sourceName = lens _sourceName (\s x -> s { _sourceName = x})
 
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
@@ -153,59 +147,49 @@ defaultEvaluateSettings = EvaluateSettings
 --
 -- @since 1.16
 startingContext
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Context.Context (Expr Src Void))
-startingContext = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src Void))
-    l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (Dhall.Context.Context (Expr Src Void))
+startingContext =
+    evaluateSettings
+        . lens _startingContext (\s x -> s { _startingContext = x})
 
 -- | Access the custom substitutions.
 --
 -- @since 1.30
 substitutions
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Substitution.Substitutions Src Void)
-substitutions = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Substitution.Substitutions Src Void)
-    l k s = fmap (\x -> s { _substitutions = x }) (k (_substitutions s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (Dhall.Substitution.Substitutions Src Void)
+substitutions =
+    evaluateSettings
+        . lens _substitutions (\s x -> s { _substitutions = x })
 
 -- | Access the custom normalizer.
 --
 -- @since 1.16
 normalizer
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Maybe (Core.ReifiedNormalizer Void))
-normalizer = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Maybe (Core.ReifiedNormalizer Void))
-    l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (Maybe (Core.ReifiedNormalizer Void))
+normalizer =
+    evaluateSettings
+        . lens _normalizer (\s x -> s { _normalizer = x })
 
 -- | Access the HTTP manager initializer.
 --
 -- @since 1.36
 newManager
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (IO Dhall.Import.Manager)
-newManager = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (IO Dhall.Import.Manager)
-    l k s = fmap (\x -> s { _newManager = x }) (k (_newManager s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (IO Dhall.Import.Manager)
+newManager =
+    evaluateSettings
+        . lens _newManager (\s x -> s { _newManager = x })
 
 -- | @since 1.16
 class HasEvaluateSettings s where
-  evaluateSettings
-    :: (Functor f)
-    => LensLike' f s EvaluateSettings
+  evaluateSettings :: Lens' s EvaluateSettings
 
 instance HasEvaluateSettings InputSettings where
-  evaluateSettings k s =
-    fmap (\x -> s { _evaluateSettings = x }) (k (_evaluateSettings s))
+  evaluateSettings =
+    lens _evaluateSettings (\s x -> s { _evaluateSettings = x })
 
 instance HasEvaluateSettings EvaluateSettings where
   evaluateSettings = id

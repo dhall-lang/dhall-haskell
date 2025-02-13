@@ -23,7 +23,7 @@ import Dhall.Core
     )
 import Dhall.Map                        (Map)
 import Dhall.Parser                     (Src)
-import Lens.Micro                       (LensLike')
+import Lens.Micro                       (Lens', lens)
 import Prettyprinter                    (Pretty (..))
 
 #ifdef WITH_HTTP
@@ -164,45 +164,40 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _cacheWarning = CacheNotWarned
 
 -- | Lens from a `Status` to its `_stack` field
-stack :: Functor f => LensLike' f Status (NonEmpty Chained)
-stack k s = fmap (\x -> s { _stack = x }) (k (_stack s))
+stack :: Lens' Status (NonEmpty Chained)
+stack = lens _stack (\s x -> s { _stack = x })
 
 -- | Lens from a `Status` to its `_graph` field
-graph :: Functor f => LensLike' f Status [Depends]
-graph k s = fmap (\x -> s { _graph = x }) (k (_graph s))
+graph :: Lens' Status [Depends]
+graph = lens _graph (\s x -> s { _graph = x })
 
 -- | Lens from a `Status` to its `_cache` field
-cache :: Functor f => LensLike' f Status (Map Chained ImportSemantics)
-cache k s = fmap (\x -> s { _cache = x }) (k (_cache s))
+cache :: Lens' Status (Map Chained ImportSemantics)
+cache = lens _cache (\s x -> s { _cache = x })
 
 -- | Lens from a `Status` to its `_remote` field
-remote
-    :: Functor f
-    => LensLike' f Status (URL -> StateT Status IO Data.Text.Text)
-remote k s = fmap (\x -> s { _remote = x }) (k (_remote s))
+remote :: Lens' Status (URL -> StateT Status IO Data.Text.Text)
+remote = lens _remote (\s x -> s { _remote = x })
 
 -- | Lens from a `Status` to its `_remote` field
-remoteBytes
-    :: Functor f
-    => LensLike' f Status (URL -> StateT Status IO Data.ByteString.ByteString)
-remoteBytes k s = fmap (\x -> s { _remoteBytes = x }) (k (_remoteBytes s))
+remoteBytes :: Lens' Status (URL -> StateT Status IO Data.ByteString.ByteString)
+remoteBytes = lens _remoteBytes (\s x -> s { _remoteBytes = x })
 
 -- | Lens from a `Status` to its `_substitutions` field
-substitutions :: Functor f => LensLike' f Status (Dhall.Substitution.Substitutions Src Void)
-substitutions k s = fmap (\x -> s { _substitutions = x }) (k (_substitutions s))
+substitutions :: Lens' Status (Dhall.Substitution.Substitutions Src Void)
+substitutions = lens _substitutions (\s x -> s { _substitutions = x })
 
 -- | Lens from a `Status` to its `_normalizer` field
-normalizer :: Functor f => LensLike' f Status (Maybe (ReifiedNormalizer Void))
-normalizer k s = fmap (\x -> s {_normalizer = x}) (k (_normalizer s))
+normalizer :: Lens' Status (Maybe (ReifiedNormalizer Void))
+normalizer = lens _normalizer (\s x -> s {_normalizer = x})
 
 -- | Lens from a `Status` to its `_startingContext` field
-startingContext :: Functor f => LensLike' f Status (Context (Expr Src Void))
-startingContext k s =
-    fmap (\x -> s { _startingContext = x }) (k (_startingContext s))
+startingContext :: Lens' Status (Context (Expr Src Void))
+startingContext = lens _startingContext (\s x -> s { _startingContext = x })
 
 -- | Lens from a `Status` to its `_cacheWarning` field
-cacheWarning :: Functor f => LensLike' f Status CacheWarning
-cacheWarning k s = fmap (\x -> s { _cacheWarning = x }) (k (_cacheWarning s))
+cacheWarning :: Lens' Status CacheWarning
+cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
