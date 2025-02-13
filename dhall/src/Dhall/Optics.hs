@@ -22,8 +22,8 @@ module Dhall.Optics
 
 import Control.Applicative        (Const (..), WrappedMonad (..))
 import Data.Coerce                (coerce)
-import Data.Monoid                (Any (..))
 import Data.Functor.Contravariant (Contravariant (contramap))
+import Data.Monoid                (Any (..))
 import Data.Profunctor            (Profunctor (dimap))
 import Lens.Micro                 (ASetter, LensLike, Traversal)
 import Lens.Micro.Internal        (foldMapOf, (#.))

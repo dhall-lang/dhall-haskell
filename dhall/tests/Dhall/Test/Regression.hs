@@ -7,7 +7,7 @@ module Dhall.Test.Regression where
 
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
-import Dhall.Core             (Expr(..), ReifiedNormalizer(..))
+import Dhall.Core             (Expr (..), ReifiedNormalizer (..))
 import Dhall.Import           (Imported, MissingImports (..))
 import Dhall.Parser           (SourcedException (..), Src)
 import Dhall.TypeCheck        (TypeError)

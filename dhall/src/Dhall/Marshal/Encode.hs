@@ -78,7 +78,7 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.ByteString.Short
 import qualified Data.Functor.Product
-import qualified Data.HashMap.Strict  as HashMap
+import qualified Data.HashMap.Strict   as HashMap
 import qualified Data.HashSet
 import qualified Data.Map
 import qualified Data.Scientific
@@ -87,10 +87,10 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Short
-import qualified Data.Time            as Time
+import qualified Data.Time             as Time
 import qualified Data.Vector
 import qualified Data.Void
-import qualified Dhall.Core           as Core
+import qualified Dhall.Core            as Core
 import qualified Dhall.Map
 
 import Dhall.Marshal.Internal

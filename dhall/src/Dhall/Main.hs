@@ -37,7 +37,7 @@ import Dhall.Import
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )
-import Dhall.Package       (PackagingMode(..), writePackage)
+import Dhall.Package       (PackagingMode (..), writePackage)
 import Dhall.Parser        (Src)
 import Dhall.Pretty
     ( Ann

@@ -28,13 +28,7 @@ module Dhall.Test.Util
     , managedTestEnvironment
     ) where
 
-import Control.Applicative
-    ( Alternative
-    , (<|>)
-#if !MIN_VERSION_base(4,18,0)
-    , liftA2
-#endif
-    )
+import Control.Applicative              (Alternative, liftA2, (<|>))
 import Control.Exception                (tryJust)
 import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict (StateT)
@@ -77,9 +71,9 @@ import qualified Turtle
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 import qualified Data.Foldable
 #else
-import Control.Monad.IO.Class   (MonadIO (..))
-import Dhall.Core               (Directory (..), File (..), URL (..))
-import Lens.Micro.Mtl           (zoom)
+import Control.Monad.IO.Class (MonadIO (..))
+import Dhall.Core             (Directory (..), File (..), URL (..))
+import Lens.Micro.Mtl         (zoom)
 
 import qualified Data.Foldable
 import qualified Data.Text.Encoding

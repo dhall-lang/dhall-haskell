@@ -19,7 +19,7 @@ import Language.Haskell.TH.Syntax   (Lift)
 #if !MIN_VERSION_template_haskell(2,21,0)
 import qualified Data.Fixed as Fixed
 #endif
-import qualified Data.Time  as Time
+import qualified Data.Time as Time
 
 deriving instance Lift Time.Day
 deriving instance Lift Time.TimeOfDay

@@ -1,23 +1,23 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Dhall.Test.DirectoryTree (tests) where
 
 import Control.Monad
-import Data.Either (partitionEithers)
+import Data.Either            (partitionEithers)
 import Data.Either.Validation
 import Dhall.DirectoryTree
-import Lens.Micro (set)
-import System.FilePath ((</>))
+import Lens.Micro             (set)
+import System.FilePath        ((</>))
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.Core
-import qualified System.Directory as Directory
-import qualified System.FilePath as FilePath
+import qualified System.Directory         as Directory
+import qualified System.FilePath          as FilePath
 import qualified System.PosixCompat.Files as Files
 
 tests :: TestTree

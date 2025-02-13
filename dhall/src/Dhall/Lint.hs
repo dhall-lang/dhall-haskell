@@ -20,7 +20,7 @@ module Dhall.Lint
 
 import Control.Applicative ((<|>))
 
-import Dhall.Optics        (anyOf)
+import Dhall.Optics (anyOf)
 import Dhall.Syntax
     ( Binding (..)
     , Chunks (..)
