@@ -12,7 +12,7 @@
 
 -- | Types used by the implementation of the @to-directory-tree@ subcommand
 module Dhall.DirectoryTree.Types
-    ( FilesystemEntry(..)
+    ( FilesystemEntry(DirectoryEntry, BinaryFileEntry, TextFileEntry, FileEntry)
     , DirectoryEntry
     , FileEntry
     , BinaryFileEntry
@@ -81,10 +81,12 @@ type TextFileEntry = Entry Text
 -- | A filesystem entry.
 data FilesystemEntry
     = DirectoryEntry (Entry (Seq FilesystemEntry))
-    | FileEntry (Entry Text)
     | BinaryFileEntry BinaryFileEntry
     | TextFileEntry TextFileEntry
     deriving (Eq, Generic, Ord, Show)
+
+pattern FileEntry :: Entry Text -> FilesystemEntry
+pattern FileEntry entry = TextFileEntry entry
 
 instance FromDhall FilesystemEntry where
     autoWith normalizer = Decoder
@@ -92,10 +94,10 @@ instance FromDhall FilesystemEntry where
         , extract = \case
             Make "directory" entry ->
                 DirectoryEntry <$> extract (autoWith normalizer) entry
+            Make "file" entry ->
+                TextFileEntry <$> extract (autoWith normalizer) entry
             Make "binary-file" entry ->
                 BinaryFileEntry <$> extract (autoWith normalizer) entry
-            Make "text-file" entry ->
-                TextFileEntry <$> extract (autoWith normalizer) entry
             expr -> Decode.typeError (expected (Decode.autoWith normalizer :: Decoder FilesystemEntry)) expr
         }
 

@@ -10,7 +10,7 @@ let full-access = { execute = Some True, read = Some True, write = Some True }
 
 in  \(r : Type) ->
     \(make : Make r) ->
-      [ make.text-file
+      [ make.file
           { name = "file"
           , content = ""
           , user = None User

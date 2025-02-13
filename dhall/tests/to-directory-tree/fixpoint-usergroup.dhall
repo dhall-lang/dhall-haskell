@@ -8,14 +8,14 @@ let Make = (./fixpoint-helper.dhall).Make
 
 in  \(r : Type) ->
     \(make : Make r) ->
-      [ make.text-file
+      [ make.file
           { name = "ids"
           , content = ""
           , user = Some (User.UserId 0)
           , group = Some (Group.GroupId 0)
           , mode = None Mode
           }
-      , make.text-file
+      , make.file
           { name = "names"
           , content = ""
           , user = Some (User.UserName "user")

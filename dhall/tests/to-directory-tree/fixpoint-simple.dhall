@@ -8,7 +8,7 @@ let Make = (./fixpoint-helper.dhall).Make
 
 in  \(r : Type) ->
     \(make : Make r) ->
-        [ make.text-file
+        [ make.file
             { name = "file"
             , content = ""
             , user = None User
