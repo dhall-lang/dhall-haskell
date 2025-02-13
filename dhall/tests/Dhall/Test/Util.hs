@@ -79,7 +79,7 @@ import qualified Data.Foldable
 #else
 import Control.Monad.IO.Class   (MonadIO (..))
 import Dhall.Core               (Directory (..), File (..), URL (..))
-import Lens.Family.State.Strict (zoom)
+import Lens.Micro.Mtl           (zoom)
 
 import qualified Data.Foldable
 import qualified Data.Text.Encoding

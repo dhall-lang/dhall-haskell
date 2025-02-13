@@ -246,7 +246,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
-import qualified Lens.Family               as Lens
+import qualified Lens.Micro                as Lens
 import qualified Options.Applicative
 import qualified Prettyprinter.Render.Text as Pretty
 import qualified System.FilePath

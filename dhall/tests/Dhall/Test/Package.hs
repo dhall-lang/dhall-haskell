@@ -19,7 +19,7 @@ import           Dhall.Core
     )
 import qualified Dhall.Map          as Map
 import           Dhall.Package
-import           Lens.Family        (set)
+import           Lens.Micro         (set)
 import           System.FilePath    ((</>))
 import           Test.Tasty
 import           Test.Tasty.HUnit

@@ -23,7 +23,7 @@ import Dhall.Core
     )
 import Dhall.Map                        (Map)
 import Dhall.Parser                     (Src)
-import Lens.Family                      (LensLike')
+import Lens.Micro                       (LensLike')
 import Prettyprinter                    (Pretty (..))
 
 #ifdef WITH_HTTP

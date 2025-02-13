@@ -13,7 +13,7 @@ import {-# SOURCE #-} Dhall.Syntax.Operations      (unsafeSubExpressions)
 import                Dhall.Syntax.RecordField
 import                Dhall.Syntax.Types
 
-import qualified Lens.Family as Lens
+import qualified Lens.Micro as Lens
 
 deriving instance Functor (Binding s)
 deriving instance Functor (Chunks s)

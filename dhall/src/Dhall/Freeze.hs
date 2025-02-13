@@ -49,7 +49,8 @@ import Dhall.Util
     , Transitivity (..)
     , handleMultipleChecksFailed
     )
-import Lens.Family         (set, view)
+import Lens.Micro          (set, transformOf)
+import Lens.Micro.Extras   (view)
 import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception                  as Exception
@@ -433,9 +434,9 @@ freezeExpressionWithSettings settings directory scope intent expression = do
             | import1 == import2 = Embed import1
         simplify expression_ = expression_
 
-    Dhall.Optics.transformOf Core.subExpressions simplify <$> case intent of
+    transformOf Core.subExpressions simplify <$> case intent of
         Secure ->
-            traverse freezeFunction (Dhall.Optics.transformOf Core.subExpressions uncache expression)
+            traverse freezeFunction (transformOf Core.subExpressions uncache expression)
         Cache  ->
             Dhall.Optics.transformMOf Core.subExpressions cache expression
 

@@ -87,12 +87,13 @@ import                Data.Foldable
 import                Data.List.NonEmpty            (NonEmpty (..))
 import                Data.Text                     (Text)
 import                Dhall.Map                     (Map)
-import                Dhall.Optics                  (cosmosOf, foldOf, to)
+import                Dhall.Optics                  (cosmosOf, foldOf)
 import                Dhall.Src                     (Src (..))
 import                Dhall.Syntax
 import {-# SOURCE #-} Dhall.Syntax.Instances.Pretty ()
 import                GHC.Generics                  (Generic)
 import                Language.Haskell.TH.Syntax    (Lift)
+import                Lens.Micro                    (to)
 import                Numeric.Natural               (Natural)
 import                Prettyprinter                 (Doc, Pretty, space)
 

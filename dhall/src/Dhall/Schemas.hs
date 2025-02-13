@@ -41,13 +41,13 @@ import qualified Dhall.Core                         as Core
 import qualified Dhall.Import                       as Import
 import qualified Dhall.Map                          as Map
 import qualified Dhall.Normalize                    as Normalize
-import qualified Dhall.Optics                       as Optics
 import qualified Dhall.Parser                       as Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Substitution                 as Substitution
 import qualified Dhall.Syntax                       as Syntax
 import qualified Dhall.TypeCheck                    as TypeCheck
 import qualified Dhall.Util                         as Util
+import qualified Lens.Micro                         as Lens
 import qualified Prettyprinter                      as Pretty
 import qualified Prettyprinter.Render.Terminal      as Pretty.Terminal
 import qualified Prettyprinter.Render.Text          as Pretty.Text
@@ -195,7 +195,7 @@ rewriteWithSchemas _schemas expression = do
 
     let rewrittenExpression :: Expr Src Import
         rewrittenExpression =
-            fmap Void.absurd (Optics.transformOf Syntax.subExpressions schemasRewrite normalizedExpression)
+            fmap Void.absurd (Lens.transformOf Syntax.subExpressions schemasRewrite normalizedExpression)
 
     if Normalize.freeIn (V "schemas" 0) rewrittenExpression
         then return (Let (Syntax.makeBinding "schemas" _schemas) rewrittenExpression)

@@ -25,7 +25,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Test.Util           as Util
 import qualified Dhall.TypeCheck
-import qualified Lens.Family               as Lens
+import qualified Lens.Micro                as Lens
 import qualified Prettyprinter
 import qualified Prettyprinter.Render.Text
 import qualified System.Timeout

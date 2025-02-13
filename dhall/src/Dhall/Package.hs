@@ -39,7 +39,7 @@ import qualified Dhall.Map          as Map
 import           Dhall.Pretty       (CharacterSet (..))
 import qualified Dhall.Pretty
 import           Dhall.Util         (_ERROR, renderExpression)
-import           Lens.Family        (LensLike')
+import           Lens.Micro         (LensLike')
 import           System.Directory
 import           System.FilePath
 

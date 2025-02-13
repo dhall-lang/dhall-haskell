@@ -8,7 +8,7 @@ import Control.Monad
 import Data.Either (partitionEithers)
 import Data.Either.Validation
 import Dhall.DirectoryTree
-import Lens.Family (set)
+import Lens.Micro (set)
 import System.FilePath ((</>))
 import Test.Tasty
 import Test.Tasty.HUnit

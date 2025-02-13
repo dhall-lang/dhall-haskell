@@ -47,9 +47,10 @@ import Dhall.Eval
     , Val (..)
     , (~>)
     )
+import Dhall.Optics                      (anyOf)
 import Dhall.Pretty                      (Ann, UnescapedLabel(..))
 import Dhall.Src                         (Src)
-import Lens.Family                       (over)
+import Lens.Micro                        (over)
 import Prettyprinter                     (Doc, Pretty (..), vsep)
 
 import Dhall.Syntax
@@ -81,7 +82,6 @@ import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Syntax                as Syntax
 import qualified Dhall.Util
-import qualified Lens.Family
 import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 
@@ -1004,7 +1004,7 @@ infer typer = loop
                                             n < 0
 
                                         containsBadVar e =
-                                            Lens.Family.anyOf
+                                            anyOf
                                                 Dhall.Core.subExpressions
                                                 containsBadVar
                                                 e

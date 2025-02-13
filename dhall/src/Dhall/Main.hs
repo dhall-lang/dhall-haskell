@@ -48,7 +48,7 @@ import Dhall.Pretty
 import Dhall.Schemas       (Schemas (..))
 import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
 import Dhall.Version       (dhallVersionString)
-import Lens.Family         (set)
+import Lens.Micro          (set)
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
 import System.Exit         (ExitCode, exitFailure)

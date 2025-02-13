@@ -11,7 +11,7 @@ import Dhall.Src         (Src)
 import qualified Data.Either.Validation
 import qualified Dhall
 import qualified Dhall.Map
-import qualified Lens.Family            as Lens
+import qualified Lens.Micro             as Lens
 
 data Result = Failure Integer | Success String
     deriving (Eq, Dhall.Generic, Show)

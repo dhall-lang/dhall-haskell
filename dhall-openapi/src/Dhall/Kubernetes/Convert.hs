@@ -24,6 +24,7 @@ import GHC.Generics           (Generic, Rep)
 
 import qualified Data.Char       as Char
 import qualified Data.List       as List
+import qualified Data.Map        as Map
 import qualified Data.Map.Strict as Data.Map
 import qualified Data.Maybe      as Maybe
 import qualified Data.Set        as Set
@@ -32,8 +33,7 @@ import qualified Data.Text       as Text
 import qualified Data.Tuple      as Tuple
 import qualified Dhall.Core      as Dhall
 import qualified Dhall.Map
-import qualified Dhall.Optics
-import qualified Data.Map as Map
+import qualified Lens.Micro      as Lens
 
 modelsToText :: ModelHierarchy -> [Text]
 modelsToText = List.map (\ (ModelName unModelName) -> unModelName)
@@ -141,7 +141,7 @@ mergeNoConflicts :: (Ord k, Eq a, Show a, Show k) => (a -> a -> Bool) -> Data.Ma
 mergeNoConflicts canMerge = Data.Map.unionWithKey
                    (\key left right ->
                      if   canMerge left right
-                     then left 
+                     then left
                      else error ("Cannot merge differing values " ++ show left ++ " and " ++ show right ++ " for key " ++ show key))
 
 {- | Extract the 'ModelName' to be used when splitting a definition.
@@ -164,7 +164,7 @@ guessModelNameForSplit models definition = ModelName <$> ((<>) <$> toPrepend <*>
    'modelsToPath'. If a 'ModelName' is provided as a value for the given path, it will be returned (to be then used as
    the 'ModelName' for the nested definition. If no 'ModelName' is provided, 'guessModelNameForSplit' will try to guess.
    If that fails, 'Nothing' will be returned such that no split will be done by 'toTypes'
-   
+
    Currently not all split points in for nested definitions are supported (in fact only types with a properties
    attribute are currently supported).
 -}
@@ -215,7 +215,7 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
              (expr, leftOverDefs) = (convertToType (modelHierarchy ++ [k]) v (isException /= preferNaturalInt))
 
         (newDefs, modelMap) = Data.Map.mapAccumWithKey (convertAndAccumWithKey []) Data.Map.empty definitions
-       
+
         kvList = Dhall.App Dhall.List $ Dhall.Record $ Dhall.Map.fromList
           [ ("mapKey", Dhall.makeRecordField Dhall.Text), ("mapValue", Dhall.makeRecordField Dhall.Text) ]
 
@@ -233,7 +233,7 @@ toTypes' prefixMap typeSplitter preferNaturalInt natIntExceptions definitions to
                   shouldBeRequired hierarchy field = Set.member field requiredNames
                     where
                       requiredNames = requiredFields hierarchy (required definition)
-                  
+
                   (newPropDefs, propModelMap) = Data.Map.mapAccumWithKey (convertAndAccumWithKey modelHierarchy) Data.Map.empty props
 
                   (required', optional') = Data.Map.partitionWithKey
@@ -325,7 +325,7 @@ toDefault prefixMap definitions modelName = go
                     let expression = Dhall.App Dhall.None _T
 
                     let adjustedExpression =
-                            Dhall.Optics.transformOf
+                            Lens.transformOf
                               Dhall.subExpressions
                               adjustImport
                               expression

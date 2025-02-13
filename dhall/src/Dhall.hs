@@ -69,7 +69,8 @@ import Dhall.Parser           (Src (..))
 import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
-import Lens.Family            (LensLike', view)
+import Lens.Micro             (LensLike')
+import Lens.Micro.Extras      (view)
 import Prelude                hiding (maybe, sequence)
 import System.FilePath        (takeDirectory)
 
@@ -83,7 +84,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck
-import qualified Lens.Family
+import qualified Lens.Micro                       as Lens
 
 import Dhall.Marshal.Decode
 import Dhall.Marshal.Encode
@@ -278,9 +279,9 @@ resolveAndStatusWithSettings settings expression = do
     let EvaluateSettings{..} = _evaluateSettings
 
     let transform =
-               Lens.Family.set Dhall.Import.substitutions   _substitutions
-            .  Lens.Family.set Dhall.Import.normalizer      _normalizer
-            .  Lens.Family.set Dhall.Import.startingContext _startingContext
+               Lens.set Dhall.Import.substitutions   _substitutions
+            .  Lens.set Dhall.Import.normalizer      _normalizer
+            .  Lens.set Dhall.Import.startingContext _startingContext
 
     let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
 
