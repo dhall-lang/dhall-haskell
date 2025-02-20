@@ -74,7 +74,7 @@ Library
         dhall                >= 1.38.0    && < 1.43,
         file-embed           >= 0.0.10.0           ,
         filepath             >= 1.4       && < 1.6 ,
-        lens-family-core     >= 1.0.0     && < 2.2 ,
+        microlens            >= 0.4       && < 0.5 ,
         lucid                >= 2.9.12    && < 2.12,
         mmark                >= 0.0.7.0   && < 0.8 ,
         -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469

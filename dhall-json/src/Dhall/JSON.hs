@@ -241,12 +241,11 @@ import qualified Dhall.Core                as Core
 import qualified Dhall.Import
 import qualified Dhall.JSON.Compat         as JSON.Compat
 import qualified Dhall.Map
-import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
-import qualified Lens.Family               as Lens
+import qualified Lens.Micro                as Lens
 import qualified Options.Applicative
 import qualified Prettyprinter.Render.Text as Pretty
 import qualified System.FilePath
@@ -1156,7 +1155,7 @@ data SpecialDoubleMode
 handleSpecialDoubles
     :: SpecialDoubleMode -> Expr s Void -> Either CompileError (Expr s Void)
 handleSpecialDoubles specialDoubleMode =
-    Dhall.Optics.rewriteMOf Core.subExpressions rewrite
+    Lens.rewriteMOf Core.subExpressions rewrite
   where
     rewrite =
         case specialDoubleMode of

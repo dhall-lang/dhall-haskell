@@ -7,7 +7,7 @@ module Dhall.Test.Regression where
 
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
-import Dhall.Core             (Expr(..), ReifiedNormalizer(..))
+import Dhall.Core             (Expr (..), ReifiedNormalizer (..))
 import Dhall.Import           (Imported, MissingImports (..))
 import Dhall.Parser           (SourcedException (..), Src)
 import Dhall.TypeCheck        (TypeError)
@@ -25,7 +25,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Test.Util           as Util
 import qualified Dhall.TypeCheck
-import qualified Lens.Family               as Lens
+import qualified Lens.Micro                as Lens
 import qualified Prettyprinter
 import qualified Prettyprinter.Render.Text
 import qualified System.Timeout

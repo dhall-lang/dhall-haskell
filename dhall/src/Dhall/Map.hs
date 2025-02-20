@@ -78,8 +78,8 @@ import Instances.TH.Lift          ()
 import Language.Haskell.TH.Syntax (Lift)
 import Prelude                    hiding (filter, lookup)
 
-import qualified Data.Foldable.WithIndex as Foldable.WithIndex
-import qualified Data.Functor.WithIndex as Functor.WithIndex
+import qualified Data.Foldable.WithIndex    as Foldable.WithIndex
+import qualified Data.Functor.WithIndex     as Functor.WithIndex
 import qualified Data.List
 import qualified Data.Map.Strict
 import qualified Data.Set

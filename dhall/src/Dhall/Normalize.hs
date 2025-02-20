@@ -48,7 +48,7 @@ import qualified Data.Text     as Text
 import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Syntax  as Syntax
-import qualified Lens.Family   as Lens
+import qualified Lens.Micro    as Lens
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise

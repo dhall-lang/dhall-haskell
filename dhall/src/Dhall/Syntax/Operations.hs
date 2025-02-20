@@ -38,7 +38,7 @@ import Unsafe.Coerce                (unsafeCoerce)
 
 import qualified Data.HashSet
 import qualified Data.Text
-import qualified Lens.Family  as Lens
+import qualified Lens.Micro   as Lens
 
 
 -- | A traversal over the immediate sub-expressions of an expression.

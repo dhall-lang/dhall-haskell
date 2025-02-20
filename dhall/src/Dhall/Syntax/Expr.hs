@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric            #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 
 module Dhall.Syntax.Expr

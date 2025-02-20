@@ -39,7 +39,7 @@ import qualified Dhall.Map          as Map
 import           Dhall.Pretty       (CharacterSet (..))
 import qualified Dhall.Pretty
 import           Dhall.Util         (_ERROR, renderExpression)
-import           Lens.Family        (LensLike')
+import           Lens.Micro         (Lens', lens)
 import           System.Directory
 import           System.FilePath
 
@@ -65,20 +65,19 @@ defaultOptions = Options
     }
 
 -- | Access the character set used to render the package content.
-characterSet :: Functor f => LensLike' f Options CharacterSet
-characterSet k s =
-    fmap (\x -> s { optionsCharacterSet = x }) (k (optionsCharacterSet s))
+characterSet :: Lens' Options CharacterSet
+characterSet = lens optionsCharacterSet (\s x -> s { optionsCharacterSet = x })
 
 -- | Access the file name used for the package file.
-packageFileName :: Functor f => LensLike' f Options String
-packageFileName k s =
-    fmap (\x -> s { optionsPackageFileName = x }) (k (optionsPackageFileName s))
+packageFileName :: Lens' Options String
+packageFileName =
+    lens optionsPackageFileName (\s x -> s { optionsPackageFileName = x })
 
 -- | Access the packaging mode.
 -- See the documentation of 'getPackagePathAndContent'.
-packagingMode :: Functor f => LensLike' f Options PackagingMode
-packagingMode k s =
-    fmap (\x -> s { optionsPackagingMode = x }) (k (optionsPackagingMode s))
+packagingMode :: Lens' Options PackagingMode
+packagingMode =
+    lens optionsPackagingMode (\s x -> s { optionsPackagingMode = x })
 
 -- | Whether to recursively create a package for each subdirectory or not.
 -- See the documentation of 'getPackagePathAndContent'.
