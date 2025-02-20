@@ -49,7 +49,7 @@ import Dhall.Util
     , Transitivity (..)
     , handleMultipleChecksFailed
     )
-import Lens.Micro          (set, transformOf)
+import Lens.Micro          (set, transformMOf, transformOf)
 import Lens.Micro.Extras   (view)
 import System.Console.ANSI (hSupportsANSI)
 
@@ -59,7 +59,6 @@ import qualified Data.Text.IO                       as Text.IO
 import qualified Dhall
 import qualified Dhall.Core                         as Core
 import qualified Dhall.Import
-import qualified Dhall.Optics
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util                         as Util
@@ -438,7 +437,7 @@ freezeExpressionWithSettings settings directory scope intent expression = do
         Secure ->
             traverse freezeFunction (transformOf Core.subExpressions uncache expression)
         Cache  ->
-            Dhall.Optics.transformMOf Core.subExpressions cache expression
+            transformMOf Core.subExpressions cache expression
 
 -- https://github.com/dhall-lang/dhall-haskell/issues/2347
 toMissing :: Import -> Import

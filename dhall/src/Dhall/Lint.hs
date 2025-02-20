@@ -20,7 +20,6 @@ module Dhall.Lint
 
 import Control.Applicative ((<|>))
 
-import Dhall.Optics (anyOf)
 import Dhall.Syntax
     ( Binding (..)
     , Chunks (..)
@@ -144,7 +143,7 @@ addPreludeExtensions _ = Nothing
 
 isOrContainsAssert :: Expr s a -> Bool
 isOrContainsAssert (Assert _) = True
-isOrContainsAssert e = anyOf subExpressions isOrContainsAssert e
+isOrContainsAssert e = Lens.anyOf subExpressions isOrContainsAssert e
 
 -- | The difference between
 --

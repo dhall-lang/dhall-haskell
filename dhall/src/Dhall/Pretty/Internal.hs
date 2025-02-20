@@ -87,13 +87,12 @@ import                Data.Foldable
 import                Data.List.NonEmpty            (NonEmpty (..))
 import                Data.Text                     (Text)
 import                Dhall.Map                     (Map)
-import                Dhall.Optics                  (cosmosOf, foldOf)
 import                Dhall.Src                     (Src (..))
 import                Dhall.Syntax
 import {-# SOURCE #-} Dhall.Syntax.Instances.Pretty ()
 import                GHC.Generics                  (Generic)
 import                Language.Haskell.TH.Syntax    (Lift)
-import                Lens.Micro                    (to)
+import                Lens.Micro                    (cosmosOf, foldMapOf)
 import                Numeric.Natural               (Natural)
 import                Prettyprinter                 (Doc, Pretty, space)
 
@@ -166,7 +165,7 @@ defaultCharacterSet = Unicode
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
 detectCharacterSet :: Expr Src a -> CharacterSet
-detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
+detectCharacterSet = foldMapOf (cosmosOf subExpressions) exprToCharacterSet
   where
     exprToCharacterSet = \case
         Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>

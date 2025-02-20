@@ -47,10 +47,9 @@ import Dhall.Eval
     , Val (..)
     , (~>)
     )
-import Dhall.Optics                      (anyOf)
 import Dhall.Pretty                      (Ann, UnescapedLabel (..))
 import Dhall.Src                         (Src)
-import Lens.Micro                        (over)
+import Lens.Micro                        (anyOf, over)
 import Prettyprinter                     (Doc, Pretty (..), vsep)
 
 import Dhall.Syntax
