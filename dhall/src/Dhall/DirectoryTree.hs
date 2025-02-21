@@ -259,7 +259,8 @@ directoryTreeType = Pi Nothing "tree" (Const Type)
 makeType :: Expector (Expr Src Void)
 makeType = Record . Map.fromList <$> sequenceA
     [ makeConstructor "directory" (Decode.auto :: Decoder DirectoryEntry)
-    , makeConstructor "file" (Decode.auto :: Decoder FileEntry)
+    , makeConstructor "file" (Decode.auto :: Decoder TextFileEntry)
+    , makeConstructor "binary-file" (Decode.auto :: Decoder BinaryFileEntry)
     ]
     where
         makeConstructor :: Text -> Decoder b -> Expector (Text, RecordField Src Void)
@@ -295,9 +296,6 @@ processFilesystemEntry allowSeparators path (DirectoryEntry entry) =
     processEntryWith path entry $ \path' content -> do
         Directory.createDirectoryIfMissing allowSeparators path'
         processFilesystemEntryList allowSeparators path' content
-processFilesystemEntry allowSeparators path (FileEntry entry) = do
-    Util.printWarning "`file` is deprecated and will be removed eventually. Please use `text-file` instead."
-    processFilesystemEntry allowSeparators path (TextFileEntry entry)
 processFilesystemEntry _ path (BinaryFileEntry entry) =
     processEntryWith path entry ByteString.writeFile
 processFilesystemEntry _ path (TextFileEntry entry) =

@@ -84,14 +84,14 @@ fixpointedUserGroup = testCase "user and group" $ do
     expr <- Dhall.inputExpr file
     entries <- decodeDirectoryTree expr
     entries @?=
-        [ FileEntry $ Entry
+        [ TextFileEntry $ Entry
             { entryName = "ids"
             , entryContent = ""
             , entryUser = Just (UserId 0)
             , entryGroup = Just (GroupId 0)
             , entryMode = Nothing
             }
-        , FileEntry $ Entry
+        , TextFileEntry $ Entry
             { entryName = "names"
             , entryContent = ""
             , entryUser = Just (UserName "user")
