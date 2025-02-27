@@ -106,7 +106,6 @@ data Status = Status
     --   importing the same expression twice with different values
 
     , _newManager :: IO Manager
-    , _manager :: Maybe Manager
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
     -- requests
 
@@ -150,8 +149,6 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _graph = []
 
     _cache = Map.empty
-
-    _manager = Nothing
 
     _substitutions = Dhall.Substitution.empty
 

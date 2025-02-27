@@ -162,18 +162,13 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
 
 newManager :: StateT Status IO Manager
 newManager = do
-    Status { _manager = oldManager, ..} <- State.get
+    Status {..} <- State.get
 
-    case oldManager of
-        Nothing -> do
-            manager <- liftIO _newManager
+    manager <- liftIO _newManager
 
-            State.put (Status { _manager = Just manager , ..})
+    State.put (Status { _newManager = return manager , ..})
 
-            return manager
-
-        Just manager ->
-            return manager
+    return manager
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
@@ -255,7 +250,7 @@ addHeaders originHeaders urlHeaders request =
     request { HTTP.requestHeaders = (filterHeaders urlHeaders) <> perOriginHeaders }
       where
         origin = decodeUtf8 (HTTP.host request) <> ":" <> Text.pack (show (HTTP.port request))
- 
+
         perOriginHeaders = HashMap.lookupDefault [] origin originHeaders
 
         filterHeaders = foldMap (filter (not . overridden))
