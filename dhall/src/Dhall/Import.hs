@@ -232,7 +232,7 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
-import Lens.Micro.Mtl (assign, modifying, zoom)
+import Lens.Micro.Mtl (assign, modifying, use, zoom)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
@@ -385,6 +385,11 @@ instance Show MissingImports where
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
+
+throwMissingImportM :: (Exception e, MonadCatch m, MonadState Status m) => e -> m a
+throwMissingImportM e = do
+    stack <- use Dhall.Import.Types.stack
+    throwMissingImport (Imported stack e)
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -610,9 +615,7 @@ loadImportWithSemanticCache
                     zoom Dhall.Import.Types.cacheWarning (writeToSemanticCache semanticHash bytes)
 
                 else do
-                    Status{ _stack } <- State.get
-
-                    throwMissingImport (Imported _stack HashMismatch{..})
+                    throwMissingImportM (HashMismatch{..})
 
             return ImportSemantics{..}
 
@@ -798,50 +801,45 @@ writeToSemisemanticCache semisemanticHash bytes = do
 -- | Fetch source code directly from disk/network
 fetchFresh :: ImportType -> StateT Status IO Text
 fetchFresh (Local prefix file) = do
-    Status { _stack } <- State.get
     path <- liftIO $ localToPath prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
         then liftIO $ Data.Text.IO.readFile path
-        else throwMissingImport (Imported _stack (MissingFile path))
+        else throwMissingImportM (MissingFile path)
 
 fetchFresh (Remote url) = do
-    Status { _remote } <- State.get
-    _remote url
+    remote <- use Dhall.Import.Types.remote
+    remote url
 
 fetchFresh (Env env) = do
-    Status { _stack } <- State.get
     x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
         Just string ->
             return (Text.pack string)
         Nothing ->
-                throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+            throwMissingImportM (MissingEnvironmentVariable env)
 
 fetchFresh Missing = throwM (MissingImports [])
 
 -- | Like `fetchFresh`, except for `Dhall.Syntax.Expr.Bytes`
 fetchBytes :: ImportType -> StateT Status IO ByteString
 fetchBytes (Local prefix file) = do
-    Status { _stack } <- State.get
     path <- liftIO $ localToPath prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
         then liftIO $ Data.ByteString.readFile path
-        else throwMissingImport (Imported _stack (MissingFile path))
+        else throwMissingImport (MissingFile path)
 
 fetchBytes (Remote url) = do
-    Status { _remoteBytes } <- State.get
-    _remoteBytes url
+    remoteBytes <- use Dhall.Import.Types.remoteBytes
+    remoteBytes url
 
 fetchBytes (Env env) = do
-    Status { _stack } <- State.get
     x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
         Just string ->
             return (Encoding.encodeUtf8 (Text.pack string))
-        Nothing ->
-            throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+        Nothing -> throwMissingImport (MissingEnvironmentVariable env)
 fetchBytes Missing = throwM (MissingImports [])
 
 -- | Fetch the text contents of a URL
@@ -850,8 +848,7 @@ fetchRemote :: URL -> StateT Status IO Data.Text.Text
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Core.pretty url)
-    Status { _stack } <- State.get
-    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+    throwMissingImportM (CannotImportHTTPURL urlString maybeHeaders)
 #else
 fetchRemote url = do
     assign Dhall.Import.Types.remote fetchFromHTTP
@@ -869,8 +866,7 @@ fetchRemoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
 fetchRemoteBytes (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Core.pretty url)
-    Status { _stack } <- State.get
-    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+    throwMissingImportM (CannotImportHTTPURL urlString maybeHeaders)
 #else
 fetchRemoteBytes url = do
     assign Dhall.Import.Types.remoteBytes fetchFromHTTP

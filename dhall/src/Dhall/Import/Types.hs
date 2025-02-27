@@ -6,13 +6,13 @@
 
 module Dhall.Import.Types where
 
-import Control.Exception                (Exception)
+import Control.Exception                (Exception, SomeException)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Data.Dynamic
 import Data.HashMap.Strict              (HashMap)
 import Data.List.NonEmpty               (NonEmpty)
+import Data.Typeable                    (Typeable)
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
@@ -166,6 +166,14 @@ graph = lens _graph (\s x -> s { _graph = x })
 cache :: Lens' Status (Map Chained ImportSemantics)
 cache = lens _cache (\s x -> s { _cache = x })
 
+-- | Lens from a `Status` to its `_newManager` field
+newManager :: Lens' Status (IO Manager)
+newManager = lens _newManager (\s x -> s { _newManager = x })
+
+-- | Lens from a `Status` to its `_loadOriginHeaders` field
+loadOriginHeaders :: Lens' Status (StateT Status IO OriginHeaders)
+loadOriginHeaders = lens _loadOriginHeaders (\s x -> s { _loadOriginHeaders = x })
+
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Data.Text.Text)
 remote = lens _remote (\s x -> s { _remote = x })
@@ -230,8 +238,8 @@ instance Exception InternalError
 --
 -- In order to keep the library API constant even when the @with-http@ Cabal
 -- flag is disabled the pretty error message is pre-rendered and the real
--- 'Network.HTTP.Client.HttpException' is stored in a 'Dynamic'
-data PrettyHttpException = PrettyHttpException String Dynamic
+-- 'Network.HTTP.Client.HttpException' is stored in a 'SomeException'
+data PrettyHttpException = PrettyHttpException String SomeException
     deriving (Typeable)
 
 instance Exception PrettyHttpException
