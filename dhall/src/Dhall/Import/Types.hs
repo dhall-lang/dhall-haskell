@@ -142,23 +142,17 @@ emptyStatusWith
     -> (URL -> StateT Status IO Data.ByteString.ByteString)
     -> Import
     -> Status
-emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport = Status {..}
-  where
-    _stack = pure (Chained rootImport)
-
-    _graph = []
-
-    _cache = Map.empty
-
-    _substitutions = Dhall.Substitution.empty
-
-    _normalizer = Nothing
-
-    _startingContext = Dhall.Context.empty
-
-    _semanticCacheMode = UseSemanticCache
-
-    _cacheWarning = CacheNotWarned
+emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport = Status
+    { _stack = pure (Chained rootImport)
+    , _graph = []
+    , _cache = Map.empty
+    , _substitutions = Dhall.Substitution.empty
+    , _normalizer = Nothing
+    , _startingContext = Dhall.Context.empty
+    , _semanticCacheMode = UseSemanticCache
+    , _cacheWarning = CacheNotWarned
+    , ..
+    }
 
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
@@ -191,6 +185,10 @@ normalizer = lens _normalizer (\s x -> s {_normalizer = x})
 -- | Lens from a `Status` to its `_startingContext` field
 startingContext :: Lens' Status (Context (Expr Src Void))
 startingContext = lens _startingContext (\s x -> s { _startingContext = x })
+
+-- | Lens from a `Status` to its `_semanticCacheMode` field
+semanticCacheMode :: Lens' Status SemanticCacheMode
+semanticCacheMode = lens _semanticCacheMode (\s x -> s { _semanticCacheMode = x })
 
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning

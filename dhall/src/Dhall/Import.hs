@@ -114,44 +114,55 @@ module Dhall.Import (
     , hashExpressionToCode
     , writeExpressionToSemanticCache
     , assertNoImports
-    , Manager
-    , defaultNewManager
-    , CacheWarning(..)
-    , Status(..)
-    , SemanticCacheMode(..)
-    , Chained
-    , chainedImport
-    , chainedFromLocalHere
-    , chainedChangeMode
-    , emptyStatus
-    , emptyStatusWithManager
     , envOriginHeaders
-    , makeEmptyStatus
-    , remoteStatus
-    , remoteStatusWithManager
     , fetchRemote
-    , stack
-    , cache
+    , fetchRemoteBytes
     , Depends(..)
-    , graph
-    , remote
     , toHeaders
-    , substitutions
-    , normalizer
-    , startingContext
     , chainImport
     , dependencyToFile
     , ImportSemantics
     , HTTPHeader
-    , Cycle(..)
-    , ReferentiallyOpaque(..)
     , Imported(..)
+    , Chained
+    , chainedImport
+    , chainedFromLocalHere
+    , chainedChangeMode
+
+      -- * Import status
+    , Status
+    , emptyStatus
+    , emptyStatusWithManager
+    , makeEmptyStatus
+    , remoteStatus
+    , remoteStatusWithManager
+
+      -- ** Lenses for accessing the import status
+    , Dhall.Import.Types.stack
+    , Dhall.Import.Types.graph
+    , Dhall.Import.Types.cache
+    , Dhall.Import.Types.remote
+    , Dhall.Import.Types.remoteBytes
+    , Dhall.Import.Types.substitutions
+    , Dhall.Import.Types.normalizer
+    , Dhall.Import.Types.startingContext
+    , Dhall.Import.Types.semanticCacheMode
+
+      -- ** Auxiliary definitions used by the import status
+    , CacheWarning(..)
+    , SemanticCacheMode(..)
+    , Manager
+    , Dhall.Import.Types.defaultNewManager
+
+      -- * Errors
+    , Cycle(..)
+    , HashMismatch(..)
     , ImportResolutionDisabled(..)
-    , PrettyHttpException(..)
     , MissingFile(..)
     , MissingEnvironmentVariable(..)
     , MissingImports(..)
-    , HashMismatch(..)
+    , PrettyHttpException(..)
+    , ReferentiallyOpaque(..)
     ) where
 
 import Control.Applicative        (Alternative (..))
@@ -203,6 +214,17 @@ import Dhall.Import.Headers
     , toOriginHeaders
     )
 import Dhall.Import.Types
+    ( CacheWarning (..)
+    , Chained (..)
+    , Depends (..)
+    , HTTPHeader
+    , ImportSemantics (..)
+    , Manager
+    , OriginHeaders
+    , PrettyHttpException(..)
+    , SemanticCacheMode(..)
+    , Status (..)
+    )
 
 import Dhall.Parser
     ( ParseError (..)
@@ -210,7 +232,7 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
-import Lens.Micro.Mtl (zoom)
+import Lens.Micro.Mtl (assign, modifying, zoom)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
@@ -227,6 +249,7 @@ import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
+import qualified Dhall.Import.Types
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
@@ -525,7 +548,7 @@ loadImport import_ = do
         Just importSemantics -> return importSemantics
         Nothing -> do
             importSemantics <- loadImportWithSemanticCache import_
-            zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
+            modifying Dhall.Import.Types.cache (Dhall.Map.insert import_ importSemantics)
             return importSemantics
 
 -- | Load an import from the 'semantic cache'. Defers to
@@ -546,7 +569,7 @@ loadImportWithSemanticCache
     mCached <-
         case _semanticCacheMode of
             UseSemanticCache ->
-                zoom cacheWarning (fetchFromSemanticCache semanticHash)
+                zoom Dhall.Import.Types.cacheWarning (fetchFromSemanticCache semanticHash)
             IgnoreSemanticCache ->
                 pure Nothing
 
@@ -584,7 +607,7 @@ loadImportWithSemanticCache
 
             if actualHash == expectedHash
                 then do
-                    zoom cacheWarning (writeToSemanticCache semanticHash bytes)
+                    zoom Dhall.Import.Types.cacheWarning (writeToSemanticCache semanticHash bytes)
 
                 else do
                     Status{ _stack } <- State.get
@@ -665,7 +688,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
     -- behind semi-semantic caching.
     let semisemanticHash = computeSemisemanticHash (Core.denote resolvedExpr)
 
-    mCached <- zoom cacheWarning (fetchFromSemisemanticCache semisemanticHash)
+    mCached <- zoom Dhall.Import.Types.cacheWarning (fetchFromSemisemanticCache semisemanticHash)
 
     importSemantics <- case mCached of
         Just bytesStrict -> do
@@ -698,7 +721,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
 
                     let bytes = encodeExpression betaNormal
 
-                    zoom cacheWarning (writeToSemisemanticCache semisemanticHash bytes)
+                    zoom Dhall.Import.Types.cacheWarning (writeToSemisemanticCache semisemanticHash bytes)
 
                     return betaNormal
 
@@ -831,7 +854,7 @@ fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
 fetchRemote url = do
-    zoom remote (State.put fetchFromHTTP)
+    assign Dhall.Import.Types.remote fetchFromHTTP
     fetchFromHTTP url
   where
     fetchFromHTTP :: URL -> StateT Status IO Data.Text.Text
@@ -850,7 +873,7 @@ fetchRemoteBytes (url@URL { headers = maybeHeadersExpression }) = do
     throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
 #else
 fetchRemoteBytes url = do
-    zoom remoteBytes (State.put fetchFromHTTP)
+    assign Dhall.Import.Types.remoteBytes fetchFromHTTP
     fetchFromHTTP url
   where
     fetchFromHTTP :: URL -> StateT Status IO Data.ByteString.ByteString
@@ -1129,7 +1152,7 @@ originHeadersLoader headersExpr = do
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus = makeEmptyStatus defaultNewManager defaultOriginHeaders
+emptyStatus = makeEmptyStatus Dhall.Import.Types.defaultNewManager defaultOriginHeaders
 
 -- | See 'emptyStatus'
 emptyStatusWithManager
@@ -1145,7 +1168,7 @@ makeEmptyStatus
     -> FilePath
     -> Status
 makeEmptyStatus newManager headersExpr rootDirectory =
-    emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote fetchRemoteBytes rootImport
+    Dhall.Import.Types.emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote fetchRemoteBytes rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1173,12 +1196,12 @@ remoteStatus
     :: URL
     -- ^ Public address of the server
     -> Status
-remoteStatus = remoteStatusWithManager defaultNewManager
+remoteStatus = remoteStatusWithManager Dhall.Import.Types.defaultNewManager
 
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote fetchRemoteBytes rootImport
+    Dhall.Import.Types.emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote fetchRemoteBytes rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1219,15 +1242,16 @@ loadWith expr₀ = case expr₀ of
         then throwMissingImport (Imported _stack (Cycle import₀))
         else return ()
 
-    zoom graph . State.modify $
-        -- Add the edge `parent -> child` to the import graph
-        \edges -> Depends parent child : edges
+    -- Add the edge `parent -> child` to the import graph
+    modifying Dhall.Import.Types.graph (Depends parent child :)
 
     let stackWithChild = NonEmpty.cons child _stack
 
-    zoom stack (State.put stackWithChild)
+    --zoom stack (State.put stackWithChild)
+    assign Dhall.Import.Types.stack stackWithChild
     ImportSemantics {..} <- loadImport child
-    zoom stack (State.put _stack)
+    --zoom stack (State.put _stack)
+    assign Dhall.Import.Types.stack _stack
 
     return (Core.renote importSemantics)
 
@@ -1272,7 +1296,7 @@ loadWith expr₀ = case expr₀ of
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)
-load = loadWithManager defaultNewManager
+load = loadWithManager Dhall.Import.Types.defaultNewManager
 
 -- | See 'load'.
 loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
@@ -1285,7 +1309,7 @@ loadWithManager newManager =
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
 loadRelativeTo parentDirectory = loadWithStatus
-    (makeEmptyStatus defaultNewManager defaultOriginHeaders parentDirectory)
+    (makeEmptyStatus Dhall.Import.Types.defaultNewManager defaultOriginHeaders parentDirectory)
 
 -- | See 'loadRelativeTo'.
 loadWithStatus
@@ -1355,7 +1379,7 @@ assertNoImports expression =
 -}
 dependencyToFile :: Status -> Import -> IO (Maybe FilePath)
 dependencyToFile status import_ = flip State.evalStateT status $ do
-    parent :| _ <- zoom stack State.get
+    parent :| _ <- zoom Dhall.Import.Types.stack State.get
 
     child <- fmap chainedImport (hoist liftIO (chainImport parent import_))
 
