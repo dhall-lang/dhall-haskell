@@ -132,6 +132,7 @@ module Dhall.Import (
       -- * Import status
     , Status
     , emptyStatus
+    , emptyStatusWith
     , emptyStatusWithManager
     , makeEmptyStatus
     , remoteStatus
@@ -143,9 +144,9 @@ module Dhall.Import (
     , Dhall.Import.Types.cache
     , Dhall.Import.Types.remote
     , Dhall.Import.Types.remoteBytes
-    , Dhall.Import.Types.substitutions
-    , Dhall.Import.Types.normalizer
-    , Dhall.Import.Types.startingContext
+    , Dhall.Settings.substitutions
+    , Dhall.Settings.normalizer
+    , Dhall.Settings.startingContext
     , Dhall.Import.Types.semanticCacheMode
 
       -- ** Auxiliary definitions used by the import status
@@ -182,6 +183,7 @@ import Data.Maybe                 (fromMaybe)
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
+import Dhall.Settings             (EvaluateSettings, defaultEvaluateSettings)
 import Dhall.TypeCheck            (TypeError)
 import Dhall.Util                 (printWarning)
 
@@ -253,9 +255,11 @@ import qualified Dhall.Import.Types
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Settings
 import qualified Dhall.Substitution
 import qualified Dhall.Syntax                                as Syntax
 import qualified Dhall.TypeCheck
+import qualified Lens.Micro                                  as Lens
 import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
 import qualified System.Directory                            as Directory
 import qualified System.Environment
@@ -704,8 +708,10 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             return importSemantics
 
         Nothing -> do
+            substitutions <- use Dhall.Settings.substitutions
+
             let substitutedExpr =
-                  Dhall.Substitution.substitute resolvedExpr _substitutions
+                  Dhall.Substitution.substitute resolvedExpr substitutions
 
             case Core.shallowDenote parsedImport of
                 -- If this import trivially wraps another import, we can skip
@@ -715,12 +721,16 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                     return (Core.denote substitutedExpr)
 
                 _ -> do
-                    case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+                    startingContext <- use Dhall.Settings.startingContext
+
+                    case Dhall.TypeCheck.typeWith startingContext substitutedExpr of
                         Left  err -> throwMissingImport (Imported _stack err)
                         Right _   -> return ()
 
+                    normalizer <- use Dhall.Settings.normalizer
+
                     let betaNormal =
-                            Core.normalizeWith _normalizer substitutedExpr
+                            Core.normalizeWith normalizer substitutedExpr
 
                     let bytes = encodeExpression betaNormal
 
@@ -1148,23 +1158,39 @@ originHeadersLoader headersExpr = do
 
 -- | Default starting `Status`, importing relative to the given directory.
 emptyStatus :: FilePath -> Status
-emptyStatus = makeEmptyStatus Dhall.Import.Types.defaultNewManager defaultOriginHeaders
+emptyStatus = emptyStatusWith Dhall.Settings.defaultEvaluateSettings
 
--- | See 'emptyStatus'
+-- | A version of 'emptyStatus' that also takes some 'EvaluateSettings'.
+emptyStatusWith
+    :: EvaluateSettings
+    -> FilePath
+    -> Status
+emptyStatusWith settings = makeEmptyStatus settings defaultOriginHeaders
+
+-- | A version of 'emptyStatus' that also takes an action to create a new
+-- 'Manager.
 emptyStatusWithManager
     :: IO Manager
     -> FilePath
     -> Status
-emptyStatusWithManager newManager = makeEmptyStatus newManager defaultOriginHeaders
+emptyStatusWithManager newManager =
+    emptyStatusWith
+        (Lens.set Dhall.Settings.newManager newManager defaultEvaluateSettings)
 
--- | See 'emptyStatus'.
+-- | Like 'emptyStatusWith', but also takes an action to retrieve a headers
+-- expression.
 makeEmptyStatus
-    :: IO Manager
+    :: EvaluateSettings
     -> IO (Expr Src Import)
     -> FilePath
     -> Status
-makeEmptyStatus newManager headersExpr rootDirectory =
-    Dhall.Import.Types.emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote fetchRemoteBytes rootImport
+makeEmptyStatus settings headersExpr rootDirectory =
+  Dhall.Import.Types.emptyStatusWith
+        settings
+        (originHeadersLoader headersExpr)
+        fetchRemote
+        fetchRemoteBytes
+        rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1197,7 +1223,16 @@ remoteStatus = remoteStatusWithManager Dhall.Import.Types.defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    Dhall.Import.Types.emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote fetchRemoteBytes rootImport
+  let settings =
+        Lens.set Dhall.Settings.newManager newManager defaultEvaluateSettings
+
+  in
+  Dhall.Import.Types.emptyStatusWith
+        settings
+        (originHeadersLoader (pure emptyOriginHeaders))
+        fetchRemote
+        fetchRemoteBytes
+        rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1298,14 +1333,13 @@ load = loadWithManager Dhall.Import.Types.defaultNewManager
 loadWithManager :: IO Manager -> Expr Src Import -> IO (Expr Src Void)
 loadWithManager newManager =
     loadWithStatus
-        (makeEmptyStatus newManager defaultOriginHeaders ".")
+        (emptyStatusWithManager newManager ".")
         UseSemanticCache
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
-loadRelativeTo parentDirectory = loadWithStatus
-    (makeEmptyStatus Dhall.Import.Types.defaultNewManager defaultOriginHeaders parentDirectory)
+loadRelativeTo parentDirectory = loadWithStatus (emptyStatus parentDirectory)
 
 -- | See 'loadRelativeTo'.
 loadWithStatus

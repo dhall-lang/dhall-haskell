@@ -51,6 +51,7 @@ import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
 import qualified Dhall.Import.Types
+import qualified Dhall.Settings
 import qualified Dhall.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Types
@@ -170,8 +171,8 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
 
 newManager :: StateT Status IO Manager
 newManager = do
-    manager <- liftIO =<< use Dhall.Import.Types.newManager
-    assign Dhall.Import.Types.newManager (return manager)
+    manager <- liftIO =<< use Dhall.Settings.newManager
+    assign Dhall.Settings.newManager (return manager)
     return manager
 
 data NotCORSCompliant = NotCORSCompliant
