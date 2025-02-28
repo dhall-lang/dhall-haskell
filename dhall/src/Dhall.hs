@@ -28,18 +28,23 @@ module Dhall
     , interpretExprWithSettings
     , fromExpr
     , fromExprWithSettings
-    , rootDirectory
-    , sourceName
-    , startingContext
-    , substitutions
-    , normalizer
-    , newManager
-    , defaultInputSettings
-    , InputSettings
-    , defaultEvaluateSettings
-    , EvaluateSettings
-    , HasEvaluateSettings(..)
     , detailed
+
+    -- ** Input settings
+    , Dhall.Settings.InputSettings
+    , Dhall.Settings.defaultInputSettings
+    , Dhall.Settings.rootDirectory
+    , Dhall.Settings.sourceName
+    , Dhall.Settings.HasInputSettings(..)
+
+    -- ** Evaluation settings
+    , Dhall.Settings.EvaluateSettings
+    , Dhall.Settings.defaultEvaluateSettings
+    , Dhall.Settings.newManager
+    , Dhall.Settings.normalizer
+    , Dhall.Settings.startingContext
+    , Dhall.Settings.substitutions
+    , Dhall.Settings.HasEvaluateSettings(..)
 
     -- * Decoders
     , module Dhall.Marshal.Decode
@@ -66,10 +71,17 @@ import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
 import Dhall.Import           (Imported (..), Status)
 import Dhall.Parser           (Src (..))
+import Dhall.Settings
+    ( EvaluateSettings
+    , HasEvaluateSettings
+    , HasInputSettings
+    , InputSettings
+    , defaultEvaluateSettings
+    , defaultInputSettings
+    )
 import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
-import Lens.Micro             (Lens', lens)
 import Lens.Micro.Extras      (view)
 import Prelude                hiding (maybe, sequence)
 import System.FilePath        (takeDirectory)
@@ -77,11 +89,11 @@ import System.FilePath        (takeDirectory)
 import qualified Control.Exception
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text.IO
-import qualified Dhall.Context
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Settings
 import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck
 import qualified Lens.Micro                       as Lens
@@ -89,128 +101,36 @@ import qualified Lens.Micro                       as Lens
 import Dhall.Marshal.Decode
 import Dhall.Marshal.Encode
 
--- | @since 1.16
-data InputSettings = InputSettings
-  { _rootDirectory :: FilePath
-  , _sourceName :: FilePath
-  , _evaluateSettings :: EvaluateSettings
-  }
-
--- | Default input settings: resolves imports relative to @.@ (the
--- current working directory), report errors as coming from @(input)@,
--- and default evaluation settings from 'defaultEvaluateSettings'.
---
--- @since 1.16
-defaultInputSettings :: InputSettings
-defaultInputSettings = InputSettings
-  { _rootDirectory = "."
-  , _sourceName = "(input)"
-  , _evaluateSettings = defaultEvaluateSettings
-  }
-
-
--- | Access the directory to resolve imports relative to.
---
--- @since 1.16
-rootDirectory :: Lens' InputSettings FilePath
-rootDirectory = lens _rootDirectory (\s x -> s { _rootDirectory = x })
-
--- | Access the name of the source to report locations from; this is
--- only used in error messages, so it's okay if this is a best guess
--- or something symbolic.
---
--- @since 1.16
-sourceName :: Lens' InputSettings FilePath
-sourceName = lens _sourceName (\s x -> s { _sourceName = x})
-
--- | @since 1.16
-data EvaluateSettings = EvaluateSettings
-  { _substitutions   :: Dhall.Substitution.Substitutions Src Void
-  , _startingContext :: Dhall.Context.Context (Expr Src Void)
-  , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
-  , _newManager      :: IO Dhall.Import.Manager
-  }
-
--- | Default evaluation settings: no extra entries in the initial
--- context, and no special normalizer behaviour.
---
--- @since 1.16
-defaultEvaluateSettings :: EvaluateSettings
-defaultEvaluateSettings = EvaluateSettings
-  { _substitutions   = Dhall.Substitution.empty
-  , _startingContext = Dhall.Context.empty
-  , _normalizer      = Nothing
-  , _newManager      = Dhall.Import.defaultNewManager
-  }
-
--- | Access the starting context used for evaluation and type-checking.
---
--- @since 1.16
-startingContext
-  :: (HasEvaluateSettings s)
-  => Lens' s (Dhall.Context.Context (Expr Src Void))
-startingContext =
-    evaluateSettings
-        . lens _startingContext (\s x -> s { _startingContext = x})
-
--- | Access the custom substitutions.
---
--- @since 1.30
-substitutions
-  :: (HasEvaluateSettings s)
-  => Lens' s (Dhall.Substitution.Substitutions Src Void)
-substitutions =
-    evaluateSettings
-        . lens _substitutions (\s x -> s { _substitutions = x })
-
--- | Access the custom normalizer.
---
--- @since 1.16
-normalizer
-  :: (HasEvaluateSettings s)
-  => Lens' s (Maybe (Core.ReifiedNormalizer Void))
-normalizer =
-    evaluateSettings
-        . lens _normalizer (\s x -> s { _normalizer = x })
-
--- | Access the HTTP manager initializer.
---
--- @since 1.36
-newManager
-  :: (HasEvaluateSettings s)
-  => Lens' s (IO Dhall.Import.Manager)
-newManager =
-    evaluateSettings
-        . lens _newManager (\s x -> s { _newManager = x })
-
--- | @since 1.16
-class HasEvaluateSettings s where
-  evaluateSettings :: Lens' s EvaluateSettings
-
-instance HasEvaluateSettings InputSettings where
-  evaluateSettings =
-    lens _evaluateSettings (\s x -> s { _evaluateSettings = x })
-
-instance HasEvaluateSettings EvaluateSettings where
-  evaluateSettings = id
+--------------------------------------------------------------------------------
+-- Individual phases
+--------------------------------------------------------------------------------
 
 -- | Parse an expression, using the supplied `InputSettings`
-parseWithSettings :: MonadThrow m => InputSettings -> Text -> m (Expr Src Import)
-parseWithSettings settings text =
-    either throwM return (Dhall.Parser.exprFromText (view sourceName settings) text)
+parseWithSettings
+    :: (HasInputSettings s, MonadThrow m)
+    => s -> Text -> m (Expr Src Import)
+parseWithSettings settings text = do
+    let sourceName = view Dhall.Settings.sourceName settings
+
+    either throwM return (Dhall.Parser.exprFromText sourceName text)
 
 -- | Type-check an expression, using the supplied `InputSettings`
-typecheckWithSettings :: MonadThrow m => InputSettings -> Expr Src Void -> m ()
-typecheckWithSettings settings expression =
-    either throwM (return . const ()) (Dhall.TypeCheck.typeWith (view startingContext settings) expression)
+typecheckWithSettings
+    :: (HasEvaluateSettings s, MonadThrow m)
+    => s -> Expr Src Void -> m ()
+typecheckWithSettings settings expression = do
+    let startingContext = view Dhall.Settings.startingContext settings
+
+    either throwM (return . const ())
+        (Dhall.TypeCheck.typeWith startingContext expression)
 
 {-| Type-check an expression against a type provided as a Dhall expreession,
     using the supplied `InputSettings`
 -}
 checkWithSettings ::
-    MonadThrow m =>
+    (HasEvaluateSettings s, MonadThrow m) =>
     -- | The input settings
-    InputSettings ->
+    s ->
     -- | The expected type of the expression
     Expr Src Void ->
     -- | The expression to check
@@ -234,7 +154,9 @@ checkWithSettings settings type_ expression = do
     This is equivalent of using the 'expected' type of a @Decoder@ as the second
     argument to 'checkWithSettings'.
 -}
-expectWithSettings :: MonadThrow m => InputSettings -> Decoder a -> Expr Src Void -> m ()
+expectWithSettings
+    :: (HasEvaluateSettings s, MonadThrow m)
+    => s -> Decoder a -> Expr Src Void -> m ()
 expectWithSettings settings Decoder{..} expression = do
     expected' <- case expected of
         Success x -> return x
@@ -247,38 +169,44 @@ expectWithSettings settings Decoder{..} expression = do
     Note that this also applies any substitutions specified in the
     `InputSettings`
 -}
-resolveWithSettings :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
+resolveWithSettings
+    :: (HasInputSettings s)
+    => s -> Expr Src Import -> IO (Expr Src Void)
 resolveWithSettings settings expression =
     fst <$> resolveAndStatusWithSettings settings expression
 
 -- | A version of 'resolveWithSettings' that also returns the import 'Status'
 -- together with the resolved expression.
 resolveAndStatusWithSettings
-    :: InputSettings
-    -> Expr Src Import
-    -> IO (Expr Src Void, Status)
+    :: (HasInputSettings s)
+    => s -> Expr Src Import -> IO (Expr Src Void, Status)
 resolveAndStatusWithSettings settings expression = do
-    let InputSettings{..} = settings
+    let inputSettings = view Dhall.Settings.inputSettings settings
 
-    let EvaluateSettings{..} = _evaluateSettings
+    let evaluateSettings = view Dhall.Settings.evaluateSettings inputSettings
 
-    let transform =
-               Lens.set Dhall.Import.substitutions   _substitutions
-            .  Lens.set Dhall.Import.normalizer      _normalizer
-            .  Lens.set Dhall.Import.startingContext _startingContext
+    let rootDirectory = view Dhall.Settings.rootDirectory inputSettings
 
-    let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
+    let substitutions = view Dhall.Settings.substitutions evaluateSettings
+
+    let status = Dhall.Import.emptyStatusWith evaluateSettings rootDirectory
 
     (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression) status
 
-    let substituted = Dhall.Substitution.substitute resolved (view substitutions settings)
+    let substituted = Dhall.Substitution.substitute resolved substitutions
 
     pure (substituted, status')
 
 -- | Normalize an expression, using the supplied `InputSettings`
-normalizeWithSettings :: InputSettings -> Expr Src Void -> Expr Src Void
+normalizeWithSettings
+    :: (HasEvaluateSettings s)
+    => s -> Expr Src Void -> Expr Src Void
 normalizeWithSettings settings =
-    Core.normalizeWith (view normalizer settings)
+    Core.normalizeWith (view Dhall.Settings.normalizer settings)
+
+--------------------------------------------------------------------------------
+-- High-level entrypoints
+--------------------------------------------------------------------------------
 
 {-| Type-check and evaluate a Dhall program, decoding the result into Haskell
 
@@ -366,11 +294,11 @@ inputFileWithSettings
   -- ^ The decoded value in Haskell.
 inputFileWithSettings settings ty path = do
   text <- Data.Text.IO.readFile path
-  let inputSettings = InputSettings
-        { _rootDirectory = takeDirectory path
-        , _sourceName = path
-        , _evaluateSettings = settings
-        }
+  let inputSettings
+        = Lens.set Dhall.Settings.evaluateSettings settings
+        . Lens.set Dhall.Settings.rootDirectory (takeDirectory path)
+        . Lens.set Dhall.Settings.sourceName path
+        $ Dhall.Settings.defaultInputSettings
   inputWithSettings inputSettings ty text
 
 {-| Similar to `input`, but without interpreting the Dhall `Expr` into a Haskell
@@ -405,7 +333,9 @@ inputExprWithSettings settings text = do
 
     _ <- typecheckWithSettings settings resolved
 
-    pure (Core.normalizeWith (view normalizer settings) resolved)
+    let normalizer = view Dhall.Settings.normalizer settings
+
+    pure (Core.normalizeWith normalizer resolved)
 
 {-| Interpret a Dhall Expression
 
@@ -422,7 +352,9 @@ interpretExprWithSettings settings parsed = do
 
     typecheckWithSettings settings resolved
 
-    pure (Core.normalizeWith (view normalizer settings) resolved)
+    let normalizer = view Dhall.Settings.normalizer settings
+
+    pure (Core.normalizeWith normalizer resolved)
 
 {- | Decode a Dhall expression
 
@@ -438,7 +370,9 @@ fromExprWithSettings settings decoder@Decoder{..} expression = do
 
     expectWithSettings settings decoder resolved
 
-    let normalized = Core.normalizeWith (view normalizer settings) resolved
+    let normalizer = view Dhall.Settings.normalizer settings
+
+    let normalized = Core.normalizeWith normalizer resolved
 
     case extract normalized of
         Success x -> return x
