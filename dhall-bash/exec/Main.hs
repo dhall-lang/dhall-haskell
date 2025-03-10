@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
@@ -8,8 +9,10 @@
 module Main where
 
 import Control.Exception (SomeException)
-import Data.ByteString   (ByteString)
-import Options.Generic   (Generic, ParseRecord, type (<?>) (..))
+import Data.Text         (Text)
+import Data.Text.Encoding (encodeUtf8)
+import GHC.Generics      (Generic)
+import Options.Applicative
 import System.Exit       (ExitCode (..))
 
 import qualified Control.Exception
@@ -22,32 +25,57 @@ import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
-import qualified Options.Generic
 import qualified Paths_dhall_bash
 import qualified System.Exit
 import qualified System.IO
 
 data Options = Options
     { explain :: Bool
-        <?> "Explain error messages in detail"
-    , declare :: Maybe ByteString
-        <?> "Declare the given variable as a statement instead of an expression"
+    , declare :: Maybe Text
     , version :: Bool
-        <?> "Display version"
-    } deriving (Generic, ParseRecord)
+    } deriving (Generic)
+
+-- | Parser for all the command arguments and options
+parseOptions :: Parser Options
+parseOptions = do
+    explain <- switch
+        ( long "explain"
+        <> help "Explain error messages in detail"
+        )
+
+    declare <- (optional . strOption)
+        ( long "declare"
+        <> metavar "NAME"
+        <> help "Declare the given variable as a statement instead of an expression"
+        )
+
+    version <- switch
+        ( long "version"
+        <> help "Display version"
+        )
+
+    pure Options{..}
+
+parserInfo :: ParserInfo Options
+parserInfo =
+    info
+        (helper <*> parseOptions)
+        (   fullDesc
+        <>  progDesc "Compile Dhall to Bash"
+        )
 
 main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
-    Options {..} <- Options.Generic.getRecord "Compile Dhall to Bash"
+    Options {..} <- execParser parserInfo
 
-    if unHelpful version
+    if version
         then do
             putStrLn (Data.Version.showVersion Paths_dhall_bash.version)
             System.Exit.exitSuccess
         else return ()
 
-    (if unHelpful explain then Dhall.detailed else id) (handle (do
+    (if explain then Dhall.detailed else id) (handle (do
         inText <- Data.Text.IO.getContents
 
         expr <- case Dhall.Parser.exprFromText "(input)" inText of
@@ -59,13 +87,13 @@ main = do
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
 
-        bytes <- case unHelpful declare of
+        bytes <- case declare of
             Nothing  -> do
                 case Dhall.Bash.dhallToExpression expr' of
                     Left  err   -> Control.Exception.throwIO err
                     Right bytes -> return bytes
             Just var -> do
-                case Dhall.Bash.dhallToStatement expr' var of
+                case Dhall.Bash.dhallToStatement expr' (encodeUtf8 var) of
                     Left  err   -> Control.Exception.throwIO err
                     Right bytes -> return bytes
         Data.ByteString.putStr bytes ))
