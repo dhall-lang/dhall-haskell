@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -9,11 +10,11 @@ module Dhall.Import.HTTP
     ) where
 
 import Control.Exception                (Exception)
+import Control.Monad                    (join)
 import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Data.Dynamic                     (toDyn)
 import Data.List.NonEmpty               (NonEmpty (..))
 import Data.Text.Encoding               (decodeUtf8)
 import Dhall.Core
@@ -29,27 +30,35 @@ import Dhall.Core
     , URL (..)
     )
 import Dhall.Import.Types
+    ( Chained (..)
+    , HTTPHeader
+    , Manager
+    , OriginHeaders
+    , PrettyHttpException (..)
+    , Status (..)
+    )
 import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
+import Lens.Micro.Mtl                   (assign, use)
 import System.Directory                 (getXdgDirectory, XdgDirectory(XdgConfig))
 import System.FilePath                  (splitDirectories)
-
 
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..))
 
 import qualified Control.Exception
-import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.ByteString.Lazy             as ByteString.Lazy
 import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
+import qualified Dhall.Import.Types
+import qualified Dhall.Settings
 import qualified Dhall.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Types
 
 mkPrettyHttpException :: String -> HttpException -> PrettyHttpException
 mkPrettyHttpException url ex =
-    PrettyHttpException (renderPrettyHttpException url ex) (toDyn ex)
+    PrettyHttpException (renderPrettyHttpException url ex) (Control.Exception.toException ex)
 
 renderPrettyHttpException :: String -> HttpException -> String
 renderPrettyHttpException _ (InvalidUrlException _ r) =
@@ -162,18 +171,9 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
 
 newManager :: StateT Status IO Manager
 newManager = do
-    Status { _manager = oldManager, ..} <- State.get
-
-    case oldManager of
-        Nothing -> do
-            manager <- liftIO _newManager
-
-            State.put (Status { _manager = Just manager , ..})
-
-            return manager
-
-        Just manager ->
-            return manager
+    manager <- liftIO =<< use Dhall.Settings.newManager
+    assign Dhall.Settings.newManager (return manager)
+    return manager
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
@@ -255,7 +255,7 @@ addHeaders originHeaders urlHeaders request =
     request { HTTP.requestHeaders = (filterHeaders urlHeaders) <> perOriginHeaders }
       where
         origin = decodeUtf8 (HTTP.host request) <> ":" <> Text.pack (show (HTTP.port request))
- 
+
         perOriginHeaders = HashMap.lookupDefault [] origin originHeaders
 
         filterHeaders = foldMap (filter (not . overridden))
@@ -269,10 +269,7 @@ addHeaders originHeaders urlHeaders request =
 fetchFromHttpUrlBytes
     :: URL -> Maybe [HTTPHeader] -> StateT Status IO ByteString
 fetchFromHttpUrlBytes childURL mheaders = do
-    Status { _loadOriginHeaders } <- State.get
-
-    originHeaders <- _loadOriginHeaders
-
+    originHeaders <- join (use Dhall.Import.Types.loadOriginHeaders)
     manager <- newManager
 
     let childURLString = Text.unpack (renderURL childURL)
@@ -289,9 +286,7 @@ fetchFromHttpUrlBytes childURL mheaders = do
 
     response <- liftIO (Control.Exception.handle handler io)
 
-    Status {..} <- State.get
-
-    case _stack of
+    use Dhall.Import.Types.stack >>= \case
         -- We ignore the first import in the stack since that is the same import
         -- as the `childUrl`
         _ :| Chained parentImport : _ -> do
