@@ -21,7 +21,9 @@ import qualified Data.Fixed as Fixed
 #endif
 import qualified Data.Time as Time
 
+#if !MIN_VERSION_time(1,14,0)
 deriving instance Lift Time.Day
+#endif
 deriving instance Lift Time.TimeOfDay
 deriving instance Lift Time.TimeZone
 #if !MIN_VERSION_template_haskell(2,21,0)
