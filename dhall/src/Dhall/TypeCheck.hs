@@ -1314,25 +1314,6 @@ infer typer = loop
 
                   VOptional _O' -> do
                     case ks of
-                        -- The old rule was:
-                        -- 
-                        -- Γ ⊢ e : Optional T
-                        -- Γ ⊢ v : T'
-                        -- T === T'
-                        -- ──────────────────────────────────
-                        -- Γ ⊢ e with ?.ks… = v : Optional T
-                        --
-                        -- Here T is _O' and T' = tV'.
-                        -- 
-                        -- The new rule is:
-                        --
-                        -- Γ ⊢ e : Optional T
-                        -- Γ, x : T ⊢ x with ks… = v : T₁
-                        -- T ≡ T₁
-                        -- ────────────────────────────────── x ∉ FV(v)
-                        -- Γ ⊢ e with ?.ks… = v : Optional T
-                        --
-                        -- Here T is _O' and T₁ is tV'.
 
                         -- (Some x) with ? = v is valid iff the type of x is the same as the type of v.
                       WithQuestion :| [] -> do
