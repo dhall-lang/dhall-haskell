@@ -814,7 +814,7 @@ infer typer = loop
             xLs' <- case _L' of
                 VRecord xLs' ->
                     return xLs'
-
+-- or it can be VConst Type or similar, if we are doing /\ on two record types. 
                 _ -> do
                     let _L'' = quote names _L'
 
@@ -832,7 +832,7 @@ infer typer = loop
                     case mk of
                         Nothing -> die (MustCombineARecord '∧' r'' _R'')
                         Just t  -> die (InvalidDuplicateField t r _R'')
-
+-- TODO examine why this `combineTypes` is different from that defined in `CombineTypes _ l r`.
             let combineTypes xs xLs₀' xRs₀' = do
                     let combine x (VRecord xLs₁') (VRecord xRs₁') =
                             combineTypes (x : xs) xLs₁' xRs₁'
