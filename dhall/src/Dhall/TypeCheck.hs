@@ -801,11 +801,15 @@ infer typer = loop
         Combine _ mk l r -> do
             _L' <- loop ctx l
 
-            let l'' = quote names (eval values l)
+            let l' = eval values l
+
+            let l'' = quote names l'
 
             _R' <- loop ctx r
 
-            let r'' = quote names (eval values r)
+            let r' = eval values r
+
+            let r'' = quote names r'
 
             xLs' <- case _L' of
                 VRecord xLs' ->
