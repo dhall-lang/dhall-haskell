@@ -432,7 +432,8 @@ combine ASCII   = "/\\"
 combine Unicode = "∧"
 
 combineTypes :: CharacterSet -> Text
-combineTypes = combine  -- Replace //\\ by /\ as //\\ is now deprecated.
+combineTypes ASCII   = "//\\\\"
+combineTypes Unicode = "⩓"
 
 prefer :: CharacterSet -> Text
 prefer ASCII   = "//"
