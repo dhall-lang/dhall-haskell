@@ -954,6 +954,9 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide (RecordLit m) _ | Data.Foldable.null m = False
           decide _ (RecordLit n) | Data.Foldable.null n = False
           decide (RecordLit _) (RecordLit _) = False
+          decide (Record m) _ | Data.Foldable.null m = False
+          decide _ (Record n) | Data.Foldable.null n = False
+          decide (Record _) (Record _) = False
           decide  _ _ = True
       CombineTypes _ x y -> loop x && loop y && decide x y
         where
