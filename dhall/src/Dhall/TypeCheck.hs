@@ -801,15 +801,20 @@ infer typer = loop
         Combine _ mk l r -> do
             _L' <- loop ctx l
 
-            let l'' = quote names (eval values l)
+            let l' = eval values l
+
+            let l'' = quote names l'
 
             _R' <- loop ctx r
 
-            let r'' = quote names (eval values r)
+            let r' = eval values r
 
-            xLs' <- case _L' of
-                VRecord xLs' ->
-                    return xLs'
+            let r'' = quote names r'
+
+            leftTypeOrRecord <- case (_L', l') of
+                (VRecord xLs', _) -> return (Left xLs')
+
+                (VConst cL, VRecord xLs') -> return (Right (cL, xLs'))
 
                 _ -> do
                     let _L'' = quote names _L'
@@ -818,9 +823,12 @@ infer typer = loop
                         Nothing -> die (MustCombineARecord '∧' l'' _L'')
                         Just t  -> die (InvalidDuplicateField t l _L'')
 
-            xRs' <- case _R' of
-                VRecord xRs' ->
-                    return xRs'
+            -- Make sure both are on the Left (both record values) or on the Right (both record types).
+            rightTypeOrRecord  <- case (leftTypeOrRecord, _R', r') of
+                (Left _, VRecord xRs', _) ->
+                    return (Left xRs')
+                
+                (Right _, VConst cR, VRecord xRs') -> return (Right (cR, xRs'))
 
                 _ -> do
                     let _R'' = quote names _R'
@@ -845,7 +853,26 @@ infer typer = loop
 
                     return (VRecord xTs)
 
-            combineTypes [] xLs' xRs'
+            let combineTypesCheck xs xLs₀' xRs₀' = do
+                    let combine x (VRecord xLs₁') (VRecord xRs₁') =
+                            combineTypesCheck (x : xs) xLs₁' xRs₁'
+
+                        combine x _ _ =
+                            die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
+
+                    let mL = Dhall.Map.toMap xLs₀'
+                    let mR = Dhall.Map.toMap xRs₀'
+
+                    Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+
+            case (leftTypeOrRecord, rightTypeOrRecord) of
+                (Left xLs', Left xRs') -> do
+                                combineTypes [] xLs' xRs'
+                (Right (cL, xLs'), Right (cR, xRs')) -> do
+                                                         let c = max cL cR
+                                                         combineTypesCheck [] xLs' xRs'
+                                                         return (VConst c)
+
 
         CombineTypes _ l r -> do
             _L' <- loop ctx l
