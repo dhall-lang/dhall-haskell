@@ -548,15 +548,20 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
               kts' = traverse (traverse loop) kts
           Combine cs mk x y -> decide <$> loop x <*> loop y
             where
+              mergeFields (RecordField _ expr _ _) (RecordField _ expr' _ _) =
+                Syntax.makeRecordField $ decide expr expr'
               decide (RecordLit m) r | Data.Foldable.null m =
                   r
               decide l (RecordLit n) | Data.Foldable.null n =
                   l
               decide (RecordLit m) (RecordLit n) =
-                  RecordLit (Dhall.Map.unionWith f m n)
-                where
-                  f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
-                    Syntax.makeRecordField $ decide expr expr'
+                  RecordLit (Dhall.Map.unionWith mergeFields m n)
+              decide (Record m) r | Data.Foldable.null m =
+                  r
+              decide l (Record n) | Data.Foldable.null n =
+                  l
+              decide (Record m) (Record n) =
+                  Record (Dhall.Map.unionWith mergeFields m n)
               decide l r =
                   Combine cs mk l r
           CombineTypes cs x y -> decide <$> loop x <*> loop y
