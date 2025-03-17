@@ -83,6 +83,7 @@ import qualified Dhall.Syntax                as Syntax
 import qualified Dhall.Util
 import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
+import qualified Data.Type.Bool as types
 
 {-| A type synonym for `Void`
 
@@ -811,6 +812,10 @@ infer typer = loop
 
             let r'' = quote names r'
 
+            -- The `Combine` operator should now work on record terms and also on record types.
+            -- If both sides are record terms, we set leftTypeOrRecord and rightTypeOrRecord to (Left record_fields).
+            -- If both sides are record types, we set both of them to (Right (Type, record_fields)).
+            -- Then we match the pair (leftTypeOrRecord, rightTypeOrRecord) to make sure we catch errors.
             leftTypeOrRecord <- case (_L', l') of
                 (VRecord xLs', _) -> return (Left xLs')
 
