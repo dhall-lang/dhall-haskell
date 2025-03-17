@@ -83,7 +83,6 @@ import qualified Dhall.Syntax                as Syntax
 import qualified Dhall.Util
 import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
-import qualified Data.Type.Bool as types
 
 {-| A type synonym for `Void`
 
