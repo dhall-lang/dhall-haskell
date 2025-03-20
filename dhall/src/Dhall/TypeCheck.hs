@@ -801,46 +801,22 @@ infer typer = loop
         Combine _ mk l r -> do
             _L' <- loop ctx l
 
+            let _L'' = quote names _L'
+
             let l' = eval values l
 
             let l'' = quote names l'
 
             _R' <- loop ctx r
 
+            let _R'' = quote names _R'
+
             let r' = eval values r
 
             let r'' = quote names r'
 
             -- The `Combine` operator should now work on record terms and also on record types.
-            -- If both sides are record terms, we set leftTypeOrRecord and rightTypeOrRecord to (Left record_fields).
-            -- If both sides are record types, we set both of them to (Right (Type, record_fields)).
-            -- Then we match the pair (leftTypeOrRecord, rightTypeOrRecord) to make sure we catch errors.
-            leftTypeOrRecord <- case (_L', l') of
-                (VRecord xLs', _) -> return (Left xLs')
-
-                (VConst cL, VRecord xLs') -> return (Right (cL, xLs'))
-
-                _ -> do
-                    let _L'' = quote names _L'
-
-                    case mk of
-                        Nothing -> die (MustCombineARecord '∧' l'' _L'')
-                        Just t  -> die (InvalidDuplicateField t l _L'')
-
-            -- Make sure both are on the Left (both record values) or on the Right (both record types).
-            rightTypeOrRecord  <- case (leftTypeOrRecord, _R', r') of
-                (Left _, VRecord xRs', _) ->
-                    return (Left xRs')
-                
-                (Right _, VConst cR, VRecord xRs') -> return (Right (cR, xRs'))
-
-                _ -> do
-                    let _R'' = quote names _R'
-
-                    case mk of
-                        Nothing -> die (MustCombineARecord '∧' r'' _R'')
-                        Just t  -> die (InvalidDuplicateField t r _R'')
-
+            -- We will use combineTypes or combineTypesCheck below as needed for each case.
             let combineTypes xs xLs₀' xRs₀' = do
                     let combine x (VRecord xLs₁') (VRecord xRs₁') =
                             combineTypes (x : xs) xLs₁' xRs₁'
@@ -869,13 +845,32 @@ infer typer = loop
 
                     Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
 
-            case (leftTypeOrRecord, rightTypeOrRecord) of
-                (Left xLs', Left xRs') -> do
-                                combineTypes [] xLs' xRs'
-                (Right (cL, xLs'), Right (cR, xRs')) -> do
-                                                         let c = max cL cR
-                                                         combineTypesCheck [] xLs' xRs'
-                                                         return (VConst c)
+            -- If both sides of `Combine` are record terms, we use combineTypes to figure out the resulting type.
+            -- If both sides are record types, we use combineTypesCheck and then return the upper bound of two types.
+            -- Otherwise there is a type error.
+            case (_L', l', _R', r') of
+                (VRecord xLs', _, VRecord xRs', _) -> do
+                    combineTypes [] xLs' xRs'
+
+                (VConst cL, VRecord xLs', VConst cR, VRecord xRs') ->  do
+                    let c = max cL cR
+                    combineTypesCheck [] xLs' xRs'
+                    return (VConst c)
+
+                (_, _, VRecord _, _) -> do
+                  case mk of
+                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
+                     Just t  -> die (InvalidDuplicateField t l _L'')
+
+                (_, _, VConst _, _) -> do
+                  case mk of
+                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
+                     Just t  -> die (InvalidDuplicateField t l _L'')
+
+                _ -> do
+                    case mk of
+                        Nothing -> die (MustCombineARecord '∧' r'' _R'')
+                        Just t  -> die (InvalidDuplicateField t r _R'')
 
 
         CombineTypes _ l r -> do
