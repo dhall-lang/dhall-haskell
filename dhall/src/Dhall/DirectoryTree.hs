@@ -296,10 +296,16 @@ processFilesystemEntry allowSeparators path (DirectoryEntry entry) =
     processEntryWith path entry $ \path' content -> do
         Directory.createDirectoryIfMissing allowSeparators path'
         processFilesystemEntryList allowSeparators path' content
-processFilesystemEntry _ path (BinaryFileEntry entry) =
-    processEntryWith path entry ByteString.writeFile
-processFilesystemEntry _ path (TextFileEntry entry) =
-    processEntryWith path entry  Text.IO.writeFile
+processFilesystemEntry allowSeparators path (BinaryFileEntry entry) =
+    processEntryWith path entry $ \path' content -> do
+        when allowSeparators $ do
+            Directory.createDirectoryIfMissing True (FilePath.takeDirectory path')
+        ByteString.writeFile path' content
+processFilesystemEntry allowSeparators path (TextFileEntry entry) =
+    processEntryWith path entry $ \path' content -> do
+        when allowSeparators $ do
+            Directory.createDirectoryIfMissing True (FilePath.takeDirectory path')
+        Text.IO.writeFile path' content
 
 -- | A helper function used by 'processFilesystemEntry'.
 processEntryWith
