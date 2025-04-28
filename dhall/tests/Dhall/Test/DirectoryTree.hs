@@ -13,6 +13,7 @@ import System.FilePath        ((</>))
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import qualified Data.List
 import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.Core
@@ -55,7 +56,7 @@ fixpointedSimple = testCase "simple" $ do
     let outDir = "./tests/to-directory-tree/fixpoint-simple.out"
         path = "./tests/to-directory-tree/fixpoint-simple.dhall"
     entries <- runDirectoryTree False outDir path
-    entries @?=
+    entries @?= Data.List.sort
         [ Directory outDir
         , File $ outDir </> "file"
         , Directory $ outDir </> "directory"
@@ -66,7 +67,7 @@ fixpointedAllowPathSeparators = testCase "allow-path-separators" $ do
     let outDir = "./tests/to-directory-tree/fixpoint-allow-path-separators.out"
         path = "./tests/to-directory-tree/fixpoint-allow-path-separators.dhall"
     entries <- runDirectoryTree True outDir path
-    entries @?=
+    entries @?= Data.List.sort
         [ Directory outDir
         , Directory $ outDir </> "non-existent-1"
         , File $ outDir </> "non-existent-1" </> "file"
@@ -130,12 +131,12 @@ runDirectoryTree allowSeparators outDir path = do
 
     toDirectoryTree allowSeparators outDir $ Dhall.Core.denote expr
 
-    walkFsTree outDir
+    Data.List.sort <$> walkFsTree outDir
 
 data WalkEntry
     = Directory FilePath
     | File FilePath
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 walkFsTree :: FilePath -> IO [WalkEntry]
 walkFsTree dir = do
