@@ -3,7 +3,7 @@
 
 module Dhall.Test.Package where
 
-import           Control.Exception  (Exception, displayException, try)
+import           Control.Exception  (Exception, displayException, finally, try)
 import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Void          (Void)
 import           Dhall.Core
@@ -20,6 +20,7 @@ import           Dhall.Core
 import qualified Dhall.Map          as Map
 import           Dhall.Package
 import           Lens.Micro         (set)
+import qualified System.Directory   as Directory
 import           System.FilePath    ((</>))
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -122,7 +123,7 @@ packageNested = testCase "nested files" $ do
     assertEqual "content" package expr
 
 packageRecursive :: TestTree
-packageRecursive = testCase "recursively create subpackages" $ do
+packageRecursive = testCase "recursively create subpackages" $ removePackagesAfter $ do
     let path = "./tests/package/dir" </> "package.dhall"
 
     let package :: Expr Void Import
@@ -139,6 +140,11 @@ packageRecursive = testCase "recursively create subpackages" $ do
         ( "./tests/package/dir" :| [] )
     assertEqual "path" path output
     assertEqual "content" package expr
+    where
+        removePackagesAfter :: IO a -> IO a
+        removePackagesAfter action = action `finally` do
+            Directory.removePathForcibly "./tests/package/dir/subdirectory1/package.dhall"
+            Directory.removePathForcibly "./tests/package/dir/subdirectory2/package.dhall"
 
 packageMissingFile :: TestTree
 packageMissingFile = testCase "missing file" $ do
