@@ -150,16 +150,22 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Natural"           -> return Natural
                     8  | sb == "Optional"          -> return Optional
                        | sb == "TimeZone"          -> return TimeZone
+                       | sb == "Date/day"          -> return DateDay
                     9  | sb == "Date/show"         -> return DateShow
                        | sb == "List/fold"         -> return ListFold
                        | sb == "List/head"         -> return ListHead
                        | sb == "List/last"         -> return ListLast
                        | sb == "Text/show"         -> return TextShow
                        | sb == "Time/show"         -> return TimeShow
+                       | sb == "Date/year"         -> return DateYear
+                       | sb == "Time/hour"         -> return TimeHour
                     10 | sb == "List/build"        -> return ListBuild
+                       | sb == "Date/month"        -> return DateMonth
                     11 | sb == "Double/show"       -> return DoubleShow
                        | sb == "List/length"       -> return ListLength
                        | sb == "Natural/odd"       -> return NaturalOdd
+                       | sb == "Time/minute"       -> return TimeMinute
+                       | sb == "Time/second"       -> return TimeSecond
                     12 | sb == "Integer/show"      -> return IntegerShow
                        | sb == "List/indexed"      -> return ListIndexed
                        | sb == "List/reverse"      -> return ListReverse
@@ -780,11 +786,29 @@ encodeExpressionInternal encodeEmbed = go
         DateShow ->
             Encoding.encodeUtf8ByteArray "Date/show"
 
+        DateYear ->
+            Encoding.encodeUtf8ByteArray "Date/year"
+
+        DateMonth ->
+            Encoding.encodeUtf8ByteArray "Date/month"
+
+        DateDay ->
+            Encoding.encodeUtf8ByteArray "Date/day"
+
         Time ->
             Encoding.encodeUtf8ByteArray "Time"
 
         TimeShow ->
             Encoding.encodeUtf8ByteArray "Time/show"
+
+        TimeHour ->
+            Encoding.encodeUtf8ByteArray "Time/hour"
+
+        TimeMinute ->
+            Encoding.encodeUtf8ByteArray "Time/minute"
+
+        TimeSecond ->
+            Encoding.encodeUtf8ByteArray "Time/second"
 
         TimeZone ->
             Encoding.encodeUtf8ByteArray "TimeZone"

@@ -591,6 +591,15 @@ infer typer = loop
         DateShow ->
             return (VDate ~> VText)
 
+        DateYear ->
+            return (VDate ~> VNatural)
+
+        DateMonth ->
+            return (VDate ~> VNatural)
+
+        DateDay ->
+            return (VDate ~> VNatural)
+
         Time ->
             return (VConst Type)
 
@@ -599,6 +608,15 @@ infer typer = loop
 
         TimeShow ->
             return (VTime ~> VText)
+
+        TimeHour ->
+            return (VTime ~> VNatural)
+
+        TimeMinute ->
+            return (VTime ~> VNatural)
+
+        TimeSecond ->
+            return (VTime ~> VNatural)
 
         TimeZone ->
             return (VConst Type)
