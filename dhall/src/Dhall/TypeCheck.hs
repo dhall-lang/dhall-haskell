@@ -801,34 +801,22 @@ infer typer = loop
         Combine _ mk l r -> do
             _L' <- loop ctx l
 
-            let l'' = quote names (eval values l)
+            let _L'' = quote names _L'
+
+            let l' = eval values l
+
+            let l'' = quote names l'
 
             _R' <- loop ctx r
 
-            let r'' = quote names (eval values r)
+            let _R'' = quote names _R'
 
-            xLs' <- case _L' of
-                VRecord xLs' ->
-                    return xLs'
+            let r' = eval values r
 
-                _ -> do
-                    let _L'' = quote names _L'
+            let r'' = quote names r'
 
-                    case mk of
-                        Nothing -> die (MustCombineARecord '∧' l'' _L'')
-                        Just t  -> die (InvalidDuplicateField t l _L'')
-
-            xRs' <- case _R' of
-                VRecord xRs' ->
-                    return xRs'
-
-                _ -> do
-                    let _R'' = quote names _R'
-
-                    case mk of
-                        Nothing -> die (MustCombineARecord '∧' r'' _R'')
-                        Just t  -> die (InvalidDuplicateField t r _R'')
-
+            -- The `Combine` operator should now work on record terms and also on record types.
+            -- We will use combineTypes or combineTypesCheck below as needed for each case.
             let combineTypes xs xLs₀' xRs₀' = do
                     let combine x (VRecord xLs₁') (VRecord xRs₁') =
                             combineTypes (x : xs) xLs₁' xRs₁'
@@ -845,7 +833,45 @@ infer typer = loop
 
                     return (VRecord xTs)
 
-            combineTypes [] xLs' xRs'
+            let combineTypesCheck xs xLs₀' xRs₀' = do
+                    let combine x (VRecord xLs₁') (VRecord xRs₁') =
+                            combineTypesCheck (x : xs) xLs₁' xRs₁'
+
+                        combine x _ _ =
+                            die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
+
+                    let mL = Dhall.Map.toMap xLs₀'
+                    let mR = Dhall.Map.toMap xRs₀'
+
+                    Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+
+            -- If both sides of `Combine` are record terms, we use combineTypes to figure out the resulting type.
+            -- If both sides are record types, we use combineTypesCheck and then return the upper bound of two types.
+            -- Otherwise there is a type error.
+            case (_L', l', _R', r') of
+                (VRecord xLs', _, VRecord xRs', _) -> do
+                    combineTypes [] xLs' xRs'
+
+                (VConst cL, VRecord xLs', VConst cR, VRecord xRs') ->  do
+                    let c = max cL cR
+                    combineTypesCheck [] xLs' xRs'
+                    return (VConst c)
+
+                (_, _, VRecord _, _) -> do
+                  case mk of
+                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
+                     Just t  -> die (InvalidDuplicateField t l _L'')
+
+                (_, _, VConst _, _) -> do
+                  case mk of
+                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
+                     Just t  -> die (InvalidDuplicateField t l _L'')
+
+                _ -> do
+                    case mk of
+                        Nothing -> die (MustCombineARecord '∧' r'' _R'')
+                        Just t  -> die (InvalidDuplicateField t r _R'')
+
 
         CombineTypes _ l r -> do
             _L' <- loop ctx l
