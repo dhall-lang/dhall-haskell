@@ -798,6 +798,7 @@ infer typer = loop
 
             Max c <- fmap Foldable.fold (Dhall.Map.unorderedTraverseWithKey process xTs)
             return (VConst c)
+
         Combine _ mk l r -> do
             _L' <- loop ctx l
 
@@ -833,20 +834,8 @@ infer typer = loop
 
                     return (VRecord xTs)
 
-            let combineTypesCheck xs xLs₀' xRs₀' = do
-                    let combine x (VRecord xLs₁') (VRecord xRs₁') =
-                            combineTypesCheck (x : xs) xLs₁' xRs₁'
-
-                        combine x _ _ =
-                            die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
-
-                    let mL = Dhall.Map.toMap xLs₀'
-                    let mR = Dhall.Map.toMap xRs₀'
-
-                    Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
-
-            -- If both sides of `Combine` are record terms, we use combineTypes to figure out the resulting type.
-            -- If both sides are record types, we use combineTypesCheck and then return the upper bound of two types.
+            -- If both sides of `Combine` are record terms (and their types match VRecord _), we use combineTypes to figure out the resulting type.
+            -- If both sides are record types (and their types match VConst _), we run combineTypesCheckingForFieldCollisions and then return the upper bound of the two types.
             -- Otherwise there is a type error.
             case (_L', l', _R', r') of
                 (VRecord xLs', _, VRecord xRs', _) -> do
@@ -854,7 +843,7 @@ infer typer = loop
 
                 (VConst cL, VRecord xLs', VConst cR, VRecord xRs') ->  do
                     let c = max cL cR
-                    combineTypesCheck [] xLs' xRs'
+                    combineTypesCheckingForFieldCollisions [] xLs' xRs'
                     return (VConst c)
 
                 (_, _, VRecord _, _) -> do
@@ -904,19 +893,7 @@ infer typer = loop
                 VRecord xRs' -> return xRs'
                 _            -> die (CombineTypesRequiresRecordType r r'')
 
-            let combineTypes xs xLs₀' xRs₀' = do
-                    let combine x (VRecord xLs₁') (VRecord xRs₁') =
-                            combineTypes (x : xs) xLs₁' xRs₁'
-
-                        combine x _ _ =
-                            die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
-
-                    let mL = Dhall.Map.toMap xLs₀'
-                    let mR = Dhall.Map.toMap xRs₀'
-
-                    Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
-
-            combineTypes [] xLs' xRs'
+            combineTypesCheckingForFieldCollisions [] xLs' xRs'
 
             return (VConst c)
 
@@ -1385,6 +1362,19 @@ infer typer = loop
         eval vs e = Eval.eval vs (Dhall.Core.denote e)
 
         quote ns value = Dhall.Core.renote (Eval.quote ns value)
+
+        combineTypesCheckingForFieldCollisions xs xLs₀' xRs₀' = Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+          where
+            combine x (VRecord xLs₁') (VRecord xRs₁') =
+                    combineTypesCheckingForFieldCollisions (x : xs) xLs₁' xRs₁'
+
+            combine x _ _ =
+                    die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
+
+            mL = Dhall.Map.toMap xLs₀'
+            mR = Dhall.Map.toMap xRs₀'
+
+
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
