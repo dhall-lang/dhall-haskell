@@ -816,8 +816,8 @@ infer typer = loop
 
             let r'' = quote names r'
 
-            -- The `Combine` operator should now work on record terms and also on record types.
-            -- We will use combineTypes or combineTypesCheck below as needed for each case.
+            -- The `Combine` operator needs to work on record terms and also on record types.
+            -- We will use combineTypes or recordTypesHaveNoFieldCollisions below as needed for each case.
             let combineTypes xs xLs₀' xRs₀' = do
                     let combine x (VRecord xLs₁') (VRecord xRs₁') =
                             combineTypes (x : xs) xLs₁' xRs₁'
@@ -835,15 +835,15 @@ infer typer = loop
                     return (VRecord xTs)
 
             -- If both sides of `Combine` are record terms (and their types match VRecord _), we use combineTypes to figure out the resulting type.
-            -- If both sides are record types (and their types match VConst _), we run combineTypesCheckingForFieldCollisions and then return the upper bound of the two types.
+            -- If both sides are record types (and their kinds match VConst _), we check recordTypesHaveNoFieldCollisions and then return the upper bound of the two types.
             -- Otherwise there is a type error.
             case (_L', l', _R', r') of
-                (VRecord xLs', _, VRecord xRs', _) -> do
+                (VRecord xLs', _, VRecord xRs', _) -> do  -- Both arguments are record terms.
                     combineTypes [] xLs' xRs'
 
-                (VConst cL, VRecord xLs', VConst cR, VRecord xRs') ->  do
+                (VConst cL, VRecord xLs', VConst cR, VRecord xRs') -> do  -- Both arguments are record types.
                     let c = max cL cR
-                    combineTypesCheckingForFieldCollisions [] xLs' xRs'
+                    recordTypesHaveNoFieldCollisions [] xLs' xRs'
                     return (VConst c)
 
                 (_, _, VRecord _, _) -> do
@@ -893,7 +893,7 @@ infer typer = loop
                 VRecord xRs' -> return xRs'
                 _            -> die (CombineTypesRequiresRecordType r r'')
 
-            combineTypesCheckingForFieldCollisions [] xLs' xRs'
+            recordTypesHaveNoFieldCollisions [] xLs' xRs'
 
             return (VConst c)
 
@@ -1363,10 +1363,10 @@ infer typer = loop
 
         quote ns value = Dhall.Core.renote (Eval.quote ns value)
 
-        combineTypesCheckingForFieldCollisions xs xLs₀' xRs₀' = Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+        recordTypesHaveNoFieldCollisions xs xLs₀' xRs₀' = Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
           where
             combine x (VRecord xLs₁') (VRecord xRs₁') =
-                    combineTypesCheckingForFieldCollisions (x : xs) xLs₁' xRs₁'
+                    recordTypesHaveNoFieldCollisions (x : xs) xLs₁' xRs₁'
 
             combine x _ _ =
                     die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
