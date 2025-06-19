@@ -846,20 +846,16 @@ infer typer = loop
                     recordTypesHaveNoFieldCollisions [] xLs' xRs'
                     return (VConst c)
 
-                (_, _, VRecord _, _) -> do
+                (VRecord _, _, _, _) -> do  -- The left argument is a record term, the right argument is not. The error is in the right argument.
                   case mk of
-                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
-                     Just t  -> die (InvalidDuplicateField t l _L'')
+                     Nothing -> die (MustCombineARecord '∧' r'' _R'')
+                     Just t  -> die (InvalidDuplicateField t r _R'')
 
-                (_, _, VConst _, _) -> do
-                  case mk of
-                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
-                     Just t  -> die (InvalidDuplicateField t l _L'')
+                (VConst _, VRecord _, _, _) -> do  -- The left argument is a record type, the right argument is not. The error is in the right argument.
+                    die (CombineTypesRequiresRecordType r r'')
 
-                _ -> do
-                    case mk of
-                        Nothing -> die (MustCombineARecord '∧' r'' _R'')
-                        Just t  -> die (InvalidDuplicateField t r _R'')
+                _ -> do  -- The error is in the left argument: it must be either a record term or a record type, but it is neither.
+                    die (MustCombineARecordOrRecordType '∧' l l'')
 
 
         CombineTypes _ l r -> do
@@ -1405,6 +1401,7 @@ data TypeMessage s a
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustUpdateARecord (Expr s a) (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
+    | MustCombineARecordOrRecordType Char (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
     | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
@@ -2870,6 +2867,66 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
         \" <> insert expression <> "\n\
         \                                                                                \n\
         \... which is not a record, but is actually a:                                   \n\
+        \                                                                                \n\
+        \" <> insert typeExpression <> "\n"
+      where
+        op = pretty c
+
+prettyTypeMessage (MustCombineARecordOrRecordType c expression typeExpression) =
+    ErrorMessages {..}
+  where
+    action = "combine"
+    short = "You can only " <> action <> " records or record types"
+
+    hints = emptyRecordTypeHint expression
+
+    long =
+        "Explanation: You can " <> action <> " records or record types using the ❰" <> op <> "❱ operator, like this:\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz = True } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo : Bool, bar : Text } " <> op <> " { baz : Bool } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot " <> action <> " values that are neither records nor record types.\n\
+        \                                                                                \n\
+        \For example, the following expressions are " <> _NOT <> " valid:                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────┐                                            \n\
+        \    │ 1 " <> op <> " { foo = 1, bar = \"ABC\" } │                               \n\
+        \    └──────────────────────────────┘                                            \n\
+        \      ⇧                                                                         \n\
+        \      Invalid: This is not a record and not a record type                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz : Bool } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                 ⇧                                              \n\
+        \                                 Invalid: This is a record type and not a record\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ < baz : Bool > " <> op <> " { foo = 1, bar = \"ABC\" } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \            ⇧                                                                   \n\
+        \            Invalid: This is a union type and not a record                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You supplied this expression as one of the arguments:                           \n\
+        \                                                                                \n\
+        \" <> insert expression <> "\n\
+        \                                                                                \n\
+        \... which is not a record or a record type, but is actually a:                                   \n\
         \                                                                                \n\
         \" <> insert typeExpression <> "\n"
       where
@@ -4921,6 +4978,8 @@ messageExpressions f m = case m of
         MustUpdateARecord <$> f a <*> f b <*> f c
     MustCombineARecord a b c ->
         MustCombineARecord <$> pure a <*> f b <*> f c
+    MustCombineARecordOrRecordType a b c ->
+        MustCombineARecordOrRecordType <$> pure a <*> f b <*> f c
     InvalidRecordCompletion a l ->
         InvalidRecordCompletion a <$> f l
     CompletionSchemaMustBeARecord l r ->
