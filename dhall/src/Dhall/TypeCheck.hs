@@ -856,11 +856,8 @@ infer typer = loop
                      Nothing -> die (MustCombineARecord '∧' l'' _L'')
                      Just t  -> die (InvalidDuplicateField t l _L'')
 
-                (VConst _, VRecord _, _, _) -> do  -- The left argument is a record type, the right argument is not. We report the error in the right argument.
-                    die (MustCombineRecordsOrRecordTypes '∧' r r'')
-
-                _ -> do  -- The error is in the left argument: it must be either a record term or a record type, but it is neither. We report the error in the left argument.
-                    die (MustCombineRecordsOrRecordTypes '∧' l l'')
+                _ -> do  -- One of the arguments is a record type, but the other argument is not.
+                    die (MustCombineRecordsOrRecordTypes l'' _L'' r _R'')
 
 
         CombineTypes _ l r -> do
@@ -1406,7 +1403,7 @@ data TypeMessage s a
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustUpdateARecord (Expr s a) (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
-    | MustCombineRecordsOrRecordTypes Char (Expr s a) (Expr s a)
+    | MustCombineRecordsOrRecordTypes (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
     | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
@@ -2821,7 +2818,7 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
         '∧' -> "combine"
         _   -> "override"
 
-    short = "You can only " <> action <> " records"
+    short = "You can only " <> action <> " a record with another record"
 
     hints = emptyRecordTypeHint expression
 
@@ -2839,7 +2836,7 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
         \    └─────────────────────────────────────────────┘                             \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but you cannot " <> action <> " values that are not records.                \n\
+        \... but you cannot " <> action <> " a record and a value that is not a record.  \n\
         \                                                                                \n\
         \For example, the following expressions are " <> _NOT <> " valid:                \n\
         \                                                                                \n\
@@ -2877,29 +2874,31 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
       where
         op = pretty c
 
-prettyTypeMessage (MustCombineRecordsOrRecordTypes c expression typeExpression) =
+prettyTypeMessage (MustCombineRecordsOrRecordTypes e1 t1 e2 t2) =
     ErrorMessages {..}
   where
     action = "combine"
     short = "You can only " <> action <> " two records or two record types"
 
-    hints = emptyRecordTypeHint expression
+    hints = emptyRecordTypeHint e1 ++ emptyRecordTypeHint e2
 
     long =
-        "Explanation: You can " <> action <> " two records or two record types using the ❰" <> op <> "❱ operator, like this:\n\
-        \                                                                                \n\
+        "Explanation: You can " <> action <> " two records or two record types using the ❰" <> op <> "❱ |\n\
+        \  operator like this:                                                          |\n\
+        \                                                                               |\n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
         \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz = True } │                  \n\
         \    └───────────────────────────────────────────┘                               \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌───────────────────────────────────────────┐                               \n\
+        \    ┌─────────────────────────────────────────────┐                             \n\
         \    │ { foo : Bool, bar : Text } " <> op <> " { baz : Bool } │                  \n\
-        \    └───────────────────────────────────────────┘                               \n\
+        \    └─────────────────────────────────────────────┘                             \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but you cannot " <> action <> " values that are not both records and not both record types.\n\
+        \... but you cannot " <> action <> " values that are not both records            \n\
+        \  and not both record types.                                                    \n\
         \                                                                                \n\
         \For example, the following expressions are " <> _NOT <> " valid:                \n\
         \                                                                                \n\
@@ -2927,15 +2926,25 @@ prettyTypeMessage (MustCombineRecordsOrRecordTypes c expression typeExpression) 
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
-        \You supplied this expression as one of the arguments:                           \n\
+        \You supplied this expression as the first argument:                             \n\
         \                                                                                \n\
-        \" <> insert expression <> "\n\
+        \" <> insert e1 <> "\n\
         \                                                                                \n\
-        \... which is not a record or a record type, but is actually a:                                   \n\
+        \... which has type:                                                             \n\
         \                                                                                \n\
-        \" <> insert typeExpression <> "\n"
+        \" <> insert t1 <> "\n\
+        \                                                                                \n\
+        \You supplied this expression as the second argument:                            \n\
+        \                                                                                \n\
+        \" <> insert e2 <> "\n\
+        \                                                                                \n\
+        \... which has type:                                                             \n\
+        \                                                                                \n\
+        \" <> insert t2 <> "\n\
+        \                                                                                \n\
+        \At least one of these arguments is neither a record type nor a record.          \n"
       where
-        op = pretty c
+        op = pretty '∧' -- This message is only for type errors while using ∧.
 
 prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
     ErrorMessages {..}
@@ -4985,8 +4994,8 @@ messageExpressions f m = case m of
         MustUpdateARecord <$> f a <*> f b <*> f c
     MustCombineARecord a b c ->
         MustCombineARecord <$> pure a <*> f b <*> f c
-    MustCombineRecordsOrRecordTypes a b c ->
-        MustCombineRecordsOrRecordTypes <$> pure a <*> f b <*> f c
+    MustCombineRecordsOrRecordTypes a b c d ->
+        MustCombineRecordsOrRecordTypes <$> f a <*> f b <*> f c <*> f d
     InvalidRecordCompletion a l ->
         InvalidRecordCompletion a <$> f l
     CompletionSchemaMustBeARecord l r ->
