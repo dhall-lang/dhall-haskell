@@ -843,19 +843,24 @@ infer typer = loop
 
                 (VConst cL, VRecord xLs', VConst cR, VRecord xRs') -> do  -- Both arguments are record types.
                     let c = max cL cR
-                    recordTypesHaveNoFieldCollisions [] xLs' xRs'
+                    recordTypesHaveNoFieldCollisions '∧' [] xLs' xRs'
                     return (VConst c)
 
-                (VRecord _, _, _, _) -> do  -- The left argument is a record term, the right argument is not. The error is in the right argument.
+                (VRecord _, _, _, _) -> do  -- The left argument is a record term, the right argument is not. We report the error in the right argument.
                   case mk of
                      Nothing -> die (MustCombineARecord '∧' r'' _R'')
                      Just t  -> die (InvalidDuplicateField t r _R'')
 
-                (VConst _, VRecord _, _, _) -> do  -- The left argument is a record type, the right argument is not. The error is in the right argument.
-                    die (CombineTypesRequiresRecordType r r'')
+                (_, _, VRecord _, _) -> do  -- The right argument is a record term, the left argument is not. We report the error in the left argument.
+                  case mk of
+                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
+                     Just t  -> die (InvalidDuplicateField t l _L'')
 
-                _ -> do  -- The error is in the left argument: it must be either a record term or a record type, but it is neither.
-                    die (MustCombineARecordOrRecordType '∧' l l'')
+                (VConst _, VRecord _, _, _) -> do  -- The left argument is a record type, the right argument is not. We report the error in the right argument.
+                    die (MustCombineRecordsOrRecordTypes '∧' r r'')
+
+                _ -> do  -- The error is in the left argument: it must be either a record term or a record type, but it is neither. We report the error in the left argument.
+                    die (MustCombineRecordsOrRecordTypes '∧' l l'')
 
 
         CombineTypes _ l r -> do
@@ -889,7 +894,7 @@ infer typer = loop
                 VRecord xRs' -> return xRs'
                 _            -> die (CombineTypesRequiresRecordType r r'')
 
-            recordTypesHaveNoFieldCollisions [] xLs' xRs'
+            recordTypesHaveNoFieldCollisions '⩓' [] xLs' xRs'
 
             return (VConst c)
 
@@ -1359,13 +1364,13 @@ infer typer = loop
 
         quote ns value = Dhall.Core.renote (Eval.quote ns value)
 
-        recordTypesHaveNoFieldCollisions xs xLs₀' xRs₀' = Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+        recordTypesHaveNoFieldCollisions c xs xLs₀' xRs₀' = Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
           where
             combine x (VRecord xLs₁') (VRecord xRs₁') =
-                    recordTypesHaveNoFieldCollisions (x : xs) xLs₁' xRs₁'
+                    recordTypesHaveNoFieldCollisions c (x : xs) xLs₁' xRs₁'
 
             combine x _ _ =
-                    die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
+                    die (FieldTypeCollision c (NonEmpty.reverse (x :| xs)))
 
             mL = Dhall.Map.toMap xLs₀'
             mR = Dhall.Map.toMap xRs₀'
@@ -1401,7 +1406,7 @@ data TypeMessage s a
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustUpdateARecord (Expr s a) (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
-    | MustCombineARecordOrRecordType Char (Expr s a) (Expr s a)
+    | MustCombineRecordsOrRecordTypes Char (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
     | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
@@ -1409,7 +1414,7 @@ data TypeMessage s a
     | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | DuplicateFieldCannotBeMerged (NonEmpty Text)
     | FieldCollision (NonEmpty Text)
-    | FieldTypeCollision (NonEmpty Text)
+    | FieldTypeCollision Char (NonEmpty Text)
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnionOrOptional (Expr s a) (Expr s a)
     | MustMapARecord (Expr s a) (Expr s a)
@@ -2872,16 +2877,16 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
       where
         op = pretty c
 
-prettyTypeMessage (MustCombineARecordOrRecordType c expression typeExpression) =
+prettyTypeMessage (MustCombineRecordsOrRecordTypes c expression typeExpression) =
     ErrorMessages {..}
   where
     action = "combine"
-    short = "You can only " <> action <> " records or record types"
+    short = "You can only " <> action <> " two records or two record types"
 
     hints = emptyRecordTypeHint expression
 
     long =
-        "Explanation: You can " <> action <> " records or record types using the ❰" <> op <> "❱ operator, like this:\n\
+        "Explanation: You can " <> action <> " two records or two record types using the ❰" <> op <> "❱ operator, like this:\n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
@@ -2894,7 +2899,7 @@ prettyTypeMessage (MustCombineARecordOrRecordType c expression typeExpression) =
         \    └───────────────────────────────────────────┘                               \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but you cannot " <> action <> " values that are neither records nor record types.\n\
+        \... but you cannot " <> action <> " values that are not both records and not both record types.\n\
         \                                                                                \n\
         \For example, the following expressions are " <> _NOT <> " valid:                \n\
         \                                                                                \n\
@@ -2910,7 +2915,7 @@ prettyTypeMessage (MustCombineARecordOrRecordType c expression typeExpression) =
         \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz : Bool } │                  \n\
         \    └───────────────────────────────────────────┘                               \n\
         \                                 ⇧                                              \n\
-        \                                 Invalid: This is a record type and not a record\n\
+        \                                 Invalid: cannot combine a record and a record type\n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────────────────────────┐                               \n\
@@ -3224,19 +3229,21 @@ prettyTypeMessage (FieldCollision ks) = ErrorMessages {..}
       where
         txt0 = insert (toPath ks)
 
-prettyTypeMessage (FieldTypeCollision ks) = ErrorMessages {..}
+prettyTypeMessage (FieldTypeCollision c ks) = ErrorMessages {..}
   where
+    op = pretty c
+
     short = "Field type collision on: " <> pretty (toPath ks)
 
     hints = []
 
     long =
-        "Explanation: You can recursively merge record types using the ❰⩓❱ operator, like\n\
+        "Explanation: You can recursively merge record types using the ❰" <> op <> "❱ operator, like\n\
         \this:                                                                           \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────┐                                                   \n\
-        \    │ { x : A } ⩓ { y : B } │                                                   \n\
+        \    │ { x : A } " <> op <> " { y : B } │                                                   \n\
         \    └───────────────────────┘                                                   \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -3247,7 +3254,7 @@ prettyTypeMessage (FieldTypeCollision ks) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────────┐                                          \n\
-        \    │ { x : Natural } ⩓ { x : Bool } │  Invalid: The ❰x❱ fields \"collide\"       \n\
+        \    │ { x : Natural } " <> op <> " { x : Bool } │  Invalid: The ❰x❱ fields \"collide\"       \n\
         \    └────────────────────────────────┘  because they cannot be merged           \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -3255,7 +3262,7 @@ prettyTypeMessage (FieldTypeCollision ks) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────────────────────────┐  Valid: The ❰x❱ field    \n\
-        \    │ { x : { y : Bool } } ⩓ { x : { z : Natural } } │  types don't collide and \n\
+        \    │ { x : { y : Bool } } " <> op <> " { x : { z : Natural } } │  types don't collide and \n\
         \    └────────────────────────────────────────────────┘  can be merged           \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -4978,8 +4985,8 @@ messageExpressions f m = case m of
         MustUpdateARecord <$> f a <*> f b <*> f c
     MustCombineARecord a b c ->
         MustCombineARecord <$> pure a <*> f b <*> f c
-    MustCombineARecordOrRecordType a b c ->
-        MustCombineARecordOrRecordType <$> pure a <*> f b <*> f c
+    MustCombineRecordsOrRecordTypes a b c ->
+        MustCombineRecordsOrRecordTypes <$> pure a <*> f b <*> f c
     InvalidRecordCompletion a l ->
         InvalidRecordCompletion a <$> f l
     CompletionSchemaMustBeARecord l r ->
@@ -4992,8 +4999,8 @@ messageExpressions f m = case m of
         pure (DuplicateFieldCannotBeMerged a)
     FieldCollision a ->
         pure (FieldCollision a)
-    FieldTypeCollision a ->
-        pure (FieldTypeCollision a)
+    FieldTypeCollision c a ->
+        pure (FieldTypeCollision c a)
     MustMergeARecord a b ->
         MustMergeARecord <$> f a <*> f b
     MustMergeUnionOrOptional a b ->
