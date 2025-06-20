@@ -2971,8 +2971,8 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \    └────────────────────────────────────────────────┘                          \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, this implies that both fields must be records since the ❰∧❱ operator   \n\
-        \cannot merge non-record values.  For example, these expressions are not valid:  \n\
+        \However, this implies that both fields must be records or record types since the\n\
+        \ ❰∧❱ operator cannot merge other values.  Examples of invalid expressions are:  \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────┐                                                        \n\

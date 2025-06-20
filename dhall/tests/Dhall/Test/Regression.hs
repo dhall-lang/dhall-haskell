@@ -13,6 +13,7 @@ import Dhall.Parser           (SourcedException (..), Src)
 import Dhall.TypeCheck        (TypeError)
 import Test.Tasty             (TestTree)
 import Test.Tasty.HUnit       ((@?=))
+import Data.Text              (Text)
 
 import qualified Control.Exception
 import qualified Data.Text.IO
@@ -31,6 +32,15 @@ import qualified Prettyprinter.Render.Text
 import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
+import Dhall.TypeCheck (TypeError(typeMessage))
+import Dhall.TypeCheck (prettyTypeMessage)
+import qualified Data.Text as Text
+import Dhall.TypeCheck (short)
+import qualified Data.List as List
+import qualified Prettyprinter as Pretty
+import   Prettyprinter.Render.Text (renderStrict)     
+import Dhall.TypeCheck (ErrorMessages(long))
+
 
 tests :: TestTree
 tests =
@@ -57,6 +67,7 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+        , combineTypes
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
@@ -325,3 +336,32 @@ trailingSpaceAfterStringLiterals =
         -- (Yes, I did get this wrong at some point)
         _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
+
+hasTypeErrorWithMessage ::  Text -> [ Text] -> IO ()
+hasTypeErrorWithMessage dhallCode expectedErrorMessageSubstrings = do
+            let handler :: Dhall.TypeCheck.TypeError Src Void -> IO (Bool, Maybe (Dhall.TypeCheck.TypeMessage Src Void))
+                handler e = return (True, Just (typeMessage e))
+
+            let typeCheck = do
+                    _ <- Util.code dhallCode
+                    return (False, Nothing)
+            
+            (b, Just actualTypeError) <- Control.Exception.handle handler typeCheck
+            Test.Tasty.HUnit.assertBool "The expression should not type-check" b
+            let message = prettyTypeMessage actualTypeError
+            -- Concatenate the short and the long doc strings in an ErrorMessages structure:
+            let concatenateAllDocStrings m = Pretty.vsep [short m, long m]
+            -- Whether `message` has `s` as a substring:    
+            let haveSubstring :: Text -> Bool
+                haveSubstring text = Text.isInfixOf text  (renderStrict (Pretty.layoutPretty Pretty.defaultLayoutOptions (concatenateAllDocStrings message)))
+            let haveAllSubstrings = List.all haveSubstring expectedErrorMessageSubstrings
+
+            Test.Tasty.HUnit.assertBool "The error message should contain all expected substrings" haveAllSubstrings      
+             
+            return ()
+
+combineTypes :: TestTree
+combineTypes = Test.Tasty.HUnit.testCase "Combine Types" (do
+        hasTypeErrorWithMessage "{a : Bool } /\\ { b = 0 }" ["You can only combine records"]
+        hasTypeErrorWithMessage "{a : Bool } /\\ { a : Natural  }" ["Field type collision on: a", "{ x : A } ∧ { y : B }"]
+    )
