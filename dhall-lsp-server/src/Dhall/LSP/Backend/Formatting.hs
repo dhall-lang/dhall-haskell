@@ -3,7 +3,7 @@ module Dhall.LSP.Backend.Formatting (formatExpr, formatExprWithHeader) where
 import Data.Text    (Text)
 import Dhall.Core   (Expr)
 import Dhall.Parser (Header (..))
-import Dhall.Pretty (CharacterSet (..))
+import Dhall.Pretty (ChooseCharacterSet (..), chooseCharsetOrUseDefault)
 import Dhall.Src    (Src)
 
 import qualified Dhall.Pretty

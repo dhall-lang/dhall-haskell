@@ -36,7 +36,7 @@ import Dhall.Kubernetes.Types
     )
 import System.FilePath        ((</>))
 
-import Dhall.Pretty.Internal        (ChooseCharacterSet(..))
+import Dhall.Pretty        (ChooseCharacterSet(..))
 
 import qualified Data.List                  as List
 import qualified Data.Map.Strict            as Data.Map

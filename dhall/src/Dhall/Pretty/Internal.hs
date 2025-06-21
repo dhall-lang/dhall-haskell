@@ -115,6 +115,7 @@ import qualified Prettyprinter.Render.String   as Pretty
 import qualified Prettyprinter.Render.Terminal as Terminal
 import qualified Prettyprinter.Render.Text     as Pretty
 import qualified Text.Printf                   as Printf
+import Data.Aeson (Value(Null))
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -173,7 +174,12 @@ instance Semigroup ChooseCharacterSet where
 
 instance Monoid ChooseCharacterSet where
     mempty = AutoInferCharSet
-    
+
+instance FromJSON ChooseCharacterSet where
+    parseJSON Null = pure mempty
+    parseJSON v@(String _) = fmap Specify (parseJSON v)
+    parseJSON v = typeMismatch "String" v
+
 chooseCharsetOrUseDefault :: CharacterSet -> ChooseCharacterSet -> CharacterSet
 chooseCharsetOrUseDefault c chooseCS = case chooseCS of
     AutoInferCharSet -> c
