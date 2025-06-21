@@ -2953,9 +2953,10 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
 
     hints = []
 
-    long =
+    long =  -- This error occurs only when applying '∧' to two arguments, one of which is a record but the other is not.
+            -- Note that duplicate fields are not allowed in record types: { a : x, a : y } is never valid even if x, y are record types.
         "Explanation: You can specify a field twice if both fields are themselves        \n\
-        \records, like this:                                                             \n\
+        \records or record types, like this:                                             \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────────────────┐                \n\
@@ -2980,8 +2981,8 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \    └────────────────────────────────────────────────┘                          \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, this implies that both fields must be records or record types since the\n\
-        \ ❰∧❱ operator cannot merge other values.  Examples of invalid expressions are:  \n\
+        \However, this implies that both fields must be records (or both record types) as\n\
+        \ the ❰∧❱ operator cannot merge other values.  Examples of invalid expressions:  \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────┐                                                        \n\
@@ -2994,13 +2995,18 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \    └──────────────────────────┘                                                \n\
         \                                                                                \n\
         \                                                                                \n\
+        \    ┌────────────────────────────────────────┐                                  \n\
+        \    │ { x = { a : Natural }, x = { a = 0 } } │  Invalid: The first ❰x❱ field is \n\
+        \    └────────────────────────────────────────┘  a record type while the second  \n\
+        \                                                ❰x❱ field is a record           \n\
+        \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
         \You specified more than one field named:                                        \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
-        \... but one of the fields had this value:                                       \n\
+        \... and one of the fields is a record but the other is not as it has this value:\n\
         \                                                                                \n\
         \" <> txt1 <> "\n\
         \                                                                                \n\
@@ -3037,7 +3043,7 @@ prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
         \                                                                                \n\
         \    ┌───────────────────────────────────┐                                       \n\
         \    │ λ(t : Type) → t ⩓ { name : Text } │  Invalid: ❰t❱ might not be a record   \n\
-        \    └───────────────────────────────────┘  type                                 \n\
+        \    └───────────────────────────────────┘  type (we only know it is a Type)     \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
@@ -3264,15 +3270,16 @@ prettyTypeMessage (FieldTypeCollision c ks) = ErrorMessages {..}
         \                                                                                \n\
         \    ┌────────────────────────────────┐                                          \n\
         \    │ { x : Natural } " <> op <> " { x : Bool } │  Invalid: The ❰x❱ fields \"collide\"       \n\
-        \    └────────────────────────────────┘  because they cannot be merged           \n\
-        \                                                                                \n\
+        \    └────────────────────────────────┘  because they cannot be merged: Natural  \n\
+        \                                        and Bool are not record types           \n\
         \                                                                                \n\
         \... but the following expression is valid:                                      \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌────────────────────────────────────────────────┐  Valid: The ❰x❱ field    \n\
-        \    │ { x : { y : Bool } } " <> op <> " { x : { z : Natural } } │  types don't collide and \n\
-        \    └────────────────────────────────────────────────┘  can be merged           \n\
+        \    ┌────────────────────────────────────────────────┐  Valid: The ❰x❱ field    \n\     
+        \    │ { x : { y : Bool } } " <> op <> " { x : { z : Natural } } │  types are record types  \n\
+        \    └────────────────────────────────────────────────┘  that don't collide and  \n\
+        \                                                        can be merged           \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\

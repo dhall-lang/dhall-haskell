@@ -361,7 +361,7 @@ hasTypeErrorWithMessage dhallCode expectedErrorMessageSubstrings = do
 
 -- Verify that each of the expressions fails to type-check and produces a diagnostic text that contains each of the given substrings.
 combineTypes :: TestTree
-combineTypes = Test.Tasty.HUnit.testCase "Combine / Combine Types error messages" (do
+combineTypes = Test.Tasty.HUnit.testCase "Combine / CombineTypes error messages" (do
         hasTypeErrorWithMessage     "{ a : Bool } ∧ { b = 0 }"                ["You can only combine a record with another record", "∧", "↳ { a : Bool }", "which is not a record"]
         hasTypeErrorWithMessage     "{ a : Bool } ∧ { a : Natural }"          ["Field type collision on: a", "{ x : A } ∧ { y : B }"]
         hasTypeErrorWithMessage     "{ a = 0 } ∧ { b : Natural }"             ["You can only combine a record with another record", "∧", "↳ { b : Natural }", "which is not a record"]
@@ -375,6 +375,8 @@ combineTypes = Test.Tasty.HUnit.testCase "Combine / Combine Types error messages
         hasTypeErrorWithMessage     "0 ∧ 0"                                   ["You can only combine two records or two record types", "↳ 0", "↳ Natural", "At least one of these arguments is neither a record type nor a record."]
         hasTypeErrorWithMessage     "{ a : Bool } ⩓ { a : Natural }"          ["Field type collision on: a", "{ x : A } ⩓ { y : B }"]
         hasTypeErrorWithMessage     "{ a = { b : Bool }, a = { c = 0 } }"     ["Invalid duplicate field: a", "↳ { b : Bool }", "↳ Type", "which is not a record type"]
+        hasTypeErrorWithMessage     "{ a = { c = 0 }, a = { b : Bool } }"     ["Invalid duplicate field: a", "↳ { b : Bool }", "↳ Type", "which is not a record type"]
+        hasTypeErrorWithMessage     "{ a = { b = 0 }, a = { b = 1 } }"        ["Duplicate field cannot be merged: a.b", "which collided on the following path:", "↳ a.b"]
         hasTypeErrorWithMessage     "{ a = { b : Bool }, a = { b : Text } }"  ["Field type collision on: b", "↳ b", "{ x : A } ∧ { y : B }"]
         hasTypeErrorWithMessage     "{ a : Bool } ⩓ { a : Natural }"          ["Field type collision on: a", "↳ a", "{ x : A } ⩓ { y : B }"]
         hasTypeErrorWithMessage     "{ a : Bool } ⩓ { a = 0 }"                ["requires arguments that are record types", "⩓", "↳ { a = 0 }", "not a record type literal"]
