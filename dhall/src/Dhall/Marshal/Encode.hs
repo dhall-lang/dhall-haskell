@@ -65,6 +65,7 @@ import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant           (Contravariant (..), Op (..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible (..), divided)
 import Dhall.Parser                         (Src (..))
+import Dhall.Pretty                         (ChooseCharacterSet(..))
 import Dhall.Syntax
     ( Chunks (..)
     , DhallDouble (..)
@@ -94,7 +95,6 @@ import qualified Dhall.Core            as Core
 import qualified Dhall.Map
 
 import Dhall.Marshal.Internal
-import Dhall.Pretty.Internal        (ChooseCharacterSet(..))
 
 -- $setup
 -- >>> :set -XRecordWildCards

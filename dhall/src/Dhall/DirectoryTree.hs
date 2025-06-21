@@ -30,6 +30,7 @@ import Data.Text                 (Text)
 import Data.Void                 (Void)
 import Dhall.DirectoryTree.Types
 import Dhall.Marshal.Decode      (Decoder (..), Expector)
+import Dhall.Pretty              (ChooseCharacterSet(..))
 import Dhall.Src                 (Src)
 import Dhall.Syntax
     ( Chunks (..)
@@ -50,7 +51,6 @@ import qualified Dhall.Core                  as Core
 import qualified Dhall.Map                   as Map
 import qualified Dhall.Marshal.Decode        as Decode
 import qualified Dhall.Pretty
-import Dhall.Pretty.Internal        (ChooseCharacterSet(..))
 import qualified Dhall.TypeCheck             as TypeCheck
 import qualified Dhall.Util                  as Util
 import qualified Prettyprinter               as Pretty

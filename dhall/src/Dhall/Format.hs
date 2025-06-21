@@ -11,7 +11,7 @@ module Dhall.Format
 
 import Data.Foldable      (for_)
 import Data.List.NonEmpty (NonEmpty)
-import Dhall.Pretty       (annToAnsiStyle, detectCharacterSet)
+import Dhall.Pretty       (annToAnsiStyle, detectCharacterSet, ChooseCharacterSet(..), chooseCharsetOrUseDefault)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -33,7 +33,6 @@ import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
 import qualified System.Console.ANSI
 import qualified System.FilePath
 import qualified System.IO
-import Dhall.Pretty.Internal        (ChooseCharacterSet(..), chooseCharsetOrUseDefault)
 
 -- | Arguments to the `format` subcommand
 data Format = Format

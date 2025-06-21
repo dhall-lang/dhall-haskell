@@ -177,7 +177,7 @@ instance Monoid ChooseCharacterSet where
 
 instance FromJSON ChooseCharacterSet where
     parseJSON Null = pure mempty
-    parseJSON v@(String _) = fmap Specify (parseJSON v)
+    parseJSON v@(String _) = Specify <$> (parseJSON v)
     parseJSON v = typeMismatch "String" v
 
 chooseCharsetOrUseDefault :: CharacterSet -> ChooseCharacterSet -> CharacterSet
