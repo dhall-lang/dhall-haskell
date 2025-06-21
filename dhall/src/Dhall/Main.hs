@@ -99,6 +99,7 @@ import qualified Dhall.Lint
 import qualified Dhall.Map
 import qualified Dhall.Package
 import qualified Dhall.Pretty
+import Dhall.Pretty.Internal (ChooseCharacterSet(..), chooseCharsetOrUseDefault)        
 import qualified Dhall.Repl
 import qualified Dhall.Schemas
 import qualified Dhall.Tags
@@ -122,7 +123,7 @@ data Options = Options
     { mode               :: Mode
     , explain            :: Bool
     , plain              :: Bool
-    , chosenCharacterSet :: Maybe CharacterSet
+    , chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
     }
 
@@ -221,16 +222,16 @@ parseOptions =
 
     parseCharacterSet =
             Options.Applicative.flag'
-                (Just Unicode)
+                (Specify Unicode)
                 (   Options.Applicative.long "unicode"
                 <>  Options.Applicative.help "Format code using only Unicode syntax"
                 )
         <|> Options.Applicative.flag'
-                (Just ASCII)
+                (Specify ASCII)
                 (   Options.Applicative.long "ascii"
                 <>  Options.Applicative.help "Format code using only ASCII syntax"
                 )
-        <|> pure Nothing
+        <|> pure AutoInferCharSet
 
 subcommand :: Group -> String -> String -> Parser a -> Parser a
 subcommand group name description parser =
@@ -634,7 +635,7 @@ command (Options {..}) = do
     let getExpressionAndCharacterSet file = do
             expr <- getExpression file
 
-            let characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
+            let characterSet = chooseCharsetOrUseDefault (detectCharacterSet expr) chosenCharacterSet
 
             return (expr, characterSet)
 
@@ -833,7 +834,7 @@ command (Options {..}) = do
 
         Repl ->
             Dhall.Repl.repl
-                (fromMaybe Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
+                (chooseCharsetOrUseDefault Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
                 explain
 
         Diff {..} -> do
@@ -908,7 +909,7 @@ command (Options {..}) = do
                 (Header header, parsedExpression) <-
                     Dhall.Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
-                let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
+                let characterSet = chooseCharsetOrUseDefault (detectCharacterSet parsedExpression) chosenCharacterSet
 
                 case transitivity of
                     Transitive ->
@@ -994,7 +995,7 @@ command (Options {..}) = do
                 else do
                     let doc =
                             Dhall.Pretty.prettyCharacterSet
-                                (fromMaybe Unicode chosenCharacterSet) -- default to Unicode
+                                (chooseCharsetOrUseDefault Unicode chosenCharacterSet) -- default to Unicode
                                 (Dhall.Core.renote expression :: Expr Src Import)
 
                     renderDoc System.IO.stdout doc
@@ -1060,10 +1061,16 @@ command (Options {..}) = do
 
         Package {..} -> do
             let options = appEndo
-                    (maybe mempty (Endo . set Dhall.Package.characterSet) chosenCharacterSet
+                    (maybe mempty (Endo . set Dhall.Package.characterSet) chosenCharacterSetAsMaybe
                     <> packageOptions
                     ) Dhall.Package.defaultOptions
             writePackage options packageFiles
+              where
+                chosenCharacterSetAsMaybe :: Maybe CharacterSet
+                chosenCharacterSetAsMaybe = case chosenCharacterSet of
+                    AutoInferCharSet -> Nothing
+                    Specify c -> Just c  
+
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

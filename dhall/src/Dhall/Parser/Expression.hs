@@ -8,7 +8,7 @@
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
-import Control.Applicative     (Alternative (..), liftA2, optional)
+import Control.Applicative     (Alternative (..), optional)
 import Data.Foldable           (foldl')
 import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
@@ -33,6 +33,7 @@ import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
+import {-# SOURCE #-} Dhall.Pretty.Internal        (ChooseCharacterSet(..))
 
 -- | Get the current source offset (in tokens)
 getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
@@ -315,7 +316,7 @@ parsers embedded = Parsers{..}
             cs' <- _arrow
             whitespace
             c <- expression
-            return (Lam (Just (cs <> cs')) (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
+            return (Lam (Specify (cs <> cs')) (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
 
         alternative1 = do
             try (_if *> nonemptyWhitespace)
@@ -368,7 +369,7 @@ parsers embedded = Parsers{..}
             cs' <- _arrow
             whitespace
             c <- expression
-            return (Pi (Just (cs <> cs')) a b c)
+            return (Pi (Specify (cs <> cs')) a b c)
 
         alternative4 = do
             try (_assert *> whitespace *> _colon)
@@ -418,7 +419,7 @@ parsers embedded = Parsers{..}
                             whitespace
                             b <- expression
                             whitespace
-                            return (Pi (Just cs) "_" a b)
+                            return (Pi (Specify cs) "_" a b)
 
                     let alternative5B1 = do
                             _colon
@@ -489,16 +490,16 @@ parsers embedded = Parsers{..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ Equivalent . Just           <$> _equivalent   <* whitespace
+        [ Equivalent . Specify        <$> _equivalent   <* whitespace
         , ImportAlt                   <$ _importAlt     <* nonemptyWhitespace
         , BoolOr                      <$ _or            <* whitespace
         , NaturalPlus                 <$ _plus          <* nonemptyWhitespace
         , TextAppend                  <$ _textAppend    <* whitespace
         , ListAppend                  <$ _listAppend    <* whitespace
         , BoolAnd                     <$ _and           <* whitespace
-        , (\cs -> Combine (Just cs) Nothing)         <$> _combine <* whitespace
-        , (\cs -> Prefer (Just cs) PreferFromSource) <$> _prefer  <* whitespace
-        , CombineTypes . Just         <$> _combineTypes <* whitespace
+        , (\cs -> Combine (Specify cs) Nothing)         <$> _combine <* whitespace
+        , (\cs -> Prefer (Specify cs) PreferFromSource) <$> _prefer  <* whitespace
+        , CombineTypes . Specify      <$> _combineTypes <* whitespace
         , NaturalTimes                <$ _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
         , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace

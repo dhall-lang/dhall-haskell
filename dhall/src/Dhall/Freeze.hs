@@ -31,9 +31,10 @@ module Dhall.Freeze
 
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty)
-import Data.Maybe          (fromMaybe)
 import Dhall               (EvaluateSettings)
-import Dhall.Pretty        (CharacterSet, detectCharacterSet)
+import Dhall.Pretty        (detectCharacterSet)
+import Dhall.Pretty.Internal        (ChooseCharacterSet(..), chooseCharsetOrUseDefault)
+
 import Dhall.Syntax
     ( Expr (..)
     , Import (..)
@@ -128,7 +129,7 @@ freeze
     -> NonEmpty Input
     -> Scope
     -> Intent
-    -> Maybe CharacterSet
+    -> ChooseCharacterSet
     -> Censor
     -> IO ()
 freeze = freezeWithSettings Dhall.defaultEvaluateSettings
@@ -141,7 +142,7 @@ freezeWithManager
     -> NonEmpty Input
     -> Scope
     -> Intent
-    -> Maybe CharacterSet
+    -> ChooseCharacterSet
     -> Censor
     -> IO ()
 freezeWithManager newManager = freezeWithSettings (set Dhall.newManager newManager Dhall.defaultEvaluateSettings)
@@ -242,7 +243,7 @@ freezeWithSettings
     -> NonEmpty Input
     -> Scope
     -> Intent
-    -> Maybe CharacterSet
+    -> ChooseCharacterSet
     -> Censor
     -> IO ()
 freezeWithSettings settings outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
@@ -270,7 +271,7 @@ freezeWithSettings settings outputMode transitivity0 inputs scope intent chosenC
 
         (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
-        let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
+        let characterSet = chooseCharsetOrUseDefault (detectCharacterSet parsedExpression) chosenCharacterSet
 
         case transitivity of
             Transitive ->

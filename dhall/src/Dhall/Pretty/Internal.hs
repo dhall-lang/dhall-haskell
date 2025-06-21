@@ -20,6 +20,8 @@ module Dhall.Pretty.Internal (
     , prettySrcExpr
 
     , CharacterSet(..)
+    , ChooseCharacterSet(..)
+    , chooseCharsetOrUseDefault
     , defaultCharacterSet
     , detectCharacterSet
     , prettyCharacterSet
@@ -161,6 +163,23 @@ instance FromJSON CharacterSet where
 defaultCharacterSet :: CharacterSet
 defaultCharacterSet = Unicode
 
+data ChooseCharacterSet = AutoInferCharSet | Specify CharacterSet
+    deriving (Eq, Ord, Show, Data, Generic, Lift, NFData)
+
+instance Semigroup ChooseCharacterSet where
+    AutoInferCharSet <> other = other
+    other <> AutoInferCharSet = other
+    Specify x <> Specify y = Specify (x <> y)
+
+instance Monoid ChooseCharacterSet where
+    mempty = AutoInferCharSet
+    
+chooseCharsetOrUseDefault :: CharacterSet -> ChooseCharacterSet -> CharacterSet
+chooseCharsetOrUseDefault c chooseCS = case chooseCS of
+    AutoInferCharSet -> c
+    Specify x -> x
+
+
 -- | Detect which character set is used for the syntax of an expression
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
@@ -169,12 +188,12 @@ detectCharacterSet = foldMapOf (cosmosOf subExpressions) exprToCharacterSet
   where
     exprToCharacterSet = \case
         Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
-        Lam (Just Unicode) _ _ -> Unicode
-        Pi (Just Unicode) _ _ _ -> Unicode
-        Combine (Just Unicode) _ _ _ -> Unicode
-        CombineTypes (Just Unicode) _ _ -> Unicode
-        Prefer (Just Unicode) _ _ _ -> Unicode
-        Equivalent (Just Unicode) _ _ -> Unicode
+        Lam (Specify Unicode) _ _ -> Unicode
+        Pi (Specify Unicode) _ _ _ -> Unicode
+        Combine (Specify Unicode) _ _ _ -> Unicode
+        CombineTypes (Specify Unicode) _ _ -> Unicode
+        Prefer (Specify Unicode) _ _ _ -> Unicode
+        Equivalent (Specify Unicode) _ _ -> Unicode
         _ -> mempty
 
 -- | Pretty print an expression

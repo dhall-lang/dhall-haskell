@@ -50,6 +50,7 @@ import qualified Dhall.Core                  as Core
 import qualified Dhall.Map                   as Map
 import qualified Dhall.Marshal.Decode        as Decode
 import qualified Dhall.Pretty
+import Dhall.Pretty.Internal        (ChooseCharacterSet(..))
 import qualified Dhall.TypeCheck             as TypeCheck
 import qualified Dhall.Util                  as Util
 import qualified Prettyprinter               as Pretty
@@ -252,8 +253,8 @@ decodeDirectoryTree expr = Exception.throwIO $ FilesystemError $ Core.denote exp
 
 -- | The type of a fixpoint directory tree expression.
 directoryTreeType :: Expector (Expr Src Void)
-directoryTreeType = Pi Nothing "tree" (Const Type)
-    <$> (Pi Nothing "make" <$> makeType <*> pure (App List (Var (V "tree" 0))))
+directoryTreeType = Pi AutoInferCharSet "tree" (Const Type)
+    <$> (Pi AutoInferCharSet "make" <$> makeType <*> pure (App List (Var (V "tree" 0))))
 
 -- | The type of make part of a fixpoint directory tree expression.
 makeType :: Expector (Expr Src Void)
@@ -265,7 +266,7 @@ makeType = Record . Map.fromList <$> sequenceA
     where
         makeConstructor :: Text -> Decoder b -> Expector (Text, RecordField Src Void)
         makeConstructor name dec = (name,) . Core.makeRecordField
-            <$> (Pi Nothing "_" <$> expected dec <*> pure (Var (V "tree" 0)))
+            <$> (Pi AutoInferCharSet "_" <$> expected dec <*> pure (Var (V "tree" 0)))
 
 -- | Resolve a `User` to a numerical id.
 getUser :: User -> IO UserID

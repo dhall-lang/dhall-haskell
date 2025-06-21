@@ -23,7 +23,7 @@ module Dhall.Parser.Combinators
     ) where
 
 
-import Control.Applicative     (Alternative (..), liftA2)
+import Control.Applicative     (Alternative (..))
 import Control.Exception       (Exception)
 import Control.Monad           (MonadPlus (..))
 import Data.String             (IsString (..))

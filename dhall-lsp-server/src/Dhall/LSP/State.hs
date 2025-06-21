@@ -39,7 +39,7 @@ data Severity = Error
               -- ^ Log message, not displayed by default.
 
 data ServerConfig = ServerConfig
-  { chosenCharacterSet :: Maybe CharacterSet
+  { chosenCharacterSet :: ChooseCharacterSet
   } deriving Show
 
 instance Default ServerConfig where

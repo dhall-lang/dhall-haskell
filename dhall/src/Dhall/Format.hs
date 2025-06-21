@@ -11,8 +11,7 @@ module Dhall.Format
 
 import Data.Foldable      (for_)
 import Data.List.NonEmpty (NonEmpty)
-import Data.Maybe         (fromMaybe)
-import Dhall.Pretty       (CharacterSet, annToAnsiStyle, detectCharacterSet)
+import Dhall.Pretty       (annToAnsiStyle, detectCharacterSet)
 import Dhall.Util
     ( Censor
     , CheckFailed (..)
@@ -34,10 +33,11 @@ import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
 import qualified System.Console.ANSI
 import qualified System.FilePath
 import qualified System.IO
+import Dhall.Pretty.Internal        (ChooseCharacterSet(..), chooseCharsetOrUseDefault)
 
 -- | Arguments to the `format` subcommand
 data Format = Format
-    { chosenCharacterSet :: Maybe CharacterSet
+    { chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
     , transitivity       :: Transitivity
     , inputs             :: NonEmpty Input
@@ -59,7 +59,7 @@ format (Format { inputs = inputs0, transitivity = transitivity0, ..}) =
         let status = Dhall.Import.emptyStatus directory
 
         let layoutHeaderAndExpr (Header header, expr) =
-                let characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
+                let characterSet = chooseCharsetOrUseDefault (detectCharacterSet expr) chosenCharacterSet
                 in
                 Dhall.Pretty.layout
                     (   Pretty.pretty header
