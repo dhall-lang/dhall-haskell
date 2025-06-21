@@ -136,7 +136,7 @@ module Dhall.Marshal.Decode
     ) where
 
 
-import Control.Applicative              (empty)
+import Control.Applicative              (empty, liftA2)
 import Control.Exception                (Exception)
 import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict

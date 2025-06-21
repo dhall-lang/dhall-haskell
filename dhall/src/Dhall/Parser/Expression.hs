@@ -8,7 +8,7 @@
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
-import Control.Applicative     (Alternative (..), optional)
+import Control.Applicative     (Alternative (..), liftA2, optional)
 import Data.Foldable           (foldl')
 import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
