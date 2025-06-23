@@ -1332,8 +1332,17 @@ infer typer = loop
 
                   VOptional _O' -> do
                     case ks of
-                      WithQuestion  :| _ -> do
+
+                        -- (Some x) with ? = v is valid iff the type of x is the same as the type of v.
+                      WithQuestion :| [] -> do
                         tV' <- loop ctx v
+                        if Eval.conv values _O' tV'
+                          then return (VOptional _O')
+                          else die OptionalWithTypeMismatch
+
+                        -- (Some x) with ?.a.b = v is valid iff the type of x.a.b is the same as the type of v.
+                      WithQuestion :| k₁ : ks' -> do
+                        tV' <- with _O' (k₁ :| ks') v
                         if Eval.conv values _O' tV'
                           then return (VOptional _O')
                           else die OptionalWithTypeMismatch
