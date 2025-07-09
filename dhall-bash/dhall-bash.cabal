@@ -48,7 +48,7 @@ Executable dhall-to-bash
         bytestring                                 ,
         dhall                                      ,
         dhall-bash                                 ,
-        optparse-applicative >= 0.14.0.0  && < 0.19,
+        optparse-applicative >= 0.14.0.0  && < 0.20,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010

@@ -42,7 +42,7 @@ Library
         containers           >= 0.5.9    && < 0.8  ,
         unordered-containers >= 0.2      && < 0.3  ,
         prettyprinter        >= 1.7.0    && < 1.8  ,
-        optparse-applicative >= 0.14     && < 0.19
+        optparse-applicative >= 0.14     && < 0.20
     Exposed-Modules:
         Dhall.DhallToToml
         Dhall.TomlToDhall
