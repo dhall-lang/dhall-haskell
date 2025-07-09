@@ -48,7 +48,7 @@ library
     , bytestring           >= 0.10.8.2 && < 0.13
     , co-log-core          >= 0.3.1.0  && < 0.4
     , containers           >= 0.5.11.0 && < 0.9
-    , data-default         >= 0.7.1.1  && < 0.8
+    , data-default         >= 0.7.1.1  && < 0.9
     , directory            >= 1.2.2.0  && < 1.4
     , dhall                >= 1.38.0   && < 1.43
     , dhall-json           >= 1.4      && < 1.8
