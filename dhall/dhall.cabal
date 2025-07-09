@@ -447,7 +447,7 @@ Test-Suite tasty
         generic-random            >= 1.3.0.0  && < 1.6 ,
         http-client                                    ,
         http-client-tls                                ,
-        QuickCheck                >= 2.14     && < 2.16,
+        QuickCheck                >= 2.14     && < 2.17,
         quickcheck-instances      >= 0.3.12   && < 0.4 ,
         special-values                           < 0.2 ,
         spoon                                    < 0.4 ,
