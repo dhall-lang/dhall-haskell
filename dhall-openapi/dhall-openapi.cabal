@@ -78,7 +78,7 @@ Library
   Build-Depends:
     base                    >= 4.11.0.0  && < 5    ,
     aeson                   >= 1.0.0.0   && < 2.3  ,
-    containers              >= 0.5.8.0   && < 0.8  ,
+    containers              >= 0.5.8.0   && < 0.9  ,
     dhall                   >= 1.38.0    && < 1.43 ,
     prettyprinter           >= 1.7.0     && < 1.8  ,
     microlens               >= 0.4       && < 0.5  ,

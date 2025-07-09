@@ -42,7 +42,7 @@ Library
         aeson-pretty              >= 0.8.0     && < 0.9 ,
         aeson-yaml                >= 1.1.0     && < 1.2 ,
         bytestring                                < 0.13,
-        containers                >= 0.5.9     && < 0.8 ,
+        containers                >= 0.5.9     && < 0.9 ,
         dhall                     >= 1.42.0    && < 1.43,
         exceptions                >= 0.8.3     && < 0.11,
         filepath                                  < 1.6 ,
