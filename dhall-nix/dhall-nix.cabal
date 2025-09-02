@@ -27,7 +27,7 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
-        containers                               < 0.8 ,
+        containers                               < 0.9 ,
         data-fix                                 < 0.4 ,
         dhall                     >= 1.42     && < 1.43,
         hnix                      >= 0.16     && < 0.18,
