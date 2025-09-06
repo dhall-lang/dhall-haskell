@@ -1370,6 +1370,12 @@ prettyPrinters characterSet =
         (_HHHH, _MM, _DD) = Time.toGregorian day
     prettyPrimitiveExpression DateShow =
         builtin "Date/show"
+    prettyPrimitiveExpression DateYear =
+        builtin "Date/year"
+    prettyPrimitiveExpression DateMonth =
+        builtin "Date/month"
+    prettyPrimitiveExpression DateDay =
+        builtin "Date/day"
     prettyPrimitiveExpression Time =
         builtin "Time"
     prettyPrimitiveExpression (TimeLiteral (Time.TimeOfDay hh mm seconds) precision) =
@@ -1392,6 +1398,12 @@ prettyPrinters characterSet =
             | otherwise      = "." <> Pretty.pretty (Printf.printf "%0*d" precision fraction :: String)
     prettyPrimitiveExpression TimeShow =
         builtin "Time/show"
+    prettyPrimitiveExpression TimeHour =
+        builtin "Time/hour"
+    prettyPrimitiveExpression TimeMinute =
+        builtin "Time/minute"
+    prettyPrimitiveExpression TimeSecond =
+        builtin "Time/second"
     prettyPrimitiveExpression TimeZone =
         builtin "TimeZone"
     prettyPrimitiveExpression (TimeZoneLiteral (Time.TimeZone minutes _ _)) =
