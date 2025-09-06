@@ -502,7 +502,7 @@ instance (Functor f, FromDhall (f (Result f))) => FromDhall (Fix f) where
                 | a /= b    = Core.subst (V a 0) (Var (V b 0)) (Core.shift 1 (V b 0) expr)
                 | otherwise = expr
 
-        expected = (\x -> Pi mempty "result" (Const Core.Type) (Pi mempty "Make" (Pi mempty "_" x "result") "result"))
+        expected = (\x -> Pi mempty "result" (Const Core.Type) (Pi mempty "_" (Pi mempty "_" x "result") "result"))
             <$> Dhall.Marshal.Decode.expected (autoWith inputNormalizer :: Decoder (f (Result f)))
 
 resultToFix :: Functor f => Result f -> Fix f
