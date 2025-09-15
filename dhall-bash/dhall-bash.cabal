@@ -29,7 +29,7 @@ Library
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
         bytestring                               < 0.13,
-        containers                               < 0.8 ,
+        containers                               < 0.9 ,
         dhall                     >= 1.42.0   && < 1.43,
         neat-interpolation                       < 0.6 ,
         shell-escape                             < 0.3 ,
@@ -48,7 +48,7 @@ Executable dhall-to-bash
         bytestring                                 ,
         dhall                                      ,
         dhall-bash                                 ,
-        optparse-applicative >= 0.14.0.0  && < 0.19,
+        optparse-applicative >= 0.14.0.0  && < 0.20,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010
