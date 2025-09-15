@@ -1,3 +1,12 @@
+1.42.3
+
+* [Fix the typechecking rule for `Optional` + `with`](https://github.com/dhall-lang/dhall-haskell/pull/2650)
+* [Add `*WithIndex` instances for `Map`](https://github.com/dhall-lang/dhall-haskell/pull/2633)
+* [`dhall package`: Add support for automatic sub-packags](https://github.com/dhall-lang/dhall-haskell/pull/2639)
+* [`dhall to-directory-tree`: Add `binary-file` support](https://github.com/dhall-lang/dhall-haskell/pull/2641)
+* [Support GHC 9.12.1](https://github.com/dhall-lang/dhall-haskell/pull/2649)
+* [`dhall to-directory-tree`: create parents of files when using fixpoint representation](https://github.com/dhall-lang/dhall-haskell/pull/2653)
+
 1.42.2
 
 * [Supports standard version 23.1.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v23.1.0)
