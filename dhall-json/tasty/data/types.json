@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "field": "Text",
+    "list": {
+      "element": "Bool",
+      "type": "List"
+    },
+    "nested": {
+      "fields": {
+        "nested_field": "Natural"
+      },
+      "type": "Record"
+    },
+    "optional": {
+      "element": "Text",
+      "type": "Optional"
+    },
+    "union": {
+      "choices": {
+        "A": "Natural",
+        "B": "Text",
+        "C": {}
+      },
+      "type": "Union"
+    }
+  },
+  "type": "Record"
+}
