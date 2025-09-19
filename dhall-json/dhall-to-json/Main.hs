@@ -8,7 +8,7 @@ import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException)
 import Data.Aeson          (Value)
 import Data.Version        (showVersion)
-import Dhall.JSON          (Conversion, SpecialDoubleMode (..))
+import Dhall.JSON          (Conversion, SpecialDoubleMode (..), EncodeTarget)
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -31,6 +31,7 @@ data Options
         , pretty                    :: Bool
         , omission                  :: Value -> Value
         , conversion                :: Conversion
+        , encodeTarget              :: EncodeTarget
         , approximateSpecialDoubles :: Bool
         , file                      :: Maybe FilePath
         , output                    :: Maybe FilePath
@@ -44,6 +45,7 @@ parseOptions =
         <*> parsePretty
         <*> Dhall.JSON.parsePreservationAndOmission
         <*> Dhall.JSON.parseConversion
+        <*> Dhall.JSON.parseEncodeTarget
         <*> parseApproximateSpecialDoubles
         <*> optional parseFile
         <*> optional parseOutput
@@ -150,7 +152,7 @@ main = do
                     Nothing   -> Text.IO.getContents
                     Just path -> Text.IO.readFile path
 
-                json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode file text)
+                json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode encodeTarget file text)
 
                 let write =
                         case output of

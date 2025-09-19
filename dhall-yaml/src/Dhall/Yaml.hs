@@ -12,7 +12,7 @@ module Dhall.Yaml
 import Data.ByteString      (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.Text            (Text)
-import Dhall.JSON           (SpecialDoubleMode (..), codeToHeaderAndValue)
+import Dhall.JSON           (SpecialDoubleMode (..), codeToHeaderAndValue, EncodeTarget(EncodeData))
 import Dhall.JSON.Yaml      (Options (..))
 import Dhall.Parser         (Header (..))
 
@@ -44,7 +44,7 @@ dhallToYaml Options{..} mFilePath code = do
 
   let adapt (header, value) = (header, omission value)
 
-  (Header comment, json) <- adapt <$> explaining (codeToHeaderAndValue conversion UseYAMLEncoding mFilePath code)
+  (Header comment, json) <- adapt <$> explaining (codeToHeaderAndValue conversion UseYAMLEncoding EncodeData mFilePath code)
 
   let suffix
           | preserveHeader = Data.Text.Encoding.encodeUtf8 comment

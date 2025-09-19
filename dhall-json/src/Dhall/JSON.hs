@@ -201,6 +201,8 @@ module Dhall.JSON (
     , omitNull
     , omitEmpty
     , parsePreservationAndOmission
+    , EncodeTarget(..)
+    , parseEncodeTarget
     , Conversion(..)
     , defaultConversion
     , convertToHomogeneousMaps
@@ -592,6 +594,32 @@ dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
                     outer _ = Left (Unsupported e)
 
                 outer value
+
+        -- Schemas
+        Core.Bool -> return (Aeson.String "Bool")
+        Core.Natural -> return (Aeson.String "Natural")
+        Core.Bytes -> return (Aeson.String "Bytes")
+        Core.Integer -> return (Aeson.String "Integer")
+        Core.Double -> return (Aeson.String "Double")
+        Core.Text -> return (Aeson.String "Text")
+        Core.Date -> return (Aeson.String "Date")
+        Core.Time -> return (Aeson.String "Time")
+        Core.TimeZone -> return (Aeson.String "TimeZone")
+        Core.App Core.List t -> do
+            t' <- loop t
+            return $ Aeson.Object [("type", Aeson.String "List"), ("element", t')]
+        Core.App Core.Optional t -> do
+            t' <- loop t
+            return $ Aeson.Object [("type", Aeson.String "Optional"), ("element", t')]
+        Core.Record a -> do
+            a' <- traverse (loop . Core.recordFieldValue) a
+            return $ Aeson.Object [("type", Aeson.String "Record"), ("fields", Aeson.toJSON (Dhall.Map.toMap a')) ]
+        Core.Union a -> do
+            let go Nothing = return $ Aeson.Object []
+                go (Just t) = loop t
+            a' <- traverse go a
+            return $ Aeson.Object [("type", Aeson.String "Union"), ("choices", Aeson.toJSON (Dhall.Map.toMap a')) ]
+
         _ -> Left (Unsupported e)
 
 getContents :: Expr s Void -> Maybe (Text, Maybe (Expr s Void))
@@ -691,6 +719,22 @@ parseNullPreservation =
 -- | Combines parsers for command-line options related to preserving & omitting null fields.
 parsePreservationAndOmission :: Parser (Value -> Value)
 parsePreservationAndOmission = parseOmission <|> parseNullPreservation
+
+
+{-| Specify whether to encode data or type as JSON (default data) -}
+data EncodeTarget
+    = EncodeData
+    | EncodeType
+
+parseEncodeTarget :: Parser EncodeTarget
+parseEncodeTarget =
+        Options.Applicative.flag'
+            EncodeType
+            (   Options.Applicative.long "type"
+            <>  Options.Applicative.help "Encode the type of the input expression instead of the value"
+            )
+    <|> pure EncodeData
+
 
 {-| Specify whether or not to convert association lists of type
     @List { mapKey: Text, mapValue : v }@ to records
@@ -1198,12 +1242,13 @@ handleSpecialDoubles specialDoubleMode =
 codeToValue
   :: Conversion
   -> SpecialDoubleMode
+  -> EncodeTarget
   -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
                      -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO Value
-codeToValue conversion specialDoubleMode mFilePath code = do
-  fmap snd (codeToHeaderAndValue conversion specialDoubleMode mFilePath code)
+codeToValue conversion specialDoubleMode encodeTarget mFilePath code = do
+  fmap snd (codeToHeaderAndValue conversion specialDoubleMode encodeTarget mFilePath code)
 
 {-| This is like `codeToValue`, except also returning a `Header` that is a
     valid YAML comment derived from the original Dhall code's `Header`
@@ -1211,11 +1256,12 @@ codeToValue conversion specialDoubleMode mFilePath code = do
 codeToHeaderAndValue
   :: Conversion
   -> SpecialDoubleMode
+  -> EncodeTarget
   -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
                      -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO (Header, Value)
-codeToHeaderAndValue conversion specialDoubleMode mFilePath code = do
+codeToHeaderAndValue conversion specialDoubleMode encodeTarget mFilePath code = do
     (Header header, parsedExpression) <- Core.throws (Dhall.Parser.exprAndHeaderFromText (fromMaybe "(input)" mFilePath) code)
 
     let adapt line =
@@ -1231,10 +1277,15 @@ codeToHeaderAndValue conversion specialDoubleMode mFilePath code = do
 
     resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
 
-    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+    t <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+
+    let resolvedExpression' =
+            case encodeTarget of
+                EncodeData -> resolvedExpression
+                EncodeType -> t
 
     let convertedExpression =
-            convertToHomogeneousMaps conversion resolvedExpression
+            convertToHomogeneousMaps conversion resolvedExpression'
 
     specialDoubleExpression <- Core.throws (handleSpecialDoubles specialDoubleMode convertedExpression)
 

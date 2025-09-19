@@ -34,6 +34,7 @@ testTree =
         , testDhallToJSON "./tasty/data/emptyObjectStrongType"
         , testDhallToJSON "./tasty/data/toArbitraryJSON_12_0_0"
         , testDhallToJSON "./tasty/data/toArbitraryJSON_13_0_0"
+        , testDhallToJSON "./tasty/data/types"
         , testJSONToDhall "./tasty/data/emptyAlternative"
         , testJSONToDhall "./tasty/data/emptyObject"
         , testJSONToDhall "./tasty/data/emptyList"
