@@ -90,7 +90,7 @@ dhallToYaml Options{..} mFilePath code = do
 
   let adapt (header, value) = (header, omission value)
 
-  (Header comment, json) <- adapt <$> explaining (Dhall.JSON.codeToHeaderAndValue conversion UseYAMLEncoding mFilePath code)
+  (Header comment, json) <- adapt <$> explaining (Dhall.JSON.codeToHeaderAndValue conversion UseYAMLEncoding Dhall.JSON.EncodeData mFilePath code)
 
   let suffix
         | preserveHeader = Data.Text.Encoding.encodeUtf8 comment
