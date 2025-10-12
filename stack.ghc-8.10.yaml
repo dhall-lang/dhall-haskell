@@ -21,6 +21,7 @@ extra-deps:
   - lsp-types-2.0.1.0
   - lsp-test-0.15.0.1
   - lucid-2.11.0
+  - microlens-0.4.14.0@sha256:1061edc3fa96fa868692891d6e0a0e198a2983a3d154a7a0ce4a708c1c3f652f,4722
   - optparse-applicative-0.18.1.0@sha256:b4cf8d9018e5e67cb1f14edb5130b6d05ad8bc1b5f6bd4efaa6ec0b7f28f559d,5132
   - optparse-generic-1.5.2
   - relude-1.0.0.1@sha256:35bcdaf14018e79f11e712b0e2314c1aac79976f28f4adc179985457493557d5,11569

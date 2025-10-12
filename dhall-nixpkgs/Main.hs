@@ -84,7 +84,8 @@ import Dhall.Crypto                     (SHA256Digest (..))
 import Dhall.Import                     (Status (..), stack)
 import Dhall.Parser                     (Src)
 import GHC.Generics                     (Generic)
-import Lens.Family.State.Strict         (zoom)
+import Lens.Micro                       (rewriteOf)
+import Lens.Micro.Mtl                   (zoom)
 import Network.URI                      (URI (..), URIAuth (..))
 import Nix.Expr.Shorthands              ((@.), (@@))
 import Nix.Expr.Types                   (NExpr)
@@ -117,7 +118,6 @@ import qualified Data.Text.Encoding               as Text.Encoding
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
-import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified GHC.IO.Encoding
 import qualified NeatInterpolation
@@ -341,7 +341,7 @@ findExternalDependencies expression = do
 
     let rewrittenExpression :: Expr Src Import
         rewrittenExpression =
-            Dhall.Optics.rewriteOf Dhall.Core.subExpressions pickAlt expression
+            rewriteOf Dhall.Core.subExpressions pickAlt expression
 
     import_ <- lift (Turtle.select (Foldable.toList rewrittenExpression))
 

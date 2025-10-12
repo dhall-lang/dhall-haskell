@@ -5,7 +5,13 @@
 -- | Create a package.dhall from files and directory contents.
 
 module Dhall.Package
-    ( writePackage
+    ( Options
+    , defaultOptions
+    , characterSet
+    , packageFileName
+    , packagingMode
+    , PackagingMode(..)
+    , writePackage
     , getPackagePathAndContent
     , PackageError(..)
     ) where
@@ -13,7 +19,6 @@ module Dhall.Package
 import           Control.Exception  (Exception, throwIO)
 import           Control.Monad
 import           Data.List.NonEmpty (NonEmpty (..))
-import           Data.Maybe         (fromMaybe)
 import           Data.Text          (Text)
 import qualified Data.Text          as Text
 import           Data.Traversable   (for)
@@ -34,16 +39,59 @@ import qualified Dhall.Map          as Map
 import           Dhall.Pretty       (CharacterSet (..))
 import qualified Dhall.Pretty
 import           Dhall.Util         (_ERROR, renderExpression)
+import           Lens.Micro         (Lens', lens)
 import           System.Directory
 import           System.FilePath
+
+-- | Options for package creation.
+data Options = Options
+    { optionsCharacterSet :: CharacterSet
+    , optionsPackageFileName :: String
+    , optionsPackagingMode :: PackagingMode
+    }
+
+-- | The default options used for packaging.
+--
+-- The default values for the different settings are:
+--
+--  * The character set used is the one given by 'Dhall.Pretty.defaultCharacterSet'.
+--  * The package file name is @package.dhall@.
+--  * The packaging mode is 'OnlyThisPackage'.
+defaultOptions :: Options
+defaultOptions = Options
+    { optionsCharacterSet = Dhall.Pretty.defaultCharacterSet
+    , optionsPackageFileName = "package.dhall"
+    , optionsPackagingMode = OnlyThisPackage
+    }
+
+-- | Access the character set used to render the package content.
+characterSet :: Lens' Options CharacterSet
+characterSet = lens optionsCharacterSet (\s x -> s { optionsCharacterSet = x })
+
+-- | Access the file name used for the package file.
+packageFileName :: Lens' Options String
+packageFileName =
+    lens optionsPackageFileName (\s x -> s { optionsPackageFileName = x })
+
+-- | Access the packaging mode.
+-- See the documentation of 'getPackagePathAndContent'.
+packagingMode :: Lens' Options PackagingMode
+packagingMode =
+    lens optionsPackagingMode (\s x -> s { optionsPackagingMode = x })
+
+-- | Whether to recursively create a package for each subdirectory or not.
+-- See the documentation of 'getPackagePathAndContent'.
+data PackagingMode
+    = OnlyThisPackage
+    | RecursiveSubpackages
 
 -- | Create a package.dhall from files and directory contents.
 -- For a description of how the package file is constructed see
 -- 'getPackagePathAndContent'.
-writePackage :: CharacterSet -> Maybe String -> NonEmpty FilePath -> IO ()
-writePackage characterSet outputFn inputs = do
-    (outputPath, expr) <- getPackagePathAndContent outputFn inputs
-    renderExpression characterSet True (Just outputPath) expr
+writePackage :: Options -> NonEmpty FilePath -> IO ()
+writePackage options inputs = do
+    (outputPath, expr) <- getPackagePathAndContent options inputs
+    renderExpression (optionsCharacterSet options) True (Just outputPath) expr
 
 -- | Get the path and the Dhall expression for a package file.
 --
@@ -62,11 +110,18 @@ writePackage characterSet outputFn inputs = do
 --   * If the path points to a directory, all files with a @.dhall@ extensions
 --     in that directory are included in the package.
 --
+--     If you passed `Recurse` to the this function, then in addition to these
+--     files all subdirectories are traversed and a sub-package created for each
+--     one. That sub-package will be included in the package too.
+--
 --   * If the path points to a regular file, it is included in the package
 --     unless it is the path of the package file itself.
 --
-getPackagePathAndContent :: Maybe String -> NonEmpty FilePath -> IO (FilePath, Expr s Import)
-getPackagePathAndContent outputFn (path :| paths) = do
+getPackagePathAndContent
+    :: Options
+    -> NonEmpty FilePath
+    -> IO (FilePath, Expr s Import)
+getPackagePathAndContent options (path :| paths) = do
     outputDir <- do
         isDirectory <- doesDirectoryExist path
         return $ if isDirectory then path else takeDirectory path
@@ -82,9 +137,13 @@ getPackagePathAndContent outputFn (path :| paths) = do
             return relativeDir
 
     resultMap <- go Map.empty checkOutputDir (path:paths)
-    return (outputDir </> outputFn', RecordLit $ Map.sort resultMap)
+    return (outputDir </> outputFn, RecordLit $ Map.sort resultMap)
     where
-        go :: Map Text (RecordField s Import) -> (FilePath -> IO FilePath) -> [FilePath] -> IO (Map Text (RecordField s Import))
+        go
+            :: Map Text (RecordField s Import)
+            -> (FilePath -> IO FilePath)
+            -> [FilePath]
+            -> IO (Map Text (RecordField s Import))
         go !acc _checkOutputDir [] = return acc
         go !acc checkOutputDir (p:ps) = do
             isDirectory <- doesDirectoryExist p
@@ -92,22 +151,41 @@ getPackagePathAndContent outputFn (path :| paths) = do
             if | isDirectory -> do
                     void $ checkOutputDir p
                     entries <- listDirectory p
-                    let entries' = filter (\entry -> takeExtension entry == ".dhall") entries
-                    go acc checkOutputDir (map (p </>) entries' <> ps)
+                    (dhallFiles, subdirectories) <- foldMap
+                        ( \entry -> do
+                            let entry' = p </> entry
+                            isDirectoryEntry <- doesDirectoryExist entry'
+                            return $ if isDirectoryEntry
+                                then (mempty, [entry'])
+                                else if hasDhallExtension entry
+                                    then ([entry'], mempty)
+                                    else mempty
+                        ) entries
+                    subpackages <- case optionsPackagingMode options of
+                        RecursiveSubpackages ->
+                            for subdirectories $ \subdirectory -> do
+                                writePackage options (subdirectory :| [])
+                                return (subdirectory </> outputFn)
+                        OnlyThisPackage -> return []
+                    go acc checkOutputDir (dhallFiles <> subpackages <> ps)
                | isFile -> do
                     dir <- checkOutputDir $ takeDirectory p
 
                     let p' = normalise $ dir </> takeFileName p
 
-                    let resultMap = if p' == outputFn'
+                    let resultMap = if p' == outputFn
                             then Map.empty
-                            else filepathToMap outputFn' p'
+                            else filepathToMap outputFn p'
 
                     acc' <- mergeMaps acc resultMap
                     go acc' checkOutputDir ps
                 | otherwise -> throwIO $ InvalidPath p
 
-        outputFn' = fromMaybe "package.dhall" outputFn
+        hasDhallExtension :: FilePath -> Bool
+        hasDhallExtension entry = takeExtension entry == ".dhall"
+
+        outputFn :: String
+        outputFn = optionsPackageFileName options
 
 -- | Construct a nested 'Map' from a 'FilePath'.
 -- For example, the filepath @some/file/path.dhall@ will result in something

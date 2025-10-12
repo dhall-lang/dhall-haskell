@@ -210,7 +210,7 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
-import Lens.Family.State.Strict (zoom)
+import Lens.Micro.Mtl (zoom)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise

@@ -376,6 +376,7 @@ import Data.Void                (Void)
 import Dhall.Core               (Chunks (..), DhallDouble (..), Expr (App))
 import Dhall.JSON.Util          (pattern FA, pattern V)
 import Dhall.Parser             (Src)
+import Lens.Micro               (rewriteOf)
 import Options.Applicative      (Parser)
 
 import qualified Data.Aeson                 as Aeson
@@ -393,7 +394,6 @@ import qualified Dhall.Import
 import qualified Dhall.JSON.Compat          as JSON.Compat
 import qualified Dhall.Lint                 as Lint
 import qualified Dhall.Map                  as Map
-import qualified Dhall.Optics               as Optics
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck            as D
 import qualified Options.Applicative        as O
@@ -803,7 +803,7 @@ Right (RecordLit (fromList [("foo",IntegerLit 1)]))
 dhallFromJSON
   :: Conversion -> ExprX -> Value -> Either CompileError ExprX
 dhallFromJSON (Conversion {..}) expressionType =
-    fmap (Optics.rewriteOf D.subExpressions Lint.useToMap) . loop [] (D.alphaNormalize (D.normalize expressionType))
+    fmap (rewriteOf D.subExpressions Lint.useToMap) . loop [] (D.alphaNormalize (D.normalize expressionType))
   where
     loop :: Aeson.Types.JSONPath -> ExprX -> Aeson.Value -> Either CompileError ExprX
     -- any ~> Union

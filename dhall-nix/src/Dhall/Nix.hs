@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE ViewPatterns       #-}
 
@@ -103,7 +102,7 @@ import qualified  Data.Text as Text
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
-import Lens.Family (toListOf)
+import Lens.Micro (toListOf, rewriteOf)
 import Numeric (showHex)
 import Data.Char (ord, isDigit, isAsciiLower, isAsciiUpper)
 
@@ -151,7 +150,6 @@ import Nix.Expr
 import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Map
-import qualified Dhall.Optics
 import qualified Dhall.Pretty
 import qualified NeatInterpolation
 import qualified Nix
@@ -336,7 +334,7 @@ dhallToNix e =
 
     -- Even higher-level utility that renames all shadowed references
     rewriteShadowed =
-        Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
+        rewriteOf Dhall.Core.subExpressions renameShadowed
 
     loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Nix.mkSym (zEncodeSymbol a))

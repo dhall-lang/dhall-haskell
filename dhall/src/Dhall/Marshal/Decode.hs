@@ -1,6 +1,6 @@
 {-# LANGUAGE ApplicativeDo              #-}
-{-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DerivingStrategies         #-}
@@ -136,12 +136,7 @@ module Dhall.Marshal.Decode
     ) where
 
 
-import Control.Applicative
-    ( empty
-#if !MIN_VERSION_base(4,18,0)
-    , liftA2
-#endif
-    )
+import Control.Applicative              (empty, liftA2)
 import Control.Exception                (Exception)
 import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict
@@ -180,9 +175,9 @@ import qualified Data.ByteString.Short
 import qualified Data.Foldable
 import qualified Data.Functor.Compose
 import qualified Data.Functor.Product
-import qualified Data.HashMap.Strict  as HashMap
+import qualified Data.HashMap.Strict   as HashMap
 import qualified Data.HashSet
-import qualified Data.List            as List
+import qualified Data.List             as List
 import qualified Data.List.NonEmpty
 import qualified Data.Map
 import qualified Data.Maybe
@@ -192,9 +187,9 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Text.Lazy
 import qualified Data.Text.Short
-import qualified Data.Time            as Time
+import qualified Data.Time             as Time
 import qualified Data.Vector
-import qualified Dhall.Core           as Core
+import qualified Dhall.Core            as Core
 import qualified Dhall.Map
 import qualified Dhall.Util
 

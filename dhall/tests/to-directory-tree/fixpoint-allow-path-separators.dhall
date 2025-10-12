@@ -9,14 +9,14 @@ let Make = (./fixpoint-helper.dhall).Make
 in  \(r : Type) ->
     \(make : Make r) ->
       [ make.file
-          { name = "file"
+          { name = "non-existent-1/file"
           , content = ""
           , user = None User
           , group = None Group
           , mode = None Mode
           }
       , make.directory
-          { name = "directory"
+          { name = "non-existent-2/directory"
           , content = [] : List r
           , user = None User
           , group = None Group

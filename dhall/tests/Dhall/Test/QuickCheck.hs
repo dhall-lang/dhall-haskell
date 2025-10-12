@@ -103,7 +103,7 @@ import qualified Dhall.Parser          as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
-import qualified Lens.Family           as Lens
+import qualified Lens.Micro            as Lens
 import qualified Numeric.Natural       as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
