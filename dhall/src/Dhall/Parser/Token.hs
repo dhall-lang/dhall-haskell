@@ -747,7 +747,7 @@ ipLiteral :: Parser Text
 ipLiteral = "[" <> (ipV6Address <|> ipVFuture) <> "]"
 
 ipVFuture :: Parser Text
-ipVFuture = "v" <> plus (satisfy hexdig) <> "." <> plus (satisfy predicate)
+ipVFuture = ("v" <|> "V") <> plus (satisfy hexdig) <> "." <> plus (satisfy predicate)
   where
     predicate c = unreserved c || subDelims c || c == ':'
 
