@@ -835,7 +835,7 @@ decOctet =
         predicate c = '\x30' <= c && c <= '\x35'
 
 domain :: Parser Text
-domain = domainLabel <> star ("." <> domainLabel ) <> option "."
+domain = domainLabel <> star (try ("." <> domainLabel )) <> option "."
 
 domainLabel :: Parser Text
 domainLabel = plus alphaNum_ <> star (plus "-" <> plus alphaNum_)
