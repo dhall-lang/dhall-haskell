@@ -2,27 +2,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-{-# OPTIONS_GHC -Wall #-}
-
 module Dhall.Import.Types where
 
-import Control.Exception                (Exception)
+import Control.Exception                (Exception, SomeException)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Data.Dynamic
 import Data.HashMap.Strict              (HashMap)
 import Data.List.NonEmpty               (NonEmpty)
+import Data.Typeable                    (Typeable)
 import Data.Void                        (Void)
-import Dhall.Context                    (Context)
-import Dhall.Core
-    ( Expr
-    , Import (..)
-    , ReifiedNormalizer (..)
-    , URL
-    )
+import Dhall.Core                       (Expr, Import (..), URL)
 import Dhall.Map                        (Map)
-import Dhall.Parser                     (Src)
+import Dhall.Settings
 import Lens.Micro                       (Lens', lens)
 import Prettyprinter                    (Pretty (..))
 
@@ -31,9 +23,7 @@ import qualified Dhall.Import.Manager
 #endif
 
 import qualified Data.Text
-import qualified Dhall.Context
 import qualified Dhall.Map          as Map
-import qualified Dhall.Substitution
 
 -- | A fully \"chained\" import, i.e. if it contains a relative path that path
 --   is relative to the current directory. If it is a remote import with headers
@@ -93,7 +83,10 @@ data CacheWarning = CacheNotWarned | CacheWarned
 
 -- | State threaded throughout the import process
 data Status = Status
-    { _stack :: NonEmpty Chained
+    { _evaluateSettings :: EvaluateSettings
+    -- ^ The 'EvaluateSettings' to use for the evaluation of imports.
+
+    , _stack :: NonEmpty Chained
     -- ^ Stack of `Import`s that we've imported along the way to get to the
     -- current point
 
@@ -105,11 +98,6 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
-    , _newManager :: IO Manager
-    , _manager :: Maybe Manager
-    -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
-    -- requests
-
     , _loadOriginHeaders :: StateT Status IO OriginHeaders
     -- ^ Load the origin headers from environment or configuration file.
     --   After loading once, further evaluations return the cached version.
@@ -120,12 +108,6 @@ data Status = Status
     , _remoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
     -- ^ Like `_remote`, except for `Dhall.Syntax.Expr.Bytes`
 
-    , _substitutions :: Dhall.Substitution.Substitutions Src Void
-
-    , _normalizer :: Maybe (ReifiedNormalizer Void)
-
-    , _startingContext :: Context (Expr Src Void)
-
     , _semanticCacheMode :: SemanticCacheMode
 
     , _cacheWarning :: CacheWarning
@@ -133,35 +115,29 @@ data Status = Status
     --   cache directory
     }
 
+instance HasEvaluateSettings Status where
+    evaluateSettings =
+        lens _evaluateSettings (\s x -> s { _evaluateSettings = x })
+    {-# INLINE evaluateSettings #-}
+
 -- | Initial `Status`, parameterised over the HTTP 'Manager',
 --   the origin headers and the remote resolver,
 --   importing relative to the given root import.
 emptyStatusWith
-    :: IO Manager
+    :: EvaluateSettings
     -> StateT Status IO OriginHeaders
     -> (URL -> StateT Status IO Data.Text.Text)
     -> (URL -> StateT Status IO Data.ByteString.ByteString)
     -> Import
     -> Status
-emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport = Status {..}
-  where
-    _stack = pure (Chained rootImport)
-
-    _graph = []
-
-    _cache = Map.empty
-
-    _manager = Nothing
-
-    _substitutions = Dhall.Substitution.empty
-
-    _normalizer = Nothing
-
-    _startingContext = Dhall.Context.empty
-
-    _semanticCacheMode = UseSemanticCache
-
-    _cacheWarning = CacheNotWarned
+emptyStatusWith _evaluateSettings _loadOriginHeaders _remote _remoteBytes rootImport = Status
+    { _stack = pure (Chained rootImport)
+    , _graph = []
+    , _cache = Map.empty
+    , _semanticCacheMode = UseSemanticCache
+    , _cacheWarning = CacheNotWarned
+    , ..
+    }
 
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
@@ -175,6 +151,10 @@ graph = lens _graph (\s x -> s { _graph = x })
 cache :: Lens' Status (Map Chained ImportSemantics)
 cache = lens _cache (\s x -> s { _cache = x })
 
+-- | Lens from a `Status` to its `_loadOriginHeaders` field
+loadOriginHeaders :: Lens' Status (StateT Status IO OriginHeaders)
+loadOriginHeaders = lens _loadOriginHeaders (\s x -> s { _loadOriginHeaders = x })
+
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Data.Text.Text)
 remote = lens _remote (\s x -> s { _remote = x })
@@ -183,17 +163,9 @@ remote = lens _remote (\s x -> s { _remote = x })
 remoteBytes :: Lens' Status (URL -> StateT Status IO Data.ByteString.ByteString)
 remoteBytes = lens _remoteBytes (\s x -> s { _remoteBytes = x })
 
--- | Lens from a `Status` to its `_substitutions` field
-substitutions :: Lens' Status (Dhall.Substitution.Substitutions Src Void)
-substitutions = lens _substitutions (\s x -> s { _substitutions = x })
-
--- | Lens from a `Status` to its `_normalizer` field
-normalizer :: Lens' Status (Maybe (ReifiedNormalizer Void))
-normalizer = lens _normalizer (\s x -> s {_normalizer = x})
-
--- | Lens from a `Status` to its `_startingContext` field
-startingContext :: Lens' Status (Context (Expr Src Void))
-startingContext = lens _startingContext (\s x -> s { _startingContext = x })
+-- | Lens from a `Status` to its `_semanticCacheMode` field
+semanticCacheMode :: Lens' Status SemanticCacheMode
+semanticCacheMode = lens _semanticCacheMode (\s x -> s { _semanticCacheMode = x })
 
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning
@@ -235,8 +207,8 @@ instance Exception InternalError
 --
 -- In order to keep the library API constant even when the @with-http@ Cabal
 -- flag is disabled the pretty error message is pre-rendered and the real
--- 'Network.HTTP.Client.HttpException' is stored in a 'Dynamic'
-data PrettyHttpException = PrettyHttpException String Dynamic
+-- 'Network.HTTP.Client.HttpException' is stored in a 'SomeException'
+data PrettyHttpException = PrettyHttpException String SomeException
     deriving (Typeable)
 
 instance Exception PrettyHttpException
