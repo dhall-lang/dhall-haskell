@@ -18,7 +18,7 @@ import Data.Dynamic                     (Dynamic)
 import Data.Map.Strict                  (Map, empty)
 import Data.Text                        (Text)
 import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
-import Dhall.Pretty                     (CharacterSet)
+import Dhall.Pretty                     (ChooseCharacterSet(..))
 import Language.LSP.Server              (LspT)
 
 import qualified Language.LSP.Protocol.Types as J
@@ -39,11 +39,11 @@ data Severity = Error
               -- ^ Log message, not displayed by default.
 
 data ServerConfig = ServerConfig
-  { chosenCharacterSet :: Maybe CharacterSet
+  { chosenCharacterSet :: ChooseCharacterSet
   } deriving Show
 
 instance Default ServerConfig where
-  def = ServerConfig { chosenCharacterSet = Nothing }
+  def = ServerConfig { chosenCharacterSet = AutoInferCharSet }
 
 -- We need to derive the FromJSON instance manually in order to provide defaults
 -- for absent fields.
@@ -51,7 +51,7 @@ instance FromJSON ServerConfig where
   parseJSON = withObject "settings" $ \v -> do
     s <- v .: "vscode-dhall-lsp-server"
     flip (withObject "vscode-dhall-lsp-server") s $ \o -> ServerConfig
-      <$> o .:? "character-set" .!= Nothing
+      <$> o .:? "character-set" .!= AutoInferCharSet
 
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache
