@@ -230,16 +230,13 @@ toDirectoryTree allowSeparators path expression = case expression of
         empty
 
     process key value = do
+        -- Fail if path is absolute, which is a security risk.
+        when (FilePath.isAbsolute (Text.unpack key)) die
+        
         let keyPathSegments =
                 fmap Text.unpack $ Text.splitOn "/" key
 
         case keyPathSegments of
-            -- Fail if path is absolute, which is a security risk.
-            "" : _ ->
-                die
-            -- Detect Windows absolute paths like "C:".
-            [_ , ':'] : _ ->
-                die
             -- Fail if separators are not allowed by the option.
             _ : _ | not allowSeparators ->
                 die
