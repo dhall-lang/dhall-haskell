@@ -230,6 +230,9 @@ toDirectoryTree allowSeparators path expression = case expression of
         empty
 
     process key value = do
+        let keyPathSegments =
+                fmap Text.unpack $ Text.splitOn "/" key
+
         case keyPathSegments of
             -- Fail if path is absolute, which is a security risk.
             "" : _ ->
@@ -262,9 +265,6 @@ toDirectoryTree allowSeparators path expression = case expression of
         Directory.createDirectoryIfMissing True dirPath
 
         toDirectoryTree allowSeparators (dirPath </> fileName) value
-      where
-        keyPathSegments =
-            fmap Text.unpack $ Text.splitOn "/" key
 
     die = Exception.throwIO FilesystemError{..}
       where
