@@ -248,7 +248,7 @@ toDirectoryTree allowSeparators path expression = case expression of
             then die
             else return ()
 
-        (dirPath, fileName) <- case reverse keyPathSegments of
+        (dirPath', fileName) <- case reverse keyPathSegments of
             h : t ->
                 return
                     ( Foldable.foldl' (</>) path (reverse t)
@@ -256,6 +256,8 @@ toDirectoryTree allowSeparators path expression = case expression of
             _ ->
                 die
 
+        let dirPath = path </> dirPath'
+        
         Directory.createDirectoryIfMissing True dirPath
 
         toDirectoryTree allowSeparators (dirPath </> fileName) value
