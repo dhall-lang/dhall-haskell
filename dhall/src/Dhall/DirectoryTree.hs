@@ -75,7 +75,7 @@ import qualified System.PosixCompat.Files    as Posix
 
     * There is a more advanced way to construct directory trees using a fixpoint
       encoding. See the documentation below on that.
-    
+
     For example, the following Dhall record:
 
     > { dir = { `hello.txt` = "Hello\n" }
