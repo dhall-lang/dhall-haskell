@@ -21,7 +21,7 @@ module Dhall.DirectoryTree
 
 import Control.Applicative       (empty)
 import Control.Exception         (Exception)
-import Control.Monad             (unless)
+import Control.Monad             (unless, when)
 import Data.Either.Validation    (Validation (..))
 import Data.Functor.Identity     (Identity (..))
 import Data.Maybe                (fromMaybe, isJust)
@@ -55,6 +55,7 @@ import qualified Dhall.Util                  as Util
 import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
+import qualified System.FilePath             as FilePath
 #ifdef mingw32_HOST_OS
 import System.IO.Error           (illegalOperationErrorType, mkIOError)
 #else
