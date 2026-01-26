@@ -1,5 +1,5 @@
 Name: dhall-bash
-Version: 1.0.40
+Version: 1.0.41
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -28,12 +28,12 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
-        bytestring                               < 0.12,
-        containers                               < 0.7 ,
-        dhall                     >= 1.41.0   && < 1.42,
+        bytestring                               < 0.13,
+        containers                               < 0.9 ,
+        dhall                     >= 1.42.0   && < 1.43,
         neat-interpolation                       < 0.6 ,
         shell-escape                             < 0.3 ,
-        text                      >= 0.2      && < 2.1
+        text                      >= 0.2      && < 2.2
     Exposed-Modules: Dhall.Bash
     GHC-Options: -Wall
     Default-Language: Haskell2010
@@ -44,11 +44,11 @@ Executable dhall-to-bash
     Other-Modules:
         Paths_dhall_bash
     Build-Depends:
-        base                                  ,
-        bytestring                            ,
-        dhall                                 ,
-        dhall-bash                            ,
-        optparse-generic >= 1.1.1    && < 1.5 ,
+        base                 >= 4.11.0.0 && < 5    ,
+        bytestring                                 ,
+        dhall                                      ,
+        dhall-bash                                 ,
+        optparse-applicative >= 0.14.0.0  && < 0.20,
         text
     GHC-Options: -Wall
     Default-Language: Haskell2010

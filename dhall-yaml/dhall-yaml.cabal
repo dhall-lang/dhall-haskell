@@ -1,5 +1,5 @@
 Name: dhall-yaml
-Version: 1.2.11
+Version: 1.2.12
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: GPL-3
@@ -34,12 +34,12 @@ Library
         HsYAML                    >= 0.2       && < 0.3 ,
         HsYAML-aeson              >= 0.2       && < 0.3 ,
         base                      >= 4.11.0.0  && < 5   ,
-        aeson                     >= 1.0.0.0   && < 2.2 ,
-        bytestring                                < 0.12,
-        dhall                     >= 1.31.0    && < 1.42,
+        aeson                     >= 1.0.0.0   && < 2.3 ,
+        bytestring                                < 0.13,
+        dhall                     >= 1.31.0    && < 1.43,
         dhall-json                >= 1.6.0     && < 1.8 ,
-        optparse-applicative      >= 0.14.0.0  && < 0.18,
-        text                      >= 0.11.1.0  && < 2.1 ,
+        optparse-applicative      >= 0.14.0.0  && < 0.20,
+        text                      >= 0.11.1.0  && < 2.2 ,
         vector
     Exposed-Modules:
         Dhall.Yaml
@@ -51,8 +51,8 @@ Executable dhall-to-yaml-ng
     Hs-Source-Dirs: dhall-to-yaml-ng
     Main-Is: Main.hs
     Build-Depends:
-        base      ,
-        dhall-json,
+        base       >= 4.11.0.0 && < 5,
+        dhall-json                   ,
         dhall-yaml
     Other-Modules:
         Paths_dhall_yaml
@@ -63,9 +63,9 @@ Executable yaml-to-dhall
     Hs-Source-Dirs: yaml-to-dhall
     Main-Is: Main.hs
     Build-Depends:
-        base                                             ,
+        base                        >= 4.11.0.0 && < 5   ,
         aeson                                            ,
-        ansi-terminal               >= 0.6.3.1  && < 0.12,
+        ansi-terminal               >= 0.6.3.1  && < 1.2 ,
         bytestring                                       ,
         dhall                                            ,
         dhall-json                                       ,
@@ -85,14 +85,14 @@ Test-Suite tasty
     Hs-Source-Dirs: tasty
     Main-Is: Main.hs
     Build-Depends:
-        base                         ,
-        bytestring                   ,
-        dhall                        ,
-        dhall-json                   ,
-        dhall-yaml                   ,
-        tasty                  <  1.5,
-        tasty-expected-failure < 0.13,
-        text                                    ,
+        base                   >= 4.11.0.0 && < 5   ,
+        bytestring                                  ,
+        dhall                                       ,
+        dhall-json                                  ,
+        dhall-yaml                                  ,
+        tasty                                 < 1.6 ,
+        tasty-expected-failure                < 0.13,
+        text                                        ,
         tasty-hunit            >= 0.2
 
     GHC-Options: -Wall

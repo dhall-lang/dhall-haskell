@@ -1,5 +1,5 @@
 Name:               dhall-toml
-Version:            1.0.2
+Version:            1.0.4
 Cabal-Version:      >=1.10
 Build-Type:         Simple
 License:            BSD3
@@ -35,13 +35,14 @@ Library
     Hs-Source-Dirs:   src
     Build-Depends:
         base                 >= 4.12     && < 5    ,
-        dhall                >= 1.39.0   && < 1.42 ,
+        dhall                >= 1.39.0   && < 1.43 ,
+        filepath                            < 1.6  ,
         tomland              >= 1.3.2.0  && < 1.4  ,
-        text                 >= 0.11.1.0 && < 2.1  ,
-        containers           >= 0.5.9    && < 0.7  ,
+        text                 >= 0.11.1.0 && < 2.2  ,
+        containers           >= 0.5.9    && < 0.9  ,
         unordered-containers >= 0.2      && < 0.3  ,
         prettyprinter        >= 1.7.0    && < 1.8  ,
-        optparse-applicative >= 0.14     && < 0.18
+        optparse-applicative >= 0.14     && < 0.20
     Exposed-Modules:
         Dhall.DhallToToml
         Dhall.TomlToDhall
@@ -55,7 +56,7 @@ Executable dhall-to-toml
     Hs-Source-Dirs:   dhall-to-toml
     Main-Is:          Main.hs
     Build-Depends:
-        base       ,
+        base       >= 4.12 && < 5,
         dhall-toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
@@ -64,7 +65,7 @@ Executable toml-to-dhall
     Hs-Source-Dirs:   toml-to-dhall
     Main-Is:          Main.hs
     Build-Depends:
-        base       ,
+        base       >= 4.12 && < 5,
         dhall-toml
     GHC-Options:      -Wall
     Default-Language: Haskell2010
@@ -74,12 +75,12 @@ Test-Suite dhall-toml-test
     Hs-Source-Dirs:   tasty
     Main-Is:          Main.hs
     Build-Depends:
-        base               ,
-        dhall              ,
-        dhall-toml         ,
-        tasty       <  1.5 ,
-        tasty-hunit >= 0.2 ,
-        text               ,
+        base        >= 4.12 && < 5  ,
+        dhall                       ,
+        dhall-toml                  ,
+        tasty                  < 1.6,
+        tasty-hunit >= 0.2          ,
+        text                        ,
         tomland
     GHC-Options:      -Wall
     Default-Language: Haskell2010
@@ -89,9 +90,9 @@ Test-Suite doctest
     Hs-Source-Dirs:   doctest
     Main-Is:          Main.hs
     Build-Depends:
-        base      ,
-        directory ,
-        filepath  ,
+        base      >= 4.12 && < 5,
+        directory               ,
+        filepath                ,
         doctest
     GHC-Options:      -Wall
     Default-Language: Haskell2010

@@ -1,7 +1,10 @@
-{-# LANGUAGE ApplicativeDo   #-}
-{-# LANGUAGE GADTs           #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ApplicativeDo     #-}
+{-# LANGUAGE BlockArguments    #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 {-| This module exports the `tomlToDhall` function for translating a
     TOML syntax tree from @tomland@ to a Dhall syntax tree. For now,
@@ -118,35 +121,34 @@ module Dhall.TomlToDhall
     , CompileError
     ) where
 
-import Control.Exception    (Exception, throwIO)
+import Control.Exception    (Exception(..))
+import Data.Bifunctor       (first)
 import Data.Either          (rights)
-import Data.Foldable        (foldl', toList)
+import Data.Foldable        (fold, toList)
+import Data.HashMap.Strict  (HashMap)
 import Data.List.NonEmpty   (NonEmpty ((:|)))
-import Data.Text            (Text)
 import Data.Version         (showVersion)
 import Data.Void            (Void)
 import Dhall.Core           (DhallDouble (..), Expr)
 import Dhall.Parser         (Src)
 import Dhall.Toml.Utils     (fileToDhall)
 import Toml.Parser          (TomlParseError)
-import Toml.Type.AnyValue   (AnyValue (AnyValue))
-import Toml.Type.Key        (Key (Key), Piece (Piece))
-import Toml.Type.PrefixTree (PrefixTree)
+import Toml.Type.AnyValue   (AnyValue(..))
+import Toml.Type.Key        (Key(..), Piece(..))
+import Toml.Type.PrefixTree (PrefixMap, PrefixTree(..))
 import Toml.Type.TOML       (TOML)
 import Toml.Type.Value      (Value)
 
 import qualified Data.HashMap.Strict  as HashMap
 import qualified Data.Sequence        as Seq
-import qualified Data.Text
+import qualified Data.Text            as Text
 import qualified Data.Text.IO         as Text.IO
 import qualified Dhall.Core           as Core
 import qualified Dhall.Map            as Map
-import qualified Options.Applicative  as OA
+import qualified Options.Applicative  as Options
 import qualified Paths_dhall_toml     as Meta
 import qualified Toml.Parser
-import qualified Toml.Type.AnyValue   as Toml.AnyValue
-import qualified Toml.Type.PrefixTree as Toml.PrefixTree
-import qualified Toml.Type.TOML       as Toml.TOML
+import qualified Toml.Type.TOML       as TOML
 import qualified Toml.Type.Value      as Value
 
 data CompileError
@@ -155,149 +157,203 @@ data CompileError
     | InvalidToml TomlParseError
     | InternalError String
     | MissingKey String
+    deriving (Show)
 
-instance Show CompileError where
-    show (Unimplemented s) = "unimplemented: " ++ s
-    show (Incompatible e toml) = "incompatible: " ++ (show e) ++ " with " ++ (show toml)
-    show (InvalidToml e) = "invalid TOML:\n" ++ (Data.Text.unpack $ Toml.Parser.unTomlParseError e)
-    show (InternalError e) = "internal error: " ++ show e
-    show (MissingKey e) = "missing key: " ++ show e
-
-instance Exception CompileError
+instance Exception CompileError where
+    displayException exception = case exception of
+        Unimplemented s ->
+            "unimplemented: " <> s
+        Incompatible e toml ->
+            "incompatible: " <> show e <> " with " <> show toml
+        InvalidToml e ->
+            "invalid TOML:\n" <> Text.unpack (Toml.Parser.unTomlParseError e)
+        InternalError e ->
+            "internal error: " <> show e
+        MissingKey e ->
+            "missing key: " <> show e
 
 tomlToDhall :: Expr Src Void -> TOML -> Either CompileError (Expr Src Void)
-tomlToDhall schema toml = toDhall (Core.normalize schema) (tomlToObject toml)
+tomlToDhall schema toml = objectToDhall (Core.normalize schema) (tomlToObject toml)
 
-tomlValueToDhall :: Expr Src Void -> Value t -> Either CompileError (Expr Src Void)
-tomlValueToDhall exprType v = case (exprType, v) of
-    (Core.Bool                , Value.Bool a   ) -> Right $ Core.BoolLit a
-    (Core.Natural             , Value.Integer a) -> Right $ Core.NaturalLit $ fromInteger a
-    (Core.Double              , Value.Double a ) -> Right $ Core.DoubleLit $ DhallDouble a
-    (Core.Text                , Value.Text a   ) -> Right $ Core.TextLit $ Core.Chunks [] a
-    (_                        , Value.Zoned _  ) -> Left $ Unimplemented "toml time values"
-    (_                        , Value.Local _  ) -> Left $ Unimplemented "toml time values"
-    (_                        , Value.Day _    ) -> Left $ Unimplemented "toml time values"
-    (t@(Core.App Core.List _) , Value.Array [] ) -> Right $ Core.ListLit (Just t) []
-    (Core.App Core.Optional t , a              ) -> do
-        o <- tomlValueToDhall t a
-        return $ Core.Some o
-    (Core.App Core.List t     , Value.Array a  ) -> do
-        l <- mapM (tomlValueToDhall t) a
-        return $ Core.ListLit Nothing (Seq.fromList l)
+valueToDhall
+    :: Expr Src Void -> Value t -> Either CompileError (Expr Src Void)
+valueToDhall type_ value = case (type_, value) of
+    (Core.Bool, Value.Bool a) ->
+        Right (Core.BoolLit a)
+
+    (Core.Integer, Value.Integer a) ->
+        Right (Core.IntegerLit a)
+
+    (Core.Natural, Value.Integer a) ->
+        Right (Core.NaturalLit (fromInteger a))
+
+    (Core.Double, Value.Double a) ->
+        Right (Core.DoubleLit (DhallDouble a))
+
+    (Core.Text, Value.Text a) ->
+        Right (Core.TextLit (Core.Chunks [] a))
+
+    (_, Value.Zoned _) ->
+        Left (Unimplemented "toml time values")
+
+    (_, Value.Local _) ->
+        Left (Unimplemented "toml time values")
+
+    (_, Value.Day _) ->
+        Left (Unimplemented "toml time values")
+
+    (Core.App Core.List _, Value.Array [] ) ->
+        Right (Core.ListLit (Just type_) [])
+
+    (Core.App Core.Optional t, a) -> do
+        o <- valueToDhall t a
+        return (Core.Some o)
+
+    (Core.App Core.List elementType, Value.Array elements) -> do
+        expressions <- mapM (valueToDhall elementType) elements
+        return (Core.ListLit Nothing (Seq.fromList expressions))
 
     -- TODO: allow different types of matching (ex. first, strict, none)
     -- currently we just pick the first enum that matches
-    (Core.Union m        , _)        -> let
-        f key maybeType = case maybeType of
-            Just ty -> do
-                expr <- tomlValueToDhall ty v
-                return $ Core.App (Core.Field exprType $ Core.makeFieldSelection key) expr
-            Nothing -> case v of
-                Value.Text a | a == key ->
-                    return $ Core.Field exprType (Core.makeFieldSelection a)
-                _ -> Left $ Incompatible exprType (Prim (AnyValue v))
+    (Core.Union m, _) -> do
+        let f key maybeAlternativeType = case maybeAlternativeType of
+                Just alternativeType -> do
+                    expression <- valueToDhall alternativeType value
+                    return (Core.App (Core.Field type_ (Core.makeFieldSelection key)) expression)
+                Nothing -> case value of
+                    Value.Text a | a == key ->
+                        return (Core.Field type_ (Core.makeFieldSelection a))
+                    _ -> Left (Incompatible type_ (Prim (AnyValue value)))
 
-        in case rights (toList (Map.mapWithKey f m)) of
-            []  -> Left $ Incompatible exprType (Prim (AnyValue v))
-            x:_ -> Right $ x
+        case rights (toList (Map.mapWithKey f m)) of
+            []    -> Left (Incompatible type_ (Prim (AnyValue value)))
+            x : _ -> Right x
 
-    _ -> Left $ Incompatible exprType (Prim (AnyValue v))
+    _ ->
+        Left (Incompatible type_ (Prim (AnyValue value)))
 
 -- TODO: keep track of the path for more helpful error messages
-toDhall :: Expr Src Void -> Object -> Either CompileError (Expr Src Void)
-toDhall exprType value = case (exprType, value) of
-    (_,                    Invalid)  -> Left $ InternalError "invalid object"
+objectToDhall :: Expr Src Void -> Object -> Either CompileError (Expr Src Void)
+objectToDhall type_ object = case (type_, object) of
+    (_, Invalid) -> Left (InternalError "invalid object")
 
     -- TODO: allow different types of matching (ex. first, strict, none)
     -- currently we just pick the first enum that matches
-    (Core.Union m        , _)        -> let
-        f key maybeType = case maybeType of
-            Just ty -> do
-                expr <- toDhall ty value
-                return $ Core.App (Core.Field exprType $ Core.makeFieldSelection key) expr
-            Nothing -> case value of
-                Prim (AnyValue (Value.Text a)) | a == key ->
-                    return $ Core.Field exprType (Core.makeFieldSelection a)
-                _ -> Left $ Incompatible exprType value
+    (Core.Union m, _) -> do
+        let f key maybeAlternativeType = case maybeAlternativeType of
+                Just alternativeType -> do
+                    expression <- objectToDhall alternativeType object
+                    return (Core.App (Core.Field type_ (Core.makeFieldSelection key)) expression)
+                Nothing -> case object of
+                    Prim (AnyValue (Value.Text a)) | a == key ->
+                        return (Core.Field type_ (Core.makeFieldSelection a))
+                    _ -> Left (Incompatible type_ object)
 
-        in case rights (toList (Map.mapWithKey f m)) of
-            []  -> Left $ Incompatible exprType value
-            x:_ -> Right $ x
+        case rights (toList (Map.mapWithKey f m)) of
+            []    -> Left (Incompatible type_ object)
+            x : _ -> Right x
 
-    (Core.App Core.List t, Array []) -> Right $ Core.ListLit (Just t) []
+    (Core.Record record, Table table) -> do
+        let process key fieldType
+                | Just nestedObject <- HashMap.lookup (Piece key) table =
+                    objectToDhall fieldType nestedObject
+                | Core.App Core.Optional innerType <- fieldType =
+                    Right (Core.App Core.None innerType)
+                | Core.App Core.List _ <- fieldType =
+                    Right (Core.ListLit (Just fieldType) [])
+                | otherwise =
+                    Left (MissingKey (Text.unpack key))
 
-    (Core.App Core.List t, Array a) -> do
-        l <- mapM (toDhall t) a
-        return $ Core.ListLit Nothing (Seq.fromList l)
+        expressions <- Map.traverseWithKey process (fmap Core.recordFieldValue record)
 
-    (Core.Record r, Table t) -> let
-        f :: Text -> (Expr Src Void) -> Either CompileError (Expr Src Void)
-        f k ty | Just val <- HashMap.lookup (Piece k) t = toDhall ty val
-               | Core.App Core.Optional ty' <- ty = Right $ (Core.App Core.None ty')
-               | Core.App Core.List _ <- ty = Right $ Core.ListLit (Just ty) []
-               | otherwise = Left $ MissingKey $ Data.Text.unpack k
-        in do
-            values <- Map.traverseWithKey f (Core.recordFieldValue <$> r)
-            return $ Core.RecordLit (Core.makeRecordField <$> values)
+        return (Core.RecordLit (fmap Core.makeRecordField expressions))
 
-    (_, Prim (AnyValue v)) -> tomlValueToDhall exprType v
+    (Core.App Core.List (Core.Record [("mapKey", Core.recordFieldValue -> Core.Text), ("mapValue", Core.recordFieldValue -> valueType)]), Table table) -> do
+        hashMap <- traverse (objectToDhall valueType) table
 
-    (ty, obj) -> Left $ Incompatible ty obj
+        let expressions = Seq.fromList do
+                (Piece key, value) <- HashMap.toList hashMap
 
+                let newKey =
+                        Core.makeRecordField (Core.TextLit (Core.Chunks [] key))
+
+                let newValue = Core.makeRecordField value
+
+                pure (Core.RecordLit [("mapKey", newKey), ("mapValue", newValue)])
+
+        let listType = if Seq.null expressions then Just type_ else Nothing
+
+        return (Core.ListLit listType expressions)
+
+    (Core.App Core.List t, Array []) ->
+        Right (Core.ListLit (Just t) [])
+
+    (Core.App Core.List t, Array elements) -> do
+        expressions <- mapM (objectToDhall t) elements
+        return (Core.ListLit Nothing (Seq.fromList expressions))
+
+    (_, Prim (AnyValue value)) ->
+        valueToDhall type_ value
+
+    (_, obj) ->
+        Left (Incompatible type_ obj)
 
 -- | An intermediate object created from a 'TOML' before an 'Expr'.
 --   It does two things, firstly joining the tomlPairs, tomlTables,
 --   and tomlTableArrays parts of the TOML. Second, it turns the dense
 --   paths (ex. a.b.c = 1) into sparse paths (ex. a = { b = { c = 1 }}).
 data Object
-    = Prim Toml.AnyValue.AnyValue
+    = Prim AnyValue
     | Array [Object]
-    | Table (HashMap.HashMap Piece Object)
+    | Table (HashMap Piece Object)
     | Invalid
     deriving (Show)
 
 instance Semigroup Object where
-    (Table ls) <> (Table rs) = Table (ls <> rs)
+    Table ls <> Table rs = Table (ls <> rs)
     -- this shouldn't happen because tomland has already verified correctness
     -- of the toml object
     _ <> _ = Invalid
 
+instance Monoid Object where
+    mempty = Table HashMap.empty
+
 -- | Creates an arbitrarily nested object
 sparseObject :: Key -> Object -> Object
-sparseObject (Key (piece :| [])) value = Table $ HashMap.singleton piece value
-sparseObject (Key (piece :| rest:rest')) value
-    = Table $ HashMap.singleton piece (sparseObject (Key $ rest :| rest') value)
+sparseObject (Key (piece :| [])) value =
+    Table (HashMap.singleton piece value)
+sparseObject (Key (piece :| piece' : pieces)) value =
+    Table (HashMap.singleton piece (sparseObject (Key (piece' :| pieces)) value))
 
-pairsToObject :: HashMap.HashMap Key Toml.AnyValue.AnyValue -> Object
-pairsToObject pairs
-    = foldl' (<>) (Table HashMap.empty)
-    $ HashMap.mapWithKey sparseObject
-    $ fmap Prim pairs
-
-tablesToObject :: Toml.PrefixTree.PrefixMap TOML -> Object
-tablesToObject tables
-    = foldl' (<>) (Table HashMap.empty)
-    $ map prefixTreeToObject
-    $ HashMap.elems tables
+tablesToObject :: PrefixMap TOML -> Object
+tablesToObject = fold . map prefixTreeToObject . HashMap.elems
 
 prefixTreeToObject :: PrefixTree TOML -> Object
-prefixTreeToObject (Toml.PrefixTree.Leaf key toml)
-    = sparseObject key (tomlToObject toml)
-prefixTreeToObject (Toml.PrefixTree.Branch prefix _ toml)
-    = sparseObject prefix (tablesToObject toml)
-
-tableArraysToObject :: HashMap.HashMap Key (NonEmpty TOML) -> Object
-tableArraysToObject arrays
-    = foldl' (<>) (Table HashMap.empty)
-    $ HashMap.mapWithKey sparseObject
-    $ fmap (Array . fmap tomlToObject . toList)  arrays
+prefixTreeToObject (Leaf key toml) =
+    sparseObject key (tomlToObject toml)
+prefixTreeToObject (Branch prefix _ toml) =
+    sparseObject prefix (tablesToObject toml)
 
 tomlToObject :: TOML -> Object
-tomlToObject toml = pairs <> tables <> tableArrays
-    where
-        pairs = pairsToObject $ Toml.TOML.tomlPairs toml
-        tables = tablesToObject $ Toml.TOML.tomlTables toml
-        tableArrays = tableArraysToObject $ Toml.TOML.tomlTableArrays toml
+tomlToObject = pairs <> tables <> tableArrays
+  where
+    pairs =
+          fold
+        . HashMap.mapWithKey sparseObject
+        . fmap Prim
+        . TOML.tomlPairs
+
+    tables =
+          fold
+        . map prefixTreeToObject
+        . HashMap.elems
+        . TOML.tomlTables
+
+    tableArrays =
+          fold
+        . HashMap.mapWithKey sparseObject
+        . fmap (Array . fmap tomlToObject . toList)
+        . TOML.tomlTableArrays
 
 data Options = Options
     { input :: Maybe FilePath
@@ -305,38 +361,51 @@ data Options = Options
     , schemaFile :: FilePath
     }
 
-parserInfo :: OA.ParserInfo Options
-parserInfo = OA.info
-    (OA.helper <*> versionOption <*> optionsParser)
-    (OA.fullDesc <> OA.progDesc "Convert TOML to Dhall")
+parserInfo :: Options.ParserInfo Options
+parserInfo = Options.info
+    (Options.helper <*> versionOption <*> optionsParser)
+    (Options.fullDesc <> Options.progDesc "Convert TOML to Dhall")
   where
-    versionOption = OA.infoOption (showVersion Meta.version) $
-        OA.long "version" <> OA.help "Display version"
+    versionOption =
+        Options.infoOption (showVersion Meta.version)
+            (Options.long "version" <> Options.help "Display version")
+
     optionsParser = do
-        input <- OA.optional . OA.strOption $
-               OA.long "file"
-            <> OA.help "Read TOML from file instead of standard input"
-            <> fileOpts
-        output <- OA.optional . OA.strOption $
-               OA.long "output"
-            <> OA.help "Write Dhall to a file instead of standard output"
-            <> fileOpts
-        schemaFile <- OA.strArgument $
-               OA.help "Path to Dhall schema file"
-            <> OA.action "file"
-            <> OA.metavar "SCHEMA"
+        input <- (Options.optional . Options.strOption)
+            (  Options.long "file"
+            <> Options.help "Read TOML from file instead of standard input"
+            <> Options.metavar "FILE"
+            <> Options.action "file"
+            )
+        output <- (Options.optional . Options.strOption)
+            (  Options.long "output"
+            <> Options.help "Write Dhall to a file instead of standard output"
+            <> Options.metavar "FILE"
+            <> Options.action "file"
+            )
+        schemaFile <- Options.strArgument
+            (  Options.help "Path to Dhall schema file"
+            <> Options.action "file"
+            <> Options.metavar "SCHEMA"
+            )
         pure Options {..}
-    fileOpts = OA.metavar "FILE" <> OA.action "file"
 
 tomlToDhallMain :: IO ()
 tomlToDhallMain = do
-    Options {..} <- OA.execParser parserInfo
-    text <- maybe Text.IO.getContents Text.IO.readFile input
-    toml <- case Toml.Parser.parse text of
-        Left tomlErr -> throwIO (InvalidToml tomlErr)
-        Right toml -> return toml
+    Options{..} <- Options.execParser parserInfo
+
+    inputText <- case input of
+        Just file -> Text.IO.readFile file
+        Nothing   -> Text.IO.getContents
+
+    toml <- Core.throws (first InvalidToml (Toml.Parser.parse inputText))
+
     schema <- fileToDhall schemaFile
-    dhall <- case tomlToDhall schema toml of
-        Left err -> throwIO err
-        Right dhall -> return dhall
-    maybe Text.IO.putStrLn Text.IO.writeFile output $ Core.pretty dhall
+
+    dhall <- Core.throws (tomlToDhall schema toml)
+
+    let outputText = Core.pretty dhall
+
+    case output of
+        Just file -> Text.IO.writeFile file outputText
+        Nothing   -> Text.IO.putStrLn outputText

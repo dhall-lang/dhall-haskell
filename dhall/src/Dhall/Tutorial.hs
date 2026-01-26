@@ -1857,7 +1857,7 @@ import Dhall
 -- You can find an up-to-date list of available built-in functions and operators
 -- here:
 --
--- <https://github.com/dhall-lang/dhall-lang/wiki/Built-in-types%2C-functions%2C-and-operators Built-in types, functions, and operators>
+-- <https://docs.dhall-lang.org/references/Built-in-types.html>
 
 -- $caveats
 --
@@ -1882,9 +1882,13 @@ import Dhall
 -- >
 -- > (input):1:1
 --
--- In fact, there are no built-in functions for @Integer@s (or @Double@s) other
--- than @Integer/show@ and @Double/show@.  As far as the language is concerned
--- they are opaque values that can only be shuffled around but not used in any
+-- There are no built-in functions for @Integer@ arithmetic; however, conversion
+-- to and from @Natural@s is possible usinng @Integer/clamp@, @Integer/negate@
+-- and @Natural/toInteger@.
+--
+-- For @Double@s the situation is even more extreme: there are no built-in
+-- functions other than @Double/show@. As far as the language is concerned they
+-- are opaque values that can only be shuffled around but not used in any
 -- meaningful way until they have been loaded into Haskell.
 --
 -- Second, the equality @(==)@ and inequality @(!=)@ operators only work on
@@ -2312,4 +2316,4 @@ import Dhall
 
 -- $faq
 --
--- <https://github.com/dhall-lang/dhall-lang/wiki/Frequently-Asked-Questions-(FAQ) Frequently Asked Questions (FAQ)>
+-- <https://docs.dhall-lang.org/howtos/FAQ.html>

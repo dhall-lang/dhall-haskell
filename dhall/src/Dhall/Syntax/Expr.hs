@@ -1,9 +1,12 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric            #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 
 module Dhall.Syntax.Expr
     ( Expr(..)
     ) where
 
+import                Data.ByteString              (ByteString)
+import                Data.Kind                    (Type)
 import                Data.List.NonEmpty           (NonEmpty (..))
 import                Data.Sequence                (Seq)
 import                Data.String                  (IsString (..))
@@ -40,6 +43,7 @@ import qualified Data.Time as Time
     * If @a = `Data.Void.Void`@ then the code has no
       `Dhall.Syntax.Import.Import`s
 -}
+type Expr :: Type -> Type -> Type
 data Expr s a
     -- | > Const c                                  ~  c
     = Const Const
@@ -86,6 +90,10 @@ data Expr s a
     | BoolNE  (Expr s a) (Expr s a)
     -- | > BoolIf x y z                             ~  if x then y else z
     | BoolIf (Expr s a) (Expr s a) (Expr s a)
+    -- | > Bytes                                    ~ Bytes
+    | Bytes
+    -- | > BytesLit "\x00\xFF"                      ~ 0x"00FF"
+    | BytesLit ByteString
     -- | > Natural                                  ~  Natural
     | Natural
     -- | > NaturalLit n                             ~  n
@@ -142,6 +150,8 @@ data Expr s a
     | Date
     -- | > DateLiteral (fromGregorian _YYYY _MM _DD) ~ YYYY-MM-DD
     | DateLiteral Time.Day
+    -- | > DateShow                                 ~  Date/show
+    | DateShow
     -- | > Time                                     ~  Time
     | Time
     -- | > TimeLiteral (TimeOfDay hh mm ss) _       ~  hh:mm:ss
@@ -149,11 +159,15 @@ data Expr s a
         Time.TimeOfDay
         Word
         -- ^ Precision
+    -- | > TimeShow                                 ~  Time/show
+    | TimeShow
     -- | > TimeZone                                 ~  TimeZone
     | TimeZone
     -- | > TimeZoneLiteral (TimeZone ( 60 * _HH + _MM) _ _) ~ +HH:MM
     -- | > TimeZoneLiteral (TimeZone (-60 * _HH + _MM) _ _) ~ -HH:MM
     | TimeZoneLiteral Time.TimeZone
+    -- | > TimeZoneShow                             ~  TimeZone/Show
+    | TimeZoneShow
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) []                     ~  [] : t
@@ -245,7 +259,7 @@ data Expr s a
     | ImportAlt (Expr s a) (Expr s a)
     -- | > Embed import                             ~  import
     | Embed a
-    deriving Generic
+    deriving (Generic)
 -- NB: If you add a constructor to Expr, please also update the Arbitrary
 -- instance in Dhall.Test.QuickCheck.
 

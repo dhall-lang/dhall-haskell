@@ -1,15 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- FIXME: Re-enable deprecation warnings after removing support for turtle < 1.6.
-{-# OPTIONS_GHC -Wno-deprecations #-}
-
 module Dhall.Test.Freeze where
 
 import Data.Text    (Text)
 import Dhall.Freeze (Intent (..), Scope (..))
-import Prelude      hiding (FilePath)
 import Test.Tasty   (TestTree)
-import Turtle       (FilePath)
 
 import qualified Data.Text        as Text
 import qualified Data.Text.IO     as Text.IO
@@ -21,19 +16,30 @@ import qualified Test.Tasty       as Tasty
 import qualified Test.Tasty.HUnit as Tasty.HUnit
 import qualified Turtle
 
-freezeDirectory :: FilePath
-freezeDirectory = "./tests/freeze"
+freezeDirectoryCached :: FilePath
+freezeDirectoryCached = "./tests/freeze/cached"
+
+freezeDirectorySecure :: FilePath
+freezeDirectorySecure = "./tests/freeze/secure"
 
 getTests :: IO TestTree
 getTests = do
-    freezeTests <- Test.Util.discover (Turtle.chars <* "A.dhall") freezeTest (Turtle.lstree freezeDirectory)
+    freezeCachedTests <- Test.Util.discover (Turtle.chars <* "A.dhall")
+        (freezeTest freezeDirectoryCached Cache)
+        (Turtle.lstree freezeDirectoryCached)
+    freezeSecureTests <- Test.Util.discover (Turtle.chars <* "A.dhall")
+        (freezeTest freezeDirectorySecure Secure)
+        (Turtle.lstree freezeDirectorySecure)
 
-    let testTree = Tasty.testGroup "freeze tests" [ freezeTests ]
+    let testTree = Tasty.testGroup "freeze tests"
+            [ Tasty.testGroup "cached" [freezeCachedTests]
+            , Tasty.testGroup "secure" [freezeSecureTests]
+            ]
 
     return testTree
 
-freezeTest :: Text -> TestTree
-freezeTest prefix =
+freezeTest :: FilePath -> Intent -> Text -> TestTree
+freezeTest dir intent prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
         let inputFile  = Text.unpack (prefix <> "A.dhall")
         let outputFile = Text.unpack (prefix <> "B.dhall")
@@ -42,7 +48,7 @@ freezeTest prefix =
 
         parsedInput <- Core.throws (Parser.exprFromText mempty inputText)
 
-        actualExpression <- Freeze.freezeExpression (Turtle.encodeString freezeDirectory) AllImports Cache parsedInput
+        actualExpression <- Freeze.freezeExpression dir AllImports intent parsedInput
 
         let actualText = Core.pretty actualExpression <> "\n"
 

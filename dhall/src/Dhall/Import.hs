@@ -172,6 +172,7 @@ import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
 import Dhall.TypeCheck            (TypeError)
+import Dhall.Util                 (printWarning)
 
 import Dhall.Syntax
     ( Chunks (..)
@@ -209,7 +210,7 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
-import Lens.Family.State.Strict (zoom)
+import Lens.Micro.Mtl (zoom)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
@@ -221,6 +222,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
+import qualified Data.Text.Encoding                          as Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core                                  as Core
@@ -702,13 +704,19 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
 
     return (ImportSemantics {..})
 
--- `as Text` imports aren't cached since they are well-typed and normal by
--- construction
+-- `as Text` and `as Bytes` imports aren't cached since they are well-typed and
+-- normal by construction
 loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawText)) = do
     text <- fetchFresh importType
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = TextLit (Chunks [] text)
+    return (ImportSemantics {..})
+loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawBytes)) = do
+    bytes <- fetchBytes importType
+
+    -- importSemantics is alpha-beta-normal by construction!
+    let importSemantics = BytesLit bytes
     return (ImportSemantics {..})
 
 -- `as Location` imports aren't cached since they are well-typed and normal by
@@ -764,7 +772,7 @@ writeToSemisemanticCache semisemanticHash bytes = do
         liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
     return ()
 
--- Fetch source code directly from disk/network
+-- | Fetch source code directly from disk/network
 fetchFresh :: ImportType -> StateT Status IO Text
 fetchFresh (Local prefix file) = do
     Status { _stack } <- State.get
@@ -789,6 +797,30 @@ fetchFresh (Env env) = do
 
 fetchFresh Missing = throwM (MissingImports [])
 
+-- | Like `fetchFresh`, except for `Dhall.Syntax.Expr.Bytes`
+fetchBytes :: ImportType -> StateT Status IO ByteString
+fetchBytes (Local prefix file) = do
+    Status { _stack } <- State.get
+    path <- liftIO $ localToPath prefix file
+    exists <- liftIO $ Directory.doesFileExist path
+    if exists
+        then liftIO $ Data.ByteString.readFile path
+        else throwMissingImport (Imported _stack (MissingFile path))
+
+fetchBytes (Remote url) = do
+    Status { _remoteBytes } <- State.get
+    _remoteBytes url
+
+fetchBytes (Env env) = do
+    Status { _stack } <- State.get
+    x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
+    case x of
+        Just string ->
+            return (Encoding.encodeUtf8 (Text.pack string))
+        Nothing ->
+            throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+fetchBytes Missing = throwM (MissingImports [])
+
 -- | Fetch the text contents of a URL
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
 #ifndef WITH_HTTP
@@ -806,6 +838,25 @@ fetchRemote url = do
     fetchFromHTTP (url'@URL { headers = maybeHeadersExpression }) = do
         let maybeHeaders = fmap toHeaders maybeHeadersExpression
         fetchFromHttpUrl url' maybeHeaders
+#endif
+
+-- | Fetch the text contents of a URL
+fetchRemoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
+#ifndef WITH_HTTP
+fetchRemoteBytes (url@URL { headers = maybeHeadersExpression }) = do
+    let maybeHeaders = fmap toHeaders maybeHeadersExpression
+    let urlString = Text.unpack (Core.pretty url)
+    Status { _stack } <- State.get
+    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+#else
+fetchRemoteBytes url = do
+    zoom remoteBytes (State.put fetchFromHTTP)
+    fetchFromHTTP url
+  where
+    fetchFromHTTP :: URL -> StateT Status IO Data.ByteString.ByteString
+    fetchFromHTTP (url'@URL { headers = maybeHeadersExpression }) = do
+        let maybeHeaders = fmap toHeaders maybeHeadersExpression
+        fetchFromHttpUrlBytes url' maybeHeaders
 #endif
 
 getCacheFile
@@ -1094,7 +1145,7 @@ makeEmptyStatus
     -> FilePath
     -> Status
 makeEmptyStatus newManager headersExpr rootDirectory =
-    emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader headersExpr) fetchRemote fetchRemoteBytes rootImport
   where
     prefix = if FilePath.isRelative rootDirectory
       then Here
@@ -1127,7 +1178,7 @@ remoteStatus = remoteStatusWithManager defaultNewManager
 -- | See `remoteStatus`
 remoteStatusWithManager :: IO Manager -> URL -> Status
 remoteStatusWithManager newManager url =
-    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote rootImport
+    emptyStatusWith newManager (originHeadersLoader (pure emptyOriginHeaders)) fetchRemote fetchRemoteBytes rootImport
   where
     rootImport = Import
       { importHashed = ImportHashed
@@ -1230,15 +1281,6 @@ loadWithManager newManager =
         (makeEmptyStatus newManager defaultOriginHeaders ".")
         UseSemanticCache
 
-printWarning :: (MonadIO m) => String -> m ()
-printWarning message = do
-    let warning =
-                "\n"
-            <> "\ESC[1;33mWarning\ESC[0m: "
-            <> message
-
-    liftIO $ System.IO.hPutStrLn System.IO.stderr warning
-
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
@@ -1323,6 +1365,9 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
     -- types are not interpreted and therefore don't need to be modified
     case importMode child of
         RawText ->
+            ignore
+
+        RawBytes ->
             ignore
 
         Location ->

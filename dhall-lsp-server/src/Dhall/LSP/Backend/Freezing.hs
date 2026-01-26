@@ -7,6 +7,7 @@ module Dhall.LSP.Backend.Freezing (
 
 import Control.Lens                  (universeOf)
 import Data.Text                     (Text)
+import Dhall                         (EvaluateSettings)
 import Dhall.Core
     ( Expr (..)
     , Import (..)
@@ -37,16 +38,20 @@ import qualified Data.Text as Text
 
 -- | Given an expression (potentially still containing imports) compute its
 -- 'semantic' hash in the textual representation used to freeze Dhall imports.
-computeSemanticHash :: FileIdentifier -> Expr Src Import -> Cache ->
-  IO (Either DhallError (Cache, Text))
-computeSemanticHash fileid expr cache = do
-  loaded <- load fileid expr cache
+computeSemanticHash
+    :: EvaluateSettings
+    -> FileIdentifier
+    -> Expr Src Import
+    -> Cache
+    -> IO (Either DhallError (Cache, Text))
+computeSemanticHash settings fileid expr cache = do
+  loaded <- load settings fileid expr cache
   case loaded of
     Left err -> return (Left err)
-    Right (cache', expr') -> case typecheck expr' of
+    Right (cache', expr') -> case typecheck settings expr' of
       Left err -> return (Left err)
       Right (wt,_) ->
-        return (Right (cache', hashNormalToCode (normalize wt)))
+        return (Right (cache', hashNormalToCode (normalize settings wt)))
 
 stripHash :: Import -> Import
 stripHash (Import (ImportHashed _ importType) mode) =

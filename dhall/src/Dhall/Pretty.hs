@@ -8,6 +8,7 @@ module Dhall.Pretty
     , prettyExpr
 
     , CharacterSet(..)
+    , defaultCharacterSet
     , detectCharacterSet
     , prettyCharacterSet
 
@@ -15,6 +16,7 @@ module Dhall.Pretty
     , Dhall.Pretty.Internal.layoutOpts
 
     , escapeEnvironmentVariable
+    , UnescapedLabel(..)
     , escapeLabel
 
     , temporalToText

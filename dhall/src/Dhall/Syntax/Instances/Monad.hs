@@ -9,7 +9,7 @@ import Dhall.Syntax.Instances.Applicative ()
 import Dhall.Syntax.Operations
 import Dhall.Syntax.RecordField
 
-import qualified Lens.Family as Lens
+import qualified Lens.Micro as Lens
 
 instance Monad (Expr s) where
     return = pure

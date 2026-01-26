@@ -20,11 +20,15 @@ module Dhall.Test.Util
     , assertDoesntTypeCheck
     , discover
     , Dhall.Test.Util.testCase
+    , pathIn
+    , pathNotIn
+    , pathNotPrefixOf
+    , pathNotSuffixOf
     , toDhallPath
     , managedTestEnvironment
     ) where
 
-import Control.Applicative              (liftA2, (<|>))
+import Control.Applicative              (Alternative, liftA2, (<|>))
 import Control.Exception                (tryJust)
 import Control.Monad                    (guard)
 import Control.Monad.Trans.State.Strict (StateT)
@@ -41,16 +45,16 @@ import Dhall.Core
     )
 import Dhall.Import                     (SemanticCacheMode (..), Status (..))
 import Dhall.Parser                     (Src)
-import Prelude                          hiding (FilePath)
 import System.IO.Error                  (isDoesNotExistError)
 import Test.Tasty                       (TestTree)
 import Test.Tasty.HUnit
-import Turtle                           (FilePath, Pattern, Shell, fp)
+import Turtle                           (Pattern, Shell, fp)
 
 import qualified Control.Exception
 import qualified Control.Foldl                    as Foldl
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Functor
+import qualified Data.List                        as List
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Context
@@ -67,9 +71,9 @@ import qualified Turtle
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 import qualified Data.Foldable
 #else
-import Control.Monad.IO.Class   (MonadIO (..))
-import Dhall.Core               (URL (..), File (..), Directory (..))
-import Lens.Family.State.Strict (zoom)
+import Control.Monad.IO.Class (MonadIO (..))
+import Dhall.Core             (Directory (..), File (..), URL (..))
+import Lens.Micro.Mtl         (zoom)
 
 import qualified Data.Foldable
 import qualified Data.Text.Encoding
@@ -289,7 +293,7 @@ discover pattern buildTest paths = do
     let shell = do
             path_ <- paths
 
-            let pathText = Turtle.format fp path_
+            let pathText = Turtle.format fp (FilePath.normalise path_)
 
             prefix : _ <- return (Turtle.match pattern pathText)
 
@@ -301,15 +305,29 @@ discover pattern buildTest paths = do
 
 testCase :: Text -> [ FilePath ] -> Assertion -> TestTree
 testCase prefix expectedFailures assertion =
-    if prefix `elem` map (Turtle.format fp) expectedFailures
+    if prefix `elem` map (Turtle.format fp . FilePath.normalise) expectedFailures
     then Tasty.ExpectedFailure.expectFail test
     else test
   where
     test = Test.Tasty.HUnit.testCase (Text.unpack prefix) assertion
+
+pathIn :: Alternative f => FilePath -> [FilePath] -> f ()
+pathIn this = guard . any (FilePath.equalFilePath this)
+
+pathNotIn :: Alternative f => FilePath -> [FilePath] -> f ()
+pathNotIn this = guard . not . any (FilePath.equalFilePath this)
+
+pathNotPrefixOf :: Alternative f => FilePath -> FilePath -> f ()
+pathNotPrefixOf this =
+    guard . not . List.isPrefixOf (FilePath.normalise this) . FilePath.normalise
+
+pathNotSuffixOf :: Alternative f => FilePath -> FilePath -> f ()
+pathNotSuffixOf this =
+    guard . not . List.isSuffixOf (FilePath.normalise this) . FilePath.normalise
 
 {-| Path names on Windows are not valid Dhall paths due to using backslashes
     instead of forwardslashes to separate path components.  This utility fixes
     them if necessary
 -}
 toDhallPath :: Text -> Text
-toDhallPath = Text.replace "\\" "/"
+toDhallPath = ("./" <>) . Text.replace "\\" "/"

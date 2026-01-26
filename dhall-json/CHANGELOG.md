@@ -1,3 +1,11 @@
+1.7.13
+
+* [Export `UnionConv`](https://github.com/dhall-lang/dhall-haskell/pull/2570)
+
+1.7.12
+
+* Build against `dhall-1.42`
+
 1.7.11
 
 * [Add new `--preserve-header` option](https://github.com/dhall-lang/dhall-haskell/pull/2433)

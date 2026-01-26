@@ -19,7 +19,6 @@ module Dhall.Lint
     ) where
 
 import Control.Applicative ((<|>))
-import Data.List.NonEmpty  (NonEmpty (..))
 
 import Dhall.Syntax
     ( Binding (..)
@@ -38,12 +37,10 @@ import Dhall.Syntax
 
 import qualified Data.Foldable      as Foldable
 import qualified Data.List.NonEmpty as NonEmpty
-import qualified Data.Map           as Map
 import qualified Data.Text          as Text
 import qualified Dhall.Core         as Core
 import qualified Dhall.Map
-import qualified Dhall.Optics
-import qualified Lens.Family
+import qualified Lens.Micro         as Lens
 
 {-| Automatically improve a Dhall expression
 
@@ -55,7 +52,7 @@ import qualified Lens.Family
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
 -}
 lint :: Eq s => Expr s Import -> Expr s Import
-lint =  Dhall.Optics.rewriteOf subExpressions rewrite
+lint =  Lens.rewriteOf subExpressions rewrite
   where
     rewrite e =
             fixAssert                e
@@ -63,7 +60,6 @@ lint =  Dhall.Optics.rewriteOf subExpressions rewrite
         <|> fixParentPath            e
         <|> removeLetInLet           e
         <|> addPreludeExtensions     e
-        <|> sortImports              e
 
 -- | Remove unused `Let` bindings.
 removeUnusedBindings :: Eq a => Expr s a -> Maybe (Expr s a)
@@ -147,7 +143,7 @@ addPreludeExtensions _ = Nothing
 
 isOrContainsAssert :: Expr s a -> Bool
 isOrContainsAssert (Assert _) = True
-isOrContainsAssert e = Lens.Family.anyOf subExpressions isOrContainsAssert e
+isOrContainsAssert e = Lens.anyOf subExpressions isOrContainsAssert e
 
 -- | The difference between
 --
@@ -212,53 +208,3 @@ useToMap (ListLit _ keyValues)
                 Nothing
 useToMap _ =
     Nothing
-
--- | This sorts `let` bindings to move imports to the front if doing so does not
--- change the behavior of the code.
-sortImports :: Eq s => Expr s Import -> Maybe (Expr s Import)
-sortImports oldExpression@(Let binding0 oldBody0)
-    | oldExpression == newExpression = Nothing
-    | otherwise                      = Just newExpression
-  where
-    toBool (Embed _ ) = False
-    toBool (Note _ e) = toBool e
-    toBool  _         = True
-
-    process (seen, index) Binding{..} oldBody function = (pair, pairs, newBody)
-      where
-        order =
-            if b then index else Map.findWithDefault (0 :: Int) variable seen
-
-        b = toBool value
-
-        pair = (order, function)
-
-        ~(pairs, newBody) =
-            label (Map.insert variable order seen, index + 1) oldBody
-
-    label state (Let binding oldBody) = (pair : pairs, newBody)
-      where
-        function = Let binding
-
-        ~(pair, pairs, newBody) = process state binding oldBody function
-
-    label state (Note src (Let binding oldBody)) = (pair : pairs, newBody)
-      where
-        function e = Note src (Let binding e)
-
-        ~(pair, pairs, newBody) = process state binding oldBody function
-
-    label _ body =
-        ([], body)
-
-    ~(pairs0, newBody0) = (pair :| pairs, newBody)
-      where
-        function = Let binding0
-
-        ~(pair, pairs, newBody) =
-            process (Map.empty, 1) binding0 oldBody0 function
-
-    sortedFunctions = fmap snd (NonEmpty.sortWith fst pairs0)
-
-    newExpression = foldr id newBody0 sortedFunctions
-sortImports _ = Nothing

@@ -20,6 +20,7 @@ module Dhall.Pretty.Internal (
     , prettySrcExpr
 
     , CharacterSet(..)
+    , defaultCharacterSet
     , detectCharacterSet
     , prettyCharacterSet
     , prettyImportExpression
@@ -31,6 +32,7 @@ module Dhall.Pretty.Internal (
     , prettyEnvironmentVariable
 
     , prettyConst
+    , UnescapedLabel(..)
     , escapeLabel
     , prettyLabel
     , prettyAnyLabel
@@ -41,6 +43,7 @@ module Dhall.Pretty.Internal (
     , prettyDouble
     , prettyToStrictText
     , prettyToString
+    , prettyBase16
     , layout
     , layoutOpts
 
@@ -55,7 +58,7 @@ module Dhall.Pretty.Internal (
     , comma
     , dot
     , equals
-    , forall
+    , forall_
     , label
     , lambda
     , langle
@@ -78,28 +81,33 @@ import                Data.Aeson
     , Value (String)
     )
 import                Data.Aeson.Types              (typeMismatch, unexpected)
+import                Data.ByteString               (ByteString)
 import                Data.Data                     (Data)
 import                Data.Foldable
 import                Data.List.NonEmpty            (NonEmpty (..))
 import                Data.Text                     (Text)
 import                Dhall.Map                     (Map)
-import                Dhall.Optics                  (cosmosOf, foldOf, to)
 import                Dhall.Src                     (Src (..))
 import                Dhall.Syntax
 import {-# SOURCE #-} Dhall.Syntax.Instances.Pretty ()
 import                GHC.Generics                  (Generic)
 import                Language.Haskell.TH.Syntax    (Lift)
+import                Lens.Micro                    (cosmosOf, foldMapOf)
 import                Numeric.Natural               (Natural)
 import                Prettyprinter                 (Doc, Pretty, space)
 
+import qualified Control.Exception             as Exception
+import qualified Data.ByteString.Base16        as Base16
 import qualified Data.Char
 import qualified Data.HashSet
 import qualified Data.List                     as List
 import qualified Data.List.NonEmpty            as NonEmpty
 import qualified Data.Maybe
 import qualified Data.Text                     as Text
+import qualified Data.Text.Encoding            as Encoding
 import qualified Data.Time                     as Time
 import qualified Dhall.Map                     as Map
+import qualified Dhall.Syntax.Operations       as Operations
 import qualified Prettyprinter                 as Pretty
 import qualified Prettyprinter.Render.String   as Pretty
 import qualified Prettyprinter.Render.Terminal as Terminal
@@ -148,11 +156,16 @@ instance FromJSON CharacterSet where
   parseJSON v@(String _) = unexpected v
   parseJSON v = typeMismatch "String" v
 
+-- | The character set used by default in functions throughout the Dhall code
+-- base.
+defaultCharacterSet :: CharacterSet
+defaultCharacterSet = Unicode
+
 -- | Detect which character set is used for the syntax of an expression
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
 detectCharacterSet :: Expr Src a -> CharacterSet
-detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
+detectCharacterSet = foldMapOf (cosmosOf subExpressions) exprToCharacterSet
   where
     exprToCharacterSet = \case
         Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
@@ -169,7 +182,7 @@ prettyExpr :: Pretty a => Expr s a -> Doc Ann
 prettyExpr = prettySrcExpr . denote
 
 prettySrcExpr :: Pretty a => Expr Src a -> Doc Ann
-prettySrcExpr = prettyCharacterSet Unicode
+prettySrcExpr = prettyCharacterSet defaultCharacterSet
 
 {-| Internal utility for pretty-printing, used when generating element lists
     to supply to `enclose` or `enclose'`.  This utility indicates that the
@@ -310,9 +323,9 @@ lambda :: CharacterSet -> Doc Ann
 lambda Unicode = syntax "λ"
 lambda ASCII   = syntax "\\"
 
-forall :: CharacterSet -> Doc Ann
-forall Unicode = syntax "∀"
-forall ASCII   = syntax "forall "
+forall_ :: CharacterSet -> Doc Ann
+forall_ Unicode = syntax "∀"
+forall_ ASCII   = syntax "forall "
 
 rarrow :: CharacterSet -> Doc Ann
 rarrow Unicode = syntax "→"
@@ -469,7 +482,7 @@ enclose beginShort beginLong sepShort sepLong endShort endLong docs =
     combineShort x y = x <> y
 
 {-| Format an expression that holds a variable number of elements without a
-    trailing document such as nested `let`, nested lambdas, or nested `forall`s
+    trailing document such as nested @let@, nested lambdas, or nested @forall@s
 -}
 enclose'
     :: Doc ann
@@ -512,26 +525,44 @@ headCharacter c = alpha c || c == '_'
 tailCharacter :: Char -> Bool
 tailCharacter c = alphaNum c || c == '_' || c == '-' || c == '/'
 
+-- | The set of labels which do not need to be escaped
+data UnescapedLabel
+    = NonReservedLabel
+    -- ^ This corresponds to the `nonreserved-label` rule in the grammar
+    | AnyLabel
+    -- ^ This corresponds to the `any-label` rule in the grammar
+    | AnyLabelOrSome
+    -- ^ This corresponds to the `any-label-or-some` rule in the grammar
+
 -- | Escape a label if it is not valid when unquoted
-escapeLabel :: Bool -> Text -> Text
-escapeLabel allowReserved l =
+escapeLabel :: UnescapedLabel -> Text -> Text
+escapeLabel allowedLabel l =
     case Text.uncons l of
         Just (h, t)
-            | headCharacter h && Text.all tailCharacter t && (notReservedIdentifier || (allowReserved && someOrNotLanguageKeyword)) && l /= "?"
+            | headCharacter h && Text.all tailCharacter t && allowed && l /= "?"
                 -> l
         _       -> "`" <> l <> "`"
-    where
-        notReservedIdentifier = not (Data.HashSet.member l reservedIdentifiers)
-        someOrNotLanguageKeyword = l == "Some" || not (Data.HashSet.member l reservedKeywords)
+  where
+    allowed = case allowedLabel of
+        NonReservedLabel -> notReservedIdentifier
+        AnyLabel         -> notReservedKeyword
+        AnyLabelOrSome   -> notReservedKeyword || l == "Some"
 
-prettyLabelShared :: Bool -> Text -> Doc Ann
+    notReservedIdentifier = not (Data.HashSet.member l reservedIdentifiers)
+
+    notReservedKeyword = not (Data.HashSet.member l reservedKeywords)
+
+prettyLabelShared :: UnescapedLabel -> Text -> Doc Ann
 prettyLabelShared b l = label (Pretty.pretty (escapeLabel b l))
 
 prettyLabel :: Text -> Doc Ann
-prettyLabel = prettyLabelShared False
+prettyLabel = prettyLabelShared NonReservedLabel
 
 prettyAnyLabel :: Text -> Doc Ann
-prettyAnyLabel = prettyLabelShared True
+prettyAnyLabel = prettyLabelShared AnyLabel
+
+prettyAnyLabelOrSome :: Text -> Doc Ann
+prettyAnyLabelOrSome = prettyLabelShared AnyLabelOrSome
 
 prettyKeys
     :: Foldable list
@@ -565,7 +596,7 @@ prettyKeys prettyK keys = Pretty.group (Pretty.flatAlt long short)
 prettyLabels :: [Text] -> Doc Ann
 prettyLabels a
     | null a    = lbrace <> rbrace
-    | otherwise = braces (map (duplicate . prettyAnyLabel) a)
+    | otherwise = braces (map (duplicate . prettyAnyLabelOrSome) a)
 
 prettyNumber :: Integer -> Doc Ann
 prettyNumber = literal . Pretty.pretty
@@ -798,7 +829,7 @@ prettyPrinters characterSet =
         docs (Pi _ "_" b c) = prettyOperatorExpression b : docs c
         docs (Pi _ a   b c) = Pretty.group (Pretty.flatAlt long short) : docs c
           where
-            long =  forall characterSet <> space
+            long =  forall_ characterSet <> space
                 <>  Pretty.align
                     (   lparen <> space
                     <>  prettyLabel a
@@ -809,7 +840,7 @@ prettyPrinters characterSet =
                     <>  rparen
                     )
 
-            short = forall characterSet <> lparen
+            short = forall_ characterSet <> lparen
                 <>  prettyLabel a
                 <>  space <> colon <> space
                 <>  prettyExpression b
@@ -840,7 +871,7 @@ prettyPrinters characterSet =
             prettyKeyValue prettyKey prettyOperatorExpression equals
                 (makeKeyValue b c)
 
-        prettyKey (WithLabel text) = prettyAnyLabel text
+        prettyKey (WithLabel text) = prettyAnyLabelOrSome text
         prettyKey  WithQuestion    = syntax "?"
     prettyExpression (Assert a) =
         Pretty.group (Pretty.flatAlt long short)
@@ -1285,6 +1316,8 @@ prettyPrinters characterSet =
         prettyConst k
     prettyPrimitiveExpression Bool =
         builtin "Bool"
+    prettyPrimitiveExpression Bytes =
+        builtin "Bytes"
     prettyPrimitiveExpression Natural =
         builtin "Natural"
     prettyPrimitiveExpression NaturalFold =
@@ -1335,6 +1368,8 @@ prettyPrinters characterSet =
             )
       where
         (_HHHH, _MM, _DD) = Time.toGregorian day
+    prettyPrimitiveExpression DateShow =
+        builtin "Date/show"
     prettyPrimitiveExpression Time =
         builtin "Time"
     prettyPrimitiveExpression (TimeLiteral (Time.TimeOfDay hh mm seconds) precision) =
@@ -1354,7 +1389,9 @@ prettyPrinters characterSet =
 
         suffix
             | precision == 0 = ""
-            | otherwise      = "." <> Pretty.pretty fraction
+            | otherwise      = "." <> Pretty.pretty (Printf.printf "%0*d" precision fraction :: String)
+    prettyPrimitiveExpression TimeShow =
+        builtin "Time/show"
     prettyPrimitiveExpression TimeZone =
         builtin "TimeZone"
     prettyPrimitiveExpression (TimeZoneLiteral (Time.TimeZone minutes _ _)) =
@@ -1368,6 +1405,8 @@ prettyPrinters characterSet =
         sign = if 0 <= minutes then "+" else "-"
 
         (_HH, _MM) = abs minutes `divMod` 60
+    prettyPrimitiveExpression TimeZoneShow =
+        builtin "TimeZone/show"
     prettyPrimitiveExpression List =
         builtin "List"
     prettyPrimitiveExpression ListBuild =
@@ -1401,6 +1440,8 @@ prettyPrinters characterSet =
         prettyDouble a
     prettyPrimitiveExpression (TextLit a) =
         prettyChunks a
+    prettyPrimitiveExpression (BytesLit a) =
+        prettyBytes a
     prettyPrimitiveExpression (Record a) =
         prettyRecord a
     prettyPrimitiveExpression (RecordLit a) =
@@ -1542,7 +1583,7 @@ prettyPrinters characterSet =
     prettyRecord :: Pretty a => Map Text (RecordField Src a) -> Doc Ann
     prettyRecord =
         ( braces
-        . map (prettyKeyValue prettyAnyLabel prettyExpression colon . adapt)
+        . map (prettyKeyValue prettyAnyLabelOrSome prettyExpression colon . adapt)
         . Map.toList
         )
       where
@@ -1599,18 +1640,22 @@ prettyPrinters characterSet =
                     | Var (V key' 0) <- Dhall.Syntax.shallowDenote val
                     , key == key'
                     , not (containsComment mSrc2) ->
-                        duplicate (prettyKeys prettyAnyLabel [(mSrc0, key, mSrc1)])
+                        duplicate (prettyKeys prettyAnyLabelOrSome [(mSrc0, key, mSrc1)])
                 _ ->
-                    prettyKeyValue prettyAnyLabel prettyExpression equals kv
+                    prettyKeyValue prettyAnyLabelOrSome prettyExpression equals kv
 
     prettyAlternative (key, Just val) =
-        prettyKeyValue prettyAnyLabel prettyExpression colon (makeKeyValue (pure key) val)
+        prettyKeyValue prettyAnyLabelOrSome prettyExpression colon (makeKeyValue (pure key) val)
     prettyAlternative (key, Nothing) =
-        duplicate (prettyAnyLabel key)
+        duplicate (prettyAnyLabelOrSome key)
 
     prettyUnion :: Pretty a => Map Text (Maybe (Expr Src a)) -> Doc Ann
     prettyUnion =
         angles . map prettyAlternative . Map.toList
+
+    prettyBytes :: ByteString -> Doc Ann
+    prettyBytes bytes =
+        literal (Pretty.pretty ("0x\"" <> prettyBase16 bytes <> "\""))
 
     prettyChunks :: Pretty a => Chunks Src a -> Doc Ann
     prettyChunks chunks@(Chunks a b)
@@ -1931,6 +1976,15 @@ temporalToText e = case e of
     field = Dhall.Syntax.shallowDenote . recordFieldValue
 
     rendered = Just (prettyToStrictText e)
+
+prettyBase16 :: ByteString -> Text
+prettyBase16 bytes =
+    case Encoding.decodeUtf8' (Base16.encode bytes) of
+        Left exception ->
+            Operations.internalError
+                ("prettyBase16: base16-encoded bytes could not be decoded as UTF-8 text: " <> Text.pack (Exception.displayException exception))
+        Right text ->
+            Text.toUpper text
 
 {- $setup
 >>> import Test.QuickCheck (Fun(..))

@@ -241,12 +241,11 @@ import qualified Dhall.Core                as Core
 import qualified Dhall.Import
 import qualified Dhall.JSON.Compat         as JSON.Compat
 import qualified Dhall.Map
-import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
-import qualified Lens.Family               as Lens
+import qualified Lens.Micro                as Lens
 import qualified Options.Applicative
 import qualified Prettyprinter.Render.Text as Pretty
 import qualified System.FilePath
@@ -797,6 +796,12 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             b' = loop b
             c' = loop c
 
+        Core.Bytes ->
+            Core.Bytes
+
+        Core.BytesLit a ->
+            Core.BytesLit a
+
         Core.Natural ->
             Core.Natural
 
@@ -892,17 +897,26 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.DateLiteral d ->
             Core.DateLiteral d
 
+        Core.DateShow ->
+            Core.DateShow
+
         Core.Time ->
             Core.Time
 
         Core.TimeLiteral t p ->
             Core.TimeLiteral t p
 
+        Core.TimeShow ->
+            Core.TimeShow
+
         Core.TimeZone ->
             Core.TimeZone
 
         Core.TimeZoneLiteral z ->
             Core.TimeZoneLiteral z
+
+        Core.TimeZoneShow ->
+            Core.TimeZoneShow
 
         Core.List ->
             Core.List
@@ -1141,7 +1155,7 @@ data SpecialDoubleMode
 handleSpecialDoubles
     :: SpecialDoubleMode -> Expr s Void -> Either CompileError (Expr s Void)
 handleSpecialDoubles specialDoubleMode =
-    Dhall.Optics.rewriteMOf Core.subExpressions rewrite
+    Lens.rewriteMOf Core.subExpressions rewrite
   where
     rewrite =
         case specialDoubleMode of

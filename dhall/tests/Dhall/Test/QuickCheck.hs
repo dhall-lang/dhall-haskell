@@ -103,7 +103,7 @@ import qualified Dhall.Parser          as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
-import qualified Lens.Family           as Lens
+import qualified Lens.Micro            as Lens
 import qualified Numeric.Natural       as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
@@ -358,6 +358,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "BoolEQ")
             % (1 :: W "BoolNE")
             % (1 :: W "BoolIf")
+            % (1 :: W "Bytes")
+            % (1 :: W "BytesLit")
             % (1 :: W "Natural")
             % (7 :: W "NaturalLit")
             % (1 :: W "NaturalFold")
@@ -386,10 +388,13 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "TextShow")
             % (1 :: W "Date")
             % (1 :: W "DateLiteral")
+            % (1 :: W "DateShow")
             % (1 :: W "Time")
             % (1 :: W "TimeLiteral")
+            % (1 :: W "TimeShow")
             % (1 :: W "TimeZone")
             % (1 :: W "TimeZoneLiteral")
+            % (1 :: W "TimeZoneShow")
             % (1 :: W "List")
             % (1 :: W "ListLit")
             % (1 :: W "ListAppend")
@@ -524,7 +529,7 @@ instance Arbitrary ImportHashed where
 -- The standard does not yet specify how to encode `as Text`, so don't test it
 -- yet
 instance Arbitrary ImportMode where
-    arbitrary = Test.QuickCheck.elements [ Code, RawText, Location ]
+    arbitrary = Test.QuickCheck.elements [ Code, RawText, Location, RawBytes ]
 
     shrink = genericShrink
 

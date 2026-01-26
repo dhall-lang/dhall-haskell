@@ -64,7 +64,7 @@ import qualified Dhall.Core                        as Core
 import qualified Dhall.Map                         as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Lens.Family                       as Lens
+import qualified Lens.Micro                        as Lens
 import qualified Prettyprinter                     as Pretty
 import qualified Prettyprinter.Render.Text         as Pretty.Text
 import qualified Text.Megaparsec.Pos               as SourcePos
@@ -245,16 +245,16 @@ fragments = Data.List.sortBy sorter . removeUnusedDecls . Writer.execWriter . in
             return NoInfo
 
       where
-        handleRecordLike l = RecordFields . Set.fromList <$> mapM f l
+        handleRecordLike l = RecordFields . Set.fromList . concat <$> mapM f l
           where
             f (key, RecordField (Just Src{srcEnd = startPos}) val (Just Src{srcStart = endPos}) _) = do
                 dhallType <- infer context val
                 let nameSrc = makeSrcForLabel startPos endPos key
                 let nameDecl = NameDecl nameSrc key dhallType
                 Writer.tell [SourceCodeFragment nameSrc (NameDeclaration nameDecl)]
-                return nameDecl
+                return [ nameDecl ]
               where
-            f _ = fileAnIssue "A `RecordField` of type `Expr Src Import` doesn't have `Just src*`"
+            f _ = return [ ]
 
 fileAsText :: File -> Text
 fileAsText File{..} = foldr (\d acc -> acc <> "/" <> d) "" (Core.components directory)

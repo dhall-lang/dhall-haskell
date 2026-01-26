@@ -84,7 +84,8 @@ import Dhall.Crypto                     (SHA256Digest (..))
 import Dhall.Import                     (Status (..), stack)
 import Dhall.Parser                     (Src)
 import GHC.Generics                     (Generic)
-import Lens.Family.State.Strict         (zoom)
+import Lens.Micro                       (rewriteOf)
+import Lens.Micro.Mtl                   (zoom)
 import Network.URI                      (URI (..), URIAuth (..))
 import Nix.Expr.Shorthands              ((@.), (@@))
 import Nix.Expr.Types                   (NExpr)
@@ -117,7 +118,6 @@ import qualified Data.Text.Encoding               as Text.Encoding
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core
 import qualified Dhall.Import
-import qualified Dhall.Optics
 import qualified Dhall.Parser
 import qualified GHC.IO.Encoding
 import qualified NeatInterpolation
@@ -341,7 +341,7 @@ findExternalDependencies expression = do
 
     let rewrittenExpression :: Expr Src Import
         rewrittenExpression =
-            Dhall.Optics.rewriteOf Dhall.Core.subExpressions pickAlt expression
+            rewriteOf Dhall.Core.subExpressions pickAlt expression
 
     import_ <- lift (Turtle.select (Foldable.toList rewrittenExpression))
 
@@ -356,6 +356,7 @@ findExternalDependencies expression = do
     case importMode of
         Code     -> return ()
         RawText  -> return ()
+        RawBytes -> return ()
         Location -> empty  -- "as Location" imports aren't real dependencies
 
     case importType of
@@ -680,7 +681,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
                 ExitFailure _ -> die (FailedToFetchGitHubArchive args)
 
             case Text.lines text of
-                [ sha256, path ] -> return (r, sha256, Turtle.fromText path)
+                [ sha256, path ] -> return (r, sha256, Text.unpack path)
                 _                -> die (FailedToParseNixPrefetchURL args)
 
         _ -> do
@@ -705,7 +706,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
                 Right n -> do
                     return n
 
-            return (rev, sha256, Turtle.fromText path)
+            return (rev, sha256, Text.unpack path)
 
     let finalName =
             case name of
@@ -722,15 +723,11 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
         then return ()
         else die (MissingFile expressionFile)
 
-    expressionText <- Turtle.readTextFile expressionFile
+    expressionText <- Text.IO.readFile expressionFile
 
-    let expressionFileString = Turtle.encodeString expressionFile
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFile expressionText)
 
-    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFileString expressionText)
-
-    let status = Dhall.Import.emptyStatus baseDirectoryString
-          where
-            baseDirectoryString = Turtle.encodeString baseDirectory
+    let status = Dhall.Import.emptyStatus baseDirectory
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -780,16 +777,11 @@ directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutp
         else do
             die (MissingFile expressionFile)
 
-    expressionText <- Turtle.readTextFile expressionFile
+    expressionText <- Text.IO.readFile expressionFile
 
-    let expressionFileString = Turtle.encodeString expressionFile
+    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFile expressionText)
 
-    expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFileString expressionText)
-
-    let status = Dhall.Import.emptyStatus directoryString
-          where
-            directoryString =
-                Turtle.encodeString (Turtle.directory expressionFile)
+    let status = Dhall.Import.emptyStatus (Turtle.directory expressionFile)
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -803,11 +795,9 @@ directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutp
 
     let buildDhallDirectoryPackage = "buildDhallDirectoryPackage"
 
-    let src | null directoryString        = directoryString
-            | last directoryString == '/' = init directoryString
-            | otherwise                   = directoryString
-          where
-            directoryString = Turtle.encodeString directory
+    let src | null directory        = directory
+            | last directory == '/' = init directory
+            | otherwise             = directory
 
     let functionParams =
             makeNixFunctionParams buildDhallDirectoryPackage nixDependencies
@@ -851,7 +841,7 @@ data Error
     | FailedToCloneRepository [Text]
     | FailedToParseNixPrefetchGit [Text] String
     | MissingFile FilePath
-    
+
 renderError :: Error -> Text
 renderError e = case e of
     MissingSemanticIntegrityCheck url ->

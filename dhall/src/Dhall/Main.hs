@@ -27,6 +27,7 @@ import Control.Monad       (when)
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
 import Data.Maybe          (fromMaybe)
+import Data.Monoid         (Endo (..))
 import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Freeze        (Intent (..), Scope (..))
@@ -36,6 +37,7 @@ import Dhall.Import
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )
+import Dhall.Package       (PackagingMode (..), writePackage)
 import Dhall.Parser        (Src)
 import Dhall.Pretty
     ( Ann
@@ -46,6 +48,7 @@ import Dhall.Pretty
 import Dhall.Schemas       (Schemas (..))
 import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
 import Dhall.Version       (dhallVersionString)
+import Lens.Micro          (set)
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
 import System.Exit         (ExitCode, exitFailure)
@@ -94,6 +97,7 @@ import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Map
+import qualified Dhall.Package
 import qualified Dhall.Pretty
 import qualified Dhall.Repl
 import qualified Dhall.Schemas
@@ -162,6 +166,10 @@ data Mode
     | DirectoryTree { allowSeparators :: Bool, file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
+    | Package
+        { packageOptions :: Endo Dhall.Package.Options
+        , packageFiles :: NonEmpty FilePath
+        }
 
 -- | This specifies how to resolve transitive dependencies
 data ResolveMode
@@ -310,6 +318,11 @@ parseMode =
             "hash"
             "Compute semantic hashes for Dhall expressions"
             (Hash <$> parseFile <*> parseCache)
+    <|> subcommand
+            Miscellaneous
+            "package"
+            "Create a package.dhall referencing the provided paths"
+            (Package <$> parsePackageOptions <*> parsePackageFiles)
     <|> subcommand
             Miscellaneous
             "tags"
@@ -506,7 +519,7 @@ parseMode =
     parseAllFlag =
         Options.Applicative.switch
         (   Options.Applicative.long "all"
-        <>  Options.Applicative.help "Add integrity checks to all imports (not just remote imports)"
+        <>  Options.Applicative.help "Add integrity checks to all imports (not just remote imports) except for missing imports"
         )
 
     parseCacheFlag =
@@ -558,6 +571,33 @@ parseMode =
             (   Options.Applicative.long "cache"
             <>  Options.Applicative.help "Cache the hashed expression"
             )
+
+    parsePackageOptions :: Parser (Endo Dhall.Package.Options)
+    parsePackageOptions = do
+        packageMode <- (optional . Options.Applicative.flag' RecursiveSubpackages)
+            ( Options.Applicative.short 'r'
+            <> Options.Applicative.long "recursive"
+            <> Options.Applicative.help "Create packages for all subdirectories first."
+            )
+
+        packageFileName <- (optional . Options.Applicative.strOption)
+                (   Options.Applicative.long "name"
+                <>  Options.Applicative.help "The filename of the package"
+                <>  Options.Applicative.metavar "NAME"
+                <>  Options.Applicative.action "file"
+                )
+
+        pure $
+            maybe mempty (Endo . set Dhall.Package.packagingMode) packageMode <>
+            maybe mempty (Endo . set Dhall.Package.packageFileName) packageFileName
+
+    parsePackageFiles = (:|) <$> p <*> Options.Applicative.many p
+      where
+        p = Options.Applicative.strArgument
+                (   Options.Applicative.help "Paths that may either point to files or directories. If the latter is the case all *.dhall files in the directory will be included."
+                <>  Options.Applicative.metavar "PATH"
+                <>  Options.Applicative.action "file"
+                )
 
 -- | `ParserInfo` for the `Options` type
 parserInfoOptions :: ParserInfo Options
@@ -1017,6 +1057,13 @@ command (Options {..}) = do
                 let denoted :: Expr Void Import
                     denoted = Dhall.Core.denote expression
                 in Text.Pretty.Simple.pPrintNoColor denoted
+
+        Package {..} -> do
+            let options = appEndo
+                    (maybe mempty (Endo . set Dhall.Package.characterSet) chosenCharacterSet
+                    <> packageOptions
+                    ) Dhall.Package.defaultOptions
+            writePackage options packageFiles
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

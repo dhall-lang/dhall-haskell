@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE QuasiQuotes        #-}
 {-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE ViewPatterns       #-}
 
@@ -99,10 +98,13 @@ import Data.Fix (Fix (..))
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
+import qualified  Data.Text as Text
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
-import Lens.Family (toListOf)
+import Lens.Micro (toListOf, rewriteOf)
+import Numeric (showHex)
+import Data.Char (ord, isDigit, isAsciiLower, isAsciiUpper)
 
 import Dhall.Core
     ( Binding (..)
@@ -121,11 +123,12 @@ import Nix.Expr
     ( Antiquoted (..)
     , NExpr
     , NExprF (NStr, NSet)
-    , NRecordType (NNonRecursive)
+    , Recursivity (NonRecursive)
     , Binding (NamedVar)
     , NKeyName (..)
     , NString (..)
     , Params (Param)
+    , VarName(..)
     , ($!=)
     , ($&&)
     , ($*)
@@ -147,7 +150,6 @@ import Nix.Expr
 import qualified Data.Text
 import qualified Dhall.Core
 import qualified Dhall.Map
-import qualified Dhall.Optics
 import qualified Dhall.Pretty
 import qualified NeatInterpolation
 import qualified Nix
@@ -162,6 +164,9 @@ data CompileError
     -- ^ We currently do not support threading around type information
     | CannotShowConstructor
     -- ^ We currently do not support the `showConstructor` keyword
+    | BytesUnsupported
+    -- ^ The Nix language does not support arbitrary bytes (most notably: null
+    --   bytes)
     deriving (Typeable)
 
 instance Show CompileError where
@@ -222,7 +227,7 @@ Nix
 $_ERROR: Cannot project by type
 
 The ❰dhall-to-nix❱ compiler does not support projecting out a subset of a record
-by the expected type (i.e. ❰someRecord.(someType)❱ 
+by the expected type (i.e. ❰someRecord.(someType)❱
     |]
 
     show CannotShowConstructor =
@@ -236,6 +241,13 @@ doesn't survive β-normalization, so if you see this error message there might b
 an internal error in ❰dhall-to-nix❱ that you should report.
     |]
 
+    show BytesUnsupported =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Cannot translate ❰Bytes❱ to Nix
+
+Explanation: The Nix language does not support bytes literals
+    |]
+
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
@@ -244,7 +256,7 @@ instance Exception CompileError
 {-| Convert a Dhall expression to the equivalent Nix expression
 
 >>> :set -XOverloadedStrings
->>> dhallToNix (Lam "x" Natural (Lam "y" Natural (NaturalPlus "x" "y"))) 
+>>> dhallToNix (Lam "x" Natural (Lam "y" Natural (NaturalPlus "x" "y")))
 Right (NAbs (Param "x") (NAbs (Param "y") (NBinary NPlus (NSym "x") (NSym "y"))))
 >>> fmap Nix.Pretty.prettyNix it
 Right x: y: x + y
@@ -322,24 +334,20 @@ dhallToNix e =
 
     -- Even higher-level utility that renames all shadowed references
     rewriteShadowed =
-        Dhall.Optics.rewriteOf Dhall.Core.subExpressions renameShadowed
+        rewriteOf Dhall.Core.subExpressions renameShadowed
 
     loop (Const _) = return untranslatable
-    loop (Var (V a 0)) = return (Nix.mkSym a)
+    loop (Var (V a 0)) = return (Nix.mkSym (zEncodeSymbol a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
         c' <- loop c
-        return (Param a ==> c')
+        return (Param (VarName $ zEncodeSymbol a) ==> c')
     loop (Pi _ _ _ _) = return untranslatable
     loop (App None _) =
       return Nix.mkNull
-    loop (App (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
+    loop (App (Field (Union _kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
         v' <- loop v
-        let e0 = do
-                k' <- Dhall.Map.keys kts
-                return (k', Nothing)
-        let e2 = Nix.mkSym k @@ v'
-        return (Nix.mkParamset e0 False ==> e2)
+        return (unionChoice (VarName k) (Just v'))
     loop (App a b) = do
         a' <- loop a
         b' <- loop b
@@ -348,7 +356,7 @@ dhallToNix e =
         let MultiLet bindings b = Dhall.Core.multiLet a0 b0
         bindings' <- for bindings $ \Binding{ variable, value } -> do
           value' <- loop value
-          pure (variable, value')
+          pure (zEncodeSymbol variable, value')
         b' <- loop b
         return (Nix.letsE (toList bindings') b')
     loop (Annot a _) = loop a
@@ -375,6 +383,9 @@ dhallToNix e =
         b' <- loop b
         c' <- loop c
         return (Nix.mkIf a' b' c')
+    loop Bytes = return untranslatable
+    loop (BytesLit _) = do
+        Left BytesUnsupported
     loop Natural = return untranslatable
     loop (NaturalLit n) = return (Nix.mkInt (fromIntegral n))
     loop NaturalFold = do
@@ -595,6 +606,14 @@ dhallToNix e =
     loop DateLiteral{} = undefined
     loop TimeLiteral{} = undefined
     loop TimeZoneLiteral{} = undefined
+    -- We currently model `Date`/`Time`/`TimeZone` literals as strings in Nix,
+    -- so the corresponding show functions are the identity function
+    loop DateShow =
+        return ("date" ==> "date")
+    loop TimeShow =
+        return ("time" ==> "time")
+    loop TimeZoneShow =
+        return ("timeZone" ==> "timeZone")
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse (loop . Dhall.Core.recordFieldValue) a
@@ -603,8 +622,8 @@ dhallToNix e =
         -- nonrecursive attrset that uses correctly quoted keys
         -- see https://github.com/dhall-lang/dhall-haskell/issues/2414
         nixAttrs pairs =
-          Fix $ NSet NNonRecursive $
-          (\(key, val) -> NamedVar (DynamicKey (Plain (DoubleQuoted [Plain key])) :| []) val Nix.nullPos)
+          Fix $ NSet NonRecursive $
+          (\(key, val) -> NamedVar ((mkDoubleQuotedIfNecessary (VarName key)) :| []) val Nix.nullPos)
           <$> pairs
     loop (Union _) = return untranslatable
     loop (Combine _ _ a b) = do
@@ -693,24 +712,14 @@ dhallToNix e =
             -- (here "x").
             --
             -- This translates `< Foo : T >.Foo` to `x: { Foo }: Foo x`
-            Just (Just _) -> do
-                let e0 = do
-                        k' <- Dhall.Map.keys kts
-                        return (k', Nothing)
-                return ("x" ==> Nix.mkParamset e0 False ==> (Nix.mkSym k @@ "x"))
-
-            _ -> do
-                let e0 = do
-                        k' <- Dhall.Map.keys kts
-                        return (k', Nothing)
-                return (Nix.mkParamset e0 False ==> Nix.mkSym k)
+            Just (Just _) -> return ("x" ==> (unionChoice (VarName k) (Just "x")))
+            _ -> return (unionChoice (VarName k) Nothing)
     loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
         a' <- loop a
-        return (a' @. b)
+        return (Fix (Nix.NSelect Nothing a' (mkDoubleQuotedIfNecessary (VarName b) :| [])))
     loop (Project a (Left b)) = do
         a' <- loop a
-        let b' = fmap StaticKey (toList b)
-        return (Nix.mkNonRecSet [ Nix.inheritFrom a' b' Nix.nullPos ])
+        return (Nix.mkNonRecSet [ Nix.inheritFrom a' (fmap VarName b) ])
     loop (Project _ (Right _)) =
         Left CannotProjectByType
     loop (Assert _) =
@@ -738,3 +747,129 @@ dhallToNix e =
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x
+
+-- | Previously we turned @<Foo | Bar>.Foo@ into @{ Foo, Bar }: Foo@,
+-- but this would not work with <Frob/Baz>.Frob/Baz (cause the slash is not a valid symbol char in nix)
+-- so we generate @union: union."Frob/Baz"@ instead.
+--
+-- If passArgument is @Just@, pass the argument to the union selector.
+unionChoice :: VarName -> Maybe NExpr -> NExpr
+unionChoice chosenKey passArgument =
+  let selector = Fix (Nix.NSelect Nothing (Nix.mkSym "u") (mkDoubleQuotedIfNecessary chosenKey :| []))
+  in Nix.Param "u" ==>
+     case passArgument of
+       Nothing -> selector
+       Just arg -> selector @@ arg
+
+
+-- | Double-quote a field name (record or union). This makes sure it’s recognized as a valid name by nix, e.g. in
+--
+--  @{ "foo/bar" = 42; }."foo/bar" }@
+--
+-- where
+--
+-- @{ foo/bar = 42; }.foo/bar@ is not syntactically valid nix.
+--
+-- This is only done if necessary (where “necessary” is not super defined right now).
+mkDoubleQuotedIfNecessary :: VarName -> NKeyName r
+mkDoubleQuotedIfNecessary key@(VarName keyName) =
+    if Text.all simpleChar keyName
+    then StaticKey key
+    else DynamicKey (Plain (DoubleQuoted [Plain keyName]))
+    where
+        simpleChar c = isAsciiLower c || isAsciiUpper c
+
+
+-- | Nix does not support symbols like @foo/bar@, but they are allowed in dhall.
+-- So if they happen, we need to encode them with an ASCII escaping scheme.
+--
+-- This is copied/inspired by the Z-Encoding scheme from GHC, see
+-- https://hackage.haskell.org/package/zenc-0.1.2/docs/Text-Encoding-Z.html
+--
+-- Original Source is BSD-3-Clause, Copyright (c)2011, Jason Dagit
+zEncodeSymbol :: Text -> Text
+zEncodeSymbol = zEncodeString
+
+-- | The basic encoding scheme is this:
+
+--   * Alphabetic characters (upper and lower) and digits
+--         all translate to themselves;
+--         except 'Z', which translates to 'ZZ'
+--         and    'z', which translates to 'zz'
+--
+--   * Most other printable characters translate to 'zx' or 'Zx' for some
+--         alphabetic character x
+--
+--   * The others translate as 'znnnU' where 'nnn' is the decimal number
+--         of the character
+--
+-- @
+--         Before          After
+--         --------------------------
+--         Trak            Trak
+--         foo-wib         foozmwib
+--         \>               zg
+--         \>1              zg1
+--         foo\#            foozh
+--         foo\#\#           foozhzh
+--         foo\#\#1          foozhzh1
+--         fooZ            fooZZ
+--         :+              ZCzp
+-- @
+zEncodeString :: Text -> Text
+zEncodeString cs = case Text.uncons cs of
+    Nothing -> Text.empty
+    Just (c, cs') ->
+        encodeDigitChar c
+        <> Text.concatMap encodeChar cs'
+
+-- | Whether the given characters needs to be z-encoded.
+needsEncoding :: Char -> Bool
+needsEncoding 'Z' = True
+needsEncoding 'z' = True
+needsEncoding c   = not
+                  ( isAsciiLower c
+                  || isAsciiUpper c
+                  || isDigit c )
+
+-- If a digit is at the start of a symbol then we need to encode it.
+encodeDigitChar :: Char -> Text
+encodeDigitChar c | isDigit c = encodeAsUnicodeChar c
+encodeDigitChar c             = encodeChar c
+
+encodeChar :: Char -> Text
+encodeChar c | not (needsEncoding c) = [c]     -- Common case first
+
+encodeChar '('  = "ZL"
+encodeChar ')'  = "ZR"
+encodeChar '['  = "ZM"
+encodeChar ']'  = "ZN"
+encodeChar ':'  = "ZC"
+encodeChar 'Z'  = "ZZ"
+encodeChar 'z'  = "zz"
+encodeChar '&'  = "za"
+encodeChar '|'  = "zb"
+encodeChar '^'  = "zc"
+encodeChar '$'  = "zd"
+encodeChar '='  = "ze"
+encodeChar '>'  = "zg"
+encodeChar '#'  = "zh"
+encodeChar '.'  = "zi"
+encodeChar '<'  = "zl"
+-- we can’t allow @-@, because it is not valid at the start of a symbol
+encodeChar '-'  = "zm"
+encodeChar '!'  = "zn"
+encodeChar '+'  = "zp"
+encodeChar '\'' = "zq"
+encodeChar '\\' = "zr"
+encodeChar '/'  = "zs"
+encodeChar '*'  = "zt"
+-- We can allow @_@ because it can appear anywhere in a symbol
+-- encodeChar '_'  = "zu"
+encodeChar '%'  = "zv"
+encodeChar c    = encodeAsUnicodeChar c
+
+encodeAsUnicodeChar :: Char -> Text
+encodeAsUnicodeChar c = 'z' `Text.cons` if isDigit (Text.head hex_str) then hex_str
+                                                           else '0' `Text.cons` hex_str
+  where hex_str = Text.pack $ showHex (ord c) "U"

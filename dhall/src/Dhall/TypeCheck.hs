@@ -47,9 +47,9 @@ import Dhall.Eval
     , Val (..)
     , (~>)
     )
-import Dhall.Pretty                      (Ann)
+import Dhall.Pretty                      (Ann, UnescapedLabel (..))
 import Dhall.Src                         (Src)
-import Lens.Family                       (over)
+import Lens.Micro                        (anyOf, over)
 import Prettyprinter                     (Doc, Pretty (..), vsep)
 
 import Dhall.Syntax
@@ -81,7 +81,6 @@ import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Syntax                as Syntax
 import qualified Dhall.Util
-import qualified Lens.Family
 import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 
@@ -429,6 +428,12 @@ infer typer = loop
 
             return _L'
 
+        Bytes ->
+            return (VConst Type)
+
+        BytesLit _ ->
+            return VBytes
+
         Natural ->
             return (VConst Type)
 
@@ -583,17 +588,26 @@ infer typer = loop
         DateLiteral _ ->
             return VDate
 
+        DateShow ->
+            return (VDate ~> VText)
+
         Time ->
             return (VConst Type)
 
         TimeLiteral _ _ ->
             return VTime
 
+        TimeShow ->
+            return (VTime ~> VText)
+
         TimeZone ->
             return (VConst Type)
 
         TimeZoneLiteral _ ->
             return VTimeZone
+
+        TimeZoneShow ->
+            return (VTimeZone ~> VText)
 
         List ->
             return (VConst Type ~> VConst Type)
@@ -989,7 +1003,7 @@ infer typer = loop
                                             n < 0
 
                                         containsBadVar e =
-                                            Lens.Family.anyOf
+                                            anyOf
                                                 Dhall.Core.subExpressions
                                                 containsBadVar
                                                 e
@@ -1300,15 +1314,20 @@ infer typer = loop
 
                   VOptional _O' -> do
                     case ks of
-                      WithQuestion  :| [] -> do
+
+                        -- (Some x) with ? = v is valid iff the type of x is the same as the type of v.
+                      WithQuestion :| [] -> do
                         tV' <- loop ctx v
                         if Eval.conv values _O' tV'
                           then return (VOptional _O')
                           else die OptionalWithTypeMismatch
 
+                        -- (Some x) with ?.a.b = v is valid iff the type of x.a.b is the same as the type of v.
                       WithQuestion :| k₁ : ks' -> do
                         tV' <- with _O' (k₁ :| ks') v
-                        return (VOptional tV')
+                        if Eval.conv values _O' tV'
+                          then return (VOptional _O')
+                          else die OptionalWithTypeMismatch
 
                       WithLabel k :| _ -> die (NotAQuestionPath k)
 
@@ -1359,7 +1378,6 @@ data TypeMessage s a
     | Untyped
     | MissingListType
     | MismatchedListElements Int (Expr s a) (Expr s a) (Expr s a)
-    | InvalidListElement Int (Expr s a) (Expr s a) (Expr s a)
     | InvalidListType (Expr s a)
     | ListLitInvariant
     | InvalidSome (Expr s a) (Expr s a) (Expr s a)
@@ -1368,13 +1386,11 @@ data TypeMessage s a
     | InvalidFieldType Text (Expr s a)
     | InvalidAlternativeType Text (Expr s a)
     | ListAppendMismatch (Expr s a) (Expr s a)
-    | MustUpdateARecord (Expr s a) (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
     | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
-    | RecordTypeMismatch Const Const (Expr s a) (Expr s a)
     | DuplicateFieldCannotBeMerged (NonEmpty Text)
     | FieldCollision (NonEmpty Text)
     | FieldTypeCollision (NonEmpty Text)
@@ -1391,7 +1407,6 @@ data TypeMessage s a
     | HandlerInputTypeMismatch Text (Expr s a) (Expr s a)
     | DisallowedHandlerType Text (Expr s a) (Expr s a) Text
     | HandlerOutputTypeMismatch Text (Expr s a) Text (Expr s a)
-    | InvalidHandlerOutputType Text (Expr s a) (Expr s a)
     | MissingMergeType
     | HandlerNotAFunction Text (Expr s a)
     | CantAccess Text (Expr s a) (Expr s a)
@@ -2441,47 +2456,6 @@ prettyTypeMessage (MismatchedListElements i expr0 _expr1 expr2) =
         txt1 = pretty i
         txt3 = insert expr2
 
-prettyTypeMessage (InvalidListElement i expr0 _expr1 expr2) =
-    ErrorMessages {..}
-  where
-    short = "List element has the wrong type\n"
-        <>  "\n"
-        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr0 expr2)
-
-    hints = []
-
-    long =
-        "Explanation: Every element in the list must have a type matching the type       \n\
-        \annotation at the end of the list                                               \n\
-        \                                                                                \n\
-        \For example, this is a valid ❰List❱:                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────┐                                                \n\
-        \    │ [1, 2, 3] : List Natural │  Every element in this ❰List❱ is an ❰Natural❱  \n\
-        \    └──────────────────────────┘                                                \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \.. but this is " <> _NOT <> " a valid ❰List❱:                                   \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────┐                                            \n\
-        \    │ [1, \"ABC\", 3] : List Natural │  The second element is not an ❰Natural❱  \n\
-        \    └──────────────────────────────┘                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your ❰List❱ elements should have this type:                                     \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... but the element at index #" <> txt1 <> " has this type instead:             \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n"
-      where
-        txt0 = insert expr0
-        txt1 = pretty i
-        txt3 = insert expr2
-
 prettyTypeMessage (InvalidSome expr0 expr1 expr2) = ErrorMessages {..}
   where
     short = "❰Some❱ argument has the wrong type"
@@ -2726,57 +2700,6 @@ prettyTypeMessage (InvalidRecordCompletion fieldName expr0) = ErrorMessages {..}
         txt0 = insert expr0
         txt1 = pretty fieldName
 
-prettyTypeMessage (MustUpdateARecord withExpression expression typeExpression) =
-    ErrorMessages {..}
-  where
-    short = "You can only update records"
-
-    hints = []
-
-    long =
-        "Explanation: You can update records using the ❰with❱ keyword, like this:        \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────┐                                          \n\
-        \    │ { x = { y = 1 } } with x.y = 2 │                                          \n\
-        \    └────────────────────────────────┘                                          \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────────────────────────────┐              \n\
-        \    │ λ(r : { foo : { bar : Bool } }) → r with foo.bar = False } │              \n\
-        \    └────────────────────────────────────────────────────────────┘              \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot update values that are not records.                          \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────┐                                                         \n\
-        \    │ 1 with x = True │                                                         \n\
-        \    └─────────────────┘                                                         \n\
-        \      ⇧                                                                         \n\
-        \      Invalid: Not a record                                                     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \The following expression is not permitted:                                      \n\
-        \                                                                                \n\
-        \" <> insert withExpression' <> "\n\
-        \                                                                                \n\
-        \... because the left argument to ❰with❱:                                        \n\
-        \                                                                                \n\
-        \" <> insert expression <> "\n\
-        \                                                                                \n\
-        \... is not a record, but is actually a:                                         \n\
-        \                                                                                \n\
-        \" <> insert typeExpression <> "\n"
-      where
-        withExpression' = case withExpression of
-            With record keys value -> With (Dhall.Core.normalize record) keys value
-            _                      -> withExpression
-
 prettyTypeMessage (MustCombineARecord c expression typeExpression) =
     ErrorMessages {..}
   where
@@ -2904,7 +2827,7 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \                                                                                \n\
         \... which is not a record type                                                  \n"
       where
-        txt0 = insert (Dhall.Pretty.Internal.escapeLabel True k)
+        txt0 = insert (Dhall.Pretty.Internal.escapeLabel AnyLabelOrSome k)
         txt1 = insert expr0
         txt2 = insert expr1
 
@@ -2948,59 +2871,6 @@ prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
       where
         txt0 = insert expr0
         txt1 = insert expr1
-
-prettyTypeMessage (RecordTypeMismatch const0 const1 expr0 expr1) =
-    ErrorMessages {..}
-  where
-    short = "Record type mismatch"
-
-    hints = []
-
-    long =
-        "Explanation: You can only use the ❰⩓❱ operator on record types if they are both \n\
-        \ ❰Type❱s or ❰Kind❱s:                                                            \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────┐                                     \n\
-        \    │ { age : Natural } ⩓ { name : Text } │  Valid: Both arguments are ❰Type❱s  \n\
-        \    └─────────────────────────────────────┘                                     \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────┐                                    \n\
-        \    │ { Input : Type } ⩓ { Output : Type } │  Valid: Both arguments are ❰Kind❱s \n\
-        \    └──────────────────────────────────────┘                                    \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... but you cannot combine a ❰Type❱ and a ❰Kind❱:                               \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌────────────────────────────────────┐                                      \n\
-        \    │ { Input : Type } ⩓ { name : Text } │  Invalid: The arguments do not match \n\
-        \    └────────────────────────────────────┘                                      \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \────────────────────────────────────────────────────────────────────────────────\n\
-        \                                                                                \n\
-        \You tried to combine the following record type:                                 \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... with this record types:                                                     \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... but the former record type is a:                                            \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n\
-        \                                                                                \n\
-        \... but the latter record type is a:                                            \n\
-        \                                                                                \n\
-        \" <> txt3 <> "\n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
-        txt2 = insert const0
-        txt3 = insert const1
 
 prettyTypeMessage (DuplicateFieldCannotBeMerged ks) = ErrorMessages {..}
   where
@@ -3062,7 +2932,7 @@ prettyTypeMessage (DuplicateFieldCannotBeMerged ks) = ErrorMessages {..}
         \                                                                                \n\
         \" <> txt1 <> "\n"
       where
-        txt0 = insert (Dhall.Pretty.Internal.escapeLabel True (NonEmpty.head ks))
+        txt0 = insert (Dhall.Pretty.Internal.escapeLabel AnyLabelOrSome (NonEmpty.head ks))
 
         txt1 = insert (toPath ks)
 
@@ -3514,72 +3384,6 @@ prettyTypeMessage (DisallowedHandlerType label handlerType handlerOutputType var
         \... references the handler's input value:                                       \n\
         \                                                                                \n\
         \" <> insert variable <> "\n"
-
-prettyTypeMessage (InvalidHandlerOutputType expr0 expr1 expr2) =
-    ErrorMessages {..}
-  where
-    short = "Wrong handler output type\n"
-        <>  "\n"
-        <>  Dhall.Diff.doc (Dhall.Diff.diffNormalized expr1 expr2)
-
-    hints = []
-
-    long =
-        "Explanation: You can ❰merge❱ the alternatives of a union or an ❰Optional❱ using \n\
-        \a record with one handler per alternative, like this:                           \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌─────────────────────────────────────────────────────────────────┐         \n\
-        \    │ let union    = < Left : Natural | Right : Bool >.Left 2         │         \n\
-        \    │ let handlers = { Left = Natural/even, Right = λ(x : Bool) → x } │         \n\
-        \    │ in  merge handlers union : Bool                                 │         \n\
-        \    └─────────────────────────────────────────────────────────────────┘         \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \... as long as the output type of each handler function matches the declared    \n\
-        \type of the result:                                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌───────────────────────────────────────────────────────────┐               \n\
-        \    │ handlers : { Left : Natural → Bool, Right : Bool → Bool } │               \n\
-        \    └───────────────────────────────────────────────────────────┘               \n\
-        \                                    ⇧                    ⇧                      \n\
-        \                                    These output types ...                      \n\
-        \                                                                                \n\
-        \                             ... must match the declared type of the ❰merge❱    \n\
-        \                             ⇩                                                  \n\
-        \    ┌─────────────────────────────┐                                             \n\
-        \    │ merge handlers union : Bool │                                             \n\
-        \    └─────────────────────────────┘                                             \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \For example, the following expression is " <> _NOT <> " valid:                  \n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \    ┌──────────────────────────────────────────────────────────────────┐        \n\
-        \    │ let union    = < Left : Natural | Right : Bool >.Left 2          │        \n\
-        \    │ let handlers = { Left = Natural/even, Right = λ(x : Bool) → x }  │        \n\
-        \    │ in  merge handlers union : Text                                  │        \n\
-        \    └──────────────────────────────────────────────────────────────────┘        \n\
-        \                                 ⇧                                              \n\
-        \                                 Invalid: Doesn't match output of either handler\n\
-        \                                                                                \n\
-        \                                                                                \n\
-        \Your handler for the following alternative:                                     \n\
-        \                                                                                \n\
-        \" <> txt0 <> "\n\
-        \                                                                                \n\
-        \... needs to return an output value of type:                                    \n\
-        \                                                                                \n\
-        \" <> txt1 <> "\n\
-        \                                                                                \n\
-        \... but actually returns an output value of a different type:                   \n\
-        \                                                                                \n\
-        \" <> txt2 <> "\n"
-      where
-        txt0 = insert expr0
-        txt1 = insert expr1
-        txt2 = insert expr2
 
 prettyTypeMessage (HandlerOutputTypeMismatch key0 expr0 key1 expr1) =
     ErrorMessages {..}
@@ -4862,8 +4666,6 @@ messageExpressions f m = case m of
         pure MissingListType
     MismatchedListElements a b c d ->
         MismatchedListElements <$> pure a <*> f b <*> f c <*> f d
-    InvalidListElement a b c d ->
-        InvalidListElement <$> pure a <*> f b <*> f c <*> f d
     InvalidListType a ->
         InvalidListType <$> f a
     ListLitInvariant ->
@@ -4882,8 +4684,6 @@ messageExpressions f m = case m of
         ListAppendMismatch <$> f a <*> f b
     InvalidDuplicateField a b c ->
         InvalidDuplicateField a <$> f b <*> f c
-    MustUpdateARecord a b c ->
-        MustUpdateARecord <$> f a <*> f b <*> f c
     MustCombineARecord a b c ->
         MustCombineARecord <$> pure a <*> f b <*> f c
     InvalidRecordCompletion a l ->
@@ -4892,8 +4692,6 @@ messageExpressions f m = case m of
         CompletionSchemaMustBeARecord <$> f l <*> f r
     CombineTypesRequiresRecordType a b ->
         CombineTypesRequiresRecordType <$> f a <*> f b
-    RecordTypeMismatch a b c d ->
-        RecordTypeMismatch <$> pure a <*> pure b <*> f c <*> f d
     DuplicateFieldCannotBeMerged a ->
         pure (DuplicateFieldCannotBeMerged a)
     FieldCollision a ->
@@ -4926,8 +4724,6 @@ messageExpressions f m = case m of
         DisallowedHandlerType <$> pure a <*> f b <*> f c <*> pure d
     HandlerOutputTypeMismatch a b c d ->
         HandlerOutputTypeMismatch <$> pure a <*> f b <*> pure c <*> f d
-    InvalidHandlerOutputType a b c ->
-        InvalidHandlerOutputType <$> pure a <*> f b <*> f c
     MissingMergeType ->
         pure MissingMergeType
     HandlerNotAFunction a b ->
@@ -5044,7 +4840,7 @@ checkContext context =
 toPath :: (Functor list, Foldable list) => list Text -> Text
 toPath ks =
     Text.intercalate "."
-        (Foldable.toList (fmap (Dhall.Pretty.Internal.escapeLabel True) ks))
+        (Foldable.toList (fmap (Dhall.Pretty.Internal.escapeLabel AnyLabelOrSome) ks))
 
 duplicateElement :: Ord a => [a] -> Maybe a
 duplicateElement = go Data.Set.empty

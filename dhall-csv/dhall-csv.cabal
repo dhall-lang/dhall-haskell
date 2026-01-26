@@ -1,5 +1,5 @@
 Name: dhall-csv
-Version: 1.0.3
+Version: 1.0.4
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -25,6 +25,50 @@ Category: Compiler
 Extra-Source-Files:
     CHANGELOG.md
     README.md
+    tasty/data/csv-to-dhall/basic_test.csv
+    tasty/data/csv-to-dhall/basic_test.dhall
+    tasty/data/csv-to-dhall/basic_test_schema.dhall
+    tasty/data/csv-to-dhall/doubles_test.csv
+    tasty/data/csv-to-dhall/doubles_test.dhall
+    tasty/data/csv-to-dhall/doubles_test_schema.dhall
+    tasty/data/csv-to-dhall/escaped_characters.csv
+    tasty/data/csv-to-dhall/escaped_characters.dhall
+    tasty/data/csv-to-dhall/escaped_characters_schema.dhall
+    tasty/data/csv-to-dhall/integers_test.csv
+    tasty/data/csv-to-dhall/integers_test.dhall
+    tasty/data/csv-to-dhall/integers_test_schema.dhall
+    tasty/data/csv-to-dhall/naturals_test.csv
+    tasty/data/csv-to-dhall/naturals_test.dhall
+    tasty/data/csv-to-dhall/naturals_test_schema.dhall
+    tasty/data/csv-to-dhall/optionals_test.csv
+    tasty/data/csv-to-dhall/optionals_test.dhall
+    tasty/data/csv-to-dhall/optionals_test_schema.dhall
+    tasty/data/csv-to-dhall/text_test.csv
+    tasty/data/csv-to-dhall/text_test.dhall
+    tasty/data/csv-to-dhall/text_test_schema.dhall
+    tasty/data/csv-to-dhall/unions_test.csv
+    tasty/data/csv-to-dhall/unions_test.dhall
+    tasty/data/csv-to-dhall/unions_test_schema.dhall
+    tasty/data/dhall-to-csv/basic_test.csv
+    tasty/data/dhall-to-csv/basic_test.dhall
+    tasty/data/dhall-to-csv/doubles_test.csv
+    tasty/data/dhall-to-csv/doubles_test.dhall
+    tasty/data/dhall-to-csv/escaped_characters.csv
+    tasty/data/dhall-to-csv/escaped_characters.dhall
+    tasty/data/dhall-to-csv/integers_test.csv
+    tasty/data/dhall-to-csv/integers_test.dhall
+    tasty/data/dhall-to-csv/naturals_test.csv
+    tasty/data/dhall-to-csv/naturals_test.dhall
+    tasty/data/dhall-to-csv/optionals_test.csv
+    tasty/data/dhall-to-csv/optionals_test.dhall
+    tasty/data/dhall-to-csv/text_test.csv
+    tasty/data/dhall-to-csv/text_test.dhall
+    tasty/data/dhall-to-csv/unions_test.csv
+    tasty/data/dhall-to-csv/unions_test.dhall
+    tasty/data/no-header-csv-to-dhall/basic_test.csv
+    tasty/data/no-header-csv-to-dhall/basic_test.dhall
+    tasty/data/no-header-csv-to-dhall/basic_test_schema.dhall
+
 Source-Repository head
     Type: git
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-csv
@@ -33,16 +77,16 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                 >= 4.12.0.0  && < 5   ,
-        bytestring                           < 0.12,
+        bytestring                           < 0.13,
         cassava              >= 0.5.0.0   && < 0.6 ,
-        containers           >= 0.5.9     && < 0.7 ,
+        containers           >= 0.5.9     && < 0.9 ,
         either                                     ,
         exceptions           >= 0.8.3     && < 0.11,
-        dhall                >= 1.39.0    && < 1.42,
-        filepath                             < 1.5 ,
+        dhall                >= 1.39.0    && < 1.43,
+        filepath                             < 1.6 ,
         optparse-applicative                       ,
         prettyprinter        >= 1.7.0     && < 1.8 ,
-        text                 >= 0.11.1.0  && < 2.1 ,
+        text                 >= 0.11.1.0  && < 2.2 ,
         unordered-containers                 < 0.3 ,
         vector               >= 0.12      && < 0.14
     Exposed-Modules:
@@ -57,17 +101,17 @@ Executable dhall-to-csv
     Hs-Source-Dirs: dhall-to-csv
     Main-Is: Main.hs
     Build-Depends:
-        ansi-terminal                                       ,
-        base                                                ,
-        bytestring                                          ,
-        cassava                                             ,
-        dhall                                               ,
-        dhall-csv                                           ,
-        optparse-applicative                                ,
-        prettyprinter                                       ,
-        prettyprinter-ansi-terminal    >= 1.1.1    && < 1.2 ,
-        unordered-containers                                ,
-        vector                                              ,
+        ansi-terminal                                   ,
+        base                        >= 4.12.0.0 && < 5  ,
+        bytestring                                      ,
+        cassava                                         ,
+        dhall                                           ,
+        dhall-csv                                       ,
+        optparse-applicative                            ,
+        prettyprinter                                   ,
+        prettyprinter-ansi-terminal >= 1.1.1    && < 1.2,
+        unordered-containers                            ,
+        vector                                          ,
         text
     Other-Modules:
         Paths_dhall_csv
@@ -78,17 +122,17 @@ Executable csv-to-dhall
     Hs-Source-Dirs: csv-to-dhall
     Main-Is: Main.hs
     Build-Depends:
-        ansi-terminal                                       ,
-        base                                                ,
-        bytestring                                          ,
-        cassava                                             ,
-        dhall                                               ,
-        dhall-csv                                           ,
-        optparse-applicative                                ,
-        prettyprinter                                       ,
-        prettyprinter-ansi-terminal    >= 1.1.1    && < 1.2 ,
-        unordered-containers                                ,
-        vector                                              ,
+        ansi-terminal                                   ,
+        base                        >= 4.12.0.0 && < 5  ,
+        bytestring                                      ,
+        cassava                                         ,
+        dhall                                           ,
+        dhall-csv                                       ,
+        optparse-applicative                            ,
+        prettyprinter                                   ,
+        prettyprinter-ansi-terminal >= 1.1.1    && < 1.2,
+        unordered-containers                            ,
+        vector                                          ,
         text
     Other-Modules:
         Paths_dhall_csv
@@ -100,17 +144,17 @@ Test-Suite tasty
     Hs-Source-Dirs:   tasty
     Main-Is:          Main.hs
     Build-Depends:
-        base                    ,
-        bytestring              ,
-        cassava                 ,
-        dhall                   ,
-        dhall-csv               ,
-        filepath                ,
-        tasty        <  1.5     ,
-        tasty-silver <  3.4     ,
-        tasty-hunit  >= 0.2     ,
-        unordered-containers    ,
-        text                    ,
+        base         >= 4.12.0.0 && < 5  ,
+        bytestring                       ,
+        cassava                          ,
+        dhall                            ,
+        dhall-csv                        ,
+        filepath                         ,
+        tasty                       < 1.6,
+        tasty-silver                < 3.4,
+        tasty-hunit  >= 0.2              ,
+        unordered-containers             ,
+        text                             ,
         vector
     GHC-Options:      -Wall
     Default-Language: Haskell2010

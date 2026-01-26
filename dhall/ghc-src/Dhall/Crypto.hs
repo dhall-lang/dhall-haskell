@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -14,6 +15,7 @@ module Dhall.Crypto (
 
 import Control.DeepSeq         (NFData)
 import Data.ByteString         (ByteString)
+import Data.Data               (Data)
 import GHC.Generics            (Generic)
 
 import qualified Crypto.Hash.SHA256
@@ -23,7 +25,7 @@ import qualified Data.ByteString.Char8  as ByteString.Char8
 
 -- | A SHA256 digest
 newtype SHA256Digest = SHA256Digest { unSHA256Digest :: ByteString }
-  deriving (Eq, Generic, Ord, NFData)
+  deriving (Data, Eq, Generic, Ord, NFData)
 
 instance Show SHA256Digest where
   show = toString

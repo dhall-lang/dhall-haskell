@@ -48,7 +48,7 @@ import qualified Data.Text     as Text
 import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Syntax  as Syntax
-import qualified Lens.Family   as Lens
+import qualified Lens.Micro    as Lens
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
@@ -173,23 +173,21 @@ normalizeWithM
     :: (Monad m, Eq a) => NormalizerM m a -> Expr s a -> m (Expr t a)
 normalizeWithM ctx e0 = loop (Syntax.denote e0)
  where
- loop =  \case
-    Const k -> pure (Const k)
-    Var v -> pure (Var v)
-    Lam cs (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
-        Lam cs <$> (Syntax.makeFunctionBinding x <$> _A') <*> b'
-      where
-        _A' = loop _A
-        b'  = loop b
-    Pi cs x _A _B -> Pi cs x <$> _A' <*> _B'
-      where
-        _A' = loop _A
-        _B' = loop _B
-    App f a -> do
-      res <- ctx (App f a)
-      case res of
-          Just e1 -> loop e1
-          Nothing -> do
+  loop e = ctx e >>= \case
+      Just e' -> loop e'
+      Nothing -> case e of
+          Const k -> pure (Const k)
+          Var v -> pure (Var v)
+          Lam cs (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A }) b ->
+              Lam cs <$> (Syntax.makeFunctionBinding x <$> _A') <*> b'
+            where
+              _A' = loop _A
+              b'  = loop b
+          Pi cs x _A _B -> Pi cs x <$> _A' <*> _B'
+            where
+              _A' = loop _A
+              _B' = loop _B
+          App f a -> do
               f' <- loop f
               a' <- loop a
               case f' of
@@ -213,8 +211,16 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         strict =       strictLoop (fromIntegral n0 :: Integer)
                         lazy   = loop (  lazyLoop (fromIntegral n0 :: Integer))
 
-                        strictLoop 0 = loop zero
-                        strictLoop !n = App succ' <$> strictLoop (n - 1) >>= loop
+                        strictLoop !n = do
+                            z <- loop zero
+                            strictLoopShortcut n z
+
+                        strictLoopShortcut 0 !previous = pure previous
+                        strictLoopShortcut !n !previous = do
+                            current <- loop (App succ' previous)
+                            if judgmentallyEqual previous current
+                                then pure previous
+                                else strictLoopShortcut (n - 1) current
 
                         lazyLoop 0 = zero
                         lazyLoop !n = App succ' (lazyLoop (n - 1))
@@ -377,365 +383,382 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                                 suffix
 
                                     loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks ((remainder, firstInterpolation) : chunks) lastText))))
+                    App DateShow (DateLiteral date) ->
+                        loop (TextLit (Chunks [] text))
+                      where
+                        text = Eval.dateShow date
+                    App TimeShow (TimeLiteral time precision) ->
+                        loop (TextLit (Chunks [] text))
+                      where
+                        text = Eval.timeShow time precision
+                    App TimeZoneShow (TimeZoneLiteral timezone) ->
+                        loop (TextLit (Chunks [] text))
+                      where
+                        text = Eval.timezoneShow timezone
                     _ -> do
                         res2 <- ctx (App f' a')
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-    Let (Binding _ f _ _ _ r) b -> loop b''
-      where
-        r'  = Syntax.shift   1  (V f 0) r
-        b'  = subst (V f 0) r' b
-        b'' = Syntax.shift (-1) (V f 0) b'
-    Annot x _ -> loop x
-    Bool -> pure Bool
-    BoolLit b -> pure (BoolLit b)
-    BoolAnd x y -> decide <$> loop x <*> loop y
-      where
-        decide (BoolLit True )  r              = r
-        decide (BoolLit False)  _              = BoolLit False
-        decide  l              (BoolLit True ) = l
-        decide  _              (BoolLit False) = BoolLit False
-        decide  l               r
-            | Eval.judgmentallyEqual l r = l
-            | otherwise                  = BoolAnd l r
-    BoolOr x y -> decide <$> loop x <*> loop y
-      where
-        decide (BoolLit False)  r              = r
-        decide (BoolLit True )  _              = BoolLit True
-        decide  l              (BoolLit False) = l
-        decide  _              (BoolLit True ) = BoolLit True
-        decide  l               r
-            | Eval.judgmentallyEqual l r = l
-            | otherwise                  = BoolOr l r
-    BoolEQ x y -> decide <$> loop x <*> loop y
-      where
-        decide (BoolLit True )  r              = r
-        decide  l              (BoolLit True ) = l
-        decide  l               r
-            | Eval.judgmentallyEqual l r = BoolLit True
-            | otherwise                  = BoolEQ l r
-    BoolNE x y -> decide <$> loop x <*> loop y
-      where
-        decide (BoolLit False)  r              = r
-        decide  l              (BoolLit False) = l
-        decide  l               r
-            | Eval.judgmentallyEqual l r = BoolLit False
-            | otherwise                  = BoolNE l r
-    BoolIf bool true false -> decide <$> loop bool <*> loop true <*> loop false
-      where
-        decide (BoolLit True )  l              _              = l
-        decide (BoolLit False)  _              r              = r
-        decide  b              (BoolLit True) (BoolLit False) = b
-        decide  b               l              r
-            | Eval.judgmentallyEqual l r = l
-            | otherwise                  = BoolIf b l r
-    Natural -> pure Natural
-    NaturalLit n -> pure (NaturalLit n)
-    NaturalFold -> pure NaturalFold
-    NaturalBuild -> pure NaturalBuild
-    NaturalIsZero -> pure NaturalIsZero
-    NaturalEven -> pure NaturalEven
-    NaturalOdd -> pure NaturalOdd
-    NaturalToInteger -> pure NaturalToInteger
-    NaturalShow -> pure NaturalShow
-    NaturalSubtract -> pure NaturalSubtract
-    NaturalPlus x y -> decide <$> loop x <*> loop y
-      where
-        decide (NaturalLit 0)  r             = r
-        decide  l             (NaturalLit 0) = l
-        decide (NaturalLit m) (NaturalLit n) = NaturalLit (m + n)
-        decide  l              r             = NaturalPlus l r
-    NaturalTimes x y -> decide <$> loop x <*> loop y
-      where
-        decide (NaturalLit 1)  r             = r
-        decide  l             (NaturalLit 1) = l
-        decide (NaturalLit 0)  _             = NaturalLit 0
-        decide  _             (NaturalLit 0) = NaturalLit 0
-        decide (NaturalLit m) (NaturalLit n) = NaturalLit (m * n)
-        decide  l              r             = NaturalTimes l r
-    Integer -> pure Integer
-    IntegerLit n -> pure (IntegerLit n)
-    IntegerClamp -> pure IntegerClamp
-    IntegerNegate -> pure IntegerNegate
-    IntegerShow -> pure IntegerShow
-    IntegerToDouble -> pure IntegerToDouble
-    Double -> pure Double
-    DoubleLit n -> pure (DoubleLit n)
-    DoubleShow -> pure DoubleShow
-    Text -> pure Text
-    TextLit (Chunks xys z) -> do
-        chunks' <- mconcat <$> chunks
-        case chunks' of
-            Chunks [("", x)] "" -> pure x
-            c                   -> pure (TextLit c)
-      where
-        chunks =
-          ((++ [Chunks [] z]) . concat) <$> traverse process xys
+          Let (Binding _ f _ _ _ r) b -> loop b''
+            where
+              r'  = Syntax.shift   1  (V f 0) r
+              b'  = subst (V f 0) r' b
+              b'' = Syntax.shift (-1) (V f 0) b'
+          Annot x _ -> loop x
+          Bool -> pure Bool
+          BoolLit b -> pure (BoolLit b)
+          BoolAnd x y -> decide <$> loop x <*> loop y
+            where
+              decide (BoolLit True )  r              = r
+              decide (BoolLit False)  _              = BoolLit False
+              decide  l              (BoolLit True ) = l
+              decide  _              (BoolLit False) = BoolLit False
+              decide  l               r
+                  | Eval.judgmentallyEqual l r = l
+                  | otherwise                  = BoolAnd l r
+          BoolOr x y -> decide <$> loop x <*> loop y
+            where
+              decide (BoolLit False)  r              = r
+              decide (BoolLit True )  _              = BoolLit True
+              decide  l              (BoolLit False) = l
+              decide  _              (BoolLit True ) = BoolLit True
+              decide  l               r
+                  | Eval.judgmentallyEqual l r = l
+                  | otherwise                  = BoolOr l r
+          BoolEQ x y -> decide <$> loop x <*> loop y
+            where
+              decide (BoolLit True )  r              = r
+              decide  l              (BoolLit True ) = l
+              decide  l               r
+                  | Eval.judgmentallyEqual l r = BoolLit True
+                  | otherwise                  = BoolEQ l r
+          BoolNE x y -> decide <$> loop x <*> loop y
+            where
+              decide (BoolLit False)  r              = r
+              decide  l              (BoolLit False) = l
+              decide  l               r
+                  | Eval.judgmentallyEqual l r = BoolLit False
+                  | otherwise                  = BoolNE l r
+          BoolIf bool true false -> decide <$> loop bool <*> loop true <*> loop false
+            where
+              decide (BoolLit True )  l              _              = l
+              decide (BoolLit False)  _              r              = r
+              decide  b              (BoolLit True) (BoolLit False) = b
+              decide  b               l              r
+                  | Eval.judgmentallyEqual l r = l
+                  | otherwise                  = BoolIf b l r
+          Bytes -> pure Bytes
+          BytesLit b -> pure (BytesLit b)
+          Natural -> pure Natural
+          NaturalLit n -> pure (NaturalLit n)
+          NaturalFold -> pure NaturalFold
+          NaturalBuild -> pure NaturalBuild
+          NaturalIsZero -> pure NaturalIsZero
+          NaturalEven -> pure NaturalEven
+          NaturalOdd -> pure NaturalOdd
+          NaturalToInteger -> pure NaturalToInteger
+          NaturalShow -> pure NaturalShow
+          NaturalSubtract -> pure NaturalSubtract
+          NaturalPlus x y -> decide <$> loop x <*> loop y
+            where
+              decide (NaturalLit 0)  r             = r
+              decide  l             (NaturalLit 0) = l
+              decide (NaturalLit m) (NaturalLit n) = NaturalLit (m + n)
+              decide  l              r             = NaturalPlus l r
+          NaturalTimes x y -> decide <$> loop x <*> loop y
+            where
+              decide (NaturalLit 1)  r             = r
+              decide  l             (NaturalLit 1) = l
+              decide (NaturalLit 0)  _             = NaturalLit 0
+              decide  _             (NaturalLit 0) = NaturalLit 0
+              decide (NaturalLit m) (NaturalLit n) = NaturalLit (m * n)
+              decide  l              r             = NaturalTimes l r
+          Integer -> pure Integer
+          IntegerLit n -> pure (IntegerLit n)
+          IntegerClamp -> pure IntegerClamp
+          IntegerNegate -> pure IntegerNegate
+          IntegerShow -> pure IntegerShow
+          IntegerToDouble -> pure IntegerToDouble
+          Double -> pure Double
+          DoubleLit n -> pure (DoubleLit n)
+          DoubleShow -> pure DoubleShow
+          Text -> pure Text
+          TextLit (Chunks xys z) -> do
+              chunks' <- mconcat <$> chunks
+              case chunks' of
+                  Chunks [("", x)] "" -> pure x
+                  c                   -> pure (TextLit c)
+            where
+              chunks =
+                ((++ [Chunks [] z]) . concat) <$> traverse process xys
 
-        process (x, y) = do
-          y' <- loop y
-          case y' of
-            TextLit c -> pure [Chunks [] x, c]
-            _         -> pure [Chunks [(x, y')] mempty]
-    TextAppend x y -> loop (TextLit (Chunks [("", x), ("", y)] ""))
-    TextReplace -> pure TextReplace
-    TextShow -> pure TextShow
-    Date -> pure Date
-    DateLiteral d -> pure (DateLiteral d)
-    Time -> pure Time
-    TimeLiteral t p -> pure (TimeLiteral t p)
-    TimeZone -> pure TimeZone
-    TimeZoneLiteral z -> pure (TimeZoneLiteral z)
-    List -> pure List
-    ListLit t es
-        | Data.Sequence.null es -> ListLit <$> t' <*> pure Data.Sequence.empty
-        | otherwise             -> ListLit Nothing <$> es'
-      where
-        t'  = traverse loop t
-        es' = traverse loop es
-    ListAppend x y -> decide <$> loop x <*> loop y
-      where
-        decide (ListLit _ m)  r            | Data.Sequence.null m = r
-        decide  l            (ListLit _ n) | Data.Sequence.null n = l
-        decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
-        decide  l             r                                   = ListAppend l r
-    ListBuild -> pure ListBuild
-    ListFold -> pure ListFold
-    ListLength -> pure ListLength
-    ListHead -> pure ListHead
-    ListLast -> pure ListLast
-    ListIndexed -> pure ListIndexed
-    ListReverse -> pure ListReverse
-    Optional -> pure Optional
-    Some a -> Some <$> a'
-      where
-        a' = loop a
-    None -> pure None
-    Record kts -> Record . Dhall.Map.sort <$> kts'
-      where
-        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
-        kts' = traverse f kts
-    RecordLit kvs -> RecordLit . Dhall.Map.sort <$> kvs'
-      where
-        f (RecordField s0 expr s1 s2) = (\e -> RecordField s0 e s1 s2) <$> loop expr
-        kvs' = traverse f kvs
-    Union kts -> Union . Dhall.Map.sort <$> kts'
-      where
-        kts' = traverse (traverse loop) kts
-    Combine cs mk x y -> decide <$> loop x <*> loop y
-      where
-        decide (RecordLit m) r | Data.Foldable.null m =
-            r
-        decide l (RecordLit n) | Data.Foldable.null n =
-            l
-        decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.unionWith f m n)
-          where
-            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
-              Syntax.makeRecordField $ decide expr expr'
-        decide l r =
-            Combine cs mk l r
-    CombineTypes cs x y -> decide <$> loop x <*> loop y
-      where
-        decide (Record m) r | Data.Foldable.null m =
-            r
-        decide l (Record n) | Data.Foldable.null n =
-            l
-        decide (Record m) (Record n) =
-            Record (Dhall.Map.unionWith f m n)
-          where
-            f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
-              Syntax.makeRecordField $ decide expr expr'
-        decide l r =
-            CombineTypes cs l r
-    Prefer cs _ x y -> decide <$> loop x <*> loop y
-      where
-        decide (RecordLit m) r | Data.Foldable.null m =
-            r
-        decide l (RecordLit n) | Data.Foldable.null n =
-            l
-        decide (RecordLit m) (RecordLit n) =
-            RecordLit (Dhall.Map.union n m)
-        decide l r | Eval.judgmentallyEqual l r =
-            l
-        decide l r =
-            Prefer cs PreferFromSource l r
-    RecordCompletion x y ->
-        loop (Annot (Prefer mempty PreferFromCompletion (Field x def) y) (Field x typ))
-      where
-        def = Syntax.makeFieldSelection "default"
-        typ = Syntax.makeFieldSelection "Type"
-    Merge x y t      -> do
-        x' <- loop x
-        y' <- loop y
-        case x' of
-            RecordLit kvsX ->
+              process (x, y) = do
+                y' <- loop y
                 case y' of
-                    Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
-                        case Dhall.Map.lookup kY ktsY of
-                            Just Nothing ->
-                                case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
-                                    Just vX -> return vX
-                                    Nothing -> Merge x' y' <$> t'
-                            _ ->
-                                Merge x' y' <$> t'
-                    App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) vY ->
-                        case Dhall.Map.lookup kY ktsY of
-                            Just (Just _) ->
-                                case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
-                                    Just vX -> loop (App vX vY)
-                                    Nothing -> Merge x' y' <$> t'
-                            _ ->
-                                Merge x' y' <$> t'
-                    Some a ->
-                        case recordFieldValue <$> Dhall.Map.lookup "Some" kvsX of
-                            Just vX -> loop (App vX a)
-                            Nothing -> Merge x' y' <$> t'
-                    App None _ ->
-                        case recordFieldValue <$> Dhall.Map.lookup "None" kvsX of
-                            Just vX -> return vX
-                            Nothing -> Merge x' y' <$> t'
-                    _ -> Merge x' y' <$> t'
-            _ -> Merge x' y' <$> t'
-      where
-        t' = traverse loop t
-    ToMap x t        -> do
-        x' <- loop x
-        t' <- traverse loop t
-        case x' of
-            RecordLit kvsX -> do
-                let entry (key, value) =
-                        RecordLit
-                            (Dhall.Map.fromList
-                                [ ("mapKey"  , Syntax.makeRecordField $ TextLit (Chunks [] key))
-                                , ("mapValue", Syntax.makeRecordField value                  )
-                                ]
-                            )
+                  TextLit c -> pure [Chunks [] x, c]
+                  _         -> pure [Chunks [(x, y')] mempty]
+          TextAppend x y -> loop (TextLit (Chunks [("", x), ("", y)] ""))
+          TextReplace -> pure TextReplace
+          TextShow -> pure TextShow
+          Date -> pure Date
+          DateLiteral d -> pure (DateLiteral d)
+          DateShow -> pure DateShow
+          Time -> pure Time
+          TimeLiteral t p -> pure (TimeLiteral t p)
+          TimeShow -> pure TimeShow
+          TimeZone -> pure TimeZone
+          TimeZoneLiteral z -> pure (TimeZoneLiteral z)
+          TimeZoneShow -> pure TimeZoneShow
+          List -> pure List
+          ListLit t es
+              | Data.Sequence.null es -> ListLit <$> t' <*> pure Data.Sequence.empty
+              | otherwise             -> ListLit Nothing <$> es'
+            where
+              t'  = traverse loop t
+              es' = traverse loop es
+          ListAppend x y -> decide <$> loop x <*> loop y
+            where
+              decide (ListLit _ m)  r            | Data.Sequence.null m = r
+              decide  l            (ListLit _ n) | Data.Sequence.null n = l
+              decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
+              decide  l             r                                   = ListAppend l r
+          ListBuild -> pure ListBuild
+          ListFold -> pure ListFold
+          ListLength -> pure ListLength
+          ListHead -> pure ListHead
+          ListLast -> pure ListLast
+          ListIndexed -> pure ListIndexed
+          ListReverse -> pure ListReverse
+          Optional -> pure Optional
+          Some a -> Some <$> a'
+            where
+              a' = loop a
+          None -> pure None
+          Record kts -> Record . Dhall.Map.sort <$> kts'
+            where
+              f (RecordField s0 expr s1 s2) = (\expr' -> RecordField s0 expr' s1 s2) <$> loop expr
+              kts' = traverse f kts
+          RecordLit kvs -> RecordLit . Dhall.Map.sort <$> kvs'
+            where
+              f (RecordField s0 expr s1 s2) = (\expr' -> RecordField s0 expr' s1 s2) <$> loop expr
+              kvs' = traverse f kvs
+          Union kts -> Union . Dhall.Map.sort <$> kts'
+            where
+              kts' = traverse (traverse loop) kts
+          Combine cs mk x y -> decide <$> loop x <*> loop y
+            where
+              decide (RecordLit m) r | Data.Foldable.null m =
+                  r
+              decide l (RecordLit n) | Data.Foldable.null n =
+                  l
+              decide (RecordLit m) (RecordLit n) =
+                  RecordLit (Dhall.Map.unionWith f m n)
+                where
+                  f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
+                    Syntax.makeRecordField $ decide expr expr'
+              decide l r =
+                  Combine cs mk l r
+          CombineTypes cs x y -> decide <$> loop x <*> loop y
+            where
+              decide (Record m) r | Data.Foldable.null m =
+                  r
+              decide l (Record n) | Data.Foldable.null n =
+                  l
+              decide (Record m) (Record n) =
+                  Record (Dhall.Map.unionWith f m n)
+                where
+                  f (RecordField _ expr _ _) (RecordField _ expr' _ _) =
+                    Syntax.makeRecordField $ decide expr expr'
+              decide l r =
+                  CombineTypes cs l r
+          Prefer cs _ x y -> decide <$> loop x <*> loop y
+            where
+              decide (RecordLit m) r | Data.Foldable.null m =
+                  r
+              decide l (RecordLit n) | Data.Foldable.null n =
+                  l
+              decide (RecordLit m) (RecordLit n) =
+                  RecordLit (Dhall.Map.union n m)
+              decide l r | Eval.judgmentallyEqual l r =
+                  l
+              decide l r =
+                  Prefer cs PreferFromSource l r
+          RecordCompletion x y ->
+              loop (Annot (Prefer mempty PreferFromCompletion (Field x def) y) (Field x typ))
+            where
+              def = Syntax.makeFieldSelection "default"
+              typ = Syntax.makeFieldSelection "Type"
+          Merge x y t      -> do
+              x' <- loop x
+              y' <- loop y
+              case x' of
+                  RecordLit kvsX ->
+                      case y' of
+                          Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
+                              case Dhall.Map.lookup kY ktsY of
+                                  Just Nothing ->
+                                      case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
+                                          Just vX -> return vX
+                                          Nothing -> Merge x' y' <$> t'
+                                  _ ->
+                                      Merge x' y' <$> t'
+                          App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) vY ->
+                              case Dhall.Map.lookup kY ktsY of
+                                  Just (Just _) ->
+                                      case recordFieldValue <$> Dhall.Map.lookup kY kvsX of
+                                          Just vX -> loop (App vX vY)
+                                          Nothing -> Merge x' y' <$> t'
+                                  _ ->
+                                      Merge x' y' <$> t'
+                          Some a ->
+                              case recordFieldValue <$> Dhall.Map.lookup "Some" kvsX of
+                                  Just vX -> loop (App vX a)
+                                  Nothing -> Merge x' y' <$> t'
+                          App None _ ->
+                              case recordFieldValue <$> Dhall.Map.lookup "None" kvsX of
+                                  Just vX -> return vX
+                                  Nothing -> Merge x' y' <$> t'
+                          _ -> Merge x' y' <$> t'
+                  _ -> Merge x' y' <$> t'
+            where
+              t' = traverse loop t
+          ToMap x t        -> do
+              x' <- loop x
+              t' <- traverse loop t
+              case x' of
+                  RecordLit kvsX -> do
+                      let entry (key, value) =
+                              RecordLit
+                                  (Dhall.Map.fromList
+                                      [ ("mapKey"  , Syntax.makeRecordField $ TextLit (Chunks [] key))
+                                      , ("mapValue", Syntax.makeRecordField value                  )
+                                      ]
+                                  )
 
-                let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList $ recordFieldValue <$> kvsX))
+                      let keyValues = Data.Sequence.fromList (map entry (Dhall.Map.toList $ recordFieldValue <$> kvsX))
 
-                let listType = case t' of
-                        Just _ | null keyValues ->
-                            t'
-                        _ ->
-                            Nothing
+                      let listType = case t' of
+                              Just _ | null keyValues ->
+                                  t'
+                              _ ->
+                                  Nothing
 
-                return (ListLit listType keyValues)
-            _ ->
-                return (ToMap x' t')
-    ShowConstructor x -> do
-        x' <- loop x
-        return $ case x' of
-            Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
-                case Dhall.Map.lookup kY ktsY of
-                    Just Nothing -> TextLit (Chunks [] kY)
-                    _ -> ShowConstructor x'
-            App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) _ ->
-                case Dhall.Map.lookup kY ktsY of
-                    Just (Just _) -> TextLit (Chunks [] kY)
-                    _ -> ShowConstructor x'
-            Some _ ->
-                TextLit (Chunks [] "Some")
-            App None _ ->
-                TextLit (Chunks [] "None")
-            _ -> ShowConstructor x'
-    Field r k@FieldSelection{fieldSelectionLabel = x}        -> do
-        let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
+                      return (ListLit listType keyValues)
+                  _ ->
+                      return (ToMap x' t')
+          ShowConstructor x -> do
+              x' <- loop x
+              return $ case x' of
+                  Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY) ->
+                      case Dhall.Map.lookup kY ktsY of
+                          Just Nothing -> TextLit (Chunks [] kY)
+                          _ -> ShowConstructor x'
+                  App (Field (Union ktsY) (Syntax.fieldSelectionLabel -> kY)) _ ->
+                      case Dhall.Map.lookup kY ktsY of
+                          Just (Just _) -> TextLit (Chunks [] kY)
+                          _ -> ShowConstructor x'
+                  Some _ ->
+                      TextLit (Chunks [] "Some")
+                  App None _ ->
+                      TextLit (Chunks [] "None")
+                  _ -> ShowConstructor x'
+          Field r k@FieldSelection{fieldSelectionLabel = x}        -> do
+              let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
 
-        r' <- loop r
-        case r' of
-            RecordLit kvs ->
-                case Dhall.Map.lookup x kvs of
-                    Just v  -> pure $ recordFieldValue v
-                    Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure k
-            Project r_ _ -> loop (Field r_ k)
-            Prefer cs _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Prefer cs PreferFromSource (singletonRecordLit v) r_) k)
-                Nothing -> loop (Field r_ k)
-            Prefer _ _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure $ recordFieldValue v
-                Nothing -> loop (Field l k)
-            Combine cs m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine cs m (singletonRecordLit v) r_) k)
-                Nothing -> loop (Field r_ k)
-            Combine cs m l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
-                Just v -> pure (Field (Combine cs m l (singletonRecordLit v)) k)
-                Nothing -> loop (Field l k)
-            _ -> pure (Field r' k)
-    Project x (Left fields)-> do
-        x' <- loop x
-        let fieldsSet = Data.Set.fromList fields
-        case x' of
-            RecordLit kvs ->
-                pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
-            Project y _ ->
-                loop (Project y (Left fields))
-            Prefer cs _ l (RecordLit rKvs) -> do
-                let rKs = Dhall.Map.keysSet rKvs
-                let l' = Project l (Left (Data.Set.toList (Data.Set.difference fieldsSet rKs)))
-                let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
-                loop (Prefer cs PreferFromSource l' r')
-            _ | null fields -> pure (RecordLit mempty)
-              | otherwise   -> pure (Project x' (Left (Data.Set.toList (Data.Set.fromList fields))))
-    Project r (Right e1) -> do
-        e2 <- loop e1
+              r' <- loop r
+              case r' of
+                  RecordLit kvs ->
+                      case Dhall.Map.lookup x kvs of
+                          Just v  -> pure $ recordFieldValue v
+                          Nothing -> Field <$> (RecordLit <$> traverse (Syntax.recordFieldExprs loop) kvs) <*> pure k
+                  Project r_ _ -> loop (Field r_ k)
+                  Prefer cs _ (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                      Just v -> pure (Field (Prefer cs PreferFromSource (singletonRecordLit v) r_) k)
+                      Nothing -> loop (Field r_ k)
+                  Prefer _ _ l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                      Just v -> pure $ recordFieldValue v
+                      Nothing -> loop (Field l k)
+                  Combine cs m (RecordLit kvs) r_ -> case Dhall.Map.lookup x kvs of
+                      Just v -> pure (Field (Combine cs m (singletonRecordLit v) r_) k)
+                      Nothing -> loop (Field r_ k)
+                  Combine cs m l (RecordLit kvs) -> case Dhall.Map.lookup x kvs of
+                      Just v -> pure (Field (Combine cs m l (singletonRecordLit v)) k)
+                      Nothing -> loop (Field l k)
+                  _ -> pure (Field r' k)
+          Project x (Left fields)-> do
+              x' <- loop x
+              let fieldsSet = Data.Set.fromList fields
+              case x' of
+                  RecordLit kvs ->
+                      pure (RecordLit (Dhall.Map.restrictKeys kvs fieldsSet))
+                  Project y _ ->
+                      loop (Project y (Left fields))
+                  Prefer cs _ l (RecordLit rKvs) -> do
+                      let rKs = Dhall.Map.keysSet rKvs
+                      let l' = Project l (Left (Data.Set.toList (Data.Set.difference fieldsSet rKs)))
+                      let r' = RecordLit (Dhall.Map.restrictKeys rKvs fieldsSet)
+                      loop (Prefer cs PreferFromSource l' r')
+                  _ | null fields -> pure (RecordLit mempty)
+                    | otherwise   -> pure (Project x' (Left (Data.Set.toList (Data.Set.fromList fields))))
+          Project r (Right e1) -> do
+              e2 <- loop e1
 
-        case e2 of
-            Record kts ->
-                loop (Project r (Left (Data.Set.toList (Dhall.Map.keysSet kts))))
-            _ -> do
-                r' <- loop r
-                pure (Project r' (Right e2))
-    Assert t -> do
-        t' <- loop t
+              case e2 of
+                  Record kts ->
+                      loop (Project r (Left (Data.Set.toList (Dhall.Map.keysSet kts))))
+                  _ -> do
+                      r' <- loop r
+                      pure (Project r' (Right e2))
+          Assert t -> do
+              t' <- loop t
 
-        pure (Assert t')
-    Equivalent cs l r -> do
-        l' <- loop l
-        r' <- loop r
+              pure (Assert t')
+          Equivalent cs l r -> do
+              l' <- loop l
+              r' <- loop r
 
-        pure (Equivalent cs l' r')
-    With e ks v -> do
-        e' <- loop e
-        v' <- loop v
+              pure (Equivalent cs l' r')
+          With r ks v -> do
+              r' <- loop r
+              v' <- loop v
 
-        case e' of
-            RecordLit kvs ->
-                case ks of
-                    WithLabel k :| [] ->
-                        return (RecordLit (Dhall.Map.insert k (Syntax.makeRecordField v') kvs))
-                    WithLabel k₀ :| k₁ : ks' -> do
-                        let e₁ =
-                                case Dhall.Map.lookup k₀ kvs of
-                                    Nothing -> RecordLit mempty
-                                    Just r  -> Syntax.recordFieldValue r
+              case r' of
+                  RecordLit kvs ->
+                      case ks of
+                          WithLabel k :| [] ->
+                              return (RecordLit (Dhall.Map.insert k (Syntax.makeRecordField v') kvs))
+                          WithLabel k₀ :| k₁ : ks' -> do
+                              let e₁ =
+                                      case Dhall.Map.lookup k₀ kvs of
+                                          Nothing  -> RecordLit mempty
+                                          Just val -> Syntax.recordFieldValue val
 
-                        e₂ <- loop (With e₁ (k₁ :| ks') v')
+                              e₂ <- loop (With e₁ (k₁ :| ks') v')
 
-                        return (RecordLit (Dhall.Map.insert k₀ (Syntax.makeRecordField e₂) kvs))
-                    WithQuestion :| _ -> do
-                        return (With e' ks v')
-            Some t ->
-                case ks of
-                    WithQuestion :| [] -> do
-                        return (Some v')
-                    WithQuestion :| k : ks' -> do
-                        w <- loop (With t (k :| ks') v)
-                        return (Some w)
-                    WithLabel _ :| _ ->
-                        return (With e' ks v')
-            App None _T ->
-                case ks of
-                    WithQuestion :| _ ->
-                        return (App None _T)
-                    WithLabel _ :| _ ->
-                        return (With e' ks v')
-            _ ->
-                return (With e' ks v')
-    Note _ e' -> loop e'
-    ImportAlt l _r -> loop l
-    Embed a -> pure (Embed a)
+                              return (RecordLit (Dhall.Map.insert k₀ (Syntax.makeRecordField e₂) kvs))
+                          WithQuestion :| _ -> do
+                              return (With r' ks v')
+                  Some t ->
+                      case ks of
+                          WithQuestion :| [] -> do
+                              return (Some v')
+                          WithQuestion :| k : ks' -> do
+                              w <- loop (With t (k :| ks') v)
+                              return (Some w)
+                          WithLabel _ :| _ ->
+                              return (With r' ks v')
+                  App None _T ->
+                      case ks of
+                          WithQuestion :| _ ->
+                              return (App None _T)
+                          WithLabel _ :| _ ->
+                              return (With r' ks v')
+                  _ ->
+                      return (With r' ks v')
+          Note _ e' -> loop e'
+          ImportAlt l _r -> loop l
+          Embed a -> pure (Embed a)
 
 -- | Use this to wrap you embedded functions (see `normalizeWith`) to make them
 --   polymorphic enough to be used.
@@ -783,6 +806,9 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
+          App DateShow (DateLiteral _) -> False
+          App TimeShow (TimeLiteral _ _) -> False
+          App TimeZoneShow (TimeZoneLiteral _) -> False
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
           App (App NaturalSubtract _) (NaturalLit 0) -> False
@@ -837,6 +863,8 @@ isNormalized e0 = loop (Syntax.denote e0)
           decide (BoolLit _)  _              _              = False
           decide  _          (BoolLit True) (BoolLit False) = False
           decide  _           l              r              = not (Eval.judgmentallyEqual l r)
+      Bytes -> True
+      BytesLit _ -> True
       Natural -> True
       NaturalLit _ -> True
       NaturalFold -> True
@@ -882,10 +910,13 @@ isNormalized e0 = loop (Syntax.denote e0)
       TextShow -> True
       Date -> True
       DateLiteral _ -> True
+      DateShow -> True
       Time -> True
       TimeLiteral _ _ -> True
+      TimeShow -> True
       TimeZone -> True
       TimeZoneLiteral _ -> True
+      TimeZoneShow -> True
       List -> True
       ListLit t es -> all loop t && all loop es
       ListAppend x y -> loop x && loop y && decide x y

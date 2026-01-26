@@ -1,3 +1,80 @@
+1.42.3
+
+* [Fix the typechecking rule for `Optional` + `with`](https://github.com/dhall-lang/dhall-haskell/pull/2650)
+* [Add `*WithIndex` instances for `Map`](https://github.com/dhall-lang/dhall-haskell/pull/2633)
+* [`dhall package`: Add support for automatic sub-packags](https://github.com/dhall-lang/dhall-haskell/pull/2639)
+* [`dhall to-directory-tree`: Add `binary-file` support](https://github.com/dhall-lang/dhall-haskell/pull/2641)
+* [Support GHC 9.12.1](https://github.com/dhall-lang/dhall-haskell/pull/2649)
+* [`dhall to-directory-tree`: create parents of files when using fixpoint representation](https://github.com/dhall-lang/dhall-haskell/pull/2653)
+
+1.42.2
+
+* [Supports standard version 23.1.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v23.1.0)
+  * [Allow `Natural` and `Integer` literals in binary notation](https://github.com/dhall-lang/dhall-haskell/pull/2540)
+* Fix macOS build [[#2561](https://github.com/dhall-lang/dhall-haskell/pull/2561)] / [[#2586](https://github.com/dhall-lang/dhall-haskell/pull/2586)]
+* [`dhall to-directory-tree`: Fix support for empty `Map`s](https://github.com/dhall-lang/dhall-haskell/pull/2609)
+* [`Dhall.TH`: Improve recompilation checking](https://github.com/dhall-lang/dhall-haskell/pull/2620)
+  * `Dhall.TH` utilities now use `addDependentFile` internally so that GHC will recompile if any Dhall dependencies change
+* Performance improvements
+  * Optimize `Natural/fold`: [[#2585](https://github.com/dhall-lang/dhall-haskell/pull/2585)] / [[#2596](https://github.com/dhall-lang/dhall-haskell/pull/2596)]
+  * [Improve `Dhall.Map.traverseWithKey` performance](https://github.com/dhall-lang/dhall-haskell/pull/2589)
+    * The fold will now short-circuit if it reaches a fixed point
+  * [#2611](https://github.com/dhall-lang/dhall-haskell/pull/2611)
+* Fixes and improvements to test suite
+  * [#2593](https://github.com/dhall-lang/dhall-haskell/pull/2593)
+* Fixes and improvements to haddocks
+  * [#2546](https://github.com/dhall-lang/dhall-haskell/pull/2546)
+* Fixes and improvements to code formatting
+  * [#2608](https://github.com/dhall-lang/dhall-haskell/pull/2608)
+
+1.42.1
+
+* Add several new entrypoints to `Dhall` module [[#2534](https://github.com/dhall-lang/dhall-haskell/pull/2534)] / [[#2544](https://github.com/dhall-lang/dhall-haskell/pull/2544)]
+* Build against latest versions of:
+  * [`ansi-terminal`](https://github.com/dhall-lang/dhall-haskell/pull/2521)
+  * [`optparse-applicative`](https://github.com/dhall-lang/dhall-haskell/pull/2543)
+  * [`optparse-generic`](https://github.com/dhall-lang/dhall-haskell/pull/2519)
+  * [`lens`](https://github.com/dhall-lang/dhall-haskell/pull/2539)
+  * `template-haskell` [[#2532](https://github.com/dhall-lang/dhall-haskell/pull/2532)] / [[#2542](https://github.com/dhall-lang/dhall-haskell/pull/2542)]
+  * [`unix-compat`](https://github.com/dhall-lang/dhall-haskell/pull/2532)
+1.42.0
+
+* [Supports standard version 23.0.0](https://github.com/dhall-lang/dhall-lang/releases/tag/v23.0.0)
+  * [BREAKING CHANGE TO THE API AND LANGUAGE: Language support for `Bytes` literals](https://github.com/dhall-lang/dhall-haskell/pull/2499)
+    * This is a breaking change to the API due to adding new `Bytes` and `BytesLiteral` constructors to the `Expr` type
+    * This is a breaking change to the language now that `Bytes` is a reserved identifier
+  * [BREAKING CHANGE TO THE API AND LANGUAGE: New `{Date,Time,TimeZone}/show` builtins](https://github.com/dhall-lang/dhall-haskell/pull/2493)
+    * This is a breaking change to the API due to adding new `{Date,Time,TimeZone}Show` constructors to the `Expr` type
+    * This is a breaking change to the language now that `{Date,Time,TimeZone}/show` are not reserved identifiers
+* [BREAKING CHANGE: `dhall lint` no longer sorts `let` bindings](https://github.com/dhall-lang/dhall-haskell/pull/2503)
+  * This had to be removed because the old behavior was not always correct
+  * The old behavior would sometimes change the behavior of a Dhall program or break the program
+  * Out of an abundance of caution we're disabling the feature until it can be properly fixed (which is't trivial)
+* [BUG FIX: Fix pretty-printing of `Time` literals](https://github.com/dhall-lang/dhall-haskell/pull/2466)
+  * The pretty-printer was stripping leading zeros from the fractional component
+    of seconds
+* [BUG FIX: Fix custom normalizers to work for things other than functions](https://github.com/dhall-lang/dhall-haskell/pull/2464)
+  * Before this change you could extend the language with custom functions, but
+    not custom values (e.g. `foo = 1`)
+* [BUG FIX: Don't URL encode path components](https://github.com/dhall-lang/dhall-haskell/pull/2505)
+  * The pretty-printer was URL-encoding path components, which is not correct (according to the standard)
+  * URL path components are supposed to be already URL-encoded by the user and left undisturbed by the interpreter (which is now what it correctly does)
+* New `dhall package` command: [#2478](https://github.com/dhall-lang/dhall-haskell/pull/2487), [#2508](https://github.com/dhall-lang/dhall-haskell/pull/2508)
+  * This command makes it easier to turn a directory full of Dhall expressions
+    into a dhall package (e.g. `package.dhall`)
+* [Improved `dhall to-directory-tree` subcommand](https://github.com/dhall-lang/dhall-haskell/pull/2437)
+  * The `dhall to-directory-tree` subcommand now optionally supports specifying
+    metadata for generated paths
+  * For a worked example, see: https://github.com/dhall-lang/dhall-haskell/blob/main/dhall/examples/to-directory-tree.dhall
+* `dhall freeze --cache --all` is now idempotent: [#2486](https://github.com/dhall-lang/dhall-haskell/pull/2486), [#2500](https://github.com/dhall-lang/dhall-haskell/pull/2500)
+  * Before this change a second run would fail due to attempting to resolve
+    the `missing` import it would generate
+* [New Template Haskell options for adding strictness annotations to generated Haskell types](https://github.com/dhall-lang/dhall-haskell/pull/2504)
+* [Template Haskell can now generate higher-kinded Haskell types from higher-kinded Dhall types](https://github.com/dhall-lang/dhall-haskell/pull/2506)
+* [New `Dhall.Freeze` utilities for working with custom evaluators](https://github.com/dhall-lang/dhall-haskell/pull/2478)
+* [Add `Data` instances for `Import` and various other types](https://github.com/dhall-lang/dhall-haskell/pull/2462)
+* [Add `Eq` instances for `InvalidDecoder` and `ExtractError`](https://github.com/dhall-lang/dhall-haskell/pull/2482)
+
 1.41.2
 
 * [BUG FIX: Fix `:hash` REPL command to α-normalize input](https://github.com/dhall-lang/dhall-haskell/pull/2420)
@@ -313,6 +390,12 @@
     * If you really don't want to handle the new error-related wrapper, you can
       get the old behavior using a partial pattern match (which will be partial,
       still an improvement over the previous behavior, which was hanging)
+* BREAKING CHANGE: [Records can no longer contain attributes named after language keywords](https://github.com/dhall-lang/dhall-haskell/pull/1801)
+    * This is a bugfix, because the language standard disallows using
+      keywords as record labels. However, some users were relying on
+      this bug.
+    * If you need to use a keyword as a record label, enclose it in backticks:
+      ``{ `assert` = 1 }``.
 * [Fix invalid cache entries](https://github.com/dhall-lang/dhall-haskell/pull/1793)
     * The interpreter will now correct cached expressions that are incorrect
       and warn you when this happens
@@ -1049,7 +1132,7 @@
     * This allows the `dhall` package to be built without using
       `TemplateHaskell`
     * See: https://github.com/dhall-lang/dhall-haskell/pull/928
-* Increase lines of context for error messages 
+* Increase lines of context for error messages
     * Error messages now provide at least 20 lines of context instead of 3
       before truncating large expressions
     * See: https://github.com/dhall-lang/dhall-haskell/pull/916
@@ -1432,7 +1515,7 @@
       expression
     * You can pin the new hashes by supplying the `--protocol-version 1.0`
       option on the command line until you need support for newer language
-      features 
+      features
     * This also includes a breaking change to `ImportType` in the API
 * BREAKING CHANGE TO THE LANGUAGE: Disallow combining records of terms and
   types

@@ -1,0 +1,23 @@
+resolver: lts-23.6
+packages:
+  - dhall
+  - dhall-bash
+  - dhall-csv
+  - dhall-docs
+  - dhall-json
+  - dhall-lsp-server
+  # - dhall-nix
+  - dhall-openapi
+  - dhall-toml
+  - dhall-yaml
+extra-deps:
+  - microlens-0.4.14.0@sha256:1061edc3fa96fa868692891d6e0a0e198a2983a3d154a7a0ce4a708c1c3f652f,4722
+  - special-values-0.1.0.0@sha256:ea855ec644acac84d3a4c9aadae9ba70a11d1d48d00940805dbb81cc95672bbd,1416
+nix:
+  packages:
+    - ncurses
+    - zlib
+flags:
+  # https://github.com/RyanGlScott/mintty/issues/4
+  mintty:
+    Win32-2-13-1: false

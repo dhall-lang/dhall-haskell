@@ -12,9 +12,11 @@
 
 -- | Types used by the implementation of the @to-directory-tree@ subcommand
 module Dhall.DirectoryTree.Types
-    ( FilesystemEntry(..)
+    ( FilesystemEntry(DirectoryEntry, BinaryFileEntry, TextFileEntry, FileEntry)
     , DirectoryEntry
     , FileEntry
+    , BinaryFileEntry
+    , TextFileEntry
     , Entry(..)
     , User(..)
     , Group(..)
@@ -23,8 +25,11 @@ module Dhall.DirectoryTree.Types
 
     , setFileMode
     , prettyFileMode
+
+    , isMetadataSupported
     ) where
 
+import Data.ByteString          (ByteString)
 import Data.Functor.Identity    (Identity (..))
 import Data.Sequence            (Seq)
 import Data.Text                (Text)
@@ -64,13 +69,24 @@ pattern Make label entry <- App (Field (Var (V "_" 0)) (fieldSelectionLabel -> l
 type DirectoryEntry = Entry (Seq FilesystemEntry)
 
 -- | A file in the filesystem.
+{-# DEPRECATED FileEntry "`FileEntry` is deprecated and will be removed eventually. Please use `TextFileEntry` instead." #-}
 type FileEntry = Entry Text
+
+-- | A binary file in the filesystem.
+type BinaryFileEntry = Entry ByteString
+
+-- | A text file in the filesystem.
+type TextFileEntry = Entry Text
 
 -- | A filesystem entry.
 data FilesystemEntry
     = DirectoryEntry (Entry (Seq FilesystemEntry))
-    | FileEntry (Entry Text)
+    | BinaryFileEntry BinaryFileEntry
+    | TextFileEntry TextFileEntry
     deriving (Eq, Generic, Ord, Show)
+
+pattern FileEntry :: Entry Text -> FilesystemEntry
+pattern FileEntry entry = TextFileEntry entry
 
 instance FromDhall FilesystemEntry where
     autoWith normalizer = Decoder
@@ -79,7 +95,9 @@ instance FromDhall FilesystemEntry where
             Make "directory" entry ->
                 DirectoryEntry <$> extract (autoWith normalizer) entry
             Make "file" entry ->
-                FileEntry <$> extract (autoWith normalizer) entry
+                TextFileEntry <$> extract (autoWith normalizer) entry
+            Make "binary-file" entry ->
+                BinaryFileEntry <$> extract (autoWith normalizer) entry
             expr -> Decode.typeError (expected (Decode.autoWith normalizer :: Decoder FilesystemEntry)) expr
         }
 
@@ -239,3 +257,11 @@ prettyFileMode mode = userPP <> groupPP <> otherPP
         isBitSet c mask = if mask `Posix.intersectFileModes` mode /= Posix.nullFileMode
             then [c]
             else "-"
+
+-- | Is setting metadata supported on this platform or not.
+isMetadataSupported :: Bool
+#ifdef mingw32_HOST_OS
+isMetadataSupported = False
+#else
+isMetadataSupported = True
+#endif

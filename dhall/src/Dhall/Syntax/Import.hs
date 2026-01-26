@@ -1,6 +1,7 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 
 module Dhall.Syntax.Import
     ( Directory(..)
@@ -14,9 +15,11 @@ module Dhall.Syntax.Import
     , Scheme(..)
     ) where
 
+import Data.Data                      (Data)
 import Data.Text                      (Text)
 import Dhall.Src                      (Src (..))
 import Dhall.Syntax.Expr              (Expr (..))
+import Dhall.Syntax.Instances.Data    ()
 import Dhall.Syntax.Instances.Functor ()
 import GHC.Generics                   (Generic)
 
@@ -29,7 +32,7 @@ import qualified Dhall.Crypto
     @Directory { components = [ "baz", "bar", "foo" ] }@
 -}
 newtype Directory = Directory { components :: [Text] }
-    deriving Generic
+    deriving (Data, Generic)
 
 {-| A `File` is a `directory` followed by one additional path component
     representing the `file` name
@@ -37,7 +40,7 @@ newtype Directory = Directory { components :: [Text] }
 data File = File
     { directory :: Directory
     , file      :: Text
-    } deriving Generic
+    } deriving (Data, Generic)
 
 -- | The beginning of a file path which anchors subsequent path components
 data FilePrefix
@@ -49,11 +52,11 @@ data FilePrefix
     -- ^ Path relative to @..@
     | Home
     -- ^ Path relative to @~@
-    deriving Generic
+    deriving (Data, Generic)
 
 -- | The URI scheme
 data Scheme = HTTP | HTTPS
-    deriving Generic
+    deriving (Data, Generic)
 
 -- | This type stores all of the components of a remote import
 data URL = URL
@@ -62,7 +65,7 @@ data URL = URL
     , path      :: File
     , query     :: Maybe Text
     , headers   :: Maybe (Expr Src Import)
-    } deriving Generic
+    } deriving (Data, Generic)
 
 -- | The type of import (i.e. local vs. remote vs. environment)
 data ImportType
@@ -73,23 +76,23 @@ data ImportType
     | Env  Text
     -- ^ Environment variable
     | Missing
-    deriving Generic
+    deriving (Data, Generic)
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText | Location
-  deriving Generic
+data ImportMode = Code | RawText | Location | RawBytes
+  deriving (Data, Generic)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
 data ImportHashed = ImportHashed
     { hash       :: Maybe Dhall.Crypto.SHA256Digest
     , importType :: ImportType
-    } deriving Generic
+    } deriving (Data, Generic)
 
 -- | Reference to an external resource
 data Import = Import
     { importHashed :: ImportHashed
     , importMode   :: ImportMode
-    } deriving Generic
+    } deriving (Data, Generic)
 
 
 

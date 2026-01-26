@@ -7,6 +7,7 @@ import Dhall.Context                 (Context, empty, insert, toList)
 import Dhall.LSP.Backend.Diagnostics (Position, positionToOffset)
 import Dhall.LSP.Backend.Parsing     (holeExpr)
 import Dhall.Parser                  (Src, exprFromText)
+import Dhall.Pretty                  (UnescapedLabel (..))
 import Dhall.TypeCheck               (typeOf, typeWithA)
 import System.Directory              (doesDirectoryExist, listDirectory)
 import System.Environment            (getEnvironment)
@@ -186,9 +187,9 @@ completeProjections (CompletionContext context values) expr =
   -- complete a union constructor by inspecting the union value
   completeUnion _A (Union m) =
     let constructor (k, Nothing) =
-            Completion (Dhall.Pretty.escapeLabel True k) (Just _A)
+            Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just _A)
         constructor (k, Just v) =
-            Completion (Dhall.Pretty.escapeLabel True k) (Just (Pi mempty k v _A))
+            Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just (Pi mempty k v _A))
      in map constructor (Dhall.Map.toList m)
   completeUnion _ _ = []
 
@@ -197,5 +198,5 @@ completeProjections (CompletionContext context values) expr =
   completeRecord (Record m) = map toCompletion (Dhall.Map.toList $ recordFieldValue <$> m)
     where
       toCompletion (name, typ) =
-          Completion (Dhall.Pretty.escapeLabel True name) (Just typ)
+          Completion (Dhall.Pretty.escapeLabel AnyLabel name) (Just typ)
   completeRecord _ = []

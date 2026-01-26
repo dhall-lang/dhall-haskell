@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -15,13 +16,19 @@ import Dhall.Syntax.Types
 import Dhall.Syntax.Var
 import Language.Haskell.TH.Syntax   (Lift)
 
+#if !MIN_VERSION_template_haskell(2,21,0)
 import qualified Data.Fixed as Fixed
-import qualified Data.Time  as Time
+#endif
+import qualified Data.Time as Time
 
+#if !MIN_VERSION_time(1,14,0)
 deriving instance Lift Time.Day
+#endif
 deriving instance Lift Time.TimeOfDay
 deriving instance Lift Time.TimeZone
+#if !MIN_VERSION_template_haskell(2,21,0)
 deriving instance Lift (Fixed.Fixed a)
+#endif
 deriving instance Lift Const
 deriving instance Lift Var
 deriving instance (Lift s, Lift a) => Lift (Binding s a)
