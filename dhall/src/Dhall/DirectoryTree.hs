@@ -67,7 +67,7 @@ import qualified System.PosixCompat.Files    as Posix
 
     * Records are translated into directories
 
-    * @Map@s are also translated into directories
+    * @Map@s are translated into directory trees, if allowSeparators option is enabled
 
     * @Text@ values or fields are translated into files
 
@@ -118,6 +118,14 @@ import qualified System.PosixCompat.Files    as Posix
     > $ cat result/example.yaml
     > ! "bar": null
     > ! "foo": "Hello"
+
+    /Construction of directory trees from maps/
+
+    In @Map@s, the keys specify paths relative to the work dir.
+    Only forward slashes (@/@) must be used as directory separators.
+    They will be automatically transformed on Windows.
+    Absolute paths (starting with @/@) and parent directory segments (@..@)
+    are prohibited for security concerns.
 
     /Advanced construction of directory trees/
 
@@ -222,12 +230,31 @@ toDirectoryTree allowSeparators path expression = case expression of
         empty
 
     process key value = do
-        when (not allowSeparators && Text.isInfixOf (Text.pack [ FilePath.pathSeparator ]) key) $
-            die
+        -- Fail if path is absolute, which is a security risk.
+        when (FilePath.isAbsolute (Text.unpack key)) die
+        
+        let keyPathSegments =
+                fmap Text.unpack $ Text.splitOn "/" key
 
-        Directory.createDirectoryIfMissing allowSeparators path
+        -- Fail if path contains attempts to go to container directory,
+        -- which is a security risk.
+        when (elem ".." keyPathSegments) die
 
-        toDirectoryTree allowSeparators (path </> Text.unpack key) value
+        (dirPathSegments, fileName) <- case reverse keyPathSegments of
+            h : t ->
+                return (reverse t, h)
+            _ ->
+                die
+
+        -- Fail if separators are not allowed by the option but we have directories in the path.
+        when (not allowSeparators && not (null dirPathSegments)) die
+
+        let dirPath =
+                Foldable.foldl' (</>) path dirPathSegments
+
+        Directory.createDirectoryIfMissing True dirPath
+
+        toDirectoryTree allowSeparators (dirPath </> fileName) value
 
     die = Exception.throwIO FilesystemError{..}
       where
