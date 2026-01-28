@@ -236,26 +236,21 @@ toDirectoryTree allowSeparators path expression = case expression of
         let keyPathSegments =
                 fmap Text.unpack $ Text.splitOn "/" key
 
-        case keyPathSegments of
-            -- Fail if separators are not allowed by the option.
-            _ : _ | not allowSeparators ->
-                die
-            _ ->
-                return ()
-
         -- Fail if path contains attempts to go to container directory,
         -- which is a security risk.
-        if elem ".." keyPathSegments
-            then die
-            else return ()
+        when (elem ".." keyPathSegments) die
 
-        (dirPath, fileName) <- case reverse keyPathSegments of
+        (dirPathSegments, fileName) <- case reverse keyPathSegments of
             h : t ->
-                return
-                    ( Foldable.foldl' (</>) path (reverse t)
-                    , h )
+                return (reverse t, h)
             _ ->
                 die
+
+        -- Fail if separators are not allowed by the option but we have directories in the path.
+        when (not allowSeparators && not (null dirPathSegments)) die
+
+        let dirPath =
+                Foldable.foldl' (</>) path dirPathSegments
 
         Directory.createDirectoryIfMissing True dirPath
 
