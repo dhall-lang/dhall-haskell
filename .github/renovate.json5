@@ -1,0 +1,12 @@
+// See: https://github.com/jenkinsci/helm-charts/blob/efc6225850a9c4e5a7f83b15223c21ff06c5b093/.github/renovate-config.json5
+
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+  ],
+  onboarding: false,
+  platform: "github",
+  repositories: ["dhall-lang/dhall-haskell"],
+  requireConfig: "ignored",
+}
