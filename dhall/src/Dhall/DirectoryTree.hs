@@ -10,7 +10,9 @@
 -- | Implementation of the @dhall to-directory-tree@ subcommand
 module Dhall.DirectoryTree
     ( -- * Filesystem
-      toDirectoryTree
+      DirectoryTreeOptions(..)
+    , defaultDirectoryTreeOptions
+    , toDirectoryTree
     , FilesystemError(..)
 
       -- * Low-level types and functions
@@ -38,7 +40,7 @@ import Dhall.Syntax
     , RecordField (..)
     , Var (..)
     )
-import System.FilePath           ((</>))
+import System.FilePath           ((</>), isAbsolute, splitDirectories, takeDirectory)
 import System.PosixCompat.Types  (FileMode, GroupID, UserID)
 
 import qualified Control.Exception           as Exception
@@ -63,11 +65,31 @@ import qualified System.Posix.User           as Posix
 #endif
 import qualified System.PosixCompat.Files    as Posix
 
+{- | Options affecting the interpretation of a directory tree specification.
+-}
+data DirectoryTreeOptions = DirectoryTreeOptions
+    { allowAbsolute :: Bool
+      -- ^ Whether to allow absolute paths in the spec.
+    , allowParent :: Bool
+      -- ^ Whether to allow ".." in the spec.
+    , allowSeparators :: Bool
+      -- ^ Whether to allow path separators in file names.
+    }
+
+-- | The default 'DirectoryTreeOptions'. All flags are set to 'False'.
+defaultDirectoryTreeOptions :: DirectoryTreeOptions
+defaultDirectoryTreeOptions = DirectoryTreeOptions
+    { allowAbsolute = False
+    , allowParent = False
+    , allowSeparators = False
+    }
+
 {-| Attempt to transform a Dhall record into a directory tree where:
 
     * Records are translated into directories
 
-    * @Map@s are translated into directory trees, if allowSeparators option is enabled
+    * @Map@s are translated into directories or whole directory trees, if
+      `allowSeparators` option is enabled
 
     * @Text@ values or fields are translated into files
 
@@ -122,10 +144,11 @@ import qualified System.PosixCompat.Files    as Posix
     /Construction of directory trees from maps/
 
     In @Map@s, the keys specify paths relative to the work dir.
-    Only forward slashes (@/@) must be used as directory separators.
-    They will be automatically transformed on Windows.
-    Absolute paths (starting with @/@) and parent directory segments (@..@)
-    are prohibited for security concerns.
+    Absolute paths and parent directory segments (@..@) are by default
+    prohibited for security concerns, but these checks can be disabled using
+    `allowAbsolute` option field (or the @--allow-absolute-paths@ CLI flag) and
+    `allowParent` option field (or the @--allow-parent-directory@ CLI flag)
+    respectively.
 
     /Advanced construction of directory trees/
 
@@ -180,16 +203,16 @@ import qualified System.PosixCompat.Files    as Posix
     that cannot be converted as-is.
 -}
 toDirectoryTree
-    :: Bool -- ^ Whether to allow path separators in file names or not
+    :: DirectoryTreeOptions
     -> FilePath
     -> Expr Void Void
     -> IO ()
-toDirectoryTree allowSeparators path expression = case expression of
+toDirectoryTree options path expression = case expression of
     RecordLit keyValues ->
         Map.unorderedTraverseWithKey_ process $ recordFieldValue <$> keyValues
 
     ListLit (Just (App List (Record [ ("mapKey", recordFieldValue -> Text), ("mapValue", _) ]))) [] ->
-        Directory.createDirectoryIfMissing allowSeparators path
+        Directory.createDirectoryIfMissing (allowSeparators options) path
 
     ListLit _ records
         | not (null records)
@@ -200,10 +223,10 @@ toDirectoryTree allowSeparators path expression = case expression of
         Text.IO.writeFile path text
 
     Some value ->
-        toDirectoryTree allowSeparators path value
+        toDirectoryTree options path value
 
     App (Field (Union _) _) value -> do
-        toDirectoryTree allowSeparators path value
+        toDirectoryTree options path value
 
     App None _ ->
         return ()
@@ -214,7 +237,8 @@ toDirectoryTree allowSeparators path expression = case expression of
     Lam _ _ (Lam _ _ _) -> do
         entries <- decodeDirectoryTree expression
 
-        processFilesystemEntryList allowSeparators path entries
+        -- TODO: Support allowAbsolute and allowParent as well ?
+        processFilesystemEntryList (allowSeparators options) path entries
 
     _ ->
         die
@@ -230,31 +254,24 @@ toDirectoryTree allowSeparators path expression = case expression of
         empty
 
     process key value = do
+        let
+            keyPath = Text.unpack key
+            keyPathSegments = splitDirectories keyPath
+            path' = path </> keyPath
+
         -- Fail if path is absolute, which is a security risk.
-        when (FilePath.isAbsolute (Text.unpack key)) die
-        
-        let keyPathSegments =
-                fmap Text.unpack $ Text.splitOn "/" key
+        when (not (allowAbsolute options) && isAbsolute keyPath) die
 
         -- Fail if path contains attempts to go to container directory,
         -- which is a security risk.
-        when (elem ".." keyPathSegments) die
+        when (not (allowParent options) && ".." `elem` keyPathSegments) die
 
-        (dirPathSegments, fileName) <- case reverse keyPathSegments of
-            h : t ->
-                return (reverse t, h)
-            _ ->
-                die
+        -- Fail if separators are not allowed by the option.
+        when (not (allowSeparators options) && length keyPathSegments > 1) die
 
-        -- Fail if separators are not allowed by the option but we have directories in the path.
-        when (not allowSeparators && not (null dirPathSegments)) die
+        Directory.createDirectoryIfMissing (allowSeparators options) (takeDirectory path')
 
-        let dirPath =
-                Foldable.foldl' (</>) path dirPathSegments
-
-        Directory.createDirectoryIfMissing True dirPath
-
-        toDirectoryTree allowSeparators (dirPath </> fileName) value
+        toDirectoryTree options path' value
 
     die = Exception.throwIO FilesystemError{..}
       where
