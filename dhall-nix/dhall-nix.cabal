@@ -31,7 +31,7 @@ Library
         data-fix                                 < 0.4 ,
         dhall                     >= 1.42     && < 1.43,
         hnix                      >= 0.16     && < 0.18,
-        microlens                 >= 0.4      && < 0.5 ,
+        microlens >=0.4 && <0.6 ,
         neat-interpolation                       < 0.6 ,
         text                      >= 0.8.0.0  && < 2.2
     Exposed-Modules:
