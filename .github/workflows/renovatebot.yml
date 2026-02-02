@@ -7,6 +7,7 @@ on:
   schedule:
     # Run every day on midnight
     - cron: "0 0 * * *"
+  workflow_dispatch: {}
 
 jobs:
   renovate:
@@ -14,6 +15,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      workflows: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
