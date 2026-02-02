@@ -1,4 +1,4 @@
-resolver: lts-23.28
+resolver: lts-24.29
 packages:
   - dhall
   - dhall-bash
@@ -10,8 +10,6 @@ packages:
   - dhall-openapi
   - dhall-toml
   - dhall-yaml
-extra-deps:
-  - microlens-0.4.14.0@sha256:1061edc3fa96fa868692891d6e0a0e198a2983a3d154a7a0ce4a708c1c3f652f,4722
 nix:
   packages:
     - ncurses

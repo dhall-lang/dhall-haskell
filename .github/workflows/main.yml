@@ -36,6 +36,9 @@ jobs:
           - os:
               runner: "ubuntu-latest"
             stack-yaml: "stack.ghc-9.8.yaml"
+          - os:
+              runner: "ubuntu-latest"
+            stack-yaml: "stack.ghc-9.10.yaml"
       fail-fast: false
     name: ${{ matrix.os.runner }} - ${{ matrix.stack-yaml }}
     runs-on: ${{ matrix.os.runner }}
