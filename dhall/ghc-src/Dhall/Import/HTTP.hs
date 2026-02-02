@@ -46,6 +46,8 @@ import qualified Data.Text.Encoding
 import qualified Dhall.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Types
+import qualified Prettyprinter
+import qualified Prettyprinter.Render.String
 
 mkPrettyHttpException :: String -> HttpException -> PrettyHttpException
 mkPrettyHttpException url ex =
@@ -201,7 +203,7 @@ instance Show NotCORSCompliant where
                 [ expectedOrigin ] ->
                         "The following parent import:\n"
                     <>  "\n"
-                    <>  "↳ " <> show parentURL <> "\n"
+                    <>  "↳ " <> renderPretty parentURL <> "\n"
                     <>  "\n"
                     <>  "... did not match the expected origin:\n"
                     <>  "\n"
@@ -209,16 +211,16 @@ instance Show NotCORSCompliant where
                     <>  "\n"
                     <>  "... so import resolution of the following child import failed:\n"
                     <>  "\n"
-                    <>  "↳ " <> show childURL <> "\n"
+                    <>  "↳ " <> renderPretty childURL <> "\n"
                 [] ->
                         "The child response did not include any `Access-Control-Allow-Origin` header,\n"
                     <>  "so resolution of the following import failed:\n"
                     <>  "\n"
-                    <>  "↳ " <> show parentURL <> "\n"
+                    <>  "↳ " <> renderPretty parentURL <> "\n"
                     <>  "\n"
                     <>  "Child import:\n"
                     <>  "\n"
-                    <>  "↳ " <> show childURL <> "\n"
+                    <>  "↳ " <> renderPretty childURL <> "\n"
                 _:_:_ ->
                         "The child response included more than one `Access-Control-Allow-Origin` header,\n"
                     <>  "when only one such header should have been present, so import resolution\n"
@@ -228,14 +230,20 @@ instance Show NotCORSCompliant where
                     <>  "\n"
                     <>  "Parent import:\n"
                     <>  "\n"
-                    <>  "↳ " <> show parentURL <> "\n"
+                    <>  "↳ " <> renderPretty parentURL <> "\n"
                     <>  "\n"
                     <>  "Child import:\n"
                     <>  "\n"
-                    <>  "↳ " <> show childURL <> "\n"
+                    <>  "↳ " <> renderPretty childURL <> "\n"
                     <>  "\n"
                     <>  "Expected origins:\n"
                     <>  concatMap (\o -> "\n↳ " <> show o <> "\n") expectedOrigins
+        
+        renderPretty :: Prettyprinter.Pretty a => a -> String
+        renderPretty =
+            Prettyprinter.Render.String.renderString
+                . Prettyprinter.layoutCompact
+                . Prettyprinter.pretty
 
 corsCompliant
     :: MonadIO io
