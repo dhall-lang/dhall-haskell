@@ -178,6 +178,8 @@ newManager = do
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
     , actualOrigin    :: ByteString
+    , childURL        :: URL
+    , parentURL       :: URL
     }
 
 instance Exception NotCORSCompliant
@@ -199,22 +201,41 @@ instance Show NotCORSCompliant where
                 [ expectedOrigin ] ->
                         "The following parent import:\n"
                     <>  "\n"
-                    <>  "↳ " <> show actualOrigin <> "\n"
+                    <>  "↳ " <> show parentURL <> "\n"
                     <>  "\n"
                     <>  "... did not match the expected origin:\n"
                     <>  "\n"
                     <>  "↳ " <> show expectedOrigin <> "\n"
                     <>  "\n"
-                    <>  "... so import resolution failed.\n"
+                    <>  "... so import resolution of the following child import failed:\n"
+                    <>  "\n"
+                    <>  "↳ " <> show childURL <> "\n"
                 [] ->
                         "The child response did not include any `Access-Control-Allow-Origin` header,\n"
-                    <>  "so import resolution failed.\n"
+                    <>  "so resolution of the following import failed:\n"
+                    <>  "\n"
+                    <>  "↳ " <> show parentURL <> "\n"
+                    <>  "\n"
+                    <>  "Child import:\n"
+                    <>  "\n"
+                    <>  "↳ " <> show childURL <> "\n"
                 _:_:_ ->
                         "The child response included more than one `Access-Control-Allow-Origin` header,\n"
                     <>  "when only one such header should have been present, so import resolution\n"
                     <>  "failed.\n"
                     <>  "\n"
                     <>  "This may indicate that the server for the child import is misconfigured.\n"
+                    <>  "\n"
+                    <>  "Parent import:\n"
+                    <>  "\n"
+                    <>  "↳ " <> show parentURL <> "\n"
+                    <>  "\n"
+                    <>  "Child import:\n"
+                    <>  "\n"
+                    <>  "↳ " <> show childURL <> "\n"
+                    <>  "\n"
+                    <>  "Expected origins:\n"
+                    <>  concatMap (\o -> "\n↳ " <> show o <> "\n") expectedOrigins
 
 corsCompliant
     :: MonadIO io
