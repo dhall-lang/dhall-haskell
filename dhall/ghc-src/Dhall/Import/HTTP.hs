@@ -188,10 +188,12 @@ instance Exception NotCORSCompliant
 
 instance Show NotCORSCompliant where
     show (NotCORSCompliant {..}) =
-        Prettyprinter.Render.String.renderString
-            $ Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions
-            $ doc
+        render doc
       where
+        render =
+            Prettyprinter.Render.String.renderString
+                . Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions
+
         doc =
             Prettyprinter.vcat
                 [ Dhall.Util._ERROR <> ": " <> "Not CORS compliant"
@@ -205,58 +207,56 @@ instance Show NotCORSCompliant where
                     , "import, otherwise Dhall rejects the import."
                     ]
                 , ""
-                , prologue
+                , case expectedOrigins of
+                    [ expectedOrigin ] ->
+                        Prettyprinter.vcat
+                            [ "The following parent import:"
+                            , ""
+                            , "↳ " <> Prettyprinter.pretty parentURL
+                            , ""
+                            , "... did not match the expected origin:"
+                            , ""
+                            , "↳ " <> Prettyprinter.viaShow expectedOrigin
+                            , ""
+                            , "... so import resolution of the following child import failed:"
+                            , ""
+                            , "↳ " <> Prettyprinter.pretty childURL
+                            ]
+                    [] ->
+                        Prettyprinter.vcat
+                            [ Prettyprinter.fillSep
+                                [ "The child response did not include any `Access-Control-Allow-Origin` header,"
+                                , "so resolution of the following import failed:"
+                                ]
+                            , ""
+                            , "↳ " <> Prettyprinter.pretty parentURL
+                            , ""
+                            , "Child import:"
+                            , ""
+                            , "↳ " <> Prettyprinter.pretty childURL
+                            ]
+                    _:_:_ ->
+                        Prettyprinter.vcat
+                            [ Prettyprinter.fillSep
+                                [ "The child response included more than one `Access-Control-Allow-Origin` header,"
+                                , "when only one such header should have been present, so import resolution"
+                                , "failed."
+                                ]
+                            , ""
+                            , "This may indicate that the server for the child import is misconfigured."
+                            , ""
+                            , "Parent import:"
+                            , ""
+                            , "↳ " <> Prettyprinter.pretty parentURL
+                            , ""
+                            , "Child import:"
+                            , ""
+                            , "↳ " <> Prettyprinter.pretty childURL
+                            , ""
+                            , "Expected origins:"
+                            , Prettyprinter.vcat (map (\o -> "\n↳ " <> Prettyprinter.viaShow o) expectedOrigins)
+                            ]
                 ]
-        prologue =
-            case expectedOrigins of
-                [ expectedOrigin ] ->
-                    Prettyprinter.vcat
-                        [ "The following parent import:"
-                        , ""
-                        , "↳ " <> Prettyprinter.pretty parentURL
-                        , ""
-                        , "... did not match the expected origin:"
-                        , ""
-                        , "↳ " <> Prettyprinter.viaShow expectedOrigin
-                        , ""
-                        , "... so import resolution of the following child import failed:"
-                        , ""
-                        , "↳ " <> Prettyprinter.pretty childURL
-                        ]
-                [] ->
-                    Prettyprinter.vcat
-                        [ Prettyprinter.fillSep
-                            [ "The child response did not include any `Access-Control-Allow-Origin` header,"
-                            , "so resolution of the following import failed:"
-                            ]
-                        , ""
-                        , "↳ " <> Prettyprinter.pretty parentURL
-                        , ""
-                        , "Child import:"
-                        , ""
-                        , "↳ " <> Prettyprinter.pretty childURL
-                        ]
-                _:_:_ ->
-                    Prettyprinter.vcat
-                        [ Prettyprinter.fillSep
-                            [ "The child response included more than one `Access-Control-Allow-Origin` header,"
-                            , "when only one such header should have been present, so import resolution"
-                            , "failed."
-                            ]
-                        , ""
-                        , "This may indicate that the server for the child import is misconfigured."
-                        , ""
-                        , "Parent import:"
-                        , ""
-                        , "↳ " <> Prettyprinter.pretty parentURL
-                        , ""
-                        , "Child import:"
-                        , ""
-                        , "↳ " <> Prettyprinter.pretty childURL
-                        , ""
-                        , "Expected origins:"
-                        , Prettyprinter.vcat (map (\o -> "\n↳ " <> Prettyprinter.viaShow o) expectedOrigins)
-                        ]
 
 corsCompliant
     :: MonadIO io
