@@ -36,6 +36,9 @@ jobs:
           - os:
               runner: "ubuntu-latest"
             stack-yaml: "stack.ghc-9.8.yaml"
+          - os:
+              runner: "ubuntu-latest"
+            stack-yaml: "stack.ghc-9.10.yaml"
       fail-fast: false
     name: ${{ matrix.os.runner }} - ${{ matrix.stack-yaml }}
     runs-on: ${{ matrix.os.runner }}
@@ -86,6 +89,9 @@ jobs:
             if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.8.yaml' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.10.yaml' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
             if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
@@ -112,6 +118,9 @@ jobs:
           )
           for package in "${packages[@]}"; do
             if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.8.yaml' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.10.yaml' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
             if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
