@@ -798,37 +798,26 @@ infer typer = loop
 
             Max c <- fmap Foldable.fold (Dhall.Map.unorderedTraverseWithKey process xTs)
             return (VConst c)
+
         Combine _ mk l r -> do
             _L' <- loop ctx l
 
-            let l'' = quote names (eval values l)
+            let _L'' = quote names _L'
+
+            let l' = eval values l
+
+            let l'' = quote names l'
 
             _R' <- loop ctx r
 
-            let r'' = quote names (eval values r)
+            let _R'' = quote names _R'
 
-            xLs' <- case _L' of
-                VRecord xLs' ->
-                    return xLs'
+            let r' = eval values r
 
-                _ -> do
-                    let _L'' = quote names _L'
+            let r'' = quote names r'
 
-                    case mk of
-                        Nothing -> die (MustCombineARecord '∧' l'' _L'')
-                        Just t  -> die (InvalidDuplicateField t l _L'')
-
-            xRs' <- case _R' of
-                VRecord xRs' ->
-                    return xRs'
-
-                _ -> do
-                    let _R'' = quote names _R'
-
-                    case mk of
-                        Nothing -> die (MustCombineARecord '∧' r'' _R'')
-                        Just t  -> die (InvalidDuplicateField t r _R'')
-
+            -- The `Combine` operator needs to work on record terms and also on record types.
+            -- We will use combineTypes or recordTypesHaveNoFieldCollisions below as needed for each case.
             let combineTypes xs xLs₀' xRs₀' = do
                     let combine x (VRecord xLs₁') (VRecord xRs₁') =
                             combineTypes (x : xs) xLs₁' xRs₁'
@@ -845,7 +834,31 @@ infer typer = loop
 
                     return (VRecord xTs)
 
-            combineTypes [] xLs' xRs'
+            -- If both sides of `Combine` are record terms (and their types match VRecord _), we use combineTypes to figure out the resulting type.
+            -- If both sides are record types (and their kinds match VConst _), we check recordTypesHaveNoFieldCollisions and then return the upper bound of the two types.
+            -- Otherwise there is a type error.
+            case (_L', l', _R', r') of
+                (VRecord xLs', _, VRecord xRs', _) -> do  -- Both arguments are record terms.
+                    combineTypes [] xLs' xRs'
+
+                (VConst cL, VRecord xLs', VConst cR, VRecord xRs') -> do  -- Both arguments are record types.
+                    let c = max cL cR
+                    recordTypesHaveNoFieldCollisions '∧' [] xLs' xRs'
+                    return (VConst c)
+
+                (VRecord _, _, _, _) -> do  -- The left argument is a record term, the right argument is not. We report the error in the right argument.
+                  case mk of
+                     Nothing -> die (MustCombineARecord '∧' r'' _R'')
+                     Just t  -> die (InvalidDuplicateField t r _R'')
+
+                (_, _, VRecord _, _) -> do  -- The right argument is a record term, the left argument is not. We report the error in the left argument.
+                  case mk of
+                     Nothing -> die (MustCombineARecord '∧' l'' _L'')
+                     Just t  -> die (InvalidDuplicateField t l _L'')
+
+                _ -> do  -- One of the arguments is a record type, but the other argument is not.
+                    die (MustCombineRecordsOrRecordTypes l'' _L'' r _R'')
+
 
         CombineTypes _ l r -> do
             _L' <- loop ctx l
@@ -878,19 +891,7 @@ infer typer = loop
                 VRecord xRs' -> return xRs'
                 _            -> die (CombineTypesRequiresRecordType r r'')
 
-            let combineTypes xs xLs₀' xRs₀' = do
-                    let combine x (VRecord xLs₁') (VRecord xRs₁') =
-                            combineTypes (x : xs) xLs₁' xRs₁'
-
-                        combine x _ _ =
-                            die (FieldTypeCollision (NonEmpty.reverse (x :| xs)))
-
-                    let mL = Dhall.Map.toMap xLs₀'
-                    let mR = Dhall.Map.toMap xRs₀'
-
-                    Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
-
-            combineTypes [] xLs' xRs'
+            recordTypesHaveNoFieldCollisions '⩓' [] xLs' xRs'
 
             return (VConst c)
 
@@ -1360,6 +1361,19 @@ infer typer = loop
 
         quote ns value = Dhall.Core.renote (Eval.quote ns value)
 
+        recordTypesHaveNoFieldCollisions c xs xLs₀' xRs₀' = Foldable.sequence_ (Data.Map.intersectionWithKey combine mL mR)
+          where
+            combine x (VRecord xLs₁') (VRecord xRs₁') =
+                    recordTypesHaveNoFieldCollisions c (x : xs) xLs₁' xRs₁'
+
+            combine x _ _ =
+                    die (FieldTypeCollision c (NonEmpty.reverse (x :| xs)))
+
+            mL = Dhall.Map.toMap xLs₀'
+            mR = Dhall.Map.toMap xRs₀'
+
+
+
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking
     will fail.
@@ -1387,13 +1401,14 @@ data TypeMessage s a
     | InvalidAlternativeType Text (Expr s a)
     | ListAppendMismatch (Expr s a) (Expr s a)
     | MustCombineARecord Char (Expr s a) (Expr s a)
+    | MustCombineRecordsOrRecordTypes (Expr s a) (Expr s a) (Expr s a) (Expr s a)
     | InvalidDuplicateField Text (Expr s a) (Expr s a)
     | InvalidRecordCompletion Text (Expr s a)
     | CompletionSchemaMustBeARecord (Expr s a) (Expr s a)
     | CombineTypesRequiresRecordType (Expr s a) (Expr s a)
     | DuplicateFieldCannotBeMerged (NonEmpty Text)
     | FieldCollision (NonEmpty Text)
-    | FieldTypeCollision (NonEmpty Text)
+    | FieldTypeCollision Char (NonEmpty Text)
     | MustMergeARecord (Expr s a) (Expr s a)
     | MustMergeUnionOrOptional (Expr s a) (Expr s a)
     | MustMapARecord (Expr s a) (Expr s a)
@@ -2707,7 +2722,7 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
         '∧' -> "combine"
         _   -> "override"
 
-    short = "You can only " <> action <> " records"
+    short = "You can only " <> action <> " a record with another record"
 
     hints = emptyRecordTypeHint expression
 
@@ -2725,7 +2740,7 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
         \    └─────────────────────────────────────────────┘                             \n\
         \                                                                                \n\
         \                                                                                \n\
-        \... but you cannot " <> action <> " values that are not records.                \n\
+        \... but you cannot " <> action <> " a record and a value that is not a record.  \n\
         \                                                                                \n\
         \For example, the following expressions are " <> _NOT <> " valid:                \n\
         \                                                                                \n\
@@ -2763,6 +2778,78 @@ prettyTypeMessage (MustCombineARecord c expression typeExpression) =
       where
         op = pretty c
 
+prettyTypeMessage (MustCombineRecordsOrRecordTypes e1 t1 e2 t2) =
+    ErrorMessages {..}
+  where
+    action = "combine"
+    short = "You can only " <> action <> " two records or two record types"
+
+    hints = emptyRecordTypeHint e1 ++ emptyRecordTypeHint e2
+
+    long =
+        "Explanation: You can " <> action <> " two records or two record types using the ❰" <> op <> "❱ |\n\
+        \  operator like this:                                                          |\n\
+        \                                                                               |\n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz = True } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌─────────────────────────────────────────────┐                             \n\
+        \    │ { foo : Bool, bar : Text } " <> op <> " { baz : Bool } │                  \n\
+        \    └─────────────────────────────────────────────┘                             \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \... but you cannot " <> action <> " values that are not both records            \n\
+        \  and not both record types.                                                    \n\
+        \                                                                                \n\
+        \For example, the following expressions are " <> _NOT <> " valid:                \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌──────────────────────────────┐                                            \n\
+        \    │ 1 " <> op <> " { foo = 1, bar = \"ABC\" } │                               \n\
+        \    └──────────────────────────────┘                                            \n\
+        \      ⇧                                                                         \n\
+        \      Invalid: This is not a record and not a record type                       \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ { foo = 1, bar = \"ABC\" } " <> op <> " { baz : Bool } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \                                 ⇧                                              \n\
+        \                                 Invalid: cannot combine a record and a record type\n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \    ┌───────────────────────────────────────────┐                               \n\
+        \    │ < baz : Bool > " <> op <> " { foo = 1, bar = \"ABC\" } │                  \n\
+        \    └───────────────────────────────────────────┘                               \n\
+        \            ⇧                                                                   \n\
+        \            Invalid: This is a union type and not a record                      \n\
+        \                                                                                \n\
+        \                                                                                \n\
+        \────────────────────────────────────────────────────────────────────────────────\n\
+        \                                                                                \n\
+        \You supplied this expression as the first argument:                             \n\
+        \                                                                                \n\
+        \" <> insert e1 <> "\n\
+        \                                                                                \n\
+        \... which has type:                                                             \n\
+        \                                                                                \n\
+        \" <> insert t1 <> "\n\
+        \                                                                                \n\
+        \You supplied this expression as the second argument:                            \n\
+        \                                                                                \n\
+        \" <> insert e2 <> "\n\
+        \                                                                                \n\
+        \... which has type:                                                             \n\
+        \                                                                                \n\
+        \" <> insert t2 <> "\n\
+        \                                                                                \n\
+        \At least one of these arguments is neither a record type nor a record.          \n"
+      where
+        op = pretty '∧' -- This message is only for type errors while using ∧.
+
 prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
     ErrorMessages {..}
   where
@@ -2770,9 +2857,10 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
 
     hints = []
 
-    long =
+    long =  -- This error occurs only when applying '∧' to two arguments, one of which is a record but the other is not.
+            -- Note that duplicate fields are not allowed in record types: { a : x, a : y } is never valid even if x, y are record types.
         "Explanation: You can specify a field twice if both fields are themselves        \n\
-        \records, like this:                                                             \n\
+        \records or record types, like this:                                             \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────────────────────────────────────────────┐                \n\
@@ -2797,8 +2885,8 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \    └────────────────────────────────────────────────┘                          \n\
         \                                                                                \n\
         \                                                                                \n\
-        \However, this implies that both fields must be records since the ❰∧❱ operator   \n\
-        \cannot merge non-record values.  For example, these expressions are not valid:  \n\
+        \However, this implies that both fields must be records (or both record types) as\n\
+        \ the ❰∧❱ operator cannot merge other values.  Examples of invalid expressions:  \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌──────────────────┐                                                        \n\
@@ -2811,13 +2899,18 @@ prettyTypeMessage (InvalidDuplicateField k expr0 expr1) =
         \    └──────────────────────────┘                                                \n\
         \                                                                                \n\
         \                                                                                \n\
+        \    ┌────────────────────────────────────────┐                                  \n\
+        \    │ { x = { a : Natural }, x = { a = 0 } } │  Invalid: The first ❰x❱ field is \n\
+        \    └────────────────────────────────────────┘  a record type while the second  \n\
+        \                                                ❰x❱ field is a record           \n\
+        \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
         \                                                                                \n\
         \You specified more than one field named:                                        \n\
         \                                                                                \n\
         \" <> txt0 <> "\n\
         \                                                                                \n\
-        \... but one of the fields had this value:                                       \n\
+        \... and one of the fields is a record but the other is not as it has this value:\n\
         \                                                                                \n\
         \" <> txt1 <> "\n\
         \                                                                                \n\
@@ -2854,7 +2947,7 @@ prettyTypeMessage (CombineTypesRequiresRecordType expr0 expr1) =
         \                                                                                \n\
         \    ┌───────────────────────────────────┐                                       \n\
         \    │ λ(t : Type) → t ⩓ { name : Text } │  Invalid: ❰t❱ might not be a record   \n\
-        \    └───────────────────────────────────┘  type                                 \n\
+        \    └───────────────────────────────────┘  type (we only know it is a Type)     \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
@@ -3002,19 +3095,21 @@ prettyTypeMessage (FieldCollision ks) = ErrorMessages {..}
       where
         txt0 = insert (toPath ks)
 
-prettyTypeMessage (FieldTypeCollision ks) = ErrorMessages {..}
+prettyTypeMessage (FieldTypeCollision c ks) = ErrorMessages {..}
   where
+    op = pretty c
+
     short = "Field type collision on: " <> pretty (toPath ks)
 
     hints = []
 
     long =
-        "Explanation: You can recursively merge record types using the ❰⩓❱ operator, like\n\
+        "Explanation: You can recursively merge record types using the ❰" <> op <> "❱ operator, like\n\
         \this:                                                                           \n\
         \                                                                                \n\
         \                                                                                \n\
         \    ┌───────────────────────┐                                                   \n\
-        \    │ { x : A } ⩓ { y : B } │                                                   \n\
+        \    │ { x : A } " <> op <> " { y : B } │                                                   \n\
         \    └───────────────────────┘                                                   \n\
         \                                                                                \n\
         \                                                                                \n\
@@ -3025,16 +3120,17 @@ prettyTypeMessage (FieldTypeCollision ks) = ErrorMessages {..}
         \                                                                                \n\
         \                                                                                \n\
         \    ┌────────────────────────────────┐                                          \n\
-        \    │ { x : Natural } ⩓ { x : Bool } │  Invalid: The ❰x❱ fields \"collide\"       \n\
-        \    └────────────────────────────────┘  because they cannot be merged           \n\
-        \                                                                                \n\
+        \    │ { x : Natural } " <> op <> " { x : Bool } │  Invalid: The ❰x❱ fields \"collide\"       \n\
+        \    └────────────────────────────────┘  because they cannot be merged: Natural  \n\
+        \                                        and Bool are not record types           \n\
         \                                                                                \n\
         \... but the following expression is valid:                                      \n\
         \                                                                                \n\
         \                                                                                \n\
-        \    ┌────────────────────────────────────────────────┐  Valid: The ❰x❱ field    \n\
-        \    │ { x : { y : Bool } } ⩓ { x : { z : Natural } } │  types don't collide and \n\
-        \    └────────────────────────────────────────────────┘  can be merged           \n\
+        \    ┌────────────────────────────────────────────────┐  Valid: The ❰x❱ field    \n\     
+        \    │ { x : { y : Bool } } " <> op <> " { x : { z : Natural } } │  types are record types  \n\
+        \    └────────────────────────────────────────────────┘  that don't collide and  \n\
+        \                                                        can be merged           \n\
         \                                                                                \n\
         \                                                                                \n\
         \────────────────────────────────────────────────────────────────────────────────\n\
@@ -4686,6 +4782,8 @@ messageExpressions f m = case m of
         InvalidDuplicateField a <$> f b <*> f c
     MustCombineARecord a b c ->
         MustCombineARecord <$> pure a <*> f b <*> f c
+    MustCombineRecordsOrRecordTypes a b c d ->
+        MustCombineRecordsOrRecordTypes <$> f a <*> f b <*> f c <*> f d
     InvalidRecordCompletion a l ->
         InvalidRecordCompletion a <$> f l
     CompletionSchemaMustBeARecord l r ->
@@ -4696,8 +4794,8 @@ messageExpressions f m = case m of
         pure (DuplicateFieldCannotBeMerged a)
     FieldCollision a ->
         pure (FieldCollision a)
-    FieldTypeCollision a ->
-        pure (FieldTypeCollision a)
+    FieldTypeCollision c a ->
+        pure (FieldTypeCollision c a)
     MustMergeARecord a b ->
         MustMergeARecord <$> f a <*> f b
     MustMergeUnionOrOptional a b ->
