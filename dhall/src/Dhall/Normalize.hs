@@ -387,10 +387,16 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         loop (TextLit (Chunks [] text))
                       where
                         text = Eval.dateShow date
+                    App DateYear (DateLiteral date) -> pure (NaturalLit (Eval.getYear date))
+                    App DateMonth (DateLiteral date) -> pure (NaturalLit (Eval.getMonth date))
+                    App DateDay (DateLiteral date) -> pure (NaturalLit (Eval.getDay date))
                     App TimeShow (TimeLiteral time precision) ->
                         loop (TextLit (Chunks [] text))
                       where
                         text = Eval.timeShow time precision
+                    App TimeHour (TimeLiteral time _) -> pure (NaturalLit (Eval.getHour time))
+                    App TimeMinute (TimeLiteral time _) -> pure (NaturalLit (Eval.getMinute time))
+                    App TimeSecond (TimeLiteral time _) -> pure (NaturalLit (Eval.getSecond time))
                     App TimeZoneShow (TimeZoneLiteral timezone) ->
                         loop (TextLit (Chunks [] text))
                       where
@@ -504,9 +510,15 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
           Date -> pure Date
           DateLiteral d -> pure (DateLiteral d)
           DateShow -> pure DateShow
+          DateYear -> pure DateYear
+          DateMonth -> pure DateMonth
+          DateDay -> pure DateDay
           Time -> pure Time
           TimeLiteral t p -> pure (TimeLiteral t p)
           TimeShow -> pure TimeShow
+          TimeHour -> pure TimeHour
+          TimeMinute -> pure TimeMinute
+          TimeSecond -> pure TimeSecond
           TimeZone -> pure TimeZone
           TimeZoneLiteral z -> pure (TimeZoneLiteral z)
           TimeZoneShow -> pure TimeZoneShow
@@ -807,7 +819,13 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
           App DateShow (DateLiteral _) -> False
+          App DateYear (DateLiteral _) -> False
+          App DateMonth (DateLiteral _) -> False
+          App DateDay (DateLiteral _) -> False
           App TimeShow (TimeLiteral _ _) -> False
+          App TimeHour (TimeLiteral _ _) -> False
+          App TimeMinute (TimeLiteral _ _) -> False
+          App TimeSecond (TimeLiteral _ _) -> False
           App TimeZoneShow (TimeZoneLiteral _) -> False
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
@@ -911,9 +929,15 @@ isNormalized e0 = loop (Syntax.denote e0)
       Date -> True
       DateLiteral _ -> True
       DateShow -> True
+      DateYear -> True
+      DateMonth -> True
+      DateDay -> True
       Time -> True
       TimeLiteral _ _ -> True
       TimeShow -> True
+      TimeHour -> True
+      TimeMinute -> True
+      TimeSecond -> True
       TimeZone -> True
       TimeZoneLiteral _ -> True
       TimeZoneShow -> True
