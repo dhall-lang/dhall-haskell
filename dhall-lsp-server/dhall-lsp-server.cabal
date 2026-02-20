@@ -53,7 +53,7 @@ library
     , dhall                >= 1.38.0   && < 1.43
     , dhall-json           >= 1.4      && < 1.8
     , filepath             >= 1.4.2    && < 1.6
-    , lsp                  >= 2.1.0.0  && < 2.8
+    , lsp >=2.1.0.0 && <2.9
     , lens                 >= 4.16.1   && < 5.4
     -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
     , megaparsec           >= 7.0.2    && < 10
