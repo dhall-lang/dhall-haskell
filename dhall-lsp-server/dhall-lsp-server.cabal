@@ -106,7 +106,7 @@ Test-Suite tests
         base              >= 4.11     && < 5   ,
         lsp-types         >= 2.0.1    && < 2.4 ,
         hspec             >= 2.7      && < 2.12,
-        lsp-test          >= 0.15.0.0 && < 0.18,
+        lsp-test >=0.15.0.0 && <0.19,
         tasty             >= 0.11.2   && < 1.6 ,
         tasty-hspec       >= 1.1      && < 1.3 ,
         text              >= 0.11     && < 2.2
