@@ -900,6 +900,15 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.DateShow ->
             Core.DateShow
 
+        Core.DateYear ->
+            Core.DateYear
+
+        Core.DateMonth ->
+            Core.DateMonth
+
+        Core.DateDay ->
+            Core.DateDay
+
         Core.Time ->
             Core.Time
 
@@ -908,6 +917,15 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
 
         Core.TimeShow ->
             Core.TimeShow
+
+        Core.TimeHour ->
+            Core.TimeHour
+
+        Core.TimeMinute ->
+            Core.TimeMinute
+
+        Core.TimeSecond ->
+            Core.TimeSecond
 
         Core.TimeZone ->
             Core.TimeZone
