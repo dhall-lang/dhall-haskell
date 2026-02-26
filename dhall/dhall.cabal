@@ -447,8 +447,8 @@ Test-Suite tasty
         generic-random            >= 1.3.0.0  && < 1.6 ,
         http-client                                    ,
         http-client-tls                                ,
-        QuickCheck                >= 2.14     && < 2.17,
-        quickcheck-instances      >= 0.3.12   && < 0.4 ,
+        QuickCheck                >= 2.14     && < 2.18,
+        quickcheck-instances      >= 0.3.12   && < 0.5 ,
         special-values                           < 0.2 ,
         spoon                                    < 0.4 ,
         tasty                     >= 0.11.2   && < 1.6 ,
@@ -480,7 +480,7 @@ Benchmark dhall-parser
     Main-Is: Main.hs
     Build-Depends:
         dhall                                         ,
-        tasty-bench               >= 0.4      && < 0.5,
+        tasty-bench               >= 0.4      && < 0.6,
     Default-Language: Haskell2010
     Other-Extensions:
         TypeApplications
@@ -493,5 +493,5 @@ Benchmark deep-nested-large-record
     Main-Is: Main.hs
     Build-Depends:
         dhall                                         ,
-        tasty-bench               >= 0.4      && < 0.5,
+        tasty-bench               >= 0.4      && < 0.6,
     Default-Language: Haskell2010
