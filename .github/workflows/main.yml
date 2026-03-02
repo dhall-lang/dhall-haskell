@@ -178,7 +178,7 @@ jobs:
           package 'dhall-yaml' "bin/dhall-to-yaml-ng${exe}" "bin/yaml-to-dhall${exe}"
       - name: "Upload package"
         if: ${{ matrix.stack-yaml == 'stack.yaml' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: 'dhall-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
           path: 'dhall-*${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
