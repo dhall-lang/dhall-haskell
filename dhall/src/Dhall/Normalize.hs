@@ -333,16 +333,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             (App TextReplace (TextLit (Chunks [] needleText)))
                             (TextLit (Chunks [] replacementText))
                         )
-                        (TextLit (Chunks xys z)) -> do
-                            let xys' = do
-                                    (x, y) <- xys
-
-                                    let x' = Text.replace needleText replacementText x
-                                    return (x', y)
-
+                        (TextLit (Chunks [] z)) -> do
                             let z' = Text.replace needleText replacementText z
 
-                            return (TextLit (Chunks xys' z'))
+                            return (TextLit (Chunks [] z'))
                     App (App
                             (App TextReplace (TextLit (Chunks [] needleText)))
                             replacement
@@ -375,7 +369,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
 
                             if Text.null suffix
                                 then do
-                                    loop (TextAppend (TextLit (Chunks [(firstText, firstInterpolation)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks chunks lastText))))
+                                    loop (TextAppend (TextLit (Chunks [(firstText, App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) firstInterpolation)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks chunks lastText))))
                                 else do
                                     let remainder =
                                             Text.drop
