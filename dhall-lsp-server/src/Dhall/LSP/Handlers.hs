@@ -111,7 +111,11 @@ readUri :: Uri -> HandlerM Text
 readUri uri_ = do
   mVirtualFile <- liftLSP (LSP.getVirtualFile (LSP.Types.toNormalizedUri uri_))
   case mVirtualFile of
+#if MIN_VERSION_lsp(2,8,0)
+    Just (LSP.VirtualFile _ _ rope _) -> return (Rope.toText rope)
+#else
     Just (LSP.VirtualFile _ _ rope) -> return (Rope.toText rope)
+#endif
     Nothing -> throwE (Error, "Could not find " <> Text.pack (show uri_) <> " in VFS.")
 
 loadFile :: EvaluateSettings -> Uri -> HandlerM (Expr Src Void)
