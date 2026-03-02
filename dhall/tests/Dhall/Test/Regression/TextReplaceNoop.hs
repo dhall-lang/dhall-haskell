@@ -1,7 +1,3 @@
-{-# LANGUAGE MultilineStrings #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -17,10 +13,10 @@ import qualified Test.Tasty.HUnit
 
 tests :: TestTree
 tests =
-    Test.Tasty.HUnit.testCase "Text replacement should not be a no-op" $ do
+    Test.Tasty.HUnit.testCase "Text replacement should not become a no-op when the input contains append" $ do
 
         fn :: Text -> Text
-            <- Dhall.input Dhall.auto "./tests/Dhall/Test/Regression/TextReplaceNoop.dhall"
+            <- Dhall.input Dhall.auto "\\(x : Text) -> Text/replace \".\" \"!\" (x ++ \"!\")"
             
         fn "..."
             @?= "!!!!"
