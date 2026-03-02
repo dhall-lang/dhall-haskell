@@ -19,9 +19,9 @@ tests :: TestTree
 tests =
     Test.Tasty.HUnit.testCase "Text replacement should not be a no-op" $ do
 
-        fn :: [Text] -> Text
+        fn :: Text -> Text
             <- Dhall.input Dhall.auto "./tests/Dhall/Test/Regression/TextReplaceNoop.dhall"
             
-        fn ["..."]
-            @?= "\"!!!\""
+        fn "..."
+            @?= "!!!!"
 
