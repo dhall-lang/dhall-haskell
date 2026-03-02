@@ -31,28 +31,20 @@ let escapeText
         , Text/replace "\n" ("\\n\\" ++ "\n" ++ "\\")
         ]
         
-let Fragment = <A : Text | B : Natural>
-
 let renderExp
-    : List Fragment -> Text
-    = \(fragments : List Fragment) ->
+    : List Text -> Text
+    = \(fragments : List Text) ->
             "\""
         ++  concatMap
-            Fragment
-            ( \(fragment : Fragment) ->
-                merge
-                    { A = escapeText
-                    , B =
-                        \(b : Natural) ->
-                        "\$" ++ Natural/show b
-                    }
-                    fragment
+            Text
+            ( \(fragment : Text) ->
+                fragment
             )
             fragments
                     ++  "\""
 
 let fn =
-      \(fragments : List Fragment) ->
+      \(fragments : List Text) ->
         Text/replace "." "!" (renderExp fragments)
 
 in fn
