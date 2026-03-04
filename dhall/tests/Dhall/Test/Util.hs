@@ -247,35 +247,35 @@ managedTestEnvironment prefix = Turtle.managed (Control.Exception.bracket setup 
     restoreEnv (k, Just old) = Turtle.export k old
     restoreEnv (k, Nothing) = Turtle.unset k
 
-equivalent :: Text -> Text -> IO ()
+equivalent :: HasCallStack => Text -> Text -> IO ()
 equivalent text0 text1 = do
     expr0 <- fmap Dhall.Core.normalize (code text0) :: IO (Expr Void Void)
     expr1 <- fmap Dhall.Core.normalize (code text1) :: IO (Expr Void Void)
     assertEqual "Expressions are not equivalent" expr0 expr1
 
-assertNormalizesTo :: Expr Src Void -> Text -> IO ()
+assertNormalizesTo :: HasCallStack => Expr Src Void -> Text -> IO ()
 assertNormalizesTo e expected = do
   assertBool msg (not $ Dhall.Core.isNormalized e)
   normalize' e @?= expected
   where msg = "Given expression is already in normal form"
 
-assertNormalizesToWith :: Normalizer Void -> Expr Src Void -> Text -> IO ()
+assertNormalizesToWith :: HasCallStack => Normalizer Void -> Expr Src Void -> Text -> IO ()
 assertNormalizesToWith ctx e expected = do
   assertBool msg (not $ Dhall.Core.isNormalizedWith ctx (first (const ()) e))
   normalizeWith' ctx e @?= expected
   where msg = "Given expression is already in normal form"
 
-assertNormalized :: Expr Src Void -> IO ()
+assertNormalized :: HasCallStack => Expr Src Void -> IO ()
 assertNormalized e = do
   assertBool msg1 (Dhall.Core.isNormalized e)
   assertEqual msg2 (normalize' e) (Dhall.Core.pretty e)
   where msg1 = "Expression was not in normal form"
         msg2 = "Normalization is not supposed to change the expression"
 
-assertTypeChecks :: Text -> IO ()
+assertTypeChecks :: HasCallStack => Text -> IO ()
 assertTypeChecks text = Data.Functor.void (code text)
 
-assertDoesntTypeCheck :: Text -> IO ()
+assertDoesntTypeCheck :: HasCallStack => Text -> IO ()
 assertDoesntTypeCheck text = do
     expr0 <- case Dhall.Parser.exprFromText mempty text of
         Left parseError -> Control.Exception.throwIO parseError
