@@ -369,6 +369,7 @@ Library
         Dhall.Normalize
         Dhall.Parser.Combinators
         Dhall.Pretty.Internal
+        Dhall.Settings
         Dhall.Syntax
         Dhall.Syntax.Binding
         Dhall.Syntax.Chunks
