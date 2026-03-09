@@ -65,6 +65,7 @@ import Control.Monad.Trans.State.Strict
 import Data.Functor.Contravariant           (Contravariant (..), Op (..), (>$<))
 import Data.Functor.Contravariant.Divisible (Divisible (..), divided)
 import Dhall.Parser                         (Src (..))
+import Dhall.Pretty                         (ChooseCharacterSet(..))
 import Dhall.Syntax
     ( Chunks (..)
     , DhallDouble (..)
@@ -530,13 +531,13 @@ instance forall f. (Functor f, ToDhall (f (Result f))) => ToDhall (Fix f) where
     injectWith inputNormalizer = Encoder {..}
       where
         embed fixf =
-          Lam Nothing (Core.makeFunctionBinding "result" (Const Core.Type)) $
-            Lam Nothing (Core.makeFunctionBinding "Make" makeType) $
+          Lam AutoInferCharSet (Core.makeFunctionBinding "result" (Const Core.Type)) $
+            Lam AutoInferCharSet (Core.makeFunctionBinding "Make" makeType) $
               embed' . fixToResult $ fixf
 
-        declared = Pi Nothing "result" (Const Core.Type) $ Pi Nothing "_" makeType "result"
+        declared = Pi AutoInferCharSet "result" (Const Core.Type) $ Pi AutoInferCharSet "_" makeType "result"
 
-        makeType = Pi Nothing "_" declared' "result"
+        makeType = Pi AutoInferCharSet "_" declared' "result"
         Encoder embed' _ = injectWith @(Dhall.Marshal.Internal.Result f) inputNormalizer
         Encoder _ declared' = injectWith @(f (Dhall.Marshal.Internal.Result f)) inputNormalizer
 

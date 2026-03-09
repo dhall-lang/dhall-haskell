@@ -35,6 +35,7 @@ import Dhall.Syntax.RecordField     (RecordField (..), recordFieldExprs)
 import Dhall.Syntax.Types
 import Dhall.Syntax.Var
 import Unsafe.Coerce                (unsafeCoerce)
+import {-# SOURCE #-} Dhall.Pretty.Internal        (ChooseCharacterSet(..))
 
 import qualified Data.HashSet
 import qualified Data.Text
@@ -171,15 +172,15 @@ denote = \case
     Note _ b -> denote b
     Let a b -> Let (denoteBinding a) (denote b)
     Embed a -> Embed a
-    Combine _ _ b c -> Combine Nothing Nothing (denote b) (denote c)
-    CombineTypes _ b c -> CombineTypes Nothing (denote b) (denote c)
-    Prefer _ a b c -> Lens.over unsafeSubExpressions denote $ Prefer Nothing a b c
+    Combine _ _ b c -> Combine AutoInferCharSet Nothing (denote b) (denote c)
+    CombineTypes _ b c -> CombineTypes AutoInferCharSet (denote b) (denote c)
+    Prefer _ a b c -> Lens.over unsafeSubExpressions denote $ Prefer AutoInferCharSet a b c
     Record a -> Record $ denoteRecordField <$> a
     RecordLit a -> RecordLit $ denoteRecordField <$> a
-    Lam _ a b -> Lam Nothing (denoteFunctionBinding a) (denote b)
-    Pi _ t a b -> Pi Nothing t (denote a) (denote b)
+    Lam _ a b -> Lam AutoInferCharSet (denoteFunctionBinding a) (denote b)
+    Pi _ t a b -> Pi AutoInferCharSet t (denote a) (denote b)
     Field a (FieldSelection _ b _) -> Field (denote a) (FieldSelection Nothing b Nothing)
-    Equivalent _ a b -> Equivalent Nothing (denote a) (denote b)
+    Equivalent _ a b -> Equivalent AutoInferCharSet (denote a) (denote b)
     expression -> Lens.over unsafeSubExpressions denote expression
   where
     denoteRecordField (RecordField _ e _ _) = RecordField Nothing (denote e) Nothing Nothing
