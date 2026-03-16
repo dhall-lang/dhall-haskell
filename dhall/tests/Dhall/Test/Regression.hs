@@ -13,6 +13,7 @@ import Dhall.Parser           (SourcedException (..), Src)
 import Dhall.TypeCheck        (TypeError)
 import Test.Tasty             (TestTree)
 import Test.Tasty.HUnit       ((@?=))
+import Data.Text              (Text)
 
 import qualified Control.Exception
 import qualified Data.Text.IO
@@ -31,6 +32,15 @@ import qualified Prettyprinter.Render.Text
 import qualified System.Timeout
 import qualified Test.Tasty
 import qualified Test.Tasty.HUnit
+import Dhall.TypeCheck (TypeError(typeMessage))
+import Dhall.TypeCheck (prettyTypeMessage)
+import qualified Data.Text as Text
+import Dhall.TypeCheck (short)
+import qualified Data.List as List
+import qualified Prettyprinter as Pretty
+import   Prettyprinter.Render.Text (renderStrict)     
+import Dhall.TypeCheck (ErrorMessages(long))
+
 
 tests :: TestTree
 tests =
@@ -57,6 +67,7 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+        , combineTypes
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
@@ -325,3 +336,48 @@ trailingSpaceAfterStringLiterals =
         -- (Yes, I did get this wrong at some point)
         _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
+
+hasTypeErrorWithMessage ::  Text -> [ Text] -> IO ()
+hasTypeErrorWithMessage dhallCode expectedErrorMessageSubstrings = do
+            let handler :: Dhall.TypeCheck.TypeError Src Void -> IO (Bool, Maybe (Dhall.TypeCheck.TypeMessage Src Void))
+                handler e = return (True, Just (typeMessage e))
+
+            let typeCheck = do
+                    _ <- Util.code dhallCode
+                    return (False, Nothing)
+            
+            (b, Just actualTypeError) <- Control.Exception.handle handler typeCheck
+            Test.Tasty.HUnit.assertBool ("The expression " <> Text.unpack dhallCode <> " should not type-check") b
+            let message = prettyTypeMessage actualTypeError
+            -- Concatenate the short and the long doc strings in an ErrorMessages structure:
+            let concatenateAllDocStrings m = Pretty.vsep [short m, long m]
+            -- Whether `message` has `text` as a substring:    
+            let haveSubstring :: Text -> Bool
+                haveSubstring text = Text.isInfixOf text (renderStrict (Pretty.layoutPretty Pretty.defaultLayoutOptions (concatenateAllDocStrings message)))
+            let haveAllSubstrings = List.all haveSubstring expectedErrorMessageSubstrings
+
+            Test.Tasty.HUnit.assertBool ("The error message for " <> Text.unpack dhallCode <> " should contain all expected substrings") haveAllSubstrings      
+            return ()
+
+-- Verify that each of the expressions fails to type-check and produces a diagnostic text that contains each of the given substrings.
+combineTypes :: TestTree
+combineTypes = Test.Tasty.HUnit.testCase "Combine / CombineTypes error messages" (do
+        hasTypeErrorWithMessage     "{ a : Bool } ∧ { b = 0 }"                ["You can only combine a record with another record", "∧", "↳ { a : Bool }", "which is not a record"]
+        hasTypeErrorWithMessage     "{ a : Bool } ∧ { a : Natural }"          ["Field type collision on: a", "{ x : A } ∧ { y : B }"]
+        hasTypeErrorWithMessage     "{ a = 0 } ∧ { b : Natural }"             ["You can only combine a record with another record", "∧", "↳ { b : Natural }", "which is not a record"]
+        hasTypeErrorWithMessage     "{ a = 0 } ∧ { a : Natural }"             ["You can only combine a record with another record", "∧", "↳ { a : Natural }", "which is not a record"]
+        hasTypeErrorWithMessage     "{ a : Bool } ∧ { a = 0 }"                ["You can only combine a record with another record", "∧", "↳ { a : Bool }", "which is not a record"]
+        hasTypeErrorWithMessage     "{ a : Bool } ∧ { b = 0 }"                ["You can only combine a record with another record", "∧", "↳ { a : Bool }", "which is not a record"]
+        hasTypeErrorWithMessage     "{ a : Bool } ∧  0"                       ["You can only combine two records or two record types", "↳ { a : Bool }", "↳ 0", "↳ Natural", "↳ Type", "At least one of these arguments is neither a record type nor a record."]
+        hasTypeErrorWithMessage     "{ a = 0 } ∧  0"                          ["You can only combine a record with another record", "∧", "↳ 0", "↳ Natural", "which is not a record"]
+        hasTypeErrorWithMessage     "0 ∧ { a : Bool }"                        ["You can only combine two records or two record types", "↳ { a : Bool }", "↳ 0", "↳ Natural", "↳ Type", "At least one of these arguments is neither a record type nor a record."]
+        hasTypeErrorWithMessage     "0 ∧ { a = 0 }"                           ["You can only combine a record with another record", "∧", "↳ 0", "↳ Natural", "which is not a record"]
+        hasTypeErrorWithMessage     "0 ∧ 0"                                   ["You can only combine two records or two record types", "↳ 0", "↳ Natural", "At least one of these arguments is neither a record type nor a record."]
+        hasTypeErrorWithMessage     "{ a : Bool } ⩓ { a : Natural }"          ["Field type collision on: a", "{ x : A } ⩓ { y : B }"]
+        hasTypeErrorWithMessage     "{ a = { b : Bool }, a = { c = 0 } }"     ["Invalid duplicate field: a", "↳ { b : Bool }", "↳ Type", "which is not a record type"]
+        hasTypeErrorWithMessage     "{ a = { c = 0 }, a = { b : Bool } }"     ["Invalid duplicate field: a", "↳ { b : Bool }", "↳ Type", "which is not a record type"]
+        hasTypeErrorWithMessage     "{ a = { b = 0 }, a = { b = 1 } }"        ["Duplicate field cannot be merged: a.b", "which collided on the following path:", "↳ a.b"]
+        hasTypeErrorWithMessage     "{ a = { b : Bool }, a = { b : Text } }"  ["Field type collision on: b", "↳ b", "{ x : A } ∧ { y : B }"]
+        hasTypeErrorWithMessage     "{ a : Bool } ⩓ { a : Natural }"          ["Field type collision on: a", "↳ a", "{ x : A } ⩓ { y : B }"]
+        hasTypeErrorWithMessage     "{ a : Bool } ⩓ { a = 0 }"                ["requires arguments that are record types", "⩓", "↳ { a = 0 }", "not a record type literal"]
+    )                       
