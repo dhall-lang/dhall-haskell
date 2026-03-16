@@ -292,7 +292,7 @@ Library
           http-client                 >= 0.5.0    && < 0.8
         if flag(use-http-client-tls)
           Build-Depends:
-            http-client-tls           >= 0.2.0    && < 0.4
+            http-client-tls >=0.2.0 && <0.5
 
     Other-Extensions:
         BangPatterns
