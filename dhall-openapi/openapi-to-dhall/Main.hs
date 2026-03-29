@@ -36,6 +36,8 @@ import Dhall.Kubernetes.Types
     )
 import System.FilePath        ((</>))
 
+import Dhall.Pretty        (ChooseCharacterSet(..))
+
 import qualified Data.List                  as List
 import qualified Data.Map.Strict            as Data.Map
 import qualified Data.Ord                   as Ord
@@ -74,7 +76,7 @@ writeDhall path expr = do
   putStrLn $ "Writing file '" <> path <> "'"
   Text.writeFile path $ pretty expr <> "\n"
 
-  let chosenCharacterSet = Nothing -- Infer from input
+  let chosenCharacterSet = AutoInferCharSet
 
   let censor = Dhall.Util.NoCensor
 
