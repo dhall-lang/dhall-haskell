@@ -74,7 +74,16 @@ cse expr = go freshNames candidates expr
         reservedNames = usedNames `HashSet.union` reservedIdentifiers
 
     -- Find candidates: subexpressions that appear >= 2 times, are non-trivial,
-    -- and contain no free variables.
+    -- and contain no variables at all.
+    --
+    -- The 'hasNoVars' check is essential for correctness: because
+    -- 'cosmosOf subExpressions' performs a purely structural traversal that
+    -- does not respect variable scoping, two structurally identical
+    -- subexpressions (e.g. @f x@) that appear under different bindings for
+    -- the same variable name would be counted as duplicates even though they
+    -- are semantically different. By restricting candidates to
+    -- variable-free expressions we sidestep that issue entirely.
+    --
     -- Sort by size descending so that the largest common subexpressions are
     -- extracted first (this maximises the size reduction).
     candidates :: [Expr Void a]
