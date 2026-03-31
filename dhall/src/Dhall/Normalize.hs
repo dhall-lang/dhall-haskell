@@ -331,14 +331,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             return haystack
                     App (App
                             (App TextReplace (TextLit (Chunks [] needleText)))
-                            (TextLit (Chunks [] replacementText))
-                        )
-                        (TextLit (Chunks [] z)) -> do
-                            let z' = Text.replace needleText replacementText z
-
-                            return (TextLit (Chunks [] z'))
-                    App (App
-                            (App TextReplace (TextLit (Chunks [] needleText)))
                             replacement
                         )
                         (TextLit (Chunks [] lastText)) -> do
@@ -354,29 +346,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                                 suffix
 
                                     loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks [] remainder))))
-                    App (App
-                            (App TextReplace (TextLit (Chunks [] needleText)))
-                            replacement
-                        )
-                        (TextLit
-                            (Chunks
-                                ((firstText, firstInterpolation) : chunks)
-                                lastText
-                            )
-                        ) -> do
-                            let (prefix, suffix) =
-                                    Text.breakOn needleText firstText
-
-                            if Text.null suffix
-                                then do
-                                    loop (TextAppend (TextLit (Chunks [(firstText, App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) firstInterpolation)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks chunks lastText))))
-                                else do
-                                    let remainder =
-                                            Text.drop
-                                                (Text.length needleText)
-                                                suffix
-
-                                    loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks ((remainder, firstInterpolation) : chunks) lastText))))
                     App DateShow (DateLiteral date) ->
                         loop (TextLit (Chunks [] text))
                       where
