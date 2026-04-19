@@ -14,10 +14,12 @@ import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
+import qualified Dhall
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
+import qualified Lens.Micro                       as Lens
 import qualified System.FilePath                  as FilePath
 import qualified System.IO.Temp                   as Temp
 import qualified Test.Tasty                       as Tasty
@@ -147,9 +149,11 @@ successTest prefix = do
                     HTTP.tlsManagerSettings
                         { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
 
+        let settings = Lens.set Dhall.newManager httpManager Dhall.defaultEvaluateSettings
+
         let status =
                 Import.makeEmptyStatus
-                    httpManager
+                    settings
                     (pure Import.envOriginHeaders)
                     directoryString
 #else
