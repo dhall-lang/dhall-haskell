@@ -49,7 +49,7 @@ jobs:
           submodules: true
       - id: setup-haskell-cabal
         name: "Setup Haskell environment"
-        uses: haskell-actions/setup@v2.10
+        uses: haskell-actions/setup@v2.11
         with:
           enable-stack: true
           stack-version: "latest"
