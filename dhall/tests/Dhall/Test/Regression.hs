@@ -15,6 +15,7 @@ import Test.Tasty             (TestTree)
 import Test.Tasty.HUnit       ((@?=))
 
 import qualified Control.Exception
+import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy.IO
 import qualified Dhall
@@ -57,6 +58,7 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+        , largeNaturalLiteralParsing
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
@@ -325,3 +327,17 @@ trailingSpaceAfterStringLiterals =
         -- (Yes, I did get this wrong at some point)
         _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
+
+largeNaturalLiteralParsing :: TestTree
+largeNaturalLiteralParsing =
+    Test.Tasty.HUnit.testCase "Large natural number literal parsing is not O(N²)" (do
+        -- A 100,000-digit decimal literal.  Before the divide-and-conquer fix
+        -- in naturalLiteral (Token.hs) this was O(N²) in big-integer arithmetic
+        -- and would have taken many seconds here.  We allow 10 seconds which is
+        -- generous even on slow machines; the fixed version runs in < 0.3 s.
+        let bigNum = Data.Text.replicate 100000 "1"
+        Just result <- System.Timeout.timeout 10000000
+            (Control.Exception.evaluate $! Dhall.Parser.exprFromText mempty bigNum)
+        case result of
+            Left err -> Test.Tasty.HUnit.assertFailure (show err)
+            Right _  -> return () )
