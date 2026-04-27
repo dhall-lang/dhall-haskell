@@ -75,6 +75,10 @@ main = do
         , benchExprFromText "Large number of function arguments" (Text.replicate 10000 "x ")
         , benchExprFromText "Long double-quoted strings" ("\"" <> Text.replicate 1000000 "x" <> "\"")
         , benchExprFromText "Long single-quoted strings" ("''" <> Text.replicate 1000000 "x" <> "''")
+        -- A very large decimal literal triggers the big-integer path in naturalLiteral.
+        -- Before the divide-and-conquer fix this was O(N²); it should now be
+        -- O(N^1.585·log N) via GMP Karatsuba multiplication.
+        , benchExprFromText "Large natural number literal (1M digits)" (Text.replicate 1000000 "1")
         , benchExprFromText "Whitespace" (Text.replicate 1000000 " " <> "x")
         , benchExprFromText "Line comment" ("x -- " <> Text.replicate 1000000 " ")
         , benchExprFromText "Block comment" ("x {- " <> Text.replicate 1000000 " " <> "-}")
