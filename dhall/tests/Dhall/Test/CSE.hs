@@ -18,13 +18,13 @@ import qualified Test.Tasty.HUnit          as Tasty.HUnit
 import qualified Turtle
 
 cseDirectory :: FilePath
-cseDirectory = "./tests/cse"
+cseDirectory = "./tests/Dhall/Test/CSE"
 
 getTests :: IO TestTree
 getTests = do
     cseTests <- Test.Util.discover (Turtle.chars <* "A.dhall") cseTest (Turtle.lstree cseDirectory)
 
-    let testTree = Tasty.testGroup "cse tests" [ cseTests ]
+    let testTree = Tasty.testGroup "CSE" [ cseTests ]
 
     return testTree
 
