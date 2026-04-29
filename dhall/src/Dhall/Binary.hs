@@ -25,6 +25,7 @@ import Codec.CBOR.Decoding  (Decoder, TokenType (..))
 import Codec.CBOR.Encoding  (Encoding)
 import Codec.Serialise      (Serialise (decode, encode))
 import Control.Applicative  (empty, (<|>))
+import Control.DeepSeq      (NFData, force)
 import Control.Exception    (Exception)
 import Data.ByteString.Lazy (ByteString)
 import Dhall.Syntax
@@ -1355,10 +1356,10 @@ encodeExpression = Serialise.serialise
 
 -- | Decode a Dhall expression from a CBOR `Codec.CBOR.Term.Term`
 decodeExpression
-    :: Serialise (Expr s a) => ByteString -> Either DecodingFailure (Expr s a)
+    :: (NFData s, NFData a, Serialise (Expr s a)) => ByteString -> Either DecodingFailure (Expr s a)
 decodeExpression bytes =
     case decodeWithoutVersion <|> decodeWithVersion of
-        Just expression -> Right expression
+        Just expression -> Right (force expression)
         Nothing         -> Left (CBORIsNotDhall bytes)
   where
     adapt (Right ("", x)) = Just x
