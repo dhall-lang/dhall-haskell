@@ -1115,8 +1115,8 @@ originHeadersLoader headersExpr = do
 
     (headers, _) <- liftIO (State.runStateT doLoad headerLoadStatus)
 
-    -- return cached headers next time
-    _ <- State.modify (\state -> state { _loadOriginHeaders = return headers })
+    -- return cached headers next time (strict to prevent space leaks)
+    _ <- State.modify' (\state -> state { _loadOriginHeaders = return headers })
 
     return headers
   where
@@ -1219,8 +1219,8 @@ loadWith expr₀ = case expr₀ of
         then throwMissingImport (Imported _stack (Cycle import₀))
         else return ()
 
-    zoom graph . State.modify $
-        -- Add the edge `parent -> child` to the import graph
+    zoom graph . State.modify' $
+        -- Add the edge `parent -> child` to the import graph (strict to prevent space leaks)
         \edges -> Depends parent child : edges
 
     let stackWithChild = NonEmpty.cons child _stack

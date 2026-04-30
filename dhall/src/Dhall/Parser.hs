@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE BangPatterns #-}
 
 -- | This module contains Dhall's parsing logic
 
@@ -124,7 +125,7 @@ exprAndHeaderFromText delta text = case result of
     Right (txt, r) -> Right (createHeader txt, r)
   where
     parser = do
-        (bytes, _) <- Text.Megaparsec.match (many shebang *> whitespace)
+        (!bytes, _) <- Text.Megaparsec.match (many shebang *> whitespace)
         r <- expr
         Text.Megaparsec.eof
         return (bytes, r)
