@@ -69,6 +69,7 @@ customization =
     Tasty.testGroup "customization"
         [ simpleCustomization
         , nestedReduction
+        , naturalEqualTest
         ]
 
 simpleCustomization :: TestTree
@@ -140,6 +141,41 @@ alphaNormalizationTest prefix = do
                 "The alpha-normalized expression did not match the expected output"
 
         Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
+
+naturalEqualTest :: TestTree
+naturalEqualTest = Tasty.HUnit.testCase "Natural/equal" $ do
+    let tyCtx =
+            Context.insert
+                "Natural/equal"
+                (Pi mempty "_" Natural (Pi mempty "_" Natural Bool))
+                Context.empty
+
+        valCtx e =
+            case e of
+                App (App (Var (V "Natural/equal" 0)) (NaturalLit x)) (NaturalLit y) ->
+                    pure (Just (BoolLit (x == y)))
+                _ ->
+                    pure Nothing
+
+    -- Test equal numbers
+    e1 <- Test.Util.codeWith tyCtx "Natural/equal 5 5"
+    Test.Util.assertNormalizesToWith valCtx e1 "True"
+
+    -- Test unequal numbers
+    e2 <- Test.Util.codeWith tyCtx "Natural/equal 5 7"
+    Test.Util.assertNormalizesToWith valCtx e2 "False"
+
+    -- Test with zero
+    e3 <- Test.Util.codeWith tyCtx "Natural/equal 0 0"
+    Test.Util.assertNormalizesToWith valCtx e3 "True"
+
+    -- Test with larger numbers
+    e4 <- Test.Util.codeWith tyCtx "Natural/equal 42 42"
+    Test.Util.assertNormalizesToWith valCtx e4 "True"
+
+    -- Test partial application (should not reduce)
+    e5 <- Test.Util.codeWith tyCtx "Natural/equal 3"
+    Test.Util.assertNormalizesToWith valCtx e5 "Natural/equal 3"
 
 {- Unit tests don't type-check, so we only verify that they normalize to the
    expected output

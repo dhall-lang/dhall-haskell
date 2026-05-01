@@ -169,6 +169,7 @@ decodeExpressionInternal decodeEmbed = go
                        | sb == "Text/replace"      -> return TextReplace
                     13 | sb == "Integer/clamp"     -> return IntegerClamp
                        | sb == "Natural/build"     -> return NaturalBuild
+                       | sb == "Natural/equal"     -> return NaturalEqual
                        | sb == "TimeZone/show"     -> return TimeZoneShow
                     14 | sb == "Integer/negate"    -> return IntegerNegate
                        | sb == "Natural/isZero"    -> return NaturalIsZero
@@ -707,6 +708,9 @@ encodeExpressionInternal encodeEmbed = go
 
         NaturalSubtract ->
             Encoding.encodeUtf8ByteArray "Natural/subtract"
+
+        NaturalEqual ->
+            Encoding.encodeUtf8ByteArray "Natural/equal"
 
         IntegerToDouble ->
             Encoding.encodeUtf8ByteArray "Integer/toDouble"

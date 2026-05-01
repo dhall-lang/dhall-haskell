@@ -188,6 +188,7 @@ data Val a
     | VNaturalToInteger !(Val a)
     | VNaturalShow !(Val a)
     | VNaturalSubtract !(Val a) !(Val a)
+    | VNaturalEqual !(Val a) !(Val a)
     | VNaturalPlus !(Val a) !(Val a)
     | VNaturalTimes !(Val a) !(Val a)
 
@@ -577,6 +578,14 @@ eval !env t0 =
                     VNaturalLit 0    -> VNaturalLit 0
                     y | conv env x y -> VNaturalLit 0
                     y                -> VNaturalSubtract x y
+        NaturalEqual -> VPrim $ \case
+            VNaturalLit x -> VPrim $ \case
+                VNaturalLit y -> VBoolLit (x == y)
+                y -> VNaturalEqual (VNaturalLit x) y
+            x -> VPrim $ \case
+                VNaturalLit y -> VNaturalEqual x (VNaturalLit y)
+                y | conv env x y -> VBoolLit True
+                y -> VNaturalEqual x y
         NaturalPlus t u ->
             vNaturalPlus (eval env t) (eval env u)
         NaturalTimes t u ->
@@ -1017,6 +1026,8 @@ conv !env t0 t0' =
             conv env t t'
         (VNaturalSubtract x y, VNaturalSubtract x' y') ->
             conv env x x' && conv env y y'
+        (VNaturalEqual x y, VNaturalEqual x' y') ->
+            conv env x x' && conv env y y'
         (VNaturalPlus t u, VNaturalPlus t' u') ->
             conv env t t' && conv env u u'
         (VNaturalTimes t u, VNaturalTimes t' u') ->
@@ -1241,6 +1252,8 @@ quote !env !t0 =
             NaturalPlus (quote env t) (quote env u)
         VNaturalTimes t u ->
             NaturalTimes (quote env t) (quote env u)
+        VNaturalEqual x y ->
+            NaturalEqual `qApp` x `qApp` y
         VNaturalSubtract x y ->
             NaturalSubtract `qApp` x `qApp` y
         VInteger ->
@@ -1448,6 +1461,8 @@ alphaNormalize = goEnv EmptyNames
                 NaturalShow
             NaturalSubtract ->
                 NaturalSubtract
+            NaturalEqual ->
+                NaturalEqual
             NaturalPlus t u ->
                 NaturalPlus (go t) (go u)
             NaturalTimes t u ->

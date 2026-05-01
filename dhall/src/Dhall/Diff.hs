@@ -1244,6 +1244,12 @@ diffPrimitiveExpression l@NaturalSubtract r =
     mismatch l r
 diffPrimitiveExpression l r@NaturalSubtract =
     mismatch l r
+diffPrimitiveExpression NaturalEqual NaturalEqual =
+    "…"
+diffPrimitiveExpression l@NaturalEqual r =
+    mismatch l r
+diffPrimitiveExpression l r@NaturalEqual =
+    mismatch l r
 diffPrimitiveExpression Integer Integer =
     "…"
 diffPrimitiveExpression l@Integer r =

@@ -1336,6 +1336,8 @@ prettyPrinters characterSet =
         builtin "Natural/show"
     prettyPrimitiveExpression NaturalSubtract =
         builtin "Natural/subtract"
+    prettyPrimitiveExpression NaturalEqual =
+        builtin "Natural/equal"
     prettyPrimitiveExpression Integer =
         builtin "Integer"
     prettyPrimitiveExpression IntegerClamp =
