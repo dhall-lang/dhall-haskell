@@ -116,6 +116,8 @@ data Expr s a
     | NaturalSubtract
     -- | > NaturalEqual                              ~  Natural/equal
     | NaturalEqual
+    -- | > NaturalLessThan                          ~  Natural/lessThan
+    | NaturalLessThan
     -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr s a) (Expr s a)
     -- | > NaturalTimes x y                         ~  x * y

@@ -70,6 +70,7 @@ customization =
         [ simpleCustomization
         , nestedReduction
         , naturalEqualTest
+        , naturalLessThanTest
         ]
 
 simpleCustomization :: TestTree
@@ -176,6 +177,44 @@ naturalEqualTest = Tasty.HUnit.testCase "Natural/equal" $ do
     -- Test partial application (should not reduce)
     e5 <- Test.Util.codeWith tyCtx "Natural/equal 3"
     Test.Util.assertNormalizesToWith valCtx e5 "Natural/equal 3"
+
+naturalLessThanTest :: TestTree
+naturalLessThanTest = Tasty.HUnit.testCase "Natural/lessThan" $ do
+    let tyCtx =
+            Context.insert
+                "Natural/lessThan"
+                (Pi mempty "_" Natural (Pi mempty "_" Natural Bool))
+                Context.empty
+
+        valCtx e =
+            case e of
+                App (App (Var (V "Natural/lessThan" 0)) (NaturalLit x)) (NaturalLit y) ->
+                    pure (Just (BoolLit (x < y)))
+                _ ->
+                    pure Nothing
+
+    -- Test less than
+    e1 <- Test.Util.codeWith tyCtx "Natural/lessThan 5 7"
+    Test.Util.assertNormalizesToWith valCtx e1 "True"
+
+    -- Test not less than
+    e2 <- Test.Util.codeWith tyCtx "Natural/lessThan 7 5"
+    Test.Util.assertNormalizesToWith valCtx e2 "False"
+
+    -- Test equal numbers
+    e3 <- Test.Util.codeWith tyCtx "Natural/lessThan 5 5"
+    Test.Util.assertNormalizesToWith valCtx e3 "False"
+
+    -- Test with zero
+    e4 <- Test.Util.codeWith tyCtx "Natural/lessThan 0 1"
+    Test.Util.assertNormalizesToWith valCtx e4 "True"
+
+    e5 <- Test.Util.codeWith tyCtx "Natural/lessThan 1 0"
+    Test.Util.assertNormalizesToWith valCtx e5 "False"
+
+    -- Test partial application (should not reduce)
+    e6 <- Test.Util.codeWith tyCtx "Natural/lessThan 3"
+    Test.Util.assertNormalizesToWith valCtx e6 "Natural/lessThan 3"
 
 {- Unit tests don't type-check, so we only verify that they normalize to the
    expected output

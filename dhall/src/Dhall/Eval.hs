@@ -189,6 +189,7 @@ data Val a
     | VNaturalShow !(Val a)
     | VNaturalSubtract !(Val a) !(Val a)
     | VNaturalEqual !(Val a) !(Val a)
+    | VNaturalLessThan !(Val a) !(Val a)
     | VNaturalPlus !(Val a) !(Val a)
     | VNaturalTimes !(Val a) !(Val a)
 
@@ -586,6 +587,14 @@ eval !env t0 =
                 VNaturalLit y -> VNaturalEqual x (VNaturalLit y)
                 y | conv env x y -> VBoolLit True
                 y -> VNaturalEqual x y
+        NaturalLessThan -> VPrim $ \case
+            VNaturalLit x -> VPrim $ \case
+                VNaturalLit y -> VBoolLit (x < y)
+                y -> VNaturalLessThan (VNaturalLit x) y
+            x -> VPrim $ \case
+                VNaturalLit y -> VNaturalLessThan x (VNaturalLit y)
+                y | conv env x y -> VBoolLit False
+                y -> VNaturalLessThan x y
         NaturalPlus t u ->
             vNaturalPlus (eval env t) (eval env u)
         NaturalTimes t u ->
@@ -1028,6 +1037,8 @@ conv !env t0 t0' =
             conv env x x' && conv env y y'
         (VNaturalEqual x y, VNaturalEqual x' y') ->
             conv env x x' && conv env y y'
+        (VNaturalLessThan x y, VNaturalLessThan x' y') ->
+            conv env x x' && conv env y y'
         (VNaturalPlus t u, VNaturalPlus t' u') ->
             conv env t t' && conv env u u'
         (VNaturalTimes t u, VNaturalTimes t' u') ->
@@ -1254,6 +1265,8 @@ quote !env !t0 =
             NaturalTimes (quote env t) (quote env u)
         VNaturalEqual x y ->
             NaturalEqual `qApp` x `qApp` y
+        VNaturalLessThan x y ->
+            NaturalLessThan `qApp` x `qApp` y
         VNaturalSubtract x y ->
             NaturalSubtract `qApp` x `qApp` y
         VInteger ->
@@ -1463,6 +1476,8 @@ alphaNormalize = goEnv EmptyNames
                 NaturalSubtract
             NaturalEqual ->
                 NaturalEqual
+            NaturalLessThan ->
+                NaturalLessThan
             NaturalPlus t u ->
                 NaturalPlus (go t) (go u)
             NaturalTimes t u ->

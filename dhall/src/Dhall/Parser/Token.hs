@@ -60,6 +60,7 @@ module Dhall.Parser.Token (
     _NaturalShow,
     _NaturalSubtract,
     _NaturalEqual,
+    _NaturalLessThan,
     _IntegerClamp,
     _IntegerNegate,
     _IntegerShow,
@@ -1048,6 +1049,13 @@ _NaturalShow = builtin "Natural/show"
 -}
 _NaturalSubtract :: Parser ()
 _NaturalSubtract = builtin "Natural/subtract"
+
+{-| Parse the @Natural/lessThan@ built-in
+
+    This corresponds to the @Natural-lessThan@ rule from the official grammar
+-}
+_NaturalLessThan :: Parser ()
+_NaturalLessThan = builtin "Natural/lessThan"
 
 {-| Parse the @Natural/equal@ built-in
 

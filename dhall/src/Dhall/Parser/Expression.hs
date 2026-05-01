@@ -707,6 +707,7 @@ parsers embedded = Parsers{..}
                             , NaturalOdd       <$ _NaturalOdd
                             , NaturalSubtract  <$ _NaturalSubtract
                             , NaturalEqual     <$ _NaturalEqual
+                            , NaturalLessThan  <$ _NaturalLessThan
                             , NaturalToInteger <$ _NaturalToInteger
                             , NaturalShow      <$ _NaturalShow
                             , Natural          <$ _Natural

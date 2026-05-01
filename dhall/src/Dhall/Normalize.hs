@@ -236,6 +236,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Text.pack (show n))))
                     App (App NaturalEqual (NaturalLit x)) (NaturalLit y) -> pure (BoolLit (x == y))
+                    App (App NaturalLessThan (NaturalLit x)) (NaturalLit y) -> pure (BoolLit (x < y))
                     App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
                         -- Use an `Integer` for the subtraction, due to the
                         -- following issue:
@@ -462,6 +463,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
           NaturalShow -> pure NaturalShow
           NaturalSubtract -> pure NaturalSubtract
           NaturalEqual -> pure NaturalEqual
+          NaturalLessThan -> pure NaturalLessThan
           NaturalPlus x y -> decide <$> loop x <*> loop y
             where
               decide (NaturalLit 0)  r             = r
@@ -809,6 +811,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
           App (App NaturalEqual (NaturalLit _)) (NaturalLit _) -> False
+          App (App NaturalLessThan (NaturalLit _)) (NaturalLit _) -> False
           App DateShow (DateLiteral _) -> False
           App TimeShow (TimeLiteral _ _) -> False
           App TimeZoneShow (TimeZoneLiteral _) -> False
@@ -818,6 +821,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           App (App NaturalSubtract x) y -> not (Eval.judgmentallyEqual x y)
           App (App NaturalEqual (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalEqual x) y -> not (Eval.judgmentallyEqual x y)
+          App (App NaturalLessThan x) y -> not (Eval.judgmentallyEqual x y)
           App NaturalToInteger (NaturalLit _) -> False
           App IntegerNegate (IntegerLit _) -> False
           App IntegerClamp (IntegerLit _) -> False
@@ -880,6 +884,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       NaturalShow -> True
       NaturalSubtract -> True
       NaturalEqual -> True
+      NaturalLessThan -> True
       NaturalToInteger -> True
       NaturalPlus x y -> loop x && loop y && decide x y
         where

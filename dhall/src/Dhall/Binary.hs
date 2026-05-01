@@ -174,6 +174,7 @@ decodeExpressionInternal decodeEmbed = go
                     14 | sb == "Integer/negate"    -> return IntegerNegate
                        | sb == "Natural/isZero"    -> return NaturalIsZero
                     16 | sb == "Integer/toDouble"  -> return IntegerToDouble
+                       | sb == "Natural/lessThan"  -> return NaturalLessThan
                        | sb == "Natural/subtract"  -> return NaturalSubtract
                     17 | sb == "Natural/toInteger" -> return NaturalToInteger
                     _                              -> die ("Unrecognized built-in: " <> show sb)
@@ -711,6 +712,9 @@ encodeExpressionInternal encodeEmbed = go
 
         NaturalEqual ->
             Encoding.encodeUtf8ByteArray "Natural/equal"
+
+        NaturalLessThan ->
+            Encoding.encodeUtf8ByteArray "Natural/lessThan"
 
         IntegerToDouble ->
             Encoding.encodeUtf8ByteArray "Integer/toDouble"
