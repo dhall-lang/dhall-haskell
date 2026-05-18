@@ -656,7 +656,7 @@ normalizeWithMIsConsistentWithNormalize expression =
     case Control.Spoon.spoon (nfM, nf) of
         Just (a, b) -> a === b
         Nothing -> Test.QuickCheck.discard
-  where nfM = runIdentity (Dhall.Core.normalizeWithM (\_ -> Identity Nothing) expression)
+  where nfM = Dhall.Core.normalizeWith Nothing expression
         nf = Dhall.Core.normalize expression :: Expr () Import
 
 isSameAsSelf :: Expr () Import -> Property

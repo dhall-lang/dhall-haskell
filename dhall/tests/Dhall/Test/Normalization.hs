@@ -2,23 +2,27 @@
 
 module Dhall.Test.Normalization where
 
+import Control.Monad.Trans.State.Strict (StateT)
 import Data.Text       (Text)
 import Data.Void       (Void)
-import Dhall.Core      (Expr (..), Var (..), throws)
+import Dhall.Core      (Expr (..), Import (..), ImportHashed (..), ImportMode (..), ImportType (..), File (..), Directory (..), FilePrefix (..), Var (..), throws)
+import Dhall.Import    (Status)
 import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
-import qualified Data.Text        as Text
-import qualified Data.Text.IO     as Text.IO
-import qualified Dhall.Context    as Context
-import qualified Dhall.Core       as Core
-import qualified Dhall.Import     as Import
-import qualified Dhall.Parser     as Parser
-import qualified Dhall.Test.Util  as Test.Util
-import qualified Dhall.TypeCheck  as TypeCheck
-import qualified System.FilePath  as FilePath
-import qualified Test.Tasty       as Tasty
-import qualified Test.Tasty.HUnit as Tasty.HUnit
+import qualified Control.Exception                as Control.Exception
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Text                        as Text
+import qualified Data.Text.IO                     as Text.IO
+import qualified Dhall.Context                    as Context
+import qualified Dhall.Core                       as Core
+import qualified Dhall.Import                     as Import
+import qualified Dhall.Parser                     as Parser
+import qualified Dhall.Test.Util                  as Test.Util
+import qualified Dhall.TypeCheck                  as TypeCheck
+import qualified System.FilePath                  as FilePath
+import qualified Test.Tasty                       as Tasty
+import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
 
 normalizationDirectory :: FilePath
@@ -59,10 +63,103 @@ getTests = do
                 , Tasty.testGroup "alpha-normalization"
                     [ alphaNormalizationTests
                     ]
+                , proposalTests
                 , customization
                 ]
 
     return testTree
+
+proposalTests :: TestTree
+proposalTests =
+    Tasty.testGroup "proposals"
+        [ outerLetPreservation
+        , sha256ImportPreservation
+        ]
+
+outerLetPreservation :: TestTree
+outerLetPreservation =
+    Tasty.testGroup "outer let preservation"
+        [ Tasty.HUnit.testCase "preserved inside lambda" $ do
+            e <- Test.Util.code "let a = 1 in λ(x : Natural) → a + x"
+            let normalized = Core.normalize e
+            Tasty.HUnit.assertEqual "normal form"
+                (Core.pretty normalized)
+                "let a = 1 in λ(x : Natural) → a + x"
+        , Tasty.HUnit.testCase "inlined when not inside lambda" $ do
+            e <- Test.Util.code "let a = 1 in a + 2"
+            let normalized = Core.normalize e
+            Tasty.HUnit.assertEqual "normal form"
+                (Core.pretty normalized)
+                "3"
+        , Tasty.HUnit.testCase "inner let inlined inside lambda" $ do
+            e <- Test.Util.code "λ(x : Natural) → let a = 1 in a + x"
+            let normalized = Core.normalize e
+            Tasty.HUnit.assertEqual "normal form"
+                (Core.pretty normalized)
+                "λ(x : Natural) → 1 + x"
+        , Tasty.HUnit.testCase "outer let inlined after beta reduction" $ do
+            e <- Test.Util.code "let a = 1 in (λ(x : Natural) → a + x) 2"
+            let normalized = Core.normalize e
+            Tasty.HUnit.assertEqual "normal form"
+                (Core.pretty normalized)
+                "3"
+        , Tasty.HUnit.testCase "nested lambdas preserve outer lets" $ do
+            e <- Test.Util.code "let a = 1 in λ(x : Natural) → λ(y : Natural) → a + x + y"
+            let normalized = Core.normalize e
+            Tasty.HUnit.assertEqual "normal form"
+                (Core.pretty normalized)
+                "let a = 1 in λ(x : Natural) → λ(y : Natural) → a + x + y"
+        ]
+
+sha256ImportPreservation :: TestTree
+sha256ImportPreservation =
+    Tasty.HUnit.testCase "sha256 import preserved in normal form" $ do
+        let importContent = "1\n"
+        -- Create a temporary file to import
+        Turtle.with (Turtle.mktempfile "." "test.dhall") $ \tmpFile -> do
+            Turtle.writeTextFile tmpFile importContent
+
+            -- Parse and resolve the file to compute its semantic hash
+            parsed <- case Parser.exprFromText mempty importContent of
+                Left parseError -> Control.Exception.throwIO parseError
+                Right expr0     -> return expr0
+            resolved <- Import.load parsed
+            let semExpr = Core.alphaNormalize (Core.normalize resolved :: Expr Void Void)
+            let hash = Import.hashExpression semExpr
+
+            -- Build an import expression with the hash
+            let importExpr =
+                    Embed
+                        ( Import
+                            { importHashed = ImportHashed
+                                { hash = Just hash
+                                , importType = Local Here
+                                    ( File
+                                        { directory = Directory []
+                                        , file = Turtle.format Turtle.fp (Turtle.filename tmpFile)
+                                        }
+                                    )
+                                }
+                            , importMode = Code
+                            }
+                        )
+
+            -- Load preserving the import
+            loaded <- State.evalStateT
+                (Import.loadWithPreserving importExpr)
+                (Import.emptyStatus ".")
+
+            -- Normalize
+            let normalized = Core.normalize loaded
+
+            -- The import should still be present in the AST
+            case normalized of
+                Embed preservedImport -> do
+                    let expectedHash = hash
+                    let actualHash = Core.hash (Core.importHashed preservedImport)
+                    Tasty.HUnit.assertEqual "Hash preserved" (Just expectedHash) actualHash
+                _ -> do
+                    fail ("Expected import to be preserved, but got: " <> Text.unpack (Core.pretty normalized))
 
 customization :: TestTree
 customization =

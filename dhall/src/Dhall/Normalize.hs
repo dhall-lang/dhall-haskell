@@ -25,6 +25,7 @@ import Data.Foldable
 import Data.Functor.Identity (Identity (..))
 import Data.List.NonEmpty    (NonEmpty (..))
 import Data.Sequence         (ViewL (..), ViewR (..))
+import Data.Text             (Text)
 import Data.Traversable
 import Instances.TH.Lift     ()
 import Prelude               hiding (succ)
@@ -49,6 +50,11 @@ import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Syntax  as Syntax
 import qualified Lens.Micro    as Lens
+
+-- | Check if an expression contains a lambda abstraction
+containsLambda :: Expr s a -> Bool
+containsLambda (Lam _ _ _) = True
+containsLambda e = any containsLambda (Lens.toListOf Syntax.subExpressions e)
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
@@ -400,11 +406,15 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         case res2 of
                             Nothing -> pure (App f' a')
                             Just app' -> loop app'
-          Let (Binding _ f _ _ _ r) b -> loop b''
-            where
-              r'  = Syntax.shift   1  (V f 0) r
-              b'  = subst (V f 0) r' b
-              b'' = Syntax.shift (-1) (V f 0) b'
+          Let (Binding _ f _ _ _ r) b -> do
+              r' <- loop r
+              let r'' = Syntax.shift 1 (V f 0) r'
+              let b'  = subst (V f 0) r'' b
+              let b'' = Syntax.shift (-1) (V f 0) b'
+              b''' <- loop b''
+              if containsLambda b'''
+              then pure (Eval.normalize (Let (Binding Nothing f Nothing Nothing Nothing r') b'''))
+              else pure b'''
           Annot x _ -> loop x
           Bool -> pure Bool
           BoolLit b -> pure (BoolLit b)
@@ -782,6 +792,19 @@ newtype ReifiedNormalizer a = ReifiedNormalizer
 isNormalizedWith :: (Eq s, Eq a) => Normalizer a -> Expr s a -> Bool
 isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 
+-- | Find the innermost lambda in a chain of let expressions
+findLambda :: Expr s a -> Maybe (FunctionBinding s a)
+findLambda (Lam _ fb _) = Just fb
+findLambda (Let _ b) = findLambda b
+findLambda _ = Nothing
+
+-- | Check if a variable is shadowed by any binding in the expression
+isShadowedIn :: Text -> Expr s a -> Bool
+isShadowedIn x (Lam _ (FunctionBinding _ y _ _ _) b) = x == y || isShadowedIn x b
+isShadowedIn x (Pi _ y _ b) = x == y || isShadowedIn x b
+isShadowedIn x (Let (Binding _ y _ _ _ _) b) = x == y || isShadowedIn x b
+isShadowedIn x e = any (isShadowedIn x) (Lens.toListOf Syntax.subExpressions e)
+
 -- | Quickly check if an expression is in normal form
 --
 -- Given a well-typed expression @e@, @'isNormalized' e@ is equivalent to
@@ -833,7 +856,14 @@ isNormalized e0 = loop (Syntax.denote e0)
           App (App (App TextReplace (TextLit (Chunks [] _))) _) (TextLit _) ->
               False
           _ -> True
-      Let _ _ -> False
+      Let (Binding _ f _ mt _ r) b ->
+          case mt of
+              Just _ -> False
+              Nothing -> case findLambda b of
+                  Just (FunctionBinding _ x _ _ _)
+                      | f /= x && not (isShadowedIn f b) && not (V f 0 `freeIn` b) ->
+                          loop r && loop b
+                  _ -> False
       Annot _ _ -> False
       Bool -> True
       BoolLit _ -> True

@@ -109,6 +109,7 @@ module Dhall.Import (
     , loadRelativeTo
     , loadWithStatus
     , loadWith
+    , loadWithPreserving
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -235,6 +236,7 @@ import qualified Dhall.Syntax                                as Syntax
 import qualified Dhall.TypeCheck
 import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
 import qualified System.Directory                            as Directory
+import qualified Unsafe.Coerce
 import qualified System.Environment
 import qualified System.FilePath                             as FilePath
 import qualified System.Info
@@ -1269,6 +1271,124 @@ loadWith expr₀ = case expr₀ of
   Lam cs a b           -> Lam cs <$> functionBindingExprs loadWith a <*> loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   expression           -> Syntax.unsafeSubExpressions loadWith expression
+
+-- | Like 'loadWith', but preserve imports protected by a semantic hash
+--   (sha256:...) in the AST instead of inlining them.
+loadWithPreserving :: Expr Src Import -> StateT Status IO (Expr Src Import)
+loadWithPreserving expr₀ = case expr₀ of
+  Embed import_ | Just _ <- hash (importHashed import_) -> do
+    Status {..} <- State.get
+
+    let parent = NonEmpty.head _stack
+
+    child <- chainImport parent import_
+
+    let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
+        local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
+
+    let referentiallySane = not (local child) || local parent
+
+    if importMode import_ == Location || referentiallySane
+        then return ()
+        else throwMissingImport (Imported _stack (ReferentiallyOpaque import_))
+
+    let _stack' = NonEmpty.cons child _stack
+
+    if child `elem` _stack
+        then throwMissingImport (Imported _stack (Cycle import_))
+        else return ()
+
+    zoom graph . State.modify $
+        -- Add the edge `parent -> child` to the import graph
+        \edges -> Depends parent child : edges
+
+    let stackWithChild = NonEmpty.cons child _stack
+
+    zoom stack (State.put stackWithChild)
+    ImportSemantics {..} <- loadImport child
+    zoom stack (State.put _stack)
+
+    return (Embed import_)
+
+  Embed import₀ -> do
+    Status {..} <- State.get
+
+    let parent = NonEmpty.head _stack
+
+    child <- chainImport parent import₀
+
+    let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
+        local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
+
+    let referentiallySane = not (local child) || local parent
+
+    if importMode import₀ == Location || referentiallySane
+        then return ()
+        else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
+
+    let _stack' = NonEmpty.cons child _stack
+
+    if child `elem` _stack
+        then throwMissingImport (Imported _stack (Cycle import₀))
+        else return ()
+
+    zoom graph . State.modify $
+        -- Add the edge `parent -> child` to the import graph
+        \edges -> Depends parent child : edges
+
+    let stackWithChild = NonEmpty.cons child _stack
+
+    zoom stack (State.put stackWithChild)
+    ImportSemantics {..} <- loadImport child
+    zoom stack (State.put _stack)
+
+    return (coerceExpr (Core.renote importSemantics))
+
+  ImportAlt a b -> loadWithPreserving a `catch` handler₀
+    where
+      is :: forall e . Exception e => SomeException -> Bool
+      is exception = Maybe.isJust (Exception.fromException @e exception)
+
+      isNotResolutionError exception =
+              is @(Imported (TypeError Src Void)) exception
+          ||  is @(Imported  Cycle              ) exception
+          ||  is @(Imported  HashMismatch       ) exception
+          ||  is @(Imported  ParseError         ) exception
+
+      handler₀ exception₀@(SourcedException (Src begin _ text₀) (MissingImports es₀))
+          | any isNotResolutionError es₀ =
+              throwM exception₀
+          | otherwise = do
+              loadWithPreserving b `catch` handler₁
+        where
+          handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
+              | any isNotResolutionError es₁ =
+                  throwM exception₁
+              | otherwise =
+                  -- Fix the source span for the error message to encompass both
+                  -- alternatives, since both are equally to blame for the
+                  -- failure if neither succeeds.
+                  throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
+            where
+              text₂ = text₀ <> " ? " <> text₁
+
+  Note a b             -> do
+      let handler e = throwM (SourcedException a (e :: MissingImports))
+
+      (Note <$> pure a <*> loadWithPreserving b) `catch` handler
+  Let a b              -> Let <$> bindingExprs loadWithPreserving a <*> loadWithPreserving b
+  Record m             -> Record <$> traverse (recordFieldExprs loadWithPreserving) m
+  RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWithPreserving) m
+  Lam cs a b           -> Lam cs <$> functionBindingExprs loadWithPreserving a <*> loadWithPreserving b
+  Field a b            -> Field <$> loadWithPreserving a <*> pure b
+  expression           -> Syntax.unsafeSubExpressions loadWithPreserving expression
+  where
+    coerceExpr :: Expr s Void -> Expr s a
+    coerceExpr = Unsafe.Coerce.unsafeCoerce
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)

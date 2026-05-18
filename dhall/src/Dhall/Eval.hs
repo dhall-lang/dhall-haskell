@@ -87,10 +87,20 @@ import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf   as Printf
 
+-- | Check if a variable is shadowed by a lambda parameter in the environment
+shadowedBy :: Text -> Environment a -> Bool
+shadowedBy _ Empty = False
+shadowedBy x (Skip env x') = x == x' || shadowedBy x env
+shadowedBy x (Extend env x' _) = x == x' || shadowedBy x env
+shadowedBy x (LetBind env x' _) = x == x' || shadowedBy x env
+shadowedBy x (Extracted env x') = x == x' || shadowedBy x env
+
 data Environment a
     = Empty
     | Skip   !(Environment a) {-# UNPACK #-} !Text
     | Extend !(Environment a) {-# UNPACK #-} !Text (Val a)
+    | LetBind !(Environment a) {-# UNPACK #-} !Text (Val a)
+    | Extracted !(Environment a) {-# UNPACK #-} !Text
 
 deriving instance (Show a, Show (Val a -> Val a)) => Show (Environment a)
 
@@ -261,9 +271,11 @@ infixr 5 ~>
 countEnvironment :: Text -> Environment a -> Int
 countEnvironment x = go (0 :: Int)
   where
-    go !acc Empty             = acc
-    go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
-    go  acc (Extend env x' _) = go (if x == x' then acc + 1 else acc) env
+    go !acc Empty              = acc
+    go  acc (Skip env x'     ) = go (if x == x' then acc + 1 else acc) env
+    go  acc (Extend env x' _ ) = go (if x == x' then acc + 1 else acc) env
+    go  acc (LetBind env x' _) = go (if x == x' then acc + 1 else acc) env
+    go  acc (Extracted env _ ) = go acc env
 
 instantiate :: Eq a => Closure a -> Val a -> Val a
 instantiate (Closure x env t) !u = eval (Extend env x u) t
@@ -276,6 +288,16 @@ vVar env0 (V x i0) = go env0 i0
     go (Extend env x' v) i
         | x == x' =
             if i == 0 then v else go env (i - 1)
+        | otherwise =
+            go env i
+    go (LetBind env x' v) i
+        | x == x' =
+            if i == 0 then v else go env (i - 1)
+        | otherwise =
+            go env i
+    go (Extracted env x') i
+        | x == x' =
+            go env i
         | otherwise =
             go env i
     go (Skip env x') i
@@ -366,10 +388,10 @@ vField t0 k = go t0
         VUnion m -> case Map.lookup k m of
             Just (Just _) -> VPrim $ \ ~u -> VInject m k (Just u)
             Just Nothing  -> VInject m k Nothing
-            _             -> error errorMsg
+            _             -> error ("vField on VUnion: field=" ++ show k ++ " keys=" ++ show (Map.keys m))
         VRecordLit m
             | Just v <- Map.lookup k m -> v
-            | otherwise -> error errorMsg
+            | otherwise -> error ("vField on VRecordLit: field=" ++ show k ++ " keys=" ++ show (Map.keys m))
         VProject t _ -> go t
         VPrefer (VRecordLit m) r -> case Map.lookup k m of
             Just v -> VField (VPrefer (singletonVRecordLit v) r) k
@@ -458,7 +480,7 @@ eval !env t0 =
         App t u ->
             vApp (eval env t) (eval env u)
         Let (Binding _ x _ _mA _ a) b ->
-            let !env' = Extend env x (eval env a)
+            let !env' = LetBind env x (eval env a)
             in  eval env' b
         Annot t _ ->
             eval env t
@@ -1156,9 +1178,11 @@ data Names
   deriving Show
 
 envNames :: Environment a -> Names
-envNames Empty = EmptyNames
+envNames Empty              = EmptyNames
 envNames (Skip   env x  ) = Bind (envNames env) x
 envNames (Extend env x _) = Bind (envNames env) x
+envNames (LetBind env x _) = Bind (envNames env) x
+envNames (Extracted env _) = envNames env
 
 countNames :: Text -> Names -> Int
 countNames x = go 0
@@ -1166,41 +1190,85 @@ countNames x = go 0
     go !acc EmptyNames         = acc
     go  acc (Bind env x') = go (if x == x' then acc + 1 else acc) env
 
+-- | Extract all LetBind entries from an environment, returning them in order
+--   (innermost first) and a masked environment where they are replaced with Extracted.
+--   LetBind entries whose variable is shadowed by the given lambda parameter or
+--   by another binding in the environment are skipped.
+extractLetBinds :: Text -> Environment a -> ([(Text, Val a)], Environment a)
+extractLetBinds param = go
+  where
+    go Empty = ([], Empty)
+    go (Skip env x) =
+        let (lets, env') = go env
+        in  (lets, Skip env' x)
+    go (Extend env x v) =
+        let (lets, env') = go env
+        in  (lets, Extend env' x v)
+    go (LetBind env x v)
+        | x == param || shadowedBy x env =
+            let (lets, env') = go env
+            in  (lets, Extracted env' x)
+        | otherwise =
+            let (lets, env') = go env
+            in  ((x, v) : lets, Extracted env' x)
+    go (Extracted env x) =
+        let (lets, env') = go env
+        in  (lets, Extracted env' x)
+
 -- | Quote a value into beta-normal form.
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
-quote !env !t0 =
+quote = quote' True
+{-# INLINE quote #-}
+
+-- | Quote a value without extracting let bindings from lambda values.
+--   Used when quoting annotation values to avoid re-extracting lets
+--   that were already extracted at an outer boundary.
+quoteNoExtract :: forall a. Eq a => Names -> Val a -> Expr Void a
+quoteNoExtract = quote' False
+{-# INLINE quoteNoExtract #-}
+
+quote' :: forall a. Eq a => Bool -> Names -> Val a -> Expr Void a
+quote' !extract !env !t0 =
     case t0 of
         VConst k ->
             Const k
         VVar !x !i ->
             Var (V x (countNames x env - i - 1))
         VApp t u ->
-            quote env t `qApp` u
-        VLam a (freshClosure -> (x, v, t)) ->
-            Lam
-                mempty
-                (Syntax.makeFunctionBinding x (quote env a))
-                (quoteBind x (instantiate t v))
+            quote' extract env t `qApp` u
+        VLam a (freshClosure -> (x, v, Closure _ env' body)) ->
+            let (lets, maskedEnv) = if extract then extractLetBinds x env' else ([], env')
+                bodyVal = eval (Extend maskedEnv x v) body
+                bodyExpr = quote' extract (Bind env x) bodyVal
+                lamExpr = Lam
+                    mempty
+                    (Syntax.makeFunctionBinding x (quote' extract env a))
+                    bodyExpr
+            in  foldl
+                    (\e (name, val) ->
+                        Let (Binding Nothing name Nothing Nothing Nothing (quote' extract env val)) e)
+                    lamExpr
+                    (reverse lets)
         VHLam i t ->
             case i of
                 Typed (fresh -> (x, v)) a ->
                     Lam mempty
-                        (Syntax.makeFunctionBinding x (quote env a))
+                        (Syntax.makeFunctionBinding x (quote' extract env a))
                         (quoteBind x (t v))
                 Prim ->
-                    quote env (t VPrimVar)
+                    quote' extract env (t VPrimVar)
                 NaturalSubtractZero ->
                     App NaturalSubtract (NaturalLit 0)
                 TextReplaceEmpty ->
                     App TextReplace (TextLit (Chunks [] ""))
                 TextReplaceEmptyArgument replacement ->
                     App (App TextReplace (TextLit (Chunks [] "")))
-                        (quote env replacement)
+                        (quote' extract env replacement)
 
         VPi a (freshClosure -> (x, v, b)) ->
-            Pi mempty x (quote env a) (quoteBind x (instantiate b v))
+            Pi mempty x (quote' extract env a) (quoteBind x (instantiate b v))
         VHPi (fresh -> (x, v)) a b ->
-            Pi mempty x (quote env a) (quoteBind x (b v))
+            Pi mempty x (quote' extract env a) (quoteBind x (b v))
         VBool ->
             Bool
         VBoolLit b ->

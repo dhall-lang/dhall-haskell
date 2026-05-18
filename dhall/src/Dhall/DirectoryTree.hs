@@ -34,7 +34,8 @@ import Dhall.DirectoryTree.Types
 import Dhall.Marshal.Decode      (Decoder (..), Expector)
 import Dhall.Src                 (Src)
 import Dhall.Syntax
-    ( Chunks (..)
+    ( Binding (Binding)
+    , Chunks (..)
     , Const (..)
     , Expr (..)
     , RecordField (..)
@@ -51,6 +52,7 @@ import qualified Data.Text.IO                as Text.IO
 import qualified Dhall.Core                  as Core
 import qualified Dhall.Map                   as Map
 import qualified Dhall.Marshal.Decode        as Decode
+import qualified Dhall.Normalize
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck             as TypeCheck
 import qualified Dhall.Util                  as Util
@@ -234,7 +236,7 @@ toDirectoryTree options path expression = case expression of
     -- If this pattern matches we assume the user wants to use the fixpoint
     -- approach, hence we typecheck it and output error messages like we would
     -- do for every other Dhall program.
-    Lam _ _ (Lam _ _ _) -> do
+    e | ( _, Lam _ _ (Lam _ _ _) ) <- collectOuterLets e -> do
         entries <- decodeDirectoryTree expression
 
         -- TODO: Support allowAbsolute and allowParent as well ?
@@ -279,20 +281,48 @@ toDirectoryTree options path expression = case expression of
 
 -- | Decode a fixpoint directory tree from a Dhall expression.
 decodeDirectoryTree :: Expr s Void -> IO (Seq FilesystemEntry)
-decodeDirectoryTree (Core.alphaNormalize . Core.denote -> expression@(Lam _ _ (Lam _ _ body))) = do
-    expected' <- case directoryTreeType of
-        Success x -> return x
-        Failure e -> Exception.throwIO e
+decodeDirectoryTree (Core.denote -> expression) = do
+    let (bindings, stripped) = collectOuterLets expression
+    case stripped of
+        Lam _ _ (Lam _ _ body) -> do
+            expected' <- case directoryTreeType of
+                Success x -> return x
+                Failure e -> Exception.throwIO e
 
-    _ <- Core.throws $ TypeCheck.typeOf $ Annot expression expected'
+            _ <- Core.throws $ TypeCheck.typeOf $ Annot expression expected'
 
-    case Decode.extract decoder body of
-        Success x -> return x
-        Failure e -> Exception.throwIO e
-    where
-        decoder :: Decoder (Seq FilesystemEntry)
-        decoder = Decode.auto
-decodeDirectoryTree expr = Exception.throwIO $ FilesystemError $ Core.denote expr
+            -- Inline outer let bindings into the body before decoding.
+            -- The let bindings are preserved in the normal form (proposal 1),
+            -- but the decoder expects concrete values. We work with the
+            -- original (non-alpha-normalized) expression so that variable
+            -- names are distinct and substitution is straightforward.
+            let substitutedBody = foldr
+                    (\(name, val) b ->
+                        Dhall.Normalize.subst (V name 0) val b)
+                    body
+                    bindings
+            let normalizedBody = Core.normalize substitutedBody
+
+            -- After stripping the lambdas, the lambda parameter `make` is a free
+            -- variable in the body. The decoder's `Make` pattern expects the
+            -- alpha-normalized form `Var (V "_" 0)`. We manually rename it here.
+            let alphaBody = Dhall.Normalize.subst (V "make" 0) (Var (V "_" 0)) normalizedBody
+
+            case Decode.extract decoder alphaBody of
+                Success x -> return x
+                Failure e -> Exception.throwIO e
+          where
+            decoder :: Decoder (Seq FilesystemEntry)
+            decoder = Decode.auto
+        _ -> Exception.throwIO $ FilesystemError $ Core.denote expression
+
+-- | Collect outer 'Let' bindings from an expression, returning the
+--   collected bindings and the remaining expression.
+collectOuterLets :: Expr s a -> ([(Text, Expr s a)], Expr s a)
+collectOuterLets (Let (Binding _ name _ _ _ val) body) =
+    let (bindings, rest) = collectOuterLets body
+    in  ((name, val) : bindings, rest)
+collectOuterLets e = ([], e)
 
 -- | The type of a fixpoint directory tree expression.
 directoryTreeType :: Expector (Expr Src Void)
