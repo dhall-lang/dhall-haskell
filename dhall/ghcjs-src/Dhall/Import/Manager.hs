@@ -4,9 +4,8 @@
 
     For the GHC implementation the `Dhall.Import.Manager.Manager` type is a real
     `Network.HTTP.Client.Manager` from the @http-client@ package.  For the GHCJS
-    implementation the `Dhall.Import.Manager.Manager` type is a synonym for
-    @`Data.Void.Void`@ since GHCJS does not use a
-    `Network.HTTP.Client.Manager` for HTTP requests.
+    implementation the `Dhall.Import.Manager.Manager` type is a stub since GHCJS
+    does not use a `Network.HTTP.Client.Manager` for HTTP requests.
 -}
 module Dhall.Import.Manager
     ( -- * Manager
@@ -16,11 +15,11 @@ module Dhall.Import.Manager
 
 {-| The GHCJS implementation does not require a `Network.HTTP.Client.Manager`
 
-    The purpose of this synonym is so that "Dhall.Import.Types" can import a
+    The purpose of this type is so that "Dhall.Import.Types" can import a
     `Dhall.Import.Manager.Manager` type from "Dhall.Import.HTTP" that does the
-    correct thing for both the GHC and GHCJS implementations
+    correct thing for both the GHC and GHCJS implementations.
 -}
-type Manager = ()
+data Manager = Manager
 
 defaultNewManager :: IO Manager
-defaultNewManager = pure ()
+defaultNewManager = pure Manager

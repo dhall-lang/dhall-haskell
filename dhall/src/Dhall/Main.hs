@@ -31,9 +31,9 @@ import Data.Monoid         (Endo (..))
 import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Freeze        (Intent (..), Scope (..))
-import Dhall.Import
+import Dhall.Import        (Imported (..))
+import Dhall.Import.Types
     ( Depends (..)
-    , Imported (..)
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )

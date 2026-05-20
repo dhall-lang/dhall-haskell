@@ -43,8 +43,9 @@ import Dhall.Core
     , Normalizer
     , ReifiedNormalizer (..)
     )
-import Dhall.Import                     (SemanticCacheMode (..), Status (..))
+import Dhall.Import                     (SemanticCacheMode (..), Status)
 import Dhall.Parser                     (Src)
+import Lens.Micro                       (set)
 import System.IO.Error                  (isDoesNotExistError)
 import Test.Tasty                       (TestTree)
 import Test.Tasty.HUnit
@@ -108,7 +109,7 @@ loadRelativeTo :: FilePath.FilePath -> SemanticCacheMode -> Expr Src Import -> I
 loadRelativeTo rootDirectory semanticCacheMode expression =
     State.evalStateT
         (loadWith expression)
-        (Dhall.Import.emptyStatus rootDirectory) { _semanticCacheMode = semanticCacheMode }
+        (set Dhall.Import.semanticCacheMode semanticCacheMode (Dhall.Import.emptyStatus rootDirectory))
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
