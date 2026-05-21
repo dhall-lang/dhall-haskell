@@ -105,6 +105,7 @@ import Data.Void (Void, absurd)
 import Lens.Micro (toListOf, rewriteOf)
 import Numeric (showHex)
 import Data.Char (ord, isDigit, isAsciiLower, isAsciiUpper)
+import Data.String (fromString)
 
 import Dhall.Core
     ( Binding (..)
@@ -335,6 +336,19 @@ dhallToNix e =
     -- Even higher-level utility that renames all shadowed references
     rewriteShadowed =
         rewriteOf Dhall.Core.subExpressions renameShadowed
+
+    -- Template of a Nix function that extracts a substring using regex
+    -- and parses the result as an integer
+    regexSubstrToInt argName regex =
+        (fromString argName)
+        ==> ( "builtins.fromJSON"
+            @@ ( "builtins.head"
+               @@ ( "builtins.match"
+                  @@ (Nix.mkStr regex)
+                  @@ (fromString argName)
+                  )
+               )
+            )
 
     loop (Const _) = return untranslatable
     loop (Var (V a 0)) = return (Nix.mkSym (zEncodeSymbol a))
@@ -607,13 +621,27 @@ dhallToNix e =
     loop TimeLiteral{} = undefined
     loop TimeZoneLiteral{} = undefined
     -- We currently model `Date`/`Time`/`TimeZone` literals as strings in Nix,
-    -- so the corresponding show functions are the identity function
+    -- so the corresponding show functions are the identity function, and the
+    -- functions extracting the year/month/day and hour/minute/second components
+    -- find the corresponding substring and parse it as an integer.
     loop DateShow =
         return ("date" ==> "date")
     loop TimeShow =
         return ("time" ==> "time")
     loop TimeZoneShow =
         return ("timeZone" ==> "timeZone")
+    loop DateYear =
+        return (regexSubstrToInt "date" "0*([0-9]+)-[0-9]{2}-[0-9]{2}")
+    loop DateMonth =
+        return (regexSubstrToInt "date" "[0-9]{4}-0?([0-9]+)-[0-9]{2}")
+    loop DateDay =
+        return (regexSubstrToInt "date" "[0-9]{4}-[0-9]{2}-0?([0-9]+)")
+    loop TimeHour =
+        return (regexSubstrToInt "time" "0?([0-9]+):[0-9]{2}:[0-9]{2}.*")
+    loop TimeMinute =
+        return (regexSubstrToInt "time" "[0-9]{2}:0?([0-9]+):[0-9]{2}.*")
+    loop TimeSecond =
+        return (regexSubstrToInt "time" "[0-9]{2}:[0-9]{2}:0?([0-9]+).*")
     loop (Record _) = return untranslatable
     loop (RecordLit a) = do
         a' <- traverse (loop . Dhall.Core.recordFieldValue) a
