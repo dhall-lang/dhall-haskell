@@ -109,6 +109,7 @@ unsafeSubExpressions _ DoubleShow = pure DoubleShow
 unsafeSubExpressions _ Text = pure Text
 unsafeSubExpressions f (TextLit chunks) = TextLit <$> chunkExprs f chunks
 unsafeSubExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
+unsafeSubExpressions _ TextEqual = pure TextEqual
 unsafeSubExpressions _ TextReplace = pure TextReplace
 unsafeSubExpressions _ TextShow = pure TextShow
 unsafeSubExpressions _ Date = pure Date
@@ -258,6 +259,7 @@ reservedIdentifiers = reservedKeywords <>
         , "List/indexed"
         , "List/reverse"
         , "Text/replace"
+        , "Text/equal"
         , "Text/show"
         , "Date/show"
         , "Time/show"

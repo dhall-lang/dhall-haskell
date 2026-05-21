@@ -1298,6 +1298,12 @@ diffPrimitiveExpression l@TextReplace r =
     mismatch l r
 diffPrimitiveExpression l r@TextReplace =
     mismatch l r
+diffPrimitiveExpression TextEqual TextEqual =
+    "…"
+diffPrimitiveExpression l@TextEqual r =
+    mismatch l r
+diffPrimitiveExpression l r@TextEqual =
+    mismatch l r
 diffPrimitiveExpression TextShow TextShow =
     "…"
 diffPrimitiveExpression l@TextShow r =
