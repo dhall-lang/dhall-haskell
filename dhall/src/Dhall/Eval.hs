@@ -318,6 +318,12 @@ vCombine mk t u =
             t'
         (VRecordLit m, VRecordLit m') ->
             VRecordLit (Map.unionWith (vCombine Nothing) m m')
+        (VRecord m, u') | null m ->
+            u'
+        (t', VRecord m) | null m ->
+            t'
+        (VRecord m, VRecord m') ->
+            VRecord (Map.unionWith (vCombine Nothing) m m')
         (t', u') ->
             VCombine mk t' u'
 
