@@ -60,7 +60,7 @@ import Data.Functor.Identity     (Identity (..))
 import Data.Proxy                (Proxy (..))
 import Data.Typeable             (Typeable, typeRep)
 import Dhall.Parser              (Header (..), createHeader)
-import Dhall.Pretty              (CharacterSet (..))
+import Dhall.Pretty              (CharacterSet (..), ChooseCharacterSet (..))
 import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Test.Format         (format)
@@ -214,6 +214,12 @@ shrinkWhitespace _  = [""]
 
 instance Arbitrary CharacterSet where
     arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
+
+instance Arbitrary ChooseCharacterSet where
+    arbitrary = Test.QuickCheck.oneof [
+        return AutoInferCharSet
+        , Specify <$> arbitrary
+     ]
 
 instance Arbitrary Header where
     arbitrary = createHeader <$> whitespace

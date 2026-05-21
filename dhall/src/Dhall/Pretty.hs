@@ -12,6 +12,9 @@ module Dhall.Pretty
     , detectCharacterSet
     , prettyCharacterSet
 
+    , ChooseCharacterSet(..)
+    , chooseCharsetOrUseDefault
+
     , Dhall.Pretty.Internal.layout
     , Dhall.Pretty.Internal.layoutOpts
 
