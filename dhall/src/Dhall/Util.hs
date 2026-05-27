@@ -118,7 +118,7 @@ _WARNING :: IsString string => string
 _WARNING = "\ESC[1;33mWarning\ESC[0m"
 
 -- | Output a warning message on stderr.
-printWarning :: (MonadIO m) => String -> m ()
+printWarning :: (MonadIO m) => Text -> m ()
 printWarning message = do
     let warning =
                 "\n"
@@ -126,7 +126,7 @@ printWarning message = do
             <> ": "
             <> message
 
-    liftIO $ IO.hPutStrLn IO.stderr warning
+    liftIO $ Data.Text.IO.hPutStrLn IO.stderr warning
 
 get
     :: (String -> Text -> Either ParseError a)
