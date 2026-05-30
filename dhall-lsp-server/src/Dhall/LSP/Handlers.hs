@@ -118,10 +118,10 @@ tryReadUri uri_ = do
 #endif
     Nothing -> Nothing
 
--- | Like `readUriMay`, but fails if the URI was not found.
+-- | Like `tryReadUri`, but fails if the URI was not found.
 readUri :: Uri -> HandlerM Text
 readUri uri_ = do
-  mText <- readUriMay uri_
+  mText <- tryReadUri uri_
   case mText of
     Just text -> return text
     Nothing ->
@@ -273,7 +273,7 @@ documentLinkHandler =
 
 diagnosticsHandler :: EvaluateSettings -> Uri -> HandlerM ()
 diagnosticsHandler settings _uri = do
-  mTxt <- readUriMay _uri
+  mTxt <- tryReadUri _uri
   forM_ mTxt (diagnoseDocument settings _uri)
 
 diagnoseDocument :: EvaluateSettings -> Uri -> Text -> HandlerM ()
