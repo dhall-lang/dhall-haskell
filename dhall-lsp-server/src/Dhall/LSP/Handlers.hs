@@ -62,7 +62,7 @@ import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
 import Control.Lens                  (assign, modifying, use, (^.))
-import Control.Monad                 (forM, guard)
+import Control.Monad                 (forM, forM_, guard)
 import Control.Monad.Trans           (lift, liftIO)
 import Control.Monad.Trans.Except    (catchE, throwE)
 import Data.Aeson                    (FromJSON (..), Value (..))
@@ -107,16 +107,25 @@ liftLSP :: LspT ServerConfig IO a -> HandlerM a
 liftLSP m = lift (lift m)
 
 -- | A helper function to query haskell-lsp's VFS.
+tryReadUri :: Uri -> HandlerM (Maybe Text)
+tryReadUri uri_ = do
+  mVirtualFile <- liftLSP (LSP.getVirtualFile (LSP.Types.toNormalizedUri uri_))
+  return $ case mVirtualFile of
+#if MIN_VERSION_lsp(2,8,0)
+    Just (LSP.VirtualFile _ _ rope _) -> Just (Rope.toText rope)
+#else
+    Just (LSP.VirtualFile _ _ rope) -> Just (Rope.toText rope)
+#endif
+    Nothing -> Nothing
+
+-- | Like `readUriMay`, but fails if the URI was not found.
 readUri :: Uri -> HandlerM Text
 readUri uri_ = do
-  mVirtualFile <- liftLSP (LSP.getVirtualFile (LSP.Types.toNormalizedUri uri_))
-  case mVirtualFile of
-#if MIN_VERSION_lsp(2,8,0)
-    Just (LSP.VirtualFile _ _ rope _) -> return (Rope.toText rope)
-#else
-    Just (LSP.VirtualFile _ _ rope) -> return (Rope.toText rope)
-#endif
-    Nothing -> throwE (Error, "Could not find " <> Text.pack (show uri_) <> " in VFS.")
+  mText <- readUriMay uri_
+  case mText of
+    Just text -> return text
+    Nothing ->
+      throwE (Error, "Could not find " <> Text.pack (show uri_) <> " in VFS.")
 
 loadFile :: EvaluateSettings -> Uri -> HandlerM (Expr Src Void)
 loadFile settings uri_ = do
@@ -264,7 +273,11 @@ documentLinkHandler =
 
 diagnosticsHandler :: EvaluateSettings -> Uri -> HandlerM ()
 diagnosticsHandler settings _uri = do
-  txt <- readUri _uri
+  mTxt <- readUriMay _uri
+  forM_ mTxt (diagnoseDocument settings _uri)
+
+diagnoseDocument :: EvaluateSettings -> Uri -> Text -> HandlerM ()
+diagnoseDocument settings _uri txt = do
   fileIdentifier <- fileIdentifierFromUri _uri
   -- make sure we don't keep a stale version around
   modifying importCache (invalidate fileIdentifier)
