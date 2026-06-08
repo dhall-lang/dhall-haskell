@@ -156,10 +156,13 @@ successTest prefix = do
         let status = Import.emptyStatus directoryString
 #endif
 
+        let status' =
+                status { Import._reportWarning = \_ -> return () }
+
         let load =
                 State.evalStateT
                     (Test.Util.loadWith actualExpr)
-                    status
+                    status'
 
         let usesCache = [ "hashFromCache"
                         , "unit/asLocation/Hash"
