@@ -370,6 +370,8 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "NaturalToInteger")
             % (1 :: W "NaturalShow")
             % (1 :: W "NaturalSubtract")
+            % (1 :: W "NaturalEqual")
+            % (1 :: W "NaturalLessThan")
             % (1 :: W "NaturalPlus")
             % (1 :: W "NaturalTimes")
             % (1 :: W "Integer")
