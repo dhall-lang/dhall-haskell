@@ -315,7 +315,7 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         Decoding.decodeNull
 
-                                        xs <- Data.Sequence.replicateA (len - 2) go
+                                        !xs <- replicateSeq (len - 2) go
                                         return (ListLit Nothing xs)
 
                             5 -> do
@@ -1424,14 +1424,16 @@ instance Show DecodingFailure where
       where
         toHex = Printf.printf "%02x "
 
--- | This specialized version of 'Control.Monad.replicateM' reduces
--- decoding timings by roughly 10%.
 replicateDecoder :: Int -> Decoder s a -> Decoder s [a]
-replicateDecoder n0 decoder = go n0
+replicateDecoder n0 decoder = go n0 []
   where
-    go n
-      | n <= 0    = pure []
+    go n !acc
+      | n <= 0    = pure $! reverse acc
       | otherwise = do
-            x <- decoder
-            xs <- go (n - 1)
-            pure (x:xs)
+            !x <- decoder
+            go (pred n) (x:acc)
+
+-- | Strict sequence builder to avoid the thunk tree created by
+-- 'Data.Sequence.replicateA'.
+replicateSeq :: Int -> Decoder s a -> Decoder s (Data.Sequence.Seq a)
+replicateSeq n0 decoder = Data.Sequence.fromList <$> replicateDecoder n0 decoder

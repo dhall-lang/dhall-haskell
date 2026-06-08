@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
@@ -52,7 +53,7 @@ setOffset o = Text.Megaparsec.updateParserState $ \state ->
 src :: Parser a -> Parser Src
 src parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (tokens, _) <- Text.Megaparsec.match parser
+    (!tokens, _) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     return (Src before after tokens)
 
@@ -60,7 +61,7 @@ src parser = do
 srcAnd :: Parser a -> Parser (Src, a)
 srcAnd parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (tokens, x) <- Text.Megaparsec.match parser
+    (!tokens, !x) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     return (Src before after tokens, x)
 
@@ -70,7 +71,7 @@ srcAnd parser = do
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (tokens, e) <- Text.Megaparsec.match parser
+    (!tokens, !e) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     let src₀ = Src before after tokens
     case e of
@@ -406,7 +407,7 @@ parsers embedded = Parsers{..}
 
                         return (\e -> With e keys value) )
 
-                    return (foldl (\e f -> f e) a0 bs)
+                    return (foldl' (\e f -> f e) a0 bs)
 
             let alternative5B = do
                     a <- parseFirstOperatorExpression
@@ -544,7 +545,7 @@ parsers embedded = Parsers{..}
             a <- adapt (noted importExpression_)
 
             bs <- Text.Megaparsec.many . try $ do
-                (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
+                (!sep, _) <- Text.Megaparsec.match nonemptyWhitespace
                 b <- importExpression_
                 return (sep, b)
 
