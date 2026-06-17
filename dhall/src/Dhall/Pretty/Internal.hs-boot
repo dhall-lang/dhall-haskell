@@ -24,6 +24,17 @@ instance NFData CharacterSet
 instance Semigroup CharacterSet
 instance Monoid CharacterSet
 
+data ChooseCharacterSet = AutoInferCharSet | Specify CharacterSet
+
+instance Eq ChooseCharacterSet
+instance Data ChooseCharacterSet
+instance Lift ChooseCharacterSet
+instance NFData ChooseCharacterSet
+instance Ord ChooseCharacterSet
+instance Semigroup ChooseCharacterSet
+instance Show ChooseCharacterSet
+instance Monoid ChooseCharacterSet
+
 prettyVar :: Var -> Doc Ann
 
 prettyConst :: Const -> Doc Ann
