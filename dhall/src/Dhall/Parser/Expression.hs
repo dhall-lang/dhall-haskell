@@ -724,6 +724,9 @@ parsers embedded = Parsers{..}
                     'D' ->
                         choice
                             [ DateShow         <$ _DateShow
+                            , DateYear         <$ _DateYear
+                            , DateMonth        <$ _DateMonth
+                            , DateDay          <$ _DateDay
                             , Date             <$ _Date
                             , DoubleShow       <$ _DoubleShow
                             , Double           <$ _Double
@@ -754,6 +757,9 @@ parsers embedded = Parsers{..}
                             , TimeZoneShow     <$ _TimeZoneShow
                             , TimeZone         <$ _TimeZone
                             , TimeShow         <$ _TimeShow
+                            , TimeHour         <$ _TimeHour
+                            , TimeMinute       <$ _TimeMinute
+                            , TimeSecond       <$ _TimeSecond
                             , Time             <$ _Time
                             , BoolLit True     <$ _True
                             , Const Type       <$ _Type

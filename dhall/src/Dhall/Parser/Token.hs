@@ -81,8 +81,14 @@ module Dhall.Parser.Token (
     _TextShow,
     _Date,
     _DateShow,
+    _DateYear,
+    _DateMonth,
+    _DateDay,
     _Time,
     _TimeShow,
+    _TimeHour,
+    _TimeMinute,
+    _TimeSecond,
     _TimeZone,
     _TimeZoneShow,
     _List,
@@ -1209,6 +1215,27 @@ _Date = builtin "Date"
 _DateShow :: Parser ()
 _DateShow = builtin "Date/show"
 
+{-| Parse the @Date/year@ built-in
+
+    This corresponds to the @Date-year@ rule from the official grammar
+-}
+_DateYear :: Parser ()
+_DateYear = builtin "Date/year"
+
+{-| Parse the @Date/month@ built-in
+
+    This corresponds to the @Date-month@ rule from the official grammar
+-}
+_DateMonth :: Parser ()
+_DateMonth = builtin "Date/month"
+
+{-| Parse the @Date/day@ built-in
+
+    This corresponds to the @Date-day@ rule from the official grammar
+-}
+_DateDay :: Parser ()
+_DateDay = builtin "Date/day"
+
 {-| Parse the @Time@ bult-in
 
     This corresponds to the @Time@ rule from the official grammar
@@ -1222,6 +1249,27 @@ _Time = builtin "Time"
 -}
 _TimeShow :: Parser ()
 _TimeShow = builtin "Time/show"
+
+{-| Parse the @Time/hour@ built-in
+
+    This corresponds to the @Time-hour@ rule from the official grammar
+-}
+_TimeHour :: Parser ()
+_TimeHour = builtin "Time/hour"
+
+{-| Parse the @Time/minute@ built-in
+
+    This corresponds to the @Time-minute@ rule from the official grammar
+-}
+_TimeMinute :: Parser ()
+_TimeMinute = builtin "Time/minute"
+
+{-| Parse the @Time/second@ built-in
+
+    This corresponds to the @Time-second@ rule from the official grammar
+-}
+_TimeSecond :: Parser ()
+_TimeSecond = builtin "Time/second"
 
 {-| Parse the @TimeZone@ bult-in
 

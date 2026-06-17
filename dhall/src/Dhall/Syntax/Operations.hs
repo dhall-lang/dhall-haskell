@@ -114,9 +114,15 @@ unsafeSubExpressions _ TextShow = pure TextShow
 unsafeSubExpressions _ Date = pure Date
 unsafeSubExpressions _ (DateLiteral a) = pure (DateLiteral a)
 unsafeSubExpressions _ DateShow = pure DateShow
+unsafeSubExpressions _ DateYear = pure DateYear
+unsafeSubExpressions _ DateMonth = pure DateMonth
+unsafeSubExpressions _ DateDay = pure DateDay
 unsafeSubExpressions _ Time = pure Time
 unsafeSubExpressions _ (TimeLiteral a b) = pure (TimeLiteral a b)
 unsafeSubExpressions _ TimeShow = pure TimeShow
+unsafeSubExpressions _ TimeHour = pure TimeHour
+unsafeSubExpressions _ TimeMinute = pure TimeMinute
+unsafeSubExpressions _ TimeSecond = pure TimeSecond
 unsafeSubExpressions _ TimeZone = pure TimeZone
 unsafeSubExpressions _ (TimeZoneLiteral a) = pure (TimeZoneLiteral a)
 unsafeSubExpressions _ TimeZoneShow = pure TimeZoneShow
@@ -262,6 +268,12 @@ reservedIdentifiers = reservedKeywords <>
         , "Date/show"
         , "Time/show"
         , "TimeZone/show"
+        , "Date/year"
+        , "Date/month"
+        , "Date/day"
+        , "Time/hour"
+        , "Time/minute"
+        , "Time/second"
         , "Bool"
         , "Bytes"
         , "True"
