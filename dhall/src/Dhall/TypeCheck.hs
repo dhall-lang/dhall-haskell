@@ -482,6 +482,12 @@ infer typer = loop
         NaturalSubtract ->
             return (VNatural ~> VNatural ~> VNatural)
 
+        NaturalEqual ->
+            return (VNatural ~> VNatural ~> VBool)
+
+        NaturalLessThan ->
+            return (VNatural ~> VNatural ~> VBool)
+
         NaturalPlus l r -> do
             tl' <- loop ctx l
 
