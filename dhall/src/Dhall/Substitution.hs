@@ -4,6 +4,7 @@
 
 module Dhall.Substitution where
 
+import Data.List       (foldl')
 import Data.Text       (Text)
 import Dhall.Normalize (subst)
 import Dhall.Syntax    (Expr, Var (..))
@@ -31,4 +32,4 @@ empty = Dhall.Map.empty
 --
 --   results in @Dhall.Core.Var \"Baz\"@ since we first substitute \"Foo\" with \"Bar\" and then the resulting \"Bar\" with the final \"Baz\".
 substitute :: Expr s a -> Substitutions s a -> Expr s a
-substitute expr = foldl (\memo (k, v) -> subst (V k 0) v memo) expr . Dhall.Map.toList
+substitute expr = foldl' (\memo (k, v) -> subst (V k 0) v memo) expr . Dhall.Map.toList
