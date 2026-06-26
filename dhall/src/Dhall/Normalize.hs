@@ -235,6 +235,11 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
                     App NaturalShow (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Text.pack (show n))))
+                    App (ReadConstructor (Union kts)) (TextLit (Chunks [] k)) ->
+                        case Dhall.Map.lookup k kts of
+                            Just Nothing  -> pure (Some (Field (Union kts) (Syntax.makeFieldSelection k)))
+                            Nothing       -> pure (App None (Union kts))
+                            Just (Just _) -> pure (App f' a')
                     App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
                         -- Use an `Integer` for the subtraction, due to the
                         -- following issue:
@@ -663,6 +668,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                   App None _ ->
                       TextLit (Chunks [] "None")
                   _ -> ShowConstructor x'
+          ReadConstructor t -> ReadConstructor <$> loop t
           Field r k@FieldSelection{fieldSelectionLabel = x}        -> do
               let singletonRecordLit v = RecordLit (Dhall.Map.singleton x v)
 
@@ -806,6 +812,10 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalEven (NaturalLit _) -> False
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
+          App (ReadConstructor (Union kts)) (TextLit (Chunks [] k)) ->
+              case Dhall.Map.lookup k kts of
+                  Just (Just _) -> True
+                  _             -> False
           App DateShow (DateLiteral _) -> False
           App TimeShow (TimeLiteral _ _) -> False
           App TimeZoneShow (TimeZoneLiteral _) -> False
@@ -986,6 +996,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           Some _ -> False
           App None _ -> False
           _ -> True
+      ReadConstructor t -> loop t
       Field r (FieldSelection Nothing k Nothing) -> case r of
           RecordLit _ -> False
           Project _ _ -> False

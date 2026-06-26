@@ -418,6 +418,7 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "Merge")
             % (1 :: W "ToMap")
             % (1 :: W "ShowConstructor")
+            % (1 :: W "ReadConstructor")
             % (7 :: W "Field")
             % (7 :: W "Project")
             % (1 :: W "Assert")

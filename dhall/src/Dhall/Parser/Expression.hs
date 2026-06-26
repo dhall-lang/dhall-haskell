@@ -531,10 +531,15 @@ parsers embedded = Parsers{..}
 
                     return (\a -> ShowConstructor a, Just "argument to ❰showConstructor❱")
 
-            let alternative4 =
+            let alternative4 = do
+                    try (_readConstructor *> nonemptyWhitespace)
+
+                    return (\a -> ReadConstructor a, Just "argument to ❰readConstructor❱")
+
+            let alternative5 =
                     return (id, Nothing)
 
-            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2 <|> alternative3 <|> alternative4
+            (f, maybeMessage) <- alternative0 <|> alternative1 <|> alternative2 <|> alternative3 <|> alternative4 <|> alternative5
 
             let adapt parser =
                     case maybeMessage of

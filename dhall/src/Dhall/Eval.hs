@@ -241,6 +241,7 @@ data Val a
     | VMerge !(Val a) !(Val a) !(Maybe (Val a))
     | VToMap !(Val a) !(Maybe (Val a))
     | VShowConstructor !(Val a)
+    | VReadConstructor !(Val a)
     | VField !(Val a) !Text
     | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
     | VProject !(Val a) !(Either (Set Text) (Val a))
@@ -850,6 +851,19 @@ eval !env t0 =
                 VSome _ -> VTextLit (VChunks [] "Some")
                 VNone _ -> VTextLit (VChunks [] "None")
                 x' -> VShowConstructor x'
+        ReadConstructor t ->
+            case eval env t of
+                VUnion m ->
+                    VPrim $ \case
+                        VTextLit (VChunks [] k)
+                            | Just Nothing <- Map.lookup k m ->
+                                VSome (VInject m k Nothing)
+                            | Nothing <- Map.lookup k m ->
+                                VNone (VUnion m)
+                        s' ->
+                            VApp (VReadConstructor (VUnion m)) s'
+                t' ->
+                    VReadConstructor t'
         Field t (Syntax.fieldSelectionLabel -> k) ->
             vField (eval env t) k
         Project t (Left ks) ->
@@ -1111,6 +1125,8 @@ conv !env t0 t0' =
             conv env t t'
         (VShowConstructor t, VShowConstructor t') ->
             conv env t t'
+        (VReadConstructor t, VReadConstructor t') ->
+            conv env t t'
         (VField t k, VField t' k') ->
             conv env t t' && k == k'
         (VProject t (Left ks), VProject t' (Left ks')) ->
@@ -1333,6 +1349,8 @@ quote !env !t0 =
             ToMap (quote env t) (fmap (quote env) ma)
         VShowConstructor t ->
             ShowConstructor (quote env t)
+        VReadConstructor t ->
+            ReadConstructor (quote env t)
         VField t k ->
             Field (quote env t) $ Syntax.makeFieldSelection k
         VProject t p ->
@@ -1544,6 +1562,8 @@ alphaNormalize = goEnv EmptyNames
                 ToMap (go x) (fmap go ma)
             ShowConstructor x ->
                 ShowConstructor (go x)
+            ReadConstructor t ->
+                ReadConstructor (go t)
             Field t k ->
                 Field (go t) k
             Project t ks ->
