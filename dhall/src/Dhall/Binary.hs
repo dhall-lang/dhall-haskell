@@ -663,6 +663,9 @@ decodeExpressionInternal decodeEmbed = go
                             34 -> do
                                 t <- go
                                 return (ShowConstructor t)
+                            35 -> do
+                                t <- go
+                                return (ReadConstructor t)
                             _ ->
                                 die ("Unexpected tag: " <> show tag)
 
@@ -1108,6 +1111,11 @@ encodeExpressionInternal encodeEmbed = go
         ShowConstructor t ->
             encodeList2
                 (Encoding.encodeInt 34)
+                (go t)
+
+        ReadConstructor t ->
+            encodeList2
+                (Encoding.encodeInt 35)
                 (go t)
 
         Note _ b ->
