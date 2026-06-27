@@ -199,12 +199,7 @@ freezeImportWithSettings settings directory import_ = do
         Left  exception -> Exception.throwIO exception
         Right _         -> return ()
 
-    let normalizedExpression = Core.alphaNormalize (Core.normalizeWith (view Dhall.normalizer settings) expression)
-
-    -- make sure the frozen import is present in the semantic cache
-    Dhall.Import.writeExpressionToSemanticCache (Core.denote expression)
-
-    let expressionHash = Dhall.Import.hashExpression normalizedExpression
+    expressionHash <- State.evalStateT (Dhall.Import.cacheProductHash unprotectedImport) status
 
     let newImportHashed = (importHashed import_) { hash = Just expressionHash }
 

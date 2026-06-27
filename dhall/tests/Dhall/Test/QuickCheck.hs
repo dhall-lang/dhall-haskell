@@ -529,7 +529,7 @@ instance Arbitrary ImportHashed where
 -- The standard does not yet specify how to encode `as Text`, so don't test it
 -- yet
 instance Arbitrary ImportMode where
-    arbitrary = Test.QuickCheck.elements [ Code, RawText, Location, RawBytes ]
+    arbitrary = Test.QuickCheck.elements [ Code, RawText, Location, RawBytes, Source ]
 
     shrink = genericShrink
 

@@ -51,10 +51,11 @@ newtype Chained = Chained
 instance Pretty Chained where
     pretty (Chained import_) = pretty import_
 
--- | An import that has been fully interpeted
+-- | Final result of loading an import.
 newtype ImportSemantics = ImportSemantics
     { importSemantics :: Expr Void Void
-    -- ^ The fully resolved import, typechecked and beta-normal.
+    -- ^ The import-free expression returned after loading, typechecking, and
+    --   resolving all remaining transitive imports.
     }
 
 -- | `parent` imports (i.e. depends on) `child`
