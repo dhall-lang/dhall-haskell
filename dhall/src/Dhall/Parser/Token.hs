@@ -141,7 +141,6 @@ import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad              as Monad
 import qualified Data.Char                  as Char
-import qualified Data.Foldable
 import qualified Data.HashSet
 import qualified Data.List                  as List
 import qualified Data.List.NonEmpty
@@ -308,23 +307,33 @@ naturalLiteral = (do
     binary = try (char '0' >> char 'b' >> Text.Megaparsec.Char.Lexer.binary)
     hexadecimal = try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
     decimal = do
-        n <- headDigit
-        ns <- many tailDigit
-        return (mkNum (n:ns))
+        -- Consume the first (non-zero) digit then any remaining decimal digits
+        h <- Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9') <?> "non-zero digit"
+        t <- Text.Megaparsec.takeWhileP Nothing (\c -> '0' <= c && c <= '9')
+        -- Use divide-and-conquer conversion to avoid O(N²) big-integer arithmetic.
+        -- A naïve left-fold `foldl' (\acc c -> acc * 10 + digit c) 0` costs O(k)
+        -- per step (big-integer multiply) at step k, totalling O(N²) for N digits.
+        -- The divide-and-conquer approach splits the digit string in two halves,
+        -- converts each recursively, then combines: hi * 10^lo_len + lo. This
+        -- uses fast exponentiation and reduces multiplications to O(log N) calls
+        -- on numbers of size O(N/2), O(N/4), …, giving O(M(N)·log N) total where
+        -- M(N) is the cost of one N-digit multiply (O(N^1.585) via Karatsuba in GMP).
+        return (fromDecimalText (Data.Text.cons h t))
       where
-        headDigit = decimalDigit nonZeroDigit <?> "non-zero digit"
-          where
-            nonZeroDigit c = '1' <= c && c <= '9'
+        fromDecimalText t = go (Data.Text.length t) t
 
-        tailDigit = decimalDigit digit <?> "digit"
-
-        decimalDigit predicate = do
-            c <- Text.Parser.Char.satisfy predicate
-            return (fromIntegral (Char.ord c - Char.ord '0'))
-
-        mkNum = Data.Foldable.foldl' step 0
-          where
-            step acc x = acc * 10 + x
+        go len t
+            | len <= 18 =
+                -- Short enough to fit in a 64-bit word; plain left-fold is fine.
+                Data.Text.foldl'
+                    (\acc c -> acc * 10 + fromIntegral (Char.ord c - Char.ord '0'))
+                    0
+                    t
+            | otherwise =
+                let lo_len = len `div` 2
+                    hi_len = len - lo_len
+                    (hi_t, lo_t) = Data.Text.splitAt hi_len t
+                in  go hi_len hi_t * (10 ^ lo_len) + go lo_len lo_t
 
 {-| Parse a 4-digit year
 
