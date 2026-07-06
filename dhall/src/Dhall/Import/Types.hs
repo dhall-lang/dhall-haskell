@@ -13,6 +13,7 @@ import Data.CaseInsensitive             (CI)
 import Data.Dynamic
 import Data.HashMap.Strict              (HashMap)
 import Data.List.NonEmpty               (NonEmpty)
+import Data.Text                        (Text)
 import Data.Void                        (Void)
 import Dhall.Context                    (Context)
 import Dhall.Core
@@ -30,10 +31,10 @@ import Prettyprinter                    (Pretty (..))
 import qualified Dhall.Import.Manager
 #endif
 
-import qualified Data.Text
 import qualified Dhall.Context
 import qualified Dhall.Map          as Map
 import qualified Dhall.Substitution
+import qualified Dhall.Util
 
 -- | A fully \"chained\" import, i.e. if it contains a relative path that path
 --   is relative to the current directory. If it is a remote import with headers
@@ -84,7 +85,7 @@ defaultNewManager =
 type HTTPHeader = (CI ByteString, ByteString)
 
 -- | A map of site origin -> HTTP headers
-type OriginHeaders = HashMap Data.Text.Text [HTTPHeader]
+type OriginHeaders = HashMap Text [HTTPHeader]
 
 {-| Used internally to track whether or not we've already warned the user about
     caching issues
@@ -114,7 +115,7 @@ data Status = Status
     -- ^ Load the origin headers from environment or configuration file.
     --   After loading once, further evaluations return the cached version.
 
-    , _remote :: URL -> StateT Status IO Data.Text.Text
+    , _remote :: URL -> StateT Status IO Text
     -- ^ The remote resolver, fetches the content at the given URL.
 
     , _remoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
@@ -131,6 +132,9 @@ data Status = Status
     , _cacheWarning :: CacheWarning
     -- ^ Records whether or not we already warned the user about issues with
     --   cache directory
+
+    , _reportWarning :: Text -> IO ()
+    -- ^ Action to report warnings with (defaults to writing to stderr)
     }
 
 -- | Initial `Status`, parameterised over the HTTP 'Manager',
@@ -139,7 +143,7 @@ data Status = Status
 emptyStatusWith
     :: IO Manager
     -> StateT Status IO OriginHeaders
-    -> (URL -> StateT Status IO Data.Text.Text)
+    -> (URL -> StateT Status IO Text)
     -> (URL -> StateT Status IO Data.ByteString.ByteString)
     -> Import
     -> Status
@@ -163,6 +167,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _cacheWarning = CacheNotWarned
 
+    _reportWarning = Dhall.Util.printWarning
+
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
 stack = lens _stack (\s x -> s { _stack = x })
@@ -176,7 +182,7 @@ cache :: Lens' Status (Map Chained ImportSemantics)
 cache = lens _cache (\s x -> s { _cache = x })
 
 -- | Lens from a `Status` to its `_remote` field
-remote :: Lens' Status (URL -> StateT Status IO Data.Text.Text)
+remote :: Lens' Status (URL -> StateT Status IO Text)
 remote = lens _remote (\s x -> s { _remote = x })
 
 -- | Lens from a `Status` to its `_remote` field
@@ -198,6 +204,10 @@ startingContext = lens _startingContext (\s x -> s { _startingContext = x })
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning
 cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
+
+-- | Lens from a `Status` to its `_reportWarning` field
+reportWarning :: Lens' Status (Text -> IO ())
+reportWarning = lens _reportWarning (\s x -> s { _reportWarning = x })
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic

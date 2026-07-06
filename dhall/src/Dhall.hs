@@ -34,6 +34,7 @@ module Dhall
     , substitutions
     , normalizer
     , newManager
+    , reportWarning
     , defaultInputSettings
     , InputSettings
     , defaultEvaluateSettings
@@ -84,6 +85,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified Lens.Micro                       as Lens
 
 import Dhall.Marshal.Decode
@@ -129,6 +131,7 @@ data EvaluateSettings = EvaluateSettings
   , _startingContext :: Dhall.Context.Context (Expr Src Void)
   , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
   , _newManager      :: IO Dhall.Import.Manager
+  , _reportWarning   :: Text -> IO ()
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -141,6 +144,7 @@ defaultEvaluateSettings = EvaluateSettings
   , _startingContext = Dhall.Context.empty
   , _normalizer      = Nothing
   , _newManager      = Dhall.Import.defaultNewManager
+  , _reportWarning   = Dhall.Util.printWarning
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -182,6 +186,14 @@ newManager
 newManager =
     evaluateSettings
         . lens _newManager (\s x -> s { _newManager = x })
+
+-- | Access the warning reporting action.
+reportWarning
+  :: (HasEvaluateSettings s)
+  => Lens' s (Text -> IO ())
+reportWarning =
+    evaluateSettings
+        . lens _reportWarning (\s x -> s { _reportWarning = x })
 
 -- | @since 1.16
 class HasEvaluateSettings s where
@@ -266,6 +278,7 @@ resolveAndStatusWithSettings settings expression = do
                Lens.set Dhall.Import.substitutions   _substitutions
             .  Lens.set Dhall.Import.normalizer      _normalizer
             .  Lens.set Dhall.Import.startingContext _startingContext
+            .  Lens.set Dhall.Import.reportWarning   _reportWarning
 
     let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
 
