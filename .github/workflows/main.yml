@@ -44,7 +44,7 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: "Checkout repository"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
       - id: setup-haskell-cabal
