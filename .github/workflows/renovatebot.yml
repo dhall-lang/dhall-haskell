@@ -17,10 +17,10 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Self-hosted Renovate
-        uses: renovatebot/github-action@v46.1.10
+        uses: renovatebot/github-action@v46.1.16
         with:
           configurationFile: .github/renovate.json5
           token: ${{ secrets.GITHUB_TOKEN }}

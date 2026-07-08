@@ -3,6 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns        #-}
 
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Dhall.Import.Headers
     ( normalizeHeaders
     , originHeadersTypeExpr
