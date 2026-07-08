@@ -1,5 +1,6 @@
 resolver: lts-22.44
 packages:
+  - dhall-test-server
   - dhall
   - dhall-bash
   - dhall-csv

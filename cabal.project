@@ -1,4 +1,5 @@
 packages:
+  ./dhall-test-server
   ./dhall
   ./dhall-bash
   ./dhall-csv

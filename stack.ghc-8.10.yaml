@@ -1,5 +1,6 @@
 resolver: lts-18.28
 packages:
+  - dhall-test-server
   - dhall
   - dhall-bash
   - dhall-csv
