@@ -6,8 +6,6 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE BangPatterns          #-}
-
 
 -- | `Map` type used to represent records and unions
 
@@ -461,11 +459,9 @@ Nothing
 uncons :: Ord k => Map k v -> Maybe (k, v, Map k v)
 uncons (Map _ (Original []))     = Nothing
 uncons (Map m (Original (k:ks))) =
-    let !v  = m Data.Map.Strict.! k
-        !m' = Data.Map.Strict.delete k m
-    in  Just (k, v, Map m' (Original ks))
+    Just (k, m Data.Map.Strict.! k, Map (Data.Map.Strict.delete k m) (Original ks))
 uncons (Map m Sorted)
-  | Just ((!k, !v), m') <- Data.Map.Strict.minViewWithKey m = Just (k, v, Map m' Sorted)
+  | Just ((k, v), m') <- Data.Map.Strict.minViewWithKey m = Just (k, v, Map m' Sorted)
   | otherwise                                      = Nothing
 {-# INLINABLE uncons #-}
 
@@ -678,10 +674,7 @@ unorderedTraverseWithKey_ f (Map m _) =
 -}
 toList :: Ord k => Map k v -> [(k, v)]
 toList (Map m Sorted)        = Data.Map.Strict.toList m
-toList (Map m (Original ks)) = go ks
-  where
-    go []       = []
-    go (k : ks) = let !v = m Data.Map.Strict.! k in (k, v) : go ks
+toList (Map m (Original ks)) = fmap (\k -> (k, m Data.Map.Strict.! k)) ks
 {-# INLINABLE toList #-}
 
 {-| Convert a `Map` to a list of key-value pairs in ascending order of keys
@@ -716,10 +709,7 @@ keys (Map _ (Original ks)) = ks
 -}
 elems :: Ord k => Map k v -> [v]
 elems (Map m Sorted)        = Data.Map.Strict.elems m
-elems (Map m (Original ks)) = go ks
-  where
-    go []       = []
-    go (k : ks) = let !v = m Data.Map.Strict.! k in v : go ks
+elems (Map m (Original ks)) = fmap (\k -> m Data.Map.Strict.! k) ks
 {-# INLINABLE elems #-}
 
 {-| Return the @"Data.Set".'Data.Set.Set'@ of the keys
