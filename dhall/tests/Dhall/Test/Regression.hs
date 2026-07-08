@@ -25,6 +25,7 @@ import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Test.Util           as Util
+import qualified Dhall.Test.Regression.TextReplaceNoop
 import qualified Dhall.TypeCheck
 import qualified Lens.Micro                as Lens
 import qualified Prettyprinter
@@ -58,7 +59,11 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+<<<<<<< fix-load-resolved
         , largeNaturalLiteralParsing
+=======
+        , Dhall.Test.Regression.TextReplaceNoop.tests
+>>>>>>> main
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
