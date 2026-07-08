@@ -160,7 +160,7 @@ unhandledConstructor constructor =
     internalError
         (   "Dhall.Syntax.unsafeSubExpressions: Unhandled "
         <>  constructor
-        <>  " construtor"
+        <>  " constructor"
         )
 
 -- | Remove all `Note` constructors from an `Expr` (i.e. de-`Note`)
