@@ -315,7 +315,9 @@ decodeExpressionInternal decodeEmbed = go
                                     _ -> do
                                         Decoding.decodeNull
 
-                                        !xs <- replicateSeq (len - 2) go
+                                        -- Strict sequence builder to avoid the thunk tree created by
+                                        -- 'Data.Sequence.replicateA'.
+                                        !xs <- Data.Sequence.fromList <$> replicateDecoder (len - 2) go
                                         return (ListLit Nothing xs)
 
                             5 -> do
@@ -1432,8 +1434,3 @@ replicateDecoder n0 decoder = go n0 []
       | otherwise = do
             !x <- decoder
             go (pred n) (x:acc)
-
--- | Strict sequence builder to avoid the thunk tree created by
--- 'Data.Sequence.replicateA'.
-replicateSeq :: Int -> Decoder s a -> Decoder s (Data.Sequence.Seq a)
-replicateSeq n0 decoder = Data.Sequence.fromList <$> replicateDecoder n0 decoder
