@@ -141,7 +141,6 @@ import Text.Parser.Combinators (choice, try, (<?>))
 
 import qualified Control.Monad              as Monad
 import qualified Data.Char                  as Char
-import qualified Data.Foldable
 import qualified Data.HashSet
 import qualified Data.List                  as List
 import qualified Data.List.NonEmpty
@@ -307,24 +306,7 @@ naturalLiteral = (do
   where
     binary = try (char '0' >> char 'b' >> Text.Megaparsec.Char.Lexer.binary)
     hexadecimal = try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
-    decimal = do
-        n <- headDigit
-        ns <- many tailDigit
-        return (mkNum (n:ns))
-      where
-        headDigit = decimalDigit nonZeroDigit <?> "non-zero digit"
-          where
-            nonZeroDigit c = '1' <= c && c <= '9'
-
-        tailDigit = decimalDigit digit <?> "digit"
-
-        decimalDigit predicate = do
-            c <- Text.Parser.Char.satisfy predicate
-            return (fromIntegral (Char.ord c - Char.ord '0'))
-
-        mkNum = Data.Foldable.foldl' step 0
-          where
-            step acc x = acc * 10 + x
+    decimal = try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.decimal)
 
 {-| Parse a 4-digit year
 
