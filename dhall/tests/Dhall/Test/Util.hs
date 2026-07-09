@@ -4,6 +4,8 @@
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE ViewPatterns      #-}
 
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Dhall.Test.Util
     ( code
     , codeWith

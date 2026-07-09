@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
@@ -44,8 +43,9 @@ benchParser =
       bgroup "exprFromText"
     . Map.foldrWithKey (\name expr -> (benchExprFromText name expr :)) []
 
+-- Note: do not use !expr below, to avoid the bug mentioned here https://github.com/UnkindPartition/tasty/issues/401
 benchExprFromText :: String -> Text -> Benchmark
-benchExprFromText name !expr =
+benchExprFromText name expr =
     bench name $ whnf (Dhall.exprFromText "(input)") expr
 
 benchExprFromBytes :: String -> Data.ByteString.Lazy.ByteString -> Benchmark
@@ -56,8 +56,9 @@ benchExprFromBytes name bs = bench name (nf f bs)
             Left  exception  -> error (show exception)
             Right expression -> expression :: Dhall.Expr Void Dhall.Import
 
+-- Note: do not use !expr below, to avoid the bug mentioned here https://github.com/UnkindPartition/tasty/issues/401
 benchNfExprFromText :: String -> Text -> Benchmark
-benchNfExprFromText name !expr =
+benchNfExprFromText name expr =
     bench name $ nf (either throw id . Dhall.exprFromText "(input)") expr
 
 main :: IO ()

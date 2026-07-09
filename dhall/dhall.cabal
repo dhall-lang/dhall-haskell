@@ -497,3 +497,13 @@ Benchmark deep-nested-large-record
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
     Default-Language: Haskell2010
+
+Benchmark evaluation
+    Import: common
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: benchmark/evaluation
+    Main-Is: Main.hs
+    Build-Depends:
+        dhall                                         ,
+        tasty-bench               >= 0.4      && < 0.6,
+    Default-Language: Haskell2010
