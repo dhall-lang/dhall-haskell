@@ -17,10 +17,12 @@ import qualified Control.Concurrent       as Concurrent
 import qualified Control.Concurrent.Async as Async
 import qualified Data.ByteString.Char8    as BS8
 import qualified Data.ByteString.Lazy     as ByteString.Lazy
+import qualified Data.List                as List
 import qualified Data.Maybe               as Maybe
 import qualified Data.Text                as Text
 import qualified Data.Text.Encoding       as Text
 import qualified Network.Wai              as Wai
+import qualified System.FilePath          as FilePath
 
 httpPort :: Int
 httpPort = 18080
@@ -92,155 +94,189 @@ resolveCertAndKeyPaths = do
                 else throwIO (mkIOError userErrorType "Missing TLS certificate files under dhall-test-server/cert" Nothing Nothing)
 
 testHttpsApp :: IORef Int -> Application
-testHttpsApp randomCounter request respond =
-    case (requestMethod request, pathInfo request) of
-        (methodGet, ["user-agent"]) -> do
-            let userAgent = lookup hUserAgent (requestHeaders request)
-            respond (responseLBS status200 [(hContentType, "application/json")] (ByteString.Lazy.fromStrict (userAgentResponse userAgent)))
+testHttpsApp randomCounter request respond = do
+    mResponse <- responseFromTestsFixtures request
 
-        (methodGet, ["random-string"]) -> do
-            n <- nextRandomCounter randomCounter
-            let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
-            respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
+    case mResponse of
+        Just response -> respond response
+        Nothing ->
+            case (requestMethod request, pathInfo request) of
+                (methodGet, ["user-agent"]) -> do
+                    let userAgent = lookup hUserAgent (requestHeaders request)
+                    respond (responseLBS status200 [(hContentType, "application/json")] (ByteString.Lazy.fromStrict (userAgentResponse userAgent)))
 
-        (methodGet, ["foo"]) ->
-            if hasExampleTestHeader request then respond (dhallText "./bar") else respond response404
+                (methodGet, ["random-string"]) -> do
+                    n <- nextRandomCounter randomCounter
+                    let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
+                    respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
 
-        (methodGet, ["bar"]) ->
-            if hasExampleTestHeader request then respond (dhallText "True") else respond response404
+                (methodGet, ["foo"]) ->
+                    if hasExampleTestHeader request then respond (dhallText "./bar") else respond response404
 
-        (methodGet, ["cors", "AllowedAll.dhall"]) -> respond (corsText (Just "*") "42")
-        (methodGet, ["cors", "OnlyOther.dhall"]) -> respond (corsText (Just "http://localhost:28080") "42")
-        (methodGet, ["cors", "Empty.dhall"]) -> respond (corsText (Just "") "42")
-        (methodGet, ["cors", "NoCORS.dhall"]) -> respond (corsText Nothing "42")
-        (methodGet, ["cors", "Null.dhall"]) -> respond (corsText (Just "null") "42")
-        (methodGet, ["cors", "SelfImportAbsolute.dhall"]) -> respond (corsText (Just "*") "http://127.0.0.1:18080/cors/NoCORS.dhall")
-        (methodGet, ["cors", "SelfImportRelative.dhall"]) -> respond (corsText (Just "*") "./NoCORS.dhall")
-        (methodGet, ["cors", "TwoHopsFail.dhall"]) -> respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlySelf.dhall")
-        (methodGet, ["cors", "TwoHopsSuccess.dhall"]) -> respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlyGithub.dhall")
+                (methodGet, ["bar"]) ->
+                    if hasExampleTestHeader request then respond (dhallText "True") else respond response404
 
-        _ -> respond response404
+                (methodGet, ["cors", "AllowedAll.dhall"]) -> respond (corsText (Just "*") "42")
+                (methodGet, ["cors", "OnlyOther.dhall"]) -> respond (corsText (Just "http://localhost:28080") "42")
+                (methodGet, ["cors", "Empty.dhall"]) -> respond (corsText (Just "") "42")
+                (methodGet, ["cors", "NoCORS.dhall"]) -> respond (corsText Nothing "42")
+                (methodGet, ["cors", "Null.dhall"]) -> respond (corsText (Just "null") "42")
+                (methodGet, ["cors", "SelfImportAbsolute.dhall"]) -> respond (corsText (Just "*") "http://127.0.0.1:18080/cors/NoCORS.dhall")
+                (methodGet, ["cors", "SelfImportRelative.dhall"]) -> respond (corsText (Just "*") "./NoCORS.dhall")
+                (methodGet, ["cors", "TwoHopsFail.dhall"]) -> respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlySelf.dhall")
+                (methodGet, ["cors", "TwoHopsSuccess.dhall"]) -> respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlyGithub.dhall")
+
+                _ -> respond response404
 
 testHttpApp :: IORef Int -> Application
-testHttpApp randomCounter request respond =
-    case (requestMethod request, pathInfo request) of
-        (methodGet, ["user-agent"]) -> do
-            let userAgent = lookup hUserAgent (requestHeaders request)
-            respond (responseLBS status200 [(hContentType, "application/json")] (ByteString.Lazy.fromStrict (userAgentResponse userAgent)))
+testHttpApp randomCounter request respond = do
+    mResponse <- responseFromTestsFixtures request
 
-        (methodGet, ["random-string"]) -> do
-            n <- nextRandomCounter randomCounter
-            let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
-            respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
+    case mResponse of
+        Just response -> respond response
+        Nothing ->
+            case (requestMethod request, pathInfo request) of
+                (methodGet, ["user-agent"]) -> do
+                    let userAgent = lookup hUserAgent (requestHeaders request)
+                    respond (responseLBS status200 [(hContentType, "application/json")] (ByteString.Lazy.fromStrict (userAgentResponse userAgent)))
 
-        (methodGet, ["foo", "..", "random-string"]) -> do
-            n <- nextRandomCounter randomCounter
-            let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
-            respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
+                (methodGet, ["random-string"]) -> do
+                    n <- nextRandomCounter randomCounter
+                    let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
+                    respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
 
-        (methodGet, ["foo"]) ->
-            if hasExampleTestHeader request then respond (dhallText "./bar") else respond response404
+                (methodGet, ["foo", "..", "random-string"]) -> do
+                    n <- nextRandomCounter randomCounter
+                    let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
+                    respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
 
-        (methodGet, ["bar"]) ->
-            if hasExampleTestHeader request then respond (dhallText "True") else respond response404
+                (methodGet, ["foo"]) ->
+                    if hasExampleTestHeader request then respond (dhallText "./bar") else respond response404
 
-        (methodGet, ["tests", "import", "data", "example.txt"]) ->
-            respond (responseLBS status200 [(hContentType, "text/plain")] "Hello, world!\n")
+                (methodGet, ["bar"]) ->
+                    if hasExampleTestHeader request then respond (dhallText "True") else respond response404
 
-        (methodGet, ["tests", "import", "data", "simple.dhall"]) ->
-            respond (dhallText "3")
+                (methodGet, ["Prelude", "List", "length"]) ->
+                    respond (corsText (Just "*") "List/length")
 
-        (methodGet, ["Prelude", "List", "length"]) ->
-            respond (corsText (Just "*") "List/length")
+                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "Canonicalize3A.dhall"]) ->
+                    respond (dhallText "./../bar/import.dhall as Location")
 
-        (methodGet, ["tests", "import", "data", "cors", "Prelude.dhall"]) ->
-            respond (dhallText "http://127.0.0.1:18080/Prelude/List/length")
+                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "Canonicalize5A.dhall"]) ->
+                    respond (dhallText "./foo/../../bar/import.dhall as Location")
 
-        (methodGet, ["tests", "import", "data", "simpleLocation.dhall"]) ->
-            respond (dhallText "./simple.dhall as Location")
+                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "MissingA.dhall"]) ->
+                    respond (dhallText "missing as Location")
 
-        (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "Canonicalize3A.dhall"]) ->
-            respond (dhallText "./../bar/import.dhall as Location")
+                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "EnvA.dhall"]) ->
+                    respond (dhallText "env:HOME as Location")
 
-        (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "Canonicalize5A.dhall"]) ->
-            respond (dhallText "./foo/../../bar/import.dhall as Location")
+                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "bar", "import.dhall"]) ->
+                    respond (dhallText "2")
 
-        (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "MissingA.dhall"]) ->
-            respond (dhallText "missing as Location")
+                (methodGet, ["cors", "AllowedAll.dhall"]) ->
+                    respond (corsText (Just "*") "42")
 
-        (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "EnvA.dhall"]) ->
-            respond (dhallText "env:HOME as Location")
+                (methodGet, ["cors", "OnlySelf.dhall"]) ->
+                    respond (corsText (Just "http://127.0.0.1:18080") "42")
 
-        (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "bar", "import.dhall"]) ->
-            respond (dhallText "2")
+                (methodGet, ["cors", "OnlyOther.dhall"]) ->
+                    respond (corsText (Just "http://localhost:28080") "42")
 
-        (methodGet, ["tests", "import", "success", "customHeadersA.dhall"]) ->
-            respond (dhallText "http://localhost:18080/user-agent using [ { mapKey = \"User-Agent\", mapValue = \"Dhall\" } ] as Text")
+                (methodGet, ["cors", "OnlyGithub.dhall"]) ->
+                    respond (corsText (Just "http://localhost:18080") "42")
 
-        (methodGet, ["tests", "import", "data", "referentiallyOpaque.dhall"]) ->
-            respond (dhallText "env:DHALL_TEST_VAR as Text")
+                (methodGet, ["cors", "Empty.dhall"]) ->
+                    respond (corsText (Just "") "42")
 
-        (methodGet, ["tests", "import", "data", "cors", "AllowedAll.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/AllowedAll.dhall")
+                (methodGet, ["cors", "NoCORS.dhall"]) ->
+                    respond (corsText Nothing "42")
 
-        (methodGet, ["tests", "import", "data", "cors", "OnlyGithub.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/OnlyGithub.dhall")
+                (methodGet, ["cors", "Null.dhall"]) ->
+                    respond (corsText (Just "null") "42")
 
-        (methodGet, ["tests", "import", "data", "cors", "OnlySelf.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/OnlySelf.dhall")
+                (methodGet, ["cors", "SelfImportAbsolute.dhall"]) ->
+                    respond (corsText (Just "*") "http://127.0.0.1:18080/cors/NoCORS.dhall")
 
-        (methodGet, ["tests", "import", "data", "cors", "OnlyOther.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/OnlyOther.dhall")
+                (methodGet, ["cors", "SelfImportRelative.dhall"]) ->
+                    respond (corsText (Just "*") "./NoCORS.dhall")
 
-        (methodGet, ["tests", "import", "data", "cors", "Empty.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/Empty.dhall")
+                (methodGet, ["cors", "TwoHopsFail.dhall"]) ->
+                    respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlySelf.dhall")
 
-        (methodGet, ["tests", "import", "data", "cors", "NoCORS.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/NoCORS.dhall")
+                (methodGet, ["cors", "TwoHopsSuccess.dhall"]) ->
+                    respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlyGithub.dhall")
 
-        (methodGet, ["tests", "import", "data", "cors", "Null.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/Null.dhall")
+                _ -> respond response404
 
-        (methodGet, ["tests", "import", "data", "cors", "SelfImportAbsolute.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/SelfImportAbsolute.dhall")
+type TestsFixture = (FilePath, Bool) -- The Bool shows whether we need CORS information (which will be always "allow-origin *").
 
-        (methodGet, ["tests", "import", "data", "cors", "SelfImportRelative.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/SelfImportRelative.dhall")
+testsFixtures :: [TestsFixture]
+testsFixtures =
+    [ ("tests/import/data/example.txt", False)
+    , ("tests/import/data/simple.dhall", False)
+    , ("tests/import/data/cors/Prelude.dhall", False)
+    , ("tests/import/data/simpleLocation.dhall", False)
+    , ("tests/import/success/customHeadersA.dhall", False)
+    , ("tests/import/data/referentiallyOpaque.dhall", False)
+    , ("tests/import/data/cors/AllowedAll.dhall", True)
+    , ("tests/import/data/cors/OnlyGithub.dhall", True)
+    , ("tests/import/data/cors/OnlySelf.dhall", True)
+    , ("tests/import/data/cors/OnlyOther.dhall", True)
+    , ("tests/import/data/cors/Empty.dhall", True)
+    , ("tests/import/data/cors/NoCORS.dhall", True)
+    , ("tests/import/data/cors/Null.dhall", True)
+    , ("tests/import/data/cors/SelfImportAbsolute.dhall", True)
+    , ("tests/import/data/cors/SelfImportRelative.dhall", True)
+    ]
 
-        (methodGet, ["cors", "AllowedAll.dhall"]) ->
-            respond (corsText (Just "*") "42")
+responseFromTestsFixtures :: Request -> IO (Maybe Wai.Response)
+responseFromTestsFixtures request
+    | requestMethod request /= methodGet = pure Nothing
+    | otherwise =
+        case lookup (pathInfo request) testsFixtureRoutes of
+            Nothing -> pure Nothing
+            Just makeResponse -> Just <$> makeResponse
 
-        (methodGet, ["cors", "OnlySelf.dhall"]) ->
-            respond (corsText (Just "http://127.0.0.1:18080") "42")
+testsFixtureRoutes :: [([Text.Text], IO Wai.Response)]
+testsFixtureRoutes = fmap toRoute testsFixtures
+  where
+    toRoute (shortPath, useCorsHeader) =
+        let (urlSegments, _) = testsPathInfo shortPath
+         in (urlSegments, testsFixtureResponse shortPath useCorsHeader)
 
-        (methodGet, ["cors", "OnlyOther.dhall"]) ->
-            respond (corsText (Just "http://localhost:28080") "42")
+testsPathInfo :: FilePath -> ([Text.Text], FilePath)
+testsPathInfo shortPath =
+    (Text.splitOn "/" (Text.pack shortPath), "dhall/dhall-lang" FilePath.</> shortPath)
 
-        (methodGet, ["cors", "OnlyGithub.dhall"]) ->
-            respond (corsText (Just "http://localhost:18080") "42")
+testsFixtureResponse :: FilePath -> Bool -> IO Wai.Response
+testsFixtureResponse shortPath useCorsHeader = do
+    body <- readTestsFixtureFile shortPath
+    pure
+        (if useCorsHeader
+            then corsText (Just "*") body
+            else dhallText body
+        )
 
-        (methodGet, ["cors", "Empty.dhall"]) ->
-            respond (corsText (Just "") "42")
+readTestsFixtureFile :: FilePath -> IO BS8.ByteString
+readTestsFixtureFile shortPath = do
+    let (_, fullPath) = testsPathInfo shortPath
+        noRepoPrefixPath = Maybe.fromMaybe fullPath (List.stripPrefix "dhall/" fullPath)
+        candidates = List.nub [fullPath, noRepoPrefixPath, ".." FilePath.</> fullPath, ".." FilePath.</> noRepoPrefixPath]
 
-        (methodGet, ["cors", "NoCORS.dhall"]) ->
-            respond (corsText Nothing "42")
+    mResolved <- firstExistingPath candidates
 
-        (methodGet, ["cors", "Null.dhall"]) ->
-            respond (corsText (Just "null") "42")
+    case mResolved of
+        Just path -> BS8.readFile path
+        Nothing -> throwIO (mkIOError userErrorType ("Missing test fixture file: " <> fullPath) Nothing Nothing)
 
-        (methodGet, ["cors", "SelfImportAbsolute.dhall"]) ->
-            respond (corsText (Just "*") "http://127.0.0.1:18080/cors/NoCORS.dhall")
-
-        (methodGet, ["cors", "SelfImportRelative.dhall"]) ->
-            respond (corsText (Just "*") "./NoCORS.dhall")
-
-        (methodGet, ["cors", "TwoHopsFail.dhall"]) ->
-            respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlySelf.dhall")
-
-        (methodGet, ["cors", "TwoHopsSuccess.dhall"]) ->
-            respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlyGithub.dhall")
-
-        _ -> respond response404
+firstExistingPath :: [FilePath] -> IO (Maybe FilePath)
+firstExistingPath [] = pure Nothing
+firstExistingPath (path : paths) = do
+    exists <- doesFileExist path
+    if exists
+        then pure (Just path)
+        else firstExistingPath paths
 
 nextRandomCounter :: IORef Int -> IO Int
 nextRandomCounter ref =

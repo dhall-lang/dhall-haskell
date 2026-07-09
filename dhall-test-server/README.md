@@ -144,6 +144,8 @@ This is used by cache tests to verify that repeated imports in one evaluation us
 - `GET /tests/import/data/simple.dhall` -> `3`
 - `GET /tests/import/data/simpleLocation.dhall` -> `./simple.dhall as Location`
 
+- `GET /tests/import/data/Prelude/List/length.dhall` -> `List/length`
+
 - `GET /nadrieril/dhall/tests/import/success/unit/asLocation/Canonicalize3A.dhall`
   -> `./../bar/import.dhall as Location`
 
