@@ -1,1 +1,1 @@
-http://localhost:18080/headers using (toMap { TOKEN = "AAAA" }) as Text
+http://example.com/ using (toMap { TOKEN = "AAAA" }) as Text

@@ -1,6 +1,6 @@
 # dhall-test-server
 
-`dhall-test-server` is a tiny local HTTP/HTTPS server used by the `dhall` test suite to remove runtime dependencies on public services (`httpbin.org`, `test.dhall-lang.org`, and selected `raw.githubusercontent.com` fixtures).
+`dhall-test-server` is a tiny local HTTP/HTTPS server used by the `dhall` test suite to remove runtime dependencies on public services (`httpbin.org`, `test.dhall-lang.org`, and `raw.githubusercontent.com` fixtures).
 
 ## Purpose
 
@@ -12,7 +12,7 @@ It specifically supports tests for:
 - transitive header forwarding,
 - CORS compliance checks in chained imports,
 - import caching behavior for a changing remote resource,
-- static remote fixture imports used by import/asLocation tests.
+- static remote fixture imports.
 
 ## Runtime model
 
@@ -54,16 +54,14 @@ This is used by cache tests to verify that repeated imports in one evaluation us
 
 ### HTTPS routes (`https://localhost:18443/...`)
 
-### Header/httpbin-compatible subset
+### User agent/httpbin-compatible subset
 
 - `GET /user-agent`
   - Reads `User-Agent` header (if present)
   - Body:
     - with header: `{\n  "user-agent": "<value>"\n}\n`
-    - without header: `{\n  "user-agent": "Dhall"\n}\n`
+    - without header: `{\n  "user-agent": "none_given"\n}\n`
 
-- `GET /headers`
-  - Body: `{}\n`
 
 ### Random string
 
@@ -124,13 +122,10 @@ This is used by cache tests to verify that repeated imports in one evaluation us
 
 ### HTTP routes (`http://localhost:18080/...` and `http://127.0.0.1:18080/...`)
 
-### Header/httpbin-compatible subset
+### User agent/httpbin-compatible subset
 
 - `GET /user-agent`
   - Same behavior as HTTPS `/user-agent`
-
-- `GET /headers`
-  - Same behavior as HTTPS `/headers`
 
 ### Random string
 

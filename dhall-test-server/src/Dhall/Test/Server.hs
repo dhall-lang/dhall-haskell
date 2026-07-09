@@ -9,10 +9,7 @@ import Data.IORef               (IORef, atomicModifyIORef', newIORef)
 import Network.HTTP.Types       (hContentType, hUserAgent, methodGet, status200, status404)
 import Network.Wai              (Application, Request (..), responseLBS)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setHost, setPort)
-import Network.Wai.Handler.WarpTLS
-    ( runTLS
-    , tlsSettings
-    )
+import Network.Wai.Handler.WarpTLS  (runTLS, tlsSettings)
 import System.Directory         (doesFileExist)
 import System.IO.Error          (mkIOError, userErrorType)
 
@@ -101,9 +98,6 @@ testHttpsApp randomCounter request respond =
             let userAgent = lookup hUserAgent (requestHeaders request)
             respond (responseLBS status200 [(hContentType, "application/json")] (ByteString.Lazy.fromStrict (userAgentResponse userAgent)))
 
-        (methodGet, ["headers"]) ->
-            respond (responseLBS status200 [(hContentType, "application/json")] "{}\n")
-
         (methodGet, ["random-string"]) -> do
             n <- nextRandomCounter randomCounter
             let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
@@ -134,9 +128,6 @@ testHttpApp randomCounter request respond =
             let userAgent = lookup hUserAgent (requestHeaders request)
             respond (responseLBS status200 [(hContentType, "application/json")] (ByteString.Lazy.fromStrict (userAgentResponse userAgent)))
 
-        (methodGet, ["headers"]) ->
-            respond (responseLBS status200 [(hContentType, "application/json")] "{}\n")
-
         (methodGet, ["random-string"]) -> do
             n <- nextRandomCounter randomCounter
             let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
@@ -159,6 +150,12 @@ testHttpApp randomCounter request respond =
         (methodGet, ["tests", "import", "data", "simple.dhall"]) ->
             respond (dhallText "3")
 
+        (methodGet, ["Prelude", "List", "length"]) ->
+            respond (corsText (Just "*") "List/length")
+
+        (methodGet, ["tests", "import", "data", "cors", "Prelude.dhall"]) ->
+            respond (dhallText "http://127.0.0.1:18080/Prelude/List/length")
+
         (methodGet, ["tests", "import", "data", "simpleLocation.dhall"]) ->
             respond (dhallText "./simple.dhall as Location")
 
@@ -179,6 +176,9 @@ testHttpApp randomCounter request respond =
 
         (methodGet, ["tests", "import", "success", "customHeadersA.dhall"]) ->
             respond (dhallText "http://localhost:18080/user-agent using [ { mapKey = \"User-Agent\", mapValue = \"Dhall\" } ] as Text")
+
+        (methodGet, ["tests", "import", "data", "referentiallyOpaque.dhall"]) ->
+            respond (dhallText "env:DHALL_TEST_VAR as Text")
 
         (methodGet, ["tests", "import", "data", "cors", "AllowedAll.dhall"]) ->
             respond (corsText (Just "*") "http://127.0.0.1:18080/cors/AllowedAll.dhall")
@@ -250,7 +250,7 @@ userAgentResponse :: Maybe BS8.ByteString -> BS8.ByteString
 userAgentResponse mUserAgent =
     "{\n  \"user-agent\": \"" <> agent <> "\"\n}\n"
   where
-    agent = Maybe.fromMaybe "Dhall" mUserAgent
+    agent = Maybe.fromMaybe "none_given" mUserAgent
 
 hasExampleTestHeader :: Request -> Bool
 hasExampleTestHeader request =
