@@ -95,7 +95,7 @@ resolveCertAndKeyPaths = do
 
 testHttpsApp :: IORef Int -> Application
 testHttpsApp randomCounter request respond = do
-    mResponse <- responseFromTestsFixtures request
+    mResponse <- responseFromTestFixtures request
 
     case mResponse of
         Just response -> respond response
@@ -130,7 +130,7 @@ testHttpsApp randomCounter request respond = do
 
 testHttpApp :: IORef Int -> Application
 testHttpApp randomCounter request respond = do
-    mResponse <- responseFromTestsFixtures request
+    mResponse <- responseFromTestFixtures request
 
     case mResponse of
         Just response -> respond response
@@ -209,10 +209,11 @@ testHttpApp randomCounter request respond = do
 
                 _ -> respond response404
 
-type TestsFixture = (FilePath, Bool) -- The Bool shows whether we need CORS information (which will be always "allow-origin *").
+type TestFixture = (FilePath, Bool) -- The Bool shows whether we need CORS information (which will be always "allow-origin *").
 
-testsFixtures :: [TestsFixture]
-testsFixtures =
+-- The server will respond to GET /tests/... requests by serving the corresponding test fixture files.
+testFixtures :: [TestFixture]
+testFixtures =
     [ ("tests/import/data/example.txt", False)
     , ("tests/import/data/simple.dhall", False)
     , ("tests/import/data/cors/Prelude.dhall", False)
@@ -230,36 +231,36 @@ testsFixtures =
     , ("tests/import/data/cors/SelfImportRelative.dhall", True)
     ]
 
-responseFromTestsFixtures :: Request -> IO (Maybe Wai.Response)
-responseFromTestsFixtures request
+responseFromTestFixtures :: Request -> IO (Maybe Wai.Response)
+responseFromTestFixtures request
     | requestMethod request /= methodGet = pure Nothing
     | otherwise =
-        case lookup (pathInfo request) testsFixtureRoutes of
+        case lookup (pathInfo request) testFixtureRoutes of
             Nothing -> pure Nothing
             Just makeResponse -> Just <$> makeResponse
 
-testsFixtureRoutes :: [([Text.Text], IO Wai.Response)]
-testsFixtureRoutes = fmap toRoute testsFixtures
+testFixtureRoutes :: [([Text.Text], IO Wai.Response)]
+testFixtureRoutes = fmap toRoute testFixtures
   where
     toRoute (shortPath, useCorsHeader) =
         let (urlSegments, _) = testsPathInfo shortPath
-         in (urlSegments, testsFixtureResponse shortPath useCorsHeader)
+         in (urlSegments, testFixtureResponse shortPath useCorsHeader)
 
 testsPathInfo :: FilePath -> ([Text.Text], FilePath)
 testsPathInfo shortPath =
     (Text.splitOn "/" (Text.pack shortPath), "dhall/dhall-lang" FilePath.</> shortPath)
 
-testsFixtureResponse :: FilePath -> Bool -> IO Wai.Response
-testsFixtureResponse shortPath useCorsHeader = do
-    body <- readTestsFixtureFile shortPath
+testFixtureResponse :: FilePath -> Bool -> IO Wai.Response
+testFixtureResponse shortPath useCorsHeader = do
+    body <- readTestFixtureFile shortPath
     pure
         (if useCorsHeader
             then corsText (Just "*") body
             else dhallText body
         )
 
-readTestsFixtureFile :: FilePath -> IO BS8.ByteString
-readTestsFixtureFile shortPath = do
+readTestFixtureFile :: FilePath -> IO BS8.ByteString
+readTestFixtureFile shortPath = do
     let (_, fullPath) = testsPathInfo shortPath
         noRepoPrefixPath = Maybe.fromMaybe fullPath (List.stripPrefix "dhall/" fullPath)
         candidates = List.nub [fullPath, noRepoPrefixPath, ".." FilePath.</> fullPath, ".." FilePath.</> noRepoPrefixPath]
@@ -267,8 +268,16 @@ readTestsFixtureFile shortPath = do
     mResolved <- firstExistingPath candidates
 
     case mResolved of
-        Just path -> BS8.readFile path
+        Just path -> normalizeWindowsLineEndings <$> BS8.readFile path
         Nothing -> throwIO (mkIOError userErrorType ("Missing test fixture file: " <> fullPath) Nothing Nothing)
+
+-- Always return Unix line endings, even under Windows.
+normalizeWindowsLineEndings :: BS8.ByteString -> BS8.ByteString
+normalizeWindowsLineEndings = BS8.intercalate "\n" . fmap stripTrailingCarriageReturn . BS8.split '\n'
+  where
+    stripTrailingCarriageReturn line
+        | not (BS8.null line) && BS8.last line == '\r' = BS8.init line
+        | otherwise = line
 
 firstExistingPath :: [FilePath] -> IO (Maybe FilePath)
 firstExistingPath [] = pure Nothing
