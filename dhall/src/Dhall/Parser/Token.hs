@@ -297,16 +297,18 @@ integerLiteral = (do
     This corresponds to the @natural-literal@ rule from the official grammar
 -}
 naturalLiteral :: Parser Natural
-naturalLiteral = (do
-    a <-    binary
-        <|> hexadecimal
-        <|> decimal
-        <|> (char '0' $> 0)
-    return a ) <?> "literal"
+naturalLiteral = (zeroPrefixed <|> nonZeroDecimal) <?> "literal"
   where
-    binary = try (char '0' >> char 'b' >> Text.Megaparsec.Char.Lexer.binary)
-    hexadecimal = try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal)
-    decimal = try (char '0' >> char 'x' >> Text.Megaparsec.Char.Lexer.decimal)
+    zeroPrefixed = do
+        _ <- char '0'
+        binary <|> hexadecimal <|> nonDigitAfterZero
+
+    nonDigitAfterZero = Text.Megaparsec.notFollowedBy (Text.Parser.Char.satisfy digit) $> 0
+    binary = char 'b' >> Text.Megaparsec.Char.Lexer.binary
+    hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
+    nonZeroDecimal = do
+        _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
+        Text.Megaparsec.Char.Lexer.decimal
 
 {-| Parse a 4-digit year
 
