@@ -31,7 +31,6 @@ import Prettyprinter                    (Pretty (..))
 import qualified Dhall.Import.Manager
 #endif
 
-import qualified Data.Text.IO
 import qualified Dhall.Context
 import qualified Dhall.Map          as Map
 import qualified Dhall.Substitution

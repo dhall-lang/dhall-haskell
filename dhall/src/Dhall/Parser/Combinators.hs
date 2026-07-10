@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 {-| This module contains Dhall's parser combinators
 -}
@@ -26,6 +27,7 @@ module Dhall.Parser.Combinators
 import Control.Applicative     (Alternative (..), liftA2)
 import Control.Exception       (Exception)
 import Control.Monad           (MonadPlus (..))
+import Data.List               (foldl')
 import Data.String             (IsString (..))
 import Data.Text               (Text)
 import Data.Void               (Void)
@@ -281,7 +283,7 @@ toMapWith combine kvs = sequence m
 
 -- | Convert a list of digits to the equivalent number
 base :: Num n => [Char] -> n -> n
-digits `base` b = foldl snoc 0 (map (fromIntegral . digitToNumber) digits)
+digits `base` b = foldl' snoc 0 (map (fromIntegral . digitToNumber) digits)
   where
     snoc result number = result * b + number
 
