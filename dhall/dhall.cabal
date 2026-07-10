@@ -432,6 +432,7 @@ Test-Suite tasty
         Dhall.Test.Parser
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
+        Dhall.Test.Regression.TextReplaceNoop
         Dhall.Test.Schemas
         Dhall.Test.SemanticHash
         Dhall.Test.Substitution
@@ -442,6 +443,7 @@ Test-Suite tasty
         Other-Modules:
             Dhall.Test.TH
     Build-Depends:
+        dhall-test-server                               ,
         dhall                                          ,
         foldl                                    < 1.5 ,
         generic-random            >= 1.3.0.0  && < 1.6 ,

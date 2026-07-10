@@ -35,43 +35,8 @@ importDirectory = "./dhall-lang/tests/import"
 
 getTests :: IO TestTree
 getTests = do
-    let flakyTests =
-            [ -- This test is flaky, occasionally failing with:
-              --
-              --     Error: Remote host not found
-              --
-              --     URL: https://test.dhall-lang.org/Bool/package.dhall
-              importDirectory </> "success/headerForwardingA.dhall"
-            , importDirectory </> "success/unit/RemoteAsTextA.dhall"
-            , importDirectory </> "success/unit/SimpleRemoteA.dhall"
-            , importDirectory </> "success/unit/asLocation/RemoteChain1A.dhall"
-            , importDirectory </> "success/unit/asLocation/RemoteChain2A.dhall"
-            , importDirectory </> "success/unit/asLocation/RemoteChain3A.dhall"
-            , importDirectory </> "success/unit/asLocation/RemoteChainMissingA.dhall"
-
-              -- Skip all tests that reference httpbin.org to avoid clobbering
-              -- their servers.  These should eventually be replaced by tests
-              -- that depend on an equivalent endpoint on test.dhall-lang.org
-              -- instead of httpbin.org.
-            , importDirectory </> "failure/customHeadersUsingBoundVariable.dhall"
-            , importDirectory </> "failure/originHeadersFromRemote.dhall"
-            , importDirectory </> "failure/originHeadersFromRemoteENV.dhall"
-            , importDirectory </> "success/customHeadersA.dhall"
-            , importDirectory </> "success/noHeaderForwardingA.dhall"
-            , importDirectory </> "success/success/originHeadersA.dhall"
-            , importDirectory </> "success/originHeadersENV.dhall"
-            , importDirectory </> "success/originHeadersImportA.dhall"
-            , importDirectory </> "success/originHeadersImportENV.dhall"
-            , importDirectory </> "success/originHeadersImportFromEnvA.dhall"
-            , importDirectory </> "success/originHeadersImportFromEnvENV.dhall"
-            , importDirectory </> "success/originHeadersOverrideA.dhall"
-            , importDirectory </> "success/originHeadersOverrideENV.dhall"
-            ]
-
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
-
-        path `Test.Util.pathNotIn` flakyTests
 
         return path )
 
@@ -82,15 +47,6 @@ getTests = do
                 [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
                 , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
 #if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
-                -- We attempt to simulate test.dhall-lang.org, but even so
-                -- some tests unexpectedly succeed due to the inadequacy of
-                -- the simulation
-                , importDirectory </> "failure/unit/cors/OnlySelf.dhall"
-                , importDirectory </> "failure/unit/cors/OnlyOther.dhall"
-                , importDirectory </> "failure/unit/cors/Null.dhall"
-                , importDirectory </> "failure/unit/cors/TwoHops.dhall"
-                , importDirectory </> "failure/unit/cors/Empty.dhall"
-                , importDirectory </> "failure/unit/cors/NoCORS.dhall"
                 , importDirectory </> "failure/originHeadersFromRemote.dhall"
 #endif
                 ]
@@ -156,10 +112,13 @@ successTest prefix = do
         let status = Import.emptyStatus directoryString
 #endif
 
+        let status' =
+                status { Import._reportWarning = \_ -> return () }
+
         let load =
                 State.evalStateT
                     (Test.Util.loadWith actualExpr)
-                    status
+                    status'
 
         let usesCache = [ "hashFromCache"
                         , "unit/asLocation/Hash"

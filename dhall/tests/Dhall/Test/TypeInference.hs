@@ -29,15 +29,6 @@ getTests = do
     let successTestFiles = do
             path <- Turtle.lstree (typeInferenceDirectory </> "success")
 
-            let skip =
-                    -- These tests intermittently fails with:
-                    -- "Error: Remote host not found"
-                    [ typeInferenceDirectory </> "success/CacheImportsA.dhall"
-                    , typeInferenceDirectory </> "success/CacheImportsCanonicalizeA.dhall"
-                    ]
-
-            path `Test.Util.pathNotIn` skip
-
             return path
 
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest successTestFiles
@@ -59,8 +50,7 @@ successTest prefix = do
                 []
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 #else
-            ++  [ typeInferenceDirectory </> "success/CacheImports"
-                ]
+            ++ []
 #endif
 
     Test.Util.testCase prefix expectedFailures $ do
