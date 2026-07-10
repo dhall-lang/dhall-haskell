@@ -110,7 +110,7 @@ writePackage options inputs = do
 --   * If the path points to a directory, all files with a @.dhall@ extensions
 --     in that directory are included in the package.
 --
---     If you passed `Recurse` to the this function, then in addition to these
+--     If you passed `RecursiveSubpackages` to this function, then in addition to these
 --     files all subdirectories are traversed and a sub-package created for each
 --     one. That sub-package will be included in the package too.
 --

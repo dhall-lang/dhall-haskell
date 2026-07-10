@@ -190,6 +190,88 @@ mockRemote url@URL{ authority = "httpbin.org", path, headers } =
         _ -> do
             fail ("Unable to mock URL: " <> Text.unpack (Dhall.Core.pretty url))
 
+mockRemote url@URL{ authority = "localhost:18080", path, headers } =
+    case (path, fmap Dhall.Import.toHeaders headers) of
+        (File (Directory []) "user-agent", Just [("user-agent", userAgent)]) -> do
+            let agentText = Data.Text.Encoding.decodeUtf8 userAgent
+
+            return ("{\n  \"user-agent\": \"" <> agentText <> "\"\n}\n")
+        (File (Directory []) "user-agent", Nothing) -> do
+            return ("{\n  \"user-agent\": \"Dhall\"\n}\n")
+        (File (Directory []) "headers", _) -> do
+            return "{}\n"
+        (File (Directory []) "foo", Just [("test", _)]) ->
+            return "./bar"
+        (File (Directory []) "bar", Just [("test", _)]) ->
+            return "True"
+        (File (Directory []) "random-string", _) ->
+            return "dhall-test-random-string-1"
+        (File (Directory ["foo", ".."]) "random-string", _) ->
+            return "dhall-test-random-string-1"
+        (File (Directory ["cors"]) "AllowedAll.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlyGithub.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlySelf.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlyOther.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "Empty.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "NoCORS.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "Null.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "SelfImportAbsolute.dhall", _) ->
+            return "http://localhost:18080/cors/NoCORS.dhall"
+        (File (Directory ["cors"]) "SelfImportRelative.dhall", _) ->
+            return "./NoCORS.dhall"
+        (File (Directory ["cors"]) "TwoHopsFail.dhall", _) ->
+            return "http://localhost:18080/cors/OnlySelf.dhall"
+        (File (Directory ["cors"]) "TwoHopsSuccess.dhall", _) ->
+            return "http://localhost:18080/cors/OnlyGithub.dhall"
+        (File (Directory ["tests", "import", "data"]) "example.txt", _) ->
+            return "Hello, world!\n"
+        (File (Directory ["tests", "import", "data"]) "simple.dhall", _) ->
+            return "3"
+        (File (Directory ["tests", "import", "data"]) "simpleLocation.dhall", _) ->
+            return "./simple.dhall as Location"
+        (File (Directory ["tests", "import", "data", "cors"]) "AllowedAll.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/AllowedAll.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "OnlyGithub.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/OnlyGithub.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "OnlySelf.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/OnlySelf.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "OnlyOther.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/OnlyOther.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "Empty.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/Empty.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "NoCORS.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/NoCORS.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "Null.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/Null.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "SelfImportAbsolute.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/SelfImportAbsolute.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "SelfImportRelative.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/SelfImportRelative.dhall"
+        (File (Directory ["tests", "import", "success"]) "customHeadersA.dhall", _) ->
+            return "http://localhost:18080/user-agent using [ { mapKey = \"User-Agent\", mapValue = \"Dhall\" } ] as Text"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "Canonicalize3A.dhall", _) ->
+            return "./../bar/import.dhall as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "Canonicalize5A.dhall", _) ->
+            return "./foo/../../bar/import.dhall as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "MissingA.dhall", _) ->
+            return "missing as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "EnvA.dhall", _) ->
+            return "env:HOME as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "bar"]) "import.dhall", _) ->
+            return "2"
+        _ -> do
+            fail ("Unable to mock URL: " <> Text.unpack (Dhall.Core.pretty url))
+
+mockRemote url@URL{ authority = "127.0.0.1:18080", path, headers } =
+    mockRemote url { authority = "localhost:18080", path = path, headers = headers }
+
 mockRemote url = do
     let urlString = Text.unpack (Dhall.Core.pretty url)
     fail ("(mock http) Url does not match any of the hard-coded rules: "

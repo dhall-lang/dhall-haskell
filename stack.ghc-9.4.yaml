@@ -1,5 +1,6 @@
 resolver: lts-21.25
 packages:
+  - dhall-test-server
   - dhall
   - dhall-bash
   - dhall-csv
