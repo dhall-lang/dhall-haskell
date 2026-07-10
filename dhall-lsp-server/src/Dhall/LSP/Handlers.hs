@@ -6,6 +6,8 @@
 {-# LANGUAGE TypeOperators  #-}
 {-# LANGUAGE ViewPatterns   #-}
 
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Dhall.LSP.Handlers where
 
 import Data.Void    (Void)
@@ -86,6 +88,7 @@ import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types   hiding (Range (..))
 import Language.LSP.Server           (Handlers, LspT)
 import System.FilePath               (takeDirectory, (</>))
+import System.IO                     (hPutStrLn, stderr)
 import Text.Megaparsec               (SourcePos (..), unPos)
 
 import qualified Data.Aeson                  as Aeson
@@ -274,7 +277,13 @@ documentLinkHandler =
 diagnosticsHandler :: EvaluateSettings -> Uri -> HandlerM ()
 diagnosticsHandler settings _uri = do
   mTxt <- tryReadUri _uri
-  forM_ mTxt (diagnoseDocument settings _uri)
+  case mTxt of
+    Just txt -> diagnoseDocument settings _uri txt
+    Nothing ->
+      liftIO $ hPutStrLn stderr
+        (  "Warning: received textDocument/didSave for URI not present in VFS (missing prior didOpen?): "
+        <> Text.unpack (getUri _uri)
+        )
 
 diagnoseDocument :: EvaluateSettings -> Uri -> Text -> HandlerM ()
 diagnoseDocument settings _uri txt = do
