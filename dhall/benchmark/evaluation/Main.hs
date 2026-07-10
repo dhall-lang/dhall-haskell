@@ -55,7 +55,7 @@ main = do
             ]
         ]
  where
-   -- These helpers are needed just to reduce polymorphism in TypeCheck.typeOf and Core.ormalize.
+   -- These helpers are needed just to reduce polymorphism in TypeCheck.typeOf and Core.normalize.
    typecheckResolvedExpr :: ResolvedExpr -> Maybe (Core.Expr Parser.Src Void)
    typecheckResolvedExpr = either (const Nothing) Just . TypeCheck.typeOf
 

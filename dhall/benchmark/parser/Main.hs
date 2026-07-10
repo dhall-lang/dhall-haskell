@@ -80,7 +80,6 @@ main = do
         , benchExprFromText "Line comment" ("x -- " <> Text.replicate 1000000 " ")
         , benchExprFromText "Block comment" ("x {- " <> Text.replicate 1000000 " " <> "-}")
         , benchExprFromText "Deeply nested parentheses" "((((((((((((((((x))))))))))))))))"
-        , benchParser prelude
         , env cpkgExample $
             benchNfExprFromText "CPkg/Text"
         ]
