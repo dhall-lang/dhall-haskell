@@ -87,7 +87,7 @@ import Dhall.Pretty.Internal
 import Dhall.Src              (Src (..))
 import Dhall.Syntax
 import Instances.TH.Lift      ()
-import Lens.Family            (over)
+import Lens.Micro             (over)
 import Prettyprinter          (Pretty)
 
 import qualified Control.Exception

@@ -27,7 +27,7 @@ import Dhall                     (FromDhall, ToDhall)
 import Dhall.Syntax              (Expr (..), FunctionBinding (..), Var (..))
 import GHC.Generics              (Generic)
 import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
-import Lens.Family               (view)
+import Lens.Micro.Extras         (view)
 import Prettyprinter             (Pretty)
 
 import Language.Haskell.TH.Syntax

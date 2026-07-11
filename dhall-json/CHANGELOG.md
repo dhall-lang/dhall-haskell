@@ -1,3 +1,7 @@
+1.7.13
+
+* [Export `UnionConv`](https://github.com/dhall-lang/dhall-haskell/pull/2570)
+
 1.7.12
 
 * Build against `dhall-1.42`

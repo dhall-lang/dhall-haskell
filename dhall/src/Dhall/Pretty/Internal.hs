@@ -20,6 +20,9 @@ module Dhall.Pretty.Internal (
     , prettySrcExpr
 
     , CharacterSet(..)
+    , ChooseCharacterSet(..)
+    , chooseCharsetOrUseDefault
+    , defaultCharacterSet
     , detectCharacterSet
     , prettyCharacterSet
     , prettyImportExpression
@@ -86,12 +89,12 @@ import                Data.Foldable
 import                Data.List.NonEmpty            (NonEmpty (..))
 import                Data.Text                     (Text)
 import                Dhall.Map                     (Map)
-import                Dhall.Optics                  (cosmosOf, foldOf, to)
 import                Dhall.Src                     (Src (..))
 import                Dhall.Syntax
 import {-# SOURCE #-} Dhall.Syntax.Instances.Pretty ()
 import                GHC.Generics                  (Generic)
 import                Language.Haskell.TH.Syntax    (Lift)
+import                Lens.Micro                    (cosmosOf, foldMapOf)
 import                Numeric.Natural               (Natural)
 import                Prettyprinter                 (Doc, Pretty, space)
 
@@ -112,6 +115,7 @@ import qualified Prettyprinter.Render.String   as Pretty
 import qualified Prettyprinter.Render.Terminal as Terminal
 import qualified Prettyprinter.Render.Text     as Pretty
 import qualified Text.Printf                   as Printf
+import Data.Aeson (Value(Null))
 
 {-| Annotation type used to tag elements in a pretty-printed document for
     syntax highlighting purposes
@@ -155,20 +159,47 @@ instance FromJSON CharacterSet where
   parseJSON v@(String _) = unexpected v
   parseJSON v = typeMismatch "String" v
 
+-- | The character set used by default in functions throughout the Dhall code
+-- base.
+defaultCharacterSet :: CharacterSet
+defaultCharacterSet = Unicode
+
+data ChooseCharacterSet = AutoInferCharSet | Specify CharacterSet
+    deriving (Eq, Ord, Show, Data, Generic, Lift, NFData)
+
+instance Semigroup ChooseCharacterSet where
+    AutoInferCharSet <> other = other
+    other <> AutoInferCharSet = other
+    Specify x <> Specify y = Specify (x <> y)
+
+instance Monoid ChooseCharacterSet where
+    mempty = AutoInferCharSet
+
+instance FromJSON ChooseCharacterSet where
+    parseJSON Null = pure mempty
+    parseJSON v@(String _) = Specify <$> (parseJSON v)
+    parseJSON v = typeMismatch "String" v
+
+chooseCharsetOrUseDefault :: CharacterSet -> ChooseCharacterSet -> CharacterSet
+chooseCharsetOrUseDefault c chooseCS = case chooseCS of
+    AutoInferCharSet -> c
+    Specify x -> x
+
+
 -- | Detect which character set is used for the syntax of an expression
 -- If any parts of the expression uses the Unicode syntax, the whole expression
 -- is deemed to be using the Unicode syntax.
 detectCharacterSet :: Expr Src a -> CharacterSet
-detectCharacterSet = foldOf (cosmosOf subExpressions . to exprToCharacterSet)
+detectCharacterSet = foldMapOf (cosmosOf subExpressions) exprToCharacterSet
   where
     exprToCharacterSet = \case
         Embed _ -> mempty -- Don't go down the embed route, otherwise: <<loop>>
-        Lam (Just Unicode) _ _ -> Unicode
-        Pi (Just Unicode) _ _ _ -> Unicode
-        Combine (Just Unicode) _ _ _ -> Unicode
-        CombineTypes (Just Unicode) _ _ -> Unicode
-        Prefer (Just Unicode) _ _ _ -> Unicode
-        Equivalent (Just Unicode) _ _ -> Unicode
+        Lam (Specify Unicode) _ _ -> Unicode
+        Pi (Specify Unicode) _ _ _ -> Unicode
+        Combine (Specify Unicode) _ _ _ -> Unicode
+        CombineTypes (Specify Unicode) _ _ -> Unicode
+        Prefer (Specify Unicode) _ _ _ -> Unicode
+        Equivalent (Specify Unicode) _ _ -> Unicode
         _ -> mempty
 
 -- | Pretty print an expression
@@ -176,7 +207,7 @@ prettyExpr :: Pretty a => Expr s a -> Doc Ann
 prettyExpr = prettySrcExpr . denote
 
 prettySrcExpr :: Pretty a => Expr Src a -> Doc Ann
-prettySrcExpr = prettyCharacterSet Unicode
+prettySrcExpr = prettyCharacterSet defaultCharacterSet
 
 {-| Internal utility for pretty-printing, used when generating element lists
     to supply to `enclose` or `enclose'`.  This utility indicates that the

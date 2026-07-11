@@ -24,6 +24,7 @@ import qualified Dhall.Test.TH
 import qualified Dhall.Test.Tags
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeInference
+import qualified Dhall.Test.Server
 import qualified GHC.IO.Encoding
 import qualified System.Directory
 import qualified System.Environment
@@ -94,6 +95,9 @@ main = do
     -- https://github.com/feuerbach/tasty/issues/273#issuecomment-657054281
     System.Environment.setEnv "TASTY_HIDE_SUCCESSES" "true"
 
-    allTests <- getAllTests
+    System.Environment.setEnv "CURL_CA_BUNDLE" "./dhall-test-server/cert/cert.pem"
 
-    Test.Tasty.defaultMain allTests
+    Dhall.Test.Server.withServers $ do
+        allTests <- getAllTests
+
+        Test.Tasty.defaultMain allTests

@@ -1,5 +1,5 @@
 Name: dhall-nix
-Version: 1.1.26
+Version: 1.1.27
 Cabal-Version: >=1.10
 Build-Type: Simple
 License: BSD3
@@ -27,11 +27,11 @@ Library
     Hs-Source-Dirs: src
     Build-Depends:
         base                      >= 4.11.0.0 && < 5   ,
-        containers                               < 0.8 ,
+        containers                               < 0.9 ,
         data-fix                                 < 0.4 ,
         dhall                     >= 1.42     && < 1.43,
         hnix                      >= 0.16     && < 0.18,
-        lens-family-core          >= 1.0.0    && < 2.2 ,
+        microlens                 >= 0.4      && < 0.6 ,
         neat-interpolation                       < 0.6 ,
         text                      >= 0.8.0.0  && < 2.2
     Exposed-Modules:
@@ -49,7 +49,7 @@ Executable dhall-to-nix
     Other-Modules:
         Paths_dhall_nix
     Build-Depends:
-        base                                ,
+        base             >= 4.11.0.0 && < 5 ,
         dhall                               ,
         dhall-nix                           ,
         hnix                                ,

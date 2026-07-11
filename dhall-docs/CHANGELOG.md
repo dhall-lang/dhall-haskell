@@ -1,3 +1,11 @@
+1.0.12
+
+* [Fix white flashes on page load in dark mode](https://github.com/dhall-lang/dhall-haskell/pull/2574)
+* [Render standalone text files as preformatted text](https://github.com/dhall-lang/dhall-haskell/pull/2565)
+* [Render Markdown files as HTML](https://github.com/dhall-lang/dhall-haskell/pull/2579)
+* [Default to browser settings for dark mode](https://github.com/dhall-lang/dhall-haskell/pull/2582)
+* [Fix typo and formatting in a warning message](https://github.com/dhall-lang/dhall-haskell/pull/2572)
+
 1.0.11
 
 * Build against `dhall-1.42`

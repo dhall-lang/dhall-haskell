@@ -6,6 +6,8 @@
 {-# LANGUAGE TypeOperators  #-}
 {-# LANGUAGE ViewPatterns   #-}
 
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Dhall.LSP.Handlers where
 
 import Data.Void    (Void)
@@ -62,7 +64,7 @@ import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
 import Control.Lens                  (assign, modifying, use, (^.))
-import Control.Monad                 (forM, guard)
+import Control.Monad                 (forM, forM_, guard)
 import Control.Monad.Trans           (lift, liftIO)
 import Control.Monad.Trans.Except    (catchE, throwE)
 import Data.Aeson                    (FromJSON (..), Value (..))
@@ -86,28 +88,47 @@ import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types   hiding (Range (..))
 import Language.LSP.Server           (Handlers, LspT)
 import System.FilePath               (takeDirectory, (</>))
+import System.IO                     (hPutStrLn, stderr)
 import Text.Megaparsec               (SourcePos (..), unPos)
 
 import qualified Data.Aeson                  as Aeson
 import qualified Data.Map.Strict             as Map
 import qualified Data.Text                   as Text
-import qualified Data.Text.Utf16.Rope        as Rope
 import qualified Language.LSP.Protocol.Types as LSP.Types
 import qualified Language.LSP.Server         as LSP
 import qualified Language.LSP.VFS            as LSP
 import qualified Network.URI                 as URI
 import qualified Network.URI.Encode          as URI
 
+#if MIN_VERSION_lsp(2,4,0)
+import qualified Data.Text.Utf16.Rope.Mixed as Rope
+#else
+import qualified Data.Text.Utf16.Rope as Rope
+#endif
+
 liftLSP :: LspT ServerConfig IO a -> HandlerM a
 liftLSP m = lift (lift m)
 
 -- | A helper function to query haskell-lsp's VFS.
+tryReadUri :: Uri -> HandlerM (Maybe Text)
+tryReadUri uri_ = do
+  mVirtualFile <- liftLSP (LSP.getVirtualFile (LSP.Types.toNormalizedUri uri_))
+  return $ case mVirtualFile of
+#if MIN_VERSION_lsp(2,8,0)
+    Just (LSP.VirtualFile _ _ rope _) -> Just (Rope.toText rope)
+#else
+    Just (LSP.VirtualFile _ _ rope) -> Just (Rope.toText rope)
+#endif
+    Nothing -> Nothing
+
+-- | Like `tryReadUri`, but fails if the URI was not found.
 readUri :: Uri -> HandlerM Text
 readUri uri_ = do
-  mVirtualFile <- liftLSP (LSP.getVirtualFile (LSP.Types.toNormalizedUri uri_))
-  case mVirtualFile of
-    Just (LSP.VirtualFile _ _ rope) -> return (Rope.toText rope)
-    Nothing -> throwE (Error, "Could not find " <> Text.pack (show uri_) <> " in VFS.")
+  mText <- tryReadUri uri_
+  case mText of
+    Just text -> return text
+    Nothing ->
+      throwE (Error, "Could not find " <> Text.pack (show uri_) <> " in VFS.")
 
 loadFile :: EvaluateSettings -> Uri -> HandlerM (Expr Src Void)
 loadFile settings uri_ = do
@@ -226,7 +247,11 @@ documentLinkHandler =
               filePath <- localToPath prefix file
               let filePath' = basePath </> filePath  -- absolute file path
               let _range = rangeToJSON range_
+#if MIN_VERSION_lsp(2,5,0)
+              let _target = Just (filePathToUri filePath')
+#else
               let _target = Just (getUri (filePathToUri filePath'))
+#endif
               let _tooltip = Nothing
               let _data_ = Nothing
               return [DocumentLink {..}]
@@ -234,7 +259,11 @@ documentLinkHandler =
             go (range_, Import (ImportHashed _ (Remote url)) _) = do
               let _range = rangeToJSON range_
               let url' = url { headers = Nothing }
+#if MIN_VERSION_lsp(2,5,0)
+              let _target = Just (Uri (pretty url'))
+#else
               let _target = Just (pretty url')
+#endif
               let _tooltip = Nothing
               let _data_ = Nothing
               return [DocumentLink {..}]
@@ -247,7 +276,17 @@ documentLinkHandler =
 
 diagnosticsHandler :: EvaluateSettings -> Uri -> HandlerM ()
 diagnosticsHandler settings _uri = do
-  txt <- readUri _uri
+  mTxt <- tryReadUri _uri
+  case mTxt of
+    Just txt -> diagnoseDocument settings _uri txt
+    Nothing ->
+      liftIO $ hPutStrLn stderr
+        (  "Warning: received textDocument/didSave for URI not present in VFS (missing prior didOpen?): "
+        <> Text.unpack (getUri _uri)
+        )
+
+diagnoseDocument :: EvaluateSettings -> Uri -> Text -> HandlerM ()
+diagnoseDocument settings _uri txt = do
   fileIdentifier <- fileIdentifierFromUri _uri
   -- make sure we don't keep a stale version around
   modifying importCache (invalidate fileIdentifier)

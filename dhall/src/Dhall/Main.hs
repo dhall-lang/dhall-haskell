@@ -27,6 +27,7 @@ import Control.Monad       (when)
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
 import Data.Maybe          (fromMaybe)
+import Data.Monoid         (Endo (..))
 import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Freeze        (Intent (..), Scope (..))
@@ -36,7 +37,7 @@ import Dhall.Import
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )
-import Dhall.Package       (writePackage)
+import Dhall.Package       (PackagingMode (..), writePackage)
 import Dhall.Parser        (Src)
 import Dhall.Pretty
     ( Ann
@@ -47,6 +48,7 @@ import Dhall.Pretty
 import Dhall.Schemas       (Schemas (..))
 import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
 import Dhall.Version       (dhallVersionString)
+import Lens.Micro          (set)
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
 import System.Exit         (ExitCode, exitFailure)
@@ -95,7 +97,9 @@ import qualified Dhall.Import
 import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Map
+import qualified Dhall.Package
 import qualified Dhall.Pretty
+import Dhall.Pretty.Internal (ChooseCharacterSet(..), chooseCharsetOrUseDefault)        
 import qualified Dhall.Repl
 import qualified Dhall.Schemas
 import qualified Dhall.Tags
@@ -119,7 +123,7 @@ data Options = Options
     { mode               :: Mode
     , explain            :: Bool
     , plain              :: Bool
-    , chosenCharacterSet :: Maybe CharacterSet
+    , chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
     }
 
@@ -160,10 +164,13 @@ data Mode
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
     | Text { file :: Input, output :: Output }
-    | DirectoryTree { allowSeparators :: Bool, file :: Input, path :: FilePath }
+    | DirectoryTree { directoryTreeOptions :: DirectoryTree.DirectoryTreeOptions, file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
-    | Package { name :: Maybe String, files :: NonEmpty FilePath }
+    | Package
+        { packageOptions :: Endo Dhall.Package.Options
+        , packageFiles :: NonEmpty FilePath
+        }
 
 -- | This specifies how to resolve transitive dependencies
 data ResolveMode
@@ -215,16 +222,16 @@ parseOptions =
 
     parseCharacterSet =
             Options.Applicative.flag'
-                (Just Unicode)
+                (Specify Unicode)
                 (   Options.Applicative.long "unicode"
                 <>  Options.Applicative.help "Format code using only Unicode syntax"
                 )
         <|> Options.Applicative.flag'
-                (Just ASCII)
+                (Specify ASCII)
                 (   Options.Applicative.long "ascii"
                 <>  Options.Applicative.help "Format code using only ASCII syntax"
                 )
-        <|> pure Nothing
+        <|> pure AutoInferCharSet
 
 subcommand :: Group -> String -> String -> Parser a -> Parser a
 subcommand group name description parser =
@@ -271,7 +278,7 @@ parseMode =
             Generate
             "to-directory-tree"
             "Convert nested records of Text literals into a directory tree"
-            (DirectoryTree <$> parseDirectoryTreeAllowSeparators <*> parseFile <*> parseDirectoryTreeOutput)
+            (DirectoryTree <$> parseDirectoryTreeOptions <*> parseFile <*> parseDirectoryTreeOutput)
     <|> subcommand
             Interpret
             "resolve"
@@ -316,7 +323,7 @@ parseMode =
             Miscellaneous
             "package"
             "Create a package.dhall referencing the provided paths"
-            (Package <$> parsePackageName <*> parsePackageFiles)
+            (Package <$> parsePackageOptions <*> parsePackageFiles)
     <|> subcommand
             Miscellaneous
             "tags"
@@ -540,8 +547,16 @@ parseMode =
             <>  Options.Applicative.metavar "EXPR"
             )
 
-    parseDirectoryTreeAllowSeparators =
-        Options.Applicative.switch
+    parseDirectoryTreeOptions = DirectoryTree.DirectoryTreeOptions
+        <$> Options.Applicative.switch
+            (   Options.Applicative.long "allow-absolute-paths"
+            <>  Options.Applicative.help "Whether to allow absolute file paths"
+            )
+        <*> Options.Applicative.switch
+            (   Options.Applicative.long "allow-parent-directory"
+            <>  Options.Applicative.help "Whether to allow references to the parent directory (\"..\") in file paths"
+            )
+        <*> Options.Applicative.switch
             (   Options.Applicative.long "allow-path-separators"
             <>  Options.Applicative.help "Whether to allow path separators in file names"
             )
@@ -566,13 +581,24 @@ parseMode =
             <>  Options.Applicative.help "Cache the hashed expression"
             )
 
-    parsePackageName = optional $
-        Options.Applicative.strOption
-            (   Options.Applicative.long "name"
-            <>  Options.Applicative.help "The filename of the package"
-            <>  Options.Applicative.metavar "NAME"
-            <>  Options.Applicative.action "file"
+    parsePackageOptions :: Parser (Endo Dhall.Package.Options)
+    parsePackageOptions = do
+        packageMode <- (optional . Options.Applicative.flag' RecursiveSubpackages)
+            ( Options.Applicative.short 'r'
+            <> Options.Applicative.long "recursive"
+            <> Options.Applicative.help "Create packages for all subdirectories first."
             )
+
+        packageFileName <- (optional . Options.Applicative.strOption)
+                (   Options.Applicative.long "name"
+                <>  Options.Applicative.help "The filename of the package"
+                <>  Options.Applicative.metavar "NAME"
+                <>  Options.Applicative.action "file"
+                )
+
+        pure $
+            maybe mempty (Endo . set Dhall.Package.packagingMode) packageMode <>
+            maybe mempty (Endo . set Dhall.Package.packageFileName) packageFileName
 
     parsePackageFiles = (:|) <$> p <*> Options.Applicative.many p
       where
@@ -617,7 +643,7 @@ command (Options {..}) = do
     let getExpressionAndCharacterSet file = do
             expr <- getExpression file
 
-            let characterSet = fromMaybe (detectCharacterSet expr) chosenCharacterSet
+            let characterSet = chooseCharsetOrUseDefault (detectCharacterSet expr) chosenCharacterSet
 
             return (expr, characterSet)
 
@@ -816,7 +842,7 @@ command (Options {..}) = do
 
         Repl ->
             Dhall.Repl.repl
-                (fromMaybe Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
+                (chooseCharsetOrUseDefault Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
                 explain
 
         Diff {..} -> do
@@ -891,7 +917,7 @@ command (Options {..}) = do
                 (Header header, parsedExpression) <-
                     Dhall.Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
-                let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
+                let characterSet = chooseCharsetOrUseDefault (detectCharacterSet parsedExpression) chosenCharacterSet
 
                 case transitivity of
                     Transitive ->
@@ -977,7 +1003,7 @@ command (Options {..}) = do
                 else do
                     let doc =
                             Dhall.Pretty.prettyCharacterSet
-                                (fromMaybe Unicode chosenCharacterSet) -- default to Unicode
+                                (chooseCharsetOrUseDefault Unicode chosenCharacterSet) -- default to Unicode
                                 (Dhall.Core.renote expression :: Expr Src Import)
 
                     renderDoc System.IO.stdout doc
@@ -1026,7 +1052,7 @@ command (Options {..}) = do
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
-            DirectoryTree.toDirectoryTree allowSeparators path normalizedExpression
+            DirectoryTree.toDirectoryTree directoryTreeOptions path normalizedExpression
 
         Dhall.Main.Schemas{..} ->
             Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}
@@ -1041,7 +1067,18 @@ command (Options {..}) = do
                     denoted = Dhall.Core.denote expression
                 in Text.Pretty.Simple.pPrintNoColor denoted
 
-        Package {..} -> writePackage (fromMaybe Unicode chosenCharacterSet) name files
+        Package {..} -> do
+            let options = appEndo
+                    (maybe mempty (Endo . set Dhall.Package.characterSet) chosenCharacterSetAsMaybe
+                    <> packageOptions
+                    ) Dhall.Package.defaultOptions
+            writePackage options packageFiles
+              where
+                chosenCharacterSetAsMaybe :: Maybe CharacterSet
+                chosenCharacterSetAsMaybe = case chosenCharacterSet of
+                    AutoInferCharSet -> Nothing
+                    Specify c -> Just c  
+
 
 -- | Entry point for the @dhall@ executable
 main :: IO ()

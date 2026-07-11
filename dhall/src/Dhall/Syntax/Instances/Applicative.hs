@@ -9,7 +9,7 @@ import Dhall.Syntax.Instances.Functor ()
 import Dhall.Syntax.Operations
 import Dhall.Syntax.RecordField
 
-import qualified Lens.Family as Lens
+import qualified Lens.Micro as Lens
 
 instance Applicative (Expr s) where
     pure = Embed

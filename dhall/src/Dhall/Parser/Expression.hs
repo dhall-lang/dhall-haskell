@@ -4,17 +4,13 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 -- | Parsing Dhall expressions.
 module Dhall.Parser.Expression where
 
-import Control.Applicative
-    ( Alternative (..)
-#if !MIN_VERSION_base(4,18,0)
-    , liftA2
-#endif
-    , optional
-    )
+import Control.Applicative     (Alternative (..), liftA2, optional)
 import Data.Foldable           (foldl')
 import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
@@ -39,6 +35,7 @@ import qualified Text.Megaparsec
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Token
+import {-# SOURCE #-} Dhall.Pretty.Internal        (ChooseCharacterSet(..))
 
 -- | Get the current source offset (in tokens)
 getOffset :: Text.Megaparsec.MonadParsec e s m => m Int
@@ -58,7 +55,7 @@ setOffset o = Text.Megaparsec.updateParserState $ \state ->
 src :: Parser a -> Parser Src
 src parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (tokens, _) <- Text.Megaparsec.match parser
+    (!tokens, _) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     return (Src before after tokens)
 
@@ -66,7 +63,7 @@ src parser = do
 srcAnd :: Parser a -> Parser (Src, a)
 srcAnd parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (tokens, x) <- Text.Megaparsec.match parser
+    (!tokens, !x) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     return (Src before after tokens, x)
 
@@ -76,7 +73,7 @@ srcAnd parser = do
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (tokens, e) <- Text.Megaparsec.match parser
+    (!tokens, !e) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     let src₀ = Src before after tokens
     case e of
@@ -321,7 +318,7 @@ parsers embedded = Parsers{..}
             cs' <- _arrow
             whitespace
             c <- expression
-            return (Lam (Just (cs <> cs')) (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
+            return (Lam (Specify (cs <> cs')) (FunctionBinding (Just src0) a (Just src1) (Just src2) b) c)
 
         alternative1 = do
             try (_if *> nonemptyWhitespace)
@@ -374,7 +371,7 @@ parsers embedded = Parsers{..}
             cs' <- _arrow
             whitespace
             c <- expression
-            return (Pi (Just (cs <> cs')) a b c)
+            return (Pi (Specify (cs <> cs')) a b c)
 
         alternative4 = do
             try (_assert *> whitespace *> _colon)
@@ -412,7 +409,7 @@ parsers embedded = Parsers{..}
 
                         return (\e -> With e keys value) )
 
-                    return (foldl (\e f -> f e) a0 bs)
+                    return (foldl' (\e f -> f e) a0 bs)
 
             let alternative5B = do
                     a <- parseFirstOperatorExpression
@@ -424,7 +421,7 @@ parsers embedded = Parsers{..}
                             whitespace
                             b <- expression
                             whitespace
-                            return (Pi (Just cs) "_" a b)
+                            return (Pi (Specify cs) "_" a b)
 
                     let alternative5B1 = do
                             _colon
@@ -495,16 +492,16 @@ parsers embedded = Parsers{..}
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ Equivalent . Just           <$> _equivalent   <* whitespace
+        [ Equivalent . Specify        <$> _equivalent   <* whitespace
         , ImportAlt                   <$ _importAlt     <* nonemptyWhitespace
         , BoolOr                      <$ _or            <* whitespace
         , NaturalPlus                 <$ _plus          <* nonemptyWhitespace
         , TextAppend                  <$ _textAppend    <* whitespace
         , ListAppend                  <$ _listAppend    <* whitespace
         , BoolAnd                     <$ _and           <* whitespace
-        , (\cs -> Combine (Just cs) Nothing)         <$> _combine <* whitespace
-        , (\cs -> Prefer (Just cs) PreferFromSource) <$> _prefer  <* whitespace
-        , CombineTypes . Just         <$> _combineTypes <* whitespace
+        , (\cs -> Combine (Specify cs) Nothing)         <$> _combine <* whitespace
+        , (\cs -> Prefer (Specify cs) PreferFromSource) <$> _prefer  <* whitespace
+        , CombineTypes . Specify      <$> _combineTypes <* whitespace
         , NaturalTimes                <$ _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
         , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace
@@ -550,7 +547,7 @@ parsers embedded = Parsers{..}
             a <- adapt (noted importExpression_)
 
             bs <- Text.Megaparsec.many . try $ do
-                (sep, _) <- Text.Megaparsec.match nonemptyWhitespace
+                (!sep, _) <- Text.Megaparsec.match nonemptyWhitespace
                 b <- importExpression_
                 return (sep, b)
 

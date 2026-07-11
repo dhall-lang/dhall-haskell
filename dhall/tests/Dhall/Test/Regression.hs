@@ -7,7 +7,7 @@ module Dhall.Test.Regression where
 
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
-import Dhall.Core             (Expr(..), ReifiedNormalizer(..))
+import Dhall.Core             (Expr (..), ReifiedNormalizer (..))
 import Dhall.Import           (Imported, MissingImports (..))
 import Dhall.Parser           (SourcedException (..), Src)
 import Dhall.TypeCheck        (TypeError)
@@ -15,6 +15,7 @@ import Test.Tasty             (TestTree)
 import Test.Tasty.HUnit       ((@?=))
 
 import qualified Control.Exception
+import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Data.Text.Lazy.IO
 import qualified Dhall
@@ -24,8 +25,9 @@ import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Test.Util           as Util
+import qualified Dhall.Test.Regression.TextReplaceNoop
 import qualified Dhall.TypeCheck
-import qualified Lens.Family               as Lens
+import qualified Lens.Micro                as Lens
 import qualified Prettyprinter
 import qualified Prettyprinter.Render.Text
 import qualified System.Timeout
@@ -57,6 +59,10 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+        , Dhall.Test.Regression.TextReplaceNoop.tests
+        , largeNaturalLiteralParsing
+        , largeNaturalHexadecimalParsing
+        , largeNaturalBinaryParsing
         ]
 
 data Foo = Foo Integer Bool | Bar Bool Bool Bool | Baz Integer Integer
@@ -325,3 +331,37 @@ trailingSpaceAfterStringLiterals =
         -- (Yes, I did get this wrong at some point)
         _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
+
+largeNaturalLiteralParsing :: TestTree
+largeNaturalLiteralParsing =
+    Test.Tasty.HUnit.testCase "Large natural number literal parsing is not O(N²)" (do
+        -- A 100,000-digit decimal literal.  Before the divide-and-conquer fix
+        -- in naturalLiteral (Token.hs) this was O(N²) in big-integer arithmetic
+        -- and would have taken many seconds here.  We allow 10 seconds which is
+        -- generous even on slow machines; the fixed version runs in < 0.3 s.
+        let bigNum = Data.Text.replicate 100000 "1"
+        Just result <- System.Timeout.timeout 10000000
+            (Control.Exception.evaluate $! Dhall.Parser.exprFromText mempty bigNum)
+        case result of
+            Left err -> Test.Tasty.HUnit.assertFailure (show err)
+            Right _  -> return () )
+
+largeNaturalHexadecimalParsing :: TestTree
+largeNaturalHexadecimalParsing =
+    Test.Tasty.HUnit.testCase "Large hexadecimal number literal parsing is not O(N²)" $ do
+        let bigNum =  "0x" <> Data.Text.replicate 100000 "1"
+        Just result <- System.Timeout.timeout 10000000
+            (Control.Exception.evaluate $! Dhall.Parser.exprFromText mempty bigNum)
+        case result of
+            Left err -> Test.Tasty.HUnit.assertFailure (show err)
+            Right _  -> return ()
+
+largeNaturalBinaryParsing :: TestTree
+largeNaturalBinaryParsing =
+    Test.Tasty.HUnit.testCase "Large binary number literal parsing is not O(N²)" $ do
+        let bigNum = "0b" <> Data.Text.replicate 1000000 "1"
+        Just result <- System.Timeout.timeout 10000000
+            (Control.Exception.evaluate $! Dhall.Parser.exprFromText mempty bigNum)
+        case result of
+            Left err -> Test.Tasty.HUnit.assertFailure (show err)
+            Right _  -> return ()

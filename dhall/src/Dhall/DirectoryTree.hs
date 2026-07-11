@@ -10,7 +10,9 @@
 -- | Implementation of the @dhall to-directory-tree@ subcommand
 module Dhall.DirectoryTree
     ( -- * Filesystem
-      toDirectoryTree
+      DirectoryTreeOptions(..)
+    , defaultDirectoryTreeOptions
+    , toDirectoryTree
     , FilesystemError(..)
 
       -- * Low-level types and functions
@@ -30,6 +32,7 @@ import Data.Text                 (Text)
 import Data.Void                 (Void)
 import Dhall.DirectoryTree.Types
 import Dhall.Marshal.Decode      (Decoder (..), Expector)
+import Dhall.Pretty              (ChooseCharacterSet(..))
 import Dhall.Src                 (Src)
 import Dhall.Syntax
     ( Chunks (..)
@@ -38,7 +41,7 @@ import Dhall.Syntax
     , RecordField (..)
     , Var (..)
     )
-import System.FilePath           ((</>))
+import System.FilePath           ((</>), isAbsolute, splitDirectories, takeDirectory)
 import System.PosixCompat.Types  (FileMode, GroupID, UserID)
 
 import qualified Control.Exception           as Exception
@@ -63,11 +66,31 @@ import qualified System.Posix.User           as Posix
 #endif
 import qualified System.PosixCompat.Files    as Posix
 
+{- | Options affecting the interpretation of a directory tree specification.
+-}
+data DirectoryTreeOptions = DirectoryTreeOptions
+    { allowAbsolute :: Bool
+      -- ^ Whether to allow absolute paths in the spec.
+    , allowParent :: Bool
+      -- ^ Whether to allow ".." in the spec.
+    , allowSeparators :: Bool
+      -- ^ Whether to allow path separators in file names.
+    }
+
+-- | The default 'DirectoryTreeOptions'. All flags are set to 'False'.
+defaultDirectoryTreeOptions :: DirectoryTreeOptions
+defaultDirectoryTreeOptions = DirectoryTreeOptions
+    { allowAbsolute = False
+    , allowParent = False
+    , allowSeparators = False
+    }
+
 {-| Attempt to transform a Dhall record into a directory tree where:
 
     * Records are translated into directories
 
-    * @Map@s are also translated into directories
+    * @Map@s are translated into directories or whole directory trees, if
+      `allowSeparators` option is enabled
 
     * @Text@ values or fields are translated into files
 
@@ -118,6 +141,15 @@ import qualified System.PosixCompat.Files    as Posix
     > $ cat result/example.yaml
     > ! "bar": null
     > ! "foo": "Hello"
+
+    /Construction of directory trees from maps/
+
+    In @Map@s, the keys specify paths relative to the work dir.
+    Absolute paths and parent directory segments (@..@) are by default
+    prohibited for security concerns, but these checks can be disabled using
+    `allowAbsolute` option field (or the @--allow-absolute-paths@ CLI flag) and
+    `allowParent` option field (or the @--allow-parent-directory@ CLI flag)
+    respectively.
 
     /Advanced construction of directory trees/
 
@@ -172,16 +204,16 @@ import qualified System.PosixCompat.Files    as Posix
     that cannot be converted as-is.
 -}
 toDirectoryTree
-    :: Bool -- ^ Whether to allow path separators in file names or not
+    :: DirectoryTreeOptions
     -> FilePath
     -> Expr Void Void
     -> IO ()
-toDirectoryTree allowSeparators path expression = case expression of
+toDirectoryTree options path expression = case expression of
     RecordLit keyValues ->
         Map.unorderedTraverseWithKey_ process $ recordFieldValue <$> keyValues
 
     ListLit (Just (App List (Record [ ("mapKey", recordFieldValue -> Text), ("mapValue", _) ]))) [] ->
-        Directory.createDirectoryIfMissing allowSeparators path
+        Directory.createDirectoryIfMissing (allowSeparators options) path
 
     ListLit _ records
         | not (null records)
@@ -192,10 +224,10 @@ toDirectoryTree allowSeparators path expression = case expression of
         Text.IO.writeFile path text
 
     Some value ->
-        toDirectoryTree allowSeparators path value
+        toDirectoryTree options path value
 
     App (Field (Union _) _) value -> do
-        toDirectoryTree allowSeparators path value
+        toDirectoryTree options path value
 
     App None _ ->
         return ()
@@ -206,7 +238,8 @@ toDirectoryTree allowSeparators path expression = case expression of
     Lam _ _ (Lam _ _ _) -> do
         entries <- decodeDirectoryTree expression
 
-        processFilesystemEntryList allowSeparators path entries
+        -- TODO: Support allowAbsolute and allowParent as well ?
+        processFilesystemEntryList (allowSeparators options) path entries
 
     _ ->
         die
@@ -222,12 +255,24 @@ toDirectoryTree allowSeparators path expression = case expression of
         empty
 
     process key value = do
-        when (not allowSeparators && Text.isInfixOf (Text.pack [ FilePath.pathSeparator ]) key) $
-            die
+        let
+            keyPath = Text.unpack key
+            keyPathSegments = splitDirectories keyPath
+            path' = path </> keyPath
 
-        Directory.createDirectoryIfMissing allowSeparators path
+        -- Fail if path is absolute, which is a security risk.
+        when (not (allowAbsolute options) && isAbsolute keyPath) die
 
-        toDirectoryTree allowSeparators (path </> Text.unpack key) value
+        -- Fail if path contains attempts to go to container directory,
+        -- which is a security risk.
+        when (not (allowParent options) && ".." `elem` keyPathSegments) die
+
+        -- Fail if separators are not allowed by the option.
+        when (not (allowSeparators options) && length keyPathSegments > 1) die
+
+        Directory.createDirectoryIfMissing (allowSeparators options) (takeDirectory path')
+
+        toDirectoryTree options path' value
 
     die = Exception.throwIO FilesystemError{..}
       where
@@ -252,19 +297,20 @@ decodeDirectoryTree expr = Exception.throwIO $ FilesystemError $ Core.denote exp
 
 -- | The type of a fixpoint directory tree expression.
 directoryTreeType :: Expector (Expr Src Void)
-directoryTreeType = Pi Nothing "tree" (Const Type)
-    <$> (Pi Nothing "make" <$> makeType <*> pure (App List (Var (V "tree" 0))))
+directoryTreeType = Pi AutoInferCharSet "tree" (Const Type)
+    <$> (Pi AutoInferCharSet "make" <$> makeType <*> pure (App List (Var (V "tree" 0))))
 
 -- | The type of make part of a fixpoint directory tree expression.
 makeType :: Expector (Expr Src Void)
 makeType = Record . Map.fromList <$> sequenceA
     [ makeConstructor "directory" (Decode.auto :: Decoder DirectoryEntry)
-    , makeConstructor "file" (Decode.auto :: Decoder FileEntry)
+    , makeConstructor "file" (Decode.auto :: Decoder TextFileEntry)
+    , makeConstructor "binary-file" (Decode.auto :: Decoder BinaryFileEntry)
     ]
     where
         makeConstructor :: Text -> Decoder b -> Expector (Text, RecordField Src Void)
         makeConstructor name dec = (name,) . Core.makeRecordField
-            <$> (Pi Nothing "_" <$> expected dec <*> pure (Var (V "tree" 0)))
+            <$> (Pi AutoInferCharSet "_" <$> expected dec <*> pure (Var (V "tree" 0)))
 
 -- | Resolve a `User` to a numerical id.
 getUser :: User -> IO UserID
@@ -295,13 +341,16 @@ processFilesystemEntry allowSeparators path (DirectoryEntry entry) =
     processEntryWith path entry $ \path' content -> do
         Directory.createDirectoryIfMissing allowSeparators path'
         processFilesystemEntryList allowSeparators path' content
-processFilesystemEntry allowSeparators path (FileEntry entry) = do
-    Util.printWarning "`file` is deprecated and will be removed eventually. Please use `text-file` instead."
-    processFilesystemEntry allowSeparators path (TextFileEntry entry)
-processFilesystemEntry _ path (BinaryFileEntry entry) =
-    processEntryWith path entry ByteString.writeFile
-processFilesystemEntry _ path (TextFileEntry entry) =
-    processEntryWith path entry  Text.IO.writeFile
+processFilesystemEntry allowSeparators path (BinaryFileEntry entry) =
+    processEntryWith path entry $ \path' content -> do
+        when allowSeparators $ do
+            Directory.createDirectoryIfMissing True (FilePath.takeDirectory path')
+        ByteString.writeFile path' content
+processFilesystemEntry allowSeparators path (TextFileEntry entry) =
+    processEntryWith path entry $ \path' content -> do
+        when allowSeparators $ do
+            Directory.createDirectoryIfMissing True (FilePath.takeDirectory path')
+        Text.IO.writeFile path' content
 
 -- | A helper function used by 'processFilesystemEntry'.
 processEntryWith

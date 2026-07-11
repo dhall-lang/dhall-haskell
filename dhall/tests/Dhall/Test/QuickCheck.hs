@@ -60,7 +60,7 @@ import Data.Functor.Identity     (Identity (..))
 import Data.Proxy                (Proxy (..))
 import Data.Typeable             (Typeable, typeRep)
 import Dhall.Parser              (Header (..), createHeader)
-import Dhall.Pretty              (CharacterSet (..))
+import Dhall.Pretty              (CharacterSet (..), ChooseCharacterSet (..))
 import Dhall.Set                 (Set)
 import Dhall.Src                 (Src (..))
 import Dhall.Test.Format         (format)
@@ -103,7 +103,7 @@ import qualified Dhall.Parser          as Parser
 import qualified Dhall.Set
 import qualified Dhall.TypeCheck
 import qualified Generic.Random
-import qualified Lens.Family           as Lens
+import qualified Lens.Micro            as Lens
 import qualified Numeric.Natural       as Nat
 import qualified Test.QuickCheck
 import qualified Test.Tasty
@@ -214,6 +214,12 @@ shrinkWhitespace _  = [""]
 
 instance Arbitrary CharacterSet where
     arbitrary = Test.QuickCheck.elements [ ASCII, Unicode ]
+
+instance Arbitrary ChooseCharacterSet where
+    arbitrary = Test.QuickCheck.oneof [
+        return AutoInferCharSet
+        , Specify <$> arbitrary
+     ]
 
 instance Arbitrary Header where
     arbitrary = createHeader <$> whitespace

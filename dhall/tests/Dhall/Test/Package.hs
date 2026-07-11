@@ -3,7 +3,7 @@
 
 module Dhall.Test.Package where
 
-import           Control.Exception  (Exception, displayException, try)
+import           Control.Exception  (Exception, displayException, finally, try)
 import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Void          (Void)
 import           Dhall.Core
@@ -19,6 +19,8 @@ import           Dhall.Core
     )
 import qualified Dhall.Map          as Map
 import           Dhall.Package
+import           Lens.Micro         (set)
+import qualified System.Directory   as Directory
 import           System.FilePath    ((</>))
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -31,6 +33,7 @@ tests = testGroup "Package"
     , packageEmptyDirectory
     , packageSingleDirectory
     , packageNested
+    , packageRecursive
     , packageMissingFile
     , packageFilesDifferentDirs
     , packageIncompatibleFiles
@@ -43,7 +46,7 @@ packagePackageFile = testCase "package file" $ do
     let package :: Expr Void Import
         package = RecordLit Map.empty
 
-    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/package.dhall" :| [])
+    (output, expr) <- getPackagePathAndContent defaultOptions ("./tests/package/package.dhall" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -55,7 +58,10 @@ packageCustomPackageFile = testCase "custom package file" $ do
         package = RecordLit $
             Map.singleton "package" $ makeRecordField $ Embed packageDhall
 
-    (output, expr) <- getPackagePathAndContent (Just "custom.dhall") ("./tests/package/package.dhall" :| [])
+    let options :: Options
+        options = set packageFileName "custom.dhall" defaultOptions
+
+    (output, expr) <- getPackagePathAndContent options ("./tests/package/package.dhall" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -67,7 +73,7 @@ packageSingleFile = testCase "single file" $ do
         package = RecordLit $
             Map.singleton "test" $ makeRecordField $ Embed testDhall
 
-    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/dir/test.dhall" :| [])
+    (output, expr) <- getPackagePathAndContent defaultOptions ("./tests/package/dir/test.dhall" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -78,7 +84,7 @@ packageEmptyDirectory = testCase "empty directory" $ do
     let package :: Expr Void Import
         package = RecordLit Map.empty
 
-    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/empty" :| [])
+    (output, expr) <- getPackagePathAndContent defaultOptions ("./tests/package/empty" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -90,7 +96,7 @@ packageSingleDirectory = testCase "single directory" $ do
         package = RecordLit $ Map.singleton "test" $
             makeRecordField $ Embed testDhall
 
-    (output, expr) <- getPackagePathAndContent Nothing ("./tests/package/dir" :| [])
+    (output, expr) <- getPackagePathAndContent defaultOptions ("./tests/package/dir" :| [])
     assertEqual "path" path output
     assertEqual "content" package expr
 
@@ -108,7 +114,7 @@ packageNested = testCase "nested files" $ do
             , ("test", makeRecordField $ Embed testDhall)
             ]
 
-    (output, expr) <- getPackagePathAndContent Nothing
+    (output, expr) <- getPackagePathAndContent defaultOptions
         ( "./tests/package/test.dhall" :|
         [ "./tests/package/dir/test.dhall"
         , "./tests/package/other/package.dhall"
@@ -116,10 +122,34 @@ packageNested = testCase "nested files" $ do
     assertEqual "path" path output
     assertEqual "content" package expr
 
+packageRecursive :: TestTree
+packageRecursive = testCase "recursively create subpackages" $ removePackagesAfter $ do
+    let path = "./tests/package/dir" </> "package.dhall"
+
+    let package :: Expr Void Import
+        package = RecordLit $ Map.fromList
+            [ ("subdirectory1", makeRecordField $ Embed subdirectoryPackageDhall1)
+            , ("subdirectory2", makeRecordField $ Embed subdirectoryPackageDhall2)
+            , ("test", makeRecordField $ Embed testDhall)
+            ]
+
+    let options :: Options
+        options = set packagingMode RecursiveSubpackages defaultOptions
+
+    (output, expr) <- getPackagePathAndContent options
+        ( "./tests/package/dir" :| [] )
+    assertEqual "path" path output
+    assertEqual "content" package expr
+    where
+        removePackagesAfter :: IO a -> IO a
+        removePackagesAfter action = action `finally` do
+            Directory.removePathForcibly "./tests/package/dir/subdirectory1/package.dhall"
+            Directory.removePathForcibly "./tests/package/dir/subdirectory2/package.dhall"
+
 packageMissingFile :: TestTree
 packageMissingFile = testCase "missing file" $ do
     let action :: IO (FilePath, Expr Void Import)
-        action = getPackagePathAndContent Nothing ("./tests/package/missing.dhall" :| [])
+        action = getPackagePathAndContent defaultOptions ("./tests/package/missing.dhall" :| [])
 
     assertThrow action $ \case
         InvalidPath "./tests/package/missing.dhall" -> True
@@ -128,7 +158,10 @@ packageMissingFile = testCase "missing file" $ do
 packageFilesDifferentDirs :: TestTree
 packageFilesDifferentDirs = testCase "files from different directories" $ do
     let action :: IO (FilePath, Expr Void Import)
-        action = getPackagePathAndContent Nothing ("./tests/package/dir/test.dhall" :| ["./tests/package/test/test.dhall"])
+        action = getPackagePathAndContent defaultOptions
+            ( "./tests/package/dir/test.dhall" :|
+            [ "./tests/package/test/test.dhall"
+            ])
 
     assertThrow action $ \case
         AmbiguousOutputDirectory "./tests/package/dir" "./tests/package/test" -> True
@@ -137,7 +170,10 @@ packageFilesDifferentDirs = testCase "files from different directories" $ do
 packageIncompatibleFiles :: TestTree
 packageIncompatibleFiles = testCase "files that are incompatible" $ do
     let action :: IO (FilePath, Expr Void Import)
-        action = getPackagePathAndContent Nothing ("./tests/package/test.dhall" :| ["./tests/package/test/test.dhall"])
+        action = getPackagePathAndContent defaultOptions
+            ( "./tests/package/test.dhall" :|
+            [ "./tests/package/test/test.dhall"
+            ])
 
     assertThrow action $ \case
         IncompatiblePaths xs -> xs == [ testDhall , testTestDhall ]
@@ -190,6 +226,28 @@ otherPackageDhall = Import
         }
     , importMode = Code
     }
+
+subdirectoryPackageDhall1 :: Import
+subdirectoryPackageDhall1 = Import
+    { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local Here $ File
+            { directory = Directory {components = ["subdirectory1"]}
+            , file = "package.dhall"}
+            }
+        , importMode = Code
+        }
+
+subdirectoryPackageDhall2 :: Import
+subdirectoryPackageDhall2 = Import
+    { importHashed = ImportHashed
+        { hash = Nothing
+        , importType = Local Here $ File
+            { directory = Directory {components = ["subdirectory2"]}
+            , file = "package.dhall"}
+            }
+        , importMode = Code
+        }
 
 testTestDhall :: Import
 testTestDhall = Import

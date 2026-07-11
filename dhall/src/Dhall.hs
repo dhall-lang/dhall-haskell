@@ -34,6 +34,7 @@ module Dhall
     , substitutions
     , normalizer
     , newManager
+    , reportWarning
     , defaultInputSettings
     , InputSettings
     , defaultEvaluateSettings
@@ -51,6 +52,7 @@ module Dhall
     , parseWithSettings
     , resolveWithSettings
     , resolveAndStatusWithSettings
+    , emptyStatusWithSettings
     , typecheckWithSettings
     , checkWithSettings
     , expectWithSettings
@@ -69,7 +71,8 @@ import Dhall.Parser           (Src (..))
 import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
-import Lens.Family            (LensLike', view)
+import Lens.Micro             (Lens', lens)
+import Lens.Micro.Extras      (view)
 import Prelude                hiding (maybe, sequence)
 import System.FilePath        (takeDirectory)
 
@@ -83,7 +86,8 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck
-import qualified Lens.Family
+import qualified Dhall.Util
+import qualified Lens.Micro                       as Lens
 
 import Dhall.Marshal.Decode
 import Dhall.Marshal.Encode
@@ -111,22 +115,16 @@ defaultInputSettings = InputSettings
 -- | Access the directory to resolve imports relative to.
 --
 -- @since 1.16
-rootDirectory
-  :: (Functor f)
-  => LensLike' f InputSettings FilePath
-rootDirectory k s =
-  fmap (\x -> s { _rootDirectory = x }) (k (_rootDirectory s))
+rootDirectory :: Lens' InputSettings FilePath
+rootDirectory = lens _rootDirectory (\s x -> s { _rootDirectory = x })
 
 -- | Access the name of the source to report locations from; this is
 -- only used in error messages, so it's okay if this is a best guess
 -- or something symbolic.
 --
 -- @since 1.16
-sourceName
-  :: (Functor f)
-  => LensLike' f InputSettings FilePath
-sourceName k s =
-  fmap (\x -> s { _sourceName = x}) (k (_sourceName s))
+sourceName :: Lens' InputSettings FilePath
+sourceName = lens _sourceName (\s x -> s { _sourceName = x})
 
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
@@ -134,6 +132,7 @@ data EvaluateSettings = EvaluateSettings
   , _startingContext :: Dhall.Context.Context (Expr Src Void)
   , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
   , _newManager      :: IO Dhall.Import.Manager
+  , _reportWarning   :: Text -> IO ()
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -146,65 +145,64 @@ defaultEvaluateSettings = EvaluateSettings
   , _startingContext = Dhall.Context.empty
   , _normalizer      = Nothing
   , _newManager      = Dhall.Import.defaultNewManager
+  , _reportWarning   = Dhall.Util.printWarning
   }
 
 -- | Access the starting context used for evaluation and type-checking.
 --
 -- @since 1.16
 startingContext
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Context.Context (Expr Src Void))
-startingContext = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Context.Context (Expr Src Void))
-    l k s = fmap (\x -> s { _startingContext = x}) (k (_startingContext s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (Dhall.Context.Context (Expr Src Void))
+startingContext =
+    evaluateSettings
+        . lens _startingContext (\s x -> s { _startingContext = x})
 
 -- | Access the custom substitutions.
 --
 -- @since 1.30
 substitutions
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Dhall.Substitution.Substitutions Src Void)
-substitutions = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Dhall.Substitution.Substitutions Src Void)
-    l k s = fmap (\x -> s { _substitutions = x }) (k (_substitutions s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (Dhall.Substitution.Substitutions Src Void)
+substitutions =
+    evaluateSettings
+        . lens _substitutions (\s x -> s { _substitutions = x })
 
 -- | Access the custom normalizer.
 --
 -- @since 1.16
 normalizer
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (Maybe (Core.ReifiedNormalizer Void))
-normalizer = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (Maybe (Core.ReifiedNormalizer Void))
-    l k s = fmap (\x -> s { _normalizer = x }) (k (_normalizer s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (Maybe (Core.ReifiedNormalizer Void))
+normalizer =
+    evaluateSettings
+        . lens _normalizer (\s x -> s { _normalizer = x })
 
 -- | Access the HTTP manager initializer.
 --
 -- @since 1.36
 newManager
-  :: (Functor f, HasEvaluateSettings s)
-  => LensLike' f s (IO Dhall.Import.Manager)
-newManager = evaluateSettings . l
-  where
-    l :: (Functor f)
-      => LensLike' f EvaluateSettings (IO Dhall.Import.Manager)
-    l k s = fmap (\x -> s { _newManager = x }) (k (_newManager s))
+  :: (HasEvaluateSettings s)
+  => Lens' s (IO Dhall.Import.Manager)
+newManager =
+    evaluateSettings
+        . lens _newManager (\s x -> s { _newManager = x })
+
+-- | Access the warning reporting action.
+reportWarning
+  :: (HasEvaluateSettings s)
+  => Lens' s (Text -> IO ())
+reportWarning =
+    evaluateSettings
+        . lens _reportWarning (\s x -> s { _reportWarning = x })
 
 -- | @since 1.16
 class HasEvaluateSettings s where
-  evaluateSettings
-    :: (Functor f)
-    => LensLike' f s EvaluateSettings
+  evaluateSettings :: Lens' s EvaluateSettings
 
 instance HasEvaluateSettings InputSettings where
-  evaluateSettings k s =
-    fmap (\x -> s { _evaluateSettings = x }) (k (_evaluateSettings s))
+  evaluateSettings =
+    lens _evaluateSettings (\s x -> s { _evaluateSettings = x })
 
 instance HasEvaluateSettings EvaluateSettings where
   evaluateSettings = id
@@ -275,20 +273,24 @@ resolveAndStatusWithSettings
 resolveAndStatusWithSettings settings expression = do
     let InputSettings{..} = settings
 
-    let EvaluateSettings{..} = _evaluateSettings
-
-    let transform =
-               Lens.Family.set Dhall.Import.substitutions   _substitutions
-            .  Lens.Family.set Dhall.Import.normalizer      _normalizer
-            .  Lens.Family.set Dhall.Import.startingContext _startingContext
-
-    let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
+    let status = emptyStatusWithSettings _evaluateSettings _rootDirectory
 
     (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression) status
 
     let substituted = Dhall.Substitution.substitute resolved (view substitutions settings)
 
     pure (substituted, status')
+
+-- | As 'emptyStatus' but applying 'EvaluateSettings'.
+emptyStatusWithSettings :: EvaluateSettings -> FilePath -> Status
+emptyStatusWithSettings EvaluateSettings{..} rootDir =
+        transform (Dhall.Import.emptyStatusWithManager _newManager rootDir)
+    where
+        transform =
+               Lens.set Dhall.Import.substitutions   _substitutions
+            .  Lens.set Dhall.Import.normalizer      _normalizer
+            .  Lens.set Dhall.Import.startingContext _startingContext
+            .  Lens.set Dhall.Import.reportWarning   _reportWarning
 
 -- | Normalize an expression, using the supplied `InputSettings`
 normalizeWithSettings :: InputSettings -> Expr Src Void -> Expr Src Void

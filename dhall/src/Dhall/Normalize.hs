@@ -48,7 +48,7 @@ import qualified Data.Text     as Text
 import qualified Dhall.Eval    as Eval
 import qualified Dhall.Map
 import qualified Dhall.Syntax  as Syntax
-import qualified Lens.Family   as Lens
+import qualified Lens.Micro    as Lens
 
 {-| Returns `True` if two expressions are α-equivalent and β-equivalent and
     `False` otherwise
@@ -116,7 +116,7 @@ boundedType _                = False
 
 >>> mfb = Syntax.makeFunctionBinding
 >>> alphaNormalize (Lam mempty (mfb "a" (Const Type)) (Lam mempty (mfb "b" (Const Type)) (Lam mempty (mfb "x" "a") (Lam mempty (mfb "y" "b") "x"))))
-Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Lam Nothing (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
+Lam AutoInferCharSet (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam AutoInferCharSet (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Const Type}) (Lam AutoInferCharSet (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Lam AutoInferCharSet (FunctionBinding {functionBindingSrc0 = Nothing, functionBindingVariable = "_", functionBindingSrc1 = Nothing, functionBindingSrc2 = Nothing, functionBindingAnnotation = Var (V "_" 1)}) (Var (V "_" 1)))))
 
     α-normalization does not affect free variables:
 
@@ -331,20 +331,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             return haystack
                     App (App
                             (App TextReplace (TextLit (Chunks [] needleText)))
-                            (TextLit (Chunks [] replacementText))
-                        )
-                        (TextLit (Chunks xys z)) -> do
-                            let xys' = do
-                                    (x, y) <- xys
-
-                                    let x' = Text.replace needleText replacementText x
-                                    return (x', y)
-
-                            let z' = Text.replace needleText replacementText z
-
-                            return (TextLit (Chunks xys' z'))
-                    App (App
-                            (App TextReplace (TextLit (Chunks [] needleText)))
                             replacement
                         )
                         (TextLit (Chunks [] lastText)) -> do
@@ -360,29 +346,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                                 suffix
 
                                     loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks [] remainder))))
-                    App (App
-                            (App TextReplace (TextLit (Chunks [] needleText)))
-                            replacement
-                        )
-                        (TextLit
-                            (Chunks
-                                ((firstText, firstInterpolation) : chunks)
-                                lastText
-                            )
-                        ) -> do
-                            let (prefix, suffix) =
-                                    Text.breakOn needleText firstText
-
-                            if Text.null suffix
-                                then do
-                                    loop (TextAppend (TextLit (Chunks [(firstText, firstInterpolation)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks chunks lastText))))
-                                else do
-                                    let remainder =
-                                            Text.drop
-                                                (Text.length needleText)
-                                                suffix
-
-                                    loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks ((remainder, firstInterpolation) : chunks) lastText))))
                     App DateShow (DateLiteral date) ->
                         loop (TextLit (Chunks [] text))
                       where

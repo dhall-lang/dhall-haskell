@@ -1,12 +1,19 @@
 packages:
+  ./dhall-test-server
   ./dhall
   ./dhall-bash
   ./dhall-csv
   ./dhall-docs
   ./dhall-json
   ./dhall-lsp-server
-  ./dhall-nix
-  ./dhall-nixpkgs
   ./dhall-openapi
   ./dhall-toml
   ./dhall-yaml
+
+if impl(ghc < 9.8)
+  packages:
+    ./dhall-nix
+    ./dhall-nixpkgs
+
+if impl(ghc >= 9.12)
+  allow-newer: repline:containers

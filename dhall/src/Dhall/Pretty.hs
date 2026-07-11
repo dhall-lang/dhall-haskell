@@ -8,8 +8,12 @@ module Dhall.Pretty
     , prettyExpr
 
     , CharacterSet(..)
+    , defaultCharacterSet
     , detectCharacterSet
     , prettyCharacterSet
+
+    , ChooseCharacterSet(..)
+    , chooseCharsetOrUseDefault
 
     , Dhall.Pretty.Internal.layout
     , Dhall.Pretty.Internal.layoutOpts

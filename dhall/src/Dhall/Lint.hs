@@ -40,8 +40,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text          as Text
 import qualified Dhall.Core         as Core
 import qualified Dhall.Map
-import qualified Dhall.Optics
-import qualified Lens.Family
+import qualified Lens.Micro         as Lens
 
 {-| Automatically improve a Dhall expression
 
@@ -53,7 +52,7 @@ import qualified Lens.Family
     * fixes paths of the form @.\/..\/foo@ to @..\/foo@
 -}
 lint :: Eq s => Expr s Import -> Expr s Import
-lint =  Dhall.Optics.rewriteOf subExpressions rewrite
+lint =  Lens.rewriteOf subExpressions rewrite
   where
     rewrite e =
             fixAssert                e
@@ -144,7 +143,7 @@ addPreludeExtensions _ = Nothing
 
 isOrContainsAssert :: Expr s a -> Bool
 isOrContainsAssert (Assert _) = True
-isOrContainsAssert e = Lens.Family.anyOf subExpressions isOrContainsAssert e
+isOrContainsAssert e = Lens.anyOf subExpressions isOrContainsAssert e
 
 -- | The difference between
 --

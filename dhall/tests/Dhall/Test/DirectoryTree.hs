@@ -1,23 +1,24 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Dhall.Test.DirectoryTree (tests) where
 
 import Control.Monad
-import Data.Either (partitionEithers)
+import Data.Either            (partitionEithers)
 import Data.Either.Validation
 import Dhall.DirectoryTree
-import Lens.Family (set)
-import System.FilePath ((</>))
+import Lens.Micro             (set)
+import System.FilePath        ((</>))
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import qualified Data.List
 import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.Core
-import qualified System.Directory as Directory
-import qualified System.FilePath as FilePath
+import qualified System.Directory         as Directory
+import qualified System.FilePath          as FilePath
 import qualified System.PosixCompat.Files as Files
 
 tests :: TestTree
@@ -26,10 +27,14 @@ tests = testGroup "to-directory-tree"
         [ fixpointedType
         , fixpointedEmpty
         , fixpointedSimple
+        , fixpointedAllowPathSeparators
 #ifndef mingw32_HOST_OS
         , fixpointedPermissions
         , fixpointedUserGroup
 #endif
+        ]
+    , testGroup "path separators"
+        [ issue1305
         ]
     ]
 
@@ -46,18 +51,34 @@ fixpointedEmpty :: TestTree
 fixpointedEmpty = testCase "empty" $ do
     let outDir = "./tests/to-directory-tree/fixpoint-empty.out"
         path = "./tests/to-directory-tree/fixpoint-empty.dhall"
-    entries <- runDirectoryTree False outDir path
+    entries <- runDirectoryTree defaultDirectoryTreeOptions outDir path
     entries @?= [Directory outDir]
 
 fixpointedSimple :: TestTree
 fixpointedSimple = testCase "simple" $ do
     let outDir = "./tests/to-directory-tree/fixpoint-simple.out"
         path = "./tests/to-directory-tree/fixpoint-simple.dhall"
-    entries <- runDirectoryTree False outDir path
-    entries @?=
+    entries <- runDirectoryTree defaultDirectoryTreeOptions outDir path
+    entries @?= Data.List.sort
         [ Directory outDir
         , File $ outDir </> "file"
         , Directory $ outDir </> "directory"
+        ]
+
+fixpointedAllowPathSeparators :: TestTree
+fixpointedAllowPathSeparators = testCase "allow-path-separators" $ do
+    let outDir = "./tests/to-directory-tree/fixpoint-allow-path-separators.out"
+        path = "./tests/to-directory-tree/fixpoint-allow-path-separators.dhall"
+        options = defaultDirectoryTreeOptions
+            { allowSeparators = True
+            }
+    entries <- runDirectoryTree options outDir path
+    entries @?= Data.List.sort
+        [ Directory outDir
+        , Directory $ outDir </> "non-existent-1"
+        , File $ outDir </> "non-existent-1" </> "file"
+        , Directory $ outDir </> "non-existent-2"
+        , Directory $ outDir </> "non-existent-2" </> "directory"
         ]
 
 {-
@@ -69,7 +90,7 @@ fixpointedPermissions :: TestTree
 fixpointedPermissions = testCase "permissions" $ do
     let outDir = "./tests/to-directory-tree/fixpoint-permissions.out"
         path = "./tests/to-directory-tree/fixpoint-permissions.dhall"
-    entries <- runDirectoryTree False outDir path
+    entries <- runDirectoryTree defaultDirectoryTreeOptions outDir path
     entries @?=
         [ Directory outDir
         , File $ outDir </> "file"
@@ -84,14 +105,14 @@ fixpointedUserGroup = testCase "user and group" $ do
     expr <- Dhall.inputExpr file
     entries <- decodeDirectoryTree expr
     entries @?=
-        [ FileEntry $ Entry
+        [ TextFileEntry $ Entry
             { entryName = "ids"
             , entryContent = ""
             , entryUser = Just (UserId 0)
             , entryGroup = Just (GroupId 0)
             , entryMode = Nothing
             }
-        , FileEntry $ Entry
+        , TextFileEntry $ Entry
             { entryName = "names"
             , entryContent = ""
             , entryUser = Just (UserName "user")
@@ -100,8 +121,20 @@ fixpointedUserGroup = testCase "user and group" $ do
             }
         ]
 
-runDirectoryTree :: Bool -> FilePath -> FilePath -> IO [WalkEntry]
-runDirectoryTree allowSeparators outDir path = do
+issue1305 :: TestTree
+issue1305 = testCase "separators in map keys" $ do
+    let outDir = "./tests/to-directory-tree/T1305.out"
+        path = "./tests/to-directory-tree/T1305.dhall"
+        opts = defaultDirectoryTreeOptions { allowSeparators = True }
+    entries <- runDirectoryTree opts outDir path
+    entries @?=
+        [ Directory outDir
+        , Directory $ outDir </> "A"
+        , File $ outDir </> "A" </> "B"
+        ]
+
+runDirectoryTree :: DirectoryTreeOptions -> FilePath -> FilePath -> IO [WalkEntry]
+runDirectoryTree opts outDir path = do
     doesOutDirExist <- Directory.doesDirectoryExist outDir
     when doesOutDirExist $
         Directory.removeDirectoryRecursive outDir
@@ -114,14 +147,14 @@ runDirectoryTree allowSeparators outDir path = do
             $ Dhall.defaultInputSettings
     expr <- Dhall.inputExprWithSettings inputSettings text
 
-    toDirectoryTree allowSeparators outDir $ Dhall.Core.denote expr
+    toDirectoryTree opts outDir $ Dhall.Core.denote expr
 
-    walkFsTree outDir
+    Data.List.sort <$> walkFsTree outDir
 
 data WalkEntry
     = Directory FilePath
     | File FilePath
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 walkFsTree :: FilePath -> IO [WalkEntry]
 walkFsTree dir = do

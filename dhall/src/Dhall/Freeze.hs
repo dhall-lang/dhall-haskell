@@ -31,9 +31,10 @@ module Dhall.Freeze
 
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty)
-import Data.Maybe          (fromMaybe)
 import Dhall               (EvaluateSettings)
-import Dhall.Pretty        (CharacterSet, detectCharacterSet)
+import Dhall.Pretty        (detectCharacterSet)
+import Dhall.Pretty.Internal        (ChooseCharacterSet(..), chooseCharsetOrUseDefault)
+
 import Dhall.Syntax
     ( Expr (..)
     , Import (..)
@@ -49,7 +50,8 @@ import Dhall.Util
     , Transitivity (..)
     , handleMultipleChecksFailed
     )
-import Lens.Family         (set, view)
+import Lens.Micro          (set, transformMOf, transformOf)
+import Lens.Micro.Extras   (view)
 import System.Console.ANSI (hSupportsANSI)
 
 import qualified Control.Exception                  as Exception
@@ -58,7 +60,6 @@ import qualified Data.Text.IO                       as Text.IO
 import qualified Dhall
 import qualified Dhall.Core                         as Core
 import qualified Dhall.Import
-import qualified Dhall.Optics
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util                         as Util
@@ -128,7 +129,7 @@ freeze
     -> NonEmpty Input
     -> Scope
     -> Intent
-    -> Maybe CharacterSet
+    -> ChooseCharacterSet
     -> Censor
     -> IO ()
 freeze = freezeWithSettings Dhall.defaultEvaluateSettings
@@ -141,7 +142,7 @@ freezeWithManager
     -> NonEmpty Input
     -> Scope
     -> Intent
-    -> Maybe CharacterSet
+    -> ChooseCharacterSet
     -> Censor
     -> IO ()
 freezeWithManager newManager = freezeWithSettings (set Dhall.newManager newManager Dhall.defaultEvaluateSettings)
@@ -191,7 +192,7 @@ freezeImportWithSettings settings directory import_ = do
                         }
                 }
 
-    let status = Dhall.Import.emptyStatusWithManager (view Dhall.newManager settings) directory
+    let status = Dhall.emptyStatusWithSettings settings directory
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
@@ -242,7 +243,7 @@ freezeWithSettings
     -> NonEmpty Input
     -> Scope
     -> Intent
-    -> Maybe CharacterSet
+    -> ChooseCharacterSet
     -> Censor
     -> IO ()
 freezeWithSettings settings outputMode transitivity0 inputs scope intent chosenCharacterSet censor =
@@ -255,7 +256,7 @@ freezeWithSettings settings outputMode transitivity0 inputs scope intent chosenC
                 InputFile file ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatusWithManager (view Dhall.newManager settings) directory
+        let status = Dhall.emptyStatusWithSettings settings directory
 
         (inputName, originalText, transitivity) <- case input of
             InputFile file -> do
@@ -270,7 +271,7 @@ freezeWithSettings settings outputMode transitivity0 inputs scope intent chosenC
 
         (Header header, parsedExpression) <- Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
-        let characterSet = fromMaybe (detectCharacterSet parsedExpression) chosenCharacterSet
+        let characterSet = chooseCharsetOrUseDefault (detectCharacterSet parsedExpression) chosenCharacterSet
 
         case transitivity of
             Transitive ->
@@ -433,11 +434,11 @@ freezeExpressionWithSettings settings directory scope intent expression = do
             | import1 == import2 = Embed import1
         simplify expression_ = expression_
 
-    Dhall.Optics.transformOf Core.subExpressions simplify <$> case intent of
+    transformOf Core.subExpressions simplify <$> case intent of
         Secure ->
-            traverse freezeFunction (Dhall.Optics.transformOf Core.subExpressions uncache expression)
+            traverse freezeFunction (transformOf Core.subExpressions uncache expression)
         Cache  ->
-            Dhall.Optics.transformMOf Core.subExpressions cache expression
+            transformMOf Core.subExpressions cache expression
 
 -- https://github.com/dhall-lang/dhall-haskell/issues/2347
 toMissing :: Import -> Import

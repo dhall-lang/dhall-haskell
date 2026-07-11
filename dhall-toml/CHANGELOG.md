@@ -1,3 +1,8 @@
+1.0.4
+
+* [Add support for `Prelude.Map.Type`](https://github.com/dhall-lang/dhall-haskell/pull/2549)
+* [Fix loading of relative paths](https://github.com/dhall-lang/dhall-haskell/pull/2607)
+
 1.0.3
 
 * [Support `Integer`s](https://github.com/dhall-lang/dhall-haskell/pull/2469)

@@ -4,6 +4,8 @@
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE ViewPatterns      #-}
 
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Dhall.Test.Util
     ( code
     , codeWith
@@ -71,9 +73,9 @@ import qualified Turtle
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
 import qualified Data.Foldable
 #else
-import Control.Monad.IO.Class   (MonadIO (..))
-import Dhall.Core               (Directory (..), File (..), URL (..))
-import Lens.Family.State.Strict (zoom)
+import Control.Monad.IO.Class (MonadIO (..))
+import Dhall.Core             (Directory (..), File (..), URL (..))
+import Lens.Micro.Mtl         (zoom)
 
 import qualified Data.Foldable
 import qualified Data.Text.Encoding
@@ -190,6 +192,88 @@ mockRemote url@URL{ authority = "httpbin.org", path, headers } =
         _ -> do
             fail ("Unable to mock URL: " <> Text.unpack (Dhall.Core.pretty url))
 
+mockRemote url@URL{ authority = "localhost:18080", path, headers } =
+    case (path, fmap Dhall.Import.toHeaders headers) of
+        (File (Directory []) "user-agent", Just [("user-agent", userAgent)]) -> do
+            let agentText = Data.Text.Encoding.decodeUtf8 userAgent
+
+            return ("{\n  \"user-agent\": \"" <> agentText <> "\"\n}\n")
+        (File (Directory []) "user-agent", Nothing) -> do
+            return ("{\n  \"user-agent\": \"Dhall\"\n}\n")
+        (File (Directory []) "headers", _) -> do
+            return "{}\n"
+        (File (Directory []) "foo", Just [("test", _)]) ->
+            return "./bar"
+        (File (Directory []) "bar", Just [("test", _)]) ->
+            return "True"
+        (File (Directory []) "random-string", _) ->
+            return "dhall-test-random-string-1"
+        (File (Directory ["foo", ".."]) "random-string", _) ->
+            return "dhall-test-random-string-1"
+        (File (Directory ["cors"]) "AllowedAll.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlyGithub.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlySelf.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "OnlyOther.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "Empty.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "NoCORS.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "Null.dhall", _) ->
+            return "42"
+        (File (Directory ["cors"]) "SelfImportAbsolute.dhall", _) ->
+            return "http://localhost:18080/cors/NoCORS.dhall"
+        (File (Directory ["cors"]) "SelfImportRelative.dhall", _) ->
+            return "./NoCORS.dhall"
+        (File (Directory ["cors"]) "TwoHopsFail.dhall", _) ->
+            return "http://localhost:18080/cors/OnlySelf.dhall"
+        (File (Directory ["cors"]) "TwoHopsSuccess.dhall", _) ->
+            return "http://localhost:18080/cors/OnlyGithub.dhall"
+        (File (Directory ["tests", "import", "data"]) "example.txt", _) ->
+            return "Hello, world!\n"
+        (File (Directory ["tests", "import", "data"]) "simple.dhall", _) ->
+            return "3"
+        (File (Directory ["tests", "import", "data"]) "simpleLocation.dhall", _) ->
+            return "./simple.dhall as Location"
+        (File (Directory ["tests", "import", "data", "cors"]) "AllowedAll.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/AllowedAll.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "OnlyGithub.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/OnlyGithub.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "OnlySelf.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/OnlySelf.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "OnlyOther.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/OnlyOther.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "Empty.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/Empty.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "NoCORS.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/NoCORS.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "Null.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/Null.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "SelfImportAbsolute.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/SelfImportAbsolute.dhall"
+        (File (Directory ["tests", "import", "data", "cors"]) "SelfImportRelative.dhall", _) ->
+            return "http://127.0.0.1:18080/cors/SelfImportRelative.dhall"
+        (File (Directory ["tests", "import", "success"]) "customHeadersA.dhall", _) ->
+            return "http://localhost:18080/user-agent using [ { mapKey = \"User-Agent\", mapValue = \"Dhall\" } ] as Text"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "Canonicalize3A.dhall", _) ->
+            return "./../bar/import.dhall as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "Canonicalize5A.dhall", _) ->
+            return "./foo/../../bar/import.dhall as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "MissingA.dhall", _) ->
+            return "missing as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "EnvA.dhall", _) ->
+            return "env:HOME as Location"
+        (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "bar"]) "import.dhall", _) ->
+            return "2"
+        _ -> do
+            fail ("Unable to mock URL: " <> Text.unpack (Dhall.Core.pretty url))
+
+mockRemote url@URL{ authority = "127.0.0.1:18080", path, headers } =
+    mockRemote url { authority = "localhost:18080", path = path, headers = headers }
+
 mockRemote url = do
     let urlString = Text.unpack (Dhall.Core.pretty url)
     fail ("(mock http) Url does not match any of the hard-coded rules: "
@@ -247,35 +331,35 @@ managedTestEnvironment prefix = Turtle.managed (Control.Exception.bracket setup 
     restoreEnv (k, Just old) = Turtle.export k old
     restoreEnv (k, Nothing) = Turtle.unset k
 
-equivalent :: Text -> Text -> IO ()
+equivalent :: HasCallStack => Text -> Text -> IO ()
 equivalent text0 text1 = do
     expr0 <- fmap Dhall.Core.normalize (code text0) :: IO (Expr Void Void)
     expr1 <- fmap Dhall.Core.normalize (code text1) :: IO (Expr Void Void)
     assertEqual "Expressions are not equivalent" expr0 expr1
 
-assertNormalizesTo :: Expr Src Void -> Text -> IO ()
+assertNormalizesTo :: HasCallStack => Expr Src Void -> Text -> IO ()
 assertNormalizesTo e expected = do
   assertBool msg (not $ Dhall.Core.isNormalized e)
   normalize' e @?= expected
   where msg = "Given expression is already in normal form"
 
-assertNormalizesToWith :: Normalizer Void -> Expr Src Void -> Text -> IO ()
+assertNormalizesToWith :: HasCallStack => Normalizer Void -> Expr Src Void -> Text -> IO ()
 assertNormalizesToWith ctx e expected = do
   assertBool msg (not $ Dhall.Core.isNormalizedWith ctx (first (const ()) e))
   normalizeWith' ctx e @?= expected
   where msg = "Given expression is already in normal form"
 
-assertNormalized :: Expr Src Void -> IO ()
+assertNormalized :: HasCallStack => Expr Src Void -> IO ()
 assertNormalized e = do
   assertBool msg1 (Dhall.Core.isNormalized e)
   assertEqual msg2 (normalize' e) (Dhall.Core.pretty e)
   where msg1 = "Expression was not in normal form"
         msg2 = "Normalization is not supposed to change the expression"
 
-assertTypeChecks :: Text -> IO ()
+assertTypeChecks :: HasCallStack => Text -> IO ()
 assertTypeChecks text = Data.Functor.void (code text)
 
-assertDoesntTypeCheck :: Text -> IO ()
+assertDoesntTypeCheck :: HasCallStack => Text -> IO ()
 assertDoesntTypeCheck text = do
     expr0 <- case Dhall.Parser.exprFromText mempty text of
         Left parseError -> Control.Exception.throwIO parseError

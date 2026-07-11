@@ -16,12 +16,11 @@ module Dhall.Schemas
 
 import Control.Applicative (empty)
 import Control.Exception   (Exception)
-import Data.Maybe          (fromMaybe)
 import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Crypto        (SHA256Digest)
 import Dhall.Map           (Map)
-import Dhall.Pretty        (CharacterSet (..), detectCharacterSet)
+import Dhall.Pretty        (detectCharacterSet, ChooseCharacterSet(..), chooseCharsetOrUseDefault)
 import Dhall.Src           (Src)
 import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
@@ -41,13 +40,13 @@ import qualified Dhall.Core                         as Core
 import qualified Dhall.Import                       as Import
 import qualified Dhall.Map                          as Map
 import qualified Dhall.Normalize                    as Normalize
-import qualified Dhall.Optics                       as Optics
 import qualified Dhall.Parser                       as Parser
 import qualified Dhall.Pretty
 import qualified Dhall.Substitution                 as Substitution
 import qualified Dhall.Syntax                       as Syntax
 import qualified Dhall.TypeCheck                    as TypeCheck
 import qualified Dhall.Util                         as Util
+import qualified Lens.Micro                         as Lens
 import qualified Prettyprinter                      as Pretty
 import qualified Prettyprinter.Render.Terminal      as Pretty.Terminal
 import qualified Prettyprinter.Render.Text          as Pretty.Text
@@ -57,7 +56,7 @@ import qualified System.IO                          as IO
 
 -- | Arguments to the @rewrite-with-schemas@ subcommand
 data Schemas = Schemas
-    { chosenCharacterSet :: Maybe CharacterSet
+    { chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
     , input              :: Input
     , outputMode         :: OutputMode
@@ -73,7 +72,7 @@ schemasCommand Schemas{..} = do
 
     (Header header, expression) <- Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
-    let characterSet = fromMaybe (detectCharacterSet expression) chosenCharacterSet
+    let characterSet = chooseCharsetOrUseDefault (detectCharacterSet expression) chosenCharacterSet
 
     schemasRecord <- Core.throws (Parser.exprFromText "(schemas)" schemas)
 
@@ -195,7 +194,7 @@ rewriteWithSchemas _schemas expression = do
 
     let rewrittenExpression :: Expr Src Import
         rewrittenExpression =
-            fmap Void.absurd (Optics.transformOf Syntax.subExpressions schemasRewrite normalizedExpression)
+            fmap Void.absurd (Lens.transformOf Syntax.subExpressions schemasRewrite normalizedExpression)
 
     if Normalize.freeIn (V "schemas" 0) rewrittenExpression
         then return (Let (Syntax.makeBinding "schemas" _schemas) rewrittenExpression)

@@ -64,7 +64,7 @@ import qualified Dhall.Core                        as Core
 import qualified Dhall.Map                         as Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Lens.Family                       as Lens
+import qualified Lens.Micro                        as Lens
 import qualified Prettyprinter                     as Pretty
 import qualified Prettyprinter.Render.Text         as Pretty.Text
 import qualified Text.Megaparsec.Pos               as SourcePos

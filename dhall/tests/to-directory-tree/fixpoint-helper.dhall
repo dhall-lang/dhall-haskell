@@ -21,6 +21,10 @@ let Entry =
         }
 
 let Make =
-      \(r : Type) -> { directory : Entry (List r) -> r, file : Entry Text -> r }
+      \(r : Type) ->
+        { directory : Entry (List r) -> r
+        , binary-file : Entry Bytes -> r
+        , file : Entry Text -> r
+        }
 
 in  { User, Group, Access, Mode, Entry, Make }
