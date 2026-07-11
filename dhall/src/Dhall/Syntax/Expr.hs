@@ -13,7 +13,7 @@ import                Data.String                  (IsString (..))
 import                Data.Text                    (Text)
 import                Data.Traversable             ()
 import                Dhall.Map                    (Map)
-import {-# SOURCE #-} Dhall.Pretty.Internal        (CharacterSet (..))
+import {-# SOURCE #-} Dhall.Pretty.Internal        (ChooseCharacterSet(..))
 import                Dhall.Syntax.Binding
 import                Dhall.Syntax.Chunks
 import                Dhall.Syntax.Const
@@ -51,10 +51,10 @@ data Expr s a
     --   > Var (V x n)                              ~  x@n
     | Var Var
     -- | > Lam _ (FunctionBinding _ "x" _ _ A) b    ~  λ(x : A) -> b
-    | Lam (Maybe CharacterSet) (FunctionBinding s a) (Expr s a)
+    | Lam ChooseCharacterSet (FunctionBinding s a) (Expr s a)
     -- | > Pi _ "_" A B                               ~        A  -> B
     --   > Pi _ x   A B                               ~  ∀(x : A) -> B
-    | Pi  (Maybe CharacterSet) Text (Expr s a) (Expr s a)
+    | Pi  ChooseCharacterSet Text (Expr s a) (Expr s a)
     -- | > App f a                                  ~  f a
     | App (Expr s a) (Expr s a)
     -- | > Let (Binding _ x _  Nothing  _ r) e      ~  let x     = r in e
@@ -227,11 +227,11 @@ data Expr s a
     --   >              _
     --   >              (Combine (Just k) x y)
     --   >            )]
-    | Combine (Maybe CharacterSet) (Maybe Text) (Expr s a) (Expr s a)
+    | Combine ChooseCharacterSet (Maybe Text) (Expr s a) (Expr s a)
     -- | > CombineTypes _ x y                       ~  x ⩓ y
-    | CombineTypes (Maybe CharacterSet) (Expr s a) (Expr s a)
+    | CombineTypes ChooseCharacterSet (Expr s a) (Expr s a)
     -- | > Prefer _ _ x y                           ~  x ⫽ y
-    | Prefer (Maybe CharacterSet) PreferAnnotation (Expr s a) (Expr s a)
+    | Prefer ChooseCharacterSet PreferAnnotation (Expr s a) (Expr s a)
     -- | > RecordCompletion x y                     ~  x::y
     | RecordCompletion (Expr s a) (Expr s a)
     -- | > Merge x y (Just t )                      ~  merge x y : t
@@ -250,7 +250,7 @@ data Expr s a
     -- | > Assert e                                 ~  assert : e
     | Assert (Expr s a)
     -- | > Equivalent _ x y                           ~  x ≡ y
-    | Equivalent (Maybe CharacterSet) (Expr s a) (Expr s a)
+    | Equivalent ChooseCharacterSet (Expr s a) (Expr s a)
     -- | > With x y e                               ~  x with y = e
     | With (Expr s a) (NonEmpty WithComponent) (Expr s a)
     -- | > Note s x                                 ~  e
