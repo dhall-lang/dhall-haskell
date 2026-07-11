@@ -24,6 +24,7 @@ import Dhall.Core
 import Dhall.Parser
 import Dhall.Parser.Expression (importHash_, importType_, localOnly)
 import Dhall.Parser.Token      hiding (text)
+import Dhall.Pretty ( ChooseCharacterSet(Specify) )   
 import Text.Megaparsec
     ( SourcePos (..)
     , anySingle
@@ -295,7 +296,7 @@ binderExprFromText txt =
           <|> (do cs' <- skipManyTill anySingle _arrow; return (cs', holeExpr))
       whitespace
       inner <- parseBinderExpr
-      return (Pi (Just (cs <> cs')) name typ inner)
+      return (Pi (Specify (cs <> cs')) name typ inner)
 
     lambdaBinder = do
       cs <- _lambda
@@ -312,4 +313,4 @@ binderExprFromText txt =
           <|> (do cs' <- skipManyTill anySingle _arrow; return (cs', holeExpr))
       whitespace
       inner <- parseBinderExpr
-      return (Lam (Just (cs <> cs')) (makeFunctionBinding name typ) inner)
+      return (Lam (Specify (cs <> cs')) (makeFunctionBinding name typ) inner)

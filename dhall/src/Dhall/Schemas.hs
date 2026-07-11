@@ -16,12 +16,11 @@ module Dhall.Schemas
 
 import Control.Applicative (empty)
 import Control.Exception   (Exception)
-import Data.Maybe          (fromMaybe)
 import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Crypto        (SHA256Digest)
 import Dhall.Map           (Map)
-import Dhall.Pretty        (CharacterSet (..), detectCharacterSet)
+import Dhall.Pretty        (detectCharacterSet, ChooseCharacterSet(..), chooseCharsetOrUseDefault)
 import Dhall.Src           (Src)
 import Dhall.Syntax        (Expr (..), Import, Var (..))
 import Dhall.Util
@@ -57,7 +56,7 @@ import qualified System.IO                          as IO
 
 -- | Arguments to the @rewrite-with-schemas@ subcommand
 data Schemas = Schemas
-    { chosenCharacterSet :: Maybe CharacterSet
+    { chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
     , input              :: Input
     , outputMode         :: OutputMode
@@ -73,7 +72,7 @@ schemasCommand Schemas{..} = do
 
     (Header header, expression) <- Util.getExpressionAndHeaderFromStdinText censor inputName originalText
 
-    let characterSet = fromMaybe (detectCharacterSet expression) chosenCharacterSet
+    let characterSet = chooseCharsetOrUseDefault (detectCharacterSet expression) chosenCharacterSet
 
     schemasRecord <- Core.throws (Parser.exprFromText "(schemas)" schemas)
 
