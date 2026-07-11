@@ -34,6 +34,7 @@ module Dhall
     , substitutions
     , normalizer
     , newManager
+    , reportWarning
     , defaultInputSettings
     , InputSettings
     , defaultEvaluateSettings
@@ -51,6 +52,7 @@ module Dhall
     , parseWithSettings
     , resolveWithSettings
     , resolveAndStatusWithSettings
+    , emptyStatusWithSettings
     , typecheckWithSettings
     , checkWithSettings
     , expectWithSettings
@@ -84,6 +86,7 @@ import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
 import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck
+import qualified Dhall.Util
 import qualified Lens.Micro                       as Lens
 
 import Dhall.Marshal.Decode
@@ -129,6 +132,7 @@ data EvaluateSettings = EvaluateSettings
   , _startingContext :: Dhall.Context.Context (Expr Src Void)
   , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
   , _newManager      :: IO Dhall.Import.Manager
+  , _reportWarning   :: Text -> IO ()
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -141,6 +145,7 @@ defaultEvaluateSettings = EvaluateSettings
   , _startingContext = Dhall.Context.empty
   , _normalizer      = Nothing
   , _newManager      = Dhall.Import.defaultNewManager
+  , _reportWarning   = Dhall.Util.printWarning
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -182,6 +187,14 @@ newManager
 newManager =
     evaluateSettings
         . lens _newManager (\s x -> s { _newManager = x })
+
+-- | Access the warning reporting action.
+reportWarning
+  :: (HasEvaluateSettings s)
+  => Lens' s (Text -> IO ())
+reportWarning =
+    evaluateSettings
+        . lens _reportWarning (\s x -> s { _reportWarning = x })
 
 -- | @since 1.16
 class HasEvaluateSettings s where
@@ -260,20 +273,24 @@ resolveAndStatusWithSettings
 resolveAndStatusWithSettings settings expression = do
     let InputSettings{..} = settings
 
-    let EvaluateSettings{..} = _evaluateSettings
-
-    let transform =
-               Lens.set Dhall.Import.substitutions   _substitutions
-            .  Lens.set Dhall.Import.normalizer      _normalizer
-            .  Lens.set Dhall.Import.startingContext _startingContext
-
-    let status = transform (Dhall.Import.emptyStatusWithManager _newManager _rootDirectory)
+    let status = emptyStatusWithSettings _evaluateSettings _rootDirectory
 
     (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression) status
 
     let substituted = Dhall.Substitution.substitute resolved (view substitutions settings)
 
     pure (substituted, status')
+
+-- | As 'emptyStatus' but applying 'EvaluateSettings'.
+emptyStatusWithSettings :: EvaluateSettings -> FilePath -> Status
+emptyStatusWithSettings EvaluateSettings{..} rootDir =
+        transform (Dhall.Import.emptyStatusWithManager _newManager rootDir)
+    where
+        transform =
+               Lens.set Dhall.Import.substitutions   _substitutions
+            .  Lens.set Dhall.Import.normalizer      _normalizer
+            .  Lens.set Dhall.Import.startingContext _startingContext
+            .  Lens.set Dhall.Import.reportWarning   _reportWarning
 
 -- | Normalize an expression, using the supplied `InputSettings`
 normalizeWithSettings :: InputSettings -> Expr Src Void -> Expr Src Void

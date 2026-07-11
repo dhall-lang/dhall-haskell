@@ -144,12 +144,18 @@ let
                       );
 
                     dhall =
-                        (applyCoverage
-                          (haskellPackagesNew.callCabal2nix
-                            "dhall"
-                            (pkgsNew.sdist ../dhall)
-                            { }
+                        (pkgsNew.haskell.lib.appendConfigureFlag
+                          (applyCoverage
+                            (haskellPackagesNew.callCabal2nix
+                              "dhall"
+                              (pkgsNew.sdist ../dhall)
+                              { }
+                            )
                           )
+                          # The test suite's CORS/remote-import tests require
+                          # internet access, which is unavailable in a sandboxed
+                          # Nix build. Disable them so the check phase is hermetic.
+                          [ "-f-network-tests" ]
                         ).overrideAttrs (old: { XDG_CACHE_HOME=".cache"; });
 
                     dhall-no-http =

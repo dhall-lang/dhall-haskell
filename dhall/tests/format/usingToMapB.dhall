@@ -1,1 +1,1 @@
-https://httpbin.org/headers using (toMap { TOKEN = "AAAA" }) as Text
+http://example.com/ using (toMap { TOKEN = "AAAA" }) as Text
