@@ -1,0 +1,21 @@
+resolver: lts-24.29
+packages:
+  - dhall-test-server
+  - dhall
+  - dhall-bash
+  - dhall-csv
+  - dhall-docs
+  - dhall-json
+  - dhall-lsp-server
+  # - dhall-nix
+  - dhall-openapi
+  - dhall-toml
+  - dhall-yaml
+nix:
+  packages:
+    - ncurses
+    - zlib
+flags:
+  # https://github.com/RyanGlScott/mintty/issues/4
+  mintty:
+    Win32-2-13-1: false

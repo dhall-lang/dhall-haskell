@@ -164,7 +164,7 @@ data Mode
     | Encode { file :: Input, json :: Bool }
     | Decode { file :: Input, json :: Bool, quiet :: Bool }
     | Text { file :: Input, output :: Output }
-    | DirectoryTree { allowSeparators :: Bool, file :: Input, path :: FilePath }
+    | DirectoryTree { directoryTreeOptions :: DirectoryTree.DirectoryTreeOptions, file :: Input, path :: FilePath }
     | Schemas { file :: Input, outputMode :: OutputMode, schemas :: Text }
     | SyntaxTree { file :: Input, noted :: Bool }
     | Package
@@ -278,7 +278,7 @@ parseMode =
             Generate
             "to-directory-tree"
             "Convert nested records of Text literals into a directory tree"
-            (DirectoryTree <$> parseDirectoryTreeAllowSeparators <*> parseFile <*> parseDirectoryTreeOutput)
+            (DirectoryTree <$> parseDirectoryTreeOptions <*> parseFile <*> parseDirectoryTreeOutput)
     <|> subcommand
             Interpret
             "resolve"
@@ -547,8 +547,16 @@ parseMode =
             <>  Options.Applicative.metavar "EXPR"
             )
 
-    parseDirectoryTreeAllowSeparators =
-        Options.Applicative.switch
+    parseDirectoryTreeOptions = DirectoryTree.DirectoryTreeOptions
+        <$> Options.Applicative.switch
+            (   Options.Applicative.long "allow-absolute-paths"
+            <>  Options.Applicative.help "Whether to allow absolute file paths"
+            )
+        <*> Options.Applicative.switch
+            (   Options.Applicative.long "allow-parent-directory"
+            <>  Options.Applicative.help "Whether to allow references to the parent directory (\"..\") in file paths"
+            )
+        <*> Options.Applicative.switch
             (   Options.Applicative.long "allow-path-separators"
             <>  Options.Applicative.help "Whether to allow path separators in file names"
             )
@@ -1044,7 +1052,7 @@ command (Options {..}) = do
 
             let normalizedExpression = Dhall.Core.normalize resolvedExpression
 
-            DirectoryTree.toDirectoryTree allowSeparators path normalizedExpression
+            DirectoryTree.toDirectoryTree directoryTreeOptions path normalizedExpression
 
         Dhall.Main.Schemas{..} ->
             Dhall.Schemas.schemasCommand Dhall.Schemas.Schemas{ input = file, ..}

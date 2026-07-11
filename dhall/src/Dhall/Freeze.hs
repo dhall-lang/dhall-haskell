@@ -192,7 +192,7 @@ freezeImportWithSettings settings directory import_ = do
                         }
                 }
 
-    let status = Dhall.Import.emptyStatusWithManager (view Dhall.newManager settings) directory
+    let status = Dhall.emptyStatusWithSettings settings directory
 
     expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
@@ -256,7 +256,7 @@ freezeWithSettings settings outputMode transitivity0 inputs scope intent chosenC
                 InputFile file ->
                     System.FilePath.takeDirectory file
 
-        let status = Dhall.Import.emptyStatusWithManager (view Dhall.newManager settings) directory
+        let status = Dhall.emptyStatusWithSettings settings directory
 
         (inputName, originalText, transitivity) <- case input of
             InputFile file -> do
