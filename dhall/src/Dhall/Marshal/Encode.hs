@@ -944,6 +944,7 @@ encodeFieldWith name encodeType = RecordEncoder $ Dhall.Map.singleton name encod
 data Status = Queued Natural
             | Result Text
             | Errored Text
+            | Unreachable
 :}
 
     And assume that we have the following Dhall union that we would like to
@@ -952,6 +953,7 @@ data Status = Queued Natural
 > < Result : Text
 > | Queued : Natural
 > | Errored : Text
+> | Unreachable
 > >.Result "Finish successfully"
 
     Our encoder has type 'Encoder' @Status@, but we can't build that out of any
@@ -964,11 +966,13 @@ injectStatus = adapt >$< unionEncoder
   (   encodeConstructorWith "Queued"  inject
   >|< encodeConstructorWith "Result"  inject
   >|< encodeConstructorWith "Errored" inject
+  >|< encodeConstructorWith "Unreachable" inject
   )
   where
     adapt (Queued  n) = Left n
     adapt (Result  t) = Right (Left t)
-    adapt (Errored e) = Right (Right e)
+    adapt (Errored e) = Right (Right (Left e))
+    adapt Unreachable = Right (Right (Right ()))
 :}
 
     Or, since we are simply using the `ToDhall` instance to inject each branch, we could write
@@ -979,11 +983,13 @@ injectStatus = adapt >$< unionEncoder
   (   encodeConstructor "Queued"
   >|< encodeConstructor "Result"
   >|< encodeConstructor "Errored"
+  >|< encodeConstructor "Unreachable"
   )
   where
     adapt (Queued  n) = Left n
     adapt (Result  t) = Right (Left t)
-    adapt (Errored e) = Right (Right e)
+    adapt (Errored e) = Right (Right (Left e))
+    adapt Unreachable = Right (Right (Right ()))
 :}
 
 -}
