@@ -100,7 +100,7 @@ testHttpApp randomCounter request respond = do
 
     case mResponse of
         Just response -> respond response
-        Nothing ->
+        Nothing -> -- Custom APIs for specific tests.
             case (requestMethod request, pathInfo request) of
                 (methodGet, ["user-agent"]) -> do
                     let userAgent = lookup hUserAgent (requestHeaders request)
@@ -176,8 +176,8 @@ testHttpApp randomCounter request respond = do
                 _ -> respond response404
 
 -- The server responds to GET /tests/import/... requests by serving the
--- corresponding file from dhall/dhall-lang/tests/import/... . Files located in a
--- `cors` directory are served with an `Access-Control-Allow-Origin: *` header.
+-- corresponding file from dhall/dhall-lang/tests/import/... . All files
+-- are served with the header `Access-Control-Allow-Origin: *`.
 responseFromTestFixtures :: Request -> IO (Maybe Wai.Response)
 responseFromTestFixtures request
     | requestMethod request /= methodGet = pure Nothing
@@ -196,8 +196,7 @@ serveTestFixture shortPath = do
         Nothing -> pure Nothing
         Just path -> do
             body <- normalizeWindowsLineEndings <$> BS8.readFile path
-            let response = if (isCorsFixture shortPath) then corsText (Just "*") body else dhallText body
-            pure $ Just response
+            pure $ Just $ corsText (Just "*") body
  where
   resolveTestFixturePath :: FilePath -> IO (Maybe FilePath)
   resolveTestFixturePath shortPath =
@@ -205,9 +204,6 @@ serveTestFixture shortPath = do
         noRepoPrefixPath = Maybe.fromMaybe fullPath (List.stripPrefix "dhall/" fullPath)
         candidates = List.nub [fullPath, noRepoPrefixPath, ".." FilePath.</> fullPath, ".." FilePath.</> noRepoPrefixPath]
      in firstExistingPath candidates
-
-  isCorsFixture :: FilePath -> Bool
-  isCorsFixture shortPath = "cors" `elem` FilePath.splitDirectories shortPath
 
   -- Always return Unix line endings, even under Windows.
   normalizeWindowsLineEndings :: BS8.ByteString -> BS8.ByteString

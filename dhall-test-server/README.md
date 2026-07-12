@@ -1,19 +1,20 @@
 # dhall-test-server
 
-`dhall-test-server` is a tiny local HTTP/HTTPS server used by the `dhall` test suite to remove runtime dependencies on public services (`httpbin.org`, `test.dhall-lang.org`, and `raw.githubusercontent.com` fixtures).
+`dhall-test-server` implements the local HTTP/HTTPS server required by the `dhall` test suite.
 
-## Purpose
+The HTTP and HTTPS servers respond with identical APIs. The HTTPS server uses a self-signed certificate.
+The test suite configures the import system to accept self-signed certificates.
 
-The server exists to make CI and local test runs deterministic and offline-capable for the networking-related tests.
+The APIs include only GET requests and serve:
 
-It specifically supports tests for:
+- static files from `dhall/dhall-lang/tests/import/...`
+- routes with custom request headers and `User-Agent` handling
+- routes with specific CORS headers
+- routes with specific custom behavior
 
-- custom request headers and `User-Agent` handling,
-- transitive header forwarding,
-- CORS compliance checks in chained imports,
-- import caching behavior for a changing remote resource,
-- static remote fixture imports.
-
+When the server responds with a static text file, the file must be served with Unix newlines.
+All static files have Unix newlines. The server should not replace them with other (e.g., Windows) newlines. 
+ 
 ## Runtime model
 
 - `Dhall.Test.Server.withServers` starts both servers before tests and stops them afterwards.
