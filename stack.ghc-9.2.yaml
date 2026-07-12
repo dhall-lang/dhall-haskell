@@ -32,11 +32,7 @@ extra-deps:
   - turtle-1.6.2@sha256:75710c60388e572bc17cbb08a81cbb4537f2207f8dcf187e9b1928d1e0b023a6,5767
   - typerep-map-0.5.0.0
   - validation-selective-0.1.0.2
-  - crypton-connection-0.4.6@sha256:a3764a44de9f43b1e9f590009ebbea1401fc3911e3ba41ce4d9b93d9f2a8d22e,1599
-  - crypton-socks-0.6.2@sha256:19f8f9a8c1973905ec000ea431bb4454a9c437b80f1e5f5f83ff84b964c49885,2017
-  - crypton-x509-store-1.9.0@sha256:9746160b993c24c175e560e27051dfe4616c6413014712776f1297e2ca8bba8a,1700
-  - crypton-x509-system-1.9.0@sha256:ccdc92bf98d7693c63dc680ff665b6487a28a701003dbee6695a6dbd38244392,1539
-  - tls-2.4.3@sha256:b69bad4c980463bebe216e3b1f88443884daff19878e2fec45661358abdbe6e8,7391
+  - crypton-connection-0.3.1
 nix:
   packages:
     - ncurses

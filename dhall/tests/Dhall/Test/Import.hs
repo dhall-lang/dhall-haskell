@@ -103,11 +103,21 @@ successTest prefix = do
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
         let testTlsSettings =
+#if MIN_VERSION_crypton_connection(0,4,0)
+                Connection.TLSSettingsSimple
+                    { Connection.settingDisableCertificateValidation = True
+                    , Connection.settingDisableSession = False
+                    , Connection.settingUseServerName = True
+                    , Connection.settingClientSupported = TLS.defaultSupported
+                    }
+#else
                 Connection.TLSSettingsSimple
                     { Connection.settingDisableCertificateValidation = True
                     , Connection.settingDisableSession = False
                     , Connection.settingUseServerName = True
                     }
+#endif
+
         let httpManager =
                 HTTP.newManager
                     (HTTP.mkManagerSettings testTlsSettings Nothing)
