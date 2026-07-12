@@ -5,7 +5,7 @@
 The Web server responds on HTTP and HTTPS with identical endpoints.
 
 The HTTPS server uses a self-signed certificate.
-The test suite configures the import system to accept self-signed certificates.
+The test suite configures the import system to accept self-signed certificates: see [`Dhall/Test/Import.hs`](../dhall/tests/Dhall/Test/Import.hs).
 
 The APIs include only GET requests and serve:
 
