@@ -11,6 +11,8 @@ packages:
   - dhall-openapi
   - dhall-toml
   - dhall-yaml
+extra-deps:
+  - tls-2.2.0
 nix:
   packages:
     - ncurses

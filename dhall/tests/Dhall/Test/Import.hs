@@ -29,11 +29,7 @@ import qualified Network.Connection      as Connection
 import qualified Network.HTTP.Client     as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 #if MIN_VERSION_crypton_connection(0,4,0)
-#if MIN_VERSION_tls(2,2,0)
-import Network.TLS             (defaultSupported)
-#else
-import Network.TLS.Parameters  (defaultSupported)
-#endif
+import qualified Network.TLS             as TLS
 #endif
 #endif
 
@@ -112,7 +108,7 @@ successTest prefix = do
                     { Connection.settingDisableCertificateValidation = True
                     , Connection.settingDisableSession = False
                     , Connection.settingUseServerName = True
-                    , Connection.settingClientSupported = defaultSupported
+                    , Connection.settingClientSupported = TLS.defaultSupported
                     }
 #else
                 Connection.TLSSettingsSimple
