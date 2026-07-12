@@ -462,6 +462,10 @@ Test-Suite tasty
         tasty-silver                             < 3.4 ,
         temporary                 >= 1.2.1    && < 1.4 ,
         turtle                    >= 1.6      && < 1.7 ,
+    if impl(ghc >= 9.6)
+           build-depends: crypton-connection
+    else
+           build-depends: connection
     Default-Language: Haskell2010
 
 Test-Suite doctest
