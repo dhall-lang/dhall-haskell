@@ -32,7 +32,7 @@ extra-deps:
   - turtle-1.6.2@sha256:75710c60388e572bc17cbb08a81cbb4537f2207f8dcf187e9b1928d1e0b023a6,5767
   - typerep-map-0.5.0.0
   - validation-selective-0.1.0.2
-  - crypton-connection-0.3.1
+  - connection-0.3.1
 nix:
   packages:
     - ncurses
