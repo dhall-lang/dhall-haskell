@@ -443,7 +443,6 @@ Test-Suite tasty
         Other-Modules:
             Dhall.Test.TH
     Build-Depends:
-        crypton-connection                             ,
         dhall-test-server                               ,
         dhall                                          ,
         foldl                                    < 1.5 ,
