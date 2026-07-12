@@ -104,7 +104,7 @@ This is used by cache tests to verify that repeated imports in one evaluation us
 
 - `GET /cors/SelfImportAbsolute.dhall`
   - Header: `Access-Control-Allow-Origin: *`
-  - Body: `https://127.0.0.1:18080/cors/NoCORS.dhall`
+  - Body: `https://127.0.0.1:18443/cors/NoCORS.dhall`
 
 - `GET /cors/SelfImportRelative.dhall`
   - Header: `Access-Control-Allow-Origin: *`
@@ -120,7 +120,7 @@ This is used by cache tests to verify that repeated imports in one evaluation us
 
 ---
 
-### HTTP routes (`https://localhost:18443/...` and `https://127.0.0.1:18080/...`)
+### HTTP routes (`https://localhost:18443/...` and `https://127.0.0.1:18443/...`)
 
 ### User agent/httpbin-compatible subset
 
@@ -168,15 +168,15 @@ This is used by cache tests to verify that repeated imports in one evaluation us
 
 Each of these returns a Dhall import URL as plain text and also sets `Access-Control-Allow-Origin: *`:
 
-- `AllowedAll.dhall` -> `https://127.0.0.1:18080/cors/AllowedAll.dhall`
-- `OnlyGithub.dhall` -> `https://127.0.0.1:18080/cors/OnlyGithub.dhall`
-- `OnlySelf.dhall` -> `https://127.0.0.1:18080/cors/OnlySelf.dhall`
-- `OnlyOther.dhall` -> `https://127.0.0.1:18080/cors/OnlyOther.dhall`
-- `Empty.dhall` -> `https://127.0.0.1:18080/cors/Empty.dhall`
-- `NoCORS.dhall` -> `https://127.0.0.1:18080/cors/NoCORS.dhall`
-- `Null.dhall` -> `https://127.0.0.1:18080/cors/Null.dhall`
-- `SelfImportAbsolute.dhall` -> `https://127.0.0.1:18080/cors/SelfImportAbsolute.dhall`
-- `SelfImportRelative.dhall` -> `https://127.0.0.1:18080/cors/SelfImportRelative.dhall`
+- `AllowedAll.dhall` -> `https://127.0.0.1:18443/cors/AllowedAll.dhall`
+- `OnlyGithub.dhall` -> `https://127.0.0.1:18443/cors/OnlyGithub.dhall`
+- `OnlySelf.dhall` -> `https://127.0.0.1:18443/cors/OnlySelf.dhall`
+- `OnlyOther.dhall` -> `https://127.0.0.1:18443/cors/OnlyOther.dhall`
+- `Empty.dhall` -> `https://127.0.0.1:18443/cors/Empty.dhall`
+- `NoCORS.dhall` -> `https://127.0.0.1:18443/cors/NoCORS.dhall`
+- `Null.dhall` -> `https://127.0.0.1:18443/cors/Null.dhall`
+- `SelfImportAbsolute.dhall` -> `https://127.0.0.1:18443/cors/SelfImportAbsolute.dhall`
+- `SelfImportRelative.dhall` -> `https://127.0.0.1:18443/cors/SelfImportRelative.dhall`
 
 ### CORS value/import endpoints (`/cors/...`)
 
@@ -185,7 +185,7 @@ Each of these returns a Dhall import URL as plain text and also sets `Access-Con
   - Body: `42`
 
 - `GET /cors/OnlySelf.dhall`
-  - Header: `Access-Control-Allow-Origin: https://127.0.0.1:18080`
+  - Header: `Access-Control-Allow-Origin: https://127.0.0.1:18443`
   - Body: `42`
 
 - `GET /cors/OnlyOther.dhall`
@@ -210,7 +210,7 @@ Each of these returns a Dhall import URL as plain text and also sets `Access-Con
 
 - `GET /cors/SelfImportAbsolute.dhall`
   - Header: `Access-Control-Allow-Origin: *`
-  - Body: `https://127.0.0.1:18080/cors/NoCORS.dhall`
+  - Body: `https://127.0.0.1:18443/cors/NoCORS.dhall`
 
 - `GET /cors/SelfImportRelative.dhall`
   - Header: `Access-Control-Allow-Origin: *`

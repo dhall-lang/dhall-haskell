@@ -144,7 +144,7 @@ testHttpApp randomCounter request respond = do
                     respond (corsText (Just "*") "42")
 
                 (methodGet, ["cors", "OnlySelf.dhall"]) ->
-                    respond (corsText (Just "https://127.0.0.1:18080") "42")
+                    respond (corsText (Just "https://127.0.0.1:18443") "42")
 
                 (methodGet, ["cors", "OnlyOther.dhall"]) ->
                     respond (corsText (Just "https://localhost:28080") "42")
@@ -162,7 +162,7 @@ testHttpApp randomCounter request respond = do
                     respond (corsText (Just "null") "42")
 
                 (methodGet, ["cors", "SelfImportAbsolute.dhall"]) ->
-                    respond (corsText (Just "*") "https://127.0.0.1:18080/cors/NoCORS.dhall")
+                    respond (corsText (Just "*") "https://127.0.0.1:18443/cors/NoCORS.dhall")
 
                 (methodGet, ["cors", "SelfImportRelative.dhall"]) ->
                     respond (corsText (Just "*") "./NoCORS.dhall")

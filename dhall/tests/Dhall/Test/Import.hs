@@ -25,8 +25,12 @@ import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+import qualified Network.Connection      as Connection
 import qualified Network.HTTP.Client     as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
+#if MIN_VERSION_crypton_connection(0,4,0)
+import qualified Network.TLS             as TLS
+#endif
 #endif
 
 
@@ -98,9 +102,25 @@ successTest prefix = do
         let originalCache = "dhall-lang/tests/import/cache"
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+        let testTlsSettings =
+#if MIN_VERSION_crypton_connection(0,4,0)
+                Connection.TLSSettingsSimple
+                    { Connection.settingDisableCertificateValidation = True
+                    , Connection.settingDisableSession = False
+                    , Connection.settingUseServerName = True
+                    , Connection.settingClientSupported = TLS.defaultSupported
+                    }
+#else
+                Connection.TLSSettingsSimple
+                    { Connection.settingDisableCertificateValidation = True
+                    , Connection.settingDisableSession = False
+                    , Connection.settingUseServerName = True
+                    }
+#endif
+
         let httpManager =
                 HTTP.newManager
-                    HTTP.tlsManagerSettings
+                    (HTTP.mkManagerSettings testTlsSettings Nothing)
                         { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
 
         let status =

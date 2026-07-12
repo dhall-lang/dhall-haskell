@@ -239,23 +239,23 @@ mockRemote url@URL{ authority = "localhost:18080", path, headers } =
         (File (Directory ["tests", "import", "data"]) "simpleLocation.dhall", _) ->
             return "./simple.dhall as Location"
         (File (Directory ["tests", "import", "data", "cors"]) "AllowedAll.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/AllowedAll.dhall"
+            return "https://127.0.0.1:18443/cors/AllowedAll.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "OnlyGithub.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/OnlyGithub.dhall"
+            return "https://127.0.0.1:18443/cors/OnlyGithub.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "OnlySelf.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/OnlySelf.dhall"
+            return "https://127.0.0.1:18443/cors/OnlySelf.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "OnlyOther.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/OnlyOther.dhall"
+            return "https://127.0.0.1:18443/cors/OnlyOther.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "Empty.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/Empty.dhall"
+            return "https://127.0.0.1:18443/cors/Empty.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "NoCORS.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/NoCORS.dhall"
+            return "https://127.0.0.1:18443/cors/NoCORS.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "Null.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/Null.dhall"
+            return "https://127.0.0.1:18443/cors/Null.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "SelfImportAbsolute.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/SelfImportAbsolute.dhall"
+            return "https://127.0.0.1:18443/cors/SelfImportAbsolute.dhall"
         (File (Directory ["tests", "import", "data", "cors"]) "SelfImportRelative.dhall", _) ->
-            return "https://127.0.0.1:18080/cors/SelfImportRelative.dhall"
+            return "https://127.0.0.1:18443/cors/SelfImportRelative.dhall"
         (File (Directory ["tests", "import", "success"]) "customHeadersA.dhall", _) ->
             return "https://localhost:18443/user-agent using [ { mapKey = \"User-Agent\", mapValue = \"Dhall\" } ] as Text"
         (File (Directory ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation"]) "Canonicalize3A.dhall", _) ->
