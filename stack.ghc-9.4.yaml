@@ -22,6 +22,7 @@ extra-deps:
   - microlens-0.4.14.0@sha256:1061edc3fa96fa868692891d6e0a0e198a2983a3d154a7a0ce4a708c1c3f652f,4722
   - tomland-1.3.3.2@sha256:8dd15cd2e8178a9bc3c3db4ef53e706e36ee093417a98b1d26131524629c3c07,9483
   - validation-selective-0.2.0.0@sha256:cc847f1a110e3b1bd437a5356f115881b61cafcb11781b570b180efd88bf0907,3917
+  - crypton-connection-0.4.6@sha256:a3764a44de9f43b1e9f590009ebbea1401fc3911e3ba41ce4d9b93d9f2a8d22e,1599
 nix:
   packages:
     - ncurses

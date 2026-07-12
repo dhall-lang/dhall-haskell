@@ -6,7 +6,7 @@ module Dhall.Test.Server
 
 import Control.Exception        (bracket, throwIO)
 import Data.IORef               (IORef, atomicModifyIORef', newIORef)
-import Network.HTTP.Types       (hContentType, hUserAgent, methodGet, status200, status404)
+import Network.HTTP.Types       (hContentType, hUserAgent, methodGet, status200, status403, status404)
 import Network.Wai              (Application, Request (..), responseLBS)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setHost, setPort)
 import Network.Wai.Handler.WarpTLS  (runTLS, tlsSettings)
@@ -111,34 +111,11 @@ testHttpApp randomCounter request respond = do
                     let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
                     respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
 
-                (methodGet, ["foo", "..", "random-string"]) -> do
-                    n <- nextRandomCounter randomCounter
-                    let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
-                    respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
-
                 (methodGet, ["foo"]) ->
-                    if hasExampleTestHeader request then respond (dhallText "./bar") else respond response404
+                    if hasExampleTestHeader request then respond (dhallText "./bar") else respond response403
 
                 (methodGet, ["bar"]) ->
-                    if hasExampleTestHeader request then respond (dhallText "True") else respond response404
-
-                (methodGet, ["Prelude", "List", "length"]) ->
-                    respond (corsText (Just "*") "List/length")
-
-                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "Canonicalize3A.dhall"]) ->
-                    respond (dhallText "./../bar/import.dhall as Location")
-
-                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "Canonicalize5A.dhall"]) ->
-                    respond (dhallText "./foo/../../bar/import.dhall as Location")
-
-                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "MissingA.dhall"]) ->
-                    respond (dhallText "missing as Location")
-
-                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "asLocation", "EnvA.dhall"]) ->
-                    respond (dhallText "env:HOME as Location")
-
-                (methodGet, ["nadrieril", "dhall", "tests", "import", "success", "unit", "bar", "import.dhall"]) ->
-                    respond (dhallText "2")
+                    if hasExampleTestHeader request then respond (dhallText "True") else respond response403
 
                 (methodGet, ["cors", "AllowedAll.dhall"]) ->
                     respond (corsText (Just "*") "42")
@@ -247,6 +224,9 @@ corsText mOrigin body =
 
 dhallText :: BS8.ByteString -> Wai.Response
 dhallText = responseLBS status200 [(hContentType, "text/plain")] . ByteString.Lazy.fromStrict
+
+response403 :: Wai.Response
+response403 = responseLBS status403 [(hContentType, "text/plain")] "Forbidden\n"
 
 response404 :: Wai.Response
 response404 = responseLBS status404 [(hContentType, "text/plain")] "Not Found\n"
