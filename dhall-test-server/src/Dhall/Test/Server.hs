@@ -50,11 +50,12 @@ withServers action = do
   where
     start actualCertPath actualKeyPath = do
         randomCounter <- newIORef 0
+        -- Both http and https APIs are identical, for simplicity.
         httpReady <- Concurrent.newEmptyMVar
         httpsReady <- Concurrent.newEmptyMVar
 
         httpThread <- Async.async (runHttpServer httpReady (testHttpApp randomCounter))
-        httpsThread <- Async.async (runHttpsServer actualCertPath actualKeyPath httpsReady (testHttpsApp randomCounter))
+        httpsThread <- Async.async (runHttpsServer actualCertPath actualKeyPath httpsReady (testHttpApp randomCounter))
 
         Concurrent.takeMVar httpReady
         Concurrent.takeMVar httpsReady
@@ -92,41 +93,6 @@ resolveCertAndKeyPaths = do
             if fallbackCertExists && fallbackKeyExists
                 then pure (fallbackCertPath, fallbackKeyPath)
                 else throwIO (mkIOError userErrorType "Missing TLS certificate files under dhall-test-server/cert" Nothing Nothing)
-
-testHttpsApp :: IORef Int -> Application
-testHttpsApp randomCounter request respond = do
-    mResponse <- responseFromTestFixtures request
-
-    case mResponse of
-        Just response -> respond response
-        Nothing ->
-            case (requestMethod request, pathInfo request) of
-                (methodGet, ["user-agent"]) -> do
-                    let userAgent = lookup hUserAgent (requestHeaders request)
-                    respond (responseLBS status200 [(hContentType, "application/json")] (ByteString.Lazy.fromStrict (userAgentResponse userAgent)))
-
-                (methodGet, ["random-string"]) -> do
-                    n <- nextRandomCounter randomCounter
-                    let body = "dhall-test-random-string-" <> BS8.pack (show n) <> "\n"
-                    respond (responseLBS status200 [(hContentType, "text/plain")] (ByteString.Lazy.fromStrict body))
-
-                (methodGet, ["foo"]) ->
-                    if hasExampleTestHeader request then respond (dhallText "./bar") else respond response404
-
-                (methodGet, ["bar"]) ->
-                    if hasExampleTestHeader request then respond (dhallText "True") else respond response404
-
-                (methodGet, ["cors", "AllowedAll.dhall"]) -> respond (corsText (Just "*") "42")
-                (methodGet, ["cors", "OnlyOther.dhall"]) -> respond (corsText (Just "http://localhost:28080") "42")
-                (methodGet, ["cors", "Empty.dhall"]) -> respond (corsText (Just "") "42")
-                (methodGet, ["cors", "NoCORS.dhall"]) -> respond (corsText Nothing "42")
-                (methodGet, ["cors", "Null.dhall"]) -> respond (corsText (Just "null") "42")
-                (methodGet, ["cors", "SelfImportAbsolute.dhall"]) -> respond (corsText (Just "*") "http://127.0.0.1:18080/cors/NoCORS.dhall")
-                (methodGet, ["cors", "SelfImportRelative.dhall"]) -> respond (corsText (Just "*") "./NoCORS.dhall")
-                (methodGet, ["cors", "TwoHopsFail.dhall"]) -> respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlySelf.dhall")
-                (methodGet, ["cors", "TwoHopsSuccess.dhall"]) -> respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlyGithub.dhall")
-
-                _ -> respond response404
 
 testHttpApp :: IORef Int -> Application
 testHttpApp randomCounter request respond = do
@@ -178,13 +144,13 @@ testHttpApp randomCounter request respond = do
                     respond (corsText (Just "*") "42")
 
                 (methodGet, ["cors", "OnlySelf.dhall"]) ->
-                    respond (corsText (Just "http://127.0.0.1:18080") "42")
+                    respond (corsText (Just "https://127.0.0.1:18080") "42")
 
                 (methodGet, ["cors", "OnlyOther.dhall"]) ->
-                    respond (corsText (Just "http://localhost:28080") "42")
+                    respond (corsText (Just "https://localhost:28080") "42")
 
                 (methodGet, ["cors", "OnlyGithub.dhall"]) ->
-                    respond (corsText (Just "http://localhost:18080") "42")
+                    respond (corsText (Just "https://localhost:18443") "42")
 
                 (methodGet, ["cors", "Empty.dhall"]) ->
                     respond (corsText (Just "") "42")
@@ -196,96 +162,66 @@ testHttpApp randomCounter request respond = do
                     respond (corsText (Just "null") "42")
 
                 (methodGet, ["cors", "SelfImportAbsolute.dhall"]) ->
-                    respond (corsText (Just "*") "http://127.0.0.1:18080/cors/NoCORS.dhall")
+                    respond (corsText (Just "*") "https://127.0.0.1:18080/cors/NoCORS.dhall")
 
                 (methodGet, ["cors", "SelfImportRelative.dhall"]) ->
                     respond (corsText (Just "*") "./NoCORS.dhall")
 
                 (methodGet, ["cors", "TwoHopsFail.dhall"]) ->
-                    respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlySelf.dhall")
+                    respond (corsText (Just "*") "https://localhost:18443/tests/import/data/cors/OnlySelf.dhall")
 
                 (methodGet, ["cors", "TwoHopsSuccess.dhall"]) ->
-                    respond (corsText (Just "*") "http://localhost:18080/tests/import/data/cors/OnlyGithub.dhall")
+                    respond (corsText (Just "*") "https://localhost:18443/tests/import/data/cors/OnlyGithub.dhall")
 
                 _ -> respond response404
 
-type TestFixture = (FilePath, Bool) -- The Bool shows whether we need CORS information (which will be always "allow-origin *").
-
--- The server will respond to GET /tests/... requests by serving the corresponding test fixture files.
-testFixtures :: [TestFixture]
-testFixtures =
-    [ ("tests/import/data/example.txt", False)
-    , ("tests/import/data/simple.dhall", False)
-    , ("tests/import/data/cors/Prelude.dhall", False)
-    , ("tests/import/data/simpleLocation.dhall", False)
-    , ("tests/import/success/customHeadersA.dhall", False)
-    , ("tests/import/data/referentiallyOpaque.dhall", False)
-    , ("tests/import/data/cors/AllowedAll.dhall", True)
-    , ("tests/import/data/cors/OnlyGithub.dhall", True)
-    , ("tests/import/data/cors/OnlySelf.dhall", True)
-    , ("tests/import/data/cors/OnlyOther.dhall", True)
-    , ("tests/import/data/cors/Empty.dhall", True)
-    , ("tests/import/data/cors/NoCORS.dhall", True)
-    , ("tests/import/data/cors/Null.dhall", True)
-    , ("tests/import/data/cors/SelfImportAbsolute.dhall", True)
-    , ("tests/import/data/cors/SelfImportRelative.dhall", True)
-    ]
-
+-- The server responds to GET /tests/import/... requests by serving the
+-- corresponding file from dhall/dhall-lang/tests/import/... . Files located in a
+-- `cors` directory are served with an `Access-Control-Allow-Origin: *` header.
 responseFromTestFixtures :: Request -> IO (Maybe Wai.Response)
 responseFromTestFixtures request
     | requestMethod request /= methodGet = pure Nothing
     | otherwise =
-        case lookup (pathInfo request) testFixtureRoutes of
-            Nothing -> pure Nothing
-            Just makeResponse -> Just <$> makeResponse
+        case pathInfo request of
+            ("tests" : "import" : rest) -> do
+                let shortPath = "tests" FilePath.</> "import" FilePath.</> FilePath.joinPath (fmap Text.unpack rest)
+                mResponse <- serveTestFixture shortPath
+                pure (Just (Maybe.fromMaybe response404 mResponse))
+            _ -> pure Nothing
 
-testFixtureRoutes :: [([Text.Text], IO Wai.Response)]
-testFixtureRoutes = fmap toRoute testFixtures
-  where
-    toRoute (shortPath, useCorsHeader) =
-        let (urlSegments, _) = testsPathInfo shortPath
-         in (urlSegments, testFixtureResponse shortPath useCorsHeader)
-
-testsPathInfo :: FilePath -> ([Text.Text], FilePath)
-testsPathInfo shortPath =
-    (Text.splitOn "/" (Text.pack shortPath), "dhall/dhall-lang" FilePath.</> shortPath)
-
-testFixtureResponse :: FilePath -> Bool -> IO Wai.Response
-testFixtureResponse shortPath useCorsHeader = do
-    body <- readTestFixtureFile shortPath
-    pure
-        (if useCorsHeader
-            then corsText (Just "*") body
-            else dhallText body
-        )
-
-readTestFixtureFile :: FilePath -> IO BS8.ByteString
-readTestFixtureFile shortPath = do
-    let (_, fullPath) = testsPathInfo shortPath
+serveTestFixture :: FilePath -> IO (Maybe Wai.Response)
+serveTestFixture shortPath = do
+    mFixturePath <- resolveTestFixturePath shortPath
+    case mFixturePath of
+        Nothing -> pure Nothing
+        Just path -> do
+            body <- normalizeWindowsLineEndings <$> BS8.readFile path
+            let response = if (isCorsFixture shortPath) then corsText (Just "*") body else dhallText body
+            pure $ Just response
+ where
+  resolveTestFixturePath :: FilePath -> IO (Maybe FilePath)
+  resolveTestFixturePath shortPath =
+    let fullPath = "dhall/dhall-lang" FilePath.</> shortPath
         noRepoPrefixPath = Maybe.fromMaybe fullPath (List.stripPrefix "dhall/" fullPath)
         candidates = List.nub [fullPath, noRepoPrefixPath, ".." FilePath.</> fullPath, ".." FilePath.</> noRepoPrefixPath]
+     in firstExistingPath candidates
 
-    mResolved <- firstExistingPath candidates
+  isCorsFixture :: FilePath -> Bool
+  isCorsFixture shortPath = "cors" `elem` FilePath.splitDirectories shortPath
 
-    case mResolved of
-        Just path -> normalizeWindowsLineEndings <$> BS8.readFile path
-        Nothing -> throwIO (mkIOError userErrorType ("Missing test fixture file: " <> fullPath) Nothing Nothing)
+  -- Always return Unix line endings, even under Windows.
+  normalizeWindowsLineEndings :: BS8.ByteString -> BS8.ByteString
+  normalizeWindowsLineEndings = BS8.intercalate "\n" . fmap stripTrailingCarriageReturn . BS8.split '\n'
 
--- Always return Unix line endings, even under Windows.
-normalizeWindowsLineEndings :: BS8.ByteString -> BS8.ByteString
-normalizeWindowsLineEndings = BS8.intercalate "\n" . fmap stripTrailingCarriageReturn . BS8.split '\n'
-  where
-    stripTrailingCarriageReturn line
+  stripTrailingCarriageReturn line
         | not (BS8.null line) && BS8.last line == '\r' = BS8.init line
         | otherwise = line
 
-firstExistingPath :: [FilePath] -> IO (Maybe FilePath)
-firstExistingPath [] = pure Nothing
-firstExistingPath (path : paths) = do
+  firstExistingPath :: [FilePath] -> IO (Maybe FilePath)
+  firstExistingPath [] = pure Nothing
+  firstExistingPath (path : paths) = do
     exists <- doesFileExist path
-    if exists
-        then pure (Just path)
-        else firstExistingPath paths
+    if exists then pure (Just path) else firstExistingPath paths
 
 nextRandomCounter :: IORef Int -> IO Int
 nextRandomCounter ref =

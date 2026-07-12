@@ -95,7 +95,7 @@ main = do
     -- https://github.com/feuerbach/tasty/issues/273#issuecomment-657054281
     System.Environment.setEnv "TASTY_HIDE_SUCCESSES" "true"
 
-    System.Environment.setEnv "CURL_CA_BUNDLE" "./dhall-test-server/cert/cert.pem"
+    System.Environment.setEnv "SSL_CERT_FILE" "./dhall-test-server/cert/cert.pem"
 
     Dhall.Test.Server.withServers $ do
         allTests <- getAllTests
