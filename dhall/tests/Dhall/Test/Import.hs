@@ -28,9 +28,9 @@ import qualified Turtle
 import qualified Network.Connection      as Connection
 import qualified Network.HTTP.Client     as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
-#if MIN_VERSION_crypton_connection(0,4,0)
-import qualified Network.TLS             as TLS
-#endif
+-- #if MIN_VERSION_crypton_connection(0,4,0)
+import Network.TLS             (Supported(..))
+-- #endif
 #endif
 
 
@@ -104,11 +104,13 @@ successTest prefix = do
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
         let testTlsSettings =
 #if MIN_VERSION_crypton_connection(0,4,0)
-                Connection.TLSSettingsSimple
+                let defaultSupported :: Supported
+                    defaultSupported = def
+                in Connection.TLSSettingsSimple
                     { Connection.settingDisableCertificateValidation = True
                     , Connection.settingDisableSession = False
                     , Connection.settingUseServerName = True
-                    , Connection.settingClientSupported = TLS.defaultSupported
+                    , Connection.settingClientSupported = defaultSupported
                     }
 #else
                 Connection.TLSSettingsSimple
