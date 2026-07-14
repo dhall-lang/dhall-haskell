@@ -7,7 +7,9 @@ module Dhall.Test.Import where
 import Control.Exception (SomeException)
 import Data.Text         (Text)
 import Data.Void         (Void)
+#if __GLASGOW_HASKELL__ >= 908
 import Data.Default      (def)
+#endif
 import System.FilePath   ((</>))
 import Test.Tasty        (TestTree)
 
@@ -29,9 +31,9 @@ import qualified Turtle
 import qualified Network.Connection      as Connection
 import qualified Network.HTTP.Client     as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
--- #if MIN_VERSION_crypton_connection(0,4,0)
+#if __GLASGOW_HASKELL__ >= 908
 import Network.TLS             (Supported(..))
--- #endif
+#endif
 #endif
 
 
