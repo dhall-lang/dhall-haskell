@@ -1213,8 +1213,6 @@ loadWith expr₀ = case expr₀ of
         then return ()
         else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
 
-    let _stack' = NonEmpty.cons child _stack
-
     if child `elem` _stack
         then throwMissingImport (Imported _stack (Cycle import₀))
         else return ()
