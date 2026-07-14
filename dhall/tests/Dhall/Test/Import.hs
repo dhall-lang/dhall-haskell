@@ -7,6 +7,9 @@ module Dhall.Test.Import where
 import Control.Exception (SomeException)
 import Data.Text         (Text)
 import Data.Void         (Void)
+#if __GLASGOW_HASKELL__ >= 908
+import Data.Default      (def)
+#endif
 import System.FilePath   ((</>))
 import Test.Tasty        (TestTree)
 
@@ -25,8 +28,12 @@ import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+import qualified Network.Connection      as Connection
 import qualified Network.HTTP.Client     as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
+#if __GLASGOW_HASKELL__ >= 908
+import Network.TLS             (Supported(..))
+#endif
 #endif
 
 
@@ -98,9 +105,35 @@ successTest prefix = do
         let originalCache = "dhall-lang/tests/import/cache"
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+        let testTlsSettings =
+#if __GLASGOW_HASKELL__ >= 906
+#if MIN_VERSION_crypton_connection(0,4,0)
+                let defaultSupported :: Supported
+                    defaultSupported = def
+                in Connection.TLSSettingsSimple
+                    { Connection.settingDisableCertificateValidation = True
+                    , Connection.settingDisableSession = False
+                    , Connection.settingUseServerName = True
+                    , Connection.settingClientSupported = defaultSupported
+                    }
+#else
+                Connection.TLSSettingsSimple
+                    { Connection.settingDisableCertificateValidation = True
+                    , Connection.settingDisableSession = False
+                    , Connection.settingUseServerName = True
+                    }
+#endif
+#else
+                Connection.TLSSettingsSimple
+                    { Connection.settingDisableCertificateValidation = True
+                    , Connection.settingDisableSession = False
+                    , Connection.settingUseServerName = True
+                    }
+#endif
+
         let httpManager =
                 HTTP.newManager
-                    HTTP.tlsManagerSettings
+                    (HTTP.mkManagerSettings testTlsSettings Nothing)
                         { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
 
         let status =
