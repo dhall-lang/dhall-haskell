@@ -7,6 +7,7 @@ module Dhall.Test.Import where
 import Control.Exception (SomeException)
 import Data.Text         (Text)
 import Data.Void         (Void)
+import Data.Default      (def)
 import System.FilePath   ((</>))
 import Test.Tasty        (TestTree)
 

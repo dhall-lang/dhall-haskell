@@ -445,6 +445,7 @@ Test-Suite tasty
     Build-Depends:
         dhall-test-server                               ,
         dhall                                          ,
+        data-default                                   ,
         foldl                                    < 1.5 ,
         generic-random            >= 1.3.0.0  && < 1.6 ,
         http-client                                    ,
