@@ -1252,7 +1252,7 @@ loadWith expr₀ = case expr₀ of
               -- and the right side succeeded
               -- populate the semantic cache.
               case Core.shallowDenote a of
-                Embed (Import (ImportHashed (Just h) _) _) -> do
+                Embed (Import (ImportHashed (Just h) Missing) _) -> do
                     Status { _reportWarning } <- State.get
 
                     let bytes = encodeExpression (Core.alphaNormalize (Core.denote result))
