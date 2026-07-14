@@ -104,6 +104,7 @@ successTest prefix = do
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
         let testTlsSettings =
+#if __GLASGOW_HASKELL__ >= 906
 #if MIN_VERSION_crypton_connection(0,4,0)
                 let defaultSupported :: Supported
                     defaultSupported = def
@@ -113,6 +114,13 @@ successTest prefix = do
                     , Connection.settingUseServerName = True
                     , Connection.settingClientSupported = defaultSupported
                     }
+#else
+                Connection.TLSSettingsSimple
+                    { Connection.settingDisableCertificateValidation = True
+                    , Connection.settingDisableSession = False
+                    , Connection.settingUseServerName = True
+                    }
+#endif
 #else
                 Connection.TLSSettingsSimple
                     { Connection.settingDisableCertificateValidation = True
