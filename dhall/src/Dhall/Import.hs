@@ -1246,7 +1246,25 @@ loadWith expr₀ = case expr₀ of
           | any isNotResolutionError es₀ =
               throwM exception₀
           | otherwise = do
-              loadWith b `catch` handler₁
+              result <- loadWith b `catch` handler₁
+
+              -- If the left side was a frozen missing import
+              -- and the right side succeeded
+              -- populate the semantic cache.
+              case Core.shallowDenote a of
+                Embed (Import (ImportHashed (Just h) _) _) -> do
+                    Status { _reportWarning } <- State.get
+
+                    let bytes = encodeExpression (Core.alphaNormalize (Core.denote result))
+
+                    let actualHash = Dhall.Crypto.sha256Hash bytes
+
+                    if actualHash == h
+                        then zoom cacheWarning (writeToSemanticCache _reportWarning h bytes)
+                        else return ()
+                _ -> return ()
+
+              return result
         where
           handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
               | any isNotResolutionError es₁ =
