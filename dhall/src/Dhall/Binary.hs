@@ -1416,15 +1416,22 @@ instance Exception DecodingFailure
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
+errorByteShowLimit :: Int
+errorByteShowLimit = 1024
+
 instance Show DecodingFailure where
     show (CBORIsNotDhall bytes) =
             _ERROR <> ": Cannot decode CBOR to Dhall\n"
         <>  "\n"
         <>  "The following bytes do not encode a valid Dhall expression\n"
         <>  "\n"
-        <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack bytes) <> "\n"
+        <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack shownBytes) <> suffix
       where
         toHex = Printf.printf "%02x "
+        (shownBytes, rest) = Data.ByteString.Lazy.splitAt errorByteShowLimit bytes
+        suffix
+            | Data.ByteString.Lazy.null rest = "\n"
+            | otherwise = "... (truncated; showing first " <> show errorByteShowLimit <> " bytes)\n"
 
 replicateDecoder :: Int -> Decoder s a -> Decoder s [a]
 replicateDecoder n0 decoder = go n0 []
