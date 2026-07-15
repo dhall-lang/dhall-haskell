@@ -652,6 +652,7 @@ command (Options {..}) = do
                 [ Handler handleTypeError
                 , Handler handleImported
                 , Handler handleExitCode
+                , Handler handleAll
                 ]
           where
             handleAll e = do
