@@ -95,22 +95,6 @@ main = do
     -- https://github.com/feuerbach/tasty/issues/273#issuecomment-657054281
     System.Environment.setEnv "TASTY_HIDE_SUCCESSES" "true"
 
-    let certDirCandidates =
-            [ pwd </> ".." </> "dhall-test-server" </> "cert"
-            , pwd </> "dhall-test-server" </> "cert"
-            ]
-
-    certDirs <- traverse System.Directory.doesDirectoryExist certDirCandidates
-
-    let certDir =
-            case [ path | (path, True) <- zip certDirCandidates certDirs ] of
-                path : _ -> path
-                _        -> head certDirCandidates
-
-    -- The Haskell x509 unix backend reads this path to locate trusted roots
-    -- for TLS verification in tests.
-    System.Environment.setEnv "SYSTEM_CERTIFICATE_PATH" certDir
-
     Dhall.Test.Server.withServers $ do
         allTests <- getAllTests
 
