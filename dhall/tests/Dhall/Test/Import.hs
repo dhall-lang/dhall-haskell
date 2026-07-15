@@ -43,7 +43,7 @@ importDirectory = "./dhall-lang/tests/import"
 
 getTests :: IO TestTree
 getTests = do
-    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest $ (do
+    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
 
         return path )

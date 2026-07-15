@@ -28,7 +28,6 @@ import qualified Dhall.Test.Server
 import qualified GHC.IO.Encoding
 import qualified System.Directory
 import qualified System.Environment
-import qualified System.Info
 import qualified System.IO
 import qualified Test.Tasty
 
@@ -88,38 +87,13 @@ main = do
 
     pwd <- System.Directory.getCurrentDirectory
 
-    let isWindows = System.Info.os == "mingw32"
-
-    if isWindows
-        then do
-            maybeLocalAppData <- System.Environment.lookupEnv "LOCALAPPDATA"
-            case maybeLocalAppData of
-                Just localAppData -> System.Environment.setEnv "XDG_CACHE_HOME" localAppData
-                Nothing           -> return ()
-        else
-            System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
+    System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
 
     System.Environment.setEnv "DHALL_TEST_VAR" "6 * 7"
 
     -- Make test failures easier to find by eliding the successes.
     -- https://github.com/feuerbach/tasty/issues/273#issuecomment-657054281
     System.Environment.setEnv "TASTY_HIDE_SUCCESSES" "true"
-
-    let certDirCandidates =
-            [ pwd </> ".." </> "dhall-test-server" </> "cert"
-            , pwd </> "dhall-test-server" </> "cert"
-            ]
-
-    certDirs <- traverse System.Directory.doesDirectoryExist certDirCandidates
-
-    let certDir =
-            case [ path | (path, True) <- zip certDirCandidates certDirs ] of
-                path : _ -> path
-                _        -> head certDirCandidates
-
-    -- The Haskell x509 unix backend reads this path to locate trusted roots
-    -- for TLS verification in tests.
-    System.Environment.setEnv "SYSTEM_CERTIFICATE_PATH" certDir
 
     Dhall.Test.Server.withServers $ do
         allTests <- getAllTests
