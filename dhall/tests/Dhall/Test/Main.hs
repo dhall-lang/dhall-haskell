@@ -28,6 +28,7 @@ import qualified Dhall.Test.Server
 import qualified GHC.IO.Encoding
 import qualified System.Directory
 import qualified System.Environment
+import qualified System.Info
 import qualified System.IO
 import qualified Test.Tasty
 
@@ -87,7 +88,16 @@ main = do
 
     pwd <- System.Directory.getCurrentDirectory
 
-    System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
+    let isWindows = System.Info.os == "mingw32"
+
+    if isWindows
+        then do
+            maybeLocalAppData <- System.Environment.lookupEnv "LOCALAPPDATA"
+            case maybeLocalAppData of
+                Just localAppData -> System.Environment.setEnv "XDG_CACHE_HOME" localAppData
+                Nothing           -> return ()
+        else
+            System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
 
     System.Environment.setEnv "DHALL_TEST_VAR" "6 * 7"
 

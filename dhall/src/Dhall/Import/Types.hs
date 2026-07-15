@@ -35,6 +35,7 @@ import qualified Dhall.Context
 import qualified Dhall.Map          as Map
 import qualified Dhall.Substitution
 import qualified Dhall.Util
+import qualified System.Directory   as Directory
 
 -- | A fully \"chained\" import, i.e. if it contains a relative path that path
 --   is relative to the current directory. If it is a remote import with headers
@@ -135,6 +136,9 @@ data Status = Status
 
     , _reportWarning :: Text -> IO ()
     -- ^ Action to report warnings with (defaults to writing to stderr)
+
+    , _getHomeDirectory :: IO FilePath
+    -- ^ Action to get the home directory for resolving @~@ imports (special case for Windows tests)
     }
 
 -- | Initial `Status`, parameterised over the HTTP 'Manager',
@@ -168,6 +172,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _cacheWarning = CacheNotWarned
 
     _reportWarning = Dhall.Util.printWarning
+
+    _getHomeDirectory = Directory.getHomeDirectory
 
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)

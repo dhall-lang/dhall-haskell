@@ -468,14 +468,17 @@ makeHashMismatchMessage expectedHash actualHash =
 -- | Construct the file path corresponding to a local import. If the import is
 --   _relative_ then the resulting path is also relative.
 localToPath :: MonadIO io => FilePrefix -> File -> io FilePath
-localToPath prefix file_ = liftIO $ do
+localToPath = localToPathWith Directory.getHomeDirectory
+
+localToPathWith :: MonadIO io => IO FilePath -> FilePrefix -> File -> io FilePath
+localToPathWith getHomeDirectory prefix file_ = liftIO $ do
     let File {..} = file_
 
     let Directory {..} = directory
 
     prefixPath <- case prefix of
         Home ->
-            Directory.getHomeDirectory
+            getHomeDirectory
 
         Absolute ->
             return "/"
@@ -640,7 +643,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
 
     path <- case importType of
         Local prefix file -> liftIO $ do
-            path <- localToPath prefix file
+            path <- localToPathWith _getHomeDirectory prefix file
             absolutePath <- Directory.makeAbsolute path
             return absolutePath
         Remote url -> do
@@ -777,8 +780,8 @@ writeToSemisemanticCache report semisemanticHash bytes = do
 -- | Fetch source code directly from disk/network
 fetchFresh :: ImportType -> StateT Status IO Text
 fetchFresh (Local prefix file) = do
-    Status { _stack } <- State.get
-    path <- liftIO $ localToPath prefix file
+    Status { _stack, _getHomeDirectory } <- State.get
+    path <- liftIO $ localToPathWith _getHomeDirectory prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
         then liftIO $ Data.Text.IO.readFile path
@@ -802,8 +805,8 @@ fetchFresh Missing = throwM (MissingImports [])
 -- | Like `fetchFresh`, except for `Dhall.Syntax.Expr.Bytes`
 fetchBytes :: ImportType -> StateT Status IO ByteString
 fetchBytes (Local prefix file) = do
-    Status { _stack } <- State.get
-    path <- liftIO $ localToPath prefix file
+    Status { _stack, _getHomeDirectory } <- State.get
+    path <- liftIO $ localToPathWith _getHomeDirectory prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
         then liftIO $ Data.ByteString.readFile path
@@ -1376,8 +1379,10 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
         Code ->
             case importType (importHashed child) of
                 Local filePrefix file -> do
+                    let Status{ _getHomeDirectory } = status
+
                     let descend = liftIO $ do
-                            path <- localToPath filePrefix file
+                            path <- localToPathWith _getHomeDirectory filePrefix file
 
                             return (Just path)
 

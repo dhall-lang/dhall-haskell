@@ -21,6 +21,7 @@ import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
+import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
 import qualified System.IO.Temp                   as Temp
 import qualified Test.Tasty                       as Tasty
@@ -42,7 +43,7 @@ importDirectory = "./dhall-lang/tests/import"
 
 getTests :: IO TestTree
 getTests = do
-    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
+    successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest $ (do
         path <- Turtle.lstree (importDirectory </> "success")
 
         return path )
@@ -79,18 +80,7 @@ successTest prefix = do
 
     let directoryString = FilePath.takeDirectory inputPath
 
-    let expectedFailures =
-            [
-              -- Importing relative to the home directory works, but I'm too
-              -- lazy to mock the home directory for testing purposes
-              importDirectory </> "success/unit/ImportRelativeToHome"
-#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
-            , importDirectory </> "success/originHeadersImportFromEnv"
-            , importDirectory </> "success/originHeadersImport"
-            , importDirectory </> "success/originHeadersOverride"
-            , importDirectory </> "success/unit/asLocation/RemoteChainEnv"
-#endif
-            ]
+    let expectedFailures = []
 
     Test.Util.testCase prefix expectedFailures (do
 
@@ -102,11 +92,14 @@ successTest prefix = do
 
         expectedExpr <- Core.throws (Parser.exprFromText mempty expectedText)
 
+        homeDirectory <- Directory.makeAbsolute (importDirectory </> "home")
+
         let originalCache = "dhall-lang/tests/import/cache"
 
 #if defined(WITH_HTTP) && defined(NETWORK_TESTS)
         let testTlsSettings =
 #if __GLASGOW_HASKELL__ >= 906
+-- note: MIN_VERSION_crypton_connection is defined only if we are building with GHC 9.6 and later
 #if MIN_VERSION_crypton_connection(0,4,0)
                 let defaultSupported :: Supported
                     defaultSupported = def
@@ -146,7 +139,10 @@ successTest prefix = do
 #endif
 
         let status' =
-                status { Import._reportWarning = \_ -> return () }
+                status
+                    { Import._reportWarning = \_ -> return ()
+                    , Import._getHomeDirectory = pure homeDirectory
+                    }
 
         let load =
                 State.evalStateT
@@ -218,10 +214,16 @@ failureTest prefix = do
         actualExpr <- do
           Core.throws (Parser.exprFromText mempty (Test.Util.toDhallPath path))
 
+        homeDirectory <- Directory.makeAbsolute (importDirectory </> "home")
+
+        let status =
+                (Import.emptyStatus ".")
+                    { Import._getHomeDirectory = pure homeDirectory }
+
         let setup = Test.Util.managedTestEnvironment prefix
 
         let run = Exception.catch @SomeException
-              (Test.Util.load actualExpr >> return True)
+              (State.evalStateT (Test.Util.loadWith actualExpr) status >> return True)
               (\_ -> return False)
 
         succeeded <- Turtle.with setup (const run)
