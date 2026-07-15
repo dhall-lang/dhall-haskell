@@ -657,11 +657,7 @@ command (Options {..}) = do
           where
             handleAll e = do
                 let string = show (e :: SomeException)
-
-                if not (null string)
-                    then System.IO.hPutStrLn System.IO.stderr string
-                    else return ()
-
+                when (not (null string)) $ System.IO.hPutStrLn System.IO.stderr string
                 System.Exit.exitFailure
 
             handleTypeError e = Control.Exception.handle handleAll $ do
