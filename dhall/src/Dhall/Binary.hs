@@ -1416,9 +1416,6 @@ instance Exception DecodingFailure
 _ERROR :: String
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
-errorByteShowLimit :: Int
-errorByteShowLimit = 1024
-
 instance Show DecodingFailure where
     show (CBORIsNotDhall bytes) =
             _ERROR <> ": Cannot decode CBOR to Dhall\n"
@@ -1427,6 +1424,7 @@ instance Show DecodingFailure where
         <>  "\n"
         <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack shownBytes) <> suffix
       where
+        errorByteShowLimit = 1024
         toHex = Printf.printf "%02x "
         (shownBytes, rest) = Data.ByteString.Lazy.splitAt errorByteShowLimit bytes
         suffix
