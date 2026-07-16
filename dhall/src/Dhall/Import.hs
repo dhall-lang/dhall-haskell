@@ -1246,10 +1246,10 @@ loadWith expr₀ = case expr₀ of
           | otherwise = do
               result <- loadWith b `catch` handler₁
 
-              -- If the left side was a frozen missing import
+              -- If the left side was a frozen import
               -- and the right side succeeded
               -- populate the semantic cache.
-              case findMissingImportHash a of
+              case findImportHash a of
                 Just hash -> do
                     Status { _reportWarning } <- State.get
 
@@ -1264,9 +1264,9 @@ loadWith expr₀ = case expr₀ of
 
               return result
         where
-          findMissingImportHash expr = case Core.shallowDenote expr of
-            Embed (Import (ImportHashed (Just hash) Missing) _) -> Just hash
-            ImportAlt left _ -> findMissingImportHash left
+          findImportHash expr = case Core.shallowDenote expr of
+            Embed (Import (ImportHashed (Just hash) _) _) -> Just hash
+            ImportAlt left right -> findImportHash left <|> findImportHash right
             _ -> Nothing
 
           handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
