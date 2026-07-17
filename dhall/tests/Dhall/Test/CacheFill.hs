@@ -13,7 +13,6 @@ import qualified Dhall.Core             as Core
 import qualified Dhall.Import           as Import
 import qualified System.Directory       as Directory
 import qualified System.Environment     as Environment
-import qualified System.FilePath.Posix  as FilePath.Posix
 import qualified System.IO.Temp         as Temp
 import qualified Data.Text              as Text
 
@@ -33,9 +32,7 @@ cacheFillTest = Temp.withSystemTempDirectory "dhall-cache" $ \cacheDir -> do
 
     tempFile <- Temp.writeTempFile "." "tmp.dhall" (Text.unpack simpleValue)
 
-    -- normalise will ensure that the path uses slashes,
-    -- but will strip the leading ./ so we have to add it
-    let importPath = "./" <> Text.pack (FilePath.Posix.normalise tempFile)
+    let importPath = Text.replace "\\" "/" (Text.pack tempFile)
 
     let alwaysFailing = "missing"
 
