@@ -4,6 +4,7 @@ module Main where
 import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
+import qualified Dhall.Test.CacheFill
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Diff
 import qualified Dhall.Test.DirectoryTree
@@ -43,6 +44,8 @@ getAllTests = do
 
     importingTests <- Dhall.Test.Import.getTests
 
+    cacheFillTests <- Dhall.Test.CacheFill.getTests
+
     lintTests <- Dhall.Test.Lint.getTests
 
     tagsTests <- Dhall.Test.Tags.getTests
@@ -60,6 +63,7 @@ getAllTests = do
                 [ normalizationTests
                 , parsingTests
                 , importingTests
+                , cacheFillTests
                 , typeinferenceTests
                 , formattingTests
                 , lintTests

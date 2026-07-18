@@ -419,6 +419,7 @@ Test-Suite tasty
     Hs-Source-Dirs: tests
     Main-Is: Dhall/Test/Main.hs
     Other-Modules:
+        Dhall.Test.CacheFill
         Dhall.Test.Dhall
         Dhall.Test.Diff
         Dhall.Test.DirectoryTree
