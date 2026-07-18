@@ -1422,9 +1422,14 @@ instance Show DecodingFailure where
         <>  "\n"
         <>  "The following bytes do not encode a valid Dhall expression\n"
         <>  "\n"
-        <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack bytes) <> "\n"
+        <>  "↳ 0x" <> concatMap toHex (Data.ByteString.Lazy.unpack shownBytes) <> suffix
       where
+        errorByteShowLimit = 1024
         toHex = Printf.printf "%02x "
+        (shownBytes, rest) = Data.ByteString.Lazy.splitAt errorByteShowLimit bytes
+        suffix
+            | Data.ByteString.Lazy.null rest = "\n"
+            | otherwise = "... (truncated; showing first " <> show errorByteShowLimit <> " bytes)\n"
 
 replicateDecoder :: Int -> Decoder s a -> Decoder s [a]
 replicateDecoder n0 decoder = go n0 []
