@@ -581,6 +581,7 @@ cacheProductHash import_ = do
 data FrozenImportResolutionMode
     = PreserveHashedImports
     | InlineHashedImports
+  deriving (Eq, Ord)
 
 -- | Load an import from the 'semantic cache'. Defers to
 --   @loadImportWithSemisemanticCache@ for imports that aren't frozen (and
@@ -866,9 +867,32 @@ loadSourceChildArtifact child@(Chained import_) =
         RawText  -> liftImport child
         RawBytes -> liftImport child
         Location -> liftImport child
-        Code     -> loadSourceImportArtifact child
-        Source   -> loadSourceImportArtifact child
+        Code     -> sourceImport child
+        Source   -> sourceImport child
   where
+    sourceImport importChild = do
+        sourceArtifact <- loadSourceImportArtifact importChild
+
+        -- During the preserve pass we already parsed and resolved this
+        -- transitive import into a source artifact. Pre-fill the regular import
+        -- semantics cache from that artifact so that the later inlining pass can
+        -- reuse it without reparsing the same import.
+        prefillImportSemantics importChild sourceArtifact
+
+        return sourceArtifact
+
+    prefillImportSemantics importChild sourceArtifact = do
+        Status { _cache } <- State.get
+
+        case Dhall.Map.lookup importChild _cache of
+            Just _ ->
+                return ()
+
+            Nothing -> do
+                importSemantics <- finalizeSourceImport sourceArtifact
+
+                zoom cache (State.modify (Dhall.Map.insert importChild importSemantics))
+
     liftImport importChild = do
         ImportSemantics { importSemantics } <- loadImport importChild
 
@@ -880,16 +904,13 @@ loadSourceChild child@(Chained import_) =
         RawText  -> loadImport child
         RawBytes -> loadImport child
         Location -> loadImport child
-        Code
-            | Maybe.isJust (hash (importHashed import_)) ->
-                loadImport child
-            | otherwise ->
-                loadSourceImportArtifact child >>= finalizeSourceImport
-        Source
-            | Maybe.isJust (hash (importHashed import_)) ->
-                loadImport child
-            | otherwise ->
-                loadSourceImportArtifact child >>= finalizeSourceImport
+        -- During the inlining pass we need import-free semantics, not another
+        -- source-preserving artifact. Re-entering `loadSourceImportArtifact`
+        -- here introduces an extra Preserve/Inline round-trip per child.
+        -- `loadImport` already provides the required fully-resolved semantics
+        -- and reuses the in-memory cache.
+        Code     -> loadImport child
+        Source   -> loadImport child
 
 -- The semi-semantic hash of an expression is computed from the fully resolved
 -- AST (without normalising or type-checking it first). See
@@ -1558,62 +1579,30 @@ loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
               -- If the left side was a frozen import and the right side
               -- succeeded, opportunistically populate the semantic cache.
               case findImportHashAndMode a of
-                Just (expectedHash, expectedMode) -> do
-                    Status { _normalizer, _reportWarning, _semanticCacheMode } <- State.get
+                Just (expectedHash, expectedMode)
+                    | expectedMode == Source
+                    , frozenImportResolutionMode == PreserveHashedImports -> do
+                        if branchContainsSourceImport b
+                            then do
+                                Status { _reportWarning, _semanticCacheMode } <- State.get
 
-                    case _semanticCacheMode of
-                        IgnoreSemanticCache ->
-                            return ()
+                                case _semanticCacheMode of
+                                    IgnoreSemanticCache ->
+                                        return ()
 
-                        UseSemanticCache -> do
-                            let resultDenoted = Core.denote result
+                                    UseSemanticCache -> do
+                                        let bytes = encodeExpressionWithImports (Core.denote result)
 
-                            let maybeNormalizedBytes
-                                    | expectedMode == Source =
-                                        Nothing
+                                        let actualHash = Dhall.Crypto.sha256Hash bytes
 
-                                    | otherwise =
-                                        case traverse (\_ -> Nothing) resultDenoted of
-                                            Just importFreeExpr ->
-                                                let betaNormal =
-                                                        Core.normalizeWith _normalizer importFreeExpr
+                                        if actualHash == expectedHash
+                                            then zoom cacheWarning (writeToSemanticCache _reportWarning expectedHash bytes)
+                                            else return ()
+                            else
+                                return ()
 
-                                                    bytes =
-                                                        encodeExpression (Core.alphaNormalize betaNormal)
-
-                                                in  Just bytes
-
-                                            Nothing ->
-                                                Nothing
-
-                            let maybeBytes = case (frozenImportResolutionMode, expectedMode) of
-                                    -- In the source-preserving pass, `as Source`
-                                    -- hashes are computed from a non-normalized
-                                    -- expression that may still contain imports.
-                                    (PreserveHashedImports, Source) ->
-                                        Just (encodeExpressionWithImports resultDenoted)
-
-                                    -- Opportunistically cache ordinary frozen
-                                    -- imports as soon as the fallback branch is
-                                    -- import-free.
-                                    (PreserveHashedImports, _) ->
-                                        maybeNormalizedBytes
-
-                                    -- During inlining, only non-`Source` frozen
-                                    -- imports use normalized cache products.
-                                    (InlineHashedImports, _) ->
-                                        maybeNormalizedBytes
-
-                            case maybeBytes of
-                                Just bytes -> do
-                                    let actualHash = Dhall.Crypto.sha256Hash bytes
-
-                                    if actualHash == expectedHash
-                                        then zoom cacheWarning (writeToSemanticCache _reportWarning expectedHash bytes)
-                                        else return ()
-
-                                Nothing ->
-                                    return ()
+                Just _ ->
+                    return ()
 
                 Nothing ->
                     return ()
@@ -1624,6 +1613,14 @@ loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
             Embed (Import (ImportHashed (Just hash) _) mode) -> Just (hash, mode)
             ImportAlt left right -> findImportHashAndMode left <|> findImportHashAndMode right
             _ -> Nothing
+
+          branchContainsSourceImport expr = case Core.shallowDenote expr of
+            Embed Import{ importMode = Source } -> True
+            ImportAlt left right ->
+                branchContainsSourceImport left || branchContainsSourceImport right
+            Note _ e ->
+                branchContainsSourceImport e
+            _ -> False
 
           handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
               | any isNotResolutionError es₁ =
