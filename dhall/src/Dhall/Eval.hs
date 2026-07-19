@@ -49,6 +49,12 @@ module Dhall.Eval (
   , dateShow
   , timeShow
   , timezoneShow
+  , getYear
+  , getMonth
+  , getDay
+  , getHour
+  , getMinute
+  , getSecond
   ) where
 
 import Data.Bifunctor     (first)
@@ -211,9 +217,15 @@ data Val a
     | VDate
     | VDateLiteral Time.Day
     | VDateShow !(Val a)
+    | VDateYear !(Val a)
+    | VDateMonth !(Val a)
+    | VDateDay !(Val a)
     | VTime
     | VTimeLiteral Time.TimeOfDay Word
     | VTimeShow !(Val a)
+    | VTimeHour !(Val a)
+    | VTimeMinute !(Val a)
+    | VTimeSecond !(Val a)
     | VTimeZone
     | VTimeZoneLiteral Time.TimeZone
     | VTimeZoneShow !(Val a)
@@ -681,6 +693,18 @@ eval !env t0 =
             VPrim $ \case
                 VDateLiteral d -> VTextLit (VChunks [] (dateShow d))
                 t              -> VDateShow t
+        DateYear ->
+            VPrim $ \case
+                VDateLiteral d -> VNaturalLit (getYear d)
+                t -> VDateYear t
+        DateMonth ->
+            VPrim $ \case
+                VDateLiteral d -> VNaturalLit (getMonth d)
+                t -> VDateMonth t
+        DateDay ->
+            VPrim $ \case
+                VDateLiteral d -> VNaturalLit (getDay d)
+                t -> VDateDay t
         Time ->
             VTime
         TimeLiteral t p ->
@@ -689,6 +713,18 @@ eval !env t0 =
             VPrim $ \case
                 VTimeLiteral d p -> VTextLit (VChunks [] (timeShow d p))
                 t                -> VTimeShow t
+        TimeHour ->
+            VPrim $ \case
+                VTimeLiteral d _ -> VNaturalLit (getHour d)
+                t                -> VTimeHour t
+        TimeMinute ->
+            VPrim $ \case
+                VTimeLiteral d _ -> VNaturalLit (getMinute d)
+                t                -> VTimeMinute t
+        TimeSecond ->
+            VPrim $ \case
+                VTimeLiteral d _ -> VNaturalLit (getSecond d)
+                t                -> VTimeSecond t
         TimeZone ->
             VTimeZone
         TimeZoneLiteral z ->
@@ -946,6 +982,30 @@ timeShow (TimeOfDay hh mm seconds) precision =
 timezoneShow :: TimeZone -> Text
 timezoneShow = Text.pack . Time.formatTime Time.defaultTimeLocale "%Ez"
 
+-- | Utility that powers the @Date/year@ built-in
+getYear :: Day -> Natural
+getYear = fromIntegral . (\(y,_,_) -> y) . Time.toGregorian
+
+-- | Utility that powers the @Date/month@ built-in
+getMonth :: Day -> Natural
+getMonth = fromIntegral . (\(_,m,_) -> m) . Time.toGregorian
+
+-- | Utility that powers the @Date/day@ built-in
+getDay :: Day -> Natural
+getDay = fromIntegral . (\(_,_,d) -> d) . Time.toGregorian
+
+-- | Utility that powers the @Time/hour@ built-in
+getHour :: TimeOfDay -> Natural
+getHour (TimeOfDay h _ _) = fromIntegral h
+
+-- | Utility that powers the @Time/minute@ built-in
+getMinute :: TimeOfDay -> Natural
+getMinute (TimeOfDay _ m _) = fromIntegral m
+
+-- | Utility that powers the @Time/second@ built-in
+getSecond :: TimeOfDay -> Natural
+getSecond (TimeOfDay _ _ picoseconds) = floor picoseconds
+
 conv :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 conv !env t0 t0' =
     case (t0, t0') of
@@ -1055,11 +1115,23 @@ conv !env t0 t0' =
             l == r
         (VDateShow t, VDateShow t') ->
             conv env t t'
+        (VDateYear t, VDateYear t') ->
+            conv env t t'
+        (VDateMonth t, VDateMonth t') ->
+            conv env t t'
+        (VDateDay t, VDateDay t') ->
+            conv env t t'
         (VTime, VTime) ->
             True
         (VTimeLiteral tl pl, VTimeLiteral tr pr) ->
             tl == tr && pl == pr
         (VTimeShow t, VTimeShow t') ->
+            conv env t t'
+        (VTimeHour t, VTimeHour t') ->
+            conv env t t'
+        (VTimeMinute t, VTimeMinute t') ->
+            conv env t t'
+        (VTimeSecond t, VTimeSecond t') ->
             conv env t t'
         (VTimeZone, VTimeZone) ->
             True
@@ -1277,12 +1349,24 @@ quote !env !t0 =
             DateLiteral d
         VDateShow t ->
             DateShow `qApp` t
+        VDateYear t ->
+            DateYear `qApp` t
+        VDateMonth t ->
+            DateMonth `qApp` t
+        VDateDay t ->
+            DateDay `qApp` t
         VTime ->
             Time
         VTimeLiteral t p ->
             TimeLiteral t p
         VTimeShow t ->
             TimeShow `qApp` t
+        VTimeHour t ->
+            TimeHour `qApp` t
+        VTimeMinute t ->
+            TimeMinute `qApp` t
+        VTimeSecond t ->
+            TimeSecond `qApp` t
         VTimeZone ->
             TimeZone
         VTimeZoneLiteral z ->
@@ -1486,12 +1570,24 @@ alphaNormalize = goEnv EmptyNames
                 DateLiteral d
             DateShow ->
                 DateShow
+            DateYear ->
+                DateYear
+            DateMonth ->
+                DateMonth
+            DateDay ->
+                DateDay
             Time ->
                 Time
             TimeLiteral t p ->
                 TimeLiteral t p
             TimeShow ->
                 TimeShow
+            TimeHour ->
+                TimeHour
+            TimeMinute ->
+                TimeMinute
+            TimeSecond ->
+                TimeSecond
             TimeZone ->
                 TimeZone
             TimeZoneLiteral z ->

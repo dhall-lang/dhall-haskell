@@ -152,6 +152,12 @@ data Expr s a
     | DateLiteral Time.Day
     -- | > DateShow                                 ~  Date/show
     | DateShow
+    -- | > DateYear                                 ~  Date/year
+    | DateYear
+    -- | > DateMonth                                ~  Date/month
+    | DateMonth
+    -- | > DateDay                                  ~  Date/day
+    | DateDay
     -- | > Time                                     ~  Time
     | Time
     -- | > TimeLiteral (TimeOfDay hh mm ss) _       ~  hh:mm:ss
@@ -161,6 +167,12 @@ data Expr s a
         -- ^ Precision
     -- | > TimeShow                                 ~  Time/show
     | TimeShow
+    -- | > TimeHour                                 ~  Time/hour
+    | TimeHour
+    -- | > TimeMinute                               ~  Time/minute
+    | TimeMinute
+    -- | > TimeSecond                               ~  Time/second
+    | TimeSecond
     -- | > TimeZone                                 ~  TimeZone
     | TimeZone
     -- | > TimeZoneLiteral (TimeZone ( 60 * _HH + _MM) _ _) ~ +HH:MM
