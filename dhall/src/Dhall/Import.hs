@@ -1553,8 +1553,78 @@ loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
           | any isNotResolutionError es₀ =
               throwM exception₀
           | otherwise = do
-              loadWithSource frozenImportResolutionMode b `catch` handler₁
+              result <- loadWithSource frozenImportResolutionMode b `catch` handler₁
+
+              -- If the left side was a frozen import and the right side
+              -- succeeded, opportunistically populate the semantic cache.
+              case findImportHashAndMode a of
+                Just (expectedHash, expectedMode) -> do
+                    Status { _normalizer, _reportWarning, _semanticCacheMode } <- State.get
+
+                    case _semanticCacheMode of
+                        IgnoreSemanticCache ->
+                            return ()
+
+                        UseSemanticCache -> do
+                            let resultDenoted = Core.denote result
+
+                            let maybeNormalizedBytes
+                                    | expectedMode == Source =
+                                        Nothing
+
+                                    | otherwise =
+                                        case traverse (\_ -> Nothing) resultDenoted of
+                                            Just importFreeExpr ->
+                                                let betaNormal =
+                                                        Core.normalizeWith _normalizer importFreeExpr
+
+                                                    bytes =
+                                                        encodeExpression (Core.alphaNormalize betaNormal)
+
+                                                in  Just bytes
+
+                                            Nothing ->
+                                                Nothing
+
+                            let maybeBytes = case (frozenImportResolutionMode, expectedMode) of
+                                    -- In the source-preserving pass, `as Source`
+                                    -- hashes are computed from a non-normalized
+                                    -- expression that may still contain imports.
+                                    (PreserveHashedImports, Source) ->
+                                        Just (encodeExpressionWithImports resultDenoted)
+
+                                    -- Opportunistically cache ordinary frozen
+                                    -- imports as soon as the fallback branch is
+                                    -- import-free.
+                                    (PreserveHashedImports, _) ->
+                                        maybeNormalizedBytes
+
+                                    -- During inlining, only non-`Source` frozen
+                                    -- imports use normalized cache products.
+                                    (InlineHashedImports, _) ->
+                                        maybeNormalizedBytes
+
+                            case maybeBytes of
+                                Just bytes -> do
+                                    let actualHash = Dhall.Crypto.sha256Hash bytes
+
+                                    if actualHash == expectedHash
+                                        then zoom cacheWarning (writeToSemanticCache _reportWarning expectedHash bytes)
+                                        else return ()
+
+                                Nothing ->
+                                    return ()
+
+                Nothing ->
+                    return ()
+
+              return result
         where
+          findImportHashAndMode expr = case Core.shallowDenote expr of
+            Embed (Import (ImportHashed (Just hash) _) mode) -> Just (hash, mode)
+            ImportAlt left right -> findImportHashAndMode left <|> findImportHashAndMode right
+            _ -> Nothing
+
           handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
               | any isNotResolutionError es₁ =
                   throwM exception₁
