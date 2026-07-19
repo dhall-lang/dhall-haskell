@@ -153,6 +153,7 @@ successTest prefix = do
                         , "unit/asLocation/Hash"
                         , "unit/IgnorePoisonedCache"
                         , "unit/DontCacheIfHash"
+                        , "normalCachingOfProtected"
                         ]
 
         let endsIn path' =

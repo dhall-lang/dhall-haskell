@@ -1232,6 +1232,31 @@ loadWith expr₀ = case expr₀ of
 
     return (Core.renote importSemantics)
 
+{-
+The code below (findImportHash) implements "opportunistic caching".
+
+The Prelude often uses the import pattern `missing sha256:e01234af... ? p`.
+This expression will be resolved by first attempting to retrieve the cached expression from the file cache if the file with the corresponding name (`1220e01234af...`) exists there.
+If that fails (the file with that name is not in the file cache) then the import resolution will fall back to importing the expression `p`.
+
+The result is that the expression `p` is imported only if the cached expression is not available.
+However, the expression `p` is not hash-protected in the Dhall source code.
+It will not be an error if the semantic hash of `p` does not match the hash value (`e01234af...`) specified at the missing import.
+But when the actual semantic hash of `p` matches that hash value, it will not lead to errors if we cache `p` under its correct hash.
+This is the "opportunistic caching".
+
+In general, this will cache `p` when it does match the specified hash value (`e01234af...`).
+This happens when a missing import is hash-protected and the failure is resolved via a non-hash-protected alternative.
+The assumption is that subsequent fallback imports will often have exactly the same semantic hash as specified in a previous import.
+
+In any expression `p ? q` the opportunistic caching rule says:
+
+- If `p` is hash-protected and is non-cached and absent then attempt to resolve `q`.
+- If `q` fails to resolve then `p ? q` also fails.
+- If `q` is resolved then compute its semantic hash value.
+- Look for a hash value specified in `p`; if it is found and matches the actual hash, cache the result `p` under that hash.
+- The absent import `p` might itself have alternatives which are all absent; descend recursively into those and find the first hash specified, if any. This is done by `findImportHash` below.
+ -}
   ImportAlt a b -> loadWith a `catch` handler₀
     where
       is :: forall e . Exception e => SomeException -> Bool
