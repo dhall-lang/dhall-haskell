@@ -93,6 +93,7 @@ module Dhall.Parser.Token (
     _Kind,
     _Sort,
     _Location,
+    _Source,
     _equal,
     _or,
     _plus,
@@ -1276,6 +1277,13 @@ _Sort = builtin "Sort"
 -}
 _Location :: Parser ()
 _Location = builtin "Location"
+
+{-| Parse the @Source@ keyword
+
+    This corresponds to the @Source@ rule from the official grammar
+-}
+_Source :: Parser ()
+_Source = builtin "Source"
 
 -- | Parse the @=@ symbol
 _equal :: Parser ()
