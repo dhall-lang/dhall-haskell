@@ -68,6 +68,7 @@ import qualified Data.Foldable               as Foldable
 import qualified Data.Foldable.WithIndex     as Foldable.WithIndex
 import qualified Data.List.NonEmpty          as NonEmpty
 import qualified Data.Map
+import qualified Data.Maybe
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                   as Text
@@ -1147,6 +1148,20 @@ infer typer = loop
 
               _ -> die ShowConstructorNotOnUnion
 
+        ReadConstructor t -> do
+            _ <- loop ctx t
+
+            let t' = eval values t
+
+            case t' of
+                VUnion alts
+                    | all Data.Maybe.isNothing (Dhall.Map.elems alts) ->
+                        return (VText ~> VOptional t')
+                    | otherwise ->
+                        die ReadConstructorNotEnumLike
+                _ ->
+                    die ReadConstructorNotOnUnion
+
         Field e (Syntax.fieldSelectionLabel -> x) -> do
             _E' <- loop ctx e
 
@@ -1434,6 +1449,8 @@ data TypeMessage s a
     | NotALabelPath
     | NotAQuestionPath Text
     | ShowConstructorNotOnUnion
+    | ReadConstructorNotOnUnion
+    | ReadConstructorNotEnumLike
     deriving (Show)
 
 formatHints :: [Doc Ann] -> Doc Ann
@@ -4497,6 +4514,18 @@ prettyTypeMessage ShowConstructorNotOnUnion = ErrorMessages {..}
       hints = []
       long = ""
 
+prettyTypeMessage ReadConstructorNotOnUnion = ErrorMessages {..}
+  where
+      short = "❰readConstructor❱ used on a value that is not an enum-like union type"
+      hints = []
+      long = ""
+
+prettyTypeMessage ReadConstructorNotEnumLike = ErrorMessages {..}
+  where
+      short = "❰readConstructor❱ used on a union type that is not enum-like"
+      hints = []
+      long = ""
+
 buildBooleanOperator :: Pretty a => Text -> Expr s a -> Expr s a -> ErrorMessages
 buildBooleanOperator operator expr0 expr1 = ErrorMessages {..}
   where
@@ -4778,6 +4807,10 @@ messageExpressions f m = case m of
         pure (NotAQuestionPath k)
     ShowConstructorNotOnUnion ->
         pure ShowConstructorNotOnUnion
+    ReadConstructorNotOnUnion ->
+        pure ReadConstructorNotOnUnion
+    ReadConstructorNotEnumLike ->
+        pure ReadConstructorNotEnumLike
 
 {-| Newtype used to wrap error messages so that they render with a more
     detailed explanation of what went wrong
