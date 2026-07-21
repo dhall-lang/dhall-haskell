@@ -206,6 +206,7 @@ data Val a
     | VTextLit !(VChunks a)
     | VTextAppend !(Val a) !(Val a)
     | VTextShow !(Val a)
+    | VTextEqual !(Val a) !(Val a)
     | VTextReplace !(Val a) !(Val a) !(Val a)
 
     | VDate
@@ -634,6 +635,14 @@ eval !env t0 =
             VPrim $ \case
                 VTextLit (VChunks [] x) -> VTextLit (VChunks [] (textShow x))
                 t                       -> VTextShow t
+        TextEqual -> VPrim $ \case
+            VTextLit (VChunks [] x) -> VPrim $ \case
+                VTextLit (VChunks [] y) -> VBoolLit (x == y)
+                y -> VTextEqual (VTextLit (VChunks [] x)) y
+            x -> VPrim $ \case
+                VTextLit (VChunks [] y) -> VTextEqual x (VTextLit (VChunks [] y))
+                y | conv env x y -> VBoolLit True
+                y -> VTextEqual x y
         TextReplace ->
             VPrim $ \needle ->
             let hLamInfo0 = case needle of
@@ -1047,6 +1056,8 @@ conv !env t0 t0' =
             conv env t t' && conv env u u'
         (VTextShow t, VTextShow t') ->
             conv env t t'
+        (VTextEqual x y, VTextEqual x' y') ->
+            conv env x x' && conv env y y'
         (VTextReplace a b c, VTextReplace a' b' c') ->
             conv env a a' && conv env b b' && conv env c c'
         (VDate, VDate) ->
@@ -1269,6 +1280,8 @@ quote !env !t0 =
             TextAppend (quote env t) (quote env u)
         VTextShow t ->
             TextShow `qApp` t
+        VTextEqual x y ->
+            TextEqual `qApp` x `qApp` y
         VTextReplace a b c ->
             TextReplace `qApp` a `qApp` b `qApp` c
         VDate ->
@@ -1478,6 +1491,8 @@ alphaNormalize = goEnv EmptyNames
                 TextAppend (go t) (go u)
             TextShow ->
                 TextShow
+            TextEqual ->
+                TextEqual
             TextReplace ->
                 TextReplace
             Date ->

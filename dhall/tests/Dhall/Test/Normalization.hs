@@ -4,7 +4,7 @@ module Dhall.Test.Normalization where
 
 import Data.Text       (Text)
 import Data.Void       (Void)
-import Dhall.Core      (Expr (..), Var (..), throws)
+import Dhall.Core      (Chunks (..), Expr (..), Var (..), throws)
 import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
@@ -69,6 +69,7 @@ customization =
     Tasty.testGroup "customization"
         [ simpleCustomization
         , nestedReduction
+        , textEqualTest
         ]
 
 simpleCustomization :: TestTree
@@ -140,6 +141,41 @@ alphaNormalizationTest prefix = do
                 "The alpha-normalized expression did not match the expected output"
 
         Tasty.HUnit.assertEqual message expectedNormalized actualNormalized
+
+textEqualTest :: TestTree
+textEqualTest = Tasty.HUnit.testCase "Text/equal" $ do
+    let tyCtx =
+            Context.insert
+                "Text/equal"
+                (Pi mempty "_" Text (Pi mempty "_" Text Bool))
+                Context.empty
+
+        valCtx e =
+            case e of
+                App (App (Var (V "Text/equal" 0)) (TextLit (Chunks [] x))) (TextLit (Chunks [] y)) ->
+                    pure (Just (BoolLit (x == y)))
+                _ ->
+                    pure Nothing
+
+    -- Test equal strings
+    e1 <- Test.Util.codeWith tyCtx "Text/equal \"hello\" \"hello\""
+    Test.Util.assertNormalizesToWith valCtx e1 "True"
+
+    -- Test unequal strings
+    e2 <- Test.Util.codeWith tyCtx "Text/equal \"hello\" \"world\""
+    Test.Util.assertNormalizesToWith valCtx e2 "False"
+
+    -- Test empty strings
+    e3 <- Test.Util.codeWith tyCtx "Text/equal \"\" \"\""
+    Test.Util.assertNormalizesToWith valCtx e3 "True"
+
+    -- Test empty vs non-empty
+    e4 <- Test.Util.codeWith tyCtx "Text/equal \"\" \"a\""
+    Test.Util.assertNormalizesToWith valCtx e4 "False"
+
+    -- Test partial application (should not reduce)
+    e5 <- Test.Util.codeWith tyCtx "Text/equal \"hello\""
+    Test.Util.assertNormalizesToWith valCtx e5 "Text/equal \"hello\""
 
 {- Unit tests don't type-check, so we only verify that they normalize to the
    expected output
