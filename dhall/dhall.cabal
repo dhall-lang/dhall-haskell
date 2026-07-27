@@ -444,7 +444,7 @@ Test-Suite tasty
         Other-Modules:
             Dhall.Test.TH
     Build-Depends:
-        dhall-test-server                               ,
+        dhall-test-server                              ,
         dhall                                          ,
         data-default                                   ,
         foldl                                    < 1.5 ,
@@ -467,6 +467,7 @@ Test-Suite tasty
            build-depends: crypton-connection
     else
            build-depends: connection
+    GHC-Options: -threaded
     Default-Language: Haskell2010
 
 Test-Suite doctest
