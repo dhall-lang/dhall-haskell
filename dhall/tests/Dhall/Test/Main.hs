@@ -19,6 +19,7 @@ import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Schemas
 import qualified Dhall.Test.SemanticHash
+import qualified Dhall.Test.Substitution
 #ifndef CROSS
 import qualified Dhall.Test.TH
 #endif
@@ -74,6 +75,7 @@ getAllTests = do
                 , schemaTests
                 , Dhall.Test.DirectoryTree.tests
                 , Dhall.Test.Regression.tests
+                , Dhall.Test.Substitution.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
                 , Dhall.Test.Dhall.tests
