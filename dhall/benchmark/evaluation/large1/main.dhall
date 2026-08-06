@@ -1,4 +1,4 @@
-{- the fully expanded Dhall normal form of this file is 28 MB -}
+{- The fully expanded Dhall normal form of this file is ~28 MB. -}
 let concatMapSep =
       ./Prelude/Text/concatMapSep
 

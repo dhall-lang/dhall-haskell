@@ -17,6 +17,7 @@ import qualified Dhall.TypeCheck      as TypeCheck
 import qualified Lens.Micro
 import qualified System.Directory     as Directory
 
+type ParsedExpr = Core.Expr Parser.Src Core.Import
 type ResolvedExpr = Core.Expr Parser.Src Void
 
 large1Directory :: FilePath
@@ -24,6 +25,11 @@ large1Directory = "benchmark/evaluation/large1"
 
 large1MainPath :: FilePath
 large1MainPath = large1Directory </> "main.dhall"
+
+large1Settings :: Dhall.InputSettings
+large1Settings =
+    Lens.Micro.set Dhall.sourceName large1MainPath
+        (Lens.Micro.set Dhall.rootDirectory large1Directory Dhall.defaultInputSettings)
 
 loadExamples :: IO [(String, ResolvedExpr)]
 loadExamples = do
@@ -48,28 +54,29 @@ loadExample path = do
 
     pure (takeBaseName path, resolved)
 
--- For this example, we measure all steps of the pipeline separately.
-loadLarge1 :: IO (Text, ResolvedExpr, ResolvedExpr)
+-- | Load large1 inputs for per-phase benchmarks.
+--
+-- Import resolution (and a one-time normalize for the CBOR fixture) run here
+-- so the timed @typecheck@ / @evaluation@ / @cbor@ benches start from the
+-- right artifact.  The @resolve@ bench re-runs resolution on the parsed
+-- expression via 'nfAppIO'.
+loadLarge1 :: IO (Text, ParsedExpr, ResolvedExpr, ResolvedExpr)
 loadLarge1 = do
     text <- Text.readFile large1MainPath
 
     parsed <-
         either throw pure (Parser.exprFromText large1MainPath text)
 
-    let settings =
-            Lens.Micro.set Dhall.sourceName large1MainPath
-                (Lens.Micro.set Dhall.rootDirectory large1Directory Dhall.defaultInputSettings)
-
-    resolved <- Dhall.resolveWithSettings settings parsed
+    resolved <- Dhall.resolveWithSettings large1Settings parsed
 
     let normalized = Core.normalize resolved
 
-    pure (text, resolved, normalized)
+    pure (text, parsed, resolved, normalized)
 
 main :: IO ()
 main = do
     examples <- loadExamples
-    (large1Text, large1Resolved, large1Normalized) <- loadLarge1
+    (large1Text, large1Parsed, large1Resolved, large1Normalized) <- loadLarge1
 
     defaultMain
         [ bgroup
@@ -83,6 +90,7 @@ main = do
             ]
         , bgroup "large1"
             [ bench "parse" (nf (parseLarge1 large1MainPath) large1Text)
+            , bench "resolve" (nfAppIO (Dhall.resolveWithSettings large1Settings) large1Parsed)
             , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
             , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
             , bench "cbor" (nf encodeNormalized large1Normalized)
@@ -96,7 +104,7 @@ main = do
    normalizeResolvedExpr :: ResolvedExpr -> ResolvedExpr
    normalizeResolvedExpr = Core.normalize
 
-   parseLarge1 :: FilePath -> Text -> Core.Expr Parser.Src Core.Import
+   parseLarge1 :: FilePath -> Text -> ParsedExpr
    parseLarge1 path text =
        either throw id (Parser.exprFromText path text)
 
