@@ -34,6 +34,7 @@ import qualified Dhall.Import.Manager
 import qualified Dhall.Context
 import qualified Dhall.Map          as Map
 import qualified Dhall.Substitution
+import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified System.Directory   as Directory
 
@@ -128,6 +129,9 @@ data Status = Status
 
     , _startingContext :: Context (Expr Src Void)
 
+    , _typeCache :: Dhall.TypeCheck.TypeCache Void
+    -- ^ Pure cache of inferred types, shared across import type-checks
+
     , _semanticCacheMode :: SemanticCacheMode
 
     , _cacheWarning :: CacheWarning
@@ -166,6 +170,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _normalizer = Nothing
 
     _startingContext = Dhall.Context.empty
+
+    _typeCache = Dhall.TypeCheck.emptyTypeCache
 
     _semanticCacheMode = UseSemanticCache
 
@@ -206,6 +212,10 @@ normalizer = lens _normalizer (\s x -> s {_normalizer = x})
 -- | Lens from a `Status` to its `_startingContext` field
 startingContext :: Lens' Status (Context (Expr Src Void))
 startingContext = lens _startingContext (\s x -> s { _startingContext = x })
+
+-- | Lens from a `Status` to its `_typeCache` field
+typeCache :: Lens' Status (Dhall.TypeCheck.TypeCache Void)
+typeCache = lens _typeCache (\s x -> s { _typeCache = x })
 
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning

@@ -139,6 +139,7 @@ module Dhall.Import (
     , substitutions
     , normalizer
     , startingContext
+    , typeCache
     , reportWarning
     , chainImport
     , dependencyToFile
@@ -211,7 +212,7 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
-import Lens.Micro.Mtl (zoom)
+import Lens.Micro.Mtl (use, zoom)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
@@ -694,9 +695,16 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                     return (Core.denote substitutedExpr)
 
                 _ -> do
-                    case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+                    -- Share one pure TypeCache across semisemantic import
+                    -- type-checks.  Re-read after recursive `loadWith`, which
+                    -- may have populated the cache while resolving nested
+                    -- imports.
+                    typeCache0 <- use typeCache
+
+                    case Dhall.TypeCheck.typeWithCache typeCache0 _startingContext substitutedExpr of
                         Left  err -> throwMissingImport (Imported _stack err)
-                        Right _   -> return ()
+                        Right (_, typeCache') ->
+                            State.modify (\s -> s { _typeCache = typeCache' })
 
                     let betaNormal =
                             Core.normalizeWith _normalizer substitutedExpr

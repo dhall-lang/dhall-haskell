@@ -12,10 +12,21 @@
 module Dhall.TypeCheck (
     -- * Type-checking
       typeWith
+    , typeWithCache
     , typeOf
+    , typeOfCache
     , typeWithA
+    , typeWithACache
     , checkContext
+    , checkContextCache
     , messageExpressions
+
+    -- * Type-check cache
+    , TypeCache
+    , emptyTypeCache
+    , typeCacheHits
+    , typeCacheMisses
+    , typeCacheSize
 
     -- * Types
     , Typer
@@ -31,6 +42,7 @@ module Dhall.TypeCheck (
 
 import Control.Exception                 (Exception)
 import Control.Monad.Trans.Class         (lift)
+import Control.Monad.Trans.State.Strict  (StateT (..), runStateT)
 import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
 import Data.List.NonEmpty                (NonEmpty (..))
 import Data.Monoid                       (Endo (..))
@@ -41,6 +53,7 @@ import Data.Text                         (Text)
 import Data.Typeable                     (Typeable)
 import Data.Void                         (Void, absurd)
 import Dhall.Context                     (Context)
+import Dhall.Crypto                      (SHA256Digest)
 import Dhall.Eval
     ( Environment (..)
     , Names (..)
@@ -71,9 +84,11 @@ import qualified Data.Map
 import qualified Data.Sequence
 import qualified Data.Set
 import qualified Data.Text                   as Text
+import qualified Data.Text.Encoding
 import qualified Data.Traversable
 import qualified Dhall.Context
 import qualified Dhall.Core
+import qualified Dhall.Crypto
 import qualified Dhall.Diff
 import qualified Dhall.Eval                  as Eval
 import qualified Dhall.Map
@@ -109,6 +124,80 @@ rule Type Sort = Sort
 rule Kind Sort = Sort
 rule Sort Sort = Sort
 
+{-| Pure dictionary used to memoize complete type-check results.
+
+    Entries are keyed by a digest of the denoted expression together with a
+    digest of each starting-context binding.  Caching is only applied at the
+    @typeWithACache@ boundary (for example once per import during resolution),
+    not at every recursive inference step: memoizing every subexpression with a
+    structural @Map@ key is catastrophically expensive on large ASTs.
+-}
+data TypeCacheKey = TypeCacheKey
+    { cacheKeyContext :: [CacheContextEntry]
+    , cacheKeyExpr    :: SHA256Digest
+    } deriving (Eq, Ord)
+
+-- | One binding in a `TypeCacheKey` context: name, digest of the type, and
+-- optional digest of a let-bound value (@Nothing@ for ordinary bindings).
+data CacheContextEntry = CacheContextEntry
+    !Text
+    !SHA256Digest
+    !(Maybe SHA256Digest)
+  deriving (Eq, Ord)
+
+-- | An in-memory cache of inferred types, keyed by context and expression.
+-- Also tracks hit/miss counts for instrumentation.
+data TypeCache a = TypeCache
+    { typeCacheMap    :: !(Data.Map.Map TypeCacheKey (Val a))
+    , typeCacheHits   :: !Int
+    , typeCacheMisses :: !Int
+    }
+
+-- | An empty type-check cache
+emptyTypeCache :: TypeCache a
+emptyTypeCache = TypeCache Data.Map.empty 0 0
+
+-- | Number of distinct entries currently stored in the cache
+typeCacheSize :: TypeCache a -> Int
+typeCacheSize = Data.Map.size . typeCacheMap
+
+lookupTypeCache :: TypeCacheKey -> TypeCache a -> Maybe (Val a, TypeCache a)
+lookupTypeCache key cache@TypeCache{..} =
+    case Data.Map.lookup key typeCacheMap of
+        Just value ->
+            Just (value, cache { typeCacheHits = typeCacheHits + 1 })
+        Nothing ->
+            Nothing
+
+insertTypeCache :: TypeCacheKey -> Val a -> TypeCache a -> TypeCache a
+insertTypeCache key value cache@TypeCache{..} =
+    cache
+        { typeCacheMap = Data.Map.insert key value typeCacheMap
+        , typeCacheMisses = typeCacheMisses + 1
+        }
+
+-- | Hash a denoted expression for use in a cache key
+hashCacheExpr :: Pretty a => Expr Void a -> SHA256Digest
+hashCacheExpr =
+    Dhall.Crypto.sha256Hash
+  . Data.Text.Encoding.encodeUtf8
+  . Dhall.Core.pretty
+
+-- | Build a cache key for a closed type-check of @expression@ under @context@.
+makeTypeCacheKey
+    :: Pretty a
+    => Context (Expr s a)
+    -> Expr s a
+    -> TypeCacheKey
+makeTypeCacheKey context expression =
+    TypeCacheKey
+        { cacheKeyContext =
+            [ CacheContextEntry x (hashCacheExpr (Dhall.Core.denote t)) Nothing
+            | (x, t) <- reverse (Dhall.Context.toList context)
+            ]
+        , cacheKeyExpr = hashCacheExpr (Dhall.Core.denote expression)
+        }
+
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
 
@@ -120,9 +209,19 @@ rule Sort Sort = Sort
     these are ill-typed, the return value may be ill-typed.
 -}
 typeWith :: Context (Expr s X) -> Expr s X -> Either (TypeError s X) (Expr s X)
-typeWith ctx expr = do
-    checkContext ctx
-    typeWithA absurd ctx expr
+typeWith context expression = do
+    _ <- checkContextCache emptyTypeCache context
+    typeWithA absurd context expression
+
+-- | Like `typeWith`, but threads a pure type-check cache
+typeWithCache
+    :: TypeCache X
+    -> Context (Expr s X)
+    -> Expr s X
+    -> Either (TypeError s X) (Expr s X, TypeCache X)
+typeWithCache cache context expression = do
+    cache' <- checkContextCache cache context
+    typeWithACache cache' absurd context expression
 
 {-| Function that converts the value inside an `Embed` constructor into a new
     expression
@@ -133,15 +232,52 @@ type Typer a = forall s. a -> Expr s a
     constructor with custom logic
 -}
 typeWithA
-    :: (Eq a, Pretty a)
+    :: (Ord a, Pretty a)
     => Typer a
     -> Context (Expr s a)
     -> Expr s a
     -> Either (TypeError s a) (Expr s a)
 typeWithA tpa context expression =
-    fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
+    case infer tpa (contextToCtx context) expression emptyTypeCache of
+        Left err ->
+            Left err
+        Right (value, _) ->
+            Right (Dhall.Core.renote (Eval.quote EmptyNames value))
+
+-- | Like `typeWithA`, but threads a pure type-check cache
+--
+-- Caching applies only to complete type-checks (one entry per call), so that
+-- import resolution can reuse work across nested imports without paying for
+-- per-subexpression memoization.
+typeWithACache
+    :: (Ord a, Pretty a)
+    => TypeCache a
+    -> Typer a
+    -> Context (Expr s a)
+    -> Expr s a
+    -> Either (TypeError s a) (Expr s a, TypeCache a)
+typeWithACache cache tpa context expression =
+    case cached of
+        Just (value, cache') ->
+            Right (quoted value, cache')
+        Nothing ->
+            case infer tpa ctx expression cache of
+                Left err ->
+                    Left err
+                Right (value, _) ->
+                    Right (quoted value, insertTypeCache key value cache)
   where
     ctx = contextToCtx context
+
+    key = makeTypeCacheKey context expression
+
+    cached
+        | typeCacheSize cache == 0 =
+            Nothing
+        | otherwise =
+            lookupTypeCache key cache
+
+    quoted value = Dhall.Core.renote (Eval.quote EmptyNames value)
 
 contextToCtx :: Eq a => Context (Expr s a) -> Ctx a
 contextToCtx context = loop (Dhall.Context.toList context)
@@ -150,9 +286,11 @@ contextToCtx context = loop (Dhall.Context.toList context)
         Ctx Empty TypesEmpty
 
     loop ((x, t):rest) =
-        Ctx (Skip vs x) (TypesBind ts x (Eval.eval vs (Dhall.Core.denote t)))
+        Ctx (Skip vs x) (TypesBind ts x t')
       where
         Ctx vs ts = loop rest
+
+        t' = Eval.eval vs (Dhall.Core.denote t)
 
 ctxToContext :: Eq a => Ctx a -> Context (Expr s a)
 ctxToContext (Ctx {..}) = loop types
@@ -172,16 +310,30 @@ typesToNames TypesEmpty = EmptyNames
 
 data Types a = TypesEmpty | TypesBind !(Types a) {-# UNPACK #-} !Text (Val a)
 
-data Ctx a = Ctx { values :: !(Environment a), types :: !(Types a) }
+data Ctx a = Ctx
+    { values :: !(Environment a)
+    , types  :: !(Types a)
+    }
 
-addType :: Text -> Val a -> Ctx a -> Ctx a
-addType x t (Ctx vs ts) = Ctx (Skip vs x) (TypesBind ts x t)
+addType :: Eq a => Text -> Val a -> Ctx a -> Ctx a
+addType x t (Ctx vs ts) =
+    Ctx (Skip vs x) (TypesBind ts x t)
 
-addTypeValue :: Text -> Val a -> Val a -> Ctx a -> Ctx a
-addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
+addTypeValue
+    :: Eq a
+    => Text
+    -> Val a
+    -> Val a
+    -> Expr s a
+    -> Ctx a
+    -> Ctx a
+addTypeValue x t v _ (Ctx vs ts) =
+    Ctx (Extend vs x v) (TypesBind ts x t)
 
 fresh :: Ctx a -> Text -> Val a
 fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
+
+type Infer s a = StateT (TypeCache a) (Either (TypeError s a))
 
 {-| `typeWithA` is implemented internally in terms of @infer@ in order to speed
     up equivalence checking.
@@ -199,12 +351,14 @@ fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
 -}
 infer
     :: forall a s
-    .  (Eq a, Pretty a)
+    .  (Ord a, Pretty a)
     => Typer a
     -> Ctx a
     -> Expr s a
-    -> Either (TypeError s a) (Val a)
-infer typer = loop
+    -> TypeCache a
+    -> Either (TypeError s a) (Val a, TypeCache a)
+infer typer ctx0 expression0 cache0 =
+    runStateT (loop ctx0 expression0) cache0
   where
     {- The convention for primes (i.e. `'`s) is:
 
@@ -212,10 +366,13 @@ infer typer = loop
        * One prime  (`x'` ): A  `Val`
        * Two primes (`x''`): An `Expr` generated from `quote`ing a `Val`
     -}
-    loop :: Ctx a -> Expr s a -> Either (TypeError s a) (Val a)
-    loop ctx@Ctx{..} expression = case expression of
+    loop :: Ctx a -> Expr s a -> Infer s a (Val a)
+    loop ctx expression = loopBody ctx (Dhall.Core.shallowDenote expression)
+
+    loopBody :: Ctx a -> Expr s a -> Infer s a (Val a)
+    loopBody ctx@Ctx{..} expression = case expression of
         Const c ->
-            fmap VConst (axiom c)
+            fmap VConst (lift (axiom c))
 
         Var (V x0 n0) -> do
             let go TypesEmpty _ =
@@ -299,7 +456,7 @@ infer typer = loop
                 Nothing -> do
                     _A' <- loop ctx a₀
 
-                    return (addTypeValue x _A' a₀' ctx)
+                    return (addTypeValue x _A' a₀' a₀ ctx)
                 Just (_, _A₀) -> do
                     _ <- loop ctx _A₀
 
@@ -314,9 +471,9 @@ infer typer = loop
                         else do
                             let _A₀'' = quote names _A₀'
                             let _A₁'' = quote names _A₁'
-                            Left (TypeError context a₀ (AnnotMismatch a₀ _A₀'' _A₁''))
+                            lift (Left (TypeError context a₀ (AnnotMismatch a₀ _A₀'' _A₁'')))
 
-                    return (addTypeValue x _A₀' a₀' ctx)
+                    return (addTypeValue x _A₀' a₀' a₀ ctx)
 
             loop ctxNew body
 
@@ -645,7 +802,7 @@ infer typer = loop
                                     -- to just the offending element
                                     let err = MismatchedListElements (i+1) _T₀'' t₁ _T₁''
 
-                                    Left (TypeError context t₁ err)
+                                    lift (Left (TypeError context t₁ err))
 
                     Foldable.WithIndex.itraverse_ process ts₁
 
@@ -839,8 +996,8 @@ infer typer = loop
 
                         combine x _ _ =
                             case mk of
-                                Nothing -> die (FieldCollision (NonEmpty.reverse (x :| xs)))
-                                Just t  -> die (DuplicateFieldCannotBeMerged (t :| reverse (x : xs)))
+                                Nothing -> dieEither (FieldCollision (NonEmpty.reverse (x :| xs)))
+                                Just t  -> dieEither (DuplicateFieldCannotBeMerged (t :| reverse (x : xs)))
 
                     let xEs =
                             Dhall.Map.outerJoin Right Right combine xLs₀' xRs₀'
@@ -849,7 +1006,7 @@ infer typer = loop
 
                     return (VRecord xTs)
 
-            combineTypes [] xLs' xRs'
+            lift (combineTypes [] xLs' xRs')
 
         CombineTypes _ l r -> do
             _L' <- loop ctx l
@@ -1037,7 +1194,7 @@ infer typer = loop
                 sequence
                     (Data.Map.intersectionWithKey match (Dhall.Map.toMap yTs') (Dhall.Map.toMap yUs'))
 
-            let checkMatched :: Data.Map.Map Text (Val a) -> Either (TypeError s a) (Maybe (Val a))
+            let checkMatched :: Data.Map.Map Text (Val a) -> Infer s a (Maybe (Val a))
                 checkMatched = fmap (fmap snd) . Foldable.foldlM go Nothing . Data.Map.toList
                   where
                     go Nothing (y₁, _T₁') =
@@ -1103,7 +1260,7 @@ infer typer = loop
                         let _T₀'' = quote names _T₀'
                         let _T₁'' = quote names _T₁'
 
-                        Just (die (HeterogenousRecordToMap _E'' _T₀'' _T₁''))
+                        Just (dieEither (HeterogenousRecordToMap _E'' _T₀'' _T₁''))
 
                 compareFieldTypes _T₀' r@(Just (Left _)) =
                     r
@@ -1124,7 +1281,7 @@ infer typer = loop
                 (Nothing, Nothing) ->
                     die MissingToMapType
                 (Just err@(Left _), _) ->
-                    err
+                    lift err
                 (Just (Right _T'), Nothing) ->
                     pure (mapType _T')
                 (Nothing, Just _T₁'@(VList (VRecord itemTypes)))
@@ -1340,13 +1497,14 @@ infer typer = loop
             with tE₀' ks₀ v₀
 
         Note s e ->
-            case loop ctx e of
-                Left (TypeError ctx' (Note s' e') m) ->
-                    Left (TypeError ctx' (Note s' e') m)
-                Left (TypeError ctx'          e'  m) ->
-                    Left (TypeError ctx' (Note s  e') m)
-                Right r ->
-                    Right r
+            StateT $ \cache ->
+                case runStateT (loop ctx e) cache of
+                    Left (TypeError ctx' (Note s' e') m) ->
+                        Left (TypeError ctx' (Note s' e') m)
+                    Left (TypeError ctx'          e'  m) ->
+                        Left (TypeError ctx' (Note s  e') m)
+                    Right result ->
+                        Right result
 
         ImportAlt l _r ->
             loop ctx l
@@ -1354,7 +1512,9 @@ infer typer = loop
         Embed p ->
             return (eval values (typer p))
       where
-        die err = Left (TypeError context expression err)
+        die err = lift (dieEither err)
+
+        dieEither err = Left (TypeError context expression err)
 
         context = ctxToContext ctx
 
@@ -1370,6 +1530,13 @@ infer typer = loop
 -}
 typeOf :: Expr s X -> Either (TypeError s X) (Expr s X)
 typeOf = typeWith Dhall.Context.empty
+
+-- | Like `typeOf`, but threads a pure type-check cache
+typeOfCache
+    :: TypeCache X
+    -> Expr s X
+    -> Either (TypeError s X) (Expr s X, TypeCache X)
+typeOfCache cache = typeWithCache cache Dhall.Context.empty
 
 -- | The specific type error
 data TypeMessage s a
@@ -4831,15 +4998,23 @@ prettyDetailedTypeError (DetailedTypeError (TypeError ctx expr msg)) =
     that you supply
 -}
 checkContext :: Context (Expr s X) -> Either (TypeError s X) ()
-checkContext context =
+checkContext context = do
+    _ <- checkContextCache emptyTypeCache context
+    return ()
+
+-- | Like `checkContext`, but threads a pure type-check cache
+checkContextCache
+    :: TypeCache X
+    -> Context (Expr s X)
+    -> Either (TypeError s X) (TypeCache X)
+checkContextCache cache context =
     case Dhall.Context.match context of
         Nothing ->
-            return ()
+            return cache
         Just (x, v, context') -> do
             let shiftedV       =       Dhall.Core.shift (-1) (V x 0)  v
             let shiftedContext = fmap (Dhall.Core.shift (-1) (V x 0)) context'
-            _ <- typeWith shiftedContext shiftedV
-            return ()
+            fmap snd (typeWithCache cache shiftedContext shiftedV)
 
 toPath :: (Functor list, Foldable list) => list Text -> Text
 toPath ks =
