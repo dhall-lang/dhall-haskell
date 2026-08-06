@@ -1,9 +1,9 @@
 {- the fully expanded Dhall normal form of this file is 28 MB -}
 let concatMapSep =
-      https://prelude.dhall-lang.org/Text/concatMapSep
+      ./Prelude/Text/concatMapSep
 
 let concat =
-      https://prelude.dhall-lang.org/Text/concat
+      ./Prelude/Text/concat
 
 let types = ./cpkg-types.dhall
 

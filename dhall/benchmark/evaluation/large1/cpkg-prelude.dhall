@@ -1,21 +1,21 @@
 {- Dhall prelude imports -}
 let concatMapSep =
-      https://prelude.dhall-lang.org/Text/concatMapSep
+      ./Prelude/Text/concatMapSep
 
 let concatMapText =
-      https://prelude.dhall-lang.org/Text/concatMap
+      ./Prelude/Text/concatMap
 
 let concatMap =
-      https://prelude.dhall-lang.org/List/concatMap
+      ./Prelude/List/concatMap
 
 let map =
-      https://prelude.dhall-lang.org/List/map
+      ./Prelude/List/map
 
 let mapOptional =
-      https://prelude.dhall-lang.org/Optional/map
+      ./Prelude/Optional/map
 
 
-let not = https://prelude.dhall-lang.org/Bool/not
+let not = ./Prelude/Bool/not
 
 
 let types = ./cpkg-types.dhall
