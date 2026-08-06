@@ -62,6 +62,7 @@ import Data.Void          (Void)
 import Dhall.Map          (Map)
 import Dhall.Set          (Set)
 import GHC.Natural        (Natural)
+import Lens.Micro         (anyOf)
 import Prelude            hiding (succ)
 
 import Dhall.Syntax
@@ -155,6 +156,31 @@ toVHPi (VHPi x a b             ) = Just (x, a, b)
 toVHPi  _                        = Nothing
 {-# INLINABLE toVHPi #-}
 
+-- | Whether @V x i@ occurs free in an expression (avoids importing
+-- `Dhall.Normalize.freeIn`, which would create an import cycle).
+--
+-- Used when evaluating @Pi@ to choose @VHPi@ for non-dependent function types
+-- so type-checking need not evaluate unused arguments.
+boundVarOccurs :: Eq a => Text -> Int -> Expr Void a -> Bool
+boundVarOccurs x i = go i
+  where
+    go !j = \case
+        Var (V x' j') ->
+            x == x' && j == j'
+        Lam _ FunctionBinding{ functionBindingVariable = y
+                             , functionBindingAnnotation = a } b ->
+            go j a || go (if x == y then j + 1 else j) b
+        Pi _ y a b ->
+            go j a || go (if x == y then j + 1 else j) b
+        Let (Binding _ y _ mA _ a) b ->
+               maybe False (\(_, t) -> go j t) mA
+            || go j a
+            || go (if x == y then j + 1 else j) b
+        Note _ e ->
+            go j e
+        expression ->
+            anyOf Syntax.subExpressions (go j) expression
+    
 data Val a
     = VConst !Const
     | VVar !Text !Int
@@ -265,6 +291,10 @@ countEnvironment x = go (0 :: Int)
     go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
     go  acc (Extend env x' _) = go (if x == x' then acc + 1 else acc) env
 
+-- | Instantiate a closure.  Kept strict in the argument for NbE performance.
+-- Non-dependent @Pi@ types are evaluated to lazy @VHPi@ instead, so
+-- type-checking does not rely on a free-variable check here.
+-- And `instantiate` does not check for free variables in the closure (this would be slow).
 instantiate :: Eq a => Closure a -> Val a -> Val a
 instantiate (Closure x env t) !u = eval (Extend env x u) t
 {-# INLINE instantiate #-}
@@ -454,7 +484,13 @@ eval !env t0 =
         Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a }) t ->
             VLam (eval env a) (Closure x env t)
         Pi _ x a b ->
-            VPi (eval env a) (Closure x env b)
+            -- Classify once: non-dependent Pis become lazy VHPi so applying
+            -- the type during type-checking does not force an unused argument
+            -- (e.g. @List a → List b@).  Dependent Pis stay as VPi closures.
+            let !a' = eval env a
+            in  if boundVarOccurs x 0 b
+                then VPi a' (Closure x env b)
+                else VHPi x a' (\_ -> eval (Skip env x) b)
         App t u ->
             vApp (eval env t) (eval env u)
         Let (Binding _ x _ _mA _ a) b ->

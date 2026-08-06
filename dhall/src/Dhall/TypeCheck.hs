@@ -277,6 +277,10 @@ infer typer = loop
 
                     if Eval.conv values _A₀' _A₁'
                         then do
+                            -- For non-dependent Pis, `eval` produces a lazy
+                            -- `VHPi` that ignores this argument, so a large
+                            -- unused arg is not forced.  Dependent `VPi`s still
+                            -- instantiate strictly via `toVHPi`.
                             let a' = eval values a
 
                             return (_B' a')
