@@ -98,6 +98,9 @@ subst x e expression = Lens.over Syntax.subExpressions (subst x e) expression
     normalize the accumulator on each step of the loop.  If this function
     returns `False` then they will be lazy in their accumulator and only
     normalize the final result at the end of the fold
+
+    For @Natural/fold@ on "bounded types", the short-circuit optimization will be applied.
+    See @Dhall.Eval.boundedType@ for comparison.
 -}
 boundedType :: Expr s a -> Bool
 boundedType Bool             = True
@@ -202,6 +205,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                   case App f' a' of
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
+                      -- `boundedType` is checked once, not repeated in the loop.
                       if boundedType t' then strict else lazy
                       where
                         -- Use an `Integer` for the loop, due to the following

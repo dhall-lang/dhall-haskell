@@ -43,4 +43,4 @@ let n50M = mul n10M n5
 
 let n100M = mul n10M n10
 
-in  n50M Natural (λ(x : Natural) → x + 1) 0
+in  n10M Natural (λ(x : Natural) → x + 1) 0

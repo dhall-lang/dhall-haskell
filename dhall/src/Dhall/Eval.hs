@@ -444,6 +444,25 @@ vWith (VSome  _) (WithQuestion :| []     ) v = VSome v
 vWith (VSome  t) (WithQuestion :| k₁ : ks) v = VSome (vWith t (k₁ :| ks) v)
 vWith e₀ ks v₀ = VWith e₀ ks v₀
 
+-- | Val-level counterpart of @Dhall.Normalize.boundedType@.
+--
+-- Used once before a @Natural/fold@ loop to decide whether to perform shortcut
+-- check during the loop. Returns True for Natural/Integer/Text/Bool/Double,
+-- Optional of those, and records/unions of those; False for lists, functions,
+-- and other potentially large accumulators.
+boundedType :: Val a -> Bool
+boundedType = \case
+    VBool       -> True
+    VNatural    -> True
+    VInteger    -> True
+    VDouble     -> True
+    VText       -> True
+    VList _     -> False
+    VOptional t -> boundedType t
+    VRecord m   -> all boundedType m
+    VUnion m    -> all (all boundedType) m
+    _           -> False
+
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
 eval !env t0 =
     case t0 of
@@ -527,12 +546,25 @@ eval !env t0 =
                                 -- following issue:
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
-                                go zero (fromIntegral n' :: Integer) where
-                                  go !acc 0 = acc
-                                  go acc m =
-                                  -- Detect a shortcut: if succ acc == acc then return acc immediately.
-                                    let next = vApp succ acc
-                                    in  if conv env next acc then acc else go next (m - 1)
+                                --
+                                -- Note about the short-circuit optimization for Natural/fold:
+                                -- If `succ acc == acc` then we stop the loop and return `acc`.
+                                -- This is helpful for numerical and other "bounded" types but
+                                -- should not be done when the accumulator is a large structure
+                                -- (lists, functions, etc.) that can grow indefinitely; in those cases
+                                -- Natural/fold will probably not benefit from the shortcut.
+                                go zero (fromIntegral n' :: Integer)
+                                  where
+                                    enableShortcut = boundedType natural
+
+                                    go !acc 0 = acc
+                                    go acc m =
+                                      -- Detect a shortcut: if succ acc == acc then return acc immediately.
+                                      -- Making !next strict, as `conv` is not always applied to `next`.
+                                      let !next = vApp succ acc
+                                      in  if enableShortcut && conv env next acc
+                                          then acc
+                                          else go next (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
