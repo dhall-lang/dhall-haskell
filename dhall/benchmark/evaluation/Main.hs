@@ -8,7 +8,7 @@ import System.FilePath   ((</>), takeBaseName, takeDirectory)
 import Test.Tasty.Bench
 
 import qualified Data.ByteString.Lazy as ByteString
-import qualified Data.Text          as Text
+import qualified Data.Text            as Text
 import qualified Data.Text.IO         as Text.IO
 import qualified Dhall
 import qualified Dhall.Binary         as Binary
@@ -17,8 +17,10 @@ import qualified Dhall.Import         as Import
 import qualified Dhall.Parser         as Parser
 import qualified Dhall.TypeCheck      as TypeCheck
 import qualified Lens.Micro
-import           Lens.Micro        ((^.))
+import           Lens.Micro           ((^.))
 import qualified System.Directory     as Directory
+import qualified System.Environment   as Environment
+import           System.IO            (hClose, openTempFile)
 
 type ParsedExpr = Core.Expr Parser.Src Core.Import
 type ResolvedExpr = Core.Expr Parser.Src Void
@@ -34,10 +36,14 @@ large1Settings =
     Lens.Micro.set Dhall.sourceName large1MainPath
         (Lens.Micro.set Dhall.rootDirectory large1Directory Dhall.defaultInputSettings)
 
--- | Like 'Dhall.resolveWithSettings' but with the semantic disk cache disabled
--- (as with @dhall --no-cache@).
-resolveWithoutSemanticCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
-resolveWithoutSemanticCache settings parsed =
+k8sDirectory :: FilePath
+k8sDirectory = "benchmark/evaluation/k8s"
+
+-- | Resolve imports with the semantic disk cache disabled (as with
+-- @dhall --no-cache@).  Combined with an empty @XDG_CACHE_HOME@ set in 'main',
+-- the semisemantic disk cache is also unused.
+resolveWithoutCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
+resolveWithoutCache settings parsed =
     Import.loadWithStatus
         ( Dhall.emptyStatusWithSettings
             (settings ^. Dhall.evaluateSettings)
@@ -46,8 +52,11 @@ resolveWithoutSemanticCache settings parsed =
         Import.IgnoreSemanticCache
         parsed
 
-k8sDirectory :: FilePath
-k8sDirectory = "benchmark/evaluation/k8s"
+-- | Abort if the expression is ill-typed.  Used at load time so fixtures never
+-- report OK timings when type-checking fails.
+ensureWellTyped :: ResolvedExpr -> IO ()
+ensureWellTyped expression =
+    either throw (\_ -> pure ()) (TypeCheck.typeOf expression)
 
 loadExamples :: IO [(String, ResolvedExpr)]
 loadExamples = do
@@ -68,14 +77,16 @@ loadExample path = do
             Lens.Micro.set Dhall.sourceName path
                 (Lens.Micro.set Dhall.rootDirectory (takeDirectory path) Dhall.defaultInputSettings)
 
-    resolved <- Dhall.resolveWithSettings settings parsed
+    resolved <- resolveWithoutCache settings parsed
+
+    ensureWellTyped resolved
 
     pure (takeBaseName path, resolved)
 
 -- | Load large1 inputs for per-phase benchmarks.
 --
--- Import resolution uses 'resolveWithoutSemanticCache'. A one-time normalize for
--- the CBOR fixture runs here so the timed @typecheck@ / @evaluation@ / @cbor@
+-- Import resolution uses 'resolveWithoutCache'. A one-time normalize for the
+-- CBOR fixture runs here so the timed @typecheck@ / @evaluation@ / @cbor@
 -- benches start from the right artifact. The @resolve@ bench re-runs resolution
 -- on the parsed expression via 'nfAppIO'.
 loadLarge1 :: IO (Text, ParsedExpr, ResolvedExpr, ResolvedExpr)
@@ -85,7 +96,9 @@ loadLarge1 = do
     parsed <-
         either throw pure (Parser.exprFromText large1MainPath text)
 
-    resolved <- resolveWithoutSemanticCache large1Settings parsed
+    resolved <- resolveWithoutCache large1Settings parsed
+
+    ensureWellTyped resolved
 
     let normalized = Core.normalize resolved
 
@@ -104,7 +117,9 @@ loadK8sExample (name, expressionText) = do
     parsed <-
         either throw pure (Parser.exprFromText sourceName (Text.pack expressionText))
 
-    resolved <- resolveWithoutSemanticCache settings parsed
+    resolved <- resolveWithoutCache settings parsed
+
+    ensureWellTyped resolved
 
     pure (name, settings, parsed, resolved)
 
@@ -115,8 +130,21 @@ loadK8sExamples =
         , ( "file4", "(./file4.dhall).mkPod" )
         ]
 
+-- | Point @XDG_CACHE_HOME@ at a fresh empty directory so Dhall's semantic and
+-- semisemantic disk caches cannot serve or pollute the user's real cache.
+withEmptyDhallCacheHome :: IO a -> IO a
+withEmptyDhallCacheHome action = do
+    tmp <- Directory.getTemporaryDirectory
+    (path, handle) <- openTempFile tmp "dhall-evaluation-bench"
+    hClose handle
+    Directory.removeFile path
+    let cacheHome = path <> ".xdg"
+    Directory.createDirectory cacheHome
+    Environment.setEnv "XDG_CACHE_HOME" cacheHome
+    action
+
 main :: IO ()
-main = do
+main = withEmptyDhallCacheHome $ do
     examples <- loadExamples
     (large1Text, large1Parsed, large1Resolved, large1Normalized) <- loadLarge1
     k8sExamples <- loadK8sExamples
@@ -133,7 +161,7 @@ main = do
             ]
         , bgroup "large1"
             [ bench "parse" (nf (parseLarge1 large1MainPath) large1Text)
-            , bench "resolve" (nfAppIO (resolveWithoutSemanticCache large1Settings) large1Parsed)
+            , bench "resolve" (nfAppIO (resolveWithoutCache large1Settings) large1Parsed)
             , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
             , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
             , bench "cbor" (nf encodeNormalized large1Normalized)
@@ -142,7 +170,7 @@ main = do
             "k8s"
             [ bgroup
                 name
-                [ bench "resolve" (nfAppIO (resolveWithoutSemanticCache settings) parsed)
+                [ bench "resolve" (nfAppIO (resolveWithoutCache settings) parsed)
                 , bench "typecheck" (nf typecheckResolvedExpr resolved)
                 , bench "evaluation" (nf normalizeResolvedExpr resolved)
                 ]
@@ -150,10 +178,13 @@ main = do
             ]
         ]
  where
-   -- These helpers are needed just to reduce polymorphism in TypeCheck.typeOf and Core.normalize.
-   typecheckResolvedExpr :: ResolvedExpr -> Maybe (Core.Expr Parser.Src Void)
-   typecheckResolvedExpr = either (const Nothing) Just . TypeCheck.typeOf
+   -- These helpers reduce polymorphism in TypeCheck.typeOf and Core.normalize.
+   -- Type-check failures must throw so tasty-bench reports FAIL instead of OK.
+   typecheckResolvedExpr :: ResolvedExpr -> Core.Expr Parser.Src Void
+   typecheckResolvedExpr = either throw id . TypeCheck.typeOf
 
+   -- Pure NbE; disk caches are irrelevant here. Ill-typed fixtures are rejected
+   -- at load time via 'ensureWellTyped'.
    normalizeResolvedExpr :: ResolvedExpr -> ResolvedExpr
    normalizeResolvedExpr = Core.normalize
 

@@ -1,4 +1,4 @@
-let limit = 5000
+let limit = 1000000
 
 let compose
     : ∀(a : Type) → ∀(b : Type) → ∀(c : Type) → (a → b) → (b → c) → a → c

@@ -1,30 +1,30 @@
-let limit = 6000
+let limit = 100000
 
 let iterate =
       λ(n : Natural) →
       λ(a : Type) →
       λ(f : a → a) →
       λ(x : a) →
+        -- Natural/fold builds [x, f x, …, fⁿ⁻¹ x] using the
+        -- cons / nil constructors.
         List/build
           a
           ( λ(list : Type) →
             λ(cons : a → list → list) →
-              List/fold
-                { index : Natural, value : {} }
-                ( List/indexed
-                    {}
-                    ( List/build
-                        {}
-                        ( λ(list : Type) →
-                          λ(cons : {} → list → list) →
-                            Natural/fold n list (cons {=})
-                        )
-                    )
-                )
-                list
-                ( λ(y : { index : Natural, value : {} }) →
-                    cons (Natural/fold y.index a f x)
-                )
+            λ(nil : list) →
+              let state =
+                    Natural/fold
+                      n
+                      { next : a, rest : list → list }
+                      ( λ(p : { next : a, rest : list → list }) →
+                          { next = f p.next
+                          , rest =
+                              λ(tail : list) → p.rest (cons p.next tail)
+                          }
+                      )
+                      { next = x, rest = λ(tail : list) → tail }
+
+              in  state.rest nil
           )
 
 let countTo = λ(x : Natural) → iterate x Natural (λ(x : Natural) → x + 1) 0
