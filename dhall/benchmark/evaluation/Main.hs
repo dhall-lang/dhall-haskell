@@ -20,6 +20,7 @@ import qualified Lens.Micro
 import           Lens.Micro           ((^.))
 import qualified System.Directory     as Directory
 import qualified System.Environment   as Environment
+import           System.IO            (hClose, openTempFile)
 
 type ParsedExpr = Core.Expr Parser.Src Core.Import
 type ResolvedExpr = Core.Expr Parser.Src Void
@@ -134,7 +135,11 @@ loadK8sExamples =
 withEmptyDhallCacheHome :: IO a -> IO a
 withEmptyDhallCacheHome action = do
     tmp <- Directory.getTemporaryDirectory
-    cacheHome <- Directory.createTempDirectory tmp "dhall-evaluation-bench-cache"
+    (path, handle) <- openTempFile tmp "dhall-evaluation-bench"
+    hClose handle
+    Directory.removeFile path
+    let cacheHome = path <> ".xdg"
+    Directory.createDirectory cacheHome
     Environment.setEnv "XDG_CACHE_HOME" cacheHome
     action
 
