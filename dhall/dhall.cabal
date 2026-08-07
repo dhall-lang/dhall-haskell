@@ -514,4 +514,5 @@ Benchmark evaluation
     Build-Depends:
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
+        time                                          ,
     Default-Language: Haskell2010
