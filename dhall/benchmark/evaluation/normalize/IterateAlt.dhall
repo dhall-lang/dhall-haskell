@@ -1,3 +1,5 @@
+-- Optimized version of iterate.dhall using a Natural/fold with an accumulator of type { next : a, rest : list → list }.
+
 let limit = 300000
 
 let iterate =
@@ -31,4 +33,4 @@ let a =
 
 let b = List/length Natural (iterate limit Natural (λ(x : Natural) → x + 1) 1)
 
-in  b
+in  a

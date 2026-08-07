@@ -29,4 +29,4 @@ let a =
 
 let b = List/length Natural (iterate limit Natural (λ(x : Natural) → x + 1) 1)
 
-in  b
+in  a
