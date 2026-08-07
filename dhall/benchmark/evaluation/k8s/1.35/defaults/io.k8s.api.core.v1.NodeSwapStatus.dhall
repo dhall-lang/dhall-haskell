@@ -1,1 +1,0 @@
-{ capacity = None Natural }

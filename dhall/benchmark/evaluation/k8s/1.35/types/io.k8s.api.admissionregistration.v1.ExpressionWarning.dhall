@@ -1,1 +1,0 @@
-{ fieldRef : Text, warning : Text }

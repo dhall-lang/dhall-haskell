@@ -1,1 +1,0 @@
-{ clientCIDR : Text, serverAddress : Text }

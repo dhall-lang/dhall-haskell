@@ -1,1 +1,0 @@
-{ address : Text, type : Text }

@@ -1,1 +1,0 @@
-< Nat : Natural | String : Text >

@@ -1,1 +1,0 @@
-{ apiGroup = None Text }

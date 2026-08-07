@@ -1,1 +1,0 @@
-{ status = None Text }

@@ -1,1 +1,0 @@
-{ devicePath : Text, name : Text }

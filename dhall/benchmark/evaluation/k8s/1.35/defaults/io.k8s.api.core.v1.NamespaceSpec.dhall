@@ -1,1 +1,0 @@
-{ finalizers = None (List Text) }

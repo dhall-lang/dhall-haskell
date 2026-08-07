@@ -1,1 +1,0 @@
-< Int : Integer | String : Text >

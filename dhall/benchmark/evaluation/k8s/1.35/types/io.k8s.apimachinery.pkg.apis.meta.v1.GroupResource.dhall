@@ -1,1 +1,0 @@
-{ group : Text, resource : Text }

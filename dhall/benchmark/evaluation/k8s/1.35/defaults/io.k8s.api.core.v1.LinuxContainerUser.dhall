@@ -1,1 +1,0 @@
-{ supplementalGroups = None (List Natural) }

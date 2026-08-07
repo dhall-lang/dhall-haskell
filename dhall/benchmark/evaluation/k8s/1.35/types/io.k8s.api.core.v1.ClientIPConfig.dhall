@@ -1,1 +1,0 @@
-{ timeoutSeconds : Optional Natural }

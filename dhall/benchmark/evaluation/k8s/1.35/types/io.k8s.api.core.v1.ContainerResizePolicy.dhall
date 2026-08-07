@@ -1,1 +1,0 @@
-{ resourceName : Text, restartPolicy : Text }
