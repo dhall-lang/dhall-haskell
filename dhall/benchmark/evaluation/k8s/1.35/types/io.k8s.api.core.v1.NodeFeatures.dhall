@@ -1,0 +1,1 @@
+{ supplementalGroupsPolicy : Optional Bool }

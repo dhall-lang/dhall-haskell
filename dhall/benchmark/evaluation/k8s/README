@@ -1,0 +1,12 @@
+file3 imports file2 imports file1 imports k8s
+file4 combines all in one and imports k8s
+
+echo "(./file3.dhall).mkPod" | dhall resolve > resolved_separate.dhall
+echo "(./file4.dhall).mkPod" | dhall resolve > resolved_combined.dhall
+
+echo "(./file3.dhall).mkPod" | dhall > normed_separate.dhall
+echo "(./file4.dhall).mkPod" | dhall > normed_combined.dhall
+
+==>
+  resolved_separate == resolved_combined
+  normed_separate == normed_combined

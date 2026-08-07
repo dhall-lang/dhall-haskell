@@ -1,0 +1,1 @@
+{ nonResourceURLs = None (List Text) }

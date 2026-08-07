@@ -8,7 +8,8 @@ import System.FilePath   ((</>), takeBaseName, takeDirectory)
 import Test.Tasty.Bench
 
 import qualified Data.ByteString.Lazy as ByteString
-import qualified Data.Text.IO         as Text
+import qualified Data.Text          as Text
+import qualified Data.Text.IO         as Text.IO
 import qualified Dhall
 import qualified Dhall.Binary         as Binary
 import qualified Dhall.Core           as Core
@@ -31,6 +32,9 @@ large1Settings =
     Lens.Micro.set Dhall.sourceName large1MainPath
         (Lens.Micro.set Dhall.rootDirectory large1Directory Dhall.defaultInputSettings)
 
+k8sDirectory :: FilePath
+k8sDirectory = "benchmark/evaluation/k8s"
+
 loadExamples :: IO [(String, ResolvedExpr)]
 loadExamples = do
     files <- sort <$> Directory.listDirectory normalizeDirectory
@@ -41,7 +45,7 @@ loadExamples = do
 
 loadExample :: FilePath -> IO (String, ResolvedExpr)
 loadExample path = do
-    text <- Text.readFile path
+    text <- Text.IO.readFile path
 
     parsed <-
         either throw pure (Parser.exprFromText path text)
@@ -62,7 +66,7 @@ loadExample path = do
 -- expression via 'nfAppIO'.
 loadLarge1 :: IO (Text, ParsedExpr, ResolvedExpr, ResolvedExpr)
 loadLarge1 = do
-    text <- Text.readFile large1MainPath
+    text <- Text.IO.readFile large1MainPath
 
     parsed <-
         either throw pure (Parser.exprFromText large1MainPath text)
@@ -73,10 +77,35 @@ loadLarge1 = do
 
     pure (text, parsed, resolved, normalized)
 
+k8sSettings :: FilePath -> Dhall.InputSettings
+k8sSettings sourceName =
+    Lens.Micro.set Dhall.sourceName sourceName
+        (Lens.Micro.set Dhall.rootDirectory k8sDirectory Dhall.defaultInputSettings)
+
+loadK8sExample :: (String, String) -> IO (String, Dhall.InputSettings, ParsedExpr, ResolvedExpr)
+loadK8sExample (name, expressionText) = do
+    let sourceName = k8sDirectory </> name <> ".dhall"
+    let settings = k8sSettings sourceName
+
+    parsed <-
+        either throw pure (Parser.exprFromText sourceName (Text.pack expressionText))
+
+    resolved <- Dhall.resolveWithSettings settings parsed
+
+    pure (name, settings, parsed, resolved)
+
+loadK8sExamples :: IO [(String, Dhall.InputSettings, ParsedExpr, ResolvedExpr)]
+loadK8sExamples =
+    traverse loadK8sExample
+        [ ( "file3", "(./file3.dhall).mkPod" )
+        , ( "file4", "(./file4.dhall).mkPod" )
+        ]
+
 main :: IO ()
 main = do
     examples <- loadExamples
     (large1Text, large1Parsed, large1Resolved, large1Normalized) <- loadLarge1
+    k8sExamples <- loadK8sExamples
 
     defaultMain
         [ bgroup
@@ -94,6 +123,16 @@ main = do
             , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
             , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
             , bench "cbor" (nf encodeNormalized large1Normalized)
+            ]
+        , bgroup
+            "k8s"
+            [ bgroup
+                name
+                [ bench "resolve" (nfAppIO (Dhall.resolveWithSettings settings) parsed)
+                , bench "typecheck" (nf typecheckResolvedExpr resolved)
+                , bench "evaluation" (nf normalizeResolvedExpr resolved)
+                ]
+            | (name, settings, parsed, resolved) <- k8sExamples
             ]
         ]
  where

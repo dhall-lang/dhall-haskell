@@ -1,0 +1,1 @@
+{ selector = None Text }

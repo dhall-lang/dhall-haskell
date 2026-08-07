@@ -1,0 +1,1 @@
+{ resourceClaimName = None Text }
