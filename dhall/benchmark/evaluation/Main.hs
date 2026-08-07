@@ -70,6 +70,9 @@ loadExample path = do
 
     resolved <- Dhall.resolveWithSettings settings parsed
 
+    -- Fail fast on ill-typed fixtures so they never report OK timings.
+    _ <- either throw pure (TypeCheck.typeOf resolved)
+
     pure (takeBaseName path, resolved)
 
 -- | Load large1 inputs for per-phase benchmarks.
@@ -151,8 +154,10 @@ main = do
         ]
  where
    -- These helpers are needed just to reduce polymorphism in TypeCheck.typeOf and Core.normalize.
-   typecheckResolvedExpr :: ResolvedExpr -> Maybe (Core.Expr Parser.Src Void)
-   typecheckResolvedExpr = either (const Nothing) Just . TypeCheck.typeOf
+   -- Type-check failures must throw so tasty-bench reports FAIL instead of OK
+   -- (returning @Nothing@ would make the bench succeed).
+   typecheckResolvedExpr :: ResolvedExpr -> Core.Expr Parser.Src Void
+   typecheckResolvedExpr = either throw id . TypeCheck.typeOf
 
    normalizeResolvedExpr :: ResolvedExpr -> ResolvedExpr
    normalizeResolvedExpr = Core.normalize
