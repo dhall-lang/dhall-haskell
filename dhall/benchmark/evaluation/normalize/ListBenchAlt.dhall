@@ -1,4 +1,4 @@
-let limit = 3000
+let limit = 100000
 
 let iterate =
       λ(n : Natural) →
