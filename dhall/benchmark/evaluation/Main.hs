@@ -1,6 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
-import Control.Exception (throw)
+import Control.Exception  (throw)
 import Data.Char         (toLower)
 import Data.List         (isInfixOf, isPrefixOf, isSuffixOf, sort)
 import Data.Maybe        (listToMaybe, mapMaybe)
@@ -39,6 +41,12 @@ large1Settings :: Dhall.InputSettings
 large1Settings =
     Lens.Micro.set Dhall.sourceName large1MainPath
         (Lens.Micro.set Dhall.rootDirectory large1Directory Dhall.defaultInputSettings)
+
+large2Directory :: FilePath
+large2Directory = "benchmark/evaluation/large2"
+
+large2MainPath :: FilePath
+large2MainPath = large2Directory </> "main.dhall"
 
 k8sDirectory :: FilePath
 k8sDirectory = "benchmark/evaluation/k8s"
@@ -132,7 +140,14 @@ large1Labels =
     , "large1.resolve"
     , "large1.typecheck"
     , "large1.evaluation"
-    , "large1.cbor"
+    ]
+
+large2Labels :: [String]
+large2Labels =
+    [ "large2"
+    , "large2.normalize"
+    , "large2.cbor.encode"
+    , "large2.cbor.decode"
     ]
 
 k8sLabels :: String -> [String]
@@ -185,13 +200,18 @@ loadExample path = do
 
     pure (name, resolved)
 
--- | Load large1 inputs for per-phase benchmarks.
+encodeNormalized :: ResolvedExpr -> ByteString.ByteString
+encodeNormalized = Binary.encodeExpression . Core.denote
+
+decodeNormalized :: ByteString.ByteString -> Core.Expr Void Void
+decodeNormalized =
+    either throw id . Binary.decodeExpression
+
+-- | Load large1 inputs for the existing per-phase benchmarks.
 --
--- Import resolution for prep uses 'resolveWithCache'. A one-time normalize for
--- the CBOR fixture runs here so the timed @typecheck@ / @evaluation@ / @cbor@
--- benches start from the right artifact. The timed @resolve@ bench re-runs
--- resolution with 'resolveWithoutCache' via 'nfAppIO'.
-loadLarge1 :: IO (Text, ParsedExpr, ResolvedExpr, ResolvedExpr)
+-- Import resolution for prep uses 'resolveWithCache'. The timed @resolve@
+-- bench re-runs resolution with 'resolveWithoutCache' via 'nfAppIO'.
+loadLarge1 :: IO (Text, ParsedExpr, ResolvedExpr)
 loadLarge1 = do
     say "Loading large1…"
 
@@ -205,13 +225,38 @@ loadLarge1 = do
 
     timed "large1: typecheck" (ensureWellTyped resolved)
 
-    -- Lazy: prep time may under-report if work is deferred until the cbor bench.
-    normalized <- timed "large1: normalize (for cbor fixture)" $
-        pure (Core.normalize resolved)
-
     say "  large1: ready"
 
-    pure (text, parsed, resolved, normalized)
+    pure (text, parsed, resolved)
+
+-- | Load large2 for CBOR benchmarking: parse, resolve, typecheck, then
+-- pre-encode once to obtain decode input and report CBOR size.
+loadLarge2 :: IO (ResolvedExpr, ResolvedExpr, ByteString.ByteString)
+loadLarge2 = do
+    say "Loading large2…"
+
+    text <- timed "large2: read" (Text.IO.readFile large2MainPath)
+
+    parsed <- timed "large2: parse" $
+        either throw pure (Parser.exprFromText large2MainPath text)
+
+    resolved <- timed "large2: resolve (assert no imports)" $
+        Import.assertNoImports parsed
+
+    timed "large2: typecheck" (ensureWellTyped resolved)
+
+    normalized <- timed "large2: normalize (for encode/decode fixture)" $
+        pure (Core.normalize resolved)
+
+    encoded <- timed "large2: encode CBOR (for decode fixture)" $
+        pure (encodeNormalized normalized)
+
+    let cborBytes = ByteString.length encoded
+    say $ "  large2: CBOR size: " <> show cborBytes <> " bytes"
+
+    say "  large2: ready"
+
+    pure (resolved, normalized, encoded)
 
 k8sSettings :: FilePath -> Dhall.InputSettings
 k8sSettings sourceName =
@@ -274,6 +319,14 @@ main = do
                 say "Skipping large1 (does not match pattern)"
                 pure Nothing
 
+    let wantLarge2 = any (couldMatch mPattern) large2Labels
+    large2 <-
+        if wantLarge2
+            then Just <$> loadLarge2
+            else do
+                say "Skipping large2 (does not match pattern)"
+                pure Nothing
+
     k8sExamples <- loadK8sExamples mPattern
 
     say "Starting tasty-bench…"
@@ -294,9 +347,18 @@ main = do
               , bench "resolve" (nfAppIO (resolveWithoutCache large1Settings) large1Parsed)
               , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
               , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
-              , bench "cbor" (nf encodeNormalized large1Normalized)
               ]
-          | Just (large1Text, large1Parsed, large1Resolved, large1Normalized) <- [large1]
+          | Just (large1Text, large1Parsed, large1Resolved) <- [large1]
+          ]
+        , [ bgroup "large2"
+              [ bench "normalize" (nf normalizeResolvedExpr large2Resolved)
+              , bgroup
+                    "cbor"
+                    [ bench "encode" (nf encodeNormalized large2Normalized)
+                    , bench "decode" (nf decodeNormalized large2Encoded)
+                    ]
+              ]
+          | Just (large2Resolved, large2Normalized, large2Encoded) <- [large2]
           ]
         , [ bgroup
               "k8s"
@@ -325,6 +387,3 @@ main = do
    parseLarge1 :: FilePath -> Text -> ParsedExpr
    parseLarge1 path text =
        either throw id (Parser.exprFromText path text)
-
-   encodeNormalized :: ResolvedExpr -> ByteString.ByteString
-   encodeNormalized = Binary.encodeExpression . Core.denote
