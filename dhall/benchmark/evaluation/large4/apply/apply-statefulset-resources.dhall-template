@@ -1,0 +1,38 @@
+let baseSchema = ../base/schema.dhall
+
+let overlaySchema = ../customizations/schema.dhall
+
+let resourceCombinator = ../combinators/container-resources.dhall
+
+{{range .StatefulSetTuples}}
+let applyResources{{.Identifier}}
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+    = λ(base : baseSchema.Type) →
+      λ(overlay : overlaySchema.Type) →
+        let baseResources =
+              base.{{.Component}}.StatefulSet.{{.Name}}.spec.template.spec.containers.{{.ContainerName}}.resources
+
+        let overlayResources =
+              overlay.{{.Component}}.StatefulSet.{{.Name}}.containers.{{.ContainerName}}.resources
+
+        let finalResources =
+              resourceCombinator.overlayMerge
+                baseResources
+                overlayResources
+
+        in  base
+          with {{.Component}}.StatefulSet.{{.Name}}.spec.template.spec.containers.{{.ContainerName}}.resources =
+              finalResources
+{{end}}
+
+let applyAll
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+        = λ(base : baseSchema.Type) →
+          λ(overlay : overlaySchema.Type) →
+          let r = base
+          {{range .StatefulSetTuples}}
+          let r = applyResources{{.Identifier}} r overlay
+          {{end}}
+          in r
+
+in  applyAll

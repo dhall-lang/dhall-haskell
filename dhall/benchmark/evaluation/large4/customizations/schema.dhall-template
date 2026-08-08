@@ -1,0 +1,56 @@
+let customization/container = ./container.dhall
+
+let container/image = ./image.dhall
+
+let schema =
+      { Type =
+          { Shared :
+              { namespace : Optional Text, imageMods : container/image.Type }
+          }
+          {{range .DeploymentTuples}}
+          //\\
+          { {{.Component}} :
+              { Deployment :
+                  { {{.Name}} :
+                      { containers :
+                          { {{.ContainerName}} : customization/container.Type
+                          }
+                      }
+                  }
+              }
+           }
+           {{end}}
+           {{range .StatefulSetTuples}}
+           //\\
+          { {{.Component}} :
+              { StatefulSet :
+                  { {{.Name}} :
+                      { containers :
+                          { {{.ContainerName}} : customization/container.Type
+                          }
+                      }
+                  }
+              }
+          }
+          {{end}}
+      , default =
+        { Shared =
+          { namespace = None Text, imageMods = container/image.default }
+         }
+         {{range .DeploymentTuples}}
+         /\
+        { {{.Component}}.Deployment.{{.Name}}.containers =
+          { {{.ContainerName}} = customization/container.default
+          }
+         }
+        {{end}}
+        {{range .StatefulSetTuples}}
+        /\
+        { {{.Component}}.StatefulSet.{{.Name}}.containers =
+          { {{.ContainerName}} = customization/container.default
+          }
+        }
+        {{end}}
+      }
+
+in  schema

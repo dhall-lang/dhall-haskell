@@ -1,0 +1,41 @@
+let baseSchema = ../base/schema.dhall
+
+let overlaySchema = ../customizations/schema.dhall
+
+let overlayImage = ../combinators/container-images.dhall
+
+{{range .StatefulSetTuples}}
+let applyImage{{.Identifier}}
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+    = λ(base : baseSchema.Type) →
+      λ(overlay : overlaySchema.Type) →
+        let baseImage =
+              base.{{.Component}}.StatefulSet.{{.Name}}.spec.template.spec.containers.{{.ContainerName}}.image
+
+        let overlaySharedImageMods = overlay.Shared.imageMods
+
+        let overlayVs =
+              overlay.{{.Component}}.StatefulSet.{{.Name}}.containers.{{.ContainerName}}.vs
+
+        let finalImage =
+              overlayImage
+                baseImage
+                overlaySharedImageMods
+                overlayVs
+
+        in  base
+          with {{.Component}}.StatefulSet.{{.Name}}.spec.template.spec.containers.{{.ContainerName}}.image =
+              finalImage
+{{end}}
+
+let applyAll
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+        = λ(base : baseSchema.Type) →
+          λ(overlay : overlaySchema.Type) →
+          let r = base
+          {{range .StatefulSetTuples}}
+          let r = applyImage{{.Identifier}} r overlay
+          {{end}}
+          in r
+
+in  applyAll

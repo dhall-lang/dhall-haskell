@@ -1,0 +1,36 @@
+let baseSchema = ../base/schema.dhall
+
+let overlaySchema = ../customizations/schema.dhall
+
+{{range .KindTuples}}
+let applyNamespace{{.Identifier}}
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+    = λ(base : baseSchema.Type) →
+      λ(overlay : overlaySchema.Type) →
+        let baseNamespace =
+              base.{{.Component}}.{{.Kind}}.{{.Name}}.metadata.namespace
+
+        let overlayNamespace = overlay.Shared.namespace
+
+        let finalNamespace =
+            merge {
+                Some = λ(x : Text) → Some x
+                , None = baseNamespace
+            }
+            overlayNamespace
+
+        in  base
+          with {{.Component}}.{{.Kind}}.{{.Name}}.metadata.namespace = finalNamespace
+{{end}}
+
+let applyAll
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+        = λ(base : baseSchema.Type) →
+          λ(overlay : overlaySchema.Type) →
+          let r = base
+          {{range .KindTuples}}
+          let r = applyNamespace{{.Identifier}} r overlay
+          {{end}}
+          in r
+
+in  applyAll
