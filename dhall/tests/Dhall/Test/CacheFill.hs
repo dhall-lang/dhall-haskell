@@ -15,6 +15,7 @@ import qualified System.Directory       as Directory
 import qualified System.Environment     as Environment
 import qualified System.IO.Temp         as Temp
 import qualified Data.Text              as Text
+import qualified Test.Tasty             as Tasty
 
 cacheFillTest :: IO ()
 cacheFillTest = Temp.withSystemTempDirectory "dhall-cache" $ \cacheDir -> do
@@ -63,4 +64,7 @@ clearCache cacheDir = do
     when exists (Directory.removeDirectoryRecursive cacheDir)
 
 getTests :: IO TestTree
-getTests = return (testCase "Cache write for fallbacks" cacheFillTest)
+getTests = return
+    (Tasty.testGroup "Cache fill tests"
+        [ testCase "Cache write for fallbacks" cacheFillTest
+        ])

@@ -1,0 +1,38 @@
+let baseSchema = ../base/schema.dhall
+
+let overlaySchema = ../customizations/schema.dhall
+
+{{range .DeploymentTuples}}
+let applyAddtionalEnv{{.Identifier}}
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+    = λ(base : baseSchema.Type) →
+      λ(overlay : overlaySchema.Type) →
+        let baseAdditionalEnv =
+              base.{{.Component}}.Deployment.{{.Name}}.spec.template.spec.containers.{{.ContainerName}}.additionalEnv
+
+        let overlayAdditionalEnv =
+              overlay.{{.Component}}.Deployment.{{.Name}}.containers.{{.ContainerName}}.additionalEnv
+
+        let finalAdditionalEnv =
+              merge {
+                        Some = λ(x : List {name : Text, value : Text }) → Some x
+                       , None = baseAdditionalEnv
+                     }
+                 overlayAdditionalEnv
+
+        in  base
+          with {{.Component}}.Deployment.{{.Name}}.spec.template.spec.containers.{{.ContainerName}}.additionalEnv =
+              finalAdditionalEnv
+{{end}}
+
+let applyAll
+    : baseSchema.Type → overlaySchema.Type → baseSchema.Type
+        = λ(base : baseSchema.Type) →
+          λ(overlay : overlaySchema.Type) →
+          let r = base
+          {{range .DeploymentTuples}}
+          let r = applyAddtionalEnv{{.Identifier}} r overlay
+          {{end}}
+          in r
+
+in  applyAll

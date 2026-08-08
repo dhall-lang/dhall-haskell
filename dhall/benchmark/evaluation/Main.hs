@@ -48,6 +48,30 @@ large2Directory = "benchmark/evaluation/large2"
 large2MainPath :: FilePath
 large2MainPath = large2Directory </> "main.dhall"
 
+large3Directory :: FilePath
+large3Directory = "benchmark/evaluation/large3"
+
+large3PipelinePath :: FilePath
+large3PipelinePath = large3Directory </> "pipeline.dhall"
+
+large4Directory :: FilePath
+large4Directory = "benchmark/evaluation/large4"
+
+large4PipelinePath :: FilePath
+large4PipelinePath = large4Directory </> "generate-example.dhall"
+
+large5Directory :: FilePath
+large5Directory = "benchmark/evaluation/large5"
+
+large5CodePipelinePath :: FilePath
+large5CodePipelinePath = large5Directory </> "pipeline-code.dhall"
+
+large5SourcePipelinePath :: FilePath
+large5SourcePipelinePath = large5Directory </> "pipeline-source.dhall"
+
+large6Directory :: FilePath
+large6Directory = "benchmark/evaluation/large6"
+
 k8sDirectory :: FilePath
 k8sDirectory = "benchmark/evaluation/k8s"
 
@@ -150,6 +174,41 @@ large2Labels =
     , "large2.cbor.decode"
     ]
 
+phaseLabels :: String -> [String]
+phaseLabels prefix =
+    [ prefix
+    , prefix <> ".resolve"
+    , prefix <> ".typecheck"
+    , prefix <> ".evaluation"
+    ]
+
+large3Labels :: [String]
+large3Labels = phaseLabels "large3"
+
+large4Labels :: [String]
+large4Labels = phaseLabels "large4"
+
+large5CodeLabels :: [String]
+large5CodeLabels = phaseLabels "large5.code"
+
+large5SourceLabels :: [String]
+large5SourceLabels = phaseLabels "large5.source"
+
+large6Labels :: [String]
+large6Labels =
+    "large6"
+        : concat
+            [ phaseLabels ("large6." <> variant)
+            | variant <-
+                [ "slow_parse.as_code"
+                , "slow_parse.as_source"
+                , "slow_eval.as_code"
+                , "slow_eval.as_source"
+                , "slow_typecheck.as_code"
+                , "slow_typecheck.as_source"
+                ]
+            ]
+
 k8sLabels :: String -> [String]
 k8sLabels name =
     [ "k8s." <> name
@@ -206,6 +265,68 @@ encodeNormalized = Binary.encodeExpression . Core.denote
 decodeNormalized :: ByteString.ByteString -> Core.Expr Void Void
 decodeNormalized =
     either throw id . Binary.decodeExpression
+
+data PipelineBench = PipelineBench
+    { pbGroupLabel :: String
+    , pbSettings :: Dhall.InputSettings
+    , pbParsed :: ParsedExpr
+    , pbResolved :: ResolvedExpr
+    }
+
+pipelineSettings :: FilePath -> FilePath -> Dhall.InputSettings
+pipelineSettings directory path =
+    Lens.Micro.set Dhall.sourceName path
+        (Lens.Micro.set Dhall.rootDirectory directory Dhall.defaultInputSettings)
+
+-- | Load a Dhall pipeline for resolve / typecheck / evaluation benches.
+loadPipelineBench :: String -> FilePath -> FilePath -> IO PipelineBench
+loadPipelineBench groupLabel directory relativePath = do
+    let path = directory </> relativePath
+    let prefix = groupLabel
+
+    text <- timed (prefix <> ": read") (Text.IO.readFile path)
+
+    parsed <- timed (prefix <> ": parse") $
+        either throw pure (Parser.exprFromText path text)
+
+    let settings = pipelineSettings directory path
+
+    resolved <- timed (prefix <> ": resolve (cache on)") $
+        resolveWithCache settings parsed
+
+    timed (prefix <> ": typecheck") (ensureWellTyped resolved)
+    say $ "  " <> prefix <> ": ready"
+
+    pure
+        PipelineBench
+            { pbGroupLabel = groupLabel
+            , pbSettings = settings
+            , pbParsed = parsed
+            , pbResolved = resolved
+            }
+
+loadLarge6Variants :: Maybe String -> IO [PipelineBench]
+loadLarge6Variants mPattern = do
+    let candidates =
+            [ ("large6.slow_parse.as_code", "pipeline-code-long-parse.dhall")
+            , ("large6.slow_parse.as_source", "pipeline-source-long-parse.dhall")
+            , ("large6.slow_eval.as_code", "pipeline-code-long-eval.dhall")
+            , ("large6.slow_eval.as_source", "pipeline-source-long-eval.dhall")
+            , ("large6.slow_typecheck.as_code", "pipeline-code-long-typecheck.dhall")
+            , ("large6.slow_typecheck.as_source", "pipeline-source-long-typecheck.dhall")
+            ]
+        selected =
+            [ entry
+            | entry@(label, _) <- candidates
+            , any (couldMatch mPattern) (phaseLabels label)
+            ]
+    if null selected
+        then do
+            say "Skipping large6 fixtures (do not match pattern)"
+            pure []
+        else do
+            say $ "Loading large6 fixtures (" <> show (length selected) <> " file(s))…"
+            traverse (\(label, file) -> loadPipelineBench label large6Directory file) selected
 
 -- | Load large1 inputs for the existing per-phase benchmarks.
 --
@@ -329,6 +450,50 @@ main = do
 
     k8sExamples <- loadK8sExamples mPattern
 
+    let wantLarge3 = any (couldMatch mPattern) large3Labels
+    large3 <-
+        if wantLarge3
+            then Just <$> loadPipelineBench "large3" large3Directory "pipeline.dhall"
+            else do
+                say "Skipping large3 (does not match pattern)"
+                pure Nothing
+
+    let wantLarge4 = any (couldMatch mPattern) large4Labels
+    large4 <-
+        if wantLarge4
+            then Just <$> loadPipelineBench "large4" large4Directory "generate-example.dhall"
+            else do
+                say "Skipping large4 (does not match pattern)"
+                pure Nothing
+
+    let wantLarge5Code = any (couldMatch mPattern) large5CodeLabels
+    large5Code <-
+        if wantLarge5Code
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large5.code"
+                        large5Directory
+                        "pipeline-code.dhall"
+            else do
+                say "Skipping large5.code (does not match pattern)"
+                pure Nothing
+
+    let wantLarge5Source = any (couldMatch mPattern) large5SourceLabels
+    large5Source <-
+        if wantLarge5Source
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large5.source"
+                        large5Directory
+                        "pipeline-source.dhall"
+            else do
+                say "Skipping large5.source (does not match pattern)"
+                pure Nothing
+
+    large6Variants <- loadLarge6Variants mPattern
+
     say "Starting tasty-bench…"
 
     defaultMain $ concat
@@ -372,6 +537,19 @@ main = do
               ]
           | not (null k8sExamples)
           ]
+        , [ pipelineBenchGroup large3Bench
+          | Just large3Bench <- [large3]
+          ]
+        , [ pipelineBenchGroup large4Bench
+          | Just large4Bench <- [large4]
+          ]
+        , [ pipelineBenchGroup large5CodeBench
+          | Just large5CodeBench <- [large5Code]
+          ]
+        , [ pipelineBenchGroup large5SourceBench
+          | Just large5SourceBench <- [large5Source]
+          ]
+        , map pipelineBenchGroup large6Variants
         ]
  where
    -- These helpers reduce polymorphism in TypeCheck.typeOf and Core.normalize.
@@ -383,6 +561,14 @@ main = do
    -- at load time via 'ensureWellTyped'.
    normalizeResolvedExpr :: ResolvedExpr -> ResolvedExpr
    normalizeResolvedExpr = Core.normalize
+
+   pipelineBenchGroup :: PipelineBench -> Benchmark
+   pipelineBenchGroup fixture =
+       bgroup (pbGroupLabel fixture)
+           [ bench "resolve" (nfAppIO (resolveWithoutCache (pbSettings fixture)) (pbParsed fixture))
+           , bench "typecheck" (nf typecheckResolvedExpr (pbResolved fixture))
+           , bench "evaluation" (nf normalizeResolvedExpr (pbResolved fixture))
+           ]
 
    parseLarge1 :: FilePath -> Text -> ParsedExpr
    parseLarge1 path text =

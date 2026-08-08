@@ -112,6 +112,7 @@ module Dhall.Import (
     , localToPath
     , hashExpression
     , hashExpressionToCode
+    , cacheProductHash
     , writeExpressionToSemanticCache
     , assertNoImports
     , Manager
@@ -162,6 +163,7 @@ import Control.Exception
     , SomeException
     , toException
     )
+import Control.Monad              (when)
 import Control.Monad.Catch        (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
@@ -506,6 +508,49 @@ chainedChangeMode :: ImportMode -> Chained -> Chained
 chainedChangeMode mode (Chained (Import importHashed _)) =
     Chained (Import importHashed mode)
 
+-- | Remove the hash from a chained import while preserving its type and mode
+chainedRemoveHash :: Chained -> Chained
+chainedRemoveHash (Chained (Import importHashed mode)) =
+    Chained (Import (importHashed { hash = Nothing }) mode)
+
+-- | Convert a chained local import into an absolute local import so a later
+--   traversal does not chain it a second time against a different parent.
+preserveChainedImport :: Chained -> StateT Status IO Import
+preserveChainedImport child@(Chained import_) =
+    case importType (importHashed import_) of
+        Local prefix file -> do
+            Status { _getHomeDirectory } <- State.get
+
+            path <- liftIO (localToPathWith _getHomeDirectory prefix file)
+            absolutePath <- liftIO (Directory.makeAbsolute path)
+
+            let rootRelativePath = FilePath.makeRelative "/" absolutePath
+
+            let preservedFile =
+                    File
+                        { directory =
+                            Directory
+                                ( fmap Text.pack
+                                . reverse
+                                . FilePath.splitDirectories
+                                $ FilePath.takeDirectory rootRelativePath
+                                )
+                        , file = Text.pack (FilePath.takeFileName rootRelativePath)
+                        }
+
+            let preservedImportType = Local Absolute (canonicalize preservedFile)
+
+            return
+                import_
+                    { importHashed =
+                        (importHashed import_)
+                            { importType = preservedImportType
+                            }
+                    }
+
+        _ ->
+            return (chainedImport child)
+
 -- | Chain imports, also typecheck and normalize headers if applicable.
 chainImport :: Chained -> Import -> StateT Status IO Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
@@ -516,8 +561,8 @@ chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote 
 chainImport (Chained parent) child =
     return (Chained (canonicalize (parent <> child)))
 
--- | Load an import, resulting in a fully resolved, type-checked and normalised
---   expression. @loadImport@ handles the \"hot\" cache in @Status@ and defers
+-- | Load an import, resulting in a fully resolved and type-checked expression.
+--   @loadImport@ handles the \"hot\" cache in @Status@ and defers
 --   to @loadImportWithSemanticCache@ for imports that aren't in the @Status@
 --   cache already.
 loadImport :: Chained -> StateT Status IO ImportSemantics
@@ -531,6 +576,133 @@ loadImport import_ = do
             zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
             return importSemantics
 
+-- | Compute the semantic cache product for an import, write it to the semantic
+--   cache, and return the corresponding hash. For ordinary code imports this is
+--   the alpha-beta-normalized expression. For `as Source` imports this is the
+--   finalized import-free result without an extra normalization pass, so frozen
+--   `as Source` hashes match the expanded import-free expression.
+cacheProductHash :: Import -> StateT Status IO Dhall.Crypto.SHA256Digest
+cacheProductHash import_ = do
+    Status { _reportWarning, _stack } <- State.get
+    parent :| _ <- zoom stack State.get
+    child <- chainImport parent import_
+    let stackWithChild = NonEmpty.cons child _stack
+
+    zoom stack (State.put stackWithChild)
+
+    semanticHash <- case importMode import_ of
+        Source -> do
+            ImportSemantics{ importSemantics } <- loadImport child
+
+            let bytes = encodeExpression importSemantics
+
+            let semanticHash = Dhall.Crypto.sha256Hash bytes
+
+            zoom cacheWarning (writeToSemanticCache _reportWarning semanticHash bytes)
+
+            return semanticHash
+
+        _ -> do
+            ImportSemantics{ importSemantics } <- loadImport child
+
+            let normalizedExpression = Core.alphaNormalize importSemantics
+
+            let bytes = encodeExpression normalizedExpression
+
+            let semanticHash = Dhall.Crypto.sha256Hash bytes
+
+            zoom cacheWarning (writeToSemanticCache _reportWarning semanticHash bytes)
+
+            return semanticHash
+
+    zoom stack (State.put _stack)
+
+    return semanticHash
+
+-- | Controls what happens to hash-protected child imports. While traversing
+--   an `as Source` import tree, they are not inlined but preserved as import
+--   references. Unhashed child imports are always recursively
+--   resolved and inlined.
+data FrozenImportResolutionMode
+    = PreserveHashedImports
+    | InlineHashedImports
+  deriving (Eq, Ord)
+
+{-| Manual toggle for source-path opportunistic semantic cache fill.
+
+    When 'False' (default), @loadWithSource@ does not write semantic cache
+    entries after a successful @ImportAlt@ fallback during an @as Source@
+    preserve pass. This avoids an extra @finalizeSourceImport@ typecheck when
+    a fallback succeeds.
+
+    When 'True', after @missing sha256:… as Source ? …@ resolves via the
+    right-hand branch (and that branch contains an @as Source@ import), the
+    interpreter finalizes the fallback result and writes it to the semantic
+    cache when the computed hash matches the hash on the left. Change this
+    constant and recompile to compare benchmark results with opportunistic
+    fill enabled vs disabled.
+
+    See @trySourceOpportunisticCacheFill@.
+-}
+sourceOpportunisticCacheFillEnabled :: Bool
+sourceOpportunisticCacheFillEnabled = False
+
+findImportHashAndMode
+    :: Expr s Import -> Maybe (Dhall.Crypto.SHA256Digest, ImportMode)
+findImportHashAndMode expr = case Core.shallowDenote expr of
+    Embed (Import (ImportHashed (Just hash) _) mode) -> Just (hash, mode)
+    ImportAlt left right -> findImportHashAndMode left <|> findImportHashAndMode right
+    _ -> Nothing
+
+branchContainsSourceImport :: Expr s Import -> Bool
+branchContainsSourceImport expr = case Core.shallowDenote expr of
+    Embed Import{ importMode = Source } -> True
+    ImportAlt left right ->
+        branchContainsSourceImport left || branchContainsSourceImport right
+    Note _ e ->
+        branchContainsSourceImport e
+    _ -> False
+
+-- | Opportunistically populate the semantic cache during an @as Source@
+--   preserve pass when @sourceOpportunisticCacheFillEnabled@ is 'True'.
+--
+--   This runs inside @loadWithSource@ after @ImportAlt@ resolves the missing
+--   left-hand import via the fallback branch @fallbackBranch@. The computed
+--   cache product matches @cacheProductHash@ for @as Source@: the finalized
+--   import-free expression, not the intermediate preserve-pass artifact.
+trySourceOpportunisticCacheFill
+    :: FrozenImportResolutionMode
+    -> Expr Src Import
+    -> Expr Src Import
+    -> Expr Src Import
+    -> StateT Status IO ()
+trySourceOpportunisticCacheFill frozenImportResolutionMode left fallbackBranch result =
+    when sourceOpportunisticCacheFillEnabled $
+        case findImportHashAndMode left of
+            Just (expectedHash, expectedMode)
+                | expectedMode == Source
+                , frozenImportResolutionMode == PreserveHashedImports
+                , branchContainsSourceImport fallbackBranch -> do
+                    Status { _reportWarning, _semanticCacheMode } <- State.get
+
+                    case _semanticCacheMode of
+                        IgnoreSemanticCache ->
+                            return ()
+
+                        UseSemanticCache -> do
+                            ImportSemantics { importSemantics } <-
+                                finalizeSourceImport (Core.denote result)
+
+                            let bytes = encodeExpression importSemantics
+
+                            let actualHash = Dhall.Crypto.sha256Hash bytes
+
+                            when (actualHash == expectedHash) $
+                                zoom cacheWarning
+                                    (writeToSemanticCache _reportWarning expectedHash bytes)
+            _ ->
+                return ()
+
 -- | Load an import from the 'semantic cache'. Defers to
 --   @loadImportWithSemisemanticCache@ for imports that aren't frozen (and
 --   therefore not cached semantically), as well as those that aren't cached yet.
@@ -542,6 +714,59 @@ loadImportWithSemanticCache
 loadImportWithSemanticCache
   import_@(Chained (Import _ Location)) =
     loadImportWithSemisemanticCache import_
+
+loadImportWithSemanticCache
+  import_@(Chained (Import (ImportHashed (Just semanticHash) _) Source)) = do
+    -- Frozen `as Source` imports cache the finalized import-free expression,
+    -- not the intermediate source artifact with preserved import references.
+    Status { .. } <- State.get
+    mCached <-
+        case _semanticCacheMode of
+            UseSemanticCache ->
+                zoom cacheWarning (fetchFromSemanticCache _reportWarning semanticHash)
+            IgnoreSemanticCache ->
+                pure Nothing
+
+    case mCached of
+        Just bytesStrict -> do
+            let actualHash = Dhall.Crypto.sha256Hash bytesStrict
+
+            if semanticHash == actualHash
+                then do
+                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+
+                    importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
+                        Left  err -> throwMissingImport (Imported _stack err)
+                        Right e   -> return e
+
+                    return (ImportSemantics {..})
+                else do
+                    liftIO $ _reportWarning $ Text.pack $
+                        makeHashMismatchMessage semanticHash actualHash
+                        <> "\n"
+                        <> "The interpreter will attempt to fix the cached import\n"
+                    fetch
+
+        Nothing -> fetch
+  where
+    fetch = do
+        Status{ _reportWarning, _stack } <- State.get
+
+        ImportSemantics{ importSemantics } <- loadImportWithSemisemanticCache import_
+
+        let bytes = encodeExpression importSemantics
+
+        let actualHash = Dhall.Crypto.sha256Hash bytes
+
+        let expectedHash = semanticHash
+
+        if actualHash == expectedHash
+            then do
+                zoom cacheWarning (writeToSemanticCache _reportWarning semanticHash bytes)
+            else
+                throwMissingImport (Imported _stack HashMismatch{..})
+
+        return ImportSemantics{..}
 
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
@@ -600,7 +825,9 @@ loadImportWithSemanticCache
 
 
 
--- Fetch encoded normal form from "semantic cache"
+-- Fetch encoded semantic-cache bytes. For ordinary imports these are encoded
+-- normal forms; for frozen `as Source` imports these are finalized import-free,
+-- non-normalized expressions.
 fetchFromSemanticCache
     :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => (Text -> IO ()) -> Dhall.Crypto.SHA256Digest
@@ -637,33 +864,17 @@ writeToSemanticCache report hash bytes = do
 -- scratch.
 loadImportWithSemisemanticCache
   :: Chained -> StateT Status IO ImportSemantics
+loadImportWithSemisemanticCache
+  import_@(Chained (Import _ Source)) = do
+    sourceArtifact <- loadSourceImportArtifact import_
+
+    finalizeSourceImport sourceArtifact
+
 loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
-    text <- fetchFresh importType
-    Status {..} <- State.get
-
-    path <- case importType of
-        Local prefix file -> liftIO $ do
-            path <- localToPathWith _getHomeDirectory prefix file
-            absolutePath <- Directory.makeAbsolute path
-            return absolutePath
-        Remote url -> do
-            let urlText = Core.pretty (url { headers = Nothing })
-            return (Text.unpack urlText)
-        Env env -> return $ Text.unpack env
-        Missing -> throwM (MissingImports [])
-
-    let parser = unParser $ do
-            Text.Parser.Token.whiteSpace
-            r <- Dhall.Parser.expr
-            Text.Parser.Combinators.eof
-            return r
-
-    parsedImport <- case Text.Megaparsec.parse parser path text of
-        Left  errInfo ->
-            throwMissingImport (Imported _stack (ParseError errInfo text))
-        Right expr    -> return expr
+    parsedImport <- parseImportedExpression importType
 
     resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
+    Status {..} <- State.get
 
     -- Check the semi-semantic cache. See
     -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
@@ -698,8 +909,8 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                         Left  err -> throwMissingImport (Imported _stack err)
                         Right _   -> return ()
 
-                    let betaNormal =
-                            Core.normalizeWith _normalizer substitutedExpr
+                    betaNormal <-
+                        liftIO (Exception.evaluate (Core.normalizeWith _normalizer substitutedExpr))
 
                     let bytes = encodeExpression betaNormal
 
@@ -748,6 +959,105 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
                   (TextLit (Chunks [] (Core.pretty env)))
 
     return (ImportSemantics {..})
+
+loadSourceImportArtifact :: Chained -> StateT Status IO (Expr Void Import)
+loadSourceImportArtifact (Chained (Import (ImportHashed _ importType) _)) = do
+    parsedImport <- parseImportedExpression importType
+
+    -- Preserve hashed child imports as references while inlining unhashed ones.
+    resolvedExpr <- loadWithSource PreserveHashedImports parsedImport
+
+    return (Core.denote resolvedExpr)
+
+finalizeSourceImport
+    :: Expr Void Import
+    -> StateT Status IO ImportSemantics
+finalizeSourceImport sourceArtifact = do
+    -- Expand preserved hashed imports and produce import-free semantics for
+    -- typechecking and semantic-cache storage.
+    importFreeExpr <- do
+        expandedExpr <- loadWithSource InlineHashedImports (Core.renote sourceArtifact)
+        assertNoImports expandedExpr
+    Status {..} <- State.get
+
+    let substitutedExpr =
+          Dhall.Substitution.substitute importFreeExpr _substitutions
+
+    case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+        Left  err -> throwMissingImport (Imported _stack err)
+        Right _   -> return ()
+
+    let importSemantics = Core.denote substitutedExpr
+
+    return (ImportSemantics {..})
+
+loadSourceChildArtifact :: Chained -> StateT Status IO (Expr Void Import)
+loadSourceChildArtifact child@(Chained import_) =
+    case importMode import_ of
+        RawText  -> liftImport child
+        RawBytes -> liftImport child
+        Location -> liftImport child
+        Code     -> sourceImport child
+        Source   -> sourceImport child
+  where
+    sourceImport importChild = do
+        sourceArtifact <- loadSourceImportArtifact importChild
+
+        -- NOTE: We intentionally do not eagerly call `finalizeSourceImport`
+        -- here during the preserve pass. That prefill added an extra
+        -- source-finalization typecheck per transitive child with no warm-cache
+        -- benefit on the benchmarked slow paths.
+
+        return sourceArtifact
+
+    liftImport importChild = do
+        ImportSemantics { importSemantics } <- loadImport importChild
+
+        return (fmap absurd importSemantics)
+
+loadSourceChild :: Chained -> StateT Status IO ImportSemantics
+loadSourceChild child@(Chained import_) =
+    case importMode import_ of
+        RawText  -> loadImport child
+        RawBytes -> loadImport child
+        Location -> loadImport child
+        Code     -> loadSourceSemantics child
+        Source   -> loadSourceSemantics child
+  where
+    loadSourceSemantics importChild@(Chained importChild') = do
+        case hash (importHashed importChild') of
+            Just _ -> do
+                -- Hashed child imports inside `as Source` are validated in
+                -- their original mode, then expanded under `as Source` so a
+                -- later transitive freeze does not change the surrounding
+                -- source-preserving result.
+                _ <- loadImport importChild
+                loadImport
+                    ( chainedChangeMode Source
+                    ( chainedRemoveHash importChild
+                    )
+                    )
+
+            Nothing ->
+                loadImport
+                    (chainedChangeMode Source importChild)
+
+-- | Warm the in-memory import cache for a hashed child during the preserve
+--   pass of an `as Source` traversal.
+prefillSourceImportSemantics :: Chained -> StateT Status IO ()
+prefillSourceImportSemantics importChild = do
+    let sourceChild =
+            chainedChangeMode Source (chainedRemoveHash importChild)
+
+    Status { _cache } <- State.get
+
+    case Dhall.Map.lookup sourceChild _cache of
+        Just _ ->
+            return ()
+
+        Nothing -> do
+            _ <- loadImport sourceChild
+            return ()
 
 -- The semi-semantic hash of an expression is computed from the fully resolved
 -- AST (without normalising or type-checking it first). See
@@ -825,6 +1135,35 @@ fetchBytes (Env env) = do
         Nothing ->
             throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
 fetchBytes Missing = throwM (MissingImports [])
+
+parseImportedExpression :: ImportType -> StateT Status IO (Expr Src Import)
+parseImportedExpression importType = do
+    Status {..} <- State.get
+
+    text <- fetchFresh importType
+
+    path <- case importType of
+        Local prefix file -> liftIO $ do
+            path <- localToPathWith _getHomeDirectory prefix file
+            absolutePath <- Directory.makeAbsolute path
+            return absolutePath
+        Remote url -> do
+            let urlText = Core.pretty (url { headers = Nothing })
+            return (Text.unpack urlText)
+        Env env -> return $ Text.unpack env
+        Missing -> throwM (MissingImports [])
+
+    let parser = unParser $ do
+            Text.Parser.Token.whiteSpace
+            r <- Dhall.Parser.expr
+            Text.Parser.Combinators.eof
+            return r
+
+    case Text.Megaparsec.parse parser path text of
+        Left errInfo ->
+            throwMissingImport (Imported _stack (ParseError errInfo text))
+        Right expr ->
+            return expr
 
 -- | Fetch the text contents of a URL
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
@@ -1277,11 +1616,16 @@ In any expression `p ? q` the opportunistic caching rule says:
               -- If the left side was a frozen import
               -- and the right side succeeded
               -- populate the semantic cache.
-              case findImportHash a of
-                Just hash -> do
+              case findImportHashAndMode a of
+                Just (hash, mode) -> do
                     Status { _reportWarning } <- State.get
 
-                    let bytes = encodeExpression (Core.alphaNormalize (Core.denote result))
+                    -- For `as Source` imports, cache the denoted fallback result
+                    -- without alpha-normalizing it. Ordinary code imports still
+                    -- use the normalized form.
+                    let bytes = case mode of
+                            Source -> encodeExpression (Core.denote result)
+                            _      -> encodeExpression (Core.alphaNormalize (Core.denote result))
 
                     let actualHash = Dhall.Crypto.sha256Hash bytes
 
@@ -1292,11 +1636,6 @@ In any expression `p ? q` the opportunistic caching rule says:
 
               return result
         where
-          findImportHash expr = case Core.shallowDenote expr of
-            Embed (Import (ImportHashed (Just hash) _) _) -> Just hash
-            ImportAlt left right -> findImportHash left <|> findImportHash right
-            _ -> Nothing
-
           handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
               | any isNotResolutionError es₁ =
                   throwM exception₁
@@ -1318,6 +1657,99 @@ In any expression `p ? q` the opportunistic caching rule says:
   Lam cs a b           -> Lam cs <$> functionBindingExprs loadWith a <*> loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   expression           -> Syntax.unsafeSubExpressions loadWith expression
+
+loadWithSource :: FrozenImportResolutionMode -> Expr Src Import -> StateT Status IO (Expr Src Import)
+loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
+  Embed import₀ -> do
+    Status {..} <- State.get
+
+    let parent = NonEmpty.head _stack
+
+    child <- chainImport parent import₀
+
+    let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
+        local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
+
+    let referentiallySane = not (local child) || local parent
+
+    if importMode import₀ == Location || referentiallySane
+        then return ()
+        else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
+
+    let _stack' = NonEmpty.cons child _stack
+
+    if child `elem` _stack
+        then throwMissingImport (Imported _stack (Cycle import₀))
+        else return ()
+
+    zoom graph . State.modify $
+        \edges -> Depends parent child : edges
+
+    let stackWithChild = NonEmpty.cons child _stack
+
+    zoom stack (State.put stackWithChild)
+    result <- case frozenImportResolutionMode of
+        PreserveHashedImports
+            | Maybe.isJust (hash (importHashed import₀)) -> do
+                _ <- loadImport child
+                -- Pre-warm the unhashed `as Source` view of this hashed child.
+                prefillSourceImportSemantics child
+                preservedImport <- preserveChainedImport child
+                return (Embed preservedImport)
+
+        PreserveHashedImports -> do
+            childExpr <- loadSourceChildArtifact child
+            return (Core.renote childExpr)
+
+        InlineHashedImports -> do
+            ImportSemantics { importSemantics } <- loadSourceChild child
+            return (fmap absurd (Core.renote importSemantics))
+    zoom stack (State.put _stack)
+
+    return result
+
+  ImportAlt a b        -> loadWithSource frozenImportResolutionMode a `catch` handler₀
+    where
+      is :: forall e . Exception e => SomeException -> Bool
+      is exception = Maybe.isJust (Exception.fromException @e exception)
+
+      isNotResolutionError exception =
+              is @(Imported (TypeError Src Void)) exception
+          ||  is @(Imported  Cycle              ) exception
+          ||  is @(Imported  HashMismatch       ) exception
+          ||  is @(Imported  ParseError         ) exception
+
+      handler₀ exception₀@(SourcedException (Src begin _ text₀) (MissingImports es₀))
+          | any isNotResolutionError es₀ =
+              throwM exception₀
+          | otherwise = do
+              result <- loadWithSource frozenImportResolutionMode b `catch` handler₁
+
+              trySourceOpportunisticCacheFill
+                  frozenImportResolutionMode a b result
+
+              return result
+        where
+          handler₁ exception₁@(SourcedException (Src _ end text₁) (MissingImports es₁))
+              | any isNotResolutionError es₁ =
+                  throwM exception₁
+              | otherwise =
+                  throwM (SourcedException (Src begin end text₂) (MissingImports (es₀ ++ es₁)))
+            where
+              text₂ = text₀ <> " ? " <> text₁
+
+  Note a b             -> do
+      let handler e = throwM (SourcedException a (e :: MissingImports))
+
+      (Note <$> pure a <*> loadWithSource frozenImportResolutionMode b) `catch` handler
+  Let a b              -> Let <$> bindingExprs (loadWithSource frozenImportResolutionMode) a <*> loadWithSource frozenImportResolutionMode b
+  Record m             -> Record <$> traverse (recordFieldExprs (loadWithSource frozenImportResolutionMode)) m
+  RecordLit m          -> RecordLit <$> traverse (recordFieldExprs (loadWithSource frozenImportResolutionMode)) m
+  Lam cs a b           -> Lam cs <$> functionBindingExprs (loadWithSource frozenImportResolutionMode) a <*> loadWithSource frozenImportResolutionMode b
+  Field a b            -> Field <$> loadWithSource frozenImportResolutionMode a <*> pure b
+  expression           -> Syntax.unsafeSubExpressions (loadWithSource frozenImportResolutionMode) expression
 
 -- | Resolve all imports within an expression
 load :: Expr Src Import -> IO (Expr Src Void)
@@ -1348,12 +1780,15 @@ loadWithStatus status semanticCacheMode expression =
         status { _semanticCacheMode = semanticCacheMode }
 
 encodeExpression :: Expr Void Void -> Data.ByteString.ByteString
-encodeExpression expression = bytesStrict
+encodeExpression expression = encodeExpressionWithImports intermediateExpression
   where
     intermediateExpression :: Expr Void Import
     intermediateExpression = fmap absurd expression
 
-    encoding = Codec.Serialise.encode intermediateExpression
+encodeExpressionWithImports :: Expr Void Import -> Data.ByteString.ByteString
+encodeExpressionWithImports expression = bytesStrict
+  where
+    encoding = Codec.Serialise.encode expression
 
     bytesStrict = Write.toStrictByteString encoding
 
@@ -1442,6 +1877,28 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
                         _              -> ignore
 
                 -- Don't transitively modify any other type of import
+                Remote{} ->
+                    ignore
+
+                Missing ->
+                    ignore
+
+                Env{} ->
+                    ignore
+
+        Source ->
+            case importType (importHashed child) of
+                Local filePrefix file -> do
+                    let descend = liftIO $ do
+                            path <- localToPath filePrefix file
+
+                            return (Just path)
+
+                    case importType (importHashed import_) of
+                        Local Here   _ -> descend
+                        Local Parent _ -> descend
+                        _              -> ignore
+
                 Remote{} ->
                     ignore
 
