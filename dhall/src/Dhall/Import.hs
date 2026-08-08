@@ -513,6 +513,44 @@ chainedRemoveHash :: Chained -> Chained
 chainedRemoveHash (Chained (Import importHashed mode)) =
     Chained (Import (importHashed { hash = Nothing }) mode)
 
+-- | Convert a chained local import into an absolute local import so a later
+--   traversal does not chain it a second time against a different parent.
+preserveChainedImport :: Chained -> StateT Status IO Import
+preserveChainedImport child@(Chained import_) =
+    case importType (importHashed import_) of
+        Local prefix file -> do
+            Status { _getHomeDirectory } <- State.get
+
+            path <- liftIO (localToPathWith _getHomeDirectory prefix file)
+            absolutePath <- liftIO (Directory.makeAbsolute path)
+
+            let rootRelativePath = FilePath.makeRelative "/" absolutePath
+
+            let preservedFile =
+                    File
+                        { directory =
+                            Directory
+                                ( fmap Text.pack
+                                . reverse
+                                . FilePath.splitDirectories
+                                $ FilePath.takeDirectory rootRelativePath
+                                )
+                        , file = Text.pack (FilePath.takeFileName rootRelativePath)
+                        }
+
+            let preservedImportType = Local Absolute (canonicalize preservedFile)
+
+            return
+                import_
+                    { importHashed =
+                        (importHashed import_)
+                            { importType = preservedImportType
+                            }
+                    }
+
+        _ ->
+            return (chainedImport child)
+
 -- | Chain imports, also typecheck and normalize headers if applicable.
 chainImport :: Chained -> Import -> StateT Status IO Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
@@ -1658,7 +1696,8 @@ loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
                 _ <- loadImport child
                 -- Pre-warm the unhashed `as Source` view of this hashed child.
                 prefillSourceImportSemantics child
-                return expr₀
+                preservedImport <- preserveChainedImport child
+                return (Embed preservedImport)
 
         PreserveHashedImports -> do
             childExpr <- loadSourceChildArtifact child
