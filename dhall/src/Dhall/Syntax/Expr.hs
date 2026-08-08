@@ -242,6 +242,8 @@ data Expr s a
     | ToMap (Expr s a) (Maybe (Expr s a))
     -- | > ShowConstructor x                        ~  showConstructor x
     | ShowConstructor (Expr s a)
+    -- | > ReadConstructor x                         ~  readConstructor x
+    | ReadConstructor (Expr s a)
     -- | > Field e (FieldSelection _ x _)              ~  e.x
     | Field (Expr s a) (FieldSelection s)
     -- | > Project e (Left xs)                      ~  e.{ xs }
