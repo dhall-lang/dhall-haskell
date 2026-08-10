@@ -650,6 +650,10 @@ skeleton (ShowConstructor {}) =
         keyword "showConstructor"
     <>  " "
     <>  ignore
+skeleton (ReadConstructor {}) =
+        keyword "readConstructor"
+    <>  " "
+    <>  ignore
 skeleton (Field {}) =
         ignore
     <>  dot
@@ -805,6 +809,15 @@ diffAnnotatedExpression (ShowConstructor aL) (ShowConstructor aR) = align doc
 diffAnnotatedExpression l@(ShowConstructor {}) r =
     mismatch l r
 diffAnnotatedExpression l r@(ShowConstructor {}) =
+    mismatch l r
+diffAnnotatedExpression (ReadConstructor aL) (ReadConstructor aR) = align doc
+  where
+    doc =   keyword "readConstructor"
+        <>  " "
+        <>  format " " (diffWithExpression aL aR)
+diffAnnotatedExpression l@(ReadConstructor {}) r =
+    mismatch l r
+diffAnnotatedExpression l r@(ReadConstructor {}) =
     mismatch l r
 diffAnnotatedExpression (ListLit aL@(Just _) bL) (ListLit aR bR) = align doc
   where
