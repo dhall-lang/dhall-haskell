@@ -45,6 +45,7 @@ module Dhall.Eval (
   , Environment(..)
   , Val(..)
   , (~>)
+  , unboundBuiltinTypes
   , textShow
   , dateShow
   , timeShow
@@ -79,14 +80,15 @@ import Dhall.Syntax
     )
 
 import qualified Data.Char
-import qualified Data.Sequence as Sequence
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Sequence       as Sequence
 import qualified Data.Set
-import qualified Data.Text     as Text
-import qualified Data.Time     as Time
-import qualified Dhall.Map     as Map
+import qualified Data.Text           as Text
+import qualified Data.Time           as Time
+import qualified Dhall.Map           as Map
 import qualified Dhall.Set
-import qualified Dhall.Syntax  as Syntax
-import qualified Text.Printf   as Printf
+import qualified Dhall.Syntax        as Syntax
+import qualified Text.Printf         as Printf
 
 data Environment a
     = Empty
@@ -313,8 +315,107 @@ vVar env0 (V x i0) = go env0 i0
             if i == 0 then VVar x (countEnvironment x env) else go env (i - 1)
         | otherwise =
             go env i
+    go Empty 0
+        | Just builtin <- HashMap.lookup x unboundBuiltinValues =
+            builtin
     go Empty i =
         VVar x (negate i - 1)
+
+data BuiltinPrim a = BuiltinPrim
+    { primName :: Text
+    , primType :: Val a
+    , primVal  :: Val a
+    }
+
+-- New-style primitives implemented as ordinary variables with specially recognized names.
+-- Parsing, pretty-printing, and CBOR still treat these primitives as plain variables.
+unboundPrimitives :: [BuiltinPrim a]
+unboundPrimitives =
+    [ BuiltinPrim { primName = "Date/year"  , primType = dateYearType  , primVal = dateYearPrimVal   }
+    , BuiltinPrim { primName = "Date/month" , primType = dateMonthType , primVal = dateMonthPrimVal  }
+    , BuiltinPrim { primName = "Date/day"   , primType = dateDayType   , primVal = dateDayPrimVal    }
+    , BuiltinPrim { primName = "Time/hour"  , primType = timeHourType  , primVal = timeHourPrimVal   }
+    , BuiltinPrim { primName = "Time/minute", primType = timeMinuteType, primVal = timeMinutePrimVal }
+    , BuiltinPrim { primName = "Time/second", primType = timeSecondType, primVal = timeSecondPrimVal }
+    ]
+  where
+    dateYearType = VDate ~> VNatural
+    dateYearPrimVal = dateComponent "Date/year" getYear
+
+    dateMonthType = VDate ~> VNatural
+    dateMonthPrimVal = dateComponent "Date/month" getMonth
+
+    dateDayType = VDate ~> VNatural
+    dateDayPrimVal = dateComponent "Date/day" getDay
+
+    timeHourType = VTime ~> VNatural
+    timeHourPrimVal = timeComponent "Time/hour" getHour
+
+    timeMinuteType = VTime ~> VNatural
+    timeMinutePrimVal = timeComponent "Time/minute" getMinute
+
+    timeSecondType = VTime ~> VNatural
+    timeSecondPrimVal = timeComponent "Time/second" getSecond
+
+-- Type registration table for primitives implemented as ordinary variable
+-- names.
+unboundBuiltinTypes :: HashMap.HashMap Text (Val a)
+unboundBuiltinTypes =
+    HashMap.fromList
+        [ (primName prim, primType prim)
+        | prim <- unboundPrimitives
+        ]
+
+-- Evaluation registration table for primitives implemented as ordinary
+-- variable names.
+unboundBuiltinValues :: HashMap.HashMap Text (Val a)
+unboundBuiltinValues =
+    HashMap.fromList
+        [ (primName prim, primVal prim)
+        | prim <- unboundPrimitives
+        ]
+
+dateComponent :: Text -> (Day -> Natural) -> Val a
+dateComponent name extract =
+    VPrim $ \case
+        VPrimVar ->
+            neutral
+        VDateLiteral d ->
+            VNaturalLit (extract d)
+        t ->
+            VApp neutral t
+  where
+    neutral = VVar name (-1)
+
+timeComponent :: Text -> (TimeOfDay -> Natural) -> Val a
+timeComponent name extract =
+    VPrim $ \case
+        VPrimVar ->
+            neutral
+        VTimeLiteral time _ ->
+            VNaturalLit (extract time)
+        t ->
+            VApp neutral t
+  where
+    neutral = VVar name (-1)
+
+getYear :: Day -> Natural
+getYear = fromIntegral . (\(year, _, _) -> year) . Time.toGregorian
+
+getMonth :: Day -> Natural
+getMonth = fromIntegral . (\(_, month, _) -> month) . Time.toGregorian
+
+getDay :: Day -> Natural
+getDay = fromIntegral . (\(_, _, day) -> day) . Time.toGregorian
+
+getHour :: TimeOfDay -> Natural
+getHour (TimeOfDay hour _ _) = fromIntegral hour
+
+getMinute :: TimeOfDay -> Natural
+getMinute (TimeOfDay _ minute _) = fromIntegral minute
+
+getSecond :: TimeOfDay -> Natural
+getSecond (TimeOfDay _ _ seconds) = floor seconds
 
 vApp :: Eq a => Val a -> Val a -> Val a
 vApp !t !u =

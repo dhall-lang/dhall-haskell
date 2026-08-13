@@ -24,6 +24,7 @@ import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
+import qualified Dhall.Test.Regression.Primitives
 import qualified Dhall.Test.Util           as Util
 import qualified Dhall.Test.Regression.TextReplaceNoop
 import qualified Dhall.TypeCheck
@@ -59,6 +60,7 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+        , Dhall.Test.Regression.Primitives.tests
         , Dhall.Test.Regression.TextReplaceNoop.tests
         , largeNaturalLiteralParsing
         , largeNaturalHexadecimalParsing
