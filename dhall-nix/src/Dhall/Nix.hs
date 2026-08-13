@@ -102,6 +102,7 @@ import qualified  Data.Text as Text
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
+import Data.String (fromString)
 import Lens.Micro (toListOf, rewriteOf)
 import Numeric (showHex)
 import Data.Char (ord, isDigit, isAsciiLower, isAsciiUpper)
@@ -266,7 +267,7 @@ Right x: y: x + y
 -}
 dhallToNix :: Expr s Void -> Either CompileError NExpr
 dhallToNix e =
-    loop (rewriteShadowed (Dhall.Core.normalize e))
+    loop (rewriteShadowed (renameBuiltinShadowing (Dhall.Core.normalize e)))
   where
     untranslatable = Nix.attrsE []
 
@@ -316,6 +317,18 @@ dhallToNix e =
               where
                 x' = x <> Data.Text.pack (show n)
 
+    renameBuiltin :: (Text, Expr s Void) -> Maybe (Text, Expr s Void)
+    renameBuiltin (x, expression)
+        | isNixBuiltinPrimitiveName x =
+            Just
+              ( x'
+              , Dhall.Core.subst (V x 0) (Var (V x' 0)) (Dhall.Core.shift 1 (V x' 0) expression)
+              )
+        | otherwise =
+            Nothing
+      where
+        x' = x <> "_"
+
     renameShadowed :: Expr s Void -> Maybe (Expr s Void)
     renameShadowed (Lam cs FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a} b) = do
         (x', b') <- rename (x, b)
@@ -332,11 +345,67 @@ dhallToNix e =
     renameShadowed _ =
         Nothing
 
+    renameBuiltinShadowing :: Expr s Void -> Expr s Void
+    renameBuiltinShadowing =
+        rewriteOf Dhall.Core.subExpressions renameBuiltinShadowed
+
+    renameBuiltinShadowed :: Expr s Void -> Maybe (Expr s Void)
+    renameBuiltinShadowed (Lam cs FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a} b) = do
+        (x', b') <- renameBuiltin (x, b)
+
+        return (Lam cs (Dhall.Core.makeFunctionBinding x' a) b')
+    renameBuiltinShadowed (Pi cs x a b) = do
+        (x', b') <- renameBuiltin (x, b)
+
+        return (Pi cs x' a b')
+    renameBuiltinShadowed (Let Binding{ variable = x, .. } a) = do
+        (x' , a') <- renameBuiltin (x, a)
+
+        return (Let Binding{ variable = x', .. } a')
+    renameBuiltinShadowed _ =
+        Nothing
+
     -- Even higher-level utility that renames all shadowed references
     rewriteShadowed =
         rewriteOf Dhall.Core.subExpressions renameShadowed
 
+    regexSubstrToInt :: String -> Text -> NExpr
+    regexSubstrToInt argName regex =
+        fromString argName
+            ==> (   "builtins.fromJSON"
+                @@  (   "builtins.head"
+                    @@  (   "builtins.match"
+                        @@  Nix.mkStr regex
+                        @@  fromString argName
+                        )
+                    )
+                )
+
+    nixBuiltinPrimitive :: Text -> Maybe NExpr
+    nixBuiltinPrimitive "Date/year" =
+        Just (regexSubstrToInt "date" "0*([0-9]+)-[0-9]{2}-[0-9]{2}")
+    nixBuiltinPrimitive "Date/month" =
+        Just (regexSubstrToInt "date" "[0-9]{4}-0?([0-9]+)-[0-9]{2}")
+    nixBuiltinPrimitive "Date/day" =
+        Just (regexSubstrToInt "date" "[0-9]{4}-[0-9]{2}-0?([0-9]+)")
+    nixBuiltinPrimitive "Time/hour" =
+        Just (regexSubstrToInt "time" "0?([0-9]+):[0-9]{2}:[0-9]{2}.*")
+    nixBuiltinPrimitive "Time/minute" =
+        Just (regexSubstrToInt "time" "[0-9]{2}:0?([0-9]+):[0-9]{2}.*")
+    nixBuiltinPrimitive "Time/second" =
+        Just (regexSubstrToInt "time" "[0-9]{2}:[0-9]{2}:0?([0-9]+).*")
+    nixBuiltinPrimitive _ =
+        Nothing
+
+    isNixBuiltinPrimitiveName :: Text -> Bool
+    isNixBuiltinPrimitiveName name =
+        case nixBuiltinPrimitive name of
+            Just _  -> True
+            Nothing -> False
+
     loop (Const _) = return untranslatable
+    loop (Var (V a 0))
+        | Just builtin <- nixBuiltinPrimitive a = return builtin
     loop (Var (V a 0)) = return (Nix.mkSym (zEncodeSymbol a))
     loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
     loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
