@@ -357,6 +357,7 @@ findExternalDependencies expression = do
         Code     -> return ()
         RawText  -> return ()
         RawBytes -> return ()
+        Source   -> return ()
         Location -> empty  -- "as Location" imports aren't real dependencies
 
     case importType of

@@ -115,6 +115,7 @@ instance Pretty Import where
             Location -> " as Location"
             Code     -> ""
             RawBytes -> " as Bytes"
+            Source   -> " as Source"
 
 {-| Returns `True` if the given `Char` is valid within an unquoted path
     component
