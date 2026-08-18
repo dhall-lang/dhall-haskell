@@ -1270,6 +1270,7 @@ import_ = (do
       (_Text >> pure RawText)
           <|> (_Location >> pure Location)
           <|> (_Bytes >> pure RawBytes)
+          <|> (_Source >> pure Source)
 
 -- | 'ApplicationExprInfo' distinguishes certain subtypes of application
 -- expressions.
