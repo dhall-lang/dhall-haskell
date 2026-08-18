@@ -136,6 +136,7 @@ module Dhall.Import (
     , fetchRemote
     , stack
     , cache
+    , parsedImportCache
     , Depends(..)
     , graph
     , remote
@@ -1501,30 +1502,52 @@ parseImportedExpression :: ImportType -> StateT Status IO (Expr Src Import)
 parseImportedExpression importType = do
     Status {..} <- State.get
 
-    text <- fetchFresh importType
-
-    path <- case importType of
+    -- Canonical fetch identity for the per-run parsed-import cache. Local
+    -- imports are keyed by absolute path so relative/absolute spellings of the
+    -- same file share a cache entry; remote imports keep headers in the key so
+    -- differently-headered fetches do not collide.
+    cacheKey <- case importType of
         Local prefix file -> liftIO $ do
             path <- localToPathWith _getHomeDirectory prefix file
             absolutePath <- Directory.makeAbsolute path
-            return absolutePath
-        Remote url -> do
-            let urlText = Core.pretty (url { headers = Nothing })
-            return (Text.unpack urlText)
-        Env env -> return $ Text.unpack env
-        Missing -> throwM (MissingImports [])
+            return (Text.pack absolutePath)
+        Remote url ->
+            return (Core.pretty url)
+        Env env ->
+            return ("env:" <> env)
+        Missing ->
+            throwM (MissingImports [])
 
-    let parser = unParser $ do
-            Text.Parser.Token.whiteSpace
-            r <- Dhall.Parser.expr
-            Text.Parser.Combinators.eof
-            return r
-
-    case Text.Megaparsec.parse parser path text of
-        Left errInfo ->
-            throwMissingImport (Imported _stack (ParseError errInfo text))
-        Right expr ->
+    case Dhall.Map.lookup cacheKey _parsedImportCache of
+        Just expr ->
             return expr
+        Nothing -> do
+            text <- fetchFresh importType
+
+            path <- case importType of
+                Local _ _ ->
+                    return (Text.unpack cacheKey)
+                Remote url -> do
+                    let urlText = Core.pretty (url { headers = Nothing })
+                    return (Text.unpack urlText)
+                Env env ->
+                    return (Text.unpack env)
+                Missing ->
+                    throwM (MissingImports [])
+
+            let parser = unParser $ do
+                    Text.Parser.Token.whiteSpace
+                    r <- Dhall.Parser.expr
+                    Text.Parser.Combinators.eof
+                    return r
+
+            case Text.Megaparsec.parse parser path text of
+                Left errInfo ->
+                    throwMissingImport (Imported _stack (ParseError errInfo text))
+                Right expr -> do
+                    zoom parsedImportCache
+                        (State.modify (Dhall.Map.insert cacheKey expr))
+                    return expr
 
 -- | Fetch the text contents of a URL
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
