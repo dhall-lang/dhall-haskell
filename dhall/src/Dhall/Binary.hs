@@ -1188,6 +1188,7 @@ decodeImport len = do
         1 -> return RawText
         2 -> return Location
         3 -> return RawBytes
+        4 -> return Source
         _ -> die ("Unexpected code for import mode: " <> show m)
 
     let remote scheme = do
@@ -1330,7 +1331,8 @@ encodeImport import_ =
             Code -> 0
             RawText -> 1
             Location -> 2
-            RawBytes -> 3 )
+            RawBytes -> 3
+            Source -> 4 )
 
     Import{..} = import_
 
