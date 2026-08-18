@@ -79,7 +79,7 @@ data ImportType
     deriving (Data, Generic)
 
 -- | How to interpret the import's contents (i.e. as Dhall code or raw text)
-data ImportMode = Code | RawText | Location | RawBytes
+data ImportMode = Code | RawText | Location | RawBytes | Source
   deriving (Data, Generic)
 
 -- | A `ImportType` extended with an optional hash for semantic integrity checks
