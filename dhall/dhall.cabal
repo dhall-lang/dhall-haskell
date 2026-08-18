@@ -518,5 +518,17 @@ Benchmark evaluation
     Build-Depends:
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
+        temporary                 >= 1.2.1    && < 1.4 ,
         time                                          ,
+    Default-Language: Haskell2010
+
+Benchmark import-as-source
+    Import: common
+    Type: exitcode-stdio-1.0
+    Hs-Source-Dirs: benchmark/import-as-source
+    Main-Is: Main.hs
+    Build-Depends:
+        dhall                                         ,
+        tasty-bench               >= 0.4      && < 0.6,
+        temporary                 >= 1.2.1    && < 1.4 ,
     Default-Language: Haskell2010

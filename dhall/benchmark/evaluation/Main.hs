@@ -1,35 +1,343 @@
 {-# LANGUAGE OverloadedStrings #-}
-
+--
+-- Evaluation benchmark harness for Dhall import/resolve/typecheck/normalize.
+--
+-- See benchmark/evaluation/README.md for how to read results. Three modes:
+--
+--   Mode A (phase): prep resolves with UseSemanticCache; timed resolve uses
+--     IgnoreSemanticCache (semantic off, semisemantic still on); typecheck and
+--     evaluation run on the pre-resolved AST from prep.
+--
+--   Mode B (resolve_cold_cache_on): parse-only prep; each sample uses a fresh
+--     XDG_CACHE_HOME with caches enabled. Used for prep-sensitive Code large6
+--     variants, prelude_import, and substitutions (library substitution path).
+--
+--   Mode C (implicit): some as Source large6 costs appear on evaluation, not
+--     resolve. See large6/README.md matrix.
+--
 module Main where
 
-import Control.Exception  (throw)
+import Control.Exception  (bracket, throw)
+import Control.Monad      (foldM)
+import Control.Monad.Trans.State.Strict (runState, state)
 import Data.Char         (toLower)
-import Data.List         (isInfixOf, isPrefixOf, isSuffixOf, sort)
-import Data.Maybe        (listToMaybe, mapMaybe)
+import Data.List         (isInfixOf, isPrefixOf, isSuffixOf, mapAccumL, sort)
+import Data.Maybe        (isNothing, listToMaybe, mapMaybe)
 import Data.Text         (Text)
+import Dhall.Core        (Binding (..), FunctionBinding (..), Var (..))
 import Data.Time.Clock   (diffUTCTime, getCurrentTime)
 import Data.Void         (Void)
-import System.Environment (getArgs)
+import System.Environment (getArgs, lookupEnv, setEnv, unsetEnv)
 import System.FilePath   ((</>), takeBaseName, takeDirectory)
 import System.IO         (hFlush, stdout)
 import Text.Printf       (printf)
 import Test.Tasty.Bench
 
+import qualified Data.ByteString      as StrictByteString
 import qualified Data.ByteString.Lazy as ByteString
+import qualified Data.Foldable.WithIndex as Foldable.WithIndex
+import qualified Data.Functor.Const   as FunctorConst
+import qualified Data.Map.Strict      as Map
+import qualified Data.Set             as Set
 import qualified Data.Text            as Text
 import qualified Data.Text.IO         as Text.IO
 import qualified Dhall
 import qualified Dhall.Binary         as Binary
 import qualified Dhall.Core           as Core
 import qualified Dhall.Import         as Import
+import qualified Dhall.Map
 import qualified Dhall.Parser         as Parser
+import qualified Dhall.Substitution
 import qualified Dhall.TypeCheck      as TypeCheck
 import qualified Lens.Micro
 import           Lens.Micro           ((^.))
 import qualified System.Directory     as Directory
+import qualified System.IO.Temp       as Temp
 
 type ParsedExpr = Core.Expr Parser.Src Core.Import
 type ResolvedExpr = Core.Expr Parser.Src Void
+
+-- | Shared @x + x@ tree for @semisemantic.nf_size_walk@. Unique nodes =
+-- depth+1; a full walk visits @2^(depth+1)-1@ constructors (no DAG memo).
+-- Depth 20 is ~2M visits, well above the 64KiB store-NF cutoff.
+-- 'NOINLINE' keeps GHC from constant-folding the size walk out of the bench.
+{-# NOINLINE sharedNaturalPlusTree #-}
+sharedNaturalPlusTree :: Int -> Core.Expr Void Void
+sharedNaturalPlusTree depth = go depth
+  where
+    go 0 = Core.NaturalLit 0
+    go n = let t = go (n - 1) in Core.NaturalPlus t t
+
+nfSizeWalkDepth :: Int
+nfSizeWalkDepth = 20
+
+nfSizeWalkThreshold :: Int
+nfSizeWalkThreshold = 64 * 1024
+
+-- | Full-tree size estimate (naive baseline for @semisemantic.nf_size_walk.full@).
+-- Same metric as 'nfSizeWalkExceedsThreshold'; kept in the harness so this
+-- group does not depend on Import internals.
+nfSizeWalkEstimate :: Core.Expr s a -> Int
+nfSizeWalkEstimate expression =
+    case expression of
+        Core.TextLit (Core.Chunks xys z) ->
+            1
+          + Text.length z
+          + sum [ Text.length t + nfSizeWalkEstimate x | (t, x) <- xys ]
+        Core.BytesLit bytes ->
+            1 + StrictByteString.length bytes
+        Core.Embed _ ->
+            1
+        _ ->
+            let FunctorConst.Const childSizes =
+                    Core.subExpressions
+                        (\child -> FunctorConst.Const [nfSizeWalkEstimate child])
+                        expression
+            in  1 + sum childSizes
+
+-- | Early-abort size check (optimized side of @semisemantic.nf_size_walk@).
+nfSizeWalkExceedsThreshold :: Core.Expr s a -> Bool
+nfSizeWalkExceedsThreshold expression =
+    isNothing (spend nfSizeWalkThreshold expression)
+  where
+    debit budget cost
+        | budget < cost = Nothing
+        | otherwise     = Just (budget - cost)
+
+    spend budget _
+        | budget <= 0 =
+            Nothing
+    spend budget (Core.TextLit (Core.Chunks xys z)) = do
+        b0 <- debit budget (1 + Text.length z)
+        foldM
+            (\b (t, x) -> debit b (Text.length t) >>= (`spend` x))
+            b0
+            xys
+    spend budget (Core.BytesLit bytes) =
+        debit budget (1 + StrictByteString.length bytes)
+    spend budget (Core.Embed _) =
+        debit budget 1
+    spend budget expr = do
+        b0 <- debit budget 1
+        let FunctorConst.Const kids =
+                Core.subExpressions
+                    (\child -> FunctorConst.Const [child])
+                    expr
+        foldM spend b0 kids
+
+-- | In-harness copies of the HEAD substitution algorithms used by
+-- @substitutions.shift_cost@. Kept here so the first benchmark commit
+-- compiles (those helpers do not exist yet) while still resolving the map
+-- once and comparing @substituteManyNaive@ against @substituteManyFromRoot@.
+data ShiftCostResolved s a = ShiftCostResolved
+    { scrMap                :: Map.Map Var (Core.Expr s a)
+    , scrKeyNames           :: Set.Set Text
+    , scrValueFreeNames     :: Set.Set Text
+    , scrValueFreeNamesByVar :: Map.Map Var (Set.Set Text)
+    }
+
+resolveShiftCost
+    :: Dhall.Substitution.Substitutions s a -> ShiftCostResolved s a
+resolveShiftCost substitutions =
+    let step k v acc =
+            Map.insert (V k 0) (shiftCostRaw acc v) acc
+
+        resolvedMap' =
+            Foldable.WithIndex.ifoldr step Map.empty substitutions
+
+        freeByVar = Map.map shiftCostFreeVarNames resolvedMap'
+    in  ShiftCostResolved
+            { scrMap = resolvedMap'
+            , scrKeyNames = Set.fromList [ k | V k _ <- Map.keys resolvedMap' ]
+            , scrValueFreeNames = foldMap id freeByVar
+            , scrValueFreeNamesByVar = freeByVar
+            }
+
+shiftCostRaw
+    :: Map.Map Var (Core.Expr s a) -> Core.Expr s a -> Core.Expr s a
+shiftCostRaw substitutions expression
+     | Map.null substitutions = expression
+shiftCostRaw substitutions (Core.Var v) =
+     Map.findWithDefault (Core.Var v) v substitutions
+shiftCostRaw substitutions (Core.Lam cs (FunctionBinding src0 y src1 src2 type_) body) =
+     let type_' = shiftCostRaw substitutions type_
+         body' = shiftCostRaw (shiftCostRawShift y substitutions) body
+     in Core.Lam cs (FunctionBinding src0 y src1 src2 type_') body'
+shiftCostRaw substitutions (Core.Pi cs y domain codomain) =
+     let domain' = shiftCostRaw substitutions domain
+         codomain' = shiftCostRaw (shiftCostRawShift y substitutions) codomain
+     in Core.Pi cs y domain' codomain'
+shiftCostRaw substitutions (Core.Let (Binding src0 f src1 type_ src2 replacement) body) =
+     let type_' = fmap (fmap (shiftCostRaw substitutions)) type_
+         replacement' = shiftCostRaw substitutions replacement
+         body' = shiftCostRaw (shiftCostRawShift f substitutions) body
+     in Core.Let (Binding src0 f src1 type_' src2 replacement') body'
+shiftCostRaw substitutions expression =
+     Lens.Micro.over Core.subExpressions (shiftCostRaw substitutions) expression
+
+shiftCostRawShift
+    :: Text -> Map.Map Var (Core.Expr s a) -> Map.Map Var (Core.Expr s a)
+shiftCostRawShift name substitutions =
+     let shiftKey (V k n) = if k == name then V k (n + 1) else V k n
+         shiftValue = Core.shift 1 (V name 0)
+         step k v = Map.insert (shiftKey k) (shiftValue v)
+     in Map.foldrWithKey step Map.empty substitutions
+
+shiftCostFreeVarNames :: Core.Expr s a -> Set.Set Text
+shiftCostFreeVarNames = go Map.empty
+  where
+    go bound (Core.Var (V k n)) =
+        case Map.lookup k bound of
+            Just depth | n < depth -> Set.empty
+            _                      -> Set.singleton k
+    go bound (Core.Lam _ (FunctionBinding _ y _ _ type_) body) =
+        go bound type_ <> go (Map.insertWith (+) y 1 bound) body
+    go bound (Core.Pi _ y domain codomain) =
+        go bound domain <> go (Map.insertWith (+) y 1 bound) codomain
+    go bound (Core.Let (Binding _ f _ type_ _ replacement) body) =
+           foldMap (go bound . snd) type_
+        <> go bound replacement
+        <> go (Map.insertWith (+) f 1 bound) body
+    go bound expression =
+        Lens.Micro.foldMapOf Core.subExpressions (go bound) expression
+
+shiftCostSubstituteMany
+    :: ShiftCostResolved s a -> Core.Expr s a -> Core.Expr s a
+shiftCostSubstituteMany substitutions expression
+     | Map.null (scrMap substitutions) = expression
+shiftCostSubstituteMany substitutions (Core.Var v) =
+     Map.findWithDefault (Core.Var v) v (scrMap substitutions)
+shiftCostSubstituteMany substitutions (Core.Lam cs (FunctionBinding src0 y src1 src2 type_) body) =
+     let type_' = shiftCostSubstituteMany substitutions type_
+         body' = shiftCostSubstituteMany (shiftCostShift y substitutions) body
+     in Core.Lam cs (FunctionBinding src0 y src1 src2 type_') body'
+shiftCostSubstituteMany substitutions (Core.Pi cs y domain codomain) =
+     let domain' = shiftCostSubstituteMany substitutions domain
+         codomain' = shiftCostSubstituteMany (shiftCostShift y substitutions) codomain
+     in Core.Pi cs y domain' codomain'
+shiftCostSubstituteMany substitutions (Core.Let (Binding src0 f src1 type_ src2 replacement) body) =
+     let type_' = fmap (fmap (shiftCostSubstituteMany substitutions)) type_
+         replacement' = shiftCostSubstituteMany substitutions replacement
+         body' = shiftCostSubstituteMany (shiftCostShift f substitutions) body
+     in Core.Let (Binding src0 f src1 type_' src2 replacement') body'
+shiftCostSubstituteMany substitutions expression =
+     Lens.Micro.over Core.subExpressions (shiftCostSubstituteMany substitutions) expression
+
+-- | Pre-plan-(1) walker: @Map.map shift@ on every value at a non-key binder.
+-- No root-shift memo (plan (2)).
+shiftCostNaiveWalk
+    :: ShiftCostResolved s a -> Core.Expr s a -> Core.Expr s a
+shiftCostNaiveWalk substitutions expression
+     | Map.null (scrMap substitutions) = expression
+shiftCostNaiveWalk substitutions (Core.Var v) =
+     Map.findWithDefault (Core.Var v) v (scrMap substitutions)
+shiftCostNaiveWalk substitutions (Core.Lam cs (FunctionBinding src0 y src1 src2 type_) body) =
+     let type_' = shiftCostNaiveWalk substitutions type_
+         body' = shiftCostNaiveWalk (shiftCostNaiveShift y substitutions) body
+     in Core.Lam cs (FunctionBinding src0 y src1 src2 type_') body'
+shiftCostNaiveWalk substitutions (Core.Pi cs y domain codomain) =
+     let domain' = shiftCostNaiveWalk substitutions domain
+         codomain' = shiftCostNaiveWalk (shiftCostNaiveShift y substitutions) codomain
+     in Core.Pi cs y domain' codomain'
+shiftCostNaiveWalk substitutions (Core.Let (Binding src0 f src1 type_ src2 replacement) body) =
+     let type_' = fmap (fmap (shiftCostNaiveWalk substitutions)) type_
+         replacement' = shiftCostNaiveWalk substitutions replacement
+         body' = shiftCostNaiveWalk (shiftCostNaiveShift f substitutions) body
+     in Core.Let (Binding src0 f src1 type_' src2 replacement') body'
+shiftCostNaiveWalk substitutions expression =
+     Lens.Micro.over Core.subExpressions (shiftCostNaiveWalk substitutions) expression
+
+shiftCostNaiveShift
+    :: Text -> ShiftCostResolved s a -> ShiftCostResolved s a
+shiftCostNaiveShift name substitutions
+    | Set.notMember name (scrKeyNames substitutions) =
+        substitutions
+            { scrMap =
+                Map.map
+                    (Core.shift 1 (V name 0))
+                    (scrMap substitutions)
+            }
+    | otherwise =
+        shiftCostShift name substitutions
+
+shiftCostShift
+    :: Text -> ShiftCostResolved s a -> ShiftCostResolved s a
+shiftCostShift name substitutions
+    | Set.notMember name (scrKeyNames substitutions)
+    , Set.notMember name (scrValueFreeNames substitutions) =
+        substitutions
+    | Set.notMember name (scrKeyNames substitutions) =
+        substitutions { scrMap = shiftCostMatchingValues name substitutions }
+    | otherwise =
+        let shiftKey (V k n) = if k == name then V k (n + 1) else V k n
+            shiftValue = Core.shift 1 (V name 0)
+            step k v = Map.insert (shiftKey k) (shiftValue v)
+            shiftedMap = Map.foldrWithKey step Map.empty (scrMap substitutions)
+        in  substitutions
+                { scrMap = shiftedMap
+                , scrValueFreeNamesByVar =
+                    Map.mapKeys shiftKey (scrValueFreeNamesByVar substitutions)
+                }
+
+shiftCostMatchingValues
+    :: Text -> ShiftCostResolved s a -> Map.Map Var (Core.Expr s a)
+shiftCostMatchingValues name substitutions =
+    let shiftValue = Core.shift 1 (V name 0)
+        go k v acc =
+            if maybe False (Set.member name) (Map.lookup k (scrValueFreeNamesByVar substitutions))
+                then Map.insert k (shiftValue v) acc
+                else acc
+    in  Map.foldrWithKey go (scrMap substitutions) (scrMap substitutions)
+
+shiftCostFromRoot
+    :: Map.Map Text (ShiftCostResolved s a)
+    -> ShiftCostResolved s a
+    -> Core.Expr s a
+    -> (Core.Expr s a, Map.Map Text (ShiftCostResolved s a))
+shiftCostFromRoot cache root expression
+    | Map.null (scrMap root) = (expression, cache)
+shiftCostFromRoot cache root expression =
+    runState (goRoot expression) cache
+  where
+    goRoot (Core.Var v) =
+        pure (Map.findWithDefault (Core.Var v) v (scrMap root))
+    goRoot (Core.Lam cs (FunctionBinding src0 y src1 src2 type_) body) = do
+        type_' <- goRoot type_
+        shifted <- cachedShift y
+        let body' = shiftCostSubstituteMany shifted body
+        pure (Core.Lam cs (FunctionBinding src0 y src1 src2 type_') body')
+    goRoot (Core.Pi cs y domain codomain) = do
+        domain' <- goRoot domain
+        shifted <- cachedShift y
+        let codomain' = shiftCostSubstituteMany shifted codomain
+        pure (Core.Pi cs y domain' codomain')
+    goRoot (Core.Let (Binding src0 f src1 type_ src2 replacement) body) = do
+        type_' <- traverse (traverse goRoot) type_
+        replacement' <- goRoot replacement
+        shifted <- cachedShift f
+        let body' = shiftCostSubstituteMany shifted body
+        pure (Core.Let (Binding src0 f src1 type_' src2 replacement') body')
+    goRoot other =
+        Lens.Micro.traverseOf Core.subExpressions goRoot other
+
+    cachedShift name = state $ \c ->
+        case Map.lookup name c of
+            Just shifted ->
+                (shifted, c)
+            Nothing ->
+                let shifted = shiftCostShift name root
+                in  (shifted, Map.insert name shifted c)
+
+shiftCostFromRootEach
+    :: ShiftCostResolved s a -> [Core.Expr s a] -> [Core.Expr s a]
+shiftCostFromRootEach root =
+    snd
+        . mapAccumL
+            (\cache expression ->
+                let (expression', cache') = shiftCostFromRoot cache root expression
+                in  (cache', expression')
+            )
+            mempty
 
 large1Directory :: FilePath
 large1Directory = "benchmark/evaluation/large1"
@@ -51,8 +359,35 @@ large2MainPath = large2Directory </> "main.dhall"
 large3Directory :: FilePath
 large3Directory = "benchmark/evaluation/large3"
 
+large3PipelinePath :: FilePath
+large3PipelinePath = large3Directory </> "pipeline.dhall"
+
 large4Directory :: FilePath
 large4Directory = "benchmark/evaluation/large4"
+
+large4PipelinePath :: FilePath
+large4PipelinePath = large4Directory </> "generate-example.dhall"
+
+large4SourcePipelinePath :: FilePath
+large4SourcePipelinePath = large4Directory </> "generate-example-source.dhall"
+
+large5Directory :: FilePath
+large5Directory = "benchmark/evaluation/large5"
+
+large5CodePipelinePath :: FilePath
+large5CodePipelinePath = large5Directory </> "pipeline-code.dhall"
+
+large5SourcePipelinePath :: FilePath
+large5SourcePipelinePath = large5Directory </> "pipeline-source.dhall"
+
+large6Directory :: FilePath
+large6Directory = "benchmark/evaluation/large6"
+
+preludeImportDirectory :: FilePath
+preludeImportDirectory = "benchmark/evaluation/prelude_import"
+
+substitutionsDirectory :: FilePath
+substitutionsDirectory = "benchmark/evaluation/substitutions"
 
 k8sDirectory :: FilePath
 k8sDirectory = "benchmark/evaluation/k8s"
@@ -78,8 +413,8 @@ timed label action = do
     pure result
 
 -- | Resolve imports using the normal semantic / semisemantic disk caches.
--- Used only for fixture preparation so large imports (e.g. large1) are not
--- paid cold on every bench run.
+-- Used for fixture preparation (Mode A) so broken fixtures fail early and
+-- typecheck/evaluation benches have a resolved AST. See ../README.md.
 resolveWithCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveWithCache settings parsed =
     Import.loadWithStatus
@@ -91,7 +426,8 @@ resolveWithCache settings parsed =
         parsed
 
 -- | Resolve imports with the semantic disk cache disabled (as with
--- @dhall --no-cache@).  Used for the timed @resolve@ benches.
+-- @dhall --no-cache@). Semisemantic cache (@dhall-haskell/@) is still read.
+-- Used for Mode A timed @resolve@ benches.
 resolveWithoutCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveWithoutCache settings parsed =
     Import.loadWithStatus
@@ -101,6 +437,31 @@ resolveWithoutCache settings parsed =
         )
         Import.IgnoreSemanticCache
         parsed
+
+-- | Mode B: resolve with caches on under a fresh @XDG_CACHE_HOME@ per sample.
+resolveWithColdCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
+resolveWithColdCache settings parsed =
+    withFreshCacheHome (resolveWithCache settings parsed)
+
+-- | Mode B using the library substitution path ('Dhall.resolveWithSettings'),
+-- matching @inputExprWithSettings@ rather than @Import.loadWithStatus@ alone.
+resolveWithSettingsCold :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
+resolveWithSettingsCold settings parsed =
+    withFreshCacheHome (Dhall.resolveWithSettings settings parsed)
+
+withFreshCacheHome :: IO a -> IO a
+withFreshCacheHome action = do
+    originalCacheHome <- lookupEnv "XDG_CACHE_HOME"
+
+    Temp.withSystemTempDirectory "dhall-evaluation-bench" $ \cacheHome ->
+        bracket
+            (setEnv "XDG_CACHE_HOME" cacheHome)
+            (\() -> restoreCacheHome originalCacheHome)
+            (\() -> action)
+
+restoreCacheHome :: Maybe String -> IO ()
+restoreCacheHome =
+    maybe (unsetEnv "XDG_CACHE_HOME") (setEnv "XDG_CACHE_HOME")
 
 -- | Abort if the expression is ill-typed.  Used at load time so fixtures never
 -- report OK timings when type-checking fails.
@@ -164,14 +525,219 @@ phaseLabels prefix =
     , prefix <> ".evaluation"
     ]
 
+-- | Bench name for Mode B cold resolve (see ../README.md).
+coldResolveBenchName :: String
+coldResolveBenchName = "resolve_cold_cache_on"
+
+coldResolveLabels :: String -> [String]
+coldResolveLabels prefix =
+    [ prefix
+    , prefix <> "." <> coldResolveBenchName
+    ]
+
 large3Labels :: [String]
 large3Labels = phaseLabels "large3"
 
+large3SourceLabels :: [String]
+large3SourceLabels = phaseLabels "large3.source"
+
 large3GetConfigLabels :: [String]
-large3GetConfigLabels = phaseLabels "large3.get_config"
+large3GetConfigLabels = phaseLabels "large3.get_config.code"
+
+large3GetConfigAsSourceLabels :: [String]
+large3GetConfigAsSourceLabels = phaseLabels "large3.get_config.source"
 
 large4Labels :: [String]
 large4Labels = phaseLabels "large4"
+
+large4SourceLabels :: [String]
+large4SourceLabels = phaseLabels "large4.source"
+
+large5CodeLabels :: [String]
+large5CodeLabels = phaseLabels "large5.code"
+
+large5SourceLabels :: [String]
+large5SourceLabels = phaseLabels "large5.source"
+
+-- | Pattern labels for all large6 groups. Code eval/typecheck/normalize/multi
+-- use coldResolveLabels; other variants use phaseLabels. Matrix in
+-- large6/README.md.
+large6Labels :: [String]
+large6Labels =
+    "large6"
+        : concat
+            [ phaseLabels "large6.slow_parse.as_code"
+            , phaseLabels "large6.slow_parse.as_source"
+            , coldResolveLabels "large6.slow_eval.as_code"
+            , phaseLabels "large6.slow_eval.as_source"
+            , coldResolveLabels "large6.slow_typecheck.as_code"
+            , phaseLabels "large6.slow_typecheck.as_source"
+            , coldResolveLabels "large6.slow_normalize.as_code"
+            , phaseLabels "large6.slow_normalize.as_source"
+            , coldResolveLabels "large6.slow_multi.as_code"
+            , phaseLabels "large6.slow_multi.as_source"
+            -- Structural-walk probe: large import-free List Natural.
+            -- Measures whether as Source pays a second denote/walk after
+            -- Code hash-check (should be near-parity after denoted reuse).
+            , phaseLabels "large6.slow_walk.as_code"
+            , phaseLabels "large6.slow_walk.as_source"
+            ]
+
+preludeImportCodeLabels :: [String]
+preludeImportCodeLabels = coldResolveLabels "prelude_import.code"
+
+preludeImportSourceLabels :: [String]
+preludeImportSourceLabels = coldResolveLabels "prelude_import.source"
+
+substitutionsCodeLabels :: [String]
+substitutionsCodeLabels = coldResolveLabels "substitutions.as_code"
+
+substitutionsSourceLabels :: [String]
+substitutionsSourceLabels = coldResolveLabels "substitutions.as_source"
+
+substitutionsManyFilesCodeLabels :: [String]
+substitutionsManyFilesCodeLabels =
+    coldResolveLabels "substitutions.many_files.as_code"
+
+substitutionsManyFilesSourceLabels :: [String]
+substitutionsManyFilesSourceLabels =
+    coldResolveLabels "substitutions.many_files.as_source"
+
+-- | Pure (1)+(2) probe: same map and @let a@ / @let x@ shape as many_files
+-- modules, but no import/typecheck. Compare @naive@ (shift every value, no
+-- root memo) vs @optimized@ (per-value shift + root-shift cache).
+substitutionsShiftCostLabels :: [String]
+substitutionsShiftCostLabels =
+    [ "substitutions.shift_cost"
+    , "substitutions.shift_cost.naive"
+    , "substitutions.shift_cost.optimized"
+    ]
+
+-- | Pure probe for the semisemantic NF size check: full walk vs early abort
+-- on a shared binary tree whose visit count exceeds the 64KiB threshold.
+-- Implemented in this harness (not via Import internals) so the group compiles
+-- before those functions exist. Existing import benches do not show this
+-- (warm cache, tiny NFs, or TextLit).
+nfSizeWalkLabels :: [String]
+nfSizeWalkLabels =
+    [ "semisemantic.nf_size_walk"
+    , "semisemantic.nf_size_walk.full"
+    , "semisemantic.nf_size_walk.early_abort"
+    ]
+
+-- | Haskell-API substitution map for the nested-let identity-path probe:
+-- 100 type-like values whose names do not collide with the nested @xᵢ@
+-- binders in @substitutions/package.dhall@, and whose bodies are closed.
+--
+-- This is *not* the customer shape. Use 'manyCollidingSubstitutions' with
+-- @substitutions/many_files@ to see as-code resolveSubstitutions cost.
+manyUserSubstitutions :: Dhall.Substitution.Substitutions Parser.Src Void
+manyUserSubstitutions =
+    Dhall.Map.fromList
+        [ (name, userTypeValue)
+        | i <- [0 .. 99 :: Int]
+        , let name = "UserType" <> Text.pack (printf "%03d" i)
+        ]
+
+-- | Shared injected type: large enough that @Syntax.shift@ on values is not
+-- free, but closed so the identity fast path can still skip it when enabled.
+userTypeValue :: Core.Expr Parser.Src Void
+userTypeValue =
+    Core.Lam
+        mempty
+        (Core.makeFunctionBinding "a" (Core.Const Core.Type))
+        (Core.Record
+            (Dhall.Map.fromList
+                [ ("x", Core.makeRecordField (Core.Var "a"))
+                , ("y", Core.makeRecordField Core.Natural)
+                , ("z", Core.makeRecordField Core.Text)
+                , ("w", Core.makeRecordField (Core.App Core.List Core.Natural))
+                ]
+            )
+        )
+
+withManyUserSubstitutions :: Dhall.InputSettings -> Dhall.InputSettings
+withManyUserSubstitutions =
+    Lens.Micro.set Dhall.substitutions manyUserSubstitutions
+
+-- | Customer-shaped map: many keys, large values. Every 10th value has a
+-- free @a@ (must shift at @let a@); the rest are closed (plan (1) must
+-- skip them). Values are large so skipping / memoizing shift is visible;
+-- the previous 5-field records were cheaper than tasty-bench noise.
+manyCollidingSubstitutions :: Dhall.Substitution.Substitutions Parser.Src Void
+manyCollidingSubstitutions =
+    Dhall.Map.fromList
+        [ (name, largeUserTypeValue (i `mod` 10 == 0))
+        | i <- [0 .. manyFilesModuleCount - 1]
+        , let name = "UserType" <> Text.pack (printf "%03d" i)
+        ]
+
+-- | ~64-field record. @True@: every field is free @a@ (collides with
+-- module binders). @False@: closed (@Natural@), so @let a@ must not shift it.
+largeUserTypeValue :: Bool -> Core.Expr Parser.Src Void
+largeUserTypeValue mentionA =
+    Core.Record
+        (Dhall.Map.fromList
+            [ (fieldName, Core.makeRecordField field)
+            | i <- [0 .. largeUserTypeFieldCount - 1]
+            , let fieldName = "f" <> Text.pack (printf "%03d" i)
+                  field =
+                      if mentionA
+                          then Core.Var "a"
+                          else Core.Natural
+            ]
+        )
+
+largeUserTypeFieldCount :: Int
+largeUserTypeFieldCount = 64
+
+withManyCollidingSubstitutions :: Dhall.InputSettings -> Dhall.InputSettings
+withManyCollidingSubstitutions =
+    Lens.Micro.set Dhall.substitutions manyCollidingSubstitutions
+
+-- | How many imported modules (and substitution keys) the many-files probe
+-- uses. Must stay a many-import tree: a single large file would only call
+-- @substitute@ a couple of times and miss the as-code regression.
+manyFilesModuleCount :: Int
+manyFilesModuleCount = 200
+
+-- | Write the many-files package into @root@ (temp dir). Shared by the Code
+-- and Source pipelines; not timed as part of @resolve_cold_cache_on@.
+writeManyFilesFixture :: FilePath -> IO ()
+writeManyFilesFixture root = do
+    let modsDir = root </> "mods"
+    Directory.createDirectoryIfMissing True modsDir
+    mapM_ writeModule [0 .. manyFilesModuleCount - 1]
+    Text.IO.writeFile (root </> "package.dhall") packageSource
+    Text.IO.writeFile (root </> "pipeline-code.dhall") "./package.dhall\n"
+    Text.IO.writeFile
+        (root </> "pipeline-source.dhall")
+        "./package.dhall as Source\n"
+  where
+    writeModule i = do
+        let path = root </> "mods" </> printf "m%03d.dhall" i
+        Text.IO.writeFile path $
+            Text.unlines
+                [ "let a = " <> Text.pack (show i)
+                , "let x = 1"
+                , "in  a + x"
+                ]
+
+    packageSource =
+        let rows =
+                [ "    ./mods/" <> Text.pack (printf "m%03d.dhall" (i :: Int))
+                | i <- [0 .. manyFilesModuleCount - 1]
+                ]
+        in  "[\n" <> Text.intercalate ",\n" rows <> "\n]\n"
+
+-- | Keep the generated tree alive through timed resolve samples, then delete it.
+withOptionalManyFilesTree :: Bool -> (Maybe FilePath -> IO a) -> IO a
+withOptionalManyFilesTree False k =
+    k Nothing
+withOptionalManyFilesTree True k =
+    Temp.withSystemTempDirectory "dhall-substitutions-many-files" $ \dir -> do
+        timed "substitutions.many_files: generate" (writeManyFilesFixture dir)
+        k (Just dir)
 
 k8sLabels :: String -> [String]
 k8sLabels name =
@@ -230,6 +796,133 @@ decodeNormalized :: ByteString.ByteString -> Core.Expr Void Void
 decodeNormalized =
     either throw id . Binary.decodeExpression
 
+data PipelineBench = PipelineBench
+    { pbGroupLabel :: String
+    , pbSettings :: Dhall.InputSettings
+    , pbParsed :: ParsedExpr
+    , pbResolved :: ResolvedExpr
+    }
+    -- ^ Mode A fixture: needs pre-resolved AST for typecheck/evaluation benches.
+
+data ColdResolveBench = ColdResolveBench
+    { crbGroupLabel :: String
+    , crbSettings :: Dhall.InputSettings
+    , crbParsed :: ParsedExpr
+    }
+    -- ^ Mode B fixture: parse-only prep; only cold resolve is measured.
+
+pipelineSettings :: FilePath -> FilePath -> Dhall.InputSettings
+pipelineSettings directory path =
+    Lens.Micro.set Dhall.sourceName path
+        (Lens.Micro.set Dhall.rootDirectory directory Dhall.defaultInputSettings)
+
+-- | Mode A loader: parse, cache-warming resolve, validity typecheck.
+loadPipelineBench :: String -> FilePath -> FilePath -> IO PipelineBench
+loadPipelineBench groupLabel directory relativePath = do
+    let path = directory </> relativePath
+    let prefix = groupLabel
+
+    text <- timed (prefix <> ": read") (Text.IO.readFile path)
+
+    parsed <- timed (prefix <> ": parse") $
+        either throw pure (Parser.exprFromText path text)
+
+    let settings = pipelineSettings directory path
+
+    resolved <- timed (prefix <> ": resolve (cache on)") $
+        resolveWithCache settings parsed
+
+    timed (prefix <> ": typecheck") (ensureWellTyped resolved)
+    say $ "  " <> prefix <> ": ready"
+
+    pure
+        PipelineBench
+            { pbGroupLabel = groupLabel
+            , pbSettings = settings
+            , pbParsed = parsed
+            , pbResolved = resolved
+            }
+
+-- | Mode B loader: parse only (no cache-warming resolve).
+loadColdResolveBench :: String -> FilePath -> FilePath -> IO ColdResolveBench
+loadColdResolveBench groupLabel directory relativePath =
+    loadColdResolveBenchWithSettings groupLabel directory relativePath id
+
+loadColdResolveBenchWithSettings
+    :: String
+    -> FilePath
+    -> FilePath
+    -> (Dhall.InputSettings -> Dhall.InputSettings)
+    -> IO ColdResolveBench
+loadColdResolveBenchWithSettings groupLabel directory relativePath tweakSettings = do
+    let path = directory </> relativePath
+    let prefix = groupLabel
+
+    text <- timed (prefix <> ": read") (Text.IO.readFile path)
+
+    parsed <- timed (prefix <> ": parse") $
+        either throw pure (Parser.exprFromText path text)
+
+    let settings = tweakSettings (pipelineSettings directory path)
+
+    say $ "  " <> prefix <> ": ready (explicit cold resolve benchmark)"
+
+    pure
+        ColdResolveBench
+            { crbGroupLabel = groupLabel
+            , crbSettings = settings
+            , crbParsed = parsed
+            }
+
+loadLarge6PhaseVariants :: Maybe String -> IO [PipelineBench]
+loadLarge6PhaseVariants mPattern = do
+    -- Mode A large6 rows (see large6/README.md matrix).
+    let candidates =
+            [ ("large6.slow_parse.as_code", "pipeline-code-long-parse.dhall")
+            , ("large6.slow_parse.as_source", "pipeline-source-long-parse.dhall")
+            , ("large6.slow_eval.as_source", "pipeline-source-long-eval.dhall")
+            , ("large6.slow_typecheck.as_source", "pipeline-source-long-typecheck.dhall")
+            , ("large6.slow_normalize.as_source", "pipeline-source-long-normalize.dhall")
+            , ("large6.slow_multi.as_source", "pipeline-source-long-multi.dhall")
+            -- See large6Labels: second Source walk after Code validation.
+            , ("large6.slow_walk.as_code", "pipeline-code-long-walk.dhall")
+            , ("large6.slow_walk.as_source", "pipeline-source-long-walk.dhall")
+            ]
+        selected =
+            [ entry
+            | entry@(label, _) <- candidates
+            , any (couldMatch mPattern) (phaseLabels label)
+            ]
+    if null selected
+        then do
+            say "Skipping large6 fixtures (do not match pattern)"
+            pure []
+        else do
+            say $ "Loading large6 fixtures (" <> show (length selected) <> " file(s))…"
+            traverse (\(label, file) -> loadPipelineBench label large6Directory file) selected
+
+loadLarge6ColdResolveVariants :: Maybe String -> IO [ColdResolveBench]
+loadLarge6ColdResolveVariants mPattern = do
+    -- Mode B large6 Code rows where prep would hide resolve cost.
+    let candidates =
+            [ ("large6.slow_eval.as_code", "pipeline-code-long-eval.dhall")
+            , ("large6.slow_typecheck.as_code", "pipeline-code-long-typecheck.dhall")
+            , ("large6.slow_normalize.as_code", "pipeline-code-long-normalize.dhall")
+            , ("large6.slow_multi.as_code", "pipeline-code-long-multi.dhall")
+            ]
+        selected =
+            [ entry
+            | entry@(label, _) <- candidates
+            , any (couldMatch mPattern) (coldResolveLabels label)
+            ]
+    if null selected
+        then do
+            say "Skipping large6 cold-resolve fixtures (do not match pattern)"
+            pure []
+        else do
+            say $ "Loading large6 cold-resolve fixtures (" <> show (length selected) <> " file(s))…"
+            traverse (\(label, file) -> loadColdResolveBench label large6Directory file) selected
+
 -- | Load large1 inputs for the existing per-phase benchmarks.
 --
 -- Import resolution for prep uses 'resolveWithCache'. The timed @resolve@
@@ -281,45 +974,6 @@ loadLarge2 = do
 
     pure (resolved, normalized, encoded)
 
-data PipelineBench = PipelineBench
-    { pbGroupLabel :: String
-    , pbSettings :: Dhall.InputSettings
-    , pbParsed :: ParsedExpr
-    , pbResolved :: ResolvedExpr
-    }
-
-pipelineSettings :: FilePath -> FilePath -> Dhall.InputSettings
-pipelineSettings directory path =
-    Lens.Micro.set Dhall.sourceName path
-        (Lens.Micro.set Dhall.rootDirectory directory Dhall.defaultInputSettings)
-
--- | Parse, cache-warming resolve, and a validity typecheck for phase benches.
-loadPipelineBench :: String -> FilePath -> FilePath -> IO PipelineBench
-loadPipelineBench groupLabel directory relativePath = do
-    let path = directory </> relativePath
-    let prefix = groupLabel
-
-    text <- timed (prefix <> ": read") (Text.IO.readFile path)
-
-    parsed <- timed (prefix <> ": parse") $
-        either throw pure (Parser.exprFromText path text)
-
-    let settings = pipelineSettings directory path
-
-    resolved <- timed (prefix <> ": resolve (cache on)") $
-        resolveWithCache settings parsed
-
-    timed (prefix <> ": typecheck") (ensureWellTyped resolved)
-    say $ "  " <> prefix <> ": ready"
-
-    pure
-        PipelineBench
-            { pbGroupLabel = groupLabel
-            , pbSettings = settings
-            , pbParsed = parsed
-            , pbResolved = resolved
-            }
-
 k8sSettings :: FilePath -> Dhall.InputSettings
 k8sSettings sourceName =
     Lens.Micro.set Dhall.sourceName sourceName
@@ -361,8 +1015,8 @@ loadK8sExamples mPattern = do
             say $ "Loading k8s fixtures (" <> show (length selected) <> " file(s))…"
             traverse loadK8sExample selected
 
--- Prep uses the normal disk caches; timed @resolve@ benches still use
--- 'resolveWithoutCache'.
+-- Prep uses disk caches for Mode A validity + phase benches; Mode B fixtures
+-- skip cache-warming resolve. See benchmark/evaluation/README.md.
 main :: IO ()
 main = do
     args <- getArgs
@@ -399,17 +1053,44 @@ main = do
                 say "Skipping large3 (does not match pattern)"
                 pure Nothing
 
+    let wantLarge3Source = any (couldMatch mPattern) large3SourceLabels
+    large3Source <-
+        if wantLarge3Source
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large3.source"
+                        large3Directory
+                        "pipeline-source.dhall"
+            else do
+                say "Skipping large3.source (does not match pattern)"
+                pure Nothing
+
     let wantLarge3GetConfig = any (couldMatch mPattern) large3GetConfigLabels
     large3GetConfig <-
         if wantLarge3GetConfig
             then
                 Just
                     <$> loadPipelineBench
-                        "large3.get_config"
+                        "large3.get_config.code"
                         large3Directory
                         "get_config.dhall"
             else do
-                say "Skipping large3.get_config (does not match pattern)"
+                say "Skipping large3.get_config.code (does not match pattern)"
+                pure Nothing
+
+    let wantLarge3GetConfigAsSource =
+            any (couldMatch mPattern) large3GetConfigAsSourceLabels
+    large3GetConfigAsSource <-
+        if wantLarge3GetConfigAsSource
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large3.get_config.source"
+                        large3Directory
+                        "get_config_as_source.dhall"
+            else do
+                say "Skipping large3.get_config.source (does not match pattern)"
                 pure Nothing
 
     let wantLarge4 = any (couldMatch mPattern) large4Labels
@@ -420,59 +1101,230 @@ main = do
                 say "Skipping large4 (does not match pattern)"
                 pure Nothing
 
-    say "Starting tasty-bench…"
+    let wantLarge4Source = any (couldMatch mPattern) large4SourceLabels
+    large4Source <-
+        if wantLarge4Source
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large4.source"
+                        large4Directory
+                        "generate-example-source.dhall"
+            else do
+                say "Skipping large4.source (does not match pattern)"
+                pure Nothing
 
-    defaultMain $ concat
-        [ [ bgroup
-              "normalize"
-              [ bgroup
-                  name
-                  [ bench "typecheck" (nf typecheckResolvedExpr expression)
-                  , bench "evaluation" (nf normalizeResolvedExpr expression)
+    let wantLarge5Code = any (couldMatch mPattern) large5CodeLabels
+    large5Code <-
+        if wantLarge5Code
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large5.code"
+                        large5Directory
+                        "pipeline-code.dhall"
+            else do
+                say "Skipping large5.code (does not match pattern)"
+                pure Nothing
+
+    let wantLarge5Source = any (couldMatch mPattern) large5SourceLabels
+    large5Source <-
+        if wantLarge5Source
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large5.source"
+                        large5Directory
+                        "pipeline-source.dhall"
+            else do
+                say "Skipping large5.source (does not match pattern)"
+                pure Nothing
+
+    large6Variants <- loadLarge6PhaseVariants mPattern
+    large6ColdResolveVariants <- loadLarge6ColdResolveVariants mPattern
+
+    let wantPreludeImportCode = any (couldMatch mPattern) preludeImportCodeLabels
+    preludeImportCode <-
+        if wantPreludeImportCode
+            then
+                Just
+                    <$> loadColdResolveBench
+                        "prelude_import.code"
+                        preludeImportDirectory
+                        "prelude-code.dhall"
+            else do
+                say "Skipping prelude_import.code (does not match pattern)"
+                pure Nothing
+
+    let wantPreludeImportSource = any (couldMatch mPattern) preludeImportSourceLabels
+    preludeImportSource <-
+        if wantPreludeImportSource
+            then
+                Just
+                    <$> loadColdResolveBench
+                        "prelude_import.source"
+                        preludeImportDirectory
+                        "prelude-source.dhall"
+            else do
+                say "Skipping prelude_import.source (does not match pattern)"
+                pure Nothing
+
+    let wantSubstitutionsCode = any (couldMatch mPattern) substitutionsCodeLabels
+    substitutionsCode <-
+        if wantSubstitutionsCode
+            then
+                Just
+                    <$> loadColdResolveBenchWithSettings
+                        "substitutions.as_code"
+                        substitutionsDirectory
+                        "pipeline-code.dhall"
+                        withManyUserSubstitutions
+            else do
+                say "Skipping substitutions.as_code (does not match pattern)"
+                pure Nothing
+
+    let wantSubstitutionsSource = any (couldMatch mPattern) substitutionsSourceLabels
+    substitutionsSource <-
+        if wantSubstitutionsSource
+            then
+                Just
+                    <$> loadColdResolveBenchWithSettings
+                        "substitutions.as_source"
+                        substitutionsDirectory
+                        "pipeline-source.dhall"
+                        withManyUserSubstitutions
+            else do
+                say "Skipping substitutions.as_source (does not match pattern)"
+                pure Nothing
+
+    let wantSubstitutionsManyFilesCode =
+            any (couldMatch mPattern) substitutionsManyFilesCodeLabels
+    let wantSubstitutionsManyFilesSource =
+            any (couldMatch mPattern) substitutionsManyFilesSourceLabels
+    let wantShiftCost =
+            any (couldMatch mPattern) substitutionsShiftCostLabels
+    let wantNfSizeWalk =
+            any (couldMatch mPattern) nfSizeWalkLabels
+
+    withOptionalManyFilesTree
+        (wantSubstitutionsManyFilesCode || wantSubstitutionsManyFilesSource)
+        $ \manyFilesRoot -> do
+            substitutionsManyFilesCode <-
+                case (wantSubstitutionsManyFilesCode, manyFilesRoot) of
+                    (True, Just dir) ->
+                        Just
+                            <$> loadColdResolveBenchWithSettings
+                                "substitutions.many_files.as_code"
+                                dir
+                                "pipeline-code.dhall"
+                                withManyCollidingSubstitutions
+                    _ -> do
+                        say "Skipping substitutions.many_files.as_code (does not match pattern)"
+                        pure Nothing
+
+            substitutionsManyFilesSource <-
+                case (wantSubstitutionsManyFilesSource, manyFilesRoot) of
+                    (True, Just dir) ->
+                        Just
+                            <$> loadColdResolveBenchWithSettings
+                                "substitutions.many_files.as_source"
+                                dir
+                                "pipeline-source.dhall"
+                                withManyCollidingSubstitutions
+                    _ -> do
+                        say "Skipping substitutions.many_files.as_source (does not match pattern)"
+                        pure Nothing
+
+            say "Starting tasty-bench…"
+
+            defaultMain $ concat
+                [ [ bgroup
+                      "normalize"
+                      [ bgroup
+                          name
+                          [ bench "typecheck" (nf typecheckResolvedExpr expression)
+                          , bench "evaluation" (nf normalizeResolvedExpr expression)
+                          ]
+                      | (name, expression) <- examples
+                      ]
                   ]
-              | (name, expression) <- examples
-              ]
-          ]
-        , [ bgroup "large1"
-              [ bench "parse" (nf (parseLarge1 large1MainPath) large1Text)
-              , bench "resolve" (nfAppIO (resolveWithoutCache large1Settings) large1Parsed)
-              , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
-              , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
-              ]
-          | Just (large1Text, large1Parsed, large1Resolved) <- [large1]
-          ]
-        , [ bgroup "large2"
-              [ bench "normalize" (nf normalizeResolvedExpr large2Resolved)
-              , bgroup
-                    "cbor"
-                    [ bench "encode" (nf encodeNormalized large2Normalized)
-                    , bench "decode" (nf decodeNormalized large2Encoded)
-                    ]
-              ]
-          | Just (large2Resolved, large2Normalized, large2Encoded) <- [large2]
-          ]
-        , [ bgroup
-              "k8s"
-              [ bgroup
-                  name
-                  [ bench "resolve" (nfAppIO (resolveWithoutCache settings) parsed)
-                  , bench "typecheck" (nf typecheckResolvedExpr resolved)
-                  , bench "evaluation" (nf normalizeResolvedExpr resolved)
+                , [ bgroup "large1"
+                      [ bench "parse" (nf (parseLarge1 large1MainPath) large1Text)
+                      , bench "resolve" (nfAppIO (resolveWithoutCache large1Settings) large1Parsed)
+                      , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
+                      , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
+                      ]
+                  | Just (large1Text, large1Parsed, large1Resolved) <- [large1]
                   ]
-              | (name, settings, parsed, resolved) <- k8sExamples
-              ]
-          | not (null k8sExamples)
-          ]
-        , [ pipelineBenchGroup large3Bench
-          | Just large3Bench <- [large3]
-          ]
-        , [ pipelineBenchGroup large3GetConfigBench
-          | Just large3GetConfigBench <- [large3GetConfig]
-          ]
-        , [ pipelineBenchGroup large4Bench
-          | Just large4Bench <- [large4]
-          ]
-        ]
+                , [ bgroup "large2"
+                      [ bench "normalize" (nf normalizeResolvedExpr large2Resolved)
+                      , bgroup
+                            "cbor"
+                            [ bench "encode" (nf encodeNormalized large2Normalized)
+                            , bench "decode" (nf decodeNormalized large2Encoded)
+                            ]
+                      ]
+                  | Just (large2Resolved, large2Normalized, large2Encoded) <- [large2]
+                  ]
+                , [ bgroup
+                      "k8s"
+                      [ bgroup
+                          name
+                          [ bench "resolve" (nfAppIO (resolveWithoutCache settings) parsed)
+                          , bench "typecheck" (nf typecheckResolvedExpr resolved)
+                          , bench "evaluation" (nf normalizeResolvedExpr resolved)
+                          ]
+                      | (name, settings, parsed, resolved) <- k8sExamples
+                      ]
+                  | not (null k8sExamples)
+                  ]
+                , [ pipelineBenchGroup large3Bench
+                  | Just large3Bench <- [large3]
+                  ]
+                , [ pipelineBenchGroup large3SourceBench
+                  | Just large3SourceBench <- [large3Source]
+                  ]
+                , [ pipelineBenchGroup large3GetConfigBench
+                  | Just large3GetConfigBench <- [large3GetConfig]
+                  ]
+                , [ pipelineBenchGroup large3GetConfigAsSourceBench
+                  | Just large3GetConfigAsSourceBench <- [large3GetConfigAsSource]
+                  ]
+                , [ pipelineBenchGroup large4Bench
+                  | Just large4Bench <- [large4]
+                  ]
+                , [ pipelineBenchGroup large4SourceBench
+                  | Just large4SourceBench <- [large4Source]
+                  ]
+                , [ pipelineBenchGroup large5CodeBench
+                  | Just large5CodeBench <- [large5Code]
+                  ]
+                , [ pipelineBenchGroup large5SourceBench
+                  | Just large5SourceBench <- [large5Source]
+                  ]
+                , map pipelineBenchGroup large6Variants
+                , map coldResolveBenchGroup large6ColdResolveVariants
+                , [ coldResolveBenchGroup preludeImportCodeBench
+                  | Just preludeImportCodeBench <- [preludeImportCode]
+                  ]
+                , [ coldResolveBenchGroup preludeImportSourceBench
+                  | Just preludeImportSourceBench <- [preludeImportSource]
+                  ]
+                , [ substitutionsColdResolveBenchGroup substitutionsCodeBench
+                  | Just substitutionsCodeBench <- [substitutionsCode]
+                  ]
+                , [ substitutionsColdResolveBenchGroup substitutionsSourceBench
+                  | Just substitutionsSourceBench <- [substitutionsSource]
+                  ]
+                , [ substitutionsColdResolveBenchGroup substitutionsManyFilesCodeBench
+                  | Just substitutionsManyFilesCodeBench <- [substitutionsManyFilesCode]
+                  ]
+                , [ substitutionsColdResolveBenchGroup substitutionsManyFilesSourceBench
+                  | Just substitutionsManyFilesSourceBench <- [substitutionsManyFilesSource]
+                  ]
+                , [ shiftCostBenchGroup | wantShiftCost ]
+                , [ nfSizeWalkBenchGroup | wantNfSizeWalk ]
+                ]
  where
    -- These helpers reduce polymorphism in TypeCheck.typeOf and Core.normalize.
    -- Type-check failures must throw so tasty-bench reports FAIL instead of OK.
@@ -490,6 +1342,57 @@ main = do
            [ bench "resolve" (nfAppIO (resolveWithoutCache (pbSettings fixture)) (pbParsed fixture))
            , bench "typecheck" (nf typecheckResolvedExpr (pbResolved fixture))
            , bench "evaluation" (nf normalizeResolvedExpr (pbResolved fixture))
+           ]
+
+   coldResolveBenchGroup :: ColdResolveBench -> Benchmark
+   coldResolveBenchGroup fixture =
+       bgroup (crbGroupLabel fixture)
+           [ bench coldResolveBenchName
+               (nfAppIO (resolveWithColdCache (crbSettings fixture)) (crbParsed fixture))
+           ]
+
+   substitutionsColdResolveBenchGroup :: ColdResolveBench -> Benchmark
+   substitutionsColdResolveBenchGroup fixture =
+       bgroup (crbGroupLabel fixture)
+           [ bench coldResolveBenchName
+               (nfAppIO (resolveWithSettingsCold (crbSettings fixture)) (crbParsed fixture))
+           ]
+
+   -- | Same substitution map and @let a@/@let x@ shape as many_files modules,
+   -- without import I/O. Resolves the map once. @naive@ is the pre-(1)/(2)
+   -- walker (@Map.map shift@ every value, no root memo); @optimized@ is
+   -- @substituteManyFromRoot@ (per-value shift + root-shift memo).
+   shiftCostBenchGroup :: Benchmark
+   shiftCostBenchGroup =
+       bgroup "substitutions.shift_cost"
+           [ bench "naive" (nf (map (shiftCostNaiveWalk resolved)) exprs)
+           , bench "optimized" (nf (shiftCostFromRootEach resolved) exprs)
+           ]
+     where
+       resolved =
+           resolveShiftCost manyCollidingSubstitutions
+
+       exprs =
+           replicate manyFilesModuleCount shiftCostExpr
+
+       shiftCostExpr :: ResolvedExpr
+       shiftCostExpr =
+           Core.Let
+               (Core.makeBinding "a" (Core.NaturalLit 0))
+               (Core.Let
+                   (Core.makeBinding "x" (Core.NaturalLit 1))
+                   (Core.NaturalPlus (Core.Var "a") (Core.Var "x"))
+               )
+
+   -- | @full@ walks the whole tree; @early_abort@ stops at 64KiB. Both live in
+   -- this harness so the group does not depend on Import internals.
+   nfSizeWalkBenchGroup :: Benchmark
+   nfSizeWalkBenchGroup =
+       bgroup "semisemantic.nf_size_walk"
+           [ bench "full"
+               (nf (nfSizeWalkEstimate . sharedNaturalPlusTree) nfSizeWalkDepth)
+           , bench "early_abort"
+               (nf (nfSizeWalkExceedsThreshold . sharedNaturalPlusTree) nfSizeWalkDepth)
            ]
 
    parseLarge1 :: FilePath -> Text -> ParsedExpr
