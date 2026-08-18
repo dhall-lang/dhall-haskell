@@ -263,11 +263,18 @@ shiftCostFromRootEach root =
             mempty
 
 substitutionsCodeLabels :: [String]
-substitutionsCodeLabels = coldResolveLabels "substitutions"
+substitutionsCodeLabels = coldResolveLabels "substitutions.as_code"
+
+substitutionsSourceLabels :: [String]
+substitutionsSourceLabels = coldResolveLabels "substitutions.as_source"
 
 substitutionsManyFilesCodeLabels :: [String]
 substitutionsManyFilesCodeLabels =
-    coldResolveLabels "substitutions.many_files"
+    coldResolveLabels "substitutions.many_files.as_code"
+
+substitutionsManyFilesSourceLabels :: [String]
+substitutionsManyFilesSourceLabels =
+    coldResolveLabels "substitutions.many_files.as_source"
 
 -- | Synthetic substitution-heavy end-to-end proxy: many wide-record imports,
 -- large Haskell-API substitution map, cold resolve+typecheck+NF.
@@ -383,6 +390,9 @@ writeManyFilesFixture root = do
     mapM_ writeModule [0 .. manyFilesModuleCount - 1]
     Text.IO.writeFile (root </> "package.dhall") packageSource
     Text.IO.writeFile (root </> "pipeline-code.dhall") "./package.dhall\n"
+    Text.IO.writeFile
+        (root </> "pipeline-source.dhall")
+        "./package.dhall as Source\n"
   where
     writeModule i = do
         let path = root </> "mods" </> printf "m%03d.dhall" i
@@ -680,16 +690,32 @@ benchmarks mPattern k = do
             then
                 Just
                     <$> loadColdResolveBenchWithSettings
-                        "substitutions"
+                        "substitutions.as_code"
                         substitutionsDirectory
                         "pipeline-code.dhall"
                         withManyUserSubstitutions
             else do
-                say "Skipping substitutions (does not match pattern)"
+                say "Skipping substitutions.as_code (does not match pattern)"
+                pure Nothing
+
+    let wantSubstitutionsSource = any (couldMatch mPattern) substitutionsSourceLabels
+    substitutionsSource <-
+        if wantSubstitutionsSource
+            then
+                Just
+                    <$> loadColdResolveBenchWithSettings
+                        "substitutions.as_source"
+                        substitutionsDirectory
+                        "pipeline-source.dhall"
+                        withManyUserSubstitutions
+            else do
+                say "Skipping substitutions.as_source (does not match pattern)"
                 pure Nothing
 
     let wantSubstitutionsManyFilesCode =
             any (couldMatch mPattern) substitutionsManyFilesCodeLabels
+    let wantSubstitutionsManyFilesSource =
+            any (couldMatch mPattern) substitutionsManyFilesSourceLabels
     let wantComposerProxyCode =
             any (couldMatch mPattern) composerProxyCodeLabels
     let wantComposerProxyManyImportsCode =
@@ -698,7 +724,7 @@ benchmarks mPattern k = do
             any (couldMatch mPattern) substitutionsShiftCostLabels
 
     withOptionalManyFilesTree
-        wantSubstitutionsManyFilesCode
+        (wantSubstitutionsManyFilesCode || wantSubstitutionsManyFilesSource)
         $ \manyFilesRoot ->
             withOptionalComposerProxyTree
                 wantComposerProxyCode
@@ -714,12 +740,25 @@ benchmarks mPattern k = do
                             (True, Just dir) ->
                                 Just
                                     <$> loadColdResolveBenchWithSettings
-                                        "substitutions.many_files"
+                                        "substitutions.many_files.as_code"
                                         dir
                                         "pipeline-code.dhall"
                                         withManyCollidingSubstitutions
                             _ -> do
-                                say "Skipping substitutions.many_files (does not match pattern)"
+                                say "Skipping substitutions.many_files.as_code (does not match pattern)"
+                                pure Nothing
+
+                    substitutionsManyFilesSource <-
+                        case (wantSubstitutionsManyFilesSource, manyFilesRoot) of
+                            (True, Just dir) ->
+                                Just
+                                    <$> loadColdResolveBenchWithSettings
+                                        "substitutions.many_files.as_source"
+                                        dir
+                                        "pipeline-source.dhall"
+                                        withManyCollidingSubstitutions
+                            _ -> do
+                                say "Skipping substitutions.many_files.as_source (does not match pattern)"
                                 pure Nothing
 
                     composerProxyCode <-
@@ -762,7 +801,13 @@ benchmarks mPattern k = do
                           | Just fixture <- [substitutionsCode]
                           ]
                         , [ substitutionsColdResolveBenchGroup fixture
+                          | Just fixture <- [substitutionsSource]
+                          ]
+                        , [ substitutionsColdResolveBenchGroup fixture
                           | Just fixture <- [substitutionsManyFilesCode]
+                          ]
+                        , [ substitutionsColdResolveBenchGroup fixture
+                          | Just fixture <- [substitutionsManyFilesSource]
                           ]
                         , [ endToEndColdBenchGroup fixture
                           | Just fixture <- [composerProxyCode]

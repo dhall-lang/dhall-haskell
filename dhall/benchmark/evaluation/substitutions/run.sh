@@ -69,6 +69,9 @@ EOF
 
 echo "--- substitutions.as_code (nested lets) ---"
 time_dhall "substitutions.as_code" "${HERE}/pipeline-code.dhall"
+    echo './package.dhall as Source' > "${root}/pipeline-source.dhall"
+echo "--- substitutions.as_code / .as_source (nested lets) ---"
+time_dhall "substitutions.as_source" "${HERE}/pipeline-source.dhall"
 
 MANY_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/dhall-substitutions-many-files.XXXXXX")
 trap 'rm -rf "${MANY_ROOT}"' EXIT
@@ -76,3 +79,4 @@ trap 'rm -rf "${MANY_ROOT}"' EXIT
 echo "--- substitutions.many_files.* (generating ${MANY_FILES_MODULE_COUNT} modules) ---"
 generate_many_files_tree "${MANY_ROOT}"
 time_dhall "substitutions.many_files.as_code" "${MANY_ROOT}/pipeline-code.dhall"
+time_dhall "substitutions.many_files.as_source" "${MANY_ROOT}/pipeline-source.dhall"
