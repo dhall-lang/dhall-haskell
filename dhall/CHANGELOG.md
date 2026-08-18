@@ -9,6 +9,9 @@
 * Reuse a single HTTP `Manager` per import run by replacing `Status`'s
   `_newManager` factory with `pure manager` after the first request, instead
   of keeping a separate `_manager` field.
+* Add `as Source` import mode: resolve an import to its import-free source
+  expression without beta-normalization. Frozen `as Source` hashes are the
+  finalized import-free expression.
 * Faster disk cache for local imports without integrity checks. Cache keys
   hash this file's syntax plus hashes of its imports, instead of hashing the
   fully resolved tree. Entries go in `dhall-haskell-v2/` so they are not mixed
