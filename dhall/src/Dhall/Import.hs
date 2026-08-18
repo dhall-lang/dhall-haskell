@@ -680,7 +680,7 @@ data FrozenImportResolutionMode
     See @trySourceOpportunisticCacheFill@.
 -}
 sourceOpportunisticCacheFillEnabled :: Bool
-sourceOpportunisticCacheFillEnabled = False
+sourceOpportunisticCacheFillEnabled = True
 
 findImportHashAndMode
     :: Expr s Import -> Maybe (Dhall.Crypto.SHA256Digest, ImportMode)
