@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# CLI timings matching the large3 Haskell groups.
-# Run from this directory. These can take tens of seconds.
+# CLI timings matching large5.code / large5.source.
+# Run from this directory.
 set -euo pipefail
 
 time_dhall() {
@@ -10,7 +10,5 @@ time_dhall() {
     echo
 }
 
-time_dhall pipeline.dhall
+time_dhall pipeline-code.dhall
 time_dhall pipeline-source.dhall
-time_dhall get_config.dhall
-time_dhall get_config_as_source.dhall
