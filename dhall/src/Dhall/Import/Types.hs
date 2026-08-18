@@ -126,7 +126,8 @@ data Status = Status
     --   store the hash of their own syntax; @as Text@ / @as Bytes@ /
     --   @as Location@ store a hash of their contents. Frozen imports use
     --   their integrity hash. Caching these avoids encoding a child's full
-    --   normal form just to name the parent cache entry.
+    --   normal form just to name the parent cache entry. @as Source@ stores
+    --   the hash of the finalized import-free expression.
 
     , _merkleContextFingerprint :: Maybe SHA256Digest
     -- ^ Cached hash of '_startingContext' for merkle keys. 'Nothing' until
@@ -136,6 +137,13 @@ data Status = Status
     -- ^ Cached hash of '_substitutions' for merkle keys. Avoids CBOR-encoding
     --   a large substitution map once per Code import. Cleared when
     --   '_substitutions' is replaced.
+
+    , _parsedImportCache :: Map Text (Expr Src Import)
+    -- ^ Per-run cache of parsed import ASTs, keyed by the canonical fetch
+    --   identity of the import (absolute path, remote URL including headers,
+    --   or environment variable name). This avoids reparsing the same file
+    --   when it is loaded through multiple import modes (e.g. hashed @Code@
+    --   validation and unhashed @as Source@ prefill).
 
     , _newManager :: IO Manager
     , _manager :: Maybe Manager
@@ -203,6 +211,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _merkleSubstitutionsFingerprint = Nothing
 
+    _parsedImportCache = Map.empty
+
     _manager = Nothing
 
     _substitutions = Dhall.Substitution.empty
@@ -236,6 +246,10 @@ cache = lens _cache (\s x -> s { _cache = x })
 -- | Lens from a `Status` to its `_merkleHashCache` field
 merkleHashCache :: Lens' Status (Map Chained SHA256Digest)
 merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
+
+-- | Lens from a `Status` to its `_parsedImportCache` field
+parsedImportCache :: Lens' Status (Map Text (Expr Src Import))
+parsedImportCache = lens _parsedImportCache (\s x -> s { _parsedImportCache = x })
 
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Text)
