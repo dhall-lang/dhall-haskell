@@ -47,13 +47,17 @@ substitute :: Expr s a -> Substitutions s a -> Expr s a
 substitute expr substitutions =
      substituteMany (resolveSubstitutions substitutions) expr
 
+-- | Resolve insertion-order chaining, then compute identity-shift metadata
+--   once. Import loading should cache this on 'Dhall.Import.Types.Status'
+--   rather than calling 'substitute' (which re-resolves) per file.
+--
+--   Chaining itself uses the original always-shift walker. Calling 'fromMap'
+--   on every prefix used to recompute 'freeVarNames' in O(N²) per
+--   'substitute', which dominated as-code loads with hundreds of imports.
 resolveSubstitutions :: Substitutions s a -> ResolvedSubstitutions s a
 resolveSubstitutions substitutions =
      let step k v acc =
-             Map.insert
-                 (V k 0)
-                 (substituteMany (fromMap acc) v)
-                 acc
+             Map.insert (V k 0) (substituteManyRaw acc v) acc
 
          resolvedMap' =
              Foldable.WithIndex.ifoldr
@@ -62,6 +66,37 @@ resolveSubstitutions substitutions =
                  substitutions
 
      in  fromMap resolvedMap'
+
+-- | Original substitution walker (always shift under binders). Used only
+--   while chaining substitution values into each other.
+substituteManyRaw :: Map.Map Var (Expr s a) -> Expr s a -> Expr s a
+substituteManyRaw substitutions expression
+     | Map.null substitutions = expression
+substituteManyRaw substitutions (Var v) =
+     Map.findWithDefault (Var v) v substitutions
+substituteManyRaw substitutions (Lam cs (FunctionBinding src0 y src1 src2 type_) body) =
+     let type_' = substituteManyRaw substitutions type_
+         body' = substituteManyRaw (shiftSubstitutionsRaw y substitutions) body
+     in Lam cs (FunctionBinding src0 y src1 src2 type_') body'
+substituteManyRaw substitutions (Pi cs y domain codomain) =
+     let domain' = substituteManyRaw substitutions domain
+         codomain' = substituteManyRaw (shiftSubstitutionsRaw y substitutions) codomain
+     in Pi cs y domain' codomain'
+substituteManyRaw substitutions (Let (Binding src0 f src1 type_ src2 replacement) body) =
+     let type_' = fmap (fmap (substituteManyRaw substitutions)) type_
+         replacement' = substituteManyRaw substitutions replacement
+         body' = substituteManyRaw (shiftSubstitutionsRaw f substitutions) body
+     in Let (Binding src0 f src1 type_' src2 replacement') body'
+substituteManyRaw substitutions expression =
+     Lens.over Syntax.subExpressions (substituteManyRaw substitutions) expression
+
+shiftSubstitutionsRaw
+    :: Text -> Map.Map Var (Expr s a) -> Map.Map Var (Expr s a)
+shiftSubstitutionsRaw name substitutions =
+     let shiftKey (V k n) = if k == name then V k (n + 1) else V k n
+         shiftValue = Syntax.shift 1 (V name 0)
+         step k v = Map.insert (shiftKey k) (shiftValue v)
+     in Map.foldrWithKey step Map.empty substitutions
 
 fromMap :: Map.Map Var (Expr s a) -> ResolvedSubstitutions s a
 fromMap resolvedMap' =

@@ -137,6 +137,7 @@ module Dhall.Import (
     , remote
     , toHeaders
     , substitutions
+    , resolvedSubstitutions
     , normalizer
     , startingContext
     , reportWarning
@@ -633,6 +634,31 @@ writeToSemanticCache report hash bytes = do
         liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
     return ()
 
+-- | Apply 'Status' substitutions, resolving the map at most once per run.
+--
+--   Public 'Dhall.Substitution.substitute' re-resolves on every call. That
+--   dominated as-code loads with a large Haskell-API map (once per imported
+--   file). The raw map is fixed for the run, so we cache
+--   'Dhall.Substitution.ResolvedSubstitutions' on 'Status'.
+applyStatusSubstitutions
+    :: Expr Src Void -> StateT Status IO (Expr Src Void)
+applyStatusSubstitutions expression = do
+    Status { _substitutions, _resolvedSubstitutions } <- State.get
+
+    resolved <- case _resolvedSubstitutions of
+        Just cached ->
+            return cached
+        Nothing -> do
+            let cached =
+                    Dhall.Substitution.resolveSubstitutions _substitutions
+
+            State.modify
+                (\s -> s { _resolvedSubstitutions = Just cached })
+
+            return cached
+
+    return (Dhall.Substitution.substituteMany resolved expression)
+
 -- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
 -- scratch.
 loadImportWithSemisemanticCache
@@ -683,8 +709,7 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
             return importSemantics
 
         Nothing -> do
-            let substitutedExpr =
-                  Dhall.Substitution.substitute resolvedExpr _substitutions
+            substitutedExpr <- applyStatusSubstitutions resolvedExpr
 
             case Core.shallowDenote parsedImport of
                 -- If this import trivially wraps another import, we can skip

@@ -124,6 +124,14 @@ data Status = Status
 
     , _substitutions :: Dhall.Substitution.Substitutions Src Void
 
+    , _resolvedSubstitutions
+        :: Maybe (Dhall.Substitution.ResolvedSubstitutions Src Void)
+    -- ^ Cached result of 'Dhall.Substitution.resolveSubstitutions' for
+    --   '_substitutions'. The raw map does not change during a run (only
+    --   per-binder copies while walking an AST), so this is computed at most
+    --   once. 'Nothing' until the first import-path substitute. Cleared when
+    --   '_substitutions' is replaced.
+
     , _normalizer :: Maybe (ReifiedNormalizer Void)
 
     , _startingContext :: Context (Expr Src Void)
@@ -163,6 +171,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _substitutions = Dhall.Substitution.empty
 
+    _resolvedSubstitutions = Nothing
+
     _normalizer = Nothing
 
     _startingContext = Dhall.Context.empty
@@ -197,7 +207,16 @@ remoteBytes = lens _remoteBytes (\s x -> s { _remoteBytes = x })
 
 -- | Lens from a `Status` to its `_substitutions` field
 substitutions :: Lens' Status (Dhall.Substitution.Substitutions Src Void)
-substitutions = lens _substitutions (\s x -> s { _substitutions = x })
+substitutions =
+    lens
+        _substitutions
+        (\s x -> s { _substitutions = x, _resolvedSubstitutions = Nothing })
+
+-- | Lens from a `Status` to its cached resolved substitution map
+resolvedSubstitutions
+    :: Lens' Status (Maybe (Dhall.Substitution.ResolvedSubstitutions Src Void))
+resolvedSubstitutions =
+    lens _resolvedSubstitutions (\s x -> s { _resolvedSubstitutions = x })
 
 -- | Lens from a `Status` to its `_normalizer` field
 normalizer :: Lens' Status (Maybe (ReifiedNormalizer Void))
