@@ -1,0 +1,12 @@
+groups:
+  - name: nodes.rules
+    rules:
+      - record: node:container_cpu_usage_seconds_total:ratio_rate5m
+        expr: sum by(instance) (rate(container_cpu_usage_seconds_total{kubernetes_pod_name=""}[5m]))
+          / max by(instance) (machine_cpu_cores)
+      - record: task:container_memory_usage_bytes:max
+        expr: max by(namespace, container_name) (container_memory_usage_bytes{container_name!=""})
+      - record: task:container_cpu_usage_seconds_total:sum
+        expr: sum by(id, namespace, container_name) (irate(container_cpu_usage_seconds_total{container_name!=""}[1m]))
+      - record: node:k8snode_filesystem_avail_bytes:ratio
+        expr: min by(exported_name) (k8snode_filesystem_avail_bytes / k8snode_filesystem_size_bytes)
