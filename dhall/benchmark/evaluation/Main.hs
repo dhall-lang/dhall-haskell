@@ -48,6 +48,12 @@ large2Directory = "benchmark/evaluation/large2"
 large2MainPath :: FilePath
 large2MainPath = large2Directory </> "main.dhall"
 
+large3Directory :: FilePath
+large3Directory = "benchmark/evaluation/large3"
+
+large4Directory :: FilePath
+large4Directory = "benchmark/evaluation/large4"
+
 k8sDirectory :: FilePath
 k8sDirectory = "benchmark/evaluation/k8s"
 
@@ -149,6 +155,23 @@ large2Labels =
     , "large2.cbor.encode"
     , "large2.cbor.decode"
     ]
+
+phaseLabels :: String -> [String]
+phaseLabels prefix =
+    [ prefix
+    , prefix <> ".resolve"
+    , prefix <> ".typecheck"
+    , prefix <> ".evaluation"
+    ]
+
+large3Labels :: [String]
+large3Labels = phaseLabels "large3"
+
+large3GetConfigLabels :: [String]
+large3GetConfigLabels = phaseLabels "large3.get_config"
+
+large4Labels :: [String]
+large4Labels = phaseLabels "large4"
 
 k8sLabels :: String -> [String]
 k8sLabels name =
@@ -258,6 +281,45 @@ loadLarge2 = do
 
     pure (resolved, normalized, encoded)
 
+data PipelineBench = PipelineBench
+    { pbGroupLabel :: String
+    , pbSettings :: Dhall.InputSettings
+    , pbParsed :: ParsedExpr
+    , pbResolved :: ResolvedExpr
+    }
+
+pipelineSettings :: FilePath -> FilePath -> Dhall.InputSettings
+pipelineSettings directory path =
+    Lens.Micro.set Dhall.sourceName path
+        (Lens.Micro.set Dhall.rootDirectory directory Dhall.defaultInputSettings)
+
+-- | Parse, cache-warming resolve, and a validity typecheck for phase benches.
+loadPipelineBench :: String -> FilePath -> FilePath -> IO PipelineBench
+loadPipelineBench groupLabel directory relativePath = do
+    let path = directory </> relativePath
+    let prefix = groupLabel
+
+    text <- timed (prefix <> ": read") (Text.IO.readFile path)
+
+    parsed <- timed (prefix <> ": parse") $
+        either throw pure (Parser.exprFromText path text)
+
+    let settings = pipelineSettings directory path
+
+    resolved <- timed (prefix <> ": resolve (cache on)") $
+        resolveWithCache settings parsed
+
+    timed (prefix <> ": typecheck") (ensureWellTyped resolved)
+    say $ "  " <> prefix <> ": ready"
+
+    pure
+        PipelineBench
+            { pbGroupLabel = groupLabel
+            , pbSettings = settings
+            , pbParsed = parsed
+            , pbResolved = resolved
+            }
+
 k8sSettings :: FilePath -> Dhall.InputSettings
 k8sSettings sourceName =
     Lens.Micro.set Dhall.sourceName sourceName
@@ -329,6 +391,35 @@ main = do
 
     k8sExamples <- loadK8sExamples mPattern
 
+    let wantLarge3 = any (couldMatch mPattern) large3Labels
+    large3 <-
+        if wantLarge3
+            then Just <$> loadPipelineBench "large3" large3Directory "pipeline.dhall"
+            else do
+                say "Skipping large3 (does not match pattern)"
+                pure Nothing
+
+    let wantLarge3GetConfig = any (couldMatch mPattern) large3GetConfigLabels
+    large3GetConfig <-
+        if wantLarge3GetConfig
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large3.get_config"
+                        large3Directory
+                        "get_config.dhall"
+            else do
+                say "Skipping large3.get_config (does not match pattern)"
+                pure Nothing
+
+    let wantLarge4 = any (couldMatch mPattern) large4Labels
+    large4 <-
+        if wantLarge4
+            then Just <$> loadPipelineBench "large4" large4Directory "generate-example.dhall"
+            else do
+                say "Skipping large4 (does not match pattern)"
+                pure Nothing
+
     say "Starting tasty-bench…"
 
     defaultMain $ concat
@@ -372,6 +463,15 @@ main = do
               ]
           | not (null k8sExamples)
           ]
+        , [ pipelineBenchGroup large3Bench
+          | Just large3Bench <- [large3]
+          ]
+        , [ pipelineBenchGroup large3GetConfigBench
+          | Just large3GetConfigBench <- [large3GetConfig]
+          ]
+        , [ pipelineBenchGroup large4Bench
+          | Just large4Bench <- [large4]
+          ]
         ]
  where
    -- These helpers reduce polymorphism in TypeCheck.typeOf and Core.normalize.
@@ -383,6 +483,14 @@ main = do
    -- at load time via 'ensureWellTyped'.
    normalizeResolvedExpr :: ResolvedExpr -> ResolvedExpr
    normalizeResolvedExpr = Core.normalize
+
+   pipelineBenchGroup :: PipelineBench -> Benchmark
+   pipelineBenchGroup fixture =
+       bgroup (pbGroupLabel fixture)
+           [ bench "resolve" (nfAppIO (resolveWithoutCache (pbSettings fixture)) (pbParsed fixture))
+           , bench "typecheck" (nf typecheckResolvedExpr (pbResolved fixture))
+           , bench "evaluation" (nf normalizeResolvedExpr (pbResolved fixture))
+           ]
 
    parseLarge1 :: FilePath -> Text -> ParsedExpr
    parseLarge1 path text =

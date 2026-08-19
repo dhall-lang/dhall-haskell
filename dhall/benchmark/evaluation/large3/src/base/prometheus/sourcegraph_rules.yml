@@ -1,0 +1,9 @@
+groups:
+  - name: sourcegraph.rules
+    rules:
+      - record: app:up:sum
+        expr: sum by(app) (up)
+      - record: app:up:count
+        expr: count by(app) (up)
+      - record: app:up:ratio
+        expr: app:up:sum / on(app) app:up:count

@@ -1,0 +1,176 @@
+Base:
+    Service:
+        backend: {}
+    StorageClass:
+        sourcegraph: {}
+Cadvisor:
+    ClusterRole:
+        cadvisor: {}
+    ClusterRoleBinding:
+        cadvisor: {}
+    DaemonSet:
+        cadvisor:
+            containers:
+                cadvisor: {}
+    PodSecurityPolicy:
+        cadvisor: {}
+    ServiceAccount:
+        cadvisor: {}
+Frontend:
+    Deployment:
+        sourcegraph-frontend:
+            containers:
+                frontend: {}
+                jaeger-agent: {}
+    Ingress:
+        sourcegraph-frontend: {}
+    Role:
+        sourcegraph-frontend: {}
+    RoleBinding:
+        sourcegraph-frontend: {}
+    Service:
+        sourcegraph-frontend: {}
+        sourcegraph-frontend-internal: {}
+    ServiceAccount:
+        sourcegraph-frontend: {}
+Github-Proxy:
+    Deployment:
+        github-proxy:
+            containers:
+                github-proxy: {}
+                jaeger-agent: {}
+    Service:
+        github-proxy: {}
+Gitserver:
+    Service:
+        gitserver: {}
+    StatefulSet:
+        gitserver:
+            containers:
+                gitserver: {}
+                jaeger-agent: {}
+Grafana:
+    ConfigMap:
+        grafana: {}
+    Service:
+        grafana: {}
+    ServiceAccount:
+        grafana: {}
+    StatefulSet:
+        grafana:
+            containers:
+                grafana: {}
+Indexed-Search:
+    Service:
+        indexed-search: {}
+        indexed-search-indexer: {}
+    StatefulSet:
+        indexed-search:
+            containers:
+                zoekt-indexserver: {}
+                zoekt-webserver: {}
+Jaeger:
+    Deployment:
+        jaeger:
+            containers:
+                jaeger: {}
+    Service:
+        jaeger-collector: {}
+        jaeger-query: {}
+Pgsql:
+    ConfigMap:
+        pgsql-conf: {}
+    Deployment:
+        pgsql:
+            containers:
+                pgsql: {}
+                pgsql-exporter: {}
+    PersistentVolumeClaim:
+        pgsql: {}
+    Service:
+        pgsql: {}
+Precise-Code-Intel:
+    Deployment:
+        precise-code-intel-bundle-manager:
+            containers:
+                precise-code-intel-bundle-manager: {}
+        precise-code-intel-worker:
+            containers:
+                precise-code-intel-worker: {}
+    PersistentVolumeClaim:
+        bundle-manager: {}
+    Service:
+        precise-code-intel-bundle-manager: {}
+        precise-code-intel-worker: {}
+Prometheus:
+    ClusterRole:
+        prometheus: {}
+    ClusterRoleBinding:
+        prometheus: {}
+    ConfigMap:
+        prometheus: {}
+    Deployment:
+        prometheus:
+            containers:
+                prometheus: {}
+    PersistentVolumeClaim:
+        prometheus: {}
+    Service:
+        prometheus: {}
+    ServiceAccount:
+        prometheus: {}
+Query-Runner:
+    Deployment:
+        query-runner:
+            containers:
+                jaeger-agent: {}
+                query-runner: {}
+    Service:
+        query-runner: {}
+Redis:
+    Deployment:
+        redis-cache:
+            containers:
+                redis-cache: {}
+                redis-exporter: {}
+        redis-store:
+            containers:
+                redis-exporter: {}
+                redis-store: {}
+    PersistentVolumeClaim:
+        redis-cache: {}
+        redis-store: {}
+    Service:
+        redis-cache: {}
+        redis-store: {}
+Repo-Updater:
+    Deployment:
+        repo-updater:
+            containers:
+                jaeger-agent: {}
+                repo-updater: {}
+    Service:
+        repo-updater: {}
+Searcher:
+    Deployment:
+        searcher:
+            containers:
+                jaeger-agent: {}
+                searcher: {}
+    Service:
+        searcher: {}
+Symbols:
+    Deployment:
+        symbols:
+            containers:
+                jaeger-agent: {}
+                symbols: {}
+    Service:
+        symbols: {}
+Syntect-Server:
+    Deployment:
+        syntect-server:
+            containers:
+                syntect-server: {}
+    Service:
+        syntect-server: {}
