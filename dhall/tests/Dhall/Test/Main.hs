@@ -19,6 +19,7 @@ import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
 import qualified Dhall.Test.Schemas
 import qualified Dhall.Test.SemanticHash
+import qualified Dhall.Test.SemisemanticCache
 import qualified Dhall.Test.Substitution
 #ifndef CROSS
 import qualified Dhall.Test.TH
@@ -47,6 +48,8 @@ getAllTests = do
 
     cacheFillTests <- Dhall.Test.CacheFill.getTests
 
+    semisemanticCacheTests <- Dhall.Test.SemisemanticCache.getTests
+
     lintTests <- Dhall.Test.Lint.getTests
 
     tagsTests <- Dhall.Test.Tags.getTests
@@ -65,6 +68,7 @@ getAllTests = do
                 , parsingTests
                 , importingTests
                 , cacheFillTests
+                , semisemanticCacheTests
                 , typeinferenceTests
                 , formattingTests
                 , lintTests

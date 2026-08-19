@@ -1,5 +1,12 @@
 1.42.3
 
+* Merkle-keyed semisemantic cache for unhashed Code imports (`dhall-haskell-v2/`):
+  keys are local AST + child edge hashes (not CBOR of inlined NFs); values are
+  either a small normal form or a well-typed marker, so giant NFs are never
+  written or decoded. Starting-context and substitution fingerprints are
+  memoized once per import run.
+* Fast-path `shiftSubstitutions` when a binder cannot capture a substitution,
+  and cache the resolved substitution map once per import run on `Status`.
 * [Fix the typechecking rule for `Optional` + `with`](https://github.com/dhall-lang/dhall-haskell/pull/2650)
 * [Add `*WithIndex` instances for `Map`](https://github.com/dhall-lang/dhall-haskell/pull/2633)
 * [`dhall package`: Add support for automatic sub-packags](https://github.com/dhall-lang/dhall-haskell/pull/2639)

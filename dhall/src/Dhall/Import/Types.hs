@@ -22,6 +22,7 @@ import Dhall.Core
     , ReifiedNormalizer (..)
     , URL
     )
+import Dhall.Crypto                     (SHA256Digest)
 import Dhall.Map                        (Map)
 import Dhall.Parser                     (Src)
 import Lens.Micro                       (Lens', lens)
@@ -107,6 +108,21 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
+    , _merkleHashCache :: Map Chained SHA256Digest
+    -- ^ Per-run cache of merkle / edge hashes for unhashed Code imports and
+    --   @as Text@ / @as Bytes@ / @as Location@ children, used to build
+    --   semisemantic v2 cache keys without CBOR-encoding inlined child NFs.
+    --   Hashed imports use their integrity hash.
+
+    , _merkleContextFingerprint :: Maybe SHA256Digest
+    -- ^ Cached hash of '_startingContext' for merkle keys. 'Nothing' until
+    --   the first unhashed Code import. Cleared when the context is replaced.
+
+    , _merkleSubstitutionsFingerprint :: Maybe SHA256Digest
+    -- ^ Cached hash of '_substitutions' for merkle keys. Avoids CBOR-encoding
+    --   a large substitution map once per Code import. Cleared when
+    --   '_substitutions' is replaced.
+
     , _newManager :: IO Manager
     , _manager :: Maybe Manager
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
@@ -167,6 +183,12 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _cache = Map.empty
 
+    _merkleHashCache = Map.empty
+
+    _merkleContextFingerprint = Nothing
+
+    _merkleSubstitutionsFingerprint = Nothing
+
     _manager = Nothing
 
     _substitutions = Dhall.Substitution.empty
@@ -197,6 +219,10 @@ graph = lens _graph (\s x -> s { _graph = x })
 cache :: Lens' Status (Map Chained ImportSemantics)
 cache = lens _cache (\s x -> s { _cache = x })
 
+-- | Lens from a `Status` to its `_merkleHashCache` field
+merkleHashCache :: Lens' Status (Map Chained SHA256Digest)
+merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
+
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Text)
 remote = lens _remote (\s x -> s { _remote = x })
@@ -210,7 +236,12 @@ substitutions :: Lens' Status (Dhall.Substitution.Substitutions Src Void)
 substitutions =
     lens
         _substitutions
-        (\s x -> s { _substitutions = x, _resolvedSubstitutions = Nothing })
+        (\s x ->
+            s { _substitutions = x
+              , _resolvedSubstitutions = Nothing
+              , _merkleSubstitutionsFingerprint = Nothing
+              }
+        )
 
 -- | Lens from a `Status` to its cached resolved substitution map
 resolvedSubstitutions
@@ -224,7 +255,10 @@ normalizer = lens _normalizer (\s x -> s {_normalizer = x})
 
 -- | Lens from a `Status` to its `_startingContext` field
 startingContext :: Lens' Status (Context (Expr Src Void))
-startingContext = lens _startingContext (\s x -> s { _startingContext = x })
+startingContext =
+    lens
+        _startingContext
+        (\s x -> s { _startingContext = x, _merkleContextFingerprint = Nothing })
 
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning
