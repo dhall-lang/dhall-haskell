@@ -112,6 +112,9 @@ module Dhall.Import (
     , localToPath
     , hashExpression
     , hashExpressionToCode
+    , estimateExprSize
+    , exceedsNFSizeThreshold
+    , semisemanticNFSizeThreshold
     , writeExpressionToSemanticCache
     , assertNoImports
     , Manager
@@ -137,6 +140,8 @@ module Dhall.Import (
     , remote
     , toHeaders
     , substitutions
+    , resolvedSubstitutions
+    , merkleHashCache
     , normalizer
     , startingContext
     , reportWarning
@@ -162,13 +167,14 @@ import Control.Exception
     , SomeException
     , toException
     )
+import Control.Monad              (foldM)
 import Control.Monad.Catch        (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
 import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
-import Data.Maybe                 (fromMaybe)
+import Data.Maybe                 (fromMaybe, isJust, isNothing)
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
@@ -220,12 +226,14 @@ import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
+import qualified Data.Functor.Const                          as FunctorConst
 import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding                          as Encoding
 import qualified Data.Text.IO
 import qualified Dhall.Binary
+import qualified Dhall.Context
 import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
 import qualified Dhall.Map
@@ -633,11 +641,47 @@ writeToSemanticCache report hash bytes = do
         liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
     return ()
 
+-- | Apply 'Status' substitutions, resolving the map at most once per run.
+--
+--   Public 'Dhall.Substitution.substitute' re-resolves on every call. That
+--   dominated as-code loads with a large Haskell-API map (once per imported
+--   file). The raw map is fixed for the run, so we cache
+--   'Dhall.Substitution.ResolvedSubstitutions' on 'Status'.
+applyStatusSubstitutions
+    :: Expr Src Void -> StateT Status IO (Expr Src Void)
+applyStatusSubstitutions expression = do
+    Status { _substitutions, _resolvedSubstitutions } <- State.get
+
+    resolved <- case _resolvedSubstitutions of
+        Just cached ->
+            return cached
+        Nothing -> do
+            let cached =
+                    Dhall.Substitution.resolveSubstitutions _substitutions
+
+            State.modify
+                (\s -> s { _resolvedSubstitutions = Just cached })
+
+            return cached
+
+    return (Dhall.Substitution.substituteMany resolved expression)
+
 -- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
 -- scratch.
+--
+-- For Code imports without an integrity hash, the cache key is a hash of this
+-- file's syntax plus hashes of the files it imports (see
+-- 'computeMerkleSemisemanticHash'). A hit is either a small normal form (skip
+-- typecheck and normalize) or a one-byte "already type-checked" marker (skip
+-- typecheck only; still normalize the in-memory tree).
+--
+-- Those entries live under @dhall-haskell-v2/@, not the older
+-- @dhall-haskell/@ directory, because the keys and stored values are not
+-- compatible with the previous cache format.
 loadImportWithSemisemanticCache
   :: Chained -> StateT Status IO ImportSemantics
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Code)) = do
+loadImportWithSemisemanticCache
+    import_@(Chained (Import (ImportHashed _ importType) Code)) = do
     text <- fetchFresh importType
     Status {..} <- State.get
 
@@ -664,32 +708,49 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
         Right expr    -> return expr
 
     resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
+    Status {..} <- State.get
 
-    -- Check the semi-semantic cache. See
-    -- https://github.com/dhall-lang/dhall-haskell/issues/1098 for the reasoning
-    -- behind semi-semantic caching.
-    let semisemanticHash = computeSemisemanticHash (Core.denote resolvedExpr)
+    -- Cache key: this file's syntax, hashes of its imports, and hashes of the
+    -- starting context and substitutions. See
+    -- https://github.com/dhall-lang/dhall-haskell/issues/1098
+    semisemanticHash <- computeMerkleSemisemanticHash import_ parsedImport
 
-    mCached <- zoom cacheWarning (fetchFromSemisemanticCache _reportWarning semisemanticHash)
+    zoom merkleHashCache
+        (State.modify (Dhall.Map.insert import_ semisemanticHash))
+
+    mCached <-
+        zoom cacheWarning
+            (fetchFromSemisemanticCache _reportWarning semisemanticHash)
+
+    let hasCustomNormalizer = isJust _normalizer
 
     importSemantics <- case mCached of
-        Just bytesStrict -> do
+        Just (SemisemanticCachedNF bytesStrict)
+            | not hasCustomNormalizer -> do
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
-            importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
+            case Dhall.Binary.decodeExpression bytesLazy of
                 Left err  -> throwMissingImport (Imported _stack err)
                 Right sem -> return sem
 
-            return importSemantics
-
-        Nothing -> do
-            let substitutedExpr =
-                  Dhall.Substitution.substitute resolvedExpr _substitutions
+        Just SemisemanticWellTyped -> do
+            substitutedExpr <- applyStatusSubstitutions resolvedExpr
 
             case Core.shallowDenote parsedImport of
-                -- If this import trivially wraps another import, we can skip
-                -- the type-checking and normalization step as the transitive
-                -- import was already type-checked and normalized
+                Embed _ ->
+                    return (Core.denote substitutedExpr)
+
+                _ ->
+                    liftIO
+                        (Exception.evaluate
+                            (Core.normalizeWith _normalizer substitutedExpr)
+                        )
+
+        -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
+        _ -> do
+            substitutedExpr <- applyStatusSubstitutions resolvedExpr
+
+            case Core.shallowDenote parsedImport of
                 Embed _ ->
                     return (Core.denote substitutedExpr)
 
@@ -698,12 +759,23 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
                         Left  err -> throwMissingImport (Imported _stack err)
                         Right _   -> return ()
 
-                    let betaNormal =
-                            Core.normalizeWith _normalizer substitutedExpr
+                    betaNormal <-
+                        liftIO (Exception.evaluate (Core.normalizeWith _normalizer substitutedExpr))
 
-                    let bytes = encodeExpression betaNormal
+                    let payload
+                            | hasCustomNormalizer =
+                                SemisemanticWellTyped
+                            | exceedsNFSizeThreshold betaNormal =
+                                SemisemanticWellTyped
+                            | otherwise =
+                                SemisemanticCachedNF (encodeExpression betaNormal)
 
-                    zoom cacheWarning (writeToSemisemanticCache _reportWarning semisemanticHash bytes)
+                    zoom cacheWarning
+                        (writeToSemisemanticCache
+                            _reportWarning
+                            semisemanticHash
+                            payload
+                        )
 
                     return betaNormal
 
@@ -711,22 +783,32 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Cod
 
 -- `as Text` and `as Bytes` imports aren't cached since they are well-typed and
 -- normal by construction
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawText)) = do
+loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importType) RawText)) = do
     text <- fetchFresh importType
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = TextLit (Chunks [] text)
+
+    let edgeHash = Dhall.Crypto.sha256Hash (Encoding.encodeUtf8 text)
+
+    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+
     return (ImportSemantics {..})
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) RawBytes)) = do
+loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importType) RawBytes)) = do
     bytes <- fetchBytes importType
 
     -- importSemantics is alpha-beta-normal by construction!
     let importSemantics = BytesLit bytes
+
+    let edgeHash = Dhall.Crypto.sha256Hash bytes
+
+    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+
     return (ImportSemantics {..})
 
 -- `as Location` imports aren't cached since they are well-typed and normal by
 -- construction
-loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Location)) = do
+loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importType) Location)) = do
     let locationType = Union $ Dhall.Map.fromList
             [ ("Environment", Just Text)
             , ("Remote", Just Text)
@@ -747,34 +829,239 @@ loadImportWithSemisemanticCache (Chained (Import (ImportHashed _ importType) Loc
                 App (Field locationType $ Core.makeFieldSelection "Environment")
                   (TextLit (Chunks [] (Core.pretty env)))
 
+    let edgeHash = Dhall.Crypto.sha256Hash (encodeExpression importSemantics)
+
+    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+
     return (ImportSemantics {..})
 
--- The semi-semantic hash of an expression is computed from the fully resolved
--- AST (without normalising or type-checking it first). See
--- https://github.com/dhall-lang/dhall-haskell/issues/1098 for further
--- discussion.
-computeSemisemanticHash :: Expr Void Void -> Dhall.Crypto.SHA256Digest
-computeSemisemanticHash resolvedExpr = hashExpression resolvedExpr
+-- | If a result is larger than this (AST nodes plus text/bytes payload), the
+-- disk cache stores only an "already type-checked" marker instead of the
+-- normal form, so huge expressions are not encoded to or decoded from CBOR.
+semisemanticNFSizeThreshold :: Int
+semisemanticNFSizeThreshold = 64 * 1024
 
--- Fetch encoded normal form from "semi-semantic cache"
+-- | Full-tree size estimate: AST nodes plus 'Text' / 'Bytes' payloads. Does
+-- not CBOR-encode. Used as the naive baseline for size-walk tests; production
+-- cache decisions use 'exceedsNFSizeThreshold'.
+estimateExprSize :: Expr s a -> Int
+estimateExprSize expression =
+    case expression of
+        TextLit (Chunks xys z) ->
+            1
+          + Text.length z
+          + sum [ Text.length t + estimateExprSize x | (t, x) <- xys ]
+        BytesLit bytes ->
+            1 + Data.ByteString.length bytes
+        Embed _ ->
+            1
+        _ ->
+            let FunctorConst.Const childSizes =
+                    Syntax.subExpressions
+                        (\child -> FunctorConst.Const [estimateExprSize child])
+                        expression
+            in  1 + sum childSizes
+
+-- | 'True' when the expression's estimated size is strictly greater than
+-- 'semisemanticNFSizeThreshold'. Same metric as 'estimateExprSize', but
+-- aborts as soon as the remaining budget is exhausted so giant NFs are not
+-- fully traversed.
+exceedsNFSizeThreshold :: Expr s a -> Bool
+exceedsNFSizeThreshold expression =
+    isNothing (spend semisemanticNFSizeThreshold expression)
+  where
+    debit budget cost
+        | budget < cost = Nothing
+        | otherwise     = Just (budget - cost)
+
+    spend budget _
+        | budget <= 0 =
+            Nothing
+    spend budget (TextLit (Chunks xys z)) = do
+        b0 <- debit budget (1 + Text.length z)
+        foldM
+            (\b (t, x) -> debit b (Text.length t) >>= (`spend` x))
+            b0
+            xys
+    spend budget (BytesLit bytes) =
+        debit budget (1 + Data.ByteString.length bytes)
+    spend budget (Embed _) =
+        debit budget 1
+    spend budget expr = do
+        b0 <- debit budget 1
+        let FunctorConst.Const kids =
+                Syntax.subExpressions
+                    (\child -> FunctorConst.Const [child])
+                    expr
+        foldM spend b0 kids
+
+data SemisemanticPayload
+    = SemisemanticCachedNF Data.ByteString.ByteString
+    | SemisemanticWellTyped
+
+semisemanticNFTag :: Data.ByteString.ByteString
+semisemanticNFTag = Data.ByteString.singleton 0
+
+semisemanticTypedTag :: Data.ByteString.ByteString
+semisemanticTypedTag = Data.ByteString.singleton 1
+
+encodeSemisemanticPayload :: SemisemanticPayload -> Data.ByteString.ByteString
+encodeSemisemanticPayload (SemisemanticCachedNF bytes) =
+    semisemanticNFTag <> bytes
+encodeSemisemanticPayload SemisemanticWellTyped =
+    semisemanticTypedTag
+
+decodeSemisemanticPayload
+    :: Data.ByteString.ByteString -> Maybe SemisemanticPayload
+decodeSemisemanticPayload bytes =
+    case Data.ByteString.uncons bytes of
+        Just (0, rest) ->
+            Just (SemisemanticCachedNF rest)
+        Just (1, rest)
+            | Data.ByteString.null rest ->
+                Just SemisemanticWellTyped
+        _ ->
+            Nothing
+
+-- | Directory under @$XDG_CACHE_HOME@ (usually @~/.cache@) for Code imports
+-- without integrity checks.
+--
+-- The older semisemantic cache used @dhall-haskell/@ and stored a full normal
+-- form keyed by a hash of the fully resolved expression. This folder uses a
+-- different key and a different payload, so the files must not be mixed. The
+-- @-v2@ suffix is only a directory name to keep the two layouts apart.
+semisemanticCacheDirectory :: FilePath
+semisemanticCacheDirectory = "dhall-haskell-v2"
+
+-- | Edge hash of a child import for building a parent's merkle key.
+--
+-- Prefer the integrity hash when the import is frozen. Otherwise use a
+-- previously computed merkle hash, or a path-stable sentinel if the child was
+-- not loaded (e.g. the unused side of an @ImportAlt@).
+edgeHashOf :: Chained -> StateT Status IO Dhall.Crypto.SHA256Digest
+edgeHashOf child =
+    case hash (importHashed (chainedImport child)) of
+        Just integrityHash ->
+            return integrityHash
+        Nothing -> do
+            Status { _merkleHashCache } <- State.get
+
+            case Dhall.Map.lookup child _merkleHashCache of
+                Just merkleHash ->
+                    return merkleHash
+                Nothing ->
+                    return
+                        ( Dhall.Crypto.sha256Hash
+                            ( Encoding.encodeUtf8
+                                (Core.pretty (chainedImport child))
+                            )
+                        )
+
+replaceEmbedsWithEdgeHashes
+    :: Chained
+    -> Expr Void Import
+    -> StateT Status IO (Expr Void Void)
+replaceEmbedsWithEdgeHashes parent =
+    Syntax.subExpressionsWith
+        (\childImport -> do
+            child <- chainImport parent childImport
+            edgeHash <- edgeHashOf child
+            return (BytesLit (Dhall.Crypto.unSHA256Digest edgeHash))
+        )
+        (replaceEmbedsWithEdgeHashes parent)
+
+fingerprintStartingContext
+    :: Dhall.Context.Context (Expr Src Void) -> Dhall.Crypto.SHA256Digest
+fingerprintStartingContext context =
+    hashExpression
+        ( RecordLit
+            ( Dhall.Map.fromList
+                [ (name, Core.makeRecordField (Core.denote value))
+                | (name, value) <- Dhall.Context.toList context
+                ]
+            )
+        )
+
+fingerprintSubstitutions
+    :: Dhall.Substitution.Substitutions Src Void -> Dhall.Crypto.SHA256Digest
+fingerprintSubstitutions substitutionMap =
+    hashExpression
+        ( RecordLit
+            ( fmap Core.makeRecordField
+                (fmap Core.denote substitutionMap)
+            )
+        )
+
+-- | Hash used as the on-disk cache key for a Code import with no integrity
+-- check: this file's denoted syntax, with each import replaced by that
+-- import's hash, plus hashes of the starting context and substitutions.
+computeMerkleSemisemanticHash
+    :: Chained
+    -> Expr Src Import
+    -> StateT Status IO Dhall.Crypto.SHA256Digest
+computeMerkleSemisemanticHash parent parsedImport = do
+    let denotedParsed = Core.denote parsedImport
+
+    skeleton <- replaceEmbedsWithEdgeHashes parent denotedParsed
+
+    let skeletonHash = hashExpression skeleton
+
+    (contextHash, substitutionsHash) <- memoizedMerkleFingerprints
+
+    return
+        ( Dhall.Crypto.sha256Hash
+            ( Dhall.Crypto.unSHA256Digest skeletonHash
+           <> Dhall.Crypto.unSHA256Digest contextHash
+           <> Dhall.Crypto.unSHA256Digest substitutionsHash
+            )
+        )
+
+memoizedMerkleFingerprints
+    :: StateT Status IO (Dhall.Crypto.SHA256Digest, Dhall.Crypto.SHA256Digest)
+memoizedMerkleFingerprints = do
+    Status {..} <- State.get
+
+    contextHash <- case _merkleContextFingerprint of
+        Just cached ->
+            return cached
+        Nothing -> do
+            let hashed = fingerprintStartingContext _startingContext
+            State.modify (\s -> s { _merkleContextFingerprint = Just hashed })
+            return hashed
+
+    substitutionsHash <- case _merkleSubstitutionsFingerprint of
+        Just cached ->
+            return cached
+        Nothing -> do
+            let hashed = fingerprintSubstitutions _substitutions
+            State.modify (\s -> s { _merkleSubstitutionsFingerprint = Just hashed })
+            return hashed
+
+    return (contextHash, substitutionsHash)
+
 fetchFromSemisemanticCache
     :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => (Text -> IO ()) -> Dhall.Crypto.SHA256Digest
-    -> m (Maybe Data.ByteString.ByteString)
+    -> m (Maybe SemisemanticPayload)
 fetchFromSemisemanticCache report semisemanticHash = Maybe.runMaybeT $ do
-    cacheFile <- getCacheFile report "dhall-haskell" semisemanticHash
+    cacheFile <- getCacheFile report semisemanticCacheDirectory semisemanticHash
     True <- liftIO (Directory.doesFileExist cacheFile)
-    liftIO (Data.ByteString.readFile cacheFile)
+    bytes <- liftIO (Data.ByteString.readFile cacheFile)
+    Maybe.MaybeT (return (decodeSemisemanticPayload bytes))
 
 writeToSemisemanticCache
     :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => (Text -> IO ()) -> Dhall.Crypto.SHA256Digest
-    -> Data.ByteString.ByteString
+    -> SemisemanticPayload
     -> m ()
-writeToSemisemanticCache report semisemanticHash bytes = do
+writeToSemisemanticCache report semisemanticHash payload = do
     _ <- Maybe.runMaybeT $ do
-        cacheFile <- getCacheFile report "dhall-haskell" semisemanticHash
-        liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
+        cacheFile <- getCacheFile report semisemanticCacheDirectory semisemanticHash
+        liftIO
+            ( AtomicWrite.Binary.atomicWriteFile
+                cacheFile
+                (encodeSemisemanticPayload payload)
+            )
     return ()
 
 -- | Fetch source code directly from disk/network

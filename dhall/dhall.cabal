@@ -436,6 +436,7 @@ Test-Suite tasty
         Dhall.Test.Regression.TextReplaceNoop
         Dhall.Test.Schemas
         Dhall.Test.SemanticHash
+        Dhall.Test.SemisemanticCache
         Dhall.Test.Substitution
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference

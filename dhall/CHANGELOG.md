@@ -1,5 +1,13 @@
 1.42.3
 
+* Faster disk cache for local imports without integrity checks. Cache keys
+  hash this file's syntax plus hashes of its imports, instead of hashing the
+  fully resolved tree. Entries go in `dhall-haskell-v2/` so they are not mixed
+  with older `dhall-haskell/` files. Small results store a normal form; large
+  ones store only an "already type-checked" marker. Starting-context and
+  substitution hashes are computed once per import run.
+* Fast-path `shiftSubstitutions` when a binder cannot capture a substitution,
+  and cache the resolved substitution map once per import run on `Status`.
 * [Fix the typechecking rule for `Optional` + `with`](https://github.com/dhall-lang/dhall-haskell/pull/2650)
 * [Add `*WithIndex` instances for `Map`](https://github.com/dhall-lang/dhall-haskell/pull/2633)
 * [`dhall package`: Add support for automatic sub-packags](https://github.com/dhall-lang/dhall-haskell/pull/2639)
