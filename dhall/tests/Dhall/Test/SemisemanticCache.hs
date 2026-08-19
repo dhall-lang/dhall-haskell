@@ -13,7 +13,7 @@ import Data.Foldable                (traverse_)
 import Data.Text                    (Text)
 import Data.Void                    (Void)
 import Dhall.Src                    (Src)
-import System.FilePath              ((</>))
+import System.FilePath              (takeDirectory, takeFileName, (</>))
 import Test.Tasty                   (TestTree)
 import Test.Tasty.HUnit             (assertBool, assertEqual, testCase)
 
@@ -23,6 +23,7 @@ import qualified Data.Text.IO       as Text.IO
 import qualified Dhall
 import qualified Dhall.Core         as Core
 import qualified Dhall.Import       as Import
+import qualified Lens.Micro
 import qualified System.Directory   as Directory
 import qualified System.Environment as Environment
 import qualified System.IO.Temp     as Temp
@@ -64,8 +65,16 @@ listCacheFiles cacheDir = do
         then fmap (map (dir </>)) (Directory.listDirectory dir)
         else return []
 
-toImportPath :: FilePath -> Text
-toImportPath = Text.replace "\\" "/" . Text.pack
+-- | Load a Dhall file without putting its filesystem path in the expression.
+-- Windows absolute paths such as @C:/Users/...@ are not valid Dhall syntax
+-- (the parser reads @C:@ as a label plus annotation).
+inputFile :: FilePath -> IO (Core.Expr Src Void)
+inputFile path = do
+    let settings =
+            Lens.Micro.set Dhall.rootDirectory (takeDirectory path)
+                Dhall.defaultInputSettings
+        importExpr = "./" <> Text.pack (takeFileName path)
+    Dhall.inputExprWithSettings settings importExpr
 
 assertNormalizedEqual
     :: String -> Core.Expr Src Void -> Core.Expr Src Void -> IO ()
@@ -79,9 +88,8 @@ assertNormalizedEqual message expected actual =
 smallNFCachedTest :: IO ()
 smallNFCachedTest = withTempCache $ \cacheDir -> do
     tempFile <- Temp.writeTempFile "." "small.dhall" "1 + 1"
-    let importPath = toImportPath tempFile
 
-    void (Dhall.inputExpr importPath)
+    void (inputFile tempFile)
     filesAfterFirst <- listCacheFiles cacheDir
     assertBool
         "first load should write a semisemantic cache entry"
@@ -89,8 +97,8 @@ smallNFCachedTest = withTempCache $ \cacheDir -> do
 
     traverse_ checkNFTag filesAfterFirst
 
-    result1 <- Dhall.inputExpr importPath
-    result2 <- Dhall.inputExpr importPath
+    result1 <- inputFile tempFile
+    result2 <- inputFile tempFile
     assertNormalizedEqual "cached reload should match" result1 result2
 
     Directory.removeFile tempFile
@@ -109,9 +117,8 @@ largeNFMarkerTest = withTempCache $ \cacheDir -> do
     let big = Text.replicate 70000 "a"
     tempFile <-
         Temp.writeTempFile "." "large.dhall" (Text.unpack ("\"" <> big <> "\""))
-    let importPath = toImportPath tempFile
 
-    result1 <- Dhall.inputExpr importPath
+    result1 <- inputFile tempFile
     files <- listCacheFiles cacheDir
     assertBool "large import should write a cache entry" (not (null files))
 
@@ -127,7 +134,7 @@ largeNFMarkerTest = withTempCache $ \cacheDir -> do
         )
         files
 
-    result2 <- Dhall.inputExpr importPath
+    result2 <- inputFile tempFile
     assertNormalizedEqual "marker hit should still evaluate" result1 result2
 
     Directory.removeFile tempFile
@@ -177,13 +184,13 @@ childChangeInvalidatesParentTest = withTempCache $ \_cacheDir ->
         Text.IO.writeFile childPath "1"
         Text.IO.writeFile parentPath "./child.dhall"
 
-        result1 <- Dhall.inputExpr (toImportPath parentPath)
+        result1 <- inputFile parentPath
         expected1 <- Dhall.inputExpr "1"
         assertNormalizedEqual "initial child value" expected1 result1
 
         Text.IO.writeFile childPath "2"
 
-        result2 <- Dhall.inputExpr (toImportPath parentPath)
+        result2 <- inputFile parentPath
         expected2 <- Dhall.inputExpr "2"
         assertNormalizedEqual
             "parent must observe child change (merkle miss)"
