@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Unit tests for the merkle-keyed semisemantic cache (@dhall-haskell-v2/@).
+-- | Unit tests for the disk cache used by Code imports without integrity
+-- checks (@$XDG_CACHE_HOME/dhall-haskell-v2/@).
 --
--- Code imports still typecheck and normalize in memory. The disk cache stores
--- either a small CBOR normal form or a well-typed marker (no giant NFs).
+-- Imports still typecheck and normalize in memory. The on-disk entry is either
+-- a small encoded normal form or a one-byte "already type-checked" marker.
 module Dhall.Test.SemisemanticCache where
 
 import Control.Exception            (bracket)
@@ -29,7 +30,7 @@ import qualified Test.Tasty         as Tasty
 
 getTests :: IO TestTree
 getTests = return
-    (Tasty.testGroup "Semisemantic cache (merkle v2)"
+    (Tasty.testGroup "Semisemantic cache"
         [ testCase "Small NF is cached and reused" smallNFCachedTest
         , testCase "Large NF stores a well-typed marker only" largeNFMarkerTest
         , testCase "Early-abort size check agrees with full walk" earlyAbortAgreesWithFullWalkTest
@@ -51,12 +52,13 @@ withTempCache action =
 
         bracket setCache (const restoreCache) (\_ -> action cacheDir)
 
-semisemanticV2Dir :: FilePath -> FilePath
-semisemanticV2Dir cacheDir = cacheDir </> "dhall-haskell-v2"
+-- Same directory name as 'Import' uses under @$XDG_CACHE_HOME@.
+semisemanticCacheDir :: FilePath -> FilePath
+semisemanticCacheDir cacheDir = cacheDir </> "dhall-haskell-v2"
 
 listCacheFiles :: FilePath -> IO [FilePath]
 listCacheFiles cacheDir = do
-    let dir = semisemanticV2Dir cacheDir
+    let dir = semisemanticCacheDir cacheDir
     exists <- Directory.doesDirectoryExist dir
     if exists
         then fmap (map (dir </>)) (Directory.listDirectory dir)
@@ -82,7 +84,7 @@ smallNFCachedTest = withTempCache $ \cacheDir -> do
     void (Dhall.inputExpr importPath)
     filesAfterFirst <- listCacheFiles cacheDir
     assertBool
-        "first load should write a semisemantic v2 entry"
+        "first load should write a semisemantic cache entry"
         (not (null filesAfterFirst))
 
     traverse_ checkNFTag filesAfterFirst

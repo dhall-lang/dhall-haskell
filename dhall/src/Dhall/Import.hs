@@ -669,10 +669,15 @@ applyStatusSubstitutions expression = do
 -- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
 -- scratch.
 --
--- Unhashed Code imports use a merkle-keyed cache under @dhall-haskell-v2/@
--- (see 'computeMerkleSemisemanticHash'). The value is either a small normal
--- form (skip typecheck + normalize on hit) or a well-typed marker (skip
--- typecheck only; normalize the in-memory resolved tree).
+-- For Code imports without an integrity hash, the cache key is a hash of this
+-- file's syntax plus hashes of the files it imports (see
+-- 'computeMerkleSemisemanticHash'). A hit is either a small normal form (skip
+-- typecheck and normalize) or a one-byte "already type-checked" marker (skip
+-- typecheck only; still normalize the in-memory tree).
+--
+-- Those entries live under @dhall-haskell-v2/@, not the older
+-- @dhall-haskell/@ directory, because the keys and stored values are not
+-- compatible with the previous cache format.
 loadImportWithSemisemanticCache
   :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemisemanticCache
@@ -705,8 +710,8 @@ loadImportWithSemisemanticCache
     resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
     Status {..} <- State.get
 
-    -- Merkle key: local denoted parse tree with child edge hashes, plus a
-    -- fingerprint of the starting context and substitutions. See
+    -- Cache key: this file's syntax, hashes of its imports, and hashes of the
+    -- starting context and substitutions. See
     -- https://github.com/dhall-lang/dhall-haskell/issues/1098
     semisemanticHash <- computeMerkleSemisemanticHash import_ parsedImport
 
@@ -715,7 +720,7 @@ loadImportWithSemisemanticCache
 
     mCached <-
         zoom cacheWarning
-            (fetchFromSemisemanticCacheV2 _reportWarning semisemanticHash)
+            (fetchFromSemisemanticCache _reportWarning semisemanticHash)
 
     let hasCustomNormalizer = isJust _normalizer
 
@@ -766,7 +771,7 @@ loadImportWithSemisemanticCache
                                 SemisemanticCachedNF (encodeExpression betaNormal)
 
                     zoom cacheWarning
-                        (writeToSemisemanticCacheV2
+                        (writeToSemisemanticCache
                             _reportWarning
                             semisemanticHash
                             payload
@@ -830,9 +835,9 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     return (ImportSemantics {..})
 
--- | Maximum estimated AST size (see 'exceedsNFSizeThreshold') for which the
--- semisemantic v2 cache stores a normal form. Larger results store only a
--- well-typed marker so we avoid CBOR-encoding / decoding giant NFs.
+-- | If a result is larger than this (AST nodes plus text/bytes payload), the
+-- disk cache stores only an "already type-checked" marker instead of the
+-- normal form, so huge expressions are not encoded to or decoded from CBOR.
 semisemanticNFSizeThreshold :: Int
 semisemanticNFSizeThreshold = 64 * 1024
 
@@ -918,8 +923,15 @@ decodeSemisemanticPayload bytes =
         _ ->
             Nothing
 
-semisemanticCacheV2Name :: FilePath
-semisemanticCacheV2Name = "dhall-haskell-v2"
+-- | Directory under @$XDG_CACHE_HOME@ (usually @~/.cache@) for Code imports
+-- without integrity checks.
+--
+-- The older semisemantic cache used @dhall-haskell/@ and stored a full normal
+-- form keyed by a hash of the fully resolved expression. This folder uses a
+-- different key and a different payload, so the files must not be mixed. The
+-- @-v2@ suffix is only a directory name to keep the two layouts apart.
+semisemanticCacheDirectory :: FilePath
+semisemanticCacheDirectory = "dhall-haskell-v2"
 
 -- | Edge hash of a child import for building a parent's merkle key.
 --
@@ -980,6 +992,9 @@ fingerprintSubstitutions substitutionMap =
             )
         )
 
+-- | Hash used as the on-disk cache key for a Code import with no integrity
+-- check: this file's denoted syntax, with each import replaced by that
+-- import's hash, plus hashes of the starting context and substitutions.
 computeMerkleSemisemanticHash
     :: Chained
     -> Expr Src Import
@@ -1024,24 +1039,24 @@ memoizedMerkleFingerprints = do
 
     return (contextHash, substitutionsHash)
 
-fetchFromSemisemanticCacheV2
+fetchFromSemisemanticCache
     :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => (Text -> IO ()) -> Dhall.Crypto.SHA256Digest
     -> m (Maybe SemisemanticPayload)
-fetchFromSemisemanticCacheV2 report semisemanticHash = Maybe.runMaybeT $ do
-    cacheFile <- getCacheFile report semisemanticCacheV2Name semisemanticHash
+fetchFromSemisemanticCache report semisemanticHash = Maybe.runMaybeT $ do
+    cacheFile <- getCacheFile report semisemanticCacheDirectory semisemanticHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     bytes <- liftIO (Data.ByteString.readFile cacheFile)
     Maybe.MaybeT (return (decodeSemisemanticPayload bytes))
 
-writeToSemisemanticCacheV2
+writeToSemisemanticCache
     :: (MonadState CacheWarning m, MonadCatch m, MonadIO m)
     => (Text -> IO ()) -> Dhall.Crypto.SHA256Digest
     -> SemisemanticPayload
     -> m ()
-writeToSemisemanticCacheV2 report semisemanticHash payload = do
+writeToSemisemanticCache report semisemanticHash payload = do
     _ <- Maybe.runMaybeT $ do
-        cacheFile <- getCacheFile report semisemanticCacheV2Name semisemanticHash
+        cacheFile <- getCacheFile report semisemanticCacheDirectory semisemanticHash
         liftIO
             ( AtomicWrite.Binary.atomicWriteFile
                 cacheFile

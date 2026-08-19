@@ -109,10 +109,12 @@ data Status = Status
     --   importing the same expression twice with different values
 
     , _merkleHashCache :: Map Chained SHA256Digest
-    -- ^ Per-run cache of merkle / edge hashes for unhashed Code imports and
-    --   @as Text@ / @as Bytes@ / @as Location@ children, used to build
-    --   semisemantic v2 cache keys without CBOR-encoding inlined child NFs.
-    --   Hashed imports use their integrity hash.
+    -- ^ Per-run map from import to the hash used as that import's contribution
+    --   to a parent's disk-cache key. Code imports without an integrity hash
+    --   store the hash of their own syntax; @as Text@ / @as Bytes@ /
+    --   @as Location@ store a hash of their contents. Frozen imports use
+    --   their integrity hash. Caching these avoids encoding a child's full
+    --   normal form just to name the parent cache entry.
 
     , _merkleContextFingerprint :: Maybe SHA256Digest
     -- ^ Cached hash of '_startingContext' for merkle keys. 'Nothing' until
