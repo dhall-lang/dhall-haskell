@@ -751,15 +751,25 @@ loadImportWithSemanticCache
     loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
-  import_@(Chained (Import (ImportHashed (Just semanticHash) _) Source)) = do
+  import_@(Chained (Import (ImportHashed (Just semanticHash) importType) Source)) = do
     -- Frozen `as Source` imports cache the finalized import-free expression,
     -- not the intermediate source artifact with preserved import references.
+    --
+    -- Cache hits are only used for @missing sha256:… as Source@. For a real
+    -- origin (file / URL / env), the integrity hash must be checked against
+    -- that origin's Source product. A Code normal-form stored under the same
+    -- hash in @dhall/@ must not satisfy an @as Source@ check.
     Status { .. } <- State.get
+
+    let cacheEligible = case importType of
+            Missing -> True
+            _       -> False
+
     mCached <-
-        case _semanticCacheMode of
-            UseSemanticCache ->
+        case (_semanticCacheMode, cacheEligible) of
+            (UseSemanticCache, True) ->
                 zoom cacheWarning (fetchFromSemanticCache _reportWarning semanticHash)
-            IgnoreSemanticCache ->
+            _ ->
                 pure Nothing
 
     case mCached of
@@ -1346,8 +1356,7 @@ finalizeSourceImport sourceArtifact = do
     importFreeExpr <- expandSourceArtifact sourceArtifact
     Status {..} <- State.get
 
-    let substitutedExpr =
-          Dhall.Substitution.substitute importFreeExpr _substitutions
+    substitutedExpr <- applyStatusSubstitutions importFreeExpr
 
     case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
         Left  err -> throwMissingImport (Imported _stack err)
@@ -1372,14 +1381,17 @@ finalizeSourceImportWithoutTypecheck
     -> StateT Status IO ImportSemantics
 finalizeSourceImportWithoutTypecheck sourceArtifact = do
     importFreeExpr <- expandSourceArtifact sourceArtifact
-    Status {..} <- State.get
 
-    let substitutedExpr =
-          Dhall.Substitution.substitute importFreeExpr _substitutions
+    substitutedExpr <- applyStatusSubstitutions importFreeExpr
 
     let importSemantics = Core.denote substitutedExpr
 
-    return (ImportSemantics {..})
+    return
+        ( ImportSemantics
+            { importSemantics
+            , importNormalizationStatus = TypecheckedOnly
+            }
+        )
 
 loadSourceChildArtifact :: Chained -> StateT Status IO (Expr Void Import)
 loadSourceChildArtifact child@(Chained import_) =
