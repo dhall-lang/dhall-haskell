@@ -524,9 +524,11 @@ chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote 
 chainImport (Chained parent) child =
     return (Chained (canonicalize (parent <> child)))
 
--- | Load an import, resulting in a fully resolved, type-checked and normalised
---   expression. @loadImport@ handles the \"hot\" cache in @Status@ and defers
---   to @loadImportWithSemanticCache@ for imports that aren't in the @Status@
+-- | Load an import, resulting in a fully resolved, type-checked expression.
+--   Unhashed Code imports may still be unnormalized ('TypecheckedOnly');
+--   hashed Code imports are beta-normal ('AlreadyNormalized').
+--   @loadImport@ handles the \"hot\" cache in @Status@ and defers to
+--   @loadImportWithSemanticCache@ for imports that aren't in the @Status@
 --   cache already.
 loadImport :: Chained -> StateT Status IO ImportSemantics
 loadImport import_ = do
@@ -538,6 +540,28 @@ loadImport import_ = do
             importSemantics <- loadImportWithSemanticCache import_
             zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
             return importSemantics
+
+-- | Force an import result to a normal form when a later path requires one
+--   (for example, semantic integrity checks for Code imports).
+ensureNormalized :: Chained -> ImportSemantics -> StateT Status IO ImportSemantics
+ensureNormalized _ importSemantics@ImportSemantics
+    { importNormalizationStatus = AlreadyNormalized } =
+        return importSemantics
+ensureNormalized import_ ImportSemantics { importSemantics } = do
+    Status { _normalizer } <- State.get
+
+    normalized <-
+        liftIO (Exception.evaluate (Core.normalizeWith _normalizer importSemantics))
+
+    let normalizedSemantics =
+            ImportSemantics
+                { importSemantics = normalized
+                , importNormalizationStatus = AlreadyNormalized
+                }
+
+    zoom cache (State.modify (Dhall.Map.insert import_ normalizedSemantics))
+
+    return normalizedSemantics
 
 -- | Load an import from the 'semantic cache'. Defers to
 --   @loadImportWithSemisemanticCache@ for imports that aren't frozen (and
@@ -573,7 +597,12 @@ loadImportWithSemanticCache
                         Left  err -> throwMissingImport (Imported _stack err)
                         Right e   -> return e
 
-                    return (ImportSemantics {..})
+                    return
+                        ( ImportSemantics
+                            { importSemantics
+                            , importNormalizationStatus = AlreadyNormalized
+                            }
+                        )
                 else do
                     liftIO $ _reportWarning $ Text.pack $
                         makeHashMismatchMessage semanticHash actualHash
@@ -587,7 +616,9 @@ loadImportWithSemanticCache
         fetch = do
             Status{ _reportWarning } <- State.get
 
-            ImportSemantics{ importSemantics } <- loadImportWithSemisemanticCache import_
+            importSemantics0 <- loadImportWithSemisemanticCache import_
+            ImportSemantics{ importSemantics } <-
+                ensureNormalized import_ importSemantics0
 
             let bytes = encodeExpression (Core.alphaNormalize importSemantics)
 
@@ -604,7 +635,12 @@ loadImportWithSemanticCache
 
                     throwMissingImport (Imported _stack HashMismatch{..})
 
-            return ImportSemantics{..}
+            return
+                ( ImportSemantics
+                    { importSemantics
+                    , importNormalizationStatus = AlreadyNormalized
+                    }
+                )
 
 
 
@@ -666,14 +702,14 @@ applyStatusSubstitutions expression = do
 
     return (Dhall.Substitution.substituteMany resolved expression)
 
--- Check the "semi-semantic" disk cache, otherwise typecheck and normalise from
--- scratch.
+-- Check the "semi-semantic" disk cache, otherwise typecheck from scratch.
 --
 -- For Code imports without an integrity hash, the cache key is a hash of this
 -- file's syntax plus hashes of the files it imports (see
--- 'computeMerkleSemisemanticHash'). A hit is either a small normal form (skip
--- typecheck and normalize) or a one-byte "already type-checked" marker (skip
--- typecheck only; still normalize the in-memory tree).
+-- 'computeMerkleSemisemanticHash'). A hit is either a small normal form from an
+-- older cache entry or a one-byte "already type-checked" marker. New delayed
+-- Code entries use the marker so cache hits and misses both return
+-- 'TypecheckedOnly'.
 --
 -- Those entries live under @dhall-haskell-v2/@, not the older
 -- @dhall-haskell/@ directory, because the keys and stored values are not
@@ -724,27 +760,29 @@ loadImportWithSemisemanticCache
 
     let hasCustomNormalizer = isJust _normalizer
 
-    importSemantics <- case mCached of
+    importSemantics0 <- case mCached of
         Just (SemisemanticCachedNF bytesStrict)
             | not hasCustomNormalizer -> do
             let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
 
             case Dhall.Binary.decodeExpression bytesLazy of
                 Left err  -> throwMissingImport (Imported _stack err)
-                Right sem -> return sem
+                Right sem -> return
+                    ( ImportSemantics
+                        { importSemantics = sem
+                        , importNormalizationStatus = AlreadyNormalized
+                        }
+                    )
 
         Just SemisemanticWellTyped -> do
             substitutedExpr <- applyStatusSubstitutions resolvedExpr
 
-            case Core.shallowDenote parsedImport of
-                Embed _ ->
-                    return (Core.denote substitutedExpr)
-
-                _ ->
-                    liftIO
-                        (Exception.evaluate
-                            (Core.normalizeWith _normalizer substitutedExpr)
-                        )
+            return
+                ( ImportSemantics
+                    { importSemantics = Core.denote substitutedExpr
+                    , importNormalizationStatus = TypecheckedOnly
+                    }
+                )
 
         -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
         _ -> do
@@ -752,34 +790,33 @@ loadImportWithSemisemanticCache
 
             case Core.shallowDenote parsedImport of
                 Embed _ ->
-                    return (Core.denote substitutedExpr)
+                    return
+                        ( ImportSemantics
+                            { importSemantics = Core.denote substitutedExpr
+                            , importNormalizationStatus = TypecheckedOnly
+                            }
+                        )
 
                 _ -> do
                     case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
                         Left  err -> throwMissingImport (Imported _stack err)
                         Right _   -> return ()
 
-                    betaNormal <-
-                        liftIO (Exception.evaluate (Core.normalizeWith _normalizer substitutedExpr))
-
-                    let payload
-                            | hasCustomNormalizer =
-                                SemisemanticWellTyped
-                            | exceedsNFSizeThreshold betaNormal =
-                                SemisemanticWellTyped
-                            | otherwise =
-                                SemisemanticCachedNF (encodeExpression betaNormal)
-
                     zoom cacheWarning
                         (writeToSemisemanticCache
                             _reportWarning
                             semisemanticHash
-                            payload
+                            SemisemanticWellTyped
                         )
 
-                    return betaNormal
+                    return
+                        ( ImportSemantics
+                            { importSemantics = Core.denote substitutedExpr
+                            , importNormalizationStatus = TypecheckedOnly
+                            }
+                        )
 
-    return (ImportSemantics {..})
+    return importSemantics0
 
 -- `as Text` and `as Bytes` imports aren't cached since they are well-typed and
 -- normal by construction
@@ -793,7 +830,12 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
 
-    return (ImportSemantics {..})
+    return
+        ( ImportSemantics
+            { importSemantics
+            , importNormalizationStatus = AlreadyNormalized
+            }
+        )
 loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importType) RawBytes)) = do
     bytes <- fetchBytes importType
 
@@ -804,7 +846,12 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
 
-    return (ImportSemantics {..})
+    return
+        ( ImportSemantics
+            { importSemantics
+            , importNormalizationStatus = AlreadyNormalized
+            }
+        )
 
 -- `as Location` imports aren't cached since they are well-typed and normal by
 -- construction
@@ -833,17 +880,20 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
 
-    return (ImportSemantics {..})
+    return
+        ( ImportSemantics
+            { importSemantics
+            , importNormalizationStatus = AlreadyNormalized
+            }
+        )
 
--- | If a result is larger than this (AST nodes plus text/bytes payload), the
--- disk cache stores only an "already type-checked" marker instead of the
--- normal form, so huge expressions are not encoded to or decoded from CBOR.
+-- | Legacy threshold for older semisemantic NF payloads and tests. The delayed
+-- normalization path writes typed markers for new Code entries.
 semisemanticNFSizeThreshold :: Int
 semisemanticNFSizeThreshold = 64 * 1024
 
 -- | Full-tree size estimate: AST nodes plus 'Text' / 'Bytes' payloads. Does
--- not CBOR-encode. Used as the naive baseline for size-walk tests; production
--- cache decisions use 'exceedsNFSizeThreshold'.
+-- not CBOR-encode. Used as the naive baseline for size-walk tests.
 estimateExprSize :: Expr s a -> Int
 estimateExprSize expression =
     case expression of
@@ -1514,7 +1564,7 @@ loadWith expr₀ = case expr₀ of
     let stackWithChild = NonEmpty.cons child _stack
 
     zoom stack (State.put stackWithChild)
-    ImportSemantics {..} <- loadImport child
+    ImportSemantics { importSemantics } <- loadImport child
     zoom stack (State.put _stack)
 
     return (Core.renote importSemantics)
@@ -1566,9 +1616,18 @@ In any expression `p ? q` the opportunistic caching rule says:
               -- populate the semantic cache.
               case findImportHash a of
                 Just hash -> do
-                    Status { _reportWarning } <- State.get
+                    Status { _reportWarning, _normalizer } <- State.get
 
-                    let bytes = encodeExpression (Core.alphaNormalize (Core.denote result))
+                    -- Delayed unhashed Code inlining can leave `result`
+                    -- unnormalized. The semantic cache product is still the
+                    -- encoded alpha-beta-normal form.
+                    normalized <-
+                        liftIO
+                            ( Exception.evaluate
+                                (Core.normalizeWith _normalizer (Core.denote result))
+                            )
+
+                    let bytes = encodeExpression (Core.alphaNormalize normalized)
 
                     let actualHash = Dhall.Crypto.sha256Hash bytes
 
