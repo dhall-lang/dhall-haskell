@@ -21,6 +21,7 @@ import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
+import qualified Lens.Micro                       as Lens
 import qualified System.Directory                 as Directory
 import qualified System.FilePath                  as FilePath
 import qualified System.IO.Temp                   as Temp
@@ -111,10 +112,9 @@ successTest prefix = do
         let status = importStatus directoryString
 
         let status' =
-                status
-                    { Import._reportWarning = \_ -> return ()
-                    , Import._getHomeDirectory = pure homeDirectory
-                    }
+                Lens.set Import.reportWarning (\_ -> return ())
+                . Lens.set Import.getHomeDirectory (pure homeDirectory)
+                $ status
 
         let load =
                 State.evalStateT
@@ -191,8 +191,8 @@ failureTest prefix = do
         homeDirectory <- Directory.makeAbsolute (importDirectory </> "home")
 
         let status =
-                (importStatus ".")
-                    { Import._getHomeDirectory = pure homeDirectory }
+                Lens.set Import.getHomeDirectory (pure homeDirectory)
+                    (importStatus ".")
 
         let setup = Test.Util.managedTestEnvironment prefix
 

@@ -17,6 +17,7 @@ import qualified Dhall.Parser     as Parser
 import qualified Dhall.Test.Util  as Test.Util
 import qualified Dhall.TypeCheck  as TypeCheck
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Lens.Micro       as Lens
 import qualified System.Directory as Directory
 import qualified System.Environment as Environment
 import qualified System.FilePath    as FilePath
@@ -150,9 +151,8 @@ sourceHashSurvivesTransitiveFreezing =
             parsedFrozenMain <- Core.throws (Parser.exprFromText "(input)" frozenMainText)
 
             let status =
-                    (Import.emptyStatus directory)
-                        { Import._reportWarning = \_ -> return ()
-                        }
+                    Lens.set Import.reportWarning (\_ -> return ())
+                        (Import.emptyStatus directory)
 
             State.evalStateT (Test.Util.loadWith parsedFrozenMain) status
 
@@ -246,7 +246,8 @@ nestedFrozenChildSurvivesAsSource =
 
             State.evalStateT
                 (Test.Util.loadWith parsedMain)
-                ((Import.emptyStatus directory) { Import._reportWarning = \_ -> return () })
+                (Lens.set Import.reportWarning (\_ -> return ())
+                    (Import.emptyStatus directory))
 
         expected <- Core.throws (Parser.exprFromText "(expected)" "1")
         expectedResolved <- Import.assertNoImports expected

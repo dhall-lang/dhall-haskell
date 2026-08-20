@@ -251,6 +251,14 @@ merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
 parsedImportCache :: Lens' Status (Map Text (Expr Src Import))
 parsedImportCache = lens _parsedImportCache (\s x -> s { _parsedImportCache = x })
 
+-- | Lens from a `Status` to its `_newManager` field
+newManager :: Lens' Status (IO Manager)
+newManager = lens _newManager (\s x -> s { _newManager = x })
+
+-- | Lens from a `Status` to its `_loadOriginHeaders` field
+loadOriginHeaders :: Lens' Status (StateT Status IO OriginHeaders)
+loadOriginHeaders = lens _loadOriginHeaders (\s x -> s { _loadOriginHeaders = x })
+
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Text)
 remote = lens _remote (\s x -> s { _remote = x })
@@ -288,6 +296,10 @@ startingContext =
         _startingContext
         (\s x -> s { _startingContext = x, _merkleContextFingerprint = Nothing })
 
+-- | Lens from a `Status` to its `_semanticCacheMode` field
+semanticCacheMode :: Lens' Status SemanticCacheMode
+semanticCacheMode = lens _semanticCacheMode (\s x -> s { _semanticCacheMode = x })
+
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning
 cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
@@ -295,6 +307,10 @@ cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
 -- | Lens from a `Status` to its `_reportWarning` field
 reportWarning :: Lens' Status (Text -> IO ())
 reportWarning = lens _reportWarning (\s x -> s { _reportWarning = x })
+
+-- | Lens from a `Status` to its `_getHomeDirectory` field
+getHomeDirectory :: Lens' Status (IO FilePath)
+getHomeDirectory = lens _getHomeDirectory (\s x -> s { _getHomeDirectory = x })
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
