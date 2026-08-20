@@ -3,14 +3,14 @@
 -- | Unit tests for the disk cache used by Code imports without integrity
 -- checks (@$XDG_CACHE_HOME/dhall-haskell-v2/@).
 --
--- Imports still typecheck and normalize in memory. The on-disk entry is either
--- a small encoded normal form or a one-byte "already type-checked" marker.
+-- Imports still typecheck in memory. The on-disk entry is a one-byte
+-- "already type-checked" marker. Older cache files may still contain a small
+-- encoded normal form, which the loader still accepts.
 module Dhall.Test.SemisemanticCache where
 
 import Control.Exception            (bracket)
 import Control.Monad                (void)
 import Data.Foldable                (traverse_)
-import Data.Text                    (Text)
 import Data.Void                    (Void)
 import Dhall.Src                    (Src)
 import System.FilePath              (takeDirectory, takeFileName, (</>))
@@ -32,7 +32,7 @@ import qualified Test.Tasty         as Tasty
 getTests :: IO TestTree
 getTests = return
     (Tasty.testGroup "Semisemantic cache"
-        [ testCase "Small NF is cached and reused" smallNFCachedTest
+        [ testCase "Typechecked marker is cached and reused" typecheckedMarkerCachedTest
         , testCase "Large NF stores a well-typed marker only" largeNFMarkerTest
         , testCase "Early-abort size check agrees with full walk" earlyAbortAgreesWithFullWalkTest
         , testCase "Child change invalidates parent cache" childChangeInvalidatesParentTest
@@ -84,9 +84,10 @@ assertNormalizedEqual message expected actual =
         (Core.normalize (Core.denote expected) :: Core.Expr Void Void)
         (Core.normalize (Core.denote actual) :: Core.Expr Void Void)
 
--- | Small expression: second load should hit a cached NF (tag byte 0).
-smallNFCachedTest :: IO ()
-smallNFCachedTest = withTempCache $ \cacheDir -> do
+-- | Code imports store a typed marker (tag byte 1); normalization is delayed
+--   until the whole resolved expression is evaluated.
+typecheckedMarkerCachedTest :: IO ()
+typecheckedMarkerCachedTest = withTempCache $ \cacheDir -> do
     tempFile <- Temp.writeTempFile "." "small.dhall" "1 + 1"
 
     void (inputFile tempFile)
@@ -95,7 +96,7 @@ smallNFCachedTest = withTempCache $ \cacheDir -> do
         "first load should write a semisemantic cache entry"
         (not (null filesAfterFirst))
 
-    traverse_ checkNFTag filesAfterFirst
+    traverse_ checkTypedTag filesAfterFirst
 
     result1 <- inputFile tempFile
     result2 <- inputFile tempFile
@@ -103,13 +104,12 @@ smallNFCachedTest = withTempCache $ \cacheDir -> do
 
     Directory.removeFile tempFile
   where
-    checkNFTag file = do
+    checkTypedTag file = do
         bytes <- ByteString.readFile file
-        case ByteString.uncons bytes of
-            Just (0, rest) ->
-                assertBool "NF payload should be non-empty CBOR" (not (ByteString.null rest))
-            _ ->
-                assertBool ("expected NF tag 0 in " <> file) False
+        assertEqual
+            ("Code imports should be stored as typed markers in " <> file)
+            (ByteString.singleton 1)
+            bytes
 
 -- | Large Text payload: store only a well-typed marker (tag byte 1, tiny file).
 largeNFMarkerTest :: IO ()

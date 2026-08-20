@@ -52,10 +52,22 @@ newtype Chained = Chained
 instance Pretty Chained where
     pretty (Chained import_) = pretty import_
 
--- | An import that has been fully interpeted
-newtype ImportSemantics = ImportSemantics
+-- | Whether an imported expression has already been beta-normalized.
+data NormalizationStatus
+    = AlreadyNormalized
+    -- ^ The expression is typechecked and beta-normal.
+    | TypecheckedOnly
+    -- ^ The expression is import-free and typechecked, but not necessarily
+    --   beta-normal.
+
+-- | An import that has been fully interpreted
+data ImportSemantics = ImportSemantics
     { importSemantics :: Expr Void Void
-    -- ^ The fully resolved import, typechecked and beta-normal.
+    -- ^ The import-free expression returned after loading and resolving all
+    --   remaining transitive imports.
+
+    , importNormalizationStatus :: NormalizationStatus
+    -- ^ Whether 'importSemantics' has already been beta-normalized.
     }
 
 -- | `parent` imports (i.e. depends on) `child`
