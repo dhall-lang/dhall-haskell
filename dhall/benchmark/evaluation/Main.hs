@@ -733,6 +733,12 @@ withManyCollidingSubstitutions =
 manyFilesModuleCount :: Int
 manyFilesModuleCount = 200
 
+-- | How many @let a@/@let x@ expressions @substitutions.shift_cost@ walks.
+-- Independent of @manyFilesModuleCount@ so import benches stay unchanged.
+-- ~20× the old 200-expr probe (~0.7 ms naive) → a few milliseconds.
+shiftCostExprCount :: Int
+shiftCostExprCount = 4000
+
 -- | Write the many-files package into @root@ (temp dir). Shared by the Code
 -- and Source pipelines; not timed as part of @resolve_cold_cache_on@.
 writeManyFilesFixture :: FilePath -> IO ()
@@ -1524,6 +1530,9 @@ main = do
    -- without import I/O. Resolves the map once. @naive@ is the pre-(1)/(2)
    -- walker (@Map.map shift@ every value, no root memo); @optimized@ is
    -- @substituteManyFromRoot@ (per-value shift + root-shift memo).
+   --
+   -- @shiftCostExprCount@ is sized so both sides land in the few-millisecond
+   -- range under tasty-bench (not sub-millisecond noise).
    shiftCostBenchGroup :: Benchmark
    shiftCostBenchGroup =
        bgroup "substitutions.shift_cost"
@@ -1535,7 +1544,7 @@ main = do
            resolveShiftCost manyCollidingSubstitutions
 
        exprs =
-           replicate manyFilesModuleCount shiftCostExpr
+           replicate shiftCostExprCount shiftCostExpr
 
        shiftCostExpr :: ResolvedExpr
        shiftCostExpr =
