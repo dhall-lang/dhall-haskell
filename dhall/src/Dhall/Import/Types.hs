@@ -146,9 +146,9 @@ data Status = Status
     --   validation and unhashed @as Source@ prefill).
 
     , _newManager :: IO Manager
-    , _manager :: Maybe Manager
-    -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
-    -- requests
+    -- ^ Action that returns an HTTP 'Manager'. After the first successful
+    --   request this is replaced with @'return' manager@ so later requests
+    --   reuse the same manager without a separate cache field.
 
     , _loadOriginHeaders :: StateT Status IO OriginHeaders
     -- ^ Load the origin headers from environment or configuration file.
@@ -213,8 +213,6 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _parsedImportCache = Map.empty
 
-    _manager = Nothing
-
     _substitutions = Dhall.Substitution.empty
 
     _resolvedSubstitutions = Nothing
@@ -250,6 +248,14 @@ merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
 -- | Lens from a `Status` to its `_parsedImportCache` field
 parsedImportCache :: Lens' Status (Map Text (Expr Src Import))
 parsedImportCache = lens _parsedImportCache (\s x -> s { _parsedImportCache = x })
+
+-- | Lens from a `Status` to its `_newManager` field
+newManager :: Lens' Status (IO Manager)
+newManager = lens _newManager (\s x -> s { _newManager = x })
+
+-- | Lens from a `Status` to its `_loadOriginHeaders` field
+loadOriginHeaders :: Lens' Status (StateT Status IO OriginHeaders)
+loadOriginHeaders = lens _loadOriginHeaders (\s x -> s { _loadOriginHeaders = x })
 
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Text)
@@ -288,6 +294,10 @@ startingContext =
         _startingContext
         (\s x -> s { _startingContext = x, _merkleContextFingerprint = Nothing })
 
+-- | Lens from a `Status` to its `_semanticCacheMode` field
+semanticCacheMode :: Lens' Status SemanticCacheMode
+semanticCacheMode = lens _semanticCacheMode (\s x -> s { _semanticCacheMode = x })
+
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning
 cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
@@ -295,6 +305,10 @@ cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
 -- | Lens from a `Status` to its `_reportWarning` field
 reportWarning :: Lens' Status (Text -> IO ())
 reportWarning = lens _reportWarning (\s x -> s { _reportWarning = x })
+
+-- | Lens from a `Status` to its `_getHomeDirectory` field
+getHomeDirectory :: Lens' Status (IO FilePath)
+getHomeDirectory = lens _getHomeDirectory (\s x -> s { _getHomeDirectory = x })
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
