@@ -59,7 +59,7 @@ import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
 import qualified System.FilePath             as FilePath
-#ifdef mingw32_HOST_OS
+#if defined(mingw32_HOST_OS) || defined(javascript_HOST_ARCH)
 import System.IO.Error           (illegalOperationErrorType, mkIOError)
 #else
 import qualified System.Posix.User           as Posix
@@ -316,7 +316,7 @@ makeType = Record . Map.fromList <$> sequenceA
 getUser :: User -> IO UserID
 getUser (UserId uid) = return uid
 getUser (UserName name) =
-#ifdef mingw32_HOST_OS
+#if defined(mingw32_HOST_OS) || defined(javascript_HOST_ARCH)
     ioError $ mkIOError illegalOperationErrorType x Nothing Nothing
     where x = "System.Posix.User.getUserEntryForName: not supported"
 #else
@@ -327,7 +327,7 @@ getUser (UserName name) =
 getGroup :: Group -> IO GroupID
 getGroup (GroupId gid) = return gid
 getGroup (GroupName name) =
-#ifdef mingw32_HOST_OS
+#if defined(mingw32_HOST_OS) || defined(javascript_HOST_ARCH)
     ioError $ mkIOError illegalOperationErrorType x Nothing Nothing
     where x = "System.Posix.User.getGroupEntryForName: not supported"
 #else

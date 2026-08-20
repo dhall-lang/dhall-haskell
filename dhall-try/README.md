@@ -1,8 +1,56 @@
 # `dhall-try`
 
-For installation or development instructions, see:
+In-browser Dhall interpreter used by [try.dhall-lang.org](https://try.dhall-lang.org).
+It is compiled with **GHC's JavaScript backend** (`pkgsCross.ghcjs` on Nixpkgs
+26.05), not legacy GHCJS 8.10 (`haskell.packages.ghcjs`, removed in Nixpkgs
+25.11).
 
-* [`dhall-haskell` - `README`](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md#build-the-website)
+## Build with Nix
+
+The JS products are **not** part of a bare `nix-build` at the repo root (so a
+JS failure cannot block native tarballs).  Build them explicitly:
+
+```console
+$ nix-build nix/javascript.nix -A dhall-try
+```
+
+Equivalent:
+
+```console
+$ nix-build -A javascript.dhall-try
+$ nix-build dhall-try
+```
+
+The first build of GHC's JS backend and its package set is large and often
+uncached (hours).  Linux (`x86_64-linux`) is the well-supported host; Darwin
+may work but is less tested.
+
+The minified interpreter lands at:
+
+```
+result/bin/dhall-try.jsexe/all.min.js
+```
+
+(`all.js` is the unminified GHC output; `all.min.js` is Closure Compiler.)
+
+To open a shell with the JS GHC and `dhall-try` dependencies:
+
+```console
+$ nix-shell dhall-try/shell.nix
+```
+
+Do **not** pass `compiler = "ghcjs"` to `nix/shared.nix` on this Nixpkgs pin:
+that attribute throws.  The JS package set is `pkgs.pkgsCross.ghcjs.haskell.packages.ghc96`.
+
+## How the JS sources are selected
+
+- `dhall/dhall.cabal` uses `ghcjs-src` when `arch(javascript)`, `impl(ghcjs)`,
+  or `-fjavascript` is set.  The flag exists because `cabal2nix` evaluates the
+  Cabal file on the **build** platform, not the JS target.
+- HTTP uses `fetch`; SHA-256 uses Web Crypto (browser) or Node `crypto`.
+- `dhall-try` talks to the Ace editor via `GHC.JS.Prim` / `GHC.JS.Foreign.Callback`
+  (in `base` on the JS architecture).  There is no `ghcjs-base` / `ghcjs-xhr`
+  dependency.
 
 ## How to contribute
 
@@ -11,12 +59,14 @@ improve the site.  The vast majority of the site logic is embedded within that
 monolithic document, including a substantial amount of inline JavaScript, inline
 CSS, and all of the code examples.
 
-The [`src`](./src) directory contains the code for interpreting the live code
-demo, powered by the `dhall`/`dhall-json` packages compiled to JavaScript using
-GHCJS.  You only need to modify that Haskell source code if you would like to
-extend the site with new Haskell-derived functionality.
+The [`src`](./src) directory contains the Haskell for the live demo
+(`dhall` / `dhall-json` compiled to JavaScript).  Change it when you need new
+Haskell-derived behaviour.
 
-The [`website.nix`](../nix/website.nix) file contains the top-level logic for
-building the site, including bundling of JavaScript/CSS/image assets.  You will
-also want to refer to [`shared.nix`](../nix/shared.nix) for related logic to
-build each bundled dependency.
+Website assembly for dhall-lang.org still lives in the `dhall-lang` repository
+(`nixops/website.nix`).  After this interpreter builds, that overlay should
+stop using `dhall-haskell-old.json` (commit `8f62fdf`, August 2021) and take
+`dhall-try` from current `dhall-haskell`.
+
+For installation or development of the **native** packages, see the
+[`dhall-haskell` README](https://github.com/dhall-lang/dhall-haskell/blob/master/README.md).
