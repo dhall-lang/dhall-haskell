@@ -50,12 +50,15 @@ memo:
 `substitutions.shift_cost` is a **pure** `nf` probe: the same
 `manyCollidingSubstitutions` map (200 keys whose values are **64-field
 records**, so each `Syntax.shift` is non-trivial) and `let a` / `let x`
-module shape, with no import I/O. The map is resolved **once**. `naive` is
-an in-harness copy of `substituteManyNaive` (`Map.map shift` on every value
-at a non-key binder, no root-shift memo). `optimized` is an in-harness copy
-of `substituteManyFromRoot` (per-value shift + root-shift memo across the
-200 expressions). Both copies live in the harness so this group compiles
-before those helpers exist in `Dhall.Substitution`.
+module shape, with no import I/O. The map is resolved **once**. The harness
+walks **4000** copies of that expression (see `shiftCostExprCount` in
+`Main.hs`) so both sides take a few milliseconds rather than
+sub-millisecond noise. `naive` is an in-harness copy of
+`substituteManyNaive` (`Map.map shift` on every value at a non-key binder,
+no root-shift memo). `optimized` is an in-harness copy of
+`substituteManyFromRoot` (per-value shift + root-shift memo across those
+expressions). Both copies live in the harness so this group compiles before
+those helpers exist in `Dhall.Substitution`.
 
 ## 4. Synthetic substitution-heavy end-to-end (`substitutions.composer_proxy.*`)
 
