@@ -489,9 +489,9 @@ patternFromArgs :: [String] -> Maybe String
 patternFromArgs args =
     listToMaybe $ mapMaybe match (zip args (drop 1 args)) ++ naked
   where
-    match ("-p", value)        = Just value
-    match ("--pattern", value) = Just value
-    match _                    = Nothing
+    match ("-p", v)        = Just v
+    match ("--pattern", v) = Just v
+    match _                = Nothing
 
     naked =
         [ drop (length prefix) arg
@@ -617,8 +617,8 @@ substitutionsManyFilesSourceLabels :: [String]
 substitutionsManyFilesSourceLabels =
     coldResolveLabels "substitutions.many_files.as_source"
 
--- | Synthetic substitution-heavy end-to-end proxy: many fat imports, large
--- Haskell-API substitution map, cold resolve+typecheck+NF.
+-- | Synthetic substitution-heavy end-to-end proxy: many wide-record imports,
+-- large Haskell-API substitution map, cold resolve+typecheck+NF.
 composerProxyEndToEndBenchName :: String
 composerProxyEndToEndBenchName = "end_to_end_cold"
 
@@ -775,8 +775,8 @@ withOptionalManyFilesTree True k =
 composerProxyModuleCount :: Int
 composerProxyModuleCount = 400
 
--- | Fat record width so @Dhall.Map@ / denote / typecheck dominate over tiny
--- @let a = i@ modules.
+-- | Record field count so @Dhall.Map@ / denote / typecheck / NF node count
+-- dominate over tiny @let a = i@ modules. Source text stays short to parse.
 composerProxyFieldCount :: Int
 composerProxyFieldCount = 64
 
@@ -807,9 +807,10 @@ withComposerProxySubstitutions =
 
 -- | Write the composer_proxy package into @root@ (temp dir). Not timed.
 --
--- Each module is a fat Natural record under a shared @UserType000@ binder so
--- the package is a well-typed homogeneous list. The Haskell-API map still has
--- one key per module (fingerprint / @resolveSubstitutions@ size).
+-- Each module is a wide Natural record (many fields) under a shared
+-- @UserType000@ binder so the package is a well-typed homogeneous list. The
+-- Haskell-API map still has one key per module (fingerprint /
+-- @resolveSubstitutions@ size).
 writeComposerProxyFixture :: FilePath -> IO ()
 writeComposerProxyFixture root = do
     let modsDir = root </> "mods"
