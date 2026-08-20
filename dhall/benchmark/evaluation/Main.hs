@@ -430,7 +430,7 @@ resolveWithCache settings parsed =
         parsed
 
 -- | Resolve imports with the semantic disk cache disabled (as with
--- @dhall --no-cache@). Semisemantic cache (@dhall-haskell/@) is still read.
+-- @dhall --no-cache@). Semisemantic cache (@dhall-haskell-v2/@) is still read.
 -- Used for Mode A timed @resolve@ benches.
 resolveWithoutCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveWithoutCache settings parsed =
