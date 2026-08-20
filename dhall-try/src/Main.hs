@@ -1,3 +1,4 @@
+{-# LANGUAGE JavaScriptFFI     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
@@ -5,7 +6,6 @@ module Main where
 import qualified Control.Exception
 import qualified Data.Aeson.Encode.Pretty
 import qualified Data.IORef
-import qualified Data.JSString
 import qualified Data.Text
 import qualified Data.Text.Encoding
 import qualified Data.Text.Lazy
@@ -17,50 +17,59 @@ import qualified Dhall.JSON.Yaml
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
-import qualified GHCJS.Foreign.Callback
-import qualified Prettyprinter             as Pretty
 import qualified Prettyprinter.Render.Text as Pretty
 
-import Control.Exception      (Exception, SomeException)
-import Data.JSString          (JSString)
-import Data.Text              (Text)
-import GHCJS.Foreign.Callback (Callback)
+import Control.Exception           (Exception, SomeException)
+import Data.Text                   (Text)
+import GHC.JS.Foreign.Callback     (Callback)
+import qualified GHC.JS.Foreign.Callback
+import GHC.JS.Prim                 (JSVal, fromJSString, toJSString)
 
-foreign import javascript unsafe "input.getValue()" getInput :: IO JSString
+foreign import javascript unsafe "(() => input.getValue())"
+  getInput :: IO JSVal
 
-foreign import javascript unsafe "input.on('change', $1)" registerInterpret :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "((f) => { input.on('change', f); })"
+  registerInterpret :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "dhallTab.onclick = $1" registerDhallOutput :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "((f) => { dhallTab.onclick = f; })"
+  registerDhallOutput :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "jsonTab.onclick = $1" registerJSONOutput :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "((f) => { jsonTab.onclick = f; })"
+  registerJSONOutput :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "yamlTab.onclick = $1" registerYAMLOutput :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "((f) => { yamlTab.onclick = f; })"
+  registerYAMLOutput :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "typeTab.onclick = $1" registerTypeOutput :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "((f) => { typeTab.onclick = f; })"
+  registerTypeOutput :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "hashTab.onclick = $1" registerHashOutput :: Callback (IO ()) -> IO ()
+foreign import javascript unsafe "((f) => { hashTab.onclick = f; })"
+  registerHashOutput :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "output.setValue($1)" setOutput_ :: JSString -> IO ()
+foreign import javascript unsafe "((s) => { output.setValue(s); })"
+  setOutput_ :: JSVal -> IO ()
 
-foreign import javascript unsafe "output.setOption('mode', $1)" setMode_ :: JSString -> IO ()
+foreign import javascript unsafe "((s) => { output.setOption('mode', s); })"
+  setMode_ :: JSVal -> IO ()
 
-foreign import javascript unsafe "selectTab($1, $2)" selectTab :: JSString -> JSString -> IO ()
+foreign import javascript unsafe "((group, name) => { selectTab(group, name); })"
+  selectTab :: JSVal -> JSVal -> IO ()
 
 fixup :: Text -> Text
 fixup = Data.Text.replace "\ESC[1;31mError\ESC[0m" "Error"
 
 setOutput :: Text -> IO ()
-setOutput = setOutput_ . Data.JSString.pack . Data.Text.unpack
+setOutput = setOutput_ . toJSString . Data.Text.unpack
 
 errOutput :: Exception e => e -> IO ()
 errOutput = setOutput . fixup . Data.Text.pack . show
 
 setMode :: Mode -> IO ()
-setMode Dhall = setMode_ "haskell"
-setMode Type  = setMode_ "haskell"
-setMode JSON  = setMode_ "javascript"
-setMode YAML  = setMode_ "yaml"
-setMode Hash  = setMode_ "null"
+setMode Dhall = setMode_ (toJSString "haskell")
+setMode Type  = setMode_ (toJSString "haskell")
+setMode JSON  = setMode_ (toJSString "javascript")
+setMode YAML  = setMode_ (toJSString "yaml")
+setMode Hash  = setMode_ (toJSString "null")
 
 jsonConfig :: Data.Aeson.Encode.Pretty.Config
 jsonConfig =
@@ -87,9 +96,9 @@ main = do
             . Dhall.Pretty.prettyExpr
 
     let interpret = do
-            inputJSString <- getInput
+            inputJSVal <- getInput
 
-            let inputString = Data.JSString.unpack inputJSString
+            let inputString = fromJSString inputJSVal
             let inputText   = Data.Text.pack inputString
 
             case Dhall.Parser.exprFromText "(input)" inputText of
@@ -148,7 +157,7 @@ main = do
 
     interpret
 
-    interpretAsync <- GHCJS.Foreign.Callback.asyncCallback interpret
+    interpretAsync <- GHC.JS.Foreign.Callback.asyncCallback interpret
 
     registerInterpret interpretAsync
 
@@ -156,13 +165,13 @@ main = do
             let callback = do
                     Data.IORef.writeIORef modeRef mode
 
-                    selectTab "mode-tab" tabName
+                    selectTab (toJSString "mode-tab") (toJSString tabName)
 
                     setMode mode
 
                     interpret
 
-            callbackAsync <- GHCJS.Foreign.Callback.asyncCallback callback
+            callbackAsync <- GHC.JS.Foreign.Callback.asyncCallback callback
 
             registerCallback callbackAsync
 
