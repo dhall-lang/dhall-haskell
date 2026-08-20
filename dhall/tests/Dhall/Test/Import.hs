@@ -28,7 +28,7 @@ import qualified Test.Tasty                       as Tasty
 import qualified Test.Tasty.HUnit                 as Tasty.HUnit
 import qualified Turtle
 
-#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
+#if defined(WITH_HTTP)
 import qualified Network.Connection      as Connection
 import qualified Network.HTTP.Client     as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
@@ -46,9 +46,9 @@ getTests = do
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
 
-#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
-        -- `-f-network-tests` (used by Nix) still discovers these files; they
-        -- need the local test HTTP server and/or the public internet.
+#if !defined(WITH_HTTP)
+        -- HTTP is compiled out (`-f-with-http`); skip tests that need the
+        -- local test server.
         "cors" `Test.Util.pathNotInfixOf` path
         "Remote" `Test.Util.pathNotInfixOf` path
         "header" `Test.Util.pathNotInfixOf` path
@@ -66,7 +66,7 @@ getTests = do
         let expectedSuccesses =
                 [ importDirectory </> "failure/unit/DontRecoverCycle.dhall"
                 , importDirectory </> "failure/unit/DontRecoverTypeError.dhall"
-#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
+#if !defined(WITH_HTTP)
                 , importDirectory </> "failure/originHeadersFromRemote.dhall"
 #endif
                 ]
@@ -108,47 +108,7 @@ successTest prefix = do
 
         let originalCache = "dhall-lang/tests/import/cache"
 
-#if defined(WITH_HTTP) && defined(NETWORK_TESTS)
-        let testTlsSettings =
-#if __GLASGOW_HASKELL__ >= 906
--- note: MIN_VERSION_crypton_connection is defined only if we are building with GHC 9.6 and later
-#if MIN_VERSION_crypton_connection(0,4,0)
-                let defaultSupported :: Supported
-                    defaultSupported = def
-                in Connection.TLSSettingsSimple
-                    { Connection.settingDisableCertificateValidation = True
-                    , Connection.settingDisableSession = False
-                    , Connection.settingUseServerName = True
-                    , Connection.settingClientSupported = defaultSupported
-                    }
-#else
-                Connection.TLSSettingsSimple
-                    { Connection.settingDisableCertificateValidation = True
-                    , Connection.settingDisableSession = False
-                    , Connection.settingUseServerName = True
-                    }
-#endif
-#else
-                Connection.TLSSettingsSimple
-                    { Connection.settingDisableCertificateValidation = True
-                    , Connection.settingDisableSession = False
-                    , Connection.settingUseServerName = True
-                    }
-#endif
-
-        let httpManager =
-                HTTP.newManager
-                    (HTTP.mkManagerSettings testTlsSettings Nothing)
-                        { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
-
-        let status =
-                Import.makeEmptyStatus
-                    httpManager
-                    (pure Import.envOriginHeaders)
-                    directoryString
-#else
-        let status = Import.emptyStatus directoryString
-#endif
+        let status = importStatus directoryString
 
         let status' =
                 status
@@ -158,7 +118,7 @@ successTest prefix = do
 
         let load =
                 State.evalStateT
-                    (Test.Util.loadWith actualExpr)
+                    (importLoadWith actualExpr)
                     status'
 
         let usesCache = [ "hashFromCache"
@@ -230,13 +190,13 @@ failureTest prefix = do
         homeDirectory <- Directory.makeAbsolute (importDirectory </> "home")
 
         let status =
-                (Import.emptyStatus ".")
+                (importStatus ".")
                     { Import._getHomeDirectory = pure homeDirectory }
 
         let setup = Test.Util.managedTestEnvironment prefix
 
         let run = Exception.catch @SomeException
-              (State.evalStateT (Test.Util.loadWith actualExpr) status >> return True)
+              (State.evalStateT (importLoadWith actualExpr) status >> return True)
               (\_ -> return False)
 
         succeeded <- Turtle.with setup (const run)
@@ -244,3 +204,59 @@ failureTest prefix = do
         if succeeded
             then fail "Import should have failed, but it succeeds"
             else return () )
+
+-- | Use the real importer against `dhall-test-server` (localhost) whenever HTTP
+-- is compiled in.  `Test.Util.loadWith` still mocks remotes when
+-- `-f-network-tests` is set, which is only needed for non-import tests and for
+-- Tutorial doctests that hit the public internet.
+#if defined(WITH_HTTP)
+importLoadWith :: Core.Expr Parser.Src Core.Import -> State.StateT Import.Status IO (Core.Expr Parser.Src Void)
+importLoadWith = Import.loadWith
+
+importStatus :: FilePath -> Import.Status
+importStatus directoryString =
+    Import.makeEmptyStatus
+        testHttpManager
+        (pure Import.envOriginHeaders)
+        directoryString
+
+testHttpManager :: IO Import.Manager
+testHttpManager =
+    HTTP.newManager
+        (HTTP.mkManagerSettings testTlsSettings Nothing)
+            { HTTP.managerResponseTimeout = HTTP.responseTimeoutMicro (120 * 1000 * 1000) }
+
+testTlsSettings :: Connection.TLSSettings
+testTlsSettings =
+#if __GLASGOW_HASKELL__ >= 906
+-- note: MIN_VERSION_crypton_connection is defined only if we are building with GHC 9.6 and later
+#if MIN_VERSION_crypton_connection(0,4,0)
+    let defaultSupported :: Supported
+        defaultSupported = def
+    in Connection.TLSSettingsSimple
+        { Connection.settingDisableCertificateValidation = True
+        , Connection.settingDisableSession = False
+        , Connection.settingUseServerName = True
+        , Connection.settingClientSupported = defaultSupported
+        }
+#else
+    Connection.TLSSettingsSimple
+        { Connection.settingDisableCertificateValidation = True
+        , Connection.settingDisableSession = False
+        , Connection.settingUseServerName = True
+        }
+#endif
+#else
+    Connection.TLSSettingsSimple
+        { Connection.settingDisableCertificateValidation = True
+        , Connection.settingDisableSession = False
+        , Connection.settingUseServerName = True
+        }
+#endif
+#else
+importLoadWith :: Core.Expr Parser.Src Core.Import -> State.StateT Import.Status IO (Core.Expr Parser.Src Void)
+importLoadWith = Test.Util.loadWith
+
+importStatus :: FilePath -> Import.Status
+importStatus = Import.emptyStatus
+#endif

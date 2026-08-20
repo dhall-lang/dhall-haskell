@@ -169,12 +169,10 @@ binary-cache-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFG
 binary-caches = https://cache.nixos.org https://cache.dhall-lang.org https://dhall.cachix.org
 ```
 
-Since many tests require HTTP access, you should also add this setting to
-your `/etc/nix/nix.conf`:
-
-```
-sandbox = false
-```
+A Nix sandbox is fine for `nix-build`.  Import tests talk to
+`dhall-test-server` on loopback (`127.0.0.1:18080` / `:18443`).  The Nix
+package is built with `-f-network-tests`, which only skips Tutorial doctests
+that still fetch from GitHub.  You do not need `sandbox = false`.
 
 You can build all of the packages by running:
 

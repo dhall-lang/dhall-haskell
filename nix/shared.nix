@@ -159,9 +159,9 @@ let
                               { }
                             )
                           )
-                          # The test suite's CORS/remote-import tests require
-                          # internet access, which is unavailable in a sandboxed
-                          # Nix build. Disable them so the check phase is hermetic.
+                          # Tutorial doctests still fetch from GitHub. Import
+                          # tests use dhall-test-server on localhost and run
+                          # with this flag off.
                           [ "-f-network-tests" ]
                         ).overrideAttrs (old: {
                           XDG_CACHE_HOME = ".cache";
