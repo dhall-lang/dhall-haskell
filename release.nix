@@ -7,11 +7,8 @@ in { src ? { rev = ""; }
 let
   callShared = args: import ./nix/shared.nix ({ inherit nixpkgs; } // args);
 
-  shared_8_6_1 = callShared { compiler = "ghc861"; };
-
-
-  # We can re-enable this once https://github.com/NixOS/nixpkgs/issues/133271
-  # is fixed and Nixpkgs is upgraded to a version that incorporates GHCJS
+  # Legacy GHCJS 8.10 (`haskell.packages.ghcjs`) was removed in Nixpkgs 25.11.
+  # Re-enable via `pkgsCross.ghcjs` once `dhall-try` is ported off `ghcjs-base`.
 
   # shared_ghcjs = callShared { compiler = "ghcjs"; };
 

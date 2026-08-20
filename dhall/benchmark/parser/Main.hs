@@ -3,45 +3,16 @@
 module Main where
 
 import Control.Exception (throw)
-import Control.Monad     (forM)
-import Data.Map          (Map)
 import Data.Text         (Text)
 import Data.Void         (Void)
 import Test.Tasty.Bench
 
 import qualified Data.ByteString.Lazy
-import qualified Data.Map             as Map
 import qualified Data.Text            as Text
 import qualified Data.Text.IO
 import qualified Dhall.Binary
 import qualified Dhall.Core           as Dhall
 import qualified Dhall.Parser         as Dhall
-import qualified System.Directory     as Directory
-
-type PreludeFiles = Map FilePath Text
-
-loadPreludeFiles :: IO PreludeFiles
-loadPreludeFiles = loadDirectory "./dhall-lang/Prelude"
-    where
-        loadDirectory :: FilePath -> IO PreludeFiles
-        loadDirectory dir =
-            Directory.withCurrentDirectory dir $ do
-                files <- Directory.getCurrentDirectory >>= Directory.listDirectory
-                results <- forM files $ \file -> do
-                    file' <- Directory.makeAbsolute file
-                    doesExist <- Directory.doesFileExist file'
-                    if doesExist
-                       then loadFile file'
-                       else loadDirectory file'
-                pure $ Map.unions results
-
-        loadFile :: FilePath -> IO PreludeFiles
-        loadFile path = Map.singleton path <$> Data.Text.IO.readFile path
-
-benchParser :: PreludeFiles -> Benchmark
-benchParser =
-      bgroup "exprFromText"
-    . Map.foldrWithKey (\name expr -> (benchExprFromText name expr :)) []
 
 -- Note: do not use !expr below, to avoid the bug mentioned here https://github.com/UnkindPartition/tasty/issues/401
 benchExprFromText :: String -> Text -> Benchmark
@@ -62,8 +33,7 @@ benchNfExprFromText name expr =
     bench name $ nf (either throw id . Dhall.exprFromText "(input)") expr
 
 main :: IO ()
-main = do
-    prelude <- loadPreludeFiles
+main =
     defaultMain
         [ env issues $ \ ~(it, ib) ->
             bgroup "Issue #108"

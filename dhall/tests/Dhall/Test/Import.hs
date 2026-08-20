@@ -46,6 +46,18 @@ getTests = do
     successTests <- Test.Util.discover (Turtle.chars <* "A.dhall") successTest (do
         path <- Turtle.lstree (importDirectory </> "success")
 
+#if !(defined(WITH_HTTP) && defined(NETWORK_TESTS))
+        -- `-f-network-tests` (used by Nix) still discovers these files; they
+        -- need the local test HTTP server and/or the public internet.
+        "cors" `Test.Util.pathNotInfixOf` path
+        "Remote" `Test.Util.pathNotInfixOf` path
+        "header" `Test.Util.pathNotInfixOf` path
+        "Header" `Test.Util.pathNotInfixOf` path
+        "originHeaders" `Test.Util.pathNotInfixOf` path
+        "customHeaders" `Test.Util.pathNotInfixOf` path
+        "normalCachingOfProtected" `Test.Util.pathNotInfixOf` path
+#endif
+
         return path )
 
     failureTests <- Test.Util.discover (Turtle.chars <* ".dhall") failureTest (do
