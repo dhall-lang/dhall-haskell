@@ -515,6 +515,11 @@ Benchmark evaluation
     Type: exitcode-stdio-1.0
     Hs-Source-Dirs: benchmark/evaluation
     Main-Is: Main.hs
+    Other-Modules:
+        Bench.Common
+        Bench.ImportTrees
+        Bench.Semisemantic
+        Bench.Substitutions
     Build-Depends:
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
