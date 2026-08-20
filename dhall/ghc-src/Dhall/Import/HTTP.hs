@@ -31,7 +31,6 @@ import Dhall.Core
     , URL (..)
     )
 import Dhall.Import.Types
-    hiding (newManager)
 import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
 import Lens.Micro.Mtl                   (assign, use)
@@ -46,7 +45,6 @@ import qualified Data.ByteString.Lazy             as ByteString.Lazy
 import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
-import qualified Dhall.Import.Types
 import qualified Dhall.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Types
@@ -166,10 +164,27 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
       <>  "\n"
       <>  "URL: " <> url <> "\n"
 
-newManager :: StateT Status IO Manager
-newManager = do
-    manager <- liftIO =<< use Dhall.Import.Types.newManager
-    assign Dhall.Import.Types.newManager (return manager)
+{-| Get a shared HTTP 'Manager', creating one on the first call.
+
+    'Status' does not store a @Maybe Manager@. It stores an @IO Manager@
+    factory in '_newManager':
+
+    * Before the first request the factory *creates* a manager
+      (typically 'defaultNewManager').
+    * After we have a manager we replace the factory with @'pure' manager@,
+      an @IO@ action that does not create anything and just yields that
+      same value. The next call therefore reuses it.
+
+    This is the same caching as a @Maybe Manager@ field, with one fewer
+    'Status' field.
+-}
+getManager :: StateT Status IO Manager
+getManager = do
+    makeManager <- use newManager
+    manager <- liftIO makeManager
+    -- Overwrite the factory with a constant action: later getManager calls
+    -- run `pure manager` instead of creating a new HTTP manager.
+    assign newManager (pure manager)
     return manager
 
 data NotCORSCompliant = NotCORSCompliant
@@ -306,9 +321,9 @@ addHeaders originHeaders urlHeaders request =
 fetchFromHttpUrlBytes
     :: URL -> Maybe [HTTPHeader] -> StateT Status IO ByteString
 fetchFromHttpUrlBytes childURL mheaders = do
-    originHeaders <- join (use Dhall.Import.Types.loadOriginHeaders)
+    originHeaders <- join (use loadOriginHeaders)
 
-    manager <- newManager
+    manager <- getManager
 
     let childURLString = Text.unpack (renderURL childURL)
 
@@ -324,7 +339,7 @@ fetchFromHttpUrlBytes childURL mheaders = do
 
     response <- liftIO (Control.Exception.handle handler io)
 
-    use Dhall.Import.Types.stack >>= \case
+    use stack >>= \case
         -- We ignore the first import in the stack since that is the same import
         -- as the `childUrl`
         _ :| Chained parentImport : _ -> do
