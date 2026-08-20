@@ -150,7 +150,7 @@ data Status = Status
     --   manager itself: initially it *creates* a manager (see
     --   'defaultNewManager'); after the first successful HTTP request that
     --   action is replaced with @'pure' manager@ so later requests reuse
-    --   the same manager.
+    --   the same manager. There is no separate @Maybe Manager@ cache field.
 
     , _loadOriginHeaders :: StateT Status IO OriginHeaders
     -- ^ Load the origin headers from environment or configuration file.
@@ -251,7 +251,10 @@ merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
 parsedImportCache :: Lens' Status (Map Text (Expr Src Import))
 parsedImportCache = lens _parsedImportCache (\s x -> s { _parsedImportCache = x })
 
--- | Lens from a `Status` to its `_newManager` field
+-- | Lens from a `Status` to its `_newManager` field.
+--
+-- The value is a factory (@IO Manager@). Caching is done by overwriting it
+-- with @pure alreadyCreatedManager@, not by storing a @Maybe Manager@.
 newManager :: Lens' Status (IO Manager)
 newManager = lens _newManager (\s x -> s { _newManager = x })
 

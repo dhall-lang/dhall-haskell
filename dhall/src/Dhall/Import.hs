@@ -770,7 +770,7 @@ loadImportWithSemanticCache
     -- origin (file / URL / env), the integrity hash must be checked against
     -- that origin's Source product. A Code normal-form stored under the same
     -- hash in @dhall/@ must not satisfy an @as Source@ check.
-    Status { .. } <- State.get
+    Status { _semanticCacheMode, _reportWarning, _stack } <- State.get
 
     let cacheEligible = case importType of
             Missing -> True
@@ -835,7 +835,7 @@ loadImportWithSemanticCache
 
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed (Just semanticHash) _) _)) = do
-    Status { .. } <- State.get
+    Status { _semanticCacheMode, _reportWarning, _stack } <- State.get
     mCached <-
         case _semanticCacheMode of
             UseSemanticCache ->
@@ -993,7 +993,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
     parsedImport <- parseImportedExpression importType
 
     resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
-    Status {..} <- State.get
+    Status { _reportWarning, _normalizer, _startingContext, _stack } <- State.get
 
     -- Cache key: this file's syntax, hashes of its imports, and hashes of the
     -- starting context and substitutions. See
@@ -1318,7 +1318,12 @@ computeMerkleSemisemanticHash parent parsedImport = do
 memoizedMerkleFingerprints
     :: StateT Status IO (Dhall.Crypto.SHA256Digest, Dhall.Crypto.SHA256Digest)
 memoizedMerkleFingerprints = do
-    Status {..} <- State.get
+    Status
+        { _merkleContextFingerprint
+        , _startingContext
+        , _merkleSubstitutionsFingerprint
+        , _substitutions
+        } <- State.get
 
     contextHash <- case _merkleContextFingerprint of
         Just cached ->
@@ -1362,7 +1367,7 @@ finalizeSourceImport sourceArtifact = do
     -- Expand preserved hashed imports and produce import-free semantics for
     -- typechecking and semantic-cache storage.
     importFreeExpr <- expandSourceArtifact sourceArtifact
-    Status {..} <- State.get
+    Status { _startingContext, _stack } <- State.get
 
     substitutedExpr <- applyStatusSubstitutions importFreeExpr
 
@@ -1567,7 +1572,7 @@ fetchBytes Missing = throwM (MissingImports [])
 
 parseImportedExpression :: ImportType -> StateT Status IO (Expr Src Import)
 parseImportedExpression importType = do
-    Status {..} <- State.get
+    Status { _getHomeDirectory, _parsedImportCache, _stack } <- State.get
 
     -- Canonical fetch identity for the per-run parsed-import cache. Local
     -- imports are keyed by absolute path so relative/absolute spellings of the
