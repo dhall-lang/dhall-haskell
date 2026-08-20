@@ -44,22 +44,25 @@ memo:
 
 - nested-let is already an identity path (no shift work)
 - `many_files` is dominated by parse/typecheck/normalize of 200 files
-  (~100 ms); shift is cheaper than tasty-bench noise even after fattening
-  the map
+  (~100 ms); shift is cheaper than tasty-bench noise even after widening
+  substitution values to 64-field records
 
-`substitutions.shift_cost` is a **pure** `nf` probe: the same fat
-`manyCollidingSubstitutions` map and `let a` / `let x` module shape, with
-no import I/O. The map is resolved **once**. `naive` is an in-harness copy
-of `substituteManyNaive` (`Map.map shift` on every value at a non-key
-binder, no root-shift memo). `optimized` is an in-harness copy of
-`substituteManyFromRoot` (per-value shift + root-shift memo across the 200
-expressions). Both copies live in the harness so this group compiles before
-those helpers exist in `Dhall.Substitution`.
+`substitutions.shift_cost` is a **pure** `nf` probe: the same
+`manyCollidingSubstitutions` map (200 keys whose values are **64-field
+records**, so each `Syntax.shift` is non-trivial) and `let a` / `let x`
+module shape, with no import I/O. The map is resolved **once**. `naive` is
+an in-harness copy of `substituteManyNaive` (`Map.map shift` on every value
+at a non-key binder, no root-shift memo). `optimized` is an in-harness copy
+of `substituteManyFromRoot` (per-value shift + root-shift memo across the
+200 expressions). Both copies live in the harness so this group compiles
+before those helpers exist in `Dhall.Substitution`.
 
 ## 4. Synthetic substitution-heavy end-to-end (`substitutions.composer_proxy.*`)
 
-Many fat imports, a large `InputSettings` substitution map, and cold
-resolve → typecheck → normalize. See `composer_proxy/README.md`.
+Many imports whose bodies are **wide records** (64 fields — large AST / Map
+walk / typecheck / NF node count, not long parse text), a large
+`InputSettings` substitution map, and cold resolve → typecheck → normalize.
+See `composer_proxy/README.md`.
 
 | Group | Benchmark |
 |-------|-----------|

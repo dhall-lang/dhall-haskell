@@ -103,7 +103,8 @@ Used by: `substitutions.composer_proxy.*`
 
 Use this for a synthetic substitution-heavy path where cost is not resolve
 alone but import + typecheck + normalize under a large Haskell-API
-substitution map. See `substitutions/composer_proxy/README.md`.
+substitution map and **wide-record** module bodies (many Map fields; see
+`substitutions/composer_proxy/README.md`).
 
 ### Mode C — Source cost deferral (implicit)
 
@@ -139,7 +140,7 @@ read `evaluation` (or cold `dhall hash`).
 | `prelude_import.*` | `prelude_import/` | B | Full Prelude package, Code vs Source |
 | `substitutions.*` | `substitutions/` | B | Nested-let identity-path probe (100 closed keys) |
 | `substitutions.many_files.*` | generated at prep | B | 200 imports × 200 colliding Haskell-API keys (as-code regression) |
-| `substitutions.composer_proxy.*` | generated at prep | D | Synthetic substitution-heavy: fat many-import + large sub map; cold resolve→typecheck→NF |
+| `substitutions.composer_proxy.*` | generated at prep | D | Many wide-record imports + large sub map; cold resolve→typecheck→NF (Mode D) |
 | `substitutions.shift_cost.*` | in-harness | pure `nf` | Naive `Map.map shift` walker vs `substituteManyFromRoot` |
 | `semisemantic.nf_size_walk.*` | in-harness | pure `nf` | Full NF size walk vs early abort at 64KiB (shows the store-NF cutoff) |
 
