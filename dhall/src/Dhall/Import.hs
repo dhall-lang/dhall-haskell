@@ -576,6 +576,11 @@ chainImport (Chained parent) child =
 --   @loadImport@ handles the \"hot\" cache in @Status@ and defers to
 --   @loadImportWithSemanticCache@ for imports that aren't in the @Status@
 --   cache already.
+--
+--   After a successful *hashed* @Code@ load, also populate the corresponding
+--   *unhashed* @Code@ cache key when empty. The same file is often imported
+--   both ways (e.g. @typesUnion@ vs @schemas@), and the verified normal form
+--   is valid for the unhashed key as well.
 loadImport :: Chained -> StateT Status IO ImportSemantics
 loadImport import_ = do
     Status {..} <- State.get
@@ -585,7 +590,40 @@ loadImport import_ = do
         Nothing -> do
             importSemantics <- loadImportWithSemanticCache import_
             zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
+            publishUnhashedCodeCacheEntry import_ importSemantics
             return importSemantics
+
+-- | After a successful hashed @Code@ load, also publish the verified normal
+--   form under the corresponding *unhashed* @Code@ '_cache' key when empty.
+--
+--   Large trees often import the same file both ways (e.g. @typesUnion@ uses
+--   @./types/X.dhall sha256:…@ while @schemas@ uses @./types/X.dhall@). Those
+--   are distinct 'Chained' keys, so without this fill-in the unhashed path
+--   would typecheck again and, with delayed Code normalization, inline a
+--   larger 'TypecheckedOnly' tree into the parent. The hash-checked NF is a
+--   valid semantics for the unhashed import of the same file.
+--
+--   Does not overwrite an existing unhashed entry (that load may have used a
+--   different substitution / stack context). Only applies to @Code@ mode.
+publishUnhashedCodeCacheEntry
+    :: Chained -> ImportSemantics -> StateT Status IO ()
+publishUnhashedCodeCacheEntry import_@(Chained rawImport) importSemantics =
+    case (hash (importHashed rawImport), importMode rawImport) of
+        (Just _, Code) -> do
+            let unhashed = chainedRemoveHash import_
+
+            Status { _cache } <- State.get
+
+            case Dhall.Map.lookup unhashed _cache of
+                Just _ ->
+                    return ()
+
+                Nothing ->
+                    zoom cache
+                        (State.modify (Dhall.Map.insert unhashed importSemantics))
+
+        _ ->
+            return ()
 
 -- | Force an import result to a normal form when a later path requires one
 --   (for example, semantic integrity checks for Code imports).
