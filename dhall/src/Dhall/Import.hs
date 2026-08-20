@@ -1632,11 +1632,18 @@ In any expression `p ? q` the opportunistic caching rule says:
                     let actualHash = Dhall.Crypto.sha256Hash bytes
 
                     if actualHash == hash
-                        then zoom cacheWarning (writeToSemanticCache _reportWarning hash bytes)
-                        else return ()
-                Nothing -> return ()
+                        then do
+                            zoom cacheWarning
+                                (writeToSemanticCache _reportWarning hash bytes)
 
-              return result
+                            -- A matching fill is the same product a semantic
+                            -- cache hit would return: the alpha-beta-normal
+                            -- form, not the delayed TypecheckedOnly fallback.
+                            return (Core.renote normalized)
+                        else
+                            return result
+                Nothing ->
+                    return result
         where
           findImportHash expr = case Core.shallowDenote expr of
             Embed (Import (ImportHashed (Just hash) _) _) -> Just hash

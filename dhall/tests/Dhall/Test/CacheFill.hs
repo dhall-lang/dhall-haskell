@@ -22,6 +22,7 @@ import qualified Data.Text              as Text
 import qualified Dhall
 import qualified Dhall.Core             as Core
 import qualified Dhall.Import           as Import
+import qualified Dhall.Parser           as Parser
 import qualified Lens.Micro
 import qualified System.Directory       as Directory
 import qualified System.Environment     as Environment
@@ -37,6 +38,7 @@ getTests = return
         , testCase "Hash mismatch does not fill cache" hashMismatchDoesNotFillTest
         , testCase "Hash on successful right branch is ignored" hashOnRightIsIgnoredTest
         , testCase "Opportunistic fill normalizes unhashed Code" fillFromUnnormalizedImportTest
+        , testCase "Matching fill returns the semantic-cache normal form" fillReturnsNormalizedTermTest
         ])
 
 -- | Isolate each test in a fresh semantic cache directory.
@@ -312,5 +314,43 @@ fillFromUnnormalizedImportTest = withTempCache $ \cacheDir -> do
         "after fill, resolution should come from the semantic cache"
         expr
         step2
+
+    Directory.removeFile tempFile
+
+-- | A matching opportunistic fill must return the same normal form a semantic
+-- cache hit would, not the delayed TypecheckedOnly fallback. Otherwise
+-- @dhall type@ of Prelude @missing sha256:… ? ./file@ wrappers infers
+-- anonymous @∀(_ : A) → B@ types instead of the named binders from the
+-- normalized lambda.
+fillReturnsNormalizedTermTest :: IO ()
+fillReturnsNormalizedTermTest = withTempCache $ \_cacheDir -> do
+    let source =
+            "let f : Natural → Natural = λ(n : Natural) → n in f"
+
+    tempFile <- writeTempImport source
+    let dir = takeDirectory tempFile
+    let importPath = relativeImport tempFile
+
+    parsedFile <- Core.throws (Parser.exprFromText mempty importPath)
+    loadedFile <-
+        Import.loadRelativeTo dir Import.UseSemanticCache parsedFile
+
+    let nf =
+            Core.alphaNormalize
+                (Core.normalize (Core.denote loadedFile) :: Core.Expr Void Void)
+
+    let hashCode = Import.hashExpressionToCode nf
+
+    parsedAlt <-
+        Core.throws
+            (Parser.exprFromText mempty ("missing " <> hashCode <> " ? " <> importPath))
+
+    resolved <-
+        Import.loadRelativeTo dir Import.UseSemanticCache parsedAlt
+
+    assertEqual
+        "matching fill should return the beta-normal form"
+        nf
+        (Core.alphaNormalize (Core.denote resolved :: Core.Expr Void Void))
 
     Directory.removeFile tempFile
