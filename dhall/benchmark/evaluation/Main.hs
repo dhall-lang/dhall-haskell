@@ -12,6 +12,10 @@
 --     XDG_CACHE_HOME with caches enabled. Used for prep-sensitive Code large6
 --     variants, prelude_import, and substitutions (library substitution path).
 --
+--   Mode D (end_to_end_cold): parse-only prep; each sample uses a fresh
+--     XDG_CACHE_HOME and runs resolveWithSettings → typeOf → normalize. Used by
+--     substitutions.composer_proxy (synthetic substitution-heavy end-to-end).
+--
 --   Mode C (implicit): some as Source large6 costs appear on evaluation, not
 --     resolve. See large6/README.md matrix.
 --
@@ -449,6 +453,16 @@ resolveWithSettingsCold :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveWithSettingsCold settings parsed =
     withFreshCacheHome (Dhall.resolveWithSettings settings parsed)
 
+-- | Mode D: cold library resolve, then typecheck and normalize under a fresh
+-- cache. Synthetic substitution-heavy end-to-end path (import + typecheck + NF).
+resolveTypecheckNormalizeCold
+    :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
+resolveTypecheckNormalizeCold settings parsed =
+    withFreshCacheHome $ do
+        resolved <- Dhall.resolveWithSettings settings parsed
+        _ <- either throw pure (TypeCheck.typeOf resolved)
+        pure (Core.normalize resolved)
+
 withFreshCacheHome :: IO a -> IO a
 withFreshCacheHome action = do
     originalCacheHome <- lookupEnv "XDG_CACHE_HOME"
@@ -603,6 +617,23 @@ substitutionsManyFilesSourceLabels :: [String]
 substitutionsManyFilesSourceLabels =
     coldResolveLabels "substitutions.many_files.as_source"
 
+-- | Synthetic substitution-heavy end-to-end proxy: many fat imports, large
+-- Haskell-API substitution map, cold resolve+typecheck+NF.
+composerProxyEndToEndBenchName :: String
+composerProxyEndToEndBenchName = "end_to_end_cold"
+
+composerProxyCodeLabels :: [String]
+composerProxyCodeLabels =
+    [ "substitutions.composer_proxy.as_code"
+    , "substitutions.composer_proxy.as_code." <> composerProxyEndToEndBenchName
+    ]
+
+composerProxySourceLabels :: [String]
+composerProxySourceLabels =
+    [ "substitutions.composer_proxy.as_source"
+    , "substitutions.composer_proxy.as_source." <> composerProxyEndToEndBenchName
+    ]
+
 -- | Pure (1)+(2) probe: same map and @let a@ / @let x@ shape as many_files
 -- modules, but no import/typecheck. Compare @naive@ (shift every value, no
 -- root memo) vs @optimized@ (per-value shift + root-shift cache).
@@ -629,8 +660,9 @@ nfSizeWalkLabels =
 -- 100 type-like values whose names do not collide with the nested @xᵢ@
 -- binders in @substitutions/package.dhall@, and whose bodies are closed.
 --
--- This is *not* the customer shape. Use 'manyCollidingSubstitutions' with
--- @substitutions/many_files@ to see as-code resolveSubstitutions cost.
+-- This is *not* the many-import colliding-map shape. Use
+-- 'manyCollidingSubstitutions' with @substitutions/many_files@ to see
+-- as-code resolveSubstitutions cost.
 manyUserSubstitutions :: Dhall.Substitution.Substitutions Parser.Src Void
 manyUserSubstitutions =
     Dhall.Map.fromList
@@ -660,7 +692,7 @@ withManyUserSubstitutions :: Dhall.InputSettings -> Dhall.InputSettings
 withManyUserSubstitutions =
     Lens.Micro.set Dhall.substitutions manyUserSubstitutions
 
--- | Customer-shaped map: many keys, large values. Every 10th value has a
+-- | Many-import colliding map: many keys, large values. Every 10th value has a
 -- free @a@ (must shift at @let a@); the rest are closed (plan (1) must
 -- skip them). Values are large so skipping / memoizing shift is visible;
 -- the previous 5-field records were cheaper than tasty-bench noise.
@@ -737,6 +769,86 @@ withOptionalManyFilesTree False k =
 withOptionalManyFilesTree True k =
     Temp.withSystemTempDirectory "dhall-substitutions-many-files" $ \dir -> do
         timed "substitutions.many_files: generate" (writeManyFilesFixture dir)
+        k (Just dir)
+
+-- | Module / key count for the composer_proxy fixture.
+composerProxyModuleCount :: Int
+composerProxyModuleCount = 400
+
+-- | Fat record width so @Dhall.Map@ / denote / typecheck dominate over tiny
+-- @let a = i@ modules.
+composerProxyFieldCount :: Int
+composerProxyFieldCount = 64
+
+-- | Closed @UserType*@ map: large record *types* referenced by each module.
+-- Values are closed so the fixture stays well-typed after substitution (unlike
+-- @manyCollidingSubstitutions@, which injects free @a@ for shift-cost probes).
+composerProxySubstitutions :: Dhall.Substitution.Substitutions Parser.Src Void
+composerProxySubstitutions =
+    Dhall.Map.fromList
+        [ (name, composerProxyRecordType)
+        | i <- [0 .. composerProxyModuleCount - 1]
+        , let name = "UserType" <> Text.pack (printf "%03d" i)
+        ]
+
+composerProxyRecordType :: Core.Expr Parser.Src Void
+composerProxyRecordType =
+    Core.Record
+        (Dhall.Map.fromList
+            [ (fieldName, Core.makeRecordField Core.Natural)
+            | i <- [0 .. composerProxyFieldCount - 1]
+            , let fieldName = "f" <> Text.pack (printf "%03d" i)
+            ]
+        )
+
+withComposerProxySubstitutions :: Dhall.InputSettings -> Dhall.InputSettings
+withComposerProxySubstitutions =
+    Lens.Micro.set Dhall.substitutions composerProxySubstitutions
+
+-- | Write the composer_proxy package into @root@ (temp dir). Not timed.
+--
+-- Each module is a fat Natural record under a shared @UserType000@ binder so
+-- the package is a well-typed homogeneous list. The Haskell-API map still has
+-- one key per module (fingerprint / @resolveSubstitutions@ size).
+writeComposerProxyFixture :: FilePath -> IO ()
+writeComposerProxyFixture root = do
+    let modsDir = root </> "mods"
+    Directory.createDirectoryIfMissing True modsDir
+    mapM_ writeModule [0 .. composerProxyModuleCount - 1]
+    Text.IO.writeFile (root </> "package.dhall") packageSource
+    Text.IO.writeFile (root </> "pipeline-code.dhall") "./package.dhall\n"
+    Text.IO.writeFile
+        (root </> "pipeline-source.dhall")
+        "./package.dhall as Source\n"
+  where
+    writeModule i = do
+        let path = root </> "mods" </> printf "m%03d.dhall" i
+            -- Shared binder type so @package.dhall@ is a homogeneous list.
+            fields =
+                [ "  , f" <> Text.pack (printf "%03d" (j :: Int)) <> " = 0"
+                | j <- [1 .. composerProxyFieldCount - 1]
+                ]
+            body =
+                Text.unlines $
+                    "\\(_ : UserType000) ->"
+                        : ("  { f000 = " <> Text.pack (show i))
+                        : fields
+                        ++ ["  }"]
+        Text.IO.writeFile path body
+
+    packageSource =
+        let rows =
+                [ "    ./mods/" <> Text.pack (printf "m%03d.dhall" (i :: Int))
+                | i <- [0 .. composerProxyModuleCount - 1]
+                ]
+        in  "[\n" <> Text.intercalate ",\n" rows <> "\n]\n"
+
+withOptionalComposerProxyTree :: Bool -> (Maybe FilePath -> IO a) -> IO a
+withOptionalComposerProxyTree False k =
+    k Nothing
+withOptionalComposerProxyTree True k =
+    Temp.withSystemTempDirectory "dhall-substitutions-composer-proxy" $ \dir -> do
+        timed "substitutions.composer_proxy: generate" (writeComposerProxyFixture dir)
         k (Just dir)
 
 k8sLabels :: String -> [String]
@@ -1201,6 +1313,10 @@ main = do
             any (couldMatch mPattern) substitutionsManyFilesCodeLabels
     let wantSubstitutionsManyFilesSource =
             any (couldMatch mPattern) substitutionsManyFilesSourceLabels
+    let wantComposerProxyCode =
+            any (couldMatch mPattern) composerProxyCodeLabels
+    let wantComposerProxySource =
+            any (couldMatch mPattern) composerProxySourceLabels
     let wantShiftCost =
             any (couldMatch mPattern) substitutionsShiftCostLabels
     let wantNfSizeWalk =
@@ -1208,123 +1324,158 @@ main = do
 
     withOptionalManyFilesTree
         (wantSubstitutionsManyFilesCode || wantSubstitutionsManyFilesSource)
-        $ \manyFilesRoot -> do
-            substitutionsManyFilesCode <-
-                case (wantSubstitutionsManyFilesCode, manyFilesRoot) of
-                    (True, Just dir) ->
-                        Just
-                            <$> loadColdResolveBenchWithSettings
-                                "substitutions.many_files.as_code"
-                                dir
-                                "pipeline-code.dhall"
-                                withManyCollidingSubstitutions
-                    _ -> do
-                        say "Skipping substitutions.many_files.as_code (does not match pattern)"
-                        pure Nothing
+        $ \manyFilesRoot ->
+            withOptionalComposerProxyTree
+                (wantComposerProxyCode || wantComposerProxySource)
+                $ \composerProxyRoot -> do
+                    substitutionsManyFilesCode <-
+                        case (wantSubstitutionsManyFilesCode, manyFilesRoot) of
+                            (True, Just dir) ->
+                                Just
+                                    <$> loadColdResolveBenchWithSettings
+                                        "substitutions.many_files.as_code"
+                                        dir
+                                        "pipeline-code.dhall"
+                                        withManyCollidingSubstitutions
+                            _ -> do
+                                say "Skipping substitutions.many_files.as_code (does not match pattern)"
+                                pure Nothing
 
-            substitutionsManyFilesSource <-
-                case (wantSubstitutionsManyFilesSource, manyFilesRoot) of
-                    (True, Just dir) ->
-                        Just
-                            <$> loadColdResolveBenchWithSettings
-                                "substitutions.many_files.as_source"
-                                dir
-                                "pipeline-source.dhall"
-                                withManyCollidingSubstitutions
-                    _ -> do
-                        say "Skipping substitutions.many_files.as_source (does not match pattern)"
-                        pure Nothing
+                    substitutionsManyFilesSource <-
+                        case (wantSubstitutionsManyFilesSource, manyFilesRoot) of
+                            (True, Just dir) ->
+                                Just
+                                    <$> loadColdResolveBenchWithSettings
+                                        "substitutions.many_files.as_source"
+                                        dir
+                                        "pipeline-source.dhall"
+                                        withManyCollidingSubstitutions
+                            _ -> do
+                                say "Skipping substitutions.many_files.as_source (does not match pattern)"
+                                pure Nothing
 
-            say "Starting tasty-bench…"
+                    composerProxyCode <-
+                        case (wantComposerProxyCode, composerProxyRoot) of
+                            (True, Just dir) ->
+                                Just
+                                    <$> loadColdResolveBenchWithSettings
+                                        "substitutions.composer_proxy.as_code"
+                                        dir
+                                        "pipeline-code.dhall"
+                                        withComposerProxySubstitutions
+                            _ -> do
+                                say "Skipping substitutions.composer_proxy.as_code (does not match pattern)"
+                                pure Nothing
 
-            defaultMain $ concat
-                [ [ bgroup
-                      "normalize"
-                      [ bgroup
-                          name
-                          [ bench "typecheck" (nf typecheckResolvedExpr expression)
-                          , bench "evaluation" (nf normalizeResolvedExpr expression)
+                    composerProxySource <-
+                        case (wantComposerProxySource, composerProxyRoot) of
+                            (True, Just dir) ->
+                                Just
+                                    <$> loadColdResolveBenchWithSettings
+                                        "substitutions.composer_proxy.as_source"
+                                        dir
+                                        "pipeline-source.dhall"
+                                        withComposerProxySubstitutions
+                            _ -> do
+                                say "Skipping substitutions.composer_proxy.as_source (does not match pattern)"
+                                pure Nothing
+
+                    say "Starting tasty-bench…"
+
+                    defaultMain $ concat
+                        [ [ bgroup
+                              "normalize"
+                              [ bgroup
+                                  name
+                                  [ bench "typecheck" (nf typecheckResolvedExpr expression)
+                                  , bench "evaluation" (nf normalizeResolvedExpr expression)
+                                  ]
+                              | (name, expression) <- examples
+                              ]
                           ]
-                      | (name, expression) <- examples
-                      ]
-                  ]
-                , [ bgroup "large1"
-                      [ bench "parse" (nf (parseLarge1 large1MainPath) large1Text)
-                      , bench "resolve" (nfAppIO (resolveWithoutCache large1Settings) large1Parsed)
-                      , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
-                      , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
-                      ]
-                  | Just (large1Text, large1Parsed, large1Resolved) <- [large1]
-                  ]
-                , [ bgroup "large2"
-                      [ bench "normalize" (nf normalizeResolvedExpr large2Resolved)
-                      , bgroup
-                            "cbor"
-                            [ bench "encode" (nf encodeNormalized large2Normalized)
-                            , bench "decode" (nf decodeNormalized large2Encoded)
-                            ]
-                      ]
-                  | Just (large2Resolved, large2Normalized, large2Encoded) <- [large2]
-                  ]
-                , [ bgroup
-                      "k8s"
-                      [ bgroup
-                          name
-                          [ bench "resolve" (nfAppIO (resolveWithoutCache settings) parsed)
-                          , bench "typecheck" (nf typecheckResolvedExpr resolved)
-                          , bench "evaluation" (nf normalizeResolvedExpr resolved)
+                        , [ bgroup "large1"
+                              [ bench "parse" (nf (parseLarge1 large1MainPath) large1Text)
+                              , bench "resolve" (nfAppIO (resolveWithoutCache large1Settings) large1Parsed)
+                              , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
+                              , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
+                              ]
+                          | Just (large1Text, large1Parsed, large1Resolved) <- [large1]
                           ]
-                      | (name, settings, parsed, resolved) <- k8sExamples
-                      ]
-                  | not (null k8sExamples)
-                  ]
-                , [ pipelineBenchGroup large3Bench
-                  | Just large3Bench <- [large3]
-                  ]
-                , [ pipelineBenchGroup large3SourceBench
-                  | Just large3SourceBench <- [large3Source]
-                  ]
-                , [ pipelineBenchGroup large3GetConfigBench
-                  | Just large3GetConfigBench <- [large3GetConfig]
-                  ]
-                , [ pipelineBenchGroup large3GetConfigAsSourceBench
-                  | Just large3GetConfigAsSourceBench <- [large3GetConfigAsSource]
-                  ]
-                , [ pipelineBenchGroup large4Bench
-                  | Just large4Bench <- [large4]
-                  ]
-                , [ pipelineBenchGroup large4SourceBench
-                  | Just large4SourceBench <- [large4Source]
-                  ]
-                , [ pipelineBenchGroup large5CodeBench
-                  | Just large5CodeBench <- [large5Code]
-                  ]
-                , [ pipelineBenchGroup large5SourceBench
-                  | Just large5SourceBench <- [large5Source]
-                  ]
-                , map pipelineBenchGroup large6Variants
-                , map coldResolveBenchGroup large6ColdResolveVariants
-                , [ coldResolveBenchGroup preludeImportCodeBench
-                  | Just preludeImportCodeBench <- [preludeImportCode]
-                  ]
-                , [ coldResolveBenchGroup preludeImportSourceBench
-                  | Just preludeImportSourceBench <- [preludeImportSource]
-                  ]
-                , [ substitutionsColdResolveBenchGroup substitutionsCodeBench
-                  | Just substitutionsCodeBench <- [substitutionsCode]
-                  ]
-                , [ substitutionsColdResolveBenchGroup substitutionsSourceBench
-                  | Just substitutionsSourceBench <- [substitutionsSource]
-                  ]
-                , [ substitutionsColdResolveBenchGroup substitutionsManyFilesCodeBench
-                  | Just substitutionsManyFilesCodeBench <- [substitutionsManyFilesCode]
-                  ]
-                , [ substitutionsColdResolveBenchGroup substitutionsManyFilesSourceBench
-                  | Just substitutionsManyFilesSourceBench <- [substitutionsManyFilesSource]
-                  ]
-                , [ shiftCostBenchGroup | wantShiftCost ]
-                , [ nfSizeWalkBenchGroup | wantNfSizeWalk ]
-                ]
+                        , [ bgroup "large2"
+                              [ bench "normalize" (nf normalizeResolvedExpr large2Resolved)
+                              , bgroup
+                                    "cbor"
+                                    [ bench "encode" (nf encodeNormalized large2Normalized)
+                                    , bench "decode" (nf decodeNormalized large2Encoded)
+                                    ]
+                              ]
+                          | Just (large2Resolved, large2Normalized, large2Encoded) <- [large2]
+                          ]
+                        , [ bgroup
+                              "k8s"
+                              [ bgroup
+                                  name
+                                  [ bench "resolve" (nfAppIO (resolveWithoutCache settings) parsed)
+                                  , bench "typecheck" (nf typecheckResolvedExpr resolved)
+                                  , bench "evaluation" (nf normalizeResolvedExpr resolved)
+                                  ]
+                              | (name, settings, parsed, resolved) <- k8sExamples
+                              ]
+                          | not (null k8sExamples)
+                          ]
+                        , [ pipelineBenchGroup large3Bench
+                          | Just large3Bench <- [large3]
+                          ]
+                        , [ pipelineBenchGroup large3SourceBench
+                          | Just large3SourceBench <- [large3Source]
+                          ]
+                        , [ pipelineBenchGroup large3GetConfigBench
+                          | Just large3GetConfigBench <- [large3GetConfig]
+                          ]
+                        , [ pipelineBenchGroup large3GetConfigAsSourceBench
+                          | Just large3GetConfigAsSourceBench <- [large3GetConfigAsSource]
+                          ]
+                        , [ pipelineBenchGroup large4Bench
+                          | Just large4Bench <- [large4]
+                          ]
+                        , [ pipelineBenchGroup large4SourceBench
+                          | Just large4SourceBench <- [large4Source]
+                          ]
+                        , [ pipelineBenchGroup large5CodeBench
+                          | Just large5CodeBench <- [large5Code]
+                          ]
+                        , [ pipelineBenchGroup large5SourceBench
+                          | Just large5SourceBench <- [large5Source]
+                          ]
+                        , map pipelineBenchGroup large6Variants
+                        , map coldResolveBenchGroup large6ColdResolveVariants
+                        , [ coldResolveBenchGroup preludeImportCodeBench
+                          | Just preludeImportCodeBench <- [preludeImportCode]
+                          ]
+                        , [ coldResolveBenchGroup preludeImportSourceBench
+                          | Just preludeImportSourceBench <- [preludeImportSource]
+                          ]
+                        , [ substitutionsColdResolveBenchGroup substitutionsCodeBench
+                          | Just substitutionsCodeBench <- [substitutionsCode]
+                          ]
+                        , [ substitutionsColdResolveBenchGroup substitutionsSourceBench
+                          | Just substitutionsSourceBench <- [substitutionsSource]
+                          ]
+                        , [ substitutionsColdResolveBenchGroup substitutionsManyFilesCodeBench
+                          | Just substitutionsManyFilesCodeBench <- [substitutionsManyFilesCode]
+                          ]
+                        , [ substitutionsColdResolveBenchGroup substitutionsManyFilesSourceBench
+                          | Just substitutionsManyFilesSourceBench <- [substitutionsManyFilesSource]
+                          ]
+                        , [ composerProxyEndToEndBenchGroup composerProxyCodeBench
+                          | Just composerProxyCodeBench <- [composerProxyCode]
+                          ]
+                        , [ composerProxyEndToEndBenchGroup composerProxySourceBench
+                          | Just composerProxySourceBench <- [composerProxySource]
+                          ]
+                        , [ shiftCostBenchGroup | wantShiftCost ]
+                        , [ nfSizeWalkBenchGroup | wantNfSizeWalk ]
+                        ]
  where
    -- These helpers reduce polymorphism in TypeCheck.typeOf and Core.normalize.
    -- Type-check failures must throw so tasty-bench reports FAIL instead of OK.
@@ -1356,6 +1507,16 @@ main = do
        bgroup (crbGroupLabel fixture)
            [ bench coldResolveBenchName
                (nfAppIO (resolveWithSettingsCold (crbSettings fixture)) (crbParsed fixture))
+           ]
+
+   composerProxyEndToEndBenchGroup :: ColdResolveBench -> Benchmark
+   composerProxyEndToEndBenchGroup fixture =
+       bgroup (crbGroupLabel fixture)
+           [ bench composerProxyEndToEndBenchName
+               (nfAppIO
+                   (resolveTypecheckNormalizeCold (crbSettings fixture))
+                   (crbParsed fixture)
+               )
            ]
 
    -- | Same substitution map and @let a@/@let x@ shape as many_files modules,

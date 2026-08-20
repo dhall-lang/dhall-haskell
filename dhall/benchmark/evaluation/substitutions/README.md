@@ -56,12 +56,27 @@ binder, no root-shift memo). `optimized` is an in-harness copy of
 expressions). Both copies live in the harness so this group compiles before
 those helpers exist in `Dhall.Substitution`.
 
+## 4. Synthetic substitution-heavy end-to-end (`substitutions.composer_proxy.*`)
+
+Many fat imports, a large `InputSettings` substitution map, and cold
+resolve → typecheck → normalize. See `composer_proxy/README.md`.
+
+| Group | Benchmark |
+|-------|-----------|
+| `substitutions.composer_proxy.as_code` | `end_to_end_cold` |
+| `substitutions.composer_proxy.as_source` | `end_to_end_cold` |
+
+```sh
+stack bench evaluation --ba '--pattern substitutions.composer_proxy'
+```
+
 ## Harness
 
-The four import groups are **Mode B**: parse-only prep; each sample uses a
-fresh `XDG_CACHE_HOME` and `Dhall.resolveWithSettings` (the library path
-that applies substitutions, not `Import.loadWithStatus` alone).
+The nested-let and many_files import groups are **Mode B**: parse-only prep;
+each sample uses a fresh `XDG_CACHE_HOME` and `Dhall.resolveWithSettings`.
 `shift_cost` is not Mode B — it never touches the importer.
+`composer_proxy` is **Mode D** (resolve + typecheck + normalize under a fresh
+cache).
 
 | Group | Benchmark |
 |-------|-----------|
@@ -69,12 +84,15 @@ that applies substitutions, not `Import.loadWithStatus` alone).
 | `substitutions.as_source` | `resolve_cold_cache_on` |
 | `substitutions.many_files.as_code` | `resolve_cold_cache_on` |
 | `substitutions.many_files.as_source` | `resolve_cold_cache_on` |
+| `substitutions.composer_proxy.as_code` | `end_to_end_cold` |
+| `substitutions.composer_proxy.as_source` | `end_to_end_cold` |
 | `substitutions.shift_cost.naive` | pure `nf` (in-harness `substituteManyNaive`) |
 | `substitutions.shift_cost.optimized` | pure `nf` (in-harness `substituteManyFromRoot`) |
 
 ```sh
 stack bench evaluation --ba '--pattern substitutions'
 stack bench evaluation --ba '--pattern substitutions.many_files'
+stack bench evaluation --ba '--pattern substitutions.composer_proxy'
 stack bench evaluation --ba '--pattern substitutions.shift_cost'
 ```
 
