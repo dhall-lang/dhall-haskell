@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -9,6 +10,7 @@ module Dhall.Import.HTTP
     ) where
 
 import Control.Exception                (Exception)
+import Control.Monad                    (join)
 import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
@@ -29,8 +31,10 @@ import Dhall.Core
     , URL (..)
     )
 import Dhall.Import.Types
+    hiding (newManager)
 import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
+import Lens.Micro.Mtl                   (assign, use)
 import System.Directory                 (getXdgDirectory, XdgDirectory(XdgConfig))
 import System.FilePath                  (splitDirectories)
 
@@ -38,11 +42,11 @@ import System.FilePath                  (splitDirectories)
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..))
 
 import qualified Control.Exception
-import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.ByteString.Lazy             as ByteString.Lazy
 import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding
+import qualified Dhall.Import.Types
 import qualified Dhall.Util
 import qualified Network.HTTP.Client              as HTTP
 import qualified Network.HTTP.Types
@@ -164,18 +168,9 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
 
 newManager :: StateT Status IO Manager
 newManager = do
-    Status { _manager = oldManager, ..} <- State.get
-
-    case oldManager of
-        Nothing -> do
-            manager <- liftIO _newManager
-
-            State.put (Status { _manager = Just manager , ..})
-
-            return manager
-
-        Just manager ->
-            return manager
+    manager <- liftIO =<< use Dhall.Import.Types.newManager
+    assign Dhall.Import.Types.newManager (return manager)
+    return manager
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
@@ -311,9 +306,7 @@ addHeaders originHeaders urlHeaders request =
 fetchFromHttpUrlBytes
     :: URL -> Maybe [HTTPHeader] -> StateT Status IO ByteString
 fetchFromHttpUrlBytes childURL mheaders = do
-    Status { _loadOriginHeaders } <- State.get
-
-    originHeaders <- _loadOriginHeaders
+    originHeaders <- join (use Dhall.Import.Types.loadOriginHeaders)
 
     manager <- newManager
 
@@ -331,9 +324,7 @@ fetchFromHttpUrlBytes childURL mheaders = do
 
     response <- liftIO (Control.Exception.handle handler io)
 
-    Status {..} <- State.get
-
-    case _stack of
+    use Dhall.Import.Types.stack >>= \case
         -- We ignore the first import in the stack since that is the same import
         -- as the `childUrl`
         _ :| Chained parentImport : _ -> do

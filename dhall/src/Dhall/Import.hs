@@ -121,7 +121,7 @@ module Dhall.Import (
     , Manager
     , defaultNewManager
     , CacheWarning(..)
-    , Status(..)
+    , Status
     , SemanticCacheMode(..)
     , Chained
     , chainedImport
@@ -147,6 +147,8 @@ module Dhall.Import (
     , normalizer
     , startingContext
     , reportWarning
+    , semanticCacheMode
+    , getHomeDirectory
     , chainImport
     , dependencyToFile
     , ImportSemantics
@@ -211,7 +213,7 @@ import Dhall.Import.Headers
     , toHeaders
     , toOriginHeaders
     )
-import Dhall.Import.Types
+import Dhall.Import.Types hiding (newManager)
 
 import Dhall.Parser
     ( ParseError (..)
@@ -219,7 +221,7 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
-import Lens.Micro.Mtl (zoom)
+import Lens.Micro.Mtl (assign, modifying, use, zoom)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
@@ -244,6 +246,7 @@ import qualified Dhall.Pretty.Internal
 import qualified Dhall.Substitution
 import qualified Dhall.Syntax                                as Syntax
 import qualified Dhall.TypeCheck
+import qualified Lens.Micro                                  as Lens
 import qualified System.AtomicWrite.Writer.ByteString.Binary as AtomicWrite.Binary
 import qualified System.Directory                            as Directory
 import qualified System.Environment
@@ -373,6 +376,11 @@ instance Show MissingImports where
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
 
+throwMissingImportM :: (Exception e, MonadCatch m, MonadState Status m) => e -> m a
+throwMissingImportM e = do
+    importStack <- use stack
+    throwMissingImport (Imported importStack e)
+
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
 data CannotImportHTTPURL =
@@ -481,14 +489,14 @@ localToPath :: MonadIO io => FilePrefix -> File -> io FilePath
 localToPath = localToPathWith Directory.getHomeDirectory
 
 localToPathWith :: MonadIO io => IO FilePath -> FilePrefix -> File -> io FilePath
-localToPathWith getHomeDirectory prefix file_ = liftIO $ do
+localToPathWith getHome prefix file_ = liftIO $ do
     let File {..} = file_
 
     let Directory {..} = directory
 
     prefixPath <- case prefix of
         Home ->
-            getHomeDirectory
+            getHome
 
         Absolute ->
             return "/"
@@ -527,9 +535,9 @@ preserveChainedImport :: Chained -> StateT Status IO Import
 preserveChainedImport child@(Chained import_) =
     case importType (importHashed import_) of
         Local prefix file -> do
-            Status { _getHomeDirectory } <- State.get
+            home <- use getHomeDirectory
 
-            path <- liftIO (localToPathWith _getHomeDirectory prefix file)
+            path <- liftIO (localToPathWith home prefix file)
             absolutePath <- liftIO (Directory.makeAbsolute path)
 
             let rootRelativePath = FilePath.makeRelative "/" absolutePath
@@ -578,13 +586,13 @@ chainImport (Chained parent) child =
 --   cache already.
 loadImport :: Chained -> StateT Status IO ImportSemantics
 loadImport import_ = do
-    Status {..} <- State.get
+    cached <- use cache
 
-    case Dhall.Map.lookup import_ _cache of
+    case Dhall.Map.lookup import_ cached of
         Just importSemantics -> return importSemantics
         Nothing -> do
             importSemantics <- loadImportWithSemanticCache import_
-            zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
+            modifying cache (Dhall.Map.insert import_ importSemantics)
             return importSemantics
 
 -- | Force an import result to a normal form when a later path requires one
@@ -594,10 +602,10 @@ ensureNormalized _ importSemantics@ImportSemantics
     { importNormalizationStatus = AlreadyNormalized } =
         return importSemantics
 ensureNormalized import_ ImportSemantics { importSemantics } = do
-    Status { _normalizer } <- State.get
+    currentNormalizer <- use normalizer
 
     normalized <-
-        liftIO (Exception.evaluate (Core.normalizeWith _normalizer importSemantics))
+        liftIO (Exception.evaluate (Core.normalizeWith currentNormalizer importSemantics))
 
     let normalizedSemantics =
             ImportSemantics
@@ -605,7 +613,7 @@ ensureNormalized import_ ImportSemantics { importSemantics } = do
                 , importNormalizationStatus = AlreadyNormalized
                 }
 
-    zoom cache (State.modify (Dhall.Map.insert import_ normalizedSemantics))
+    modifying cache (Dhall.Map.insert import_ normalizedSemantics)
 
     return normalizedSemantics
 
@@ -616,12 +624,14 @@ ensureNormalized import_ ImportSemantics { importSemantics } = do
 --   `as Source` hashes match the expanded import-free expression.
 cacheProductHash :: Import -> StateT Status IO Dhall.Crypto.SHA256Digest
 cacheProductHash import_ = do
-    Status { _reportWarning, _stack } <- State.get
-    parent :| _ <- zoom stack State.get
+    importStack <- use stack
+    let parent :| _ = importStack
     child <- chainImport parent import_
-    let stackWithChild = NonEmpty.cons child _stack
+    let stackWithChild = NonEmpty.cons child importStack
 
-    zoom stack (State.put stackWithChild)
+    assign stack stackWithChild
+
+    reporter <- use reportWarning
 
     semanticHash <- case importMode import_ of
         Source -> do
@@ -631,7 +641,7 @@ cacheProductHash import_ = do
 
             let semanticHash = Dhall.Crypto.sha256Hash bytes
 
-            zoom cacheWarning (writeToSemanticCache _reportWarning semanticHash bytes)
+            zoom cacheWarning (writeToSemanticCache reporter semanticHash bytes)
 
             return semanticHash
 
@@ -646,11 +656,11 @@ cacheProductHash import_ = do
 
             let semanticHash = Dhall.Crypto.sha256Hash bytes
 
-            zoom cacheWarning (writeToSemanticCache _reportWarning semanticHash bytes)
+            zoom cacheWarning (writeToSemanticCache reporter semanticHash bytes)
 
             return semanticHash
 
-    zoom stack (State.put _stack)
+    assign stack importStack
 
     return semanticHash
 
@@ -718,9 +728,9 @@ trySourceOpportunisticCacheFill frozenImportResolutionMode left fallbackBranch r
                 | expectedMode == Source
                 , frozenImportResolutionMode == PreserveHashedImports
                 , branchContainsSourceImport fallbackBranch -> do
-                    Status { _reportWarning, _semanticCacheMode } <- State.get
+                    cacheMode <- use semanticCacheMode
 
-                    case _semanticCacheMode of
+                    case cacheMode of
                         IgnoreSemanticCache ->
                             return ()
 
@@ -732,9 +742,10 @@ trySourceOpportunisticCacheFill frozenImportResolutionMode left fallbackBranch r
 
                             let actualHash = Dhall.Crypto.sha256Hash bytes
 
-                            when (actualHash == expectedHash) $
+                            when (actualHash == expectedHash) $ do
+                                reporter <- use reportWarning
                                 zoom cacheWarning
-                                    (writeToSemanticCache _reportWarning expectedHash bytes)
+                                    (writeToSemanticCache reporter expectedHash bytes)
             _ ->
                 return ()
 
@@ -800,8 +811,6 @@ loadImportWithSemanticCache
         Nothing -> fetch
   where
     fetch = do
-        Status{ _reportWarning, _stack } <- State.get
-
         ImportSemantics{ importSemantics } <- loadImportWithSemisemanticCache import_
 
         let bytes = encodeExpression importSemantics
@@ -812,9 +821,10 @@ loadImportWithSemanticCache
 
         if actualHash == expectedHash
             then do
-                zoom cacheWarning (writeToSemanticCache _reportWarning semanticHash bytes)
+                reporter <- use reportWarning
+                zoom cacheWarning (writeToSemanticCache reporter semanticHash bytes)
             else
-                throwMissingImport (Imported _stack HashMismatch{..})
+                throwMissingImportM HashMismatch{..}
 
         return
             ( ImportSemantics
@@ -862,7 +872,7 @@ loadImportWithSemanticCache
         Nothing -> fetch
     where
         fetch = do
-            Status{ _reportWarning } <- State.get
+            reporter <- use reportWarning
 
             importSemantics0 <- loadImportWithSemisemanticCache import_
             ImportSemantics{ importSemantics } <-
@@ -876,12 +886,10 @@ loadImportWithSemanticCache
 
             if actualHash == expectedHash
                 then do
-                    zoom cacheWarning (writeToSemanticCache _reportWarning semanticHash bytes)
+                    zoom cacheWarning (writeToSemanticCache reporter semanticHash bytes)
 
-                else do
-                    Status{ _stack } <- State.get
-
-                    throwMissingImport (Imported _stack HashMismatch{..})
+                else
+                    throwMissingImportM HashMismatch{..}
 
             return
                 ( ImportSemantics
@@ -936,17 +944,17 @@ writeToSemanticCache report hash bytes = do
 applyStatusSubstitutions
     :: Expr Src Void -> StateT Status IO (Expr Src Void)
 applyStatusSubstitutions expression = do
-    Status { _substitutions, _resolvedSubstitutions } <- State.get
+    rawSubstitutions <- use substitutions
+    cachedResolved <- use resolvedSubstitutions
 
-    resolved <- case _resolvedSubstitutions of
+    resolved <- case cachedResolved of
         Just cached ->
             return cached
         Nothing -> do
             let cached =
-                    Dhall.Substitution.resolveSubstitutions _substitutions
+                    Dhall.Substitution.resolveSubstitutions rawSubstitutions
 
-            State.modify
-                (\s -> s { _resolvedSubstitutions = Just cached })
+            assign resolvedSubstitutions (Just cached)
 
             return cached
 
@@ -1235,9 +1243,9 @@ edgeHashOf child =
         Just integrityHash ->
             return integrityHash
         Nothing -> do
-            Status { _merkleHashCache } <- State.get
+            cachedHashes <- use merkleHashCache
 
-            case Dhall.Map.lookup child _merkleHashCache of
+            case Dhall.Map.lookup child cachedHashes of
                 Just merkleHash ->
                     return merkleHash
                 Nothing ->
@@ -1453,16 +1461,16 @@ loadSourceChild child@(Chained import_) =
 loadSourceChildSemanticsWithoutTypecheck
     :: Chained -> StateT Status IO ImportSemantics
 loadSourceChildSemanticsWithoutTypecheck sourceChild = do
-    Status { _cache } <- State.get
+    cached <- use cache
 
-    case Dhall.Map.lookup sourceChild _cache of
+    case Dhall.Map.lookup sourceChild cached of
         Just importSemantics ->
             return importSemantics
 
         Nothing -> do
             sourceArtifact <- loadSourceImportArtifact sourceChild
             importSemantics <- finalizeSourceImportWithoutTypecheck sourceArtifact
-            zoom cache (State.modify (Dhall.Map.insert sourceChild importSemantics))
+            modifying cache (Dhall.Map.insert sourceChild importSemantics)
             return importSemantics
 
 -- | Warm the in-memory import cache for a hashed child during the preserve
@@ -1475,9 +1483,9 @@ prefillSourceImportSemantics importChild = do
     let sourceChild =
             chainedChangeMode Source (chainedRemoveHash importChild)
 
-    Status { _cache } <- State.get
+    cached <- use cache
 
-    case Dhall.Map.lookup sourceChild _cache of
+    case Dhall.Map.lookup sourceChild cached of
         Just _ ->
             return ()
 
@@ -1513,50 +1521,48 @@ writeToSemisemanticCache report semisemanticHash payload = do
 -- | Fetch source code directly from disk/network
 fetchFresh :: ImportType -> StateT Status IO Text
 fetchFresh (Local prefix file) = do
-    Status { _stack, _getHomeDirectory } <- State.get
-    path <- liftIO $ localToPathWith _getHomeDirectory prefix file
+    home <- use getHomeDirectory
+    path <- liftIO $ localToPathWith home prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
         then liftIO $ Data.Text.IO.readFile path
-        else throwMissingImport (Imported _stack (MissingFile path))
+        else throwMissingImportM (MissingFile path)
 
 fetchFresh (Remote url) = do
-    Status { _remote } <- State.get
-    _remote url
+    resolver <- use remote
+    resolver url
 
 fetchFresh (Env env) = do
-    Status { _stack } <- State.get
     x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
         Just string ->
             return (Text.pack string)
         Nothing ->
-                throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+                throwMissingImportM (MissingEnvironmentVariable env)
 
 fetchFresh Missing = throwM (MissingImports [])
 
 -- | Like `fetchFresh`, except for `Dhall.Syntax.Expr.Bytes`
 fetchBytes :: ImportType -> StateT Status IO ByteString
 fetchBytes (Local prefix file) = do
-    Status { _stack, _getHomeDirectory } <- State.get
-    path <- liftIO $ localToPathWith _getHomeDirectory prefix file
+    home <- use getHomeDirectory
+    path <- liftIO $ localToPathWith home prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
         then liftIO $ Data.ByteString.readFile path
-        else throwMissingImport (Imported _stack (MissingFile path))
+        else throwMissingImportM (MissingFile path)
 
 fetchBytes (Remote url) = do
-    Status { _remoteBytes } <- State.get
-    _remoteBytes url
+    resolver <- use remoteBytes
+    resolver url
 
 fetchBytes (Env env) = do
-    Status { _stack } <- State.get
     x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
         Just string ->
             return (Encoding.encodeUtf8 (Text.pack string))
         Nothing ->
-            throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
+            throwMissingImportM (MissingEnvironmentVariable env)
 fetchBytes Missing = throwM (MissingImports [])
 
 parseImportedExpression :: ImportType -> StateT Status IO (Expr Src Import)
@@ -1616,11 +1622,10 @@ fetchRemote :: URL -> StateT Status IO Data.Text.Text
 fetchRemote (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Core.pretty url)
-    Status { _stack } <- State.get
-    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+    throwMissingImportM (CannotImportHTTPURL urlString maybeHeaders)
 #else
 fetchRemote url = do
-    zoom remote (State.put fetchFromHTTP)
+    assign remote fetchFromHTTP
     fetchFromHTTP url
   where
     fetchFromHTTP :: URL -> StateT Status IO Data.Text.Text
@@ -1635,11 +1640,10 @@ fetchRemoteBytes :: URL -> StateT Status IO Data.ByteString.ByteString
 fetchRemoteBytes (url@URL { headers = maybeHeadersExpression }) = do
     let maybeHeaders = fmap toHeaders maybeHeadersExpression
     let urlString = Text.unpack (Core.pretty url)
-    Status { _stack } <- State.get
-    throwMissingImport (Imported _stack (CannotImportHTTPURL urlString maybeHeaders))
+    throwMissingImportM (CannotImportHTTPURL urlString maybeHeaders)
 #else
 fetchRemoteBytes url = do
-    zoom remoteBytes (State.put fetchFromHTTP)
+    assign remoteBytes fetchFromHTTP
     fetchFromHTTP url
   where
     fetchFromHTTP :: URL -> StateT Status IO Data.ByteString.ByteString
@@ -1839,9 +1843,9 @@ getCacheBaseDirectory report = alternative₀ <|> alternative₁ <|> alternative
 -- forms.
 normalizeHeadersIn :: URL -> StateT Status IO URL
 normalizeHeadersIn url@URL { headers = Just headersExpression } = do
-    Status { _stack } <- State.get
+    importStack <- use stack
     loadedExpr <- loadWith headersExpression
-    let handler (e :: SomeException) = throwMissingImport (Imported _stack e)
+    let handler (e :: SomeException) = throwMissingImport (Imported importStack e)
     normalized <- liftIO $ handle handler (normalizeHeaders loadedExpr)
     return url { headers = Just (fmap absurd normalized) }
 
@@ -1896,14 +1900,15 @@ originHeadersLoader headersExpr = do
 
     status <- State.get
 
-    let parentStack = fromMaybe abortEmptyStack (nonEmpty (NonEmpty.tail (_stack status)))
+    let parentStack =
+            fromMaybe abortEmptyStack (nonEmpty (NonEmpty.tail (status Lens.^. stack)))
 
-    let headerLoadStatus = status { _stack = parentStack }
+    let headerLoadStatus = Lens.set stack parentStack status
 
     (headers, _) <- liftIO (State.runStateT doLoad headerLoadStatus)
 
     -- return cached headers next time (strict to prevent space leaks)
-    _ <- State.modify' (\state -> state { _loadOriginHeaders = return headers })
+    _ <- State.modify' (\state -> Lens.set loadOriginHeaders (return headers) state)
 
     return headers
   where
@@ -1983,9 +1988,9 @@ remoteStatusWithManager newManager url =
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr₀ = case expr₀ of
   Embed import₀ -> do
-    Status {..} <- State.get
+    importStack <- use stack
 
-    let parent = NonEmpty.head _stack
+    let parent = NonEmpty.head importStack
 
     child <- chainImport parent import₀
 
@@ -1998,21 +2003,21 @@ loadWith expr₀ = case expr₀ of
 
     if importMode import₀ == Location || referentiallySane
         then return ()
-        else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
+        else throwMissingImportM (ReferentiallyOpaque import₀)
 
-    if child `elem` _stack
-        then throwMissingImport (Imported _stack (Cycle import₀))
+    if child `elem` importStack
+        then throwMissingImportM (Cycle import₀)
         else return ()
 
     zoom graph . State.modify' $
         -- Add the edge `parent -> child` to the import graph (strict to prevent space leaks)
         \edges -> Depends parent child : edges
 
-    let stackWithChild = NonEmpty.cons child _stack
+    let stackWithChild = NonEmpty.cons child importStack
 
-    zoom stack (State.put stackWithChild)
+    assign stack stackWithChild
     ImportSemantics { importSemantics } <- loadImport child
-    zoom stack (State.put _stack)
+    assign stack importStack
 
     return (Core.renote importSemantics)
 
@@ -2063,7 +2068,7 @@ In any expression `p ? q` the opportunistic caching rule says:
               -- populate the semantic cache.
               case findImportHashAndMode a of
                 Just (hash, Source) -> do
-                    Status { _reportWarning } <- State.get
+                    reporter <- use reportWarning
 
                     -- `as Source` cache product is the denoted fallback, not
                     -- a beta-normal form.
@@ -2074,13 +2079,14 @@ In any expression `p ? q` the opportunistic caching rule says:
                     if actualHash == hash
                         then do
                             zoom cacheWarning
-                                (writeToSemanticCache _reportWarning hash bytes)
+                                (writeToSemanticCache reporter hash bytes)
                             return result
                         else
                             return result
 
                 Just (hash, _) -> do
-                    Status { _reportWarning, _normalizer } <- State.get
+                    reporter <- use reportWarning
+                    currentNormalizer <- use normalizer
 
                     -- Delayed unhashed Code inlining can leave `result`
                     -- unnormalized. The semantic cache product is still the
@@ -2088,7 +2094,7 @@ In any expression `p ? q` the opportunistic caching rule says:
                     normalized <-
                         liftIO
                             ( Exception.evaluate
-                                (Core.normalizeWith _normalizer (Core.denote result))
+                                (Core.normalizeWith currentNormalizer (Core.denote result))
                             )
 
                     let bytes = encodeExpression (Core.alphaNormalize normalized)
@@ -2098,7 +2104,7 @@ In any expression `p ? q` the opportunistic caching rule says:
                     if actualHash == hash
                         then do
                             zoom cacheWarning
-                                (writeToSemanticCache _reportWarning hash bytes)
+                                (writeToSemanticCache reporter hash bytes)
 
                             -- A matching fill is the same product a semantic
                             -- cache hit would return: the alpha-beta-normal
@@ -2135,9 +2141,9 @@ In any expression `p ? q` the opportunistic caching rule says:
 loadWithSource :: FrozenImportResolutionMode -> Expr Src Import -> StateT Status IO (Expr Src Import)
 loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
   Embed import₀ -> do
-    Status {..} <- State.get
+    importStack <- use stack
 
-    let parent = NonEmpty.head _stack
+    let parent = NonEmpty.head importStack
 
     child <- chainImport parent import₀
 
@@ -2150,20 +2156,19 @@ loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
 
     if importMode import₀ == Location || referentiallySane
         then return ()
-        else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
+        else throwMissingImportM (ReferentiallyOpaque import₀)
 
-    let _stack' = NonEmpty.cons child _stack
-
-    if child `elem` _stack
-        then throwMissingImport (Imported _stack (Cycle import₀))
+    if child `elem` importStack
+        then throwMissingImportM (Cycle import₀)
         else return ()
 
-    zoom graph . State.modify $
+    -- Add the edge `parent -> child` to the import graph (strict to prevent space leaks)
+    zoom graph . State.modify' $
         \edges -> Depends parent child : edges
 
-    let stackWithChild = NonEmpty.cons child _stack
+    let stackWithChild = NonEmpty.cons child importStack
 
-    zoom stack (State.put stackWithChild)
+    assign stack stackWithChild
     result <- case frozenImportResolutionMode of
         PreserveHashedImports
             | Maybe.isJust (hash (importHashed import₀)) -> do
@@ -2180,7 +2185,7 @@ loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
         InlineHashedImports -> do
             ImportSemantics { importSemantics } <- loadSourceChild child
             return (fmap absurd (Core.renote importSemantics))
-    zoom stack (State.put _stack)
+    assign stack importStack
 
     return result
 
@@ -2248,10 +2253,10 @@ loadWithStatus
     -> SemanticCacheMode
     -> Expr Src Import
     -> IO (Expr Src Void)
-loadWithStatus status semanticCacheMode expression =
+loadWithStatus status cacheMode expression =
     State.evalStateT
         (loadWith expression)
-        status { _semanticCacheMode = semanticCacheMode }
+        (Lens.set semanticCacheMode cacheMode status)
 
 encodeExpression :: Expr Void Void -> Data.ByteString.ByteString
 encodeExpression expression = encodeExpressionWithImports intermediateExpression
@@ -2313,7 +2318,7 @@ assertNoImports expression =
 -}
 dependencyToFile :: Status -> Import -> IO (Maybe FilePath)
 dependencyToFile status import_ = flip State.evalStateT status $ do
-    parent :| _ <- zoom stack State.get
+    parent :| _ <- use stack
 
     child <- fmap chainedImport (hoist liftIO (chainImport parent import_))
 
@@ -2334,10 +2339,10 @@ dependencyToFile status import_ = flip State.evalStateT status $ do
         Code ->
             case importType (importHashed child) of
                 Local filePrefix file -> do
-                    let Status{ _getHomeDirectory } = status
+                    let home = status Lens.^. getHomeDirectory
 
                     let descend = liftIO $ do
-                            path <- localToPathWith _getHomeDirectory filePrefix file
+                            path <- localToPathWith home filePrefix file
 
                             return (Just path)
 
