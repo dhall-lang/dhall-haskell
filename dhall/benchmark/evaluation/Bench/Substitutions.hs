@@ -405,6 +405,10 @@ writeManyFilesFixture root = do
         in  "[\n" <> Text.intercalate ",\n" rows <> "\n]\n"
 
 -- | Keep the generated tree alive through timed resolve samples, then delete it.
+--
+-- The bracket must wrap the Criterion run, not only construction of the
+-- 'Benchmark' list: Mode B samples import @package.dhall@ from this directory
+-- after prep returns.
 withOptionalManyFilesTree :: Bool -> (Maybe FilePath -> IO a) -> IO a
 withOptionalManyFilesTree False k =
     k Nothing
@@ -486,6 +490,8 @@ writeComposerProxyFixture root = do
                 ]
         in  "[\n" <> Text.intercalate ",\n" rows <> "\n]\n"
 
+-- Same lifetime rule as 'withOptionalManyFilesTree': Mode D samples import
+-- from this directory after prep returns.
 withOptionalComposerProxyTree :: Bool -> (Maybe FilePath -> IO a) -> IO a
 withOptionalComposerProxyTree False k =
     k Nothing
@@ -517,8 +523,10 @@ shiftCostBenchGroup =
                 (Core.NaturalPlus (Core.Var "a") (Core.Var "x"))
             )
 
-benchmarks :: Maybe String -> IO [Benchmark]
-benchmarks mPattern = do
+-- | Build substitution benches. The continuation runs while generated
+-- many_files / composer_proxy trees still exist (see 'withOptionalManyFilesTree').
+benchmarks :: Maybe String -> ([Benchmark] -> IO a) -> IO a
+benchmarks mPattern k = do
     let wantSubstitutionsCode = any (couldMatch mPattern) substitutionsCodeLabels
     substitutionsCode <-
         if wantSubstitutionsCode
@@ -616,7 +624,7 @@ benchmarks mPattern = do
                                 say "Skipping substitutions.composer_proxy.as_source (does not match pattern)"
                                 pure Nothing
 
-                    pure $ concat
+                    k $ concat
                         [ [ substitutionsColdResolveBenchGroup fixture
                           | Just fixture <- [substitutionsCode]
                           ]
