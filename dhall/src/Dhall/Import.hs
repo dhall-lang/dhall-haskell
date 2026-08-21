@@ -963,35 +963,50 @@ loadImportWithSemisemanticCache
   :: Chained -> StateT Status IO ImportSemantics
 loadImportWithSemisemanticCache
   import_@(Chained (Import _ Source)) = do
-    sourceArtifact <- loadSourceImportArtifact import_
-    Status { _reportWarning, _normalizer, _stack } <- State.get
+    Status { _reportWarning, _normalizer } <- State.get
 
     let hasCustomNormalizer = isJust _normalizer
 
-    semisemanticHash <-
-        computeSourceArtifactSemisemanticHash import_ sourceArtifact
-
-    mCached <-
+    mMerkleHit <-
         if hasCustomNormalizer
             then return Nothing
-            else zoom cacheWarning
-                    (fetchFromSemisemanticCache _reportWarning semisemanticHash)
+            else tryLoadSourceFromMerkleCache import_
 
-    semantics <- case mCached of
-        Just (SemisemanticSourceProduct bytesStrict)
-            | Just decoded <- decodeSourceProduct bytesStrict ->
-                return decoded
-        _ -> do
-            finalized <- finalizeSourceImport sourceArtifact
+    semantics <- case mMerkleHit of
+        Just hit ->
+            return hit
+        Nothing -> do
+            sourceArtifact <- loadSourceImportArtifact import_
 
-            unless hasCustomNormalizer $ do
-                let bytes = encodeExpression (importSemantics finalized)
-                zoom cacheWarning
-                    (writeToSemisemanticCache
-                        _reportWarning
-                        semisemanticHash
-                        (SemisemanticSourceProduct bytes)
-                    )
+            semisemanticHash <-
+                computeSourceArtifactSemisemanticHash import_ sourceArtifact
+
+            mCached <-
+                if hasCustomNormalizer
+                    then return Nothing
+                    else zoom cacheWarning
+                            (fetchFromSemisemanticCache _reportWarning semisemanticHash)
+
+            finalized <- case mCached of
+                Just (SemisemanticSourceProduct bytesStrict)
+                    | Just decoded <- decodeSourceProduct bytesStrict ->
+                        return decoded
+                _ -> do
+                    computed <- finalizeSourceImport sourceArtifact
+
+                    unless hasCustomNormalizer $ do
+                        let bytes = encodeExpression (importSemantics computed)
+                        zoom cacheWarning
+                            (writeToSemisemanticCache
+                                _reportWarning
+                                semisemanticHash
+                                (SemisemanticSourceProduct bytes)
+                            )
+
+                    return computed
+
+            unless hasCustomNormalizer $
+                writeSourceMerkleCache import_ finalized
 
             return finalized
 
@@ -1313,12 +1328,12 @@ sourceEdgeHashOf child =
     case (importMode (chainedImport child), hash (importHashed (chainedImport child))) of
         (Source, Just integrityHash) ->
             return integrityHash
-        (_, Just _) ->
+        (Code, _) ->
             sourceProductHashOf
                 (chainedChangeMode Source (chainedRemoveHash child))
         (Source, Nothing) ->
             sourceProductHashOf child
-        (_, Nothing) ->
+        _ ->
             edgeHashOf child
 
 sourceProductHashOf :: Chained -> StateT Status IO Dhall.Crypto.SHA256Digest
@@ -1377,6 +1392,186 @@ computeSourceArtifactSemisemanticHash parent sourceArtifact = do
            <> Dhall.Crypto.unSHA256Digest substitutionsHash
             )
         )
+
+sourceMerkleCacheDomain :: Data.ByteString.ByteString
+sourceMerkleCacheDomain = Encoding.encodeUtf8 "source-merkle-v2"
+
+containsImportAlt :: Expr s a -> Bool
+containsImportAlt expr =
+    case Core.shallowDenote expr of
+        ImportAlt _ _ ->
+            True
+        unwrapped ->
+            let FunctorConst.Const found =
+                    Syntax.subExpressions
+                        (\child ->
+                            FunctorConst.Const (Any (containsImportAlt child))
+                        )
+                        unwrapped
+            in  getAny found
+
+chainedIsLocal :: Chained -> Bool
+chainedIsLocal (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
+chainedIsLocal (Chained (Import (ImportHashed _ (Local   {})) _)) = True
+chainedIsLocal (Chained (Import (ImportHashed _ (Env     {})) _)) = True
+chainedIsLocal (Chained (Import (ImportHashed _ (Missing {})) _)) = False
+
+checkSourceMerkleChild :: Import -> Chained -> StateT Status IO ()
+checkSourceMerkleChild import₀ child = do
+    importStack <- use stack
+
+    let parent = NonEmpty.head importStack
+
+    let referentiallySane = not (chainedIsLocal child) || chainedIsLocal parent
+
+    if importMode import₀ == Location || referentiallySane
+        then return ()
+        else throwMissingImportM (ReferentiallyOpaque import₀)
+
+    if child `elem` importStack
+        then throwMissingImportM (Cycle import₀)
+        else return ()
+
+-- | Pre-preserve Source key: parsed syntax with child Source syntax-merkle
+-- keys (not Code integrity hashes). @ImportAlt@ is unsupported: we decline
+-- rather than observe unused branches.
+maybeComputeSourceMerkleHash
+    :: Chained
+    -> Expr Src Import
+    -> StateT Status IO (Maybe Dhall.Crypto.SHA256Digest)
+maybeComputeSourceMerkleHash parent parsedImport
+    | containsImportAlt parsedImport =
+        return Nothing
+    | otherwise = Maybe.runMaybeT $ do
+        skeleton <- maybeReplaceEmbedsWithSourceMerkleHashes parent (Core.denote parsedImport)
+
+        let skeletonHash = hashExpression skeleton
+
+        (contextHash, substitutionsHash) <-
+            Maybe.MaybeT (fmap Just memoizedMerkleFingerprints)
+
+        return
+            ( Dhall.Crypto.sha256Hash
+                ( sourceMerkleCacheDomain
+               <> Dhall.Crypto.unSHA256Digest skeletonHash
+               <> Dhall.Crypto.unSHA256Digest contextHash
+               <> Dhall.Crypto.unSHA256Digest substitutionsHash
+                )
+            )
+
+maybeReplaceEmbedsWithSourceMerkleHashes
+    :: Chained
+    -> Expr Void Import
+    -> Maybe.MaybeT (StateT Status IO) (Expr Void Void)
+maybeReplaceEmbedsWithSourceMerkleHashes parent =
+    Syntax.subExpressionsWith
+        (\childImport -> Maybe.MaybeT $ do
+            child <- chainImport parent childImport
+            checkSourceMerkleChild childImport child
+            mHash <- sourceMerkleChildHash child
+            return (fmap (BytesLit . Dhall.Crypto.unSHA256Digest) mHash)
+        )
+        (maybeReplaceEmbedsWithSourceMerkleHashes parent)
+
+sourceMerkleChildHash :: Chained -> StateT Status IO (Maybe Dhall.Crypto.SHA256Digest)
+sourceMerkleChildHash child =
+    case importMode (chainedImport child) of
+        Code ->
+            sourceSyntaxMerkleKey
+                (chainedChangeMode Source (chainedRemoveHash child))
+        Source ->
+            sourceSyntaxMerkleKey (chainedRemoveHash child)
+        _ ->
+            return Nothing
+
+-- | Syntax merkle key of an unhashed @as Source@ view: parse the file and
+-- recurse. Memoized per run so diamond import graphs stay cheap.
+sourceSyntaxMerkleKey :: Chained -> StateT Status IO (Maybe Dhall.Crypto.SHA256Digest)
+sourceSyntaxMerkleKey sourceChild = do
+    cachedKeys <- use sourceMerkleKeyCache
+
+    case Dhall.Map.lookup sourceChild cachedKeys of
+        Just cached ->
+            return (Just cached)
+        Nothing -> do
+            importStack <- use stack
+
+            if sourceChild `elem` importStack
+                then throwMissingImportM (Cycle (chainedImport sourceChild))
+                else do
+                    assign stack (NonEmpty.cons sourceChild importStack)
+
+                    parsedImport <-
+                        parseImportedExpression
+                            (importType (importHashed (chainedImport sourceChild)))
+
+                    mKey <- maybeComputeSourceMerkleHash sourceChild parsedImport
+
+                    assign stack importStack
+
+                    case mKey of
+                        Nothing ->
+                            return Nothing
+                        Just key -> do
+                            zoom sourceMerkleKeyCache
+                                (State.modify (Dhall.Map.insert sourceChild key))
+                            return (Just key)
+
+tryLoadSourceFromMerkleCache
+    :: Chained -> StateT Status IO (Maybe ImportSemantics)
+tryLoadSourceFromMerkleCache import_@(Chained (Import (ImportHashed _ importType) _)) = do
+    Status { _reportWarning, _normalizer } <- State.get
+
+    if isJust _normalizer
+        then return Nothing
+        else do
+            parsedImport <- parseImportedExpression importType
+
+            mKey <- maybeComputeSourceMerkleHash import_ parsedImport
+
+            case mKey of
+                Nothing ->
+                    return Nothing
+                Just semisemanticHash -> do
+                    mCached <-
+                        zoom cacheWarning
+                            (fetchFromSemisemanticCache _reportWarning semisemanticHash)
+
+                    case mCached of
+                        Just (SemisemanticSourceProduct bytesStrict)
+                            | Just decoded <- decodeSourceProduct bytesStrict -> do
+                                let edgeHash =
+                                        Dhall.Crypto.sha256Hash
+                                            (encodeExpression (importSemantics decoded))
+
+                                zoom merkleHashCache
+                                    (State.modify (Dhall.Map.insert import_ edgeHash))
+
+                                modifying cache (Dhall.Map.insert import_ decoded)
+
+                                return (Just decoded)
+                        _ ->
+                            return Nothing
+
+writeSourceMerkleCache
+    :: Chained -> ImportSemantics -> StateT Status IO ()
+writeSourceMerkleCache import_@(Chained (Import (ImportHashed _ importType) _)) semantics = do
+    parsedImport <- parseImportedExpression importType
+
+    mKey <- maybeComputeSourceMerkleHash import_ parsedImport
+
+    case mKey of
+        Nothing ->
+            return ()
+        Just semisemanticHash -> do
+            reporter <- use reportWarning
+            let bytes = encodeExpression (importSemantics semantics)
+            zoom cacheWarning
+                (writeToSemisemanticCache
+                    reporter
+                    semisemanticHash
+                    (SemisemanticSourceProduct bytes)
+                )
 
 fingerprintStartingContext
     :: Dhall.Context.Context (Expr Src Void) -> Dhall.Crypto.SHA256Digest

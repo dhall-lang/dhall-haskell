@@ -50,6 +50,10 @@ getTests = return
         , testCase "Starting context fingerprint invalidates Source cache" startingContextFingerprintInvalidatesSourceTest
         , testCase "Hash-protected Code child uses Source edge hash" hashedCodeChildUsesSourceEdgeHashTest
         , testCase "Corrupt Source payload is ignored" corruptSourcePayloadIgnoredTest
+        , testCase "Deep Source graph cache hit is stable" deepSourceGraphCacheHitTest
+        , testCase "Overlapping Source parents share children safely" overlappingSourceParentsTest
+        , testCase "ImportAlt falls back to Phase 1" importAltFallsBackTest
+        , testCase "Env import identity invalidates Source cache" envImportInvalidatesSourceCacheTest
         ])
 
 withTempCache :: (FilePath -> IO a) -> IO a
@@ -419,4 +423,99 @@ corruptSourcePayloadIgnoredTest = withTempCache $ \cacheDir ->
         result <- inputSourceFile path
         expected <- Dhall.inputExpr "{ x = 1, y = 2 }"
         assertNormalizedEqual "recompute after corrupt Source payload" expected result
+
+deepSourceGraphCacheHitTest :: IO ()
+deepSourceGraphCacheHitTest = withTempCache $ \cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-deep" $ \dir -> do
+        Text.IO.writeFile (dir </> "leaf.dhall") "1"
+        Text.IO.writeFile (dir </> "child.dhall") "./leaf.dhall"
+        Text.IO.writeFile (dir </> "parent.dhall") "./child.dhall"
+
+        let loadParent = do
+                let settings =
+                        Lens.Micro.set Dhall.sourceName (dir </> "parent.dhall")
+                            ( Lens.Micro.set Dhall.rootDirectory dir
+                                Dhall.defaultInputSettings
+                            )
+                Dhall.inputExprWithSettings settings "./parent.dhall as Source"
+
+        result1 <- loadParent
+        filesAfterFirst <- listCacheFiles cacheDir
+        assertBool "deep Source graph writes cache entries"
+            (not (null filesAfterFirst))
+
+        result2 <- loadParent
+        filesAfterSecond <- listCacheFiles cacheDir
+        expected <- Dhall.inputExpr "1"
+        assertNormalizedEqual "first deep Source load" expected result1
+        assertNormalizedEqual "cached deep Source reload" expected result2
+        assertEqual
+            "reload should not write additional cache files"
+            (length filesAfterFirst)
+            (length filesAfterSecond)
+
+overlappingSourceParentsTest :: IO ()
+overlappingSourceParentsTest = withTempCache $ \_cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-overlap" $ \dir -> do
+        let codeHash = Import.hashExpressionToCode (Core.NaturalLit 1)
+        Text.IO.writeFile (dir </> "leaf.dhall") "1"
+        Text.IO.writeFile
+            (dir </> "hashed-leaf.dhall")
+            ("./leaf.dhall " <> codeHash)
+        Text.IO.writeFile (dir </> "a.dhall") "./hashed-leaf.dhall"
+        Text.IO.writeFile (dir </> "b.dhall") "./hashed-leaf.dhall"
+        Text.IO.writeFile (dir </> "parent.dhall") "[ ./a.dhall, ./b.dhall ]"
+
+        let loadParent = do
+                let settings =
+                        Lens.Micro.set Dhall.sourceName (dir </> "parent.dhall")
+                            ( Lens.Micro.set Dhall.rootDirectory dir
+                                Dhall.defaultInputSettings
+                            )
+                Dhall.inputExprWithSettings settings "./parent.dhall as Source"
+
+        result1 <- loadParent
+        result2 <- loadParent
+        expected <- Dhall.inputExpr "[ 1, 1 ]"
+        assertNormalizedEqual "overlapping Source parents" expected result1
+        assertNormalizedEqual "overlapping Source parents reload" expected result2
+
+importAltFallsBackTest :: IO ()
+importAltFallsBackTest = withTempCache $ \_cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-alt" $ \dir -> do
+        Text.IO.writeFile (dir </> "left-miss.dhall") "./missing.dhall ? 1"
+        Text.IO.writeFile (dir </> "left-win.dhall") "1 ? ./missing.dhall"
+
+        let load name = do
+                let settings =
+                        Lens.Micro.set Dhall.sourceName (dir </> name)
+                            ( Lens.Micro.set Dhall.rootDirectory dir
+                                Dhall.defaultInputSettings
+                            )
+                Dhall.inputExprWithSettings settings
+                    ("./" <> Text.pack name <> " as Source")
+
+        leftFail <- load "left-miss.dhall"
+        leftWin <- load "left-win.dhall"
+        expected <- Dhall.inputExpr "1"
+        assertNormalizedEqual "ImportAlt missing left" expected leftFail
+        assertNormalizedEqual "ImportAlt successful left" expected leftWin
+
+envImportInvalidatesSourceCacheTest :: IO ()
+envImportInvalidatesSourceCacheTest = withTempCache $ \_cacheDir -> do
+    let var = "DHALL_SOURCE_MERKLE_ENV_TEST"
+    original <- Environment.lookupEnv var
+    let restore =
+            maybe (Environment.unsetEnv var) (Environment.setEnv var) original
+
+    bracket (Environment.setEnv var "1") (\_ -> restore) $ \_ -> do
+        result1 <- Dhall.inputExpr "env:DHALL_SOURCE_MERKLE_ENV_TEST as Source"
+        expected1 <- Dhall.inputExpr "1"
+        assertNormalizedEqual "env Source first value" expected1 result1
+
+        Environment.setEnv var "2"
+        result2 <- Dhall.inputExpr "env:DHALL_SOURCE_MERKLE_ENV_TEST as Source"
+        expected2 <- Dhall.inputExpr "2"
+        assertNormalizedEqual "env Source observes change" expected2 result2
+
 
