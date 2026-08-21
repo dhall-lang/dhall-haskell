@@ -145,6 +145,11 @@ data Status = Status
     --   when it is loaded through multiple import modes (e.g. hashed @Code@
     --   validation and unhashed @as Source@ prefill).
 
+    , _sourceMerkleKeyCache :: Map Chained SHA256Digest
+    -- ^ Per-run memo of Phase 2 Source syntax-merkle keys, so overlapping
+    --   import graphs do not re-walk the same child while building a parent
+    --   key.
+
     , _newManager :: IO Manager
     -- ^ How to obtain an HTTP 'Manager'. This is an @IO@ action, not the
     --   manager itself: initially it *creates* a manager (see
@@ -215,6 +220,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _parsedImportCache = Map.empty
 
+    _sourceMerkleKeyCache = Map.empty
+
     _substitutions = Dhall.Substitution.empty
 
     _resolvedSubstitutions = Nothing
@@ -250,6 +257,11 @@ merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
 -- | Lens from a `Status` to its `_parsedImportCache` field
 parsedImportCache :: Lens' Status (Map Text (Expr Src Import))
 parsedImportCache = lens _parsedImportCache (\s x -> s { _parsedImportCache = x })
+
+-- | Lens from a `Status` to its `_sourceMerkleKeyCache` field
+sourceMerkleKeyCache :: Lens' Status (Map Chained SHA256Digest)
+sourceMerkleKeyCache =
+    lens _sourceMerkleKeyCache (\s x -> s { _sourceMerkleKeyCache = x })
 
 -- | Lens from a `Status` to its `_newManager` field.
 --
