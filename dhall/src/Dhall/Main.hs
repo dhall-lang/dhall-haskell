@@ -35,7 +35,6 @@ import Dhall.Import
     ( Depends (..)
     , Imported (..)
     , SemanticCacheMode (..)
-    , _semanticCacheMode
     )
 import Dhall.Package       (PackagingMode (..), writePackage)
 import Dhall.Parser        (Src)
@@ -48,7 +47,7 @@ import Dhall.Pretty
 import Dhall.Schemas       (Schemas (..))
 import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
 import Dhall.Version       (dhallVersionString)
-import Lens.Micro          (set)
+import Lens.Micro          (set, (^.))
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
 import System.Exit         (ExitCode, exitFailure)
@@ -94,7 +93,6 @@ import qualified Dhall.DirectoryTree                as DirectoryTree
 import qualified Dhall.Format
 import qualified Dhall.Freeze
 import qualified Dhall.Import
-import qualified Dhall.Import.Types
 import qualified Dhall.Lint
 import qualified Dhall.Map
 import qualified Dhall.Package
@@ -753,8 +751,12 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            status <-
+                State.execStateT (Dhall.Import.loadWith expression)
+                    (set Dhall.Import.semanticCacheMode semanticCacheMode (toStatus file))
+
+            let _stack = status ^. Dhall.Import.stack
+                _graph = status ^. Dhall.Import.graph
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map parent _graph ++ map child _graph
@@ -789,8 +791,11 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            status <-
+                State.execStateT (Dhall.Import.loadWith expression)
+                    (set Dhall.Import.semanticCacheMode semanticCacheMode (toStatus file))
+
+            let _cache = status ^. Dhall.Import.cache
 
             mapM_ print
                  .   fmap ( Pretty.pretty

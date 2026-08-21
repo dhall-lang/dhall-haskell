@@ -1,368 +1,36 @@
 {-# LANGUAGE OverloadedStrings #-}
-
+--
+-- Evaluation benchmark harness for Dhall import/resolve/typecheck/normalize.
+--
+-- See benchmark/evaluation/README.md for how to read results. Modes:
+--
+--   Mode A (phase): prep resolves with UseSemanticCache; timed resolve uses
+--     IgnoreSemanticCache (semantic off, semisemantic still on); typecheck and
+--     evaluation run on the pre-resolved AST from prep.
+--
+--   Mode B (resolve_cold_cache_on): parse-only prep; each sample uses a fresh
+--     XDG_CACHE_HOME with caches enabled.
+--
+--   Mode D (end_to_end_cold): parse-only prep; each sample uses a fresh
+--     XDG_CACHE_HOME and runs resolveWithSettings → typeOf → normalize.
+--
+--   Mode C (implicit): some as Source large6 costs appear on evaluation, not
+--     resolve. See large6/README.md matrix.
+--
+-- Suites live in Bench.* modules; this file only loads and assembles them.
+--
 module Main where
 
-import Control.Exception  (throw)
-import Data.Char         (toLower)
-import Data.List         (isInfixOf, isPrefixOf, isSuffixOf, sort)
-import Data.Maybe        (listToMaybe, mapMaybe)
-import Data.Text         (Text)
-import Data.Time.Clock   (diffUTCTime, getCurrentTime)
-import Data.Void         (Void)
 import System.Environment (getArgs)
-import System.FilePath   ((</>), takeBaseName, takeDirectory)
-import System.IO         (hFlush, stdout)
-import Text.Printf       (printf)
-import Test.Tasty.Bench
-
-import qualified Data.ByteString.Lazy as ByteString
-import qualified Data.Text            as Text
-import qualified Data.Text.IO         as Text.IO
-import qualified Dhall
-import qualified Dhall.Binary         as Binary
-import qualified Dhall.Core           as Core
-import qualified Dhall.Import         as Import
-import qualified Dhall.Parser         as Parser
-import qualified Dhall.TypeCheck      as TypeCheck
-import qualified Lens.Micro
-import           Lens.Micro           ((^.))
-import qualified System.Directory     as Directory
-
-type ParsedExpr = Core.Expr Parser.Src Core.Import
-type ResolvedExpr = Core.Expr Parser.Src Void
-
-large1Directory :: FilePath
-large1Directory = "benchmark/evaluation/large1"
-
-large1MainPath :: FilePath
-large1MainPath = large1Directory </> "main.dhall"
-
-large1Settings :: Dhall.InputSettings
-large1Settings =
-    Lens.Micro.set Dhall.sourceName large1MainPath
-        (Lens.Micro.set Dhall.rootDirectory large1Directory Dhall.defaultInputSettings)
-
-large2Directory :: FilePath
-large2Directory = "benchmark/evaluation/large2"
-
-large2MainPath :: FilePath
-large2MainPath = large2Directory </> "main.dhall"
-
-large3Directory :: FilePath
-large3Directory = "benchmark/evaluation/large3"
-
-large4Directory :: FilePath
-large4Directory = "benchmark/evaluation/large4"
-
-k8sDirectory :: FilePath
-k8sDirectory = "benchmark/evaluation/k8s"
-
-say :: String -> IO ()
-say msg = putStrLn msg >> hFlush stdout
-
-formatDuration :: Double -> String
-formatDuration seconds
-    | seconds < 0.001 = printf "%.0f μs" (seconds * 1e6)
-    | seconds < 1     = printf "%.1f ms" (seconds * 1e3)
-    | otherwise       = printf "%.2f s" seconds
-
--- | Informational wall-clock timing for preparation steps (not a Criterion bench).
-timed :: String -> IO a -> IO a
-timed label action = do
-    say $ "  " <> label <> "…"
-    start <- getCurrentTime
-    result <- action
-    end <- getCurrentTime
-    let seconds = realToFrac (diffUTCTime end start) :: Double
-    say $ "  " <> label <> ": " <> formatDuration seconds
-    pure result
-
--- | Resolve imports using the normal semantic / semisemantic disk caches.
--- Used only for fixture preparation so large imports (e.g. large1) are not
--- paid cold on every bench run.
-resolveWithCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
-resolveWithCache settings parsed =
-    Import.loadWithStatus
-        ( Dhall.emptyStatusWithSettings
-            (settings ^. Dhall.evaluateSettings)
-            (settings ^. Dhall.rootDirectory)
-        )
-        Import.UseSemanticCache
-        parsed
-
--- | Resolve imports with the semantic disk cache disabled (as with
--- @dhall --no-cache@).  Used for the timed @resolve@ benches.
-resolveWithoutCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
-resolveWithoutCache settings parsed =
-    Import.loadWithStatus
-        ( Dhall.emptyStatusWithSettings
-            (settings ^. Dhall.evaluateSettings)
-            (settings ^. Dhall.rootDirectory)
-        )
-        Import.IgnoreSemanticCache
-        parsed
-
--- | Abort if the expression is ill-typed.  Used at load time so fixtures never
--- report OK timings when type-checking fails.
-ensureWellTyped :: ResolvedExpr -> IO ()
-ensureWellTyped expression =
-    either throw (\_ -> pure ()) (TypeCheck.typeOf expression)
-
--- | Best-effort extract of @-p@ / @--pattern@ from the benchmark argv, so we can
--- skip loading fixtures that tasty-bench would filter out anyway.
-patternFromArgs :: [String] -> Maybe String
-patternFromArgs args =
-    listToMaybe $ mapMaybe match (zip args (drop 1 args)) ++ naked
-  where
-    match ("-p", value)        = Just value
-    match ("--pattern", value) = Just value
-    match _                    = Nothing
-
-    naked =
-        [ drop (length prefix) arg
-        | arg <- args
-        , prefix <- ["--pattern=", "-p="]
-        , prefix `isPrefixOf` arg
-        ]
-
--- | Whether a tasty-style label path could match the user pattern (infix, like
--- tasty's default).  @Nothing@ means no pattern → load everything.
-couldMatch :: Maybe String -> String -> Bool
-couldMatch Nothing _ = True
-couldMatch (Just pat) label =
-    map toLower pat `isInfixOf` map toLower label
-
-normalizeLabels :: String -> [String]
-normalizeLabels name =
-    [ "normalize." <> name
-    , "normalize." <> name <> ".typecheck"
-    , "normalize." <> name <> ".evaluation"
-    ]
-
-large1Labels :: [String]
-large1Labels =
-    [ "large1"
-    , "large1.parse"
-    , "large1.resolve"
-    , "large1.typecheck"
-    , "large1.evaluation"
-    ]
-
-large2Labels :: [String]
-large2Labels =
-    [ "large2"
-    , "large2.normalize"
-    , "large2.cbor.encode"
-    , "large2.cbor.decode"
-    ]
-
-phaseLabels :: String -> [String]
-phaseLabels prefix =
-    [ prefix
-    , prefix <> ".resolve"
-    , prefix <> ".typecheck"
-    , prefix <> ".evaluation"
-    ]
-
-large3Labels :: [String]
-large3Labels = phaseLabels "large3"
-
-large3GetConfigLabels :: [String]
-large3GetConfigLabels = phaseLabels "large3.get_config"
-
-large4Labels :: [String]
-large4Labels = phaseLabels "large4"
-
-k8sLabels :: String -> [String]
-k8sLabels name =
-    [ "k8s." <> name
-    , "k8s." <> name <> ".resolve"
-    , "k8s." <> name <> ".typecheck"
-    , "k8s." <> name <> ".evaluation"
-    ]
-
-loadExamples :: Maybe String -> IO [(String, ResolvedExpr)]
-loadExamples mPattern = do
-    files <- sort <$> Directory.listDirectory normalizeDirectory
-    let paths =
-            [ normalizeDirectory </> file
-            | file <- files
-            , ".dhall" `isSuffixOf` file
-            , let name = takeBaseName file
-            , any (couldMatch mPattern) (normalizeLabels name)
-            ]
-    if null paths
-        then do
-            say "Skipping normalize fixtures (do not match pattern)"
-            pure []
-        else do
-            say $ "Loading normalize fixtures (" <> show (length paths) <> " file(s))…"
-            traverse loadExample paths
-  where
-    normalizeDirectory = "benchmark/evaluation/normalize"
-
-loadExample :: FilePath -> IO (String, ResolvedExpr)
-loadExample path = do
-    let name = takeBaseName path
-    let prefix = "normalize/" <> name
-
-    text <- timed (prefix <> ": read") (Text.IO.readFile path)
-
-    parsed <- timed (prefix <> ": parse") $
-        either throw pure (Parser.exprFromText path text)
-
-    let settings =
-            Lens.Micro.set Dhall.sourceName path
-                (Lens.Micro.set Dhall.rootDirectory (takeDirectory path) Dhall.defaultInputSettings)
-
-    resolved <- timed (prefix <> ": resolve (cache on)") $
-        resolveWithCache settings parsed
-
-    timed (prefix <> ": typecheck") (ensureWellTyped resolved)
-    say $ "  " <> prefix <> ": ready"
-
-    pure (name, resolved)
-
-encodeNormalized :: ResolvedExpr -> ByteString.ByteString
-encodeNormalized = Binary.encodeExpression . Core.denote
-
-decodeNormalized :: ByteString.ByteString -> Core.Expr Void Void
-decodeNormalized =
-    either throw id . Binary.decodeExpression
-
--- | Load large1 inputs for the existing per-phase benchmarks.
---
--- Import resolution for prep uses 'resolveWithCache'. The timed @resolve@
--- bench re-runs resolution with 'resolveWithoutCache' via 'nfAppIO'.
-loadLarge1 :: IO (Text, ParsedExpr, ResolvedExpr)
-loadLarge1 = do
-    say "Loading large1…"
-
-    text <- timed "large1: read" (Text.IO.readFile large1MainPath)
-
-    parsed <- timed "large1: parse" $
-        either throw pure (Parser.exprFromText large1MainPath text)
-
-    resolved <- timed "large1: resolve (cache on)" $
-        resolveWithCache large1Settings parsed
-
-    timed "large1: typecheck" (ensureWellTyped resolved)
-
-    say "  large1: ready"
-
-    pure (text, parsed, resolved)
-
--- | Load large2 for CBOR benchmarking: parse, resolve, typecheck, then
--- pre-encode once to obtain decode input and report CBOR size.
-loadLarge2 :: IO (ResolvedExpr, ResolvedExpr, ByteString.ByteString)
-loadLarge2 = do
-    say "Loading large2…"
-
-    text <- timed "large2: read" (Text.IO.readFile large2MainPath)
-
-    parsed <- timed "large2: parse" $
-        either throw pure (Parser.exprFromText large2MainPath text)
-
-    resolved <- timed "large2: resolve (assert no imports)" $
-        Import.assertNoImports parsed
-
-    timed "large2: typecheck" (ensureWellTyped resolved)
-
-    normalized <- timed "large2: normalize (for encode/decode fixture)" $
-        pure (Core.normalize resolved)
-
-    encoded <- timed "large2: encode CBOR (for decode fixture)" $
-        pure (encodeNormalized normalized)
-
-    let cborBytes = ByteString.length encoded
-    say $ "  large2: CBOR size: " <> show cborBytes <> " bytes"
-
-    say "  large2: ready"
-
-    pure (resolved, normalized, encoded)
-
-data PipelineBench = PipelineBench
-    { pbGroupLabel :: String
-    , pbSettings :: Dhall.InputSettings
-    , pbParsed :: ParsedExpr
-    , pbResolved :: ResolvedExpr
-    }
-
-pipelineSettings :: FilePath -> FilePath -> Dhall.InputSettings
-pipelineSettings directory path =
-    Lens.Micro.set Dhall.sourceName path
-        (Lens.Micro.set Dhall.rootDirectory directory Dhall.defaultInputSettings)
-
--- | Parse, cache-warming resolve, and a validity typecheck for phase benches.
-loadPipelineBench :: String -> FilePath -> FilePath -> IO PipelineBench
-loadPipelineBench groupLabel directory relativePath = do
-    let path = directory </> relativePath
-    let prefix = groupLabel
-
-    text <- timed (prefix <> ": read") (Text.IO.readFile path)
-
-    parsed <- timed (prefix <> ": parse") $
-        either throw pure (Parser.exprFromText path text)
-
-    let settings = pipelineSettings directory path
-
-    resolved <- timed (prefix <> ": resolve (cache on)") $
-        resolveWithCache settings parsed
-
-    timed (prefix <> ": typecheck") (ensureWellTyped resolved)
-    say $ "  " <> prefix <> ": ready"
-
-    pure
-        PipelineBench
-            { pbGroupLabel = groupLabel
-            , pbSettings = settings
-            , pbParsed = parsed
-            , pbResolved = resolved
-            }
-
-k8sSettings :: FilePath -> Dhall.InputSettings
-k8sSettings sourceName =
-    Lens.Micro.set Dhall.sourceName sourceName
-        (Lens.Micro.set Dhall.rootDirectory k8sDirectory Dhall.defaultInputSettings)
-
-loadK8sExample :: (String, String) -> IO (String, Dhall.InputSettings, ParsedExpr, ResolvedExpr)
-loadK8sExample (name, expressionText) = do
-    let sourceName = k8sDirectory </> name <> ".dhall"
-    let settings = k8sSettings sourceName
-    let prefix = "k8s/" <> name
-
-    parsed <- timed (prefix <> ": parse") $
-        either throw pure (Parser.exprFromText sourceName (Text.pack expressionText))
-
-    resolved <- timed (prefix <> ": resolve (cache on)") $
-        resolveWithCache settings parsed
-
-    timed (prefix <> ": typecheck") (ensureWellTyped resolved)
-    say $ "  " <> prefix <> ": ready"
-
-    pure (name, settings, parsed, resolved)
-
-loadK8sExamples :: Maybe String -> IO [(String, Dhall.InputSettings, ParsedExpr, ResolvedExpr)]
-loadK8sExamples mPattern = do
-    let candidates =
-            [ ( "file3", "(./file3.dhall).mkPod" )
-            , ( "file4", "(./file4.dhall).mkPod" )
-            ]
-        selected =
-            [ entry
-            | entry@(name, _) <- candidates
-            , any (couldMatch mPattern) (k8sLabels name)
-            ]
-    if null selected
-        then do
-            say "Skipping k8s fixtures (do not match pattern)"
-            pure []
-        else do
-            say $ "Loading k8s fixtures (" <> show (length selected) <> " file(s))…"
-            traverse loadK8sExample selected
-
--- Prep uses the normal disk caches; timed @resolve@ benches still use
--- 'resolveWithoutCache'.
+import Test.Tasty.Bench (defaultMain)
+
+import Bench.Common (patternFromArgs, say)
+import qualified Bench.ImportTrees as ImportTrees
+import qualified Bench.Semisemantic as Semisemantic
+import qualified Bench.Substitutions as Substitutions
+
+-- Prep uses disk caches for Mode A validity + phase benches; Mode B/D fixtures
+-- skip cache-warming resolve. See benchmark/evaluation/README.md.
 main :: IO ()
 main = do
     args <- getArgs
@@ -371,127 +39,17 @@ main = do
         Nothing  -> say "Preparing benchmarks (loading fixtures; prep cache on)…"
         Just pat -> say $ "Preparing benchmarks matching " <> show pat <> " (prep cache on)…"
 
-    examples <- loadExamples mPattern
+    importTreeBenches <- ImportTrees.benchmarks mPattern
+    -- many_files / composer_proxy fixtures live in temp dirs that must
+    -- remain until tasty-bench finishes (the timed samples import those
+    -- files). Substitutions.benchmarks holds that lifetime.
+    Substitutions.benchmarks mPattern $ \substitutionBenches -> do
+        semisemanticBenches <- Semisemantic.benchmarks mPattern
 
-    let wantLarge1 = any (couldMatch mPattern) large1Labels
-    large1 <-
-        if wantLarge1
-            then Just <$> loadLarge1
-            else do
-                say "Skipping large1 (does not match pattern)"
-                pure Nothing
+        say "Starting tasty-bench…"
 
-    let wantLarge2 = any (couldMatch mPattern) large2Labels
-    large2 <-
-        if wantLarge2
-            then Just <$> loadLarge2
-            else do
-                say "Skipping large2 (does not match pattern)"
-                pure Nothing
-
-    k8sExamples <- loadK8sExamples mPattern
-
-    let wantLarge3 = any (couldMatch mPattern) large3Labels
-    large3 <-
-        if wantLarge3
-            then Just <$> loadPipelineBench "large3" large3Directory "pipeline.dhall"
-            else do
-                say "Skipping large3 (does not match pattern)"
-                pure Nothing
-
-    let wantLarge3GetConfig = any (couldMatch mPattern) large3GetConfigLabels
-    large3GetConfig <-
-        if wantLarge3GetConfig
-            then
-                Just
-                    <$> loadPipelineBench
-                        "large3.get_config"
-                        large3Directory
-                        "get_config.dhall"
-            else do
-                say "Skipping large3.get_config (does not match pattern)"
-                pure Nothing
-
-    let wantLarge4 = any (couldMatch mPattern) large4Labels
-    large4 <-
-        if wantLarge4
-            then Just <$> loadPipelineBench "large4" large4Directory "generate-example.dhall"
-            else do
-                say "Skipping large4 (does not match pattern)"
-                pure Nothing
-
-    say "Starting tasty-bench…"
-
-    defaultMain $ concat
-        [ [ bgroup
-              "normalize"
-              [ bgroup
-                  name
-                  [ bench "typecheck" (nf typecheckResolvedExpr expression)
-                  , bench "evaluation" (nf normalizeResolvedExpr expression)
-                  ]
-              | (name, expression) <- examples
-              ]
-          ]
-        , [ bgroup "large1"
-              [ bench "parse" (nf (parseLarge1 large1MainPath) large1Text)
-              , bench "resolve" (nfAppIO (resolveWithoutCache large1Settings) large1Parsed)
-              , bench "typecheck" (nf typecheckResolvedExpr large1Resolved)
-              , bench "evaluation" (nf normalizeResolvedExpr large1Resolved)
-              ]
-          | Just (large1Text, large1Parsed, large1Resolved) <- [large1]
-          ]
-        , [ bgroup "large2"
-              [ bench "normalize" (nf normalizeResolvedExpr large2Resolved)
-              , bgroup
-                    "cbor"
-                    [ bench "encode" (nf encodeNormalized large2Normalized)
-                    , bench "decode" (nf decodeNormalized large2Encoded)
-                    ]
-              ]
-          | Just (large2Resolved, large2Normalized, large2Encoded) <- [large2]
-          ]
-        , [ bgroup
-              "k8s"
-              [ bgroup
-                  name
-                  [ bench "resolve" (nfAppIO (resolveWithoutCache settings) parsed)
-                  , bench "typecheck" (nf typecheckResolvedExpr resolved)
-                  , bench "evaluation" (nf normalizeResolvedExpr resolved)
-                  ]
-              | (name, settings, parsed, resolved) <- k8sExamples
-              ]
-          | not (null k8sExamples)
-          ]
-        , [ pipelineBenchGroup large3Bench
-          | Just large3Bench <- [large3]
-          ]
-        , [ pipelineBenchGroup large3GetConfigBench
-          | Just large3GetConfigBench <- [large3GetConfig]
-          ]
-        , [ pipelineBenchGroup large4Bench
-          | Just large4Bench <- [large4]
-          ]
-        ]
- where
-   -- These helpers reduce polymorphism in TypeCheck.typeOf and Core.normalize.
-   -- Type-check failures must throw so tasty-bench reports FAIL instead of OK.
-   typecheckResolvedExpr :: ResolvedExpr -> Core.Expr Parser.Src Void
-   typecheckResolvedExpr = either throw id . TypeCheck.typeOf
-
-   -- Pure NbE; disk caches are irrelevant here. Ill-typed fixtures are rejected
-   -- at load time via 'ensureWellTyped'.
-   normalizeResolvedExpr :: ResolvedExpr -> ResolvedExpr
-   normalizeResolvedExpr = Core.normalize
-
-   pipelineBenchGroup :: PipelineBench -> Benchmark
-   pipelineBenchGroup fixture =
-       bgroup (pbGroupLabel fixture)
-           [ bench "resolve" (nfAppIO (resolveWithoutCache (pbSettings fixture)) (pbParsed fixture))
-           , bench "typecheck" (nf typecheckResolvedExpr (pbResolved fixture))
-           , bench "evaluation" (nf normalizeResolvedExpr (pbResolved fixture))
-           ]
-
-   parseLarge1 :: FilePath -> Text -> ParsedExpr
-   parseLarge1 path text =
-       either throw id (Parser.exprFromText path text)
+        defaultMain $ concat
+            [ importTreeBenches
+            , substitutionBenches
+            , semisemanticBenches
+            ]

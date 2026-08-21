@@ -81,7 +81,7 @@ import Data.Maybe                       (mapMaybe)
 import Data.Text                        (Text)
 import Data.Void                        (Void)
 import Dhall.Crypto                     (SHA256Digest (..))
-import Dhall.Import                     (Status (..), stack)
+import Dhall.Import                     (Status, stack)
 import Dhall.Parser                     (Src)
 import GHC.Generics                     (Generic)
 import Lens.Micro                       (rewriteOf)
@@ -357,6 +357,7 @@ findExternalDependencies expression = do
         Code     -> return ()
         RawText  -> return ()
         RawBytes -> return ()
+        Source   -> return ()
         Location -> empty  -- "as Location" imports aren't real dependencies
 
     case importType of

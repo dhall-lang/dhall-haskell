@@ -126,7 +126,8 @@ data Status = Status
     --   store the hash of their own syntax; @as Text@ / @as Bytes@ /
     --   @as Location@ store a hash of their contents. Frozen imports use
     --   their integrity hash. Caching these avoids encoding a child's full
-    --   normal form just to name the parent cache entry.
+    --   normal form just to name the parent cache entry. @as Source@ stores
+    --   the hash of the finalized import-free expression.
 
     , _merkleContextFingerprint :: Maybe SHA256Digest
     -- ^ Cached hash of '_startingContext' for merkle keys. 'Nothing' until
@@ -137,10 +138,19 @@ data Status = Status
     --   a large substitution map once per Code import. Cleared when
     --   '_substitutions' is replaced.
 
+    , _parsedImportCache :: Map Text (Expr Src Import)
+    -- ^ Per-run cache of parsed import ASTs, keyed by the canonical fetch
+    --   identity of the import (absolute path, remote URL including headers,
+    --   or environment variable name). This avoids reparsing the same file
+    --   when it is loaded through multiple import modes (e.g. hashed @Code@
+    --   validation and unhashed @as Source@ prefill).
+
     , _newManager :: IO Manager
-    , _manager :: Maybe Manager
-    -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
-    -- requests
+    -- ^ How to obtain an HTTP 'Manager'. This is an @IO@ action, not the
+    --   manager itself: initially it *creates* a manager (see
+    --   'defaultNewManager'); after the first successful HTTP request that
+    --   action is replaced with @'pure' manager@ so later requests reuse
+    --   the same manager. There is no separate @Maybe Manager@ cache field.
 
     , _loadOriginHeaders :: StateT Status IO OriginHeaders
     -- ^ Load the origin headers from environment or configuration file.
@@ -203,7 +213,7 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _merkleSubstitutionsFingerprint = Nothing
 
-    _manager = Nothing
+    _parsedImportCache = Map.empty
 
     _substitutions = Dhall.Substitution.empty
 
@@ -236,6 +246,21 @@ cache = lens _cache (\s x -> s { _cache = x })
 -- | Lens from a `Status` to its `_merkleHashCache` field
 merkleHashCache :: Lens' Status (Map Chained SHA256Digest)
 merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
+
+-- | Lens from a `Status` to its `_parsedImportCache` field
+parsedImportCache :: Lens' Status (Map Text (Expr Src Import))
+parsedImportCache = lens _parsedImportCache (\s x -> s { _parsedImportCache = x })
+
+-- | Lens from a `Status` to its `_newManager` field.
+--
+-- The value is a factory (@IO Manager@). Caching is done by overwriting it
+-- with @pure alreadyCreatedManager@, not by storing a @Maybe Manager@.
+newManager :: Lens' Status (IO Manager)
+newManager = lens _newManager (\s x -> s { _newManager = x })
+
+-- | Lens from a `Status` to its `_loadOriginHeaders` field
+loadOriginHeaders :: Lens' Status (StateT Status IO OriginHeaders)
+loadOriginHeaders = lens _loadOriginHeaders (\s x -> s { _loadOriginHeaders = x })
 
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Text)
@@ -274,6 +299,10 @@ startingContext =
         _startingContext
         (\s x -> s { _startingContext = x, _merkleContextFingerprint = Nothing })
 
+-- | Lens from a `Status` to its `_semanticCacheMode` field
+semanticCacheMode :: Lens' Status SemanticCacheMode
+semanticCacheMode = lens _semanticCacheMode (\s x -> s { _semanticCacheMode = x })
+
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning
 cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
@@ -281,6 +310,10 @@ cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
 -- | Lens from a `Status` to its `_reportWarning` field
 reportWarning :: Lens' Status (Text -> IO ())
 reportWarning = lens _reportWarning (\s x -> s { _reportWarning = x })
+
+-- | Lens from a `Status` to its `_getHomeDirectory` field
+getHomeDirectory :: Lens' Status (IO FilePath)
+getHomeDirectory = lens _getHomeDirectory (\s x -> s { _getHomeDirectory = x })
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic

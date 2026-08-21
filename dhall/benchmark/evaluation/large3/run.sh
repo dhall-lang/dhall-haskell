@@ -11,4 +11,6 @@ time_dhall() {
 }
 
 time_dhall pipeline.dhall
+time_dhall pipeline-source.dhall
 time_dhall get_config.dhall
+time_dhall get_config_as_source.dhall

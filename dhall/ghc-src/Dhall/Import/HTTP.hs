@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -9,6 +10,7 @@ module Dhall.Import.HTTP
     ) where
 
 import Control.Exception                (Exception)
+import Control.Monad                    (join)
 import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
@@ -31,6 +33,7 @@ import Dhall.Core
 import Dhall.Import.Types
 import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
+import Lens.Micro.Mtl                   (assign, use)
 import System.Directory                 (getXdgDirectory, XdgDirectory(XdgConfig))
 import System.FilePath                  (splitDirectories)
 
@@ -38,7 +41,6 @@ import System.FilePath                  (splitDirectories)
 import Network.HTTP.Client (HttpException (..), HttpExceptionContent (..))
 
 import qualified Control.Exception
-import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.ByteString.Lazy             as ByteString.Lazy
 import qualified Data.HashMap.Strict              as HashMap
 import qualified Data.Text                        as Text
@@ -162,20 +164,28 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
       <>  "\n"
       <>  "URL: " <> url <> "\n"
 
-newManager :: StateT Status IO Manager
-newManager = do
-    Status { _manager = oldManager, ..} <- State.get
+{-| Get a shared HTTP 'Manager', creating one on the first call.
 
-    case oldManager of
-        Nothing -> do
-            manager <- liftIO _newManager
+    'Status' does not store a @Maybe Manager@. It stores an @IO Manager@
+    factory in '_newManager':
 
-            State.put (Status { _manager = Just manager , ..})
+    * Before the first request the factory *creates* a manager
+      (typically 'defaultNewManager').
+    * After we have a manager we replace the factory with @'pure' manager@,
+      an @IO@ action that does not create anything and just yields that
+      same value. The next call therefore reuses it.
 
-            return manager
-
-        Just manager ->
-            return manager
+    This is the same caching as a @Maybe Manager@ field, with one fewer
+    'Status' field.
+-}
+getManager :: StateT Status IO Manager
+getManager = do
+    makeManager <- use newManager
+    manager <- liftIO makeManager
+    -- Overwrite the factory with a constant action: later getManager calls
+    -- run `pure manager` instead of creating a new HTTP manager.
+    assign newManager (pure manager)
+    return manager
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]
@@ -311,11 +321,9 @@ addHeaders originHeaders urlHeaders request =
 fetchFromHttpUrlBytes
     :: URL -> Maybe [HTTPHeader] -> StateT Status IO ByteString
 fetchFromHttpUrlBytes childURL mheaders = do
-    Status { _loadOriginHeaders } <- State.get
+    originHeaders <- join (use loadOriginHeaders)
 
-    originHeaders <- _loadOriginHeaders
-
-    manager <- newManager
+    manager <- getManager
 
     let childURLString = Text.unpack (renderURL childURL)
 
@@ -331,9 +339,7 @@ fetchFromHttpUrlBytes childURL mheaders = do
 
     response <- liftIO (Control.Exception.handle handler io)
 
-    Status {..} <- State.get
-
-    case _stack of
+    use stack >>= \case
         -- We ignore the first import in the stack since that is the same import
         -- as the `childUrl`
         _ :| Chained parentImport : _ -> do
