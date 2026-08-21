@@ -5,7 +5,8 @@ module Bench.ImportTrees
     ) where
 
 import Control.Exception (throw)
-import Data.List (isSuffixOf, sort)
+import Control.Monad (when)
+import Data.List (isInfixOf, isSuffixOf, sort)
 import Data.Text (Text)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
 import Test.Tasty.Bench
@@ -188,8 +189,38 @@ loadLarge6PhaseVariants mPattern = do
             say "Skipping large6 fixtures (do not match pattern)"
             pure []
         else do
+            when (any (("slow_parse" `isInfixOf`) . fst) selected) $
+                ensureSlowParseDhall large6Directory
             say $ "Loading large6 fixtures (" <> show (length selected) <> " file(s))…"
             traverse (\(label, file) -> loadPipelineBench label large6Directory file) selected
+
+-- | Write `slow/parse.dhall` if missing. Nested block comments (~1.3M lines)
+-- give an artificial ~0.5s parse burden; the file evaluates to `True`.
+--
+-- Keep the block count / nesting in sync with `slow/generate-parse.py`.
+ensureSlowParseDhall :: FilePath -> IO ()
+ensureSlowParseDhall directory = do
+    let path = directory </> "slow" </> "parse.dhall"
+    exists <- Directory.doesFileExist path
+    if exists
+        then say $ "Using existing parse fixture: " <> path
+        else do
+            say $ "Generating parse fixture: " <> path
+            Directory.createDirectoryIfMissing True (takeDirectory path)
+            Text.IO.writeFile path slowParseDhallContents
+
+slowParseDhallContents :: Text
+slowParseDhallContents =
+    header <> Text.replicate blockCount block <> "True\n"
+  where
+    header =
+        "-- Artificial parse burden: ~0.5 seconds to parse this file (cold, no cache).\n\
+        \-- The cost is in the lexer/parser walking ~1.3M lines of nested block comments;\n\
+        \-- the normalized value is just `True`.\n\
+        \-- Generated during evaluation-benchmark setup (see Bench.ImportTrees).\n"
+    nesting = 8
+    blockCount = 81270
+    block = Text.replicate nesting "{-\n" <> Text.replicate nesting "-}\n"
 
 loadLarge6ColdResolveVariants :: Maybe String -> IO [ColdResolveBench]
 loadLarge6ColdResolveVariants mPattern = do

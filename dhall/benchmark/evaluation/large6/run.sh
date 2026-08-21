@@ -3,6 +3,11 @@
 # Run from this directory.
 set -euo pipefail
 
+if [[ ! -f slow/parse.dhall ]]; then
+    echo "Generating slow/parse.dhall…"
+    python3 slow/generate-parse.py
+fi
+
 time_dhall() {
     local file=$1
     echo "=== dhall --file ${file} ==="
