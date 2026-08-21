@@ -46,7 +46,29 @@ let
                   hlib = pkgsNew.haskell.lib;
                   skip = drv:
                     hlib.dontHaddock (hlib.dontBenchmark (hlib.dontCheck drv));
+                  # JS GHC ships a broken unprefixed `hsc2hs-ghc-*` wrapper
+                  # (`exeprog` is missing the target prefix, so --version fails).
+                  # Nixpkgs only passes --with-hsc2hs when stdenv.hasCC, which
+                  # is false for pkgsCross.ghcjs, so Cabal picks the wrapper.
+                  # unix-compat's cbits include sys/sysmacros.h only on Linux;
+                  # Emscripten has the same macros but does not define __linux__.
+                  hsc2hs =
+                    "${haskellPackagesOld.ghc}/bin/${haskellPackagesOld.ghc.targetPrefix}hsc2hs";
                 in {
+                  mkDerivation = args:
+                    haskellPackagesOld.mkDerivation (args // {
+                      configureFlags = (args.configureFlags or []) ++ [
+                        "--with-hsc2hs=${hsc2hs}"
+                      ];
+                      postPatch = (args.postPatch or "")
+                        + pkgsNew.lib.optionalString ((args.pname or "") == "unix-compat") ''
+                            substituteInPlace cbits/HsUnixCompat.c \
+                              --replace-fail \
+                                'defined(__linux__) || defined(__GNU__)' \
+                                'defined(__linux__) || defined(__GNU__) || defined(__EMSCRIPTEN__)'
+                          '';
+                    });
+
                   dhall =
                     hlib.overrideCabal
                       (skip
