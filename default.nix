@@ -18,8 +18,10 @@ in
       dhall-yaml
     ;
 
-    # We can re-enable these once https://github.com/NixOS/nixpkgs/issues/133271
-    # is fixed and Nixpkgs is upgraded to a version that incorporates GHCJS
+    # Legacy GHCJS 8.10 (`haskell.packages.ghcjs`) was removed in Nixpkgs 25.11.
+    # The JavaScript backend now lives under `pkgsCross.ghcjs`; restoring
+    # `dhall-try` is a separate change that ports `dhall/ghcjs-src` and
+    # `dhall-try` off `ghcjs-base`.
 
     # inherit (shared_ghcjs) dhall-try;
     # dhall-ghcjs = shared_ghcjs.dhall;
