@@ -171,7 +171,7 @@ import Control.Exception
     , SomeException
     , toException
     )
-import Control.Monad              (foldM, when)
+import Control.Monad              (foldM, unless, when)
 import Control.Monad.Catch        (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
@@ -964,11 +964,37 @@ loadImportWithSemisemanticCache
 loadImportWithSemisemanticCache
   import_@(Chained (Import _ Source)) = do
     sourceArtifact <- loadSourceImportArtifact import_
+    Status { _reportWarning, _normalizer, _stack } <- State.get
 
-    semantics <- finalizeSourceImport sourceArtifact
+    let hasCustomNormalizer = isJust _normalizer
 
-    -- Edge hash for parents that import this as Source: hash of the
-    -- finalized import-free expression (not beta-normalized).
+    semisemanticHash <-
+        computeSourceArtifactSemisemanticHash import_ sourceArtifact
+
+    mCached <-
+        if hasCustomNormalizer
+            then return Nothing
+            else zoom cacheWarning
+                    (fetchFromSemisemanticCache _reportWarning semisemanticHash)
+
+    semantics <- case mCached of
+        Just (SemisemanticSourceProduct bytesStrict)
+            | Just decoded <- decodeSourceProduct bytesStrict ->
+                return decoded
+        _ -> do
+            finalized <- finalizeSourceImport sourceArtifact
+
+            unless hasCustomNormalizer $ do
+                let bytes = encodeExpression (importSemantics finalized)
+                zoom cacheWarning
+                    (writeToSemisemanticCache
+                        _reportWarning
+                        semisemanticHash
+                        (SemisemanticSourceProduct bytes)
+                    )
+
+            return finalized
+
     let edgeHash =
             Dhall.Crypto.sha256Hash (encodeExpression (importSemantics semantics))
 
@@ -1184,6 +1210,7 @@ exceedsNFSizeThreshold expression =
 data SemisemanticPayload
     = SemisemanticCachedNF Data.ByteString.ByteString
     | SemisemanticWellTyped
+    | SemisemanticSourceProduct Data.ByteString.ByteString
 
 semisemanticNFTag :: Data.ByteString.ByteString
 semisemanticNFTag = Data.ByteString.singleton 0
@@ -1191,11 +1218,16 @@ semisemanticNFTag = Data.ByteString.singleton 0
 semisemanticTypedTag :: Data.ByteString.ByteString
 semisemanticTypedTag = Data.ByteString.singleton 1
 
+semisemanticSourceProductTag :: Data.ByteString.ByteString
+semisemanticSourceProductTag = Data.ByteString.singleton 2
+
 encodeSemisemanticPayload :: SemisemanticPayload -> Data.ByteString.ByteString
 encodeSemisemanticPayload (SemisemanticCachedNF bytes) =
     semisemanticNFTag <> bytes
 encodeSemisemanticPayload SemisemanticWellTyped =
     semisemanticTypedTag
+encodeSemisemanticPayload (SemisemanticSourceProduct bytes) =
+    semisemanticSourceProductTag <> bytes
 
 decodeSemisemanticPayload
     :: Data.ByteString.ByteString -> Maybe SemisemanticPayload
@@ -1206,7 +1238,21 @@ decodeSemisemanticPayload bytes =
         Just (1, rest)
             | Data.ByteString.null rest ->
                 Just SemisemanticWellTyped
+        Just (2, rest) ->
+            Just (SemisemanticSourceProduct rest)
         _ ->
+            Nothing
+
+decodeSourceProduct
+    :: Data.ByteString.ByteString -> Maybe ImportSemantics
+decodeSourceProduct bytesStrict =
+    case Dhall.Binary.decodeExpression (Data.ByteString.Lazy.fromStrict bytesStrict) of
+        Right sem ->
+            Just ImportSemantics
+                { importSemantics = sem
+                , importNormalizationStatus = TypecheckedOnly
+                }
+        Left _ ->
             Nothing
 
 -- | Directory under @$XDG_CACHE_HOME@ (usually @~/.cache@) for Code imports
@@ -1216,6 +1262,8 @@ decodeSemisemanticPayload bytes =
 -- form keyed by a hash of the fully resolved expression. This folder uses a
 -- different key and a different payload, so the files must not be mixed. The
 -- @-v2@ suffix is only a directory name to keep the two layouts apart.
+-- Unhashed @as Source@ imports store tag-2 finalized Source products under a
+-- domain-separated key in the same directory.
 semisemanticCacheDirectory :: FilePath
 semisemanticCacheDirectory = "dhall-haskell-v2"
 
@@ -1255,6 +1303,80 @@ replaceEmbedsWithEdgeHashes parent =
             return (BytesLit (Dhall.Crypto.unSHA256Digest edgeHash))
         )
         (replaceEmbedsWithEdgeHashes parent)
+
+-- | Like 'edgeHashOf', but the hash names the child's @as Source@ product.
+--
+-- A Code integrity hash is not sufficient: two children can share a Code
+-- normal form while differing as Source (e.g. @let x = 1 in x@ vs @1@).
+sourceEdgeHashOf :: Chained -> StateT Status IO Dhall.Crypto.SHA256Digest
+sourceEdgeHashOf child =
+    case (importMode (chainedImport child), hash (importHashed (chainedImport child))) of
+        (Source, Just integrityHash) ->
+            return integrityHash
+        (_, Just _) ->
+            sourceProductHashOf
+                (chainedChangeMode Source (chainedRemoveHash child))
+        (Source, Nothing) ->
+            sourceProductHashOf child
+        (_, Nothing) ->
+            edgeHashOf child
+
+sourceProductHashOf :: Chained -> StateT Status IO Dhall.Crypto.SHA256Digest
+sourceProductHashOf sourceChild = do
+    cached <- use cache
+
+    case Dhall.Map.lookup sourceChild cached of
+        Just ImportSemantics{ importSemantics } ->
+            return (Dhall.Crypto.sha256Hash (encodeExpression importSemantics))
+        Nothing -> do
+            cachedHashes <- use merkleHashCache
+
+            case Dhall.Map.lookup sourceChild cachedHashes of
+                Just merkleHash ->
+                    return merkleHash
+                Nothing -> do
+                    ImportSemantics{ importSemantics } <-
+                        loadSourceChildSemanticsWithoutTypecheck sourceChild
+                    return (Dhall.Crypto.sha256Hash (encodeExpression importSemantics))
+
+replaceEmbedsWithSourceEdgeHashes
+    :: Chained
+    -> Expr Void Import
+    -> StateT Status IO (Expr Void Void)
+replaceEmbedsWithSourceEdgeHashes parent =
+    Syntax.subExpressionsWith
+        (\childImport -> do
+            child <- chainImport parent childImport
+            edgeHash <- sourceEdgeHashOf child
+            return (BytesLit (Dhall.Crypto.unSHA256Digest edgeHash))
+        )
+        (replaceEmbedsWithSourceEdgeHashes parent)
+
+sourceArtifactCacheDomain :: Data.ByteString.ByteString
+sourceArtifactCacheDomain = Encoding.encodeUtf8 "source-artifact-v1"
+
+-- | Disk-cache key for an unhashed @as Source@ import after the preserve pass:
+-- the preserved artifact with Source-product child hashes, plus starting
+-- context and substitution fingerprints, under a Source domain separator.
+computeSourceArtifactSemisemanticHash
+    :: Chained
+    -> Expr Void Import
+    -> StateT Status IO Dhall.Crypto.SHA256Digest
+computeSourceArtifactSemisemanticHash parent sourceArtifact = do
+    skeleton <- replaceEmbedsWithSourceEdgeHashes parent sourceArtifact
+
+    let skeletonHash = hashExpression skeleton
+
+    (contextHash, substitutionsHash) <- memoizedMerkleFingerprints
+
+    return
+        ( Dhall.Crypto.sha256Hash
+            ( sourceArtifactCacheDomain
+           <> Dhall.Crypto.unSHA256Digest skeletonHash
+           <> Dhall.Crypto.unSHA256Digest contextHash
+           <> Dhall.Crypto.unSHA256Digest substitutionsHash
+            )
+        )
 
 fingerprintStartingContext
     :: Dhall.Context.Context (Expr Src Void) -> Dhall.Crypto.SHA256Digest

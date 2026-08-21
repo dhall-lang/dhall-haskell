@@ -1,28 +1,34 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Unit tests for the disk cache used by Code imports without integrity
--- checks (@$XDG_CACHE_HOME/dhall-haskell-v2/@).
+-- | Unit tests for the disk cache used by unhashed Code and @as Source@
+-- imports (@$XDG_CACHE_HOME/dhall-haskell-v2/@).
 --
--- Imports still typecheck in memory. The on-disk entry is a one-byte
+-- Code imports still typecheck in memory. The on-disk entry is a one-byte
 -- "already type-checked" marker. Older cache files may still contain a small
 -- encoded normal form, which the loader still accepts.
+--
+-- Unhashed @as Source@ imports store a distinct tag-2 Source-product payload
+-- under a domain-separated key, so Code and Source entries cannot collide.
 module Dhall.Test.SemisemanticCache where
 
-import Control.Exception            (bracket)
+import Control.Exception            (SomeException, bracket, try)
 import Control.Monad                (void)
 import Data.Foldable                (traverse_)
 import Data.Void                    (Void)
+import Data.Word                    (Word8)
 import Dhall.Src                    (Src)
 import System.FilePath              (takeDirectory, takeFileName, (</>))
 import Test.Tasty                   (TestTree)
-import Test.Tasty.HUnit             (assertBool, assertEqual, testCase)
+import Test.Tasty.HUnit             (assertBool, assertEqual, assertFailure, testCase)
 
 import qualified Data.ByteString    as ByteString
 import qualified Data.Text          as Text
 import qualified Data.Text.IO       as Text.IO
 import qualified Dhall
+import qualified Dhall.Context
 import qualified Dhall.Core         as Core
 import qualified Dhall.Import       as Import
+import qualified Dhall.Map
 import qualified Lens.Micro
 import qualified System.Directory   as Directory
 import qualified System.Environment as Environment
@@ -37,6 +43,13 @@ getTests = return
         , testCase "Early-abort size check agrees with full walk" earlyAbortAgreesWithFullWalkTest
         , testCase "Child change invalidates parent cache" childChangeInvalidatesParentTest
         , testCase "as Source still evaluates" asSourceStillWorksTest
+        , testCase "Source product is cached and reused" sourceProductCachedTest
+        , testCase "Source cache is distinct from Code cache" sourceCacheDistinctFromCodeTest
+        , testCase "Child source change invalidates parent Source cache" childSourceChangeInvalidatesParentTest
+        , testCase "Substitution fingerprint invalidates Source cache" substitutionFingerprintInvalidatesSourceTest
+        , testCase "Starting context fingerprint invalidates Source cache" startingContextFingerprintInvalidatesSourceTest
+        , testCase "Hash-protected Code child uses Source edge hash" hashedCodeChildUsesSourceEdgeHashTest
+        , testCase "Corrupt Source payload is ignored" corruptSourcePayloadIgnoredTest
         ])
 
 withTempCache :: (FilePath -> IO a) -> IO a
@@ -211,3 +224,199 @@ asSourceStillWorksTest = withTempCache $ \_cacheDir ->
         result <- inputFile parentPath
         expected <- Dhall.inputExpr "1"
         assertNormalizedEqual "as Source field projection" expected result
+
+sourceProductTag :: Word8
+sourceProductTag = 2
+
+typedMarkerTag :: Word8
+typedMarkerTag = 1
+
+payloadTags :: FilePath -> IO [Word8]
+payloadTags cacheDir = do
+    files <- listCacheFiles cacheDir
+    traverse readPayloadTag files
+
+readPayloadTag :: FilePath -> IO Word8
+readPayloadTag path = do
+    bytes <- ByteString.readFile path
+    case ByteString.uncons bytes of
+        Just (tag, _) -> return tag
+        Nothing -> assertFailure ("empty cache file: " <> path)
+
+inputSourceFile :: FilePath -> IO (Core.Expr Src Void)
+inputSourceFile path = do
+    let settings =
+            Lens.Micro.set Dhall.sourceName path
+                ( Lens.Micro.set Dhall.rootDirectory (takeDirectory path)
+                    Dhall.defaultInputSettings
+                )
+        file = Text.pack (takeFileName path)
+    Dhall.inputExprWithSettings settings ("./" <> file <> " as Source")
+
+-- | Unhashed as Source writes a tag-2 product and reloads equal.
+sourceProductCachedTest :: IO ()
+sourceProductCachedTest = withTempCache $ \cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-product" $ \dir -> do
+        let path = dir </> "value.dhall"
+        Text.IO.writeFile path "{ x = 1, y = 2 }"
+
+        result1 <- inputSourceFile path
+        tags1 <- payloadTags cacheDir
+        assertBool "Source product tag-2 entry exists after first load"
+            (sourceProductTag `elem` tags1)
+
+        result2 <- inputSourceFile path
+        expected <- Dhall.inputExpr "{ x = 1, y = 2 }"
+        assertNormalizedEqual "first Source load" expected result1
+        assertNormalizedEqual "cached Source reload" expected result2
+
+-- | Warming Code cache then loading as Source must use a distinct tag/key.
+sourceCacheDistinctFromCodeTest :: IO ()
+sourceCacheDistinctFromCodeTest = withTempCache $ \cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-vs-code" $ \dir -> do
+        let path = dir </> "value.dhall"
+        Text.IO.writeFile path "{ x = 1, y = 2 }"
+
+        _ <- inputFile path
+        tagsAfterCode <- payloadTags cacheDir
+        assertBool "Code writes a typed marker"
+            (typedMarkerTag `elem` tagsAfterCode)
+        assertBool "Code does not write a Source product"
+            (sourceProductTag `notElem` tagsAfterCode)
+
+        result <- inputSourceFile path
+        tagsAfterSource <- payloadTags cacheDir
+        assertBool "Source writes a distinct product tag"
+            (sourceProductTag `elem` tagsAfterSource)
+        assertBool "Source keeps the Code marker rather than replacing it"
+            (typedMarkerTag `elem` tagsAfterSource)
+
+        expected <- Dhall.inputExpr "{ x = 1, y = 2 }"
+        assertNormalizedEqual "Source after Code warm" expected result
+
+-- | Parent imports child as Source; changing child source must not reuse parent.
+childSourceChangeInvalidatesParentTest :: IO ()
+childSourceChangeInvalidatesParentTest = withTempCache $ \_cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-child" $ \dir -> do
+        let childPath = dir </> "child.dhall"
+        let parentPath = dir </> "parent.dhall"
+
+        Text.IO.writeFile childPath "{ x = 1, y = 2 }"
+        Text.IO.writeFile parentPath "(./child.dhall as Source).x"
+
+        result1 <- inputFile parentPath
+        expected1 <- Dhall.inputExpr "1"
+        assertNormalizedEqual "initial Source child" expected1 result1
+
+        Text.IO.writeFile childPath "{ x = 3, y = 2 }"
+
+        result2 <- inputFile parentPath
+        expected2 <- Dhall.inputExpr "3"
+        assertNormalizedEqual "parent Source observes child change" expected2 result2
+
+substitutionFingerprintInvalidatesSourceTest :: IO ()
+substitutionFingerprintInvalidatesSourceTest = withTempCache $ \_cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-subst" $ \dir -> do
+        let path = dir </> "value.dhall"
+        Text.IO.writeFile path "N"
+
+        let load n = do
+                let settings =
+                        Lens.Micro.set Dhall.substitutions
+                            (Dhall.Map.singleton "N" (Core.NaturalLit n))
+                            ( Lens.Micro.set Dhall.sourceName path
+                                ( Lens.Micro.set Dhall.rootDirectory dir
+                                    Dhall.defaultInputSettings
+                                )
+                            )
+                Dhall.inputExprWithSettings settings "./value.dhall as Source"
+
+        result1 <- load 1
+        result2 <- load 2
+        expected1 <- Dhall.inputExpr "1"
+        expected2 <- Dhall.inputExpr "2"
+        assertNormalizedEqual "substitution 1" expected1 result1
+        assertNormalizedEqual "substitution 2" expected2 result2
+
+startingContextFingerprintInvalidatesSourceTest :: IO ()
+startingContextFingerprintInvalidatesSourceTest = withTempCache $ \_cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-context" $ \dir -> do
+        let path = dir </> "id.dhall"
+        Text.IO.writeFile path "λ(x : T) → x"
+
+        let settingsWithT =
+                Lens.Micro.set Dhall.startingContext
+                    (Dhall.Context.insert "T" (Core.Const Core.Type) Dhall.Context.empty)
+                    ( Lens.Micro.set Dhall.sourceName path
+                        ( Lens.Micro.set Dhall.rootDirectory dir
+                            Dhall.defaultInputSettings
+                        )
+                    )
+
+        result <- Dhall.inputExprWithSettings settingsWithT "./id.dhall as Source"
+        let expected =
+                Core.Lam
+                    mempty
+                    (Core.makeFunctionBinding "x" (Core.Var "T"))
+                    (Core.Var "x")
+        assertNormalizedEqual "context-dependent Source load" expected result
+
+        let settingsEmpty =
+                Lens.Micro.set Dhall.sourceName path
+                    ( Lens.Micro.set Dhall.rootDirectory dir
+                        Dhall.defaultInputSettings
+                    )
+        failed <-
+            try (Dhall.inputExprWithSettings settingsEmpty "./id.dhall as Source")
+                :: IO (Either SomeException (Core.Expr Src Void))
+        case failed of
+            Left _ -> return ()
+            Right _ ->
+                assertFailure
+                    "empty starting context must not reuse the T-context Source cache"
+
+hashedCodeChildUsesSourceEdgeHashTest :: IO ()
+hashedCodeChildUsesSourceEdgeHashTest = withTempCache $ \_cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-edge" $ \dir -> do
+        let childPath = dir </> "child.dhall"
+        let parentPath = dir </> "parent.dhall"
+        let codeHash = Import.hashExpressionToCode (Core.NaturalLit 1)
+
+        Text.IO.writeFile childPath "let x = 1 in x"
+        Text.IO.writeFile parentPath ("./child.dhall " <> codeHash)
+
+        let loadParentAsSource = do
+                let settings =
+                        Lens.Micro.set Dhall.sourceName parentPath
+                            ( Lens.Micro.set Dhall.rootDirectory dir
+                                Dhall.defaultInputSettings
+                            )
+                parsed <- Dhall.parseWithSettings settings "./parent.dhall as Source"
+                Dhall.resolveWithSettings settings parsed
+
+        result1 <- loadParentAsSource
+        assertBool "first Source product is not the Code normal form"
+            (Core.denote result1 /= (Core.NaturalLit 1 :: Core.Expr Void Void))
+
+        Text.IO.writeFile childPath "1"
+
+        result2 <- loadParentAsSource
+        assertBool "same Code hash must not reuse a different Source product"
+            (Core.denote result2 == (Core.NaturalLit 1 :: Core.Expr Void Void))
+
+corruptSourcePayloadIgnoredTest :: IO ()
+corruptSourcePayloadIgnoredTest = withTempCache $ \cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-corrupt" $ \dir -> do
+        let path = dir </> "value.dhall"
+        Text.IO.writeFile path "{ x = 1, y = 2 }"
+
+        _ <- inputSourceFile path
+        files <- listCacheFiles cacheDir
+        traverse_
+            (\file -> ByteString.writeFile file (ByteString.pack [sourceProductTag, 0xff, 0x00]))
+            files
+
+        result <- inputSourceFile path
+        expected <- Dhall.inputExpr "{ x = 1, y = 2 }"
+        assertNormalizedEqual "recompute after corrupt Source payload" expected result
+
