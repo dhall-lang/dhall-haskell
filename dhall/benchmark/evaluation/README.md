@@ -121,6 +121,8 @@ Used by: `substitutions.composer_proxy.many_imports.*`
 This is the right number for a **repeat import load with a populated disk
 cache**, matching a customer run that is not starting from an empty
 `~/.cache`. Import code paths can hit `dhall-haskell-v2/` marker entries.
+`~/.cache`. Code can hit `dhall-haskell-v2/` marker entries; `as Source`
+currently cannot.
 
 ### Mode C — Source cost deferral (implicit)
 

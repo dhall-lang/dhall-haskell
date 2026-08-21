@@ -113,6 +113,10 @@ that applies substitutions, not `Import.loadWithStatus` alone).
 | `substitutions.as_source` | `resolve_cold_cache_on` |
 | `substitutions.many_files.as_code` | `resolve_cold_cache_on` |
 | `substitutions.many_files.as_source` | `resolve_cold_cache_on` |
+| `substitutions.composer_proxy.as_code` | `end_to_end_cold` |
+| `substitutions.composer_proxy.as_source` | `end_to_end_cold` |
+| `substitutions.composer_proxy.many_imports.as_code` | `cold`, `warm` |
+| `substitutions.composer_proxy.many_imports.as_source` | `cold`, `warm` |
 | `substitutions.shift_cost.naive` | pure `nf` (in-harness `substituteManyNaive`) |
 | `substitutions.shift_cost.optimized` | pure `nf` (in-harness `substituteManyFromRoot`) |
 
