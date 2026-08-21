@@ -22,6 +22,7 @@ import qualified Data.Maybe               as Maybe
 import qualified Data.Text                as Text
 import qualified Data.Text.Encoding       as Text
 import qualified Network.Wai              as Wai
+import qualified Paths_dhall_test_server  as Paths
 import qualified System.FilePath          as FilePath
 
 httpPort :: Int
@@ -81,18 +82,26 @@ runHttpsServer actualCertPath actualKeyPath ready app =
 
 resolveCertAndKeyPaths :: IO (FilePath, FilePath)
 resolveCertAndKeyPaths = do
-    primaryCertExists <- doesFileExist certPath
-    primaryKeyExists <- doesFileExist keyPath
+    dataCertPath <- Paths.getDataFileName "cert/cert.pem"
+    dataKeyPath <- Paths.getDataFileName "cert/key.pem"
+    dataCertExists <- doesFileExist dataCertPath
+    dataKeyExists <- doesFileExist dataKeyPath
 
-    if primaryCertExists && primaryKeyExists
-        then pure (certPath, keyPath)
+    if dataCertExists && dataKeyExists
+        then pure (dataCertPath, dataKeyPath)
         else do
-            fallbackCertExists <- doesFileExist fallbackCertPath
-            fallbackKeyExists <- doesFileExist fallbackKeyPath
+            primaryCertExists <- doesFileExist certPath
+            primaryKeyExists <- doesFileExist keyPath
 
-            if fallbackCertExists && fallbackKeyExists
-                then pure (fallbackCertPath, fallbackKeyPath)
-                else throwIO (mkIOError userErrorType "Missing TLS certificate files under dhall-test-server/cert" Nothing Nothing)
+            if primaryCertExists && primaryKeyExists
+                then pure (certPath, keyPath)
+                else do
+                    fallbackCertExists <- doesFileExist fallbackCertPath
+                    fallbackKeyExists <- doesFileExist fallbackKeyPath
+
+                    if fallbackCertExists && fallbackKeyExists
+                        then pure (fallbackCertPath, fallbackKeyPath)
+                        else throwIO (mkIOError userErrorType "Missing TLS certificate files under dhall-test-server/cert" Nothing Nothing)
 
 testHttpApp :: IORef Int -> Application
 testHttpApp randomCounter request respond = do
