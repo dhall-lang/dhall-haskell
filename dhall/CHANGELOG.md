@@ -3,6 +3,11 @@
 * Add `as Source` import mode: resolve an import to its import-free source
   expression without beta-normalization. Frozen `as Source` hashes are the
   finalized import-free expression.
+* **BREAKING CHANGE TO THE API:** `Dhall.Import` no longer exports the
+  `Status` record constructor (`Status(..)`). `Status` is still exported as
+  an abstract type; configure it with the provided lenses (`stack`, `cache`,
+  `semanticCacheMode`, `getHomeDirectory`, and so on) instead of record
+  updates.
 * Faster disk cache for local imports without integrity checks. Cache keys
   hash this file's syntax plus hashes of its imports, instead of hashing the
   fully resolved tree. Entries go in `dhall-haskell-v2/` so they are not mixed

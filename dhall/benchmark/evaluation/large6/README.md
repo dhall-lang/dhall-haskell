@@ -13,7 +13,7 @@ except `multi` which spreads ~0.5 s across eight children.
 
 | Variant | Child file | What gets slow |
 |---------|------------|----------------|
-| `parse` | `./slow/parse.dhall` | **Parsing** ~1.3M lines of nested `{--}` comments |
+| `parse` | `./slow/parse.dhall` (generated) | **Parsing** ~1.3M lines of nested `{--}` comments |
 | `eval` | `./slow/eval.dhall` | **Evaluation** of heavy `Natural/fold` when applied |
 | `typecheck` | `./slow/typecheck.dhall` | **Type-checking** `assert` that evaluates frozen eval import |
 | `normalize` | `./slow/normalize.dhall` | **Beta-normalization** of top-level `Natural/fold` during Code import load |
@@ -21,6 +21,8 @@ except `multi` which spreads ~0.5 s across eight children.
 | `walk` | `./slow/walk.dhall` | **Structural walk** of ~30k-element import-free `List Natural` |
 
 Regenerate `walk.dhall` with `python3 slow/generate-walk.py`.
+`slow/parse.dhall` is generated during evaluation-benchmark setup, or with
+`python3 slow/generate-parse.py`. It is not checked in.
 
 Packages (`package-long-*.dhall`) import `sha256:`-protected children from
 `slow/`. Pipelines:
