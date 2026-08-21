@@ -9,7 +9,7 @@ Do **not** replace this with a single large file. as-code calls
 couple of times (the nested-let group already measures that).
 
 The 200 modules are **generated at bench prep** into a temp directory
-(`writeManyFilesFixture` in `Main.hs`), not committed. Generation is
+(`writeManyFilesFixture` in `Bench.Substitutions`), not committed. Generation is
 outside the timed `resolve_cold_cache_on` samples. The tree is deleted
 when the process exits.
 

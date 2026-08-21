@@ -40,13 +40,16 @@ main = do
         Just pat -> say $ "Preparing benchmarks matching " <> show pat <> " (prep cache on)…"
 
     importTreeBenches <- ImportTrees.benchmarks mPattern
-    substitutionBenches <- Substitutions.benchmarks mPattern
-    semisemanticBenches <- Semisemantic.benchmarks mPattern
+    -- many_files / composer_proxy fixtures live in temp dirs that must
+    -- remain until tasty-bench finishes (the timed samples import those
+    -- files). Substitutions.benchmarks holds that lifetime.
+    Substitutions.benchmarks mPattern $ \substitutionBenches -> do
+        semisemanticBenches <- Semisemantic.benchmarks mPattern
 
-    say "Starting tasty-bench…"
+        say "Starting tasty-bench…"
 
-    defaultMain $ concat
-        [ importTreeBenches
-        , substitutionBenches
-        , semisemanticBenches
-        ]
+        defaultMain $ concat
+            [ importTreeBenches
+            , substitutionBenches
+            , semisemanticBenches
+            ]
