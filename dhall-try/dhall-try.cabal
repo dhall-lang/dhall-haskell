@@ -13,6 +13,7 @@ cabal-version:       >=1.10
 
 executable dhall-try
   main-is:             Main.hs
+  other-modules:       Callback
   build-depends:       base           >= 4.11.0.0 && < 5
                      , aeson-pretty
                      , dhall

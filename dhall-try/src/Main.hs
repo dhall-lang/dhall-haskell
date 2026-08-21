@@ -21,8 +21,9 @@ import qualified Prettyprinter.Render.Text as Pretty
 
 import Control.Exception           (Exception, SomeException)
 import Data.Text                   (Text)
-import GHC.JS.Foreign.Callback     (Callback)
-import qualified GHC.JS.Foreign.Callback
+-- GHC.JS.Foreign.Callback is only in base from GHC 9.8. On 9.6 use Callback.
+import Callback                    (Callback)
+import qualified Callback
 import GHC.JS.Prim                 (JSVal, fromJSString, toJSString)
 
 foreign import javascript unsafe "(() => input.getValue())"
@@ -157,7 +158,7 @@ main = do
 
     interpret
 
-    interpretAsync <- GHC.JS.Foreign.Callback.asyncCallback interpret
+    interpretAsync <- Callback.asyncCallback interpret
 
     registerInterpret interpretAsync
 
@@ -171,7 +172,7 @@ main = do
 
                     interpret
 
-            callbackAsync <- GHC.JS.Foreign.Callback.asyncCallback callback
+            callbackAsync <- Callback.asyncCallback callback
 
             registerCallback callbackAsync
 

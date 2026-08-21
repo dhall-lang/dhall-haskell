@@ -48,9 +48,10 @@ that attribute throws.  The JS package set is `pkgs.pkgsCross.ghcjs.haskell.pack
   or `-fjavascript` is set.  The flag exists because `cabal2nix` evaluates the
   Cabal file on the **build** platform, not the JS target.
 - HTTP uses `fetch`; SHA-256 uses Web Crypto (browser) or Node `crypto`.
-- `dhall-try` talks to the Ace editor via `GHC.JS.Prim` / `GHC.JS.Foreign.Callback`
-  (in `base` on the JS architecture).  There is no `ghcjs-base` / `ghcjs-xhr`
-  dependency.
+- `dhall-try` talks to the Ace editor via `GHC.JS.Prim`.  GHC 9.6's JS `base`
+  has no `GHC.JS.Foreign.Callback` (that landed in 9.8), so `src/Callback.hs`
+  wraps the same RTS helpers (`h$makeCallback` / `h$run`).  There is no
+  `ghcjs-base` / `ghcjs-xhr` dependency.
 
 ## How to contribute
 
