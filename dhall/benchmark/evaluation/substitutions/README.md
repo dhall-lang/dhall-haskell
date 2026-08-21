@@ -71,9 +71,16 @@ See `composer_proxy/README.md`.
 |-------|-----------|
 | `substitutions.composer_proxy.as_code` | `end_to_end_cold` |
 | `substitutions.composer_proxy.as_source` | `end_to_end_cold` |
+| `substitutions.composer_proxy.many_imports.as_code` | `cold`, `warm` |
+| `substitutions.composer_proxy.many_imports.as_source` | `cold`, `warm` |
+
+`many_imports` is a graph of overlapping hashed leaves and unhashed parents,
+with Mode E `warm` samples against a prep-populated cache. The flat
+`composer_proxy` group stays Mode D only.
 
 ```sh
 stack bench evaluation --ba '--pattern substitutions.composer_proxy'
+stack bench evaluation --ba '--pattern substitutions.composer_proxy.many_imports'
 ```
 
 ## Harness
@@ -82,7 +89,8 @@ The nested-let and many_files import groups are **Mode B**: parse-only prep;
 each sample uses a fresh `XDG_CACHE_HOME` and `Dhall.resolveWithSettings`.
 `shift_cost` is not Mode B — it never touches the importer.
 `composer_proxy` is **Mode D** (resolve + typecheck + normalize under a fresh
-cache).
+cache). `composer_proxy.many_imports` adds Mode **E** (`warm`) against a
+prep-populated cache.
 
 | Group | Benchmark |
 |-------|-----------|
@@ -92,6 +100,8 @@ cache).
 | `substitutions.many_files.as_source` | `resolve_cold_cache_on` |
 | `substitutions.composer_proxy.as_code` | `end_to_end_cold` |
 | `substitutions.composer_proxy.as_source` | `end_to_end_cold` |
+| `substitutions.composer_proxy.many_imports.as_code` | `cold`, `warm` |
+| `substitutions.composer_proxy.many_imports.as_source` | `cold`, `warm` |
 | `substitutions.shift_cost.naive` | pure `nf` (in-harness `substituteManyNaive`) |
 | `substitutions.shift_cost.optimized` | pure `nf` (in-harness `substituteManyFromRoot`) |
 
@@ -99,6 +109,7 @@ cache).
 stack bench evaluation --ba '--pattern substitutions'
 stack bench evaluation --ba '--pattern substitutions.many_files'
 stack bench evaluation --ba '--pattern substitutions.composer_proxy'
+stack bench evaluation --ba '--pattern substitutions.composer_proxy.many_imports'
 stack bench evaluation --ba '--pattern substitutions.shift_cost'
 ```
 

@@ -35,7 +35,7 @@ cd dhall/benchmark/evaluation/large5 && ./run.sh
 many-files tree (Code and `as Source`). It still cannot inject Haskell
 `InputSettings` substitutions; use the tasty-bench group for that.
 
-## Three measurement modes
+## Measurement modes
 
 The harness uses three different strategies. **Always check which mode a
 benchmark group uses before comparing numbers.**
@@ -92,19 +92,34 @@ entries).
 Mode A previously reported ~μs for the Code `large6` variants above because
 prep had warmed semisemantic; those groups were moved to Mode B.
 
-### Mode D — `end_to_end_cold`
+### Mode D — `end_to_end_cold` / `cold`
 
-Used by: `substitutions.composer_proxy.*`
+Used by: `substitutions.composer_proxy.*`, `substitutions.composer_proxy.many_imports.*.cold`
 
 | Step | What happens |
 |------|----------------|
 | **Prep** | Generate temp import tree; parse only |
-| **`end_to_end_cold` bench** | Fresh `XDG_CACHE_HOME`; `resolveWithSettings` → `typeOf` → `normalize` |
+| **`end_to_end_cold` / `cold` bench** | Fresh `XDG_CACHE_HOME`; `resolveWithSettings` → `typeOf` → `normalize` |
 
 Use this for a synthetic substitution-heavy path where cost is not resolve
 alone but import + typecheck + normalize under a large Haskell-API
 substitution map and **wide-record** module bodies (many Map fields; see
 `substitutions/composer_proxy/README.md`).
+
+### Mode E — `warm`
+
+Used by: `substitutions.composer_proxy.many_imports.*`
+
+| Step | What happens |
+|------|----------------|
+| **Prep** | Generate temp import tree; parse; run the end-to-end action once under a dedicated temp `XDG_CACHE_HOME` |
+| **`warm` bench** | Reuse that cache directory; `resolveWithSettings` → `typeOf` → `normalize` |
+| **`cold` bench** | Same action under a **fresh** `XDG_CACHE_HOME` per sample (Mode D) |
+
+This is the right number for a **repeat import load with a populated disk
+cache**, matching a customer run that is not starting from an empty
+`~/.cache`. Code can hit `dhall-haskell-v2/` marker entries; `as Source`
+currently cannot.
 
 ### Mode C — Source cost deferral (implicit)
 
@@ -140,7 +155,8 @@ read `evaluation` (or cold `dhall hash`).
 | `prelude_import.*` | `prelude_import/` | B | Full Prelude package, Code vs Source |
 | `substitutions.*` | `substitutions/` | B | Nested-let identity-path probe (100 closed keys) |
 | `substitutions.many_files.*` | generated at prep | B | 200 imports × 200 colliding Haskell-API keys (as-code regression) |
-| `substitutions.composer_proxy.*` | generated at prep | D | Many wide-record imports + large sub map; cold resolve→typecheck→NF (Mode D) |
+| `substitutions.composer_proxy.*` | generated at prep | D | Flat wide-record imports + large sub map; cold resolve→typecheck→NF (Mode D) |
+| `substitutions.composer_proxy.many_imports.*` | generated at prep | D+E | Overlapping hashed-leaf graph; cold and warm end-to-end |
 | `substitutions.shift_cost.*` | in-harness | pure `nf` | Naive `Map.map shift` walker vs `substituteManyFromRoot` |
 | `semisemantic.nf_size_walk.*` | in-harness | pure `nf` | Full NF size walk vs early abort at 64KiB (shows the store-NF cutoff) |
 

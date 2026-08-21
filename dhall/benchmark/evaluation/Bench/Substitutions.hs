@@ -4,6 +4,7 @@ module Bench.Substitutions
     ( benchmarks
     ) where
 
+import Control.Monad (void, when)
 import Control.Monad.Trans.State.Strict (runState, state)
 import Data.List (mapAccumL)
 import Data.Text (Text)
@@ -12,12 +13,15 @@ import Text.Printf (printf)
 import Test.Tasty.Bench
 
 import Bench.Common
-    ( ResolvedExpr
+    ( ColdResolveBench (..)
+    , ResolvedExpr
     , couldMatch
     , coldResolveLabels
     , endToEndColdBenchGroup
     , endToEndColdBenchName
     , loadColdResolveBenchWithSettings
+    , resolveTypecheckNormalizeAtCache
+    , resolveTypecheckNormalizeCold
     , say
     , substitutionsColdResolveBenchGroup
     , timed
@@ -32,6 +36,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import qualified Dhall
 import qualified Dhall.Core as Core
+import qualified Dhall.Import as Import
 import qualified Dhall.Map
 import qualified Dhall.Parser as Parser
 import qualified Dhall.Substitution
@@ -285,6 +290,20 @@ composerProxySourceLabels =
     , "substitutions.composer_proxy.as_source." <> endToEndColdBenchName
     ]
 
+composerProxyManyImportsCodeLabels :: [String]
+composerProxyManyImportsCodeLabels =
+    [ "substitutions.composer_proxy.many_imports.as_code"
+    , "substitutions.composer_proxy.many_imports.as_code.cold"
+    , "substitutions.composer_proxy.many_imports.as_code.warm"
+    ]
+
+composerProxyManyImportsSourceLabels :: [String]
+composerProxyManyImportsSourceLabels =
+    [ "substitutions.composer_proxy.many_imports.as_source"
+    , "substitutions.composer_proxy.many_imports.as_source.cold"
+    , "substitutions.composer_proxy.many_imports.as_source.warm"
+    ]
+
 -- | Pure (1)+(2) probe: same map and @let a@ / @let x@ shape as many_files
 -- modules, but no import/typecheck. Compare @naive@ (shift every value, no
 -- root memo) vs @optimized@ (per-value shift + root-shift cache).
@@ -500,6 +519,167 @@ withOptionalComposerProxyTree True k =
         timed "substitutions.composer_proxy: generate" (writeComposerProxyFixture dir)
         k (Just dir)
 
+-- | Graph-shaped customer-like fixture: overlapping unhashed parents of hashed
+-- wide-record leaves, plus a large substitution map.
+--
+-- Leaves are closed (safe to freeze). Parents import overlapping hashed
+-- leaves under @UserType*@ annotations. Aggregators import overlapping
+-- unhashed parents so @as Source@ re-walks shared parent artifacts.
+manyImportsLeafCount :: Int
+manyImportsLeafCount = 400
+
+manyImportsParentCount :: Int
+manyImportsParentCount = 80
+
+manyImportsAggregatorCount :: Int
+manyImportsAggregatorCount = 16
+
+manyImportsParentFanout :: Int
+manyImportsParentFanout = 40
+
+manyImportsAggregatorFanout :: Int
+manyImportsAggregatorFanout = 20
+
+manyImportsParentStride :: Int
+manyImportsParentStride = 5
+
+manyImportsAggregatorStride :: Int
+manyImportsAggregatorStride = 5
+
+manyImportsLeafExpr :: Int -> Core.Expr Void Void
+manyImportsLeafExpr i =
+    Core.RecordLit
+        (Dhall.Map.fromList
+            [ (fieldName, Core.makeRecordField (Core.NaturalLit n))
+            | j <- [0 .. composerProxyFieldCount - 1]
+            , let fieldName = "f" <> Text.pack (printf "%03d" j)
+                  n = if j == 0 then fromIntegral i else 0
+            ]
+        )
+
+manyImportsLeafHashCode :: Int -> Text
+manyImportsLeafHashCode i =
+    Import.hashExpressionToCode (Core.alphaNormalize (manyImportsLeafExpr i))
+
+writeComposerProxyManyImportsFixture :: FilePath -> IO ()
+writeComposerProxyManyImportsFixture root = do
+    Directory.createDirectoryIfMissing True leavesDir
+    Directory.createDirectoryIfMissing True parentsDir
+    Directory.createDirectoryIfMissing True aggregatorsDir
+    mapM_ writeLeaf [0 .. manyImportsLeafCount - 1]
+    mapM_ writeParent [0 .. manyImportsParentCount - 1]
+    mapM_ writeAggregator [0 .. manyImportsAggregatorCount - 1]
+    Text.IO.writeFile (root </> "package.dhall") packageSource
+    Text.IO.writeFile (root </> "pipeline-code.dhall") "./package.dhall\n"
+    Text.IO.writeFile
+        (root </> "pipeline-source.dhall")
+        "./package.dhall as Source\n"
+  where
+    leavesDir = root </> "leaves"
+    parentsDir = root </> "parents"
+    aggregatorsDir = root </> "aggregators"
+
+    writeLeaf i = do
+        let path = leavesDir </> printf "l%03d.dhall" i
+        Text.IO.writeFile path (Core.pretty (manyImportsLeafExpr i) <> "\n")
+
+    leafIndicesForParent p =
+        [ (p * manyImportsParentStride + j) `mod` manyImportsLeafCount
+        | j <- [0 .. manyImportsParentFanout - 1]
+        ]
+
+    parentIndicesForAggregator a =
+        [ (a * manyImportsAggregatorStride + k) `mod` manyImportsParentCount
+        | k <- [0 .. manyImportsAggregatorFanout - 1]
+        ]
+
+    writeParent p = do
+        let path = parentsDir </> printf "p%03d.dhall" p
+            fields =
+                [ "    l" <> Text.pack (printf "%02d" (j :: Int))
+                    <> " = ../leaves/l"
+                    <> Text.pack (printf "%03d" leaf)
+                    <> ".dhall "
+                    <> manyImportsLeafHashCode leaf
+                    <> " : UserType"
+                    <> Text.pack (printf "%03d" (leaf `mod` composerProxyModuleCount))
+                | (j, leaf) <- zip [0 ..] (leafIndicesForParent p)
+                ]
+        Text.IO.writeFile path ("{\n" <> Text.intercalate "\n  ,\n" fields <> "\n}\n")
+
+    writeAggregator a = do
+        let path = aggregatorsDir </> printf "a%03d.dhall" a
+            rows =
+                [ "    ../parents/p" <> Text.pack (printf "%03d" parent) <> ".dhall"
+                | parent <- parentIndicesForAggregator a
+                ]
+        Text.IO.writeFile path ("[\n" <> Text.intercalate ",\n" rows <> "\n]\n")
+
+    packageSource =
+        let rows =
+                [ "    ./aggregators/a" <> Text.pack (printf "%03d" (a :: Int)) <> ".dhall"
+                | a <- [0 .. manyImportsAggregatorCount - 1]
+                ]
+        in  "[\n" <> Text.intercalate ",\n" rows <> "\n]\n"
+
+withOptionalComposerProxyManyImportsTree :: Bool -> (Maybe FilePath -> IO a) -> IO a
+withOptionalComposerProxyManyImportsTree False k =
+    k Nothing
+withOptionalComposerProxyManyImportsTree True k =
+    Temp.withSystemTempDirectory "dhall-substitutions-composer-proxy-many-imports" $ \dir -> do
+        timed "substitutions.composer_proxy.many_imports: generate"
+            (writeComposerProxyManyImportsFixture dir)
+        k (Just dir)
+
+-- | Stable cache directories for Mode E warm samples. Lives as long as the
+-- generated import tree.
+data ManyImportsWarmCaches = ManyImportsWarmCaches
+    { miwCode :: Maybe FilePath
+    , miwSource :: Maybe FilePath
+    }
+
+withOptionalManyImportsWarmCaches
+    :: Bool -> Bool -> (ManyImportsWarmCaches -> IO a) -> IO a
+withOptionalManyImportsWarmCaches False False k =
+    k ManyImportsWarmCaches { miwCode = Nothing, miwSource = Nothing }
+withOptionalManyImportsWarmCaches wantCode wantSource k =
+    Temp.withSystemTempDirectory "dhall-many-imports-warm-cache" $ \root -> do
+        let codeDir = root </> "as_code"
+            sourceDir = root </> "as_source"
+        when wantCode (Directory.createDirectory codeDir)
+        when wantSource (Directory.createDirectory sourceDir)
+        k ManyImportsWarmCaches
+            { miwCode = if wantCode then Just codeDir else Nothing
+            , miwSource = if wantSource then Just sourceDir else Nothing
+            }
+
+manyImportsEndToEndBenchGroup :: Maybe FilePath -> ColdResolveBench -> Benchmark
+manyImportsEndToEndBenchGroup mCacheHome fixture =
+    bgroup (crbGroupLabel fixture) $
+        bench "cold"
+            (nfAppIO
+                (resolveTypecheckNormalizeCold (crbSettings fixture))
+                (crbParsed fixture)
+            )
+        : case mCacheHome of
+            Nothing -> []
+            Just cacheHome ->
+                [ bench "warm"
+                    (nfAppIO
+                        (resolveTypecheckNormalizeAtCache cacheHome (crbSettings fixture))
+                        (crbParsed fixture)
+                    )
+                ]
+
+warmManyImportsCache :: String -> FilePath -> ColdResolveBench -> IO ()
+warmManyImportsCache label cacheHome fixture =
+    timed label $
+        void $
+            resolveTypecheckNormalizeAtCache
+                cacheHome
+                (crbSettings fixture)
+                (crbParsed fixture)
+
 
 shiftCostBenchGroup :: Benchmark
 shiftCostBenchGroup =
@@ -563,6 +743,10 @@ benchmarks mPattern k = do
             any (couldMatch mPattern) composerProxyCodeLabels
     let wantComposerProxySource =
             any (couldMatch mPattern) composerProxySourceLabels
+    let wantComposerProxyManyImportsCode =
+            any (couldMatch mPattern) composerProxyManyImportsCodeLabels
+    let wantComposerProxyManyImportsSource =
+            any (couldMatch mPattern) composerProxyManyImportsSourceLabels
     let wantShiftCost =
             any (couldMatch mPattern) substitutionsShiftCostLabels
 
@@ -571,7 +755,14 @@ benchmarks mPattern k = do
         $ \manyFilesRoot ->
             withOptionalComposerProxyTree
                 (wantComposerProxyCode || wantComposerProxySource)
-                $ \composerProxyRoot -> do
+                $ \composerProxyRoot ->
+                    withOptionalComposerProxyManyImportsTree
+                        (wantComposerProxyManyImportsCode || wantComposerProxyManyImportsSource)
+                        $ \manyImportsRoot ->
+                            withOptionalManyImportsWarmCaches
+                                wantComposerProxyManyImportsCode
+                                wantComposerProxyManyImportsSource
+                                $ \warmCaches -> do
                     substitutionsManyFilesCode <-
                         case (wantSubstitutionsManyFilesCode, manyFilesRoot) of
                             (True, Just dir) ->
@@ -624,6 +815,50 @@ benchmarks mPattern k = do
                                 say "Skipping substitutions.composer_proxy.as_source (does not match pattern)"
                                 pure Nothing
 
+                    composerProxyManyImportsCode <-
+                        case (wantComposerProxyManyImportsCode, manyImportsRoot) of
+                            (True, Just dir) ->
+                                Just
+                                    <$> loadColdResolveBenchWithSettings
+                                        "substitutions.composer_proxy.many_imports.as_code"
+                                        dir
+                                        "pipeline-code.dhall"
+                                        withComposerProxySubstitutions
+                            _ -> do
+                                say "Skipping substitutions.composer_proxy.many_imports.as_code (does not match pattern)"
+                                pure Nothing
+
+                    composerProxyManyImportsSource <-
+                        case (wantComposerProxyManyImportsSource, manyImportsRoot) of
+                            (True, Just dir) ->
+                                Just
+                                    <$> loadColdResolveBenchWithSettings
+                                        "substitutions.composer_proxy.many_imports.as_source"
+                                        dir
+                                        "pipeline-source.dhall"
+                                        withComposerProxySubstitutions
+                            _ -> do
+                                say "Skipping substitutions.composer_proxy.many_imports.as_source (does not match pattern)"
+                                pure Nothing
+
+                    case (composerProxyManyImportsCode, miwCode warmCaches) of
+                        (Just fixture, Just cacheHome) ->
+                            warmManyImportsCache
+                                "composer_proxy.many_imports.as_code: warm cache"
+                                cacheHome
+                                fixture
+                        _ ->
+                            pure ()
+
+                    case (composerProxyManyImportsSource, miwSource warmCaches) of
+                        (Just fixture, Just cacheHome) ->
+                            warmManyImportsCache
+                                "composer_proxy.many_imports.as_source: warm cache"
+                                cacheHome
+                                fixture
+                        _ ->
+                            pure ()
+
                     k $ concat
                         [ [ substitutionsColdResolveBenchGroup fixture
                           | Just fixture <- [substitutionsCode]
@@ -642,6 +877,12 @@ benchmarks mPattern k = do
                           ]
                         , [ endToEndColdBenchGroup fixture
                           | Just fixture <- [composerProxySource]
+                          ]
+                        , [ manyImportsEndToEndBenchGroup (miwCode warmCaches) fixture
+                          | Just fixture <- [composerProxyManyImportsCode]
+                          ]
+                        , [ manyImportsEndToEndBenchGroup (miwSource warmCaches) fixture
+                          | Just fixture <- [composerProxyManyImportsSource]
                           ]
                         , [ shiftCostBenchGroup | wantShiftCost ]
                         ]

@@ -14,6 +14,9 @@
 --   Mode D (end_to_end_cold): parse-only prep; each sample uses a fresh
 --     XDG_CACHE_HOME and runs resolveWithSettings → typeOf → normalize.
 --
+--   Mode E (warm): parse-only prep plus one cache-warming run in a stable
+--     temp XDG_CACHE_HOME; timed samples reuse that directory.
+--
 --   Mode C (implicit): some as Source large6 costs appear on evaluation, not
 --     resolve. See large6/README.md matrix.
 --
@@ -30,7 +33,8 @@ import qualified Bench.Semisemantic as Semisemantic
 import qualified Bench.Substitutions as Substitutions
 
 -- Prep uses disk caches for Mode A validity + phase benches; Mode B/D fixtures
--- skip cache-warming resolve. See benchmark/evaluation/README.md.
+-- skip cache-warming resolve. Mode E warms a dedicated temp cache during prep.
+-- See benchmark/evaluation/README.md.
 main :: IO ()
 main = do
     args <- getArgs

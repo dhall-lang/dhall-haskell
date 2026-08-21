@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | Shared types, resolve helpers, and Mode A/B/D bench builders for the
+-- | Shared types, resolve helpers, and Mode A/B/D/E bench builders for the
 -- evaluation suite. See README.md for harness modes.
 module Bench.Common
     ( ParsedExpr
@@ -14,11 +14,14 @@ module Bench.Common
     , coldResolveBenchName
     , coldResolveLabels
     , endToEndColdBenchName
+    , endToEndWarmBenchName
     , resolveWithCache
     , resolveWithoutCache
     , resolveWithColdCache
     , resolveWithSettingsCold
+    , resolveTypecheckNormalize
     , resolveTypecheckNormalizeCold
+    , resolveTypecheckNormalizeAtCache
     , ensureWellTyped
     , pipelineSettings
     , loadPipelineBench
@@ -32,17 +35,17 @@ module Bench.Common
     , coldResolveBenchGroup
     , substitutionsColdResolveBenchGroup
     , endToEndColdBenchGroup
+    , endToEndWarmBenchGroup
     ) where
 
 import Control.Exception (bracket, throw)
 import Data.Char (toLower)
 import Data.List (isInfixOf, isPrefixOf)
 import Data.Maybe (listToMaybe, mapMaybe)
-import Data.Text (Text)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Data.Void (Void)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>))
 import System.IO (hFlush, stdout)
 import Text.Printf (printf)
 import Test.Tasty.Bench
@@ -119,25 +122,41 @@ resolveWithSettingsCold :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveWithSettingsCold settings parsed =
     withFreshCacheHome (Dhall.resolveWithSettings settings parsed)
 
+-- | Library resolve, then typecheck and normalize. Disk caches follow
+-- @XDG_CACHE_HOME@.
+resolveTypecheckNormalize
+    :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
+resolveTypecheckNormalize settings parsed = do
+    resolved <- Dhall.resolveWithSettings settings parsed
+    _ <- either throw pure (TypeCheck.typeOf resolved)
+    pure (Core.normalize resolved)
+
 -- | Mode D: cold library resolve, then typecheck and normalize under a fresh
 -- cache. Synthetic substitution-heavy end-to-end path (import + typecheck + NF).
 resolveTypecheckNormalizeCold
     :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveTypecheckNormalizeCold settings parsed =
-    withFreshCacheHome $ do
-        resolved <- Dhall.resolveWithSettings settings parsed
-        _ <- either throw pure (TypeCheck.typeOf resolved)
-        pure (Core.normalize resolved)
+    withFreshCacheHome (resolveTypecheckNormalize settings parsed)
+
+-- | Mode E: same end-to-end path as Mode D, using a stable cache directory
+-- (typically warmed once during prep).
+resolveTypecheckNormalizeAtCache
+    :: FilePath -> Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
+resolveTypecheckNormalizeAtCache cacheHome settings parsed =
+    withCacheHome cacheHome (resolveTypecheckNormalize settings parsed)
 
 withFreshCacheHome :: IO a -> IO a
-withFreshCacheHome action = do
-    originalCacheHome <- lookupEnv "XDG_CACHE_HOME"
-
+withFreshCacheHome action =
     Temp.withSystemTempDirectory "dhall-evaluation-bench" $ \cacheHome ->
-        bracket
-            (setEnv "XDG_CACHE_HOME" cacheHome)
-            (\() -> restoreCacheHome originalCacheHome)
-            (\() -> action)
+        withCacheHome cacheHome action
+
+withCacheHome :: FilePath -> IO a -> IO a
+withCacheHome cacheHome action = do
+    originalCacheHome <- lookupEnv "XDG_CACHE_HOME"
+    bracket
+        (setEnv "XDG_CACHE_HOME" cacheHome)
+        (\() -> restoreCacheHome originalCacheHome)
+        (\() -> action)
 
 restoreCacheHome :: Maybe String -> IO ()
 restoreCacheHome =
@@ -194,6 +213,10 @@ coldResolveLabels prefix =
 -- | Bench name for Mode D end-to-end cold (resolve + typecheck + normalize).
 endToEndColdBenchName :: String
 endToEndColdBenchName = "end_to_end_cold"
+
+-- | Bench name for Mode E end-to-end with a warmed, reused disk cache.
+endToEndWarmBenchName :: String
+endToEndWarmBenchName = "warm"
 
 encodeNormalized :: ResolvedExpr -> ByteString.ByteString
 encodeNormalized = Binary.encodeExpression . Core.denote
@@ -315,6 +338,17 @@ endToEndColdBenchGroup fixture =
         [ bench endToEndColdBenchName
             (nfAppIO
                 (resolveTypecheckNormalizeCold (crbSettings fixture))
+                (crbParsed fixture)
+            )
+        ]
+
+-- | Mode E: same end-to-end action as Mode D, against a prep-warmed cache.
+endToEndWarmBenchGroup :: FilePath -> ColdResolveBench -> Benchmark
+endToEndWarmBenchGroup cacheHome fixture =
+    bgroup (crbGroupLabel fixture)
+        [ bench endToEndWarmBenchName
+            (nfAppIO
+                (resolveTypecheckNormalizeAtCache cacheHome (crbSettings fixture))
                 (crbParsed fixture)
             )
         ]
