@@ -34,9 +34,9 @@ Generated at prep (not committed):
 
 | Layer | Shape |
 |-------|--------|
-| `leaves/` | 400 closed 64-field Natural records (hashed) |
-| `parents/` | 80 modules; each imports 40 overlapping hashed leaves, annotated with `UserType*` |
-| `aggregators/` | 16 modules; each imports 20 overlapping unhashed parents |
+| `leaves/` | 100 closed 64-field Natural records (hashed) |
+| `parents/` | 24 modules; each imports 16 overlapping hashed leaves, annotated with `UserType*` |
+| `aggregators/` | 8 modules; each imports 10 overlapping unhashed parents |
 | `package.dhall` | list of aggregators |
 
 Overlapping **unhashed** parents are the Source-cost amplifier: Code hits

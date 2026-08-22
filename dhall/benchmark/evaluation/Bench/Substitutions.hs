@@ -525,26 +525,28 @@ withOptionalComposerProxyTree True k =
 -- Leaves are closed (safe to freeze). Parents import overlapping hashed
 -- leaves under @UserType*@ annotations. Aggregators import overlapping
 -- unhashed parents so @as Source@ re-walks shared parent artifacts.
+-- Sized so warm end-to-end samples land around 1s, while keeping an
+-- overlapping hashed-leaf graph. The flat composer_proxy control is unchanged.
 manyImportsLeafCount :: Int
-manyImportsLeafCount = 400
+manyImportsLeafCount = 100
 
 manyImportsParentCount :: Int
-manyImportsParentCount = 80
+manyImportsParentCount = 24
 
 manyImportsAggregatorCount :: Int
-manyImportsAggregatorCount = 16
+manyImportsAggregatorCount = 8
 
 manyImportsParentFanout :: Int
-manyImportsParentFanout = 40
+manyImportsParentFanout = 16
 
 manyImportsAggregatorFanout :: Int
-manyImportsAggregatorFanout = 20
+manyImportsAggregatorFanout = 10
 
 manyImportsParentStride :: Int
-manyImportsParentStride = 5
+manyImportsParentStride = 3
 
 manyImportsAggregatorStride :: Int
-manyImportsAggregatorStride = 5
+manyImportsAggregatorStride = 2
 
 manyImportsLeafExpr :: Int -> Core.Expr Void Void
 manyImportsLeafExpr i =
