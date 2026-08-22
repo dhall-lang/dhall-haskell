@@ -1,0 +1,29 @@
+# GHC 9.12 is on Stackage Nightly; LTS 25 is not released yet.
+resolver: nightly-2026-08-20
+packages:
+  - dhall-test-server
+  - dhall
+  - dhall-bash
+  - dhall-csv
+  - dhall-docs
+  - dhall-json
+  - dhall-lsp-server
+  # - dhall-nix
+  - dhall-openapi
+  - dhall-toml
+  - dhall-yaml
+extra-deps:
+  - turtle-1.6.2
+# turtle is not on Nightly and still upper-bounds optparse-applicative < 0.19
+# and ansi-wl-pprint < 1.1; Nightly has newer versions of both.
+allow-newer: true
+allow-newer-deps:
+  - turtle
+nix:
+  packages:
+    - ncurses
+    - zlib
+flags:
+  # https://github.com/RyanGlScott/mintty/issues/4
+  mintty:
+    Win32-2-13-1: false
