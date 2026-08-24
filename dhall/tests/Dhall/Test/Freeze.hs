@@ -51,6 +51,9 @@ getTests = do
                 "nested frozen child survives as Source"
                 nestedFrozenChildSurvivesAsSource
             , Tasty.HUnit.testCase
+                "nested frozen child with relative imports survives as Source"
+                nestedFrozenChildWithRelativeImportsSurvivesAsSource
+            , Tasty.HUnit.testCase
                 "nested frozen child survives as Source hash command"
                 nestedFrozenChildSurvivesAsSourceHash
             ]
@@ -254,6 +257,78 @@ nestedFrozenChildSurvivesAsSource =
 
         let message =
                 "A frozen child preserved inside an as Source artifact should keep the base directory it was chained against"
+
+        Tasty.HUnit.assertEqual
+            message
+            (Core.normalize expectedResolved :: Core.Expr Void Void)
+            (Core.normalize actualResolved   :: Core.Expr Void Void)
+
+-- | Like 'nestedFrozenChildSurvivesAsSource', but the hashed child itself
+-- contains a relative import of a sibling file.
+--
+-- @
+-- directory/
+--   outer/package.dhall         has contents:  ./inner/package.dhall
+--   outer/inner/package.dhall   has contents:  ./webhook.dhall sha256:...
+--   outer/inner/webhook.dhall   has contents:  { clientConfig = ./config.dhall }
+--   outer/inner/config.dhall    has contents:  { url = \"https://example.com\" }
+-- @
+--
+-- Prevents: @Missing file@ when a later pass reloads the hashed child without
+-- that file on the import stack, so @./config.dhall@ is chained against
+-- @outer/package.dhall@ instead of @outer/inner/@. That is the
+-- @large3.source@ failure with hashed @dhall-kubernetes@ type files such as
+-- @MutatingWebhook.dhall@ importing @./WebhookClientConfig.dhall@.
+nestedFrozenChildWithRelativeImportsSurvivesAsSource :: IO ()
+nestedFrozenChildWithRelativeImportsSurvivesAsSource =
+    Temp.withSystemTempDirectory "dhall-import-as-source-nested-rel" $ \directory ->
+    Temp.withSystemTempDirectory "dhall-import-as-source-cache-rel" $ \cacheDir -> do
+        let outerDirectory = directory FilePath.</> "outer"
+        let innerDirectory = outerDirectory FilePath.</> "inner"
+
+        Directory.createDirectoryIfMissing True innerDirectory
+
+        let configFile = innerDirectory FilePath.</> "config.dhall"
+        let webhookFile = innerDirectory FilePath.</> "webhook.dhall"
+        let innerPackageFile = innerDirectory FilePath.</> "package.dhall"
+        let outerPackageFile = outerDirectory FilePath.</> "package.dhall"
+
+        Text.IO.writeFile configFile "{ url = \"https://example.com\" }\n"
+        Text.IO.writeFile webhookFile "{ clientConfig = ./config.dhall }\n"
+
+        originalCache <- Environment.lookupEnv "XDG_CACHE_HOME"
+
+        let setCache home = Environment.setEnv "XDG_CACHE_HOME" home
+            restoreCache = maybe
+                (Environment.unsetEnv "XDG_CACHE_HOME")
+                (Environment.setEnv "XDG_CACHE_HOME")
+                originalCache
+
+        actualResolved <- Exception.bracket_ (setCache cacheDir) restoreCache $ do
+            parsedFrozenChild <-
+                Core.throws (Parser.exprFromText "(input)" "./webhook.dhall")
+
+            frozenChild <-
+                Freeze.freezeExpression innerDirectory AllImports Secure parsedFrozenChild
+
+            Text.IO.writeFile innerPackageFile (Core.pretty frozenChild <> "\n")
+            Text.IO.writeFile outerPackageFile "./inner/package.dhall\n"
+
+            parsedMain <-
+                Core.throws
+                    (Parser.exprFromText "(input)" "./outer/package.dhall as Source")
+
+            State.evalStateT
+                (Test.Util.loadWith parsedMain)
+                (Lens.set Import.reportWarning (\_ -> return ())
+                    (Import.emptyStatus directory))
+
+        expected <- Core.throws
+            (Parser.exprFromText "(expected)" "{ clientConfig = { url = \"https://example.com\" } }")
+        expectedResolved <- Import.assertNoImports expected
+
+        let message =
+                "A hashed child with nested relative imports should resolve them against its own directory under as Source"
 
         Tasty.HUnit.assertEqual
             message
