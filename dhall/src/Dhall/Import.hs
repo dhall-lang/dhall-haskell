@@ -1331,11 +1331,20 @@ memoizedMerkleFingerprints = do
     return (contextHash, substitutionsHash)
 
 loadSourceImportArtifact :: Chained -> StateT Status IO (Expr Void Import)
-loadSourceImportArtifact (Chained (Import (ImportHashed _ importType) _)) = do
+loadSourceImportArtifact import_@(Chained (Import (ImportHashed _ importType) _)) = do
+    importStack <- use stack
+
+    -- Nested Here/Parent imports chain against 'stack'. Push this file so
+    -- callers that parse it without going through 'loadImports' still
+    -- resolve children relative to it rather than an outer parent.
+    assign stack (NonEmpty.cons import_ importStack)
+
     parsedImport <- parseImportedExpression importType
 
     -- Preserve hashed child imports as references while inlining unhashed ones.
     resolvedExpr <- loadWithSource PreserveHashedImports parsedImport
+
+    assign stack importStack
 
     return (Core.denote resolvedExpr)
 
