@@ -1229,6 +1229,7 @@ data SemisemanticPayload
     = SemisemanticCachedNF Data.ByteString.ByteString
     | SemisemanticWellTyped
     | SemisemanticSourceProduct Data.ByteString.ByteString
+    | SemisemanticSourceKeyIndex Data.ByteString.ByteString
 
 semisemanticNFTag :: Data.ByteString.ByteString
 semisemanticNFTag = Data.ByteString.singleton 0
@@ -1239,6 +1240,9 @@ semisemanticTypedTag = Data.ByteString.singleton 1
 semisemanticSourceProductTag :: Data.ByteString.ByteString
 semisemanticSourceProductTag = Data.ByteString.singleton 2
 
+semisemanticSourceKeyIndexTag :: Data.ByteString.ByteString
+semisemanticSourceKeyIndexTag = Data.ByteString.singleton 3
+
 encodeSemisemanticPayload :: SemisemanticPayload -> Data.ByteString.ByteString
 encodeSemisemanticPayload (SemisemanticCachedNF bytes) =
     semisemanticNFTag <> bytes
@@ -1246,6 +1250,8 @@ encodeSemisemanticPayload SemisemanticWellTyped =
     semisemanticTypedTag
 encodeSemisemanticPayload (SemisemanticSourceProduct bytes) =
     semisemanticSourceProductTag <> bytes
+encodeSemisemanticPayload (SemisemanticSourceKeyIndex bytes) =
+    semisemanticSourceKeyIndexTag <> bytes
 
 decodeSemisemanticPayload
     :: Data.ByteString.ByteString -> Maybe SemisemanticPayload
@@ -1258,6 +1264,8 @@ decodeSemisemanticPayload bytes =
                 Just SemisemanticWellTyped
         Just (2, rest) ->
             Just (SemisemanticSourceProduct rest)
+        Just (3, rest) ->
+            Just (SemisemanticSourceKeyIndex rest)
         _ ->
             Nothing
 
@@ -1517,8 +1525,211 @@ sourceMerkleChildHash child =
         _ ->
             return Nothing
 
+sourceKeyIndexDomain :: Data.ByteString.ByteString
+sourceKeyIndexDomain = Encoding.encodeUtf8 "source-key-index-v1"
+
+-- | Absolute local-file identity for the Source key index. 'Env' / 'Remote' /
+-- 'Missing' are unsupported for now and return 'Nothing'.
+sourceKeyIndexLocalIdentity
+    :: ImportType -> StateT Status IO (Maybe Text)
+sourceKeyIndexLocalIdentity (Local prefix file) = do
+    home <- use getHomeDirectory
+    path <- liftIO (localToPathWith home prefix file)
+    absolutePath <- liftIO (Directory.makeAbsolute path)
+    return (Just (Text.pack absolutePath))
+sourceKeyIndexLocalIdentity _ =
+    return Nothing
+
+encodeSourceKeyIndexPayload
+    :: Dhall.Crypto.SHA256Digest
+    -> [(Import, Dhall.Crypto.SHA256Digest)]
+    -> Data.ByteString.ByteString
+encodeSourceKeyIndexPayload key children =
+    Data.ByteString.Lazy.toStrict
+        ( Codec.Serialise.serialise
+            ( Dhall.Crypto.unSHA256Digest key
+            , [ ( encodeExpressionWithImports (Embed childImport)
+                , Dhall.Crypto.unSHA256Digest childDigest
+                )
+              | (childImport, childDigest) <- children
+              ]
+            )
+        )
+
+decodeSourceKeyIndexPayload
+    :: Data.ByteString.ByteString
+    -> Maybe
+        ( Dhall.Crypto.SHA256Digest
+        , [(Import, Dhall.Crypto.SHA256Digest)]
+        )
+decodeSourceKeyIndexPayload bytesStrict =
+    case Codec.Serialise.deserialiseOrFail
+            (Data.ByteString.Lazy.fromStrict bytesStrict) of
+        Left _ ->
+            Nothing
+        Right (keyBytes, childPairs) -> do
+            key <- Dhall.Crypto.sha256DigestFromByteString keyBytes
+            children <- traverse decodeChild childPairs
+            return (key, children)
+  where
+    decodeChild (importBytes, digestBytes) = do
+        childImport <- case Dhall.Binary.decodeExpression
+                (Data.ByteString.Lazy.fromStrict importBytes)
+                  :: Either Dhall.Binary.DecodingFailure (Expr Void Import) of
+            Right (Embed import_) ->
+                Just import_
+            _ ->
+                Nothing
+        digest <- Dhall.Crypto.sha256DigestFromByteString digestBytes
+        return (childImport, digest)
+
+computeSourceKeyIndexFingerprint
+    :: Text
+    -> Data.ByteString.ByteString
+    -> StateT Status IO Dhall.Crypto.SHA256Digest
+computeSourceKeyIndexFingerprint identity textBytes = do
+    (contextHash, substitutionsHash) <- memoizedMerkleFingerprints
+
+    let textHash = Dhall.Crypto.sha256Hash textBytes
+
+    return
+        ( Dhall.Crypto.sha256Hash
+            ( sourceKeyIndexDomain
+           <> Encoding.encodeUtf8 identity
+           <> Dhall.Crypto.unSHA256Digest textHash
+           <> Dhall.Crypto.unSHA256Digest contextHash
+           <> Dhall.Crypto.unSHA256Digest substitutionsHash
+            )
+        )
+
+collectSourceKeyIndexChildren
+    :: Chained
+    -> Expr Void Import
+    -> StateT Status IO (Maybe [(Import, Dhall.Crypto.SHA256Digest)])
+collectSourceKeyIndexChildren parent = go
+  where
+    go expr =
+        case Core.shallowDenote expr of
+            Embed childImport -> do
+                child <- chainImport parent childImport
+                checkSourceMerkleChild childImport child
+                mHash <- sourceMerkleChildHash child
+                return (fmap (\digest -> [(childImport, digest)]) mHash)
+            unwrapped -> do
+                let FunctorConst.Const kids =
+                        Syntax.subExpressions
+                            (\child -> FunctorConst.Const [child])
+                            unwrapped
+                mLists <- traverse go kids
+                return (fmap concat (sequence mLists))
+
+-- | Try the on-disk Source syntax-key index for a local file.
+--
+-- The index key is a fingerprint of absolute path + raw source text hash +
+-- context/substitution fingerprints (not mtime). The payload stores the
+-- computed syntax-merkle key and the child imports/digests used to build it.
+-- A hit is accepted only when every stored child digest still matches.
+tryLoadSourceKeyFromIndex
+    :: Chained -> StateT Status IO (Maybe Dhall.Crypto.SHA256Digest)
+tryLoadSourceKeyFromIndex sourceChild@(Chained (Import (ImportHashed _ importType) _)) = do
+    Status { _reportWarning, _normalizer } <- State.get
+
+    if isJust _normalizer
+        then return Nothing
+        else do
+            mIdentity <- sourceKeyIndexLocalIdentity importType
+
+            case mIdentity of
+                Nothing ->
+                    return Nothing
+                Just identity -> do
+                    text <- fetchFresh importType
+                    let textBytes = Encoding.encodeUtf8 text
+                    fingerprint <-
+                        computeSourceKeyIndexFingerprint identity textBytes
+
+                    mCached <-
+                        zoom cacheWarning
+                            (fetchFromSemisemanticCache _reportWarning fingerprint)
+
+                    case mCached of
+                        Just (SemisemanticSourceKeyIndex bytesStrict)
+                            | Just (storedKey, children) <-
+                                decodeSourceKeyIndexPayload bytesStrict -> do
+                                importStack <- use stack
+                                assign stack
+                                    (NonEmpty.cons sourceChild importStack)
+                                valid <- validateSourceKeyIndexChildren
+                                    sourceChild
+                                    children
+                                assign stack importStack
+                                if valid
+                                    then return (Just storedKey)
+                                    else return Nothing
+                        _ ->
+                            return Nothing
+
+validateSourceKeyIndexChildren
+    :: Chained
+    -> [(Import, Dhall.Crypto.SHA256Digest)]
+    -> StateT Status IO Bool
+validateSourceKeyIndexChildren parent = go
+  where
+    go [] =
+        return True
+    go ((childImport, expected) : rest) = do
+        child <- chainImport parent childImport
+        checkSourceMerkleChild childImport child
+        mActual <- sourceMerkleChildHash child
+        case mActual of
+            Just actual
+                | actual == expected ->
+                    go rest
+            _ ->
+                return False
+
+writeSourceKeyIndex
+    :: Chained
+    -> Expr Src Import
+    -> Dhall.Crypto.SHA256Digest
+    -> StateT Status IO ()
+writeSourceKeyIndex sourceChild@(Chained (Import (ImportHashed _ importType) _)) parsedImport key = do
+    Status { _reportWarning, _normalizer } <- State.get
+
+    unless (isJust _normalizer) $ do
+        mIdentity <- sourceKeyIndexLocalIdentity importType
+
+        case mIdentity of
+            Nothing ->
+                return ()
+            Just identity -> do
+                mChildren <-
+                    collectSourceKeyIndexChildren
+                        sourceChild
+                        (Core.denote parsedImport)
+
+                case mChildren of
+                    Nothing ->
+                        return ()
+                    Just children -> do
+                        text <- fetchFresh importType
+                        let textBytes = Encoding.encodeUtf8 text
+                        fingerprint <-
+                            computeSourceKeyIndexFingerprint identity textBytes
+                        let payload =
+                                encodeSourceKeyIndexPayload key children
+                        zoom cacheWarning
+                            (writeToSemisemanticCache
+                                _reportWarning
+                                fingerprint
+                                (SemisemanticSourceKeyIndex payload)
+                            )
+
 -- | Syntax merkle key of an unhashed @as Source@ view: parse the file and
--- recurse. Memoized per run so diamond import graphs stay cheap.
+-- recurse. Memoized per run so diamond import graphs stay cheap. Local files
+-- also consult a persistent key index keyed by source-text hash so repeated
+-- resolves can validate child digests without rebuilding every parent
+-- skeleton from scratch.
 sourceSyntaxMerkleKey :: Chained -> StateT Status IO (Maybe Dhall.Crypto.SHA256Digest)
 sourceSyntaxMerkleKey sourceChild = do
     cachedKeys <- use sourceMerkleKeyCache
@@ -1532,23 +1743,32 @@ sourceSyntaxMerkleKey sourceChild = do
             if sourceChild `elem` importStack
                 then throwMissingImportM (Cycle (chainedImport sourceChild))
                 else do
-                    assign stack (NonEmpty.cons sourceChild importStack)
+                    mIndexed <- tryLoadSourceKeyFromIndex sourceChild
 
-                    parsedImport <-
-                        parseImportedExpression
-                            (importType (importHashed (chainedImport sourceChild)))
-
-                    mKey <- maybeComputeSourceMerkleHash sourceChild parsedImport
-
-                    assign stack importStack
-
-                    case mKey of
-                        Nothing ->
-                            return Nothing
+                    case mIndexed of
                         Just key -> do
                             zoom sourceMerkleKeyCache
                                 (State.modify (Dhall.Map.insert sourceChild key))
                             return (Just key)
+                        Nothing -> do
+                            assign stack (NonEmpty.cons sourceChild importStack)
+
+                            parsedImport <-
+                                parseImportedExpression
+                                    (importType (importHashed (chainedImport sourceChild)))
+
+                            mKey <- maybeComputeSourceMerkleHash sourceChild parsedImport
+
+                            assign stack importStack
+
+                            case mKey of
+                                Nothing ->
+                                    return Nothing
+                                Just key -> do
+                                    writeSourceKeyIndex sourceChild parsedImport key
+                                    zoom sourceMerkleKeyCache
+                                        (State.modify (Dhall.Map.insert sourceChild key))
+                                    return (Just key)
 
 tryLoadSourceFromMerkleCache
     :: Chained -> StateT Status IO (Maybe ImportSemantics)
