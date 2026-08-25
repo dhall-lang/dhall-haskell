@@ -27,6 +27,7 @@ import qualified Data.Text.IO       as Text.IO
 import qualified Dhall
 import qualified Dhall.Context
 import qualified Dhall.Core         as Core
+import qualified Dhall.Crypto       as Crypto
 import qualified Dhall.Import       as Import
 import qualified Dhall.Map
 import qualified Lens.Micro
@@ -44,12 +45,14 @@ getTests = return
         , testCase "Child change invalidates parent cache" childChangeInvalidatesParentTest
         , testCase "as Source still evaluates" asSourceStillWorksTest
         , testCase "Source product is cached and reused" sourceProductCachedTest
+        , testCase "Source product bytes hash matches encoded product" sourceProductBytesDerivedHashTest
         , testCase "Source cache is distinct from Code cache" sourceCacheDistinctFromCodeTest
         , testCase "Child source change invalidates parent Source cache" childSourceChangeInvalidatesParentTest
         , testCase "Substitution fingerprint invalidates Source cache" substitutionFingerprintInvalidatesSourceTest
         , testCase "Starting context fingerprint invalidates Source cache" startingContextFingerprintInvalidatesSourceTest
         , testCase "Hash-protected Code child uses Source edge hash" hashedCodeChildUsesSourceEdgeHashTest
         , testCase "Corrupt Source payload is ignored" corruptSourcePayloadIgnoredTest
+        , testCase "Corrupt Source key index is ignored" corruptSourceKeyIndexIgnoredTest
         , testCase "Deep Source graph cache hit is stable" deepSourceGraphCacheHitTest
         , testCase "Overlapping Source parents share children safely" overlappingSourceParentsTest
         , testCase "ImportAlt falls back to Phase 1" importAltFallsBackTest
@@ -232,6 +235,9 @@ asSourceStillWorksTest = withTempCache $ \_cacheDir ->
 sourceProductTag :: Word8
 sourceProductTag = 2
 
+sourceKeyIndexTag :: Word8
+sourceKeyIndexTag = 3
+
 typedMarkerTag :: Word8
 typedMarkerTag = 1
 
@@ -273,6 +279,44 @@ sourceProductCachedTest = withTempCache $ \cacheDir ->
         expected <- Dhall.inputExpr "{ x = 1, y = 2 }"
         assertNormalizedEqual "first Source load" expected result1
         assertNormalizedEqual "cached Source reload" expected result2
+
+-- | Tag-2 product bytes are the Source-product identity: their SHA256 matches
+-- hashing the CBOR encoding of the resolved Source expression. Cache hits
+-- reuse that bytes-derived hash rather than re-encoding a decoded AST.
+sourceProductBytesDerivedHashTest :: IO ()
+sourceProductBytesDerivedHashTest = withTempCache $ \cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-bytes-hash" $ \dir -> do
+        let path = dir </> "value.dhall"
+        Text.IO.writeFile path "{ x = 1, y = 2 }"
+
+        result <- inputSourceFile path
+        files <- listCacheFiles cacheDir
+        productPayloads <- fmap concat (traverse readProductPayload files)
+        assertBool "expected at least one tag-2 Source product"
+            (not (null productPayloads))
+
+        let expectedHash =
+                Import.hashExpression (Core.denote result :: Core.Expr Void Void)
+        traverse_
+            (\payload ->
+                assertEqual
+                    "bytes-derived product hash matches encodeExpression hash"
+                    expectedHash
+                    (Crypto.sha256Hash payload)
+            )
+            productPayloads
+
+        result2 <- inputSourceFile path
+        assertNormalizedEqual "bytes-hash hit still returns the product" result result2
+  where
+    readProductPayload file = do
+        bytes <- ByteString.readFile file
+        case ByteString.uncons bytes of
+            Just (tag, rest)
+                | tag == sourceProductTag ->
+                    return [rest]
+            _ ->
+                return []
 
 -- | Warming Code cache then loading as Source must use a distinct tag/key.
 sourceCacheDistinctFromCodeTest :: IO ()
@@ -424,6 +468,46 @@ corruptSourcePayloadIgnoredTest = withTempCache $ \cacheDir ->
         expected <- Dhall.inputExpr "{ x = 1, y = 2 }"
         assertNormalizedEqual "recompute after corrupt Source payload" expected result
 
+-- | Corrupt tag-3 Source key-index payloads must be ignored so Phase 2 still
+-- recomputes syntax keys and returns the correct product.
+corruptSourceKeyIndexIgnoredTest :: IO ()
+corruptSourceKeyIndexIgnoredTest = withTempCache $ \cacheDir ->
+    Temp.withSystemTempDirectory "dhall-source-index-corrupt" $ \dir -> do
+        Text.IO.writeFile (dir </> "leaf.dhall") "1"
+        Text.IO.writeFile (dir </> "parent.dhall") "./leaf.dhall"
+
+        let loadParent = do
+                let settings =
+                        Lens.Micro.set Dhall.sourceName (dir </> "parent.dhall")
+                            ( Lens.Micro.set Dhall.rootDirectory dir
+                                Dhall.defaultInputSettings
+                            )
+                Dhall.inputExprWithSettings settings "./parent.dhall as Source"
+
+        result1 <- loadParent
+        tags1 <- payloadTags cacheDir
+        assertBool "Source key index tag-3 entry exists after first load"
+            (sourceKeyIndexTag `elem` tags1)
+
+        files <- listCacheFiles cacheDir
+        traverse_ corruptIndexOnly files
+
+        result2 <- loadParent
+        expected <- Dhall.inputExpr "1"
+        assertNormalizedEqual "first Source graph load" expected result1
+        assertNormalizedEqual "recompute after corrupt Source key index" expected result2
+  where
+    corruptIndexOnly file = do
+        bytes <- ByteString.readFile file
+        case ByteString.uncons bytes of
+            Just (tag, _)
+                | tag == sourceKeyIndexTag ->
+                    ByteString.writeFile
+                        file
+                        (ByteString.pack [sourceKeyIndexTag, 0xff, 0x00])
+            _ ->
+                return ()
+
 deepSourceGraphCacheHitTest :: IO ()
 deepSourceGraphCacheHitTest = withTempCache $ \cacheDir ->
     Temp.withSystemTempDirectory "dhall-source-deep" $ \dir -> do
@@ -441,8 +525,11 @@ deepSourceGraphCacheHitTest = withTempCache $ \cacheDir ->
 
         result1 <- loadParent
         filesAfterFirst <- listCacheFiles cacheDir
+        tagsAfterFirst <- payloadTags cacheDir
         assertBool "deep Source graph writes cache entries"
             (not (null filesAfterFirst))
+        assertBool "deep Source graph writes Source key index entries"
+            (sourceKeyIndexTag `elem` tagsAfterFirst)
 
         result2 <- loadParent
         filesAfterSecond <- listCacheFiles cacheDir
