@@ -989,31 +989,34 @@ loadImportWithSemisemanticCache
 
             finalized <- case mCached of
                 Just (SemisemanticSourceProduct bytesStrict)
-                    | Just decoded <- decodeSourceProduct bytesStrict ->
+                    | Just decoded <- decodeSourceProduct bytesStrict -> do
+                        rememberSourceProductHash
+                            import_
+                            (sourceProductHashFromBytes bytesStrict)
+                        unless hasCustomNormalizer $
+                            writeSourceMerkleCache import_ bytesStrict
                         return decoded
                 _ -> do
                     computed <- finalizeSourceImport sourceArtifact
 
                     unless hasCustomNormalizer $ do
                         let bytes = encodeExpression (importSemantics computed)
+                        rememberSourceProductHash
+                            import_
+                            (sourceProductHashFromBytes bytes)
                         zoom cacheWarning
                             (writeToSemisemanticCache
                                 _reportWarning
                                 semisemanticHash
                                 (SemisemanticSourceProduct bytes)
                             )
+                        writeSourceMerkleCache import_ bytes
 
                     return computed
 
-            unless hasCustomNormalizer $
-                writeSourceMerkleCache import_ finalized
-
             return finalized
 
-    let edgeHash =
-            Dhall.Crypto.sha256Hash (encodeExpression (importSemantics semantics))
-
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    rememberSourceProductHash import_ =<< sourceProductHashOf import_
 
     return semantics
 
@@ -1319,6 +1322,22 @@ replaceEmbedsWithEdgeHashes parent =
         )
         (replaceEmbedsWithEdgeHashes parent)
 
+-- | SHA256 of CBOR bytes already stored for a Source product.
+--
+--   This is the Source-product identity: it names the finalized import-free
+--   expression, not a Code normal form. Hashing the stored bytes avoids a
+--   second CBOR encode of a decoded product. A Code integrity hash is not a
+--   substitute: @let x = 1 in x@ and @1@ share a Code NF while differing as
+--   Source.
+sourceProductHashFromBytes
+    :: Data.ByteString.ByteString -> Dhall.Crypto.SHA256Digest
+sourceProductHashFromBytes = Dhall.Crypto.sha256Hash
+
+rememberSourceProductHash
+    :: Chained -> Dhall.Crypto.SHA256Digest -> StateT Status IO ()
+rememberSourceProductHash import_ edgeHash =
+    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+
 -- | Like 'edgeHashOf', but the hash names the child's @as Source@ product.
 --
 -- A Code integrity hash is not sufficient: two children can share a Code
@@ -1338,21 +1357,35 @@ sourceEdgeHashOf child =
 
 sourceProductHashOf :: Chained -> StateT Status IO Dhall.Crypto.SHA256Digest
 sourceProductHashOf sourceChild = do
-    cached <- use cache
+    cachedHashes <- use merkleHashCache
 
-    case Dhall.Map.lookup sourceChild cached of
-        Just ImportSemantics{ importSemantics } ->
-            return (Dhall.Crypto.sha256Hash (encodeExpression importSemantics))
+    case Dhall.Map.lookup sourceChild cachedHashes of
+        Just merkleHash ->
+            return merkleHash
         Nothing -> do
-            cachedHashes <- use merkleHashCache
+            cached <- use cache
 
-            case Dhall.Map.lookup sourceChild cachedHashes of
-                Just merkleHash ->
-                    return merkleHash
+            case Dhall.Map.lookup sourceChild cached of
+                Just ImportSemantics{ importSemantics } -> do
+                    let hashed =
+                            Dhall.Crypto.sha256Hash (encodeExpression importSemantics)
+                    rememberSourceProductHash sourceChild hashed
+                    return hashed
                 Nothing -> do
                     ImportSemantics{ importSemantics } <-
                         loadSourceChildSemanticsWithoutTypecheck sourceChild
-                    return (Dhall.Crypto.sha256Hash (encodeExpression importSemantics))
+
+                    cachedHashes' <- use merkleHashCache
+
+                    case Dhall.Map.lookup sourceChild cachedHashes' of
+                        Just merkleHash ->
+                            return merkleHash
+                        Nothing -> do
+                            let hashed =
+                                    Dhall.Crypto.sha256Hash
+                                        (encodeExpression importSemantics)
+                            rememberSourceProductHash sourceChild hashed
+                            return hashed
 
 replaceEmbedsWithSourceEdgeHashes
     :: Chained
@@ -1540,12 +1573,9 @@ tryLoadSourceFromMerkleCache import_@(Chained (Import (ImportHashed _ importType
                     case mCached of
                         Just (SemisemanticSourceProduct bytesStrict)
                             | Just decoded <- decodeSourceProduct bytesStrict -> do
-                                let edgeHash =
-                                        Dhall.Crypto.sha256Hash
-                                            (encodeExpression (importSemantics decoded))
-
-                                zoom merkleHashCache
-                                    (State.modify (Dhall.Map.insert import_ edgeHash))
+                                rememberSourceProductHash
+                                    import_
+                                    (sourceProductHashFromBytes bytesStrict)
 
                                 modifying cache (Dhall.Map.insert import_ decoded)
 
@@ -1554,8 +1584,8 @@ tryLoadSourceFromMerkleCache import_@(Chained (Import (ImportHashed _ importType
                             return Nothing
 
 writeSourceMerkleCache
-    :: Chained -> ImportSemantics -> StateT Status IO ()
-writeSourceMerkleCache import_@(Chained (Import (ImportHashed _ importType) _)) semantics = do
+    :: Chained -> Data.ByteString.ByteString -> StateT Status IO ()
+writeSourceMerkleCache import_@(Chained (Import (ImportHashed _ importType) _)) bytes = do
     parsedImport <- parseImportedExpression importType
 
     mKey <- maybeComputeSourceMerkleHash import_ parsedImport
@@ -1565,7 +1595,6 @@ writeSourceMerkleCache import_@(Chained (Import (ImportHashed _ importType) _)) 
             return ()
         Just semisemanticHash -> do
             reporter <- use reportWarning
-            let bytes = encodeExpression (importSemantics semantics)
             zoom cacheWarning
                 (writeToSemisemanticCache
                     reporter
@@ -1787,9 +1816,14 @@ loadSourceChildSemanticsWithoutTypecheck sourceChild = do
 
         Nothing -> do
             sourceArtifact <- loadSourceImportArtifact sourceChild
-            importSemantics <- finalizeSourceImportWithoutTypecheck sourceArtifact
-            modifying cache (Dhall.Map.insert sourceChild importSemantics)
-            return importSemantics
+            semantics@ImportSemantics{ importSemantics } <-
+                finalizeSourceImportWithoutTypecheck sourceArtifact
+            modifying cache (Dhall.Map.insert sourceChild semantics)
+            let bytes = encodeExpression importSemantics
+            rememberSourceProductHash
+                sourceChild
+                (sourceProductHashFromBytes bytes)
+            return semantics
 
 -- | Warm the in-memory import cache for a hashed child during the preserve
 --   pass of an `as Source` traversal.
