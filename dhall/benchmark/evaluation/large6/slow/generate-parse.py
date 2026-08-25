@@ -2,7 +2,7 @@
 """Regenerate slow/parse.dhall (artificial ~0.5s parse burden).
 
 Keep NESTING / BLOCK_COUNT in sync with Bench.ImportTrees.slowParseDhallContents.
-The evaluation benchmark also generates this file during setup if it is missing.
+The evaluation benchmark always regenerates this file during setup.
 """
 
 from pathlib import Path

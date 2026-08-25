@@ -21,8 +21,8 @@ except `multi` which spreads ~0.5 s across eight children.
 | `walk` | `./slow/walk.dhall` | **Structural walk** of ~30k-element import-free `List Natural` |
 
 Regenerate `walk.dhall` with `python3 slow/generate-walk.py`.
-`slow/parse.dhall` is generated during evaluation-benchmark setup, or with
-`python3 slow/generate-parse.py`. It is not checked in.
+`slow/parse.dhall` is always regenerated during evaluation-benchmark setup, or
+with `python3 slow/generate-parse.py`. It is not checked in.
 
 Packages (`package-long-*.dhall`) import `sha256:`-protected children from
 `slow/`. Pipelines:

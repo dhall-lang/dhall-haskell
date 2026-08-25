@@ -194,20 +194,18 @@ loadLarge6PhaseVariants mPattern = do
             say $ "Loading large6 fixtures (" <> show (length selected) <> " file(s))…"
             traverse (\(label, file) -> loadPipelineBench label large6Directory file) selected
 
--- | Write `slow/parse.dhall` if missing. Nested block comments (~1.3M lines)
+-- | Always rewrite `slow/parse.dhall`. Nested block comments (~1.3M lines)
 -- give an artificial ~0.5s parse burden; the file evaluates to `True`.
 --
 -- Keep the block count / nesting in sync with `slow/generate-parse.py`.
+-- Do not reuse a leftover file: a previous run with different nesting or
+-- block count would silently change the timed parse cost.
 ensureSlowParseDhall :: FilePath -> IO ()
 ensureSlowParseDhall directory = do
     let path = directory </> "slow" </> "parse.dhall"
-    exists <- Directory.doesFileExist path
-    if exists
-        then say $ "Using existing parse fixture: " <> path
-        else do
-            say $ "Generating parse fixture: " <> path
-            Directory.createDirectoryIfMissing True (takeDirectory path)
-            Text.IO.writeFile path slowParseDhallContents
+    say $ "Generating parse fixture: " <> path
+    Directory.createDirectoryIfMissing True (takeDirectory path)
+    Text.IO.writeFile path slowParseDhallContents
 
 slowParseDhallContents :: Text
 slowParseDhallContents =
