@@ -151,7 +151,9 @@ data Status = Status
     , _sourceMerkleKeyCache :: Map Chained SHA256Digest
     -- ^ Per-run memo of Phase 2 Source syntax-merkle keys, so overlapping
     --   import graphs do not re-walk the same child while building a parent
-    --   key.
+    --   key. Local-file keys are also persisted under a source-text-hash
+    --   index in @dhall-haskell-v2/@ (tag 3) so warm Mode A resolves can
+    --   validate child digests without rebuilding every skeleton.
 
     , _newManager :: IO Manager
     -- ^ How to obtain an HTTP 'Manager'. This is an @IO@ action, not the
