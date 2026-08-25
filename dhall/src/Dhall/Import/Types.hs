@@ -127,7 +127,10 @@ data Status = Status
     --   @as Location@ store a hash of their contents. Frozen imports use
     --   their integrity hash. Caching these avoids encoding a child's full
     --   normal form just to name the parent cache entry. @as Source@ stores
-    --   the hash of the finalized import-free expression.
+    --   the Source-product identity: SHA256 of the CBOR bytes of the
+    --   finalized import-free expression (not a Code NF). When those bytes
+    --   are already in hand from a cache hit or write, the identity is the
+    --   hash of those bytes rather than a second encode of the decoded AST.
 
     , _merkleContextFingerprint :: Maybe SHA256Digest
     -- ^ Cached hash of '_startingContext' for merkle keys. 'Nothing' until
