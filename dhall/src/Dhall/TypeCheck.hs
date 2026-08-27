@@ -66,6 +66,7 @@ import Dhall.Syntax
 
 import qualified Data.Foldable               as Foldable
 import qualified Data.Foldable.WithIndex     as Foldable.WithIndex
+import qualified Data.HashMap.Strict         as HashMap
 import qualified Data.List.NonEmpty          as NonEmpty
 import qualified Data.Map
 import qualified Data.Sequence
@@ -108,6 +109,11 @@ rule Sort Kind = Sort
 rule Type Sort = Sort
 rule Kind Sort = Sort
 rule Sort Sort = Sort
+
+-- Type registration table for primitives implemented as ordinary variable
+-- names.  The entries are defined in `Dhall.Eval.unboundPrimitives`.
+unboundBuiltinTypes :: HashMap.HashMap Text (Val a)
+unboundBuiltinTypes = Eval.unboundBuiltinTypes
 
 {-| Type-check an expression and return the expression's type if type-checking
     succeeds or an error if type-checking fails
@@ -218,7 +224,11 @@ infer typer = loop
             fmap VConst (axiom c)
 
         Var (V x0 n0) -> do
-            let go TypesEmpty _ =
+            let go TypesEmpty 0 =
+                    case HashMap.lookup x0 unboundBuiltinTypes of
+                        Just t  -> return t
+                        Nothing -> die (UnboundVariable x0)
+                go TypesEmpty _ =
                     die (UnboundVariable x0)
                 go (TypesBind ts x t) n
                     | x == x0   = if n == 0 then return t else go ts (n - 1)
