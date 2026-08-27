@@ -263,25 +263,25 @@ shiftCostFromRootEach root =
             mempty
 
 substitutionsCodeLabels :: [String]
-substitutionsCodeLabels = coldResolveLabels "substitutions.as_code"
+substitutionsCodeLabels = coldResolveLabels "substitutions"
 
 substitutionsManyFilesCodeLabels :: [String]
 substitutionsManyFilesCodeLabels =
-    coldResolveLabels "substitutions.many_files.as_code"
+    coldResolveLabels "substitutions.many_files"
 
 -- | Synthetic substitution-heavy end-to-end proxy: many wide-record imports,
 -- large Haskell-API substitution map, cold resolve+typecheck+NF.
 composerProxyCodeLabels :: [String]
 composerProxyCodeLabels =
-    [ "substitutions.composer_proxy.as_code"
-    , "substitutions.composer_proxy.as_code." <> endToEndColdBenchName
+    [ "substitutions.composer_proxy"
+    , "substitutions.composer_proxy." <> endToEndColdBenchName
     ]
 
 composerProxyManyImportsCodeLabels :: [String]
 composerProxyManyImportsCodeLabels =
-    [ "substitutions.composer_proxy.many_imports.as_code"
-    , "substitutions.composer_proxy.many_imports.as_code.cold"
-    , "substitutions.composer_proxy.many_imports.as_code.warm"
+    [ "substitutions.composer_proxy.many_imports"
+    , "substitutions.composer_proxy.many_imports.cold"
+    , "substitutions.composer_proxy.many_imports.warm"
     ]
 
 -- | Pure (1)+(2) probe: same map and @let a@ / @let x@ shape as many_files
@@ -689,12 +689,12 @@ benchmarks mPattern k = do
             then
                 Just
                     <$> loadColdResolveBenchWithSettings
-                        "substitutions.as_code"
+                        "substitutions"
                         substitutionsDirectory
                         "pipeline-code.dhall"
                         withManyUserSubstitutions
             else do
-                say "Skipping substitutions.as_code (does not match pattern)"
+                say "Skipping substitutions (does not match pattern)"
                 pure Nothing
 
     let wantSubstitutionsManyFilesCode =
@@ -723,12 +723,12 @@ benchmarks mPattern k = do
                             (True, Just dir) ->
                                 Just
                                     <$> loadColdResolveBenchWithSettings
-                                        "substitutions.many_files.as_code"
+                                        "substitutions.many_files"
                                         dir
                                         "pipeline-code.dhall"
                                         withManyCollidingSubstitutions
                             _ -> do
-                                say "Skipping substitutions.many_files.as_code (does not match pattern)"
+                                say "Skipping substitutions.many_files (does not match pattern)"
                                 pure Nothing
 
                     composerProxyCode <-
@@ -736,12 +736,12 @@ benchmarks mPattern k = do
                             (True, Just dir) ->
                                 Just
                                     <$> loadColdResolveBenchWithSettings
-                                        "substitutions.composer_proxy.as_code"
+                                        "substitutions.composer_proxy"
                                         dir
                                         "pipeline-code.dhall"
                                         withComposerProxySubstitutions
                             _ -> do
-                                say "Skipping substitutions.composer_proxy.as_code (does not match pattern)"
+                                say "Skipping substitutions.composer_proxy (does not match pattern)"
                                 pure Nothing
 
                     composerProxyManyImportsCode <-
@@ -749,18 +749,18 @@ benchmarks mPattern k = do
                             (True, Just dir) ->
                                 Just
                                     <$> loadColdResolveBenchWithSettings
-                                        "substitutions.composer_proxy.many_imports.as_code"
+                                        "substitutions.composer_proxy.many_imports"
                                         dir
                                         "pipeline-code.dhall"
                                         withComposerProxySubstitutions
                             _ -> do
-                                say "Skipping substitutions.composer_proxy.many_imports.as_code (does not match pattern)"
+                                say "Skipping substitutions.composer_proxy.many_imports (does not match pattern)"
                                 pure Nothing
 
                     case (composerProxyManyImportsCode, miwCode warmCaches) of
                         (Just fixture, Just cacheHome) ->
                             warmManyImportsCache
-                                "composer_proxy.many_imports.as_code: warm cache"
+                                "composer_proxy.many_imports: warm cache"
                                 cacheHome
                                 fixture
                         _ ->

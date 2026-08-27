@@ -86,16 +86,16 @@ large3Labels :: [String]
 large3Labels = phaseLabels "large3"
 
 large3GetConfigLabels :: [String]
-large3GetConfigLabels = phaseLabels "large3.get_config.code"
+large3GetConfigLabels = phaseLabels "large3.get_config"
 
 large4Labels :: [String]
 large4Labels = phaseLabels "large4"
 
 large5CodeLabels :: [String]
-large5CodeLabels = phaseLabels "large5.code"
+large5CodeLabels = phaseLabels "large5"
 
 preludeImportCodeLabels :: [String]
-preludeImportCodeLabels = coldResolveLabels "prelude_import.code"
+preludeImportCodeLabels = coldResolveLabels "prelude_import"
 
 k8sLabels :: String -> [String]
 k8sLabels name =
@@ -151,8 +151,8 @@ loadLarge6PhaseVariants :: Maybe String -> IO [PipelineBench]
 loadLarge6PhaseVariants mPattern = do
     -- Mode A large6 rows (see large6/README.md matrix).
     let candidates =
-            [ ("large6.slow_parse.as_code", "pipeline-code-long-parse.dhall")
-            , ("large6.slow_walk.as_code", "pipeline-code-long-walk.dhall")
+            [ ("large6.slow_parse", "pipeline-code-long-parse.dhall")
+            , ("large6.slow_walk", "pipeline-code-long-walk.dhall")
             ]
         selected =
             [ entry
@@ -199,10 +199,10 @@ loadLarge6ColdResolveVariants :: Maybe String -> IO [ColdResolveBench]
 loadLarge6ColdResolveVariants mPattern = do
     -- Mode B large6 Code rows where prep would hide resolve cost.
     let candidates =
-            [ ("large6.slow_eval.as_code", "pipeline-code-long-eval.dhall")
-            , ("large6.slow_typecheck.as_code", "pipeline-code-long-typecheck.dhall")
-            , ("large6.slow_normalize.as_code", "pipeline-code-long-normalize.dhall")
-            , ("large6.slow_multi.as_code", "pipeline-code-long-multi.dhall")
+            [ ("large6.slow_eval", "pipeline-code-long-eval.dhall")
+            , ("large6.slow_typecheck", "pipeline-code-long-typecheck.dhall")
+            , ("large6.slow_normalize", "pipeline-code-long-normalize.dhall")
+            , ("large6.slow_multi", "pipeline-code-long-multi.dhall")
             ]
         selected =
             [ entry
@@ -350,11 +350,11 @@ benchmarks mPattern = do
             then
                 Just
                     <$> loadPipelineBench
-                        "large3.get_config.code"
+                        "large3.get_config"
                         large3Directory
                         "get_config.dhall"
             else do
-                say "Skipping large3.get_config.code (does not match pattern)"
+                say "Skipping large3.get_config (does not match pattern)"
                 pure Nothing
 
     let wantLarge4 = any (couldMatch mPattern) large4Labels
@@ -371,11 +371,11 @@ benchmarks mPattern = do
             then
                 Just
                     <$> loadPipelineBench
-                        "large5.code"
+                        "large5"
                         large5Directory
                         "pipeline-code.dhall"
             else do
-                say "Skipping large5.code (does not match pattern)"
+                say "Skipping large5 (does not match pattern)"
                 pure Nothing
 
     large6Variants <- loadLarge6PhaseVariants mPattern
@@ -387,11 +387,11 @@ benchmarks mPattern = do
             then
                 Just
                     <$> loadColdResolveBench
-                        "prelude_import.code"
+                        "prelude_import"
                         preludeImportDirectory
                         "prelude-code.dhall"
             else do
-                say "Skipping prelude_import.code (does not match pattern)"
+                say "Skipping prelude_import (does not match pattern)"
                 pure Nothing
 
     pure $ concat
