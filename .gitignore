@@ -31,3 +31,4 @@ result
 result-*
 report.html
 /dhall/tests/to-directory-tree/*.out/
+.DS_Store
