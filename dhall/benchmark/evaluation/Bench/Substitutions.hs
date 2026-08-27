@@ -383,9 +383,6 @@ writeManyFilesFixture root = do
     mapM_ writeModule [0 .. manyFilesModuleCount - 1]
     Text.IO.writeFile (root </> "package.dhall") packageSource
     Text.IO.writeFile (root </> "pipeline-code.dhall") "./package.dhall\n"
-    Text.IO.writeFile
-        (root </> "pipeline-source.dhall")
-        "./package.dhall as Source\n"
   where
     writeModule i = do
         let path = root </> "mods" </> printf "m%03d.dhall" i
@@ -463,9 +460,6 @@ writeComposerProxyFixture root = do
     mapM_ writeModule [0 .. composerProxyModuleCount - 1]
     Text.IO.writeFile (root </> "package.dhall") packageSource
     Text.IO.writeFile (root </> "pipeline-code.dhall") "./package.dhall\n"
-    Text.IO.writeFile
-        (root </> "pipeline-source.dhall")
-        "./package.dhall as Source\n"
   where
     writeModule i = do
         let path = root </> "mods" </> printf "m%03d.dhall" i
@@ -504,7 +498,7 @@ withOptionalComposerProxyTree True k =
 --
 -- Leaves are closed (safe to freeze). Parents import overlapping hashed
 -- leaves under @UserType*@ annotations. Aggregators import overlapping
--- unhashed parents so @as Source@ re-walks shared parent artifacts.
+-- unhashed parents.
 -- Sized so warm end-to-end samples land around 1s, while keeping an
 -- overlapping hashed-leaf graph. The flat composer_proxy control is unchanged.
 manyImportsLeafCount :: Int
@@ -553,9 +547,6 @@ writeComposerProxyManyImportsFixture root = do
     mapM_ writeAggregator [0 .. manyImportsAggregatorCount - 1]
     Text.IO.writeFile (root </> "package.dhall") packageSource
     Text.IO.writeFile (root </> "pipeline-code.dhall") "./package.dhall\n"
-    Text.IO.writeFile
-        (root </> "pipeline-source.dhall")
-        "./package.dhall as Source\n"
   where
     leavesDir = root </> "leaves"
     parentsDir = root </> "parents"

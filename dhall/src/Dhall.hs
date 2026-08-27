@@ -270,8 +270,7 @@ resolveWithSettings settings expression =
 -- Substitutions are applied to the unresolved entry expression first, then
 -- again inside import loading (so each import can be type-checked). They are
 -- not applied again to the fully inlined tree: that second whole-AST walk
--- rebuilt the substitution map at every binder, which dominated large
--- @as Source@ products.
+-- rebuilt the substitution map at every binder.
 resolveAndStatusWithSettings
     :: InputSettings
     -> Expr Src Import
