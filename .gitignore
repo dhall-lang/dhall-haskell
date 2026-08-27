@@ -27,6 +27,8 @@ stack*.yaml.lock
 .vscode
 docs
 result
+/dhall/benchmark/evaluation/large6/slow/parse.dhall
 result-*
 report.html
 /dhall/tests/to-directory-tree/*.out/
+.DS_Store

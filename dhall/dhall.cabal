@@ -25,8 +25,18 @@ Data-Files:
     man/dhall.1
 Extra-Source-Files:
     CHANGELOG.md
-    benchmark/**/*.dhall
-    benchmark/**/*.dhallb
+    benchmark/deep-nested-large-record/**/*.dhall
+    benchmark/evaluation/k8s/*.dhall
+    benchmark/evaluation/large1/**/*.dhall
+    benchmark/evaluation/large2/**/*.dhall
+    benchmark/evaluation/large3/**/*.dhall
+    benchmark/evaluation/large4/**/*.dhall
+    benchmark/evaluation/large5/**/*.dhall
+    benchmark/evaluation/large6/**/*.dhall
+    benchmark/evaluation/normalize/**/*.dhall
+    benchmark/evaluation/prelude_import/**/*.dhall
+    benchmark/parser/**/*.dhall
+    benchmark/parser/**/*.dhallb
     dhall-lang/Prelude/**/*.dhall
     dhall-lang/Prelude/Bool/and
     dhall-lang/Prelude/Bool/build
@@ -515,8 +525,14 @@ Benchmark evaluation
     Type: exitcode-stdio-1.0
     Hs-Source-Dirs: benchmark/evaluation
     Main-Is: Main.hs
+    Other-Modules:
+        Bench.Common
+        Bench.ImportTrees
+        Bench.Semisemantic
+        Bench.Substitutions
     Build-Depends:
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
+        temporary                 >= 1.2.1    && < 1.4 ,
         time                                          ,
     Default-Language: Haskell2010
