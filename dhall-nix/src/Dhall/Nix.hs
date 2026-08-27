@@ -54,10 +54,31 @@
 > $ dhall-to-nix <<< "Some 1"
 > 1
 
-    Unions are Church-encoded:
+    Because of that encoding, @merge@ on an @Optional@ cannot use the same
+    Church-encoded application as a union.  Instead it becomes a null check:
+
+> $ dhall-to-nix <<< "λ(v : Optional Natural) → merge { None = 0, Some = λ(n : Natural) → n } v"
+> v:
+>   if v == null then 0 else (n: n) v
+
+    The compiler distinguishes this from a union whose alternatives happen to
+    be named @None@/@Some@ by re-typechecking the @merge@ scrutinee:
+
+> $ dhall-to-nix <<< "λ(u : < None | Some : Natural >) → merge { None = 0, Some = λ(n : Natural) → n } u"
+> u:
+>   u { None = 0; Some = n: n; }
+
+    Unions are Church-encoded as functions of a handler record (Nix has no
+    sum types).  A constructor becomes a function that selects and applies the
+    matching handler; @merge handlers u@ is just @u handlers@:
 
 > $ dhall-to-nix <<< "< Left : Bool | Right : Natural >.Left True"
-> { Left, Right }: Left true
+> u:
+>   u.Left true
+
+> $ dhall-to-nix <<< "λ(u : < Left : Bool | Right : Natural >) → merge { Left = λ(b : Bool) → 0, Right = λ(n : Natural) → n } u"
+> u:
+>   u { Left = b: 0; Right = n: n; }
 
     Also, all Dhall expressions are normalized before translation to Nix:
 
@@ -102,10 +123,11 @@ import qualified  Data.Text as Text
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
-import Lens.Micro (toListOf, rewriteOf)
+import Lens.Micro (toListOf, rewriteOf, traverseOf)
 import Numeric (showHex)
 import Data.Char (ord, isDigit, isAsciiLower, isAsciiUpper)
 
+import Dhall.Context (Context)
 import Dhall.Core
     ( Binding (..)
     , Chunks (..)
@@ -148,9 +170,11 @@ import Nix.Expr
     )
 
 import qualified Data.Text
+import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Pretty
+import qualified Dhall.TypeCheck
 import qualified NeatInterpolation
 import qualified Nix
 
@@ -167,6 +191,8 @@ data CompileError
     | BytesUnsupported
     -- ^ The Nix language does not support arbitrary bytes (most notably: null
     --   bytes)
+    | CannotTypecheck Text
+    -- ^ Re-typechecking a @merge@ scrutinee failed while compiling to Nix
     deriving (Typeable)
 
 instance Show CompileError where
@@ -248,6 +274,13 @@ $_ERROR: Cannot translate ❰Bytes❱ to Nix
 Explanation: The Nix language does not support bytes literals
     |]
 
+    show (CannotTypecheck txt) =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: The compiler reported an error during type-checking:
+
+$txt
+    |]
+
 _ERROR :: Data.Text.Text
 _ERROR = "\ESC[1;31mError\ESC[0m"
 
@@ -265,8 +298,12 @@ Right x: y: x + y
     the expression to `dhallToNix`
 -}
 dhallToNix :: Expr s Void -> Either CompileError NExpr
-dhallToNix e =
-    loop (rewriteShadowed (Dhall.Core.normalize e))
+dhallToNix e = do
+    -- `denote` forgets source spans so re-typechecking @merge@ scrutinees does
+    -- not require a `Pretty s` constraint.
+    annotated <- annotateMergeScrutinees Dhall.Context.empty
+        (Dhall.Core.denote (rewriteShadowed (Dhall.Core.normalize e)))
+    loop annotated
   where
     untranslatable = Nix.attrsE []
 
@@ -676,10 +713,60 @@ dhallToNix e =
                 ("combine" @@ a' @@ b')
             )
     loop (CombineTypes _ _ _) = return untranslatable
-    loop (Merge a b _) = do
-        a' <- loop a
-        b' <- loop b
-        return (b' @@ a')
+    loop (Merge handlers union0 _) = do
+        -- `Optional` is encoded as `null` / an unwrapped payload, whereas
+        -- unions are Church-encoded functions.  Handler names alone cannot
+        -- distinguish `Optional` from a union whose alternatives are also
+        -- named `None` / `Some`, so `annotateMergeScrutinees` records the
+        -- scrutinee type in an `Annot` wrapper before we get here.
+        let (union, mTy) = peelScrutineeType union0
+        case fmap (dropAnnot . Dhall.Core.normalize) mTy of
+            Just (App Optional _) ->
+                translateOptionalMerge handlers union
+            Just (Union _) ->
+                translateUnionMerge handlers union
+            _ ->
+                -- Fallback for an unexpected missing annotation: prefer
+                -- constructor shape, then the historical union encoding.
+                case dropAnnot union of
+                    Some x -> do
+                        handlers' <- loop handlers
+                        x' <- loop x
+                        return ((handlers' @. "Some") @@ x')
+                    App None _ -> do
+                        handlers' <- loop handlers
+                        return (handlers' @. "None")
+                    _ ->
+                        translateUnionMerge handlers union
+      where
+        translateUnionMerge hs u = do
+            hs' <- loop hs
+            u' <- loop u
+            return (u' @@ hs')
+
+        translateOptionalMerge hs u =
+            case dropAnnot u of
+                Some x -> do
+                    hs' <- loop hs
+                    x' <- loop x
+                    return ((hs' @. "Some") @@ x')
+                App None _ -> do
+                    hs' <- loop hs
+                    return (hs' @. "None")
+                _ ->
+                    case dropAnnot hs of
+                        RecordLit fields
+                            | Just none <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "None" fields
+                            , Just some <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "Some" fields
+                            , Dhall.Map.size fields == 2 -> do
+                                none' <- loop none
+                                some' <- loop some
+                                u' <- loop u
+                                return (nixOptionalMerge none' some' u')
+                        _ -> do
+                            hs' <- loop hs
+                            u' <- loop u
+                            return (nixOptionalMerge (hs' @. "None") (hs' @. "Some") u')
     loop (ToMap a _) = do
         a' <- loop a
         return
@@ -747,6 +834,82 @@ dhallToNix e =
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x
+
+-- | Strip source notes and type ascriptions so that `Merge` can match on the
+-- underlying constructor.
+dropAnnot :: Expr s a -> Expr s a
+dropAnnot (Note _ e) = dropAnnot e
+dropAnnot (Annot e _) = dropAnnot e
+dropAnnot e = e
+
+-- | Read the scrutinee type recorded by 'annotateMergeScrutinees', if present.
+peelScrutineeType :: Expr s a -> (Expr s a, Maybe (Expr s a))
+peelScrutineeType (Note _ e) = peelScrutineeType e
+peelScrutineeType (Annot e ty) = (e, Just ty)
+peelScrutineeType e = (e, Nothing)
+
+{-| Annotate every @merge@ scrutinee with its type.
+
+    This is a small alternative to threading a type-checking context through
+    the entire Nix translation: only binder forms update the context, and only
+    @merge@ nodes are rewritten.  The resulting 'Annot' wrappers let the Nix
+    pass distinguish @Optional@ from unions that also use the @None@/@Some@
+    labels.
+-}
+annotateMergeScrutinees
+    :: Context (Expr Void Void)
+    -> Expr Void Void
+    -> Either CompileError (Expr Void Void)
+annotateMergeScrutinees = go
+  where
+    go
+        :: Context (Expr Void Void)
+        -> Expr Void Void
+        -> Either CompileError (Expr Void Void)
+    go ctx (Lam cs fb@FunctionBinding{ functionBindingVariable = x, functionBindingAnnotation = a } b) = do
+        a' <- go ctx a
+        b' <- go (Dhall.Context.insert x a ctx) b
+        return (Lam cs fb{ functionBindingAnnotation = a' } b')
+    go ctx (Pi cs x a b) = do
+        a' <- go ctx a
+        b' <- go (Dhall.Context.insert x a ctx) b
+        return (Pi cs x a' b')
+    go ctx (Let binding@Binding{ variable, value, annotation } body) = do
+        value' <- go ctx value
+        annotation' <- case annotation of
+            Nothing ->
+                return Nothing
+            Just (src, ty) -> do
+                ty' <- go ctx ty
+                return (Just (src, ty'))
+        ty <- case annotation of
+            Just (_, tyExpr) ->
+                return tyExpr
+            Nothing ->
+                case Dhall.TypeCheck.typeWith ctx value of
+                    Left err ->
+                        Left (CannotTypecheck (Data.Text.pack (show err)))
+                    Right inferred ->
+                        return inferred
+        body' <- go (Dhall.Context.insert variable ty ctx) body
+        return (Let binding{ value = value', annotation = annotation' } body')
+    go ctx (Merge handlers union tyAnnotation) = do
+        handlers' <- go ctx handlers
+        union' <- go ctx union
+        tyAnnotation' <- traverse (go ctx) tyAnnotation
+        case Dhall.TypeCheck.typeWith ctx union of
+            Left err ->
+                Left (CannotTypecheck (Data.Text.pack (show err)))
+            Right ty ->
+                return (Merge handlers' (Annot union' (Dhall.Core.denote ty)) tyAnnotation')
+    go ctx expression =
+        traverseOf Dhall.Core.subExpressions (go ctx) expression
+
+-- | Translate @merge { None = none, Some = some } union@ once the handlers have
+-- already been compiled.
+nixOptionalMerge :: NExpr -> NExpr -> NExpr -> NExpr
+nixOptionalMerge none' some' union' =
+    Nix.mkIf (union' $== Nix.mkNull) none' (some' @@ union')
 
 -- | Previously we turned @<Foo | Bar>.Foo@ into @{ Foo, Bar }: Foo@,
 -- but this would not work with <Frob/Baz>.Frob/Baz (cause the slash is not a valid symbol char in nix)
