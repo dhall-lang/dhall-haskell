@@ -138,9 +138,11 @@ data Status = Status
     --   '_substitutions' is replaced.
 
     , _newManager :: IO Manager
-    , _manager :: Maybe Manager
-    -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
-    -- requests
+    -- ^ How to obtain an HTTP 'Manager'. This is an @IO@ action, not the
+    --   manager itself: initially it *creates* a manager (see
+    --   'defaultNewManager'); after the first successful HTTP request that
+    --   action is replaced with @'pure' manager@ so later requests reuse
+    --   the same manager.
 
     , _loadOriginHeaders :: StateT Status IO OriginHeaders
     -- ^ Load the origin headers from environment or configuration file.
@@ -202,8 +204,6 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _merkleContextFingerprint = Nothing
 
     _merkleSubstitutionsFingerprint = Nothing
-
-    _manager = Nothing
 
     _substitutions = Dhall.Substitution.empty
 

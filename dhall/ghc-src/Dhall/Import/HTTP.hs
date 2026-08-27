@@ -162,20 +162,18 @@ renderPrettyHttpException url (HttpExceptionRequest _ e) =
       <>  "\n"
       <>  "URL: " <> url <> "\n"
 
+-- | Get a shared HTTP 'Manager', creating one on the first call.
+--
+-- 'Status' stores an @IO Manager@ factory in '_newManager'. Before the
+-- first request that factory creates a manager (typically
+-- 'defaultNewManager'). After we have a manager we replace the factory
+-- with @'pure' manager@ so later calls reuse it.
 newManager :: StateT Status IO Manager
 newManager = do
-    Status { _manager = oldManager, ..} <- State.get
-
-    case oldManager of
-        Nothing -> do
-            manager <- liftIO _newManager
-
-            State.put (Status { _manager = Just manager , ..})
-
-            return manager
-
-        Just manager ->
-            return manager
+    Status { _newManager = makeManager } <- State.get
+    manager <- liftIO makeManager
+    State.modify (\s -> s { _newManager = pure manager })
+    return manager
 
 data NotCORSCompliant = NotCORSCompliant
     { expectedOrigins :: [ByteString]

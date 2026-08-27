@@ -1,5 +1,8 @@
 1.42.3
 
+* Reuse a single HTTP `Manager` per import run by replacing `Status`'s
+  `_newManager` factory with `pure manager` after the first request, instead
+  of keeping a separate `_manager` field.
 * Faster disk cache for local imports without integrity checks. Cache keys
   hash this file's syntax plus hashes of its imports, instead of hashing the
   fully resolved tree. Entries go in `dhall-haskell-v2/` so they are not mixed
