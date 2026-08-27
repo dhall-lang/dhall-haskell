@@ -22,7 +22,6 @@ Code imports each rebuilding `ResolvedSubstitutions`).
 |------|------|
 | `package.dhall` | 8000 nested `let xᵢ = 0 in 0` (regenerate with `python3 generate.py`) |
 | `pipeline-code.dhall` | `./package.dhall` |
-| `pipeline-source.dhall` | `./package.dhall as Source` |
 
 ## 2. Many files — as-code regression (`substitutions.many_files.*`)
 
@@ -94,14 +93,10 @@ prep-populated cache.
 
 | Group | Benchmark |
 |-------|-----------|
-| `substitutions.as_code` | `resolve_cold_cache_on` |
-| `substitutions.as_source` | `resolve_cold_cache_on` |
-| `substitutions.many_files.as_code` | `resolve_cold_cache_on` |
-| `substitutions.many_files.as_source` | `resolve_cold_cache_on` |
-| `substitutions.composer_proxy.as_code` | `end_to_end_cold` |
-| `substitutions.composer_proxy.as_source` | `end_to_end_cold` |
-| `substitutions.composer_proxy.many_imports.as_code` | `cold`, `warm` |
-| `substitutions.composer_proxy.many_imports.as_source` | `cold`, `warm` |
+| `substitutions` | `resolve_cold_cache_on` |
+| `substitutions.many_files` | `resolve_cold_cache_on` |
+| `substitutions.composer_proxy` | `end_to_end_cold` |
+| `substitutions.composer_proxy.many_imports` | `cold`, `warm` |
 | `substitutions.shift_cost.naive` | pure `nf` (in-harness `substituteManyNaive`) |
 | `substitutions.shift_cost.optimized` | pure `nf` (in-harness `substituteManyFromRoot`) |
 
@@ -116,9 +111,8 @@ stack bench evaluation --ba '--pattern substitutions.shift_cost'
 CLI wall-clock of the same four pipelines, **without** Haskell substitutions,
 from this directory (`./run.sh`):
 
-- nested-let `pipeline-code.dhall` / `pipeline-source.dhall`
-- many-files tree generated into a temp directory (not checked in), then
-  the same Code / `as Source` pipelines
+- nested-let `pipeline-code.dhall`
+- many-files tree generated into a temp directory (not checked in)
 
 Each `run.sh` sample uses a fresh `XDG_CACHE_HOME`. That is a Mode B
 analogue for import load, but it is still a full `dhall --file` evaluate,
@@ -128,19 +122,3 @@ not `resolveWithSettings`.
 `Status` (not on public `EvaluateSettings`). `shiftSubstitutions` identity
 / `Map.map` fast path is gated by `substitutionOptimizationsEnabled` in
 `dhall/src/Dhall/Substitution.hs`.
-
-## What to read
-
-- **`as_source` (nested lets)**: substitution walks the unnormalized
-  nested-let AST during `finalizeSourceImport`. Dominated by map rebuilds
-  at every binder unless the identity fast path fires.
-- **`as_code` (nested lets)**: the same map is applied once on the
-  pre-normalize tree, then beta-normalize collapses the lets to `0`.
-- **`many_files.as_code`**: this is the group that should move with the
-  customer as-code regression (18s → 30s was `resolveSubstitutions` +
-  `freeVarNames` once per imported file). It does **not** isolate (1)+(2).
-- **`shift_cost`**: this is the group that should move with plan (1)+(2).
-  Compare `naive` vs `optimized`; ignore wall-clock vs Mode B rows.
-
-Do not compare these numbers to Mode A `resolve` rows (those use
-`loadWithStatus` without the library substitution wrapper).
