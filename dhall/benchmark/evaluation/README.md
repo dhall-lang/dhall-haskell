@@ -32,7 +32,7 @@ cd dhall/benchmark/evaluation/large5 && ./run.sh
 ```
 
 `substitutions/run.sh` times the nested-let pipelines and a temp-generated
-many-files tree (Code and `as Source`). It still cannot inject Haskell
+many-files tree. It still cannot inject Haskell
 `InputSettings` substitutions; use the tasty-bench group for that.
 
 ## Measurement modes
@@ -118,19 +118,14 @@ Used by: `substitutions.composer_proxy.many_imports.*`
 
 This is the right number for a **repeat import load with a populated disk
 cache**, matching a customer run that is not starting from an empty
-`~/.cache`. Code can hit `dhall-haskell-v2/` marker entries; `as Source`
-currently cannot.
+`~/.cache`. Import code paths can hit `dhall-haskell-v2/` marker entries.
 
 ### Mode C — Source cost deferral (implicit)
 
-Some `as Source` fixtures keep heavy work out of the resolved AST:
+Some  fixtures keep heavy work out of the resolved AST:
 
 | Fixture | Slow work shows on |
 |---------|-------------------|
-| `large6.slow_eval.as_source` | **`evaluation`** (~0.5 s fold) |
-| `large6.slow_normalize.as_source` | **`evaluation`** (~0.5 s normalize); `resolve` often ~1 ms (semisemantic hit) |
-| `large6.slow_multi.as_source` | **`evaluation`** (~0.4 s); `resolve` often ~8 ms |
-| `large6.slow_typecheck.as_source` | **`resolve` + `typecheck`** (~0.22 s each; assert stays in AST) |
 | `large6.slow_parse.*` | **`resolve`** (~0.58 s; parse not semisemantic-cached) |
 | `large6.slow_walk.*` | **`resolve`** (~0.53 s; structural walk) |
 
@@ -146,11 +141,9 @@ read `evaluation` (or cold `dhall hash`).
 | `large2` | `large2/` | prep only | CBOR encode/decode |
 | `k8s.*` | `k8s/` | A | Real k8s schema imports |
 | `large3` | `large3/` | A | Sourcegraph-scale Code pipeline (~193 MB NF) |
-| `large3.source` | `large3/` | A | Same tree under `as Source` |
 | `large3.get_config.*` | `large3/` | A | Small projection; still walks full graph |
-| `large4` | `large4/` | A | Medium customization tree (Code; may OOM) |
-| `large4.source` | `large4/` | A | Same tree with `apply-all.dhall as Source` |
-| `large5.code` / `large5.source` | `large5/` | A | Small tree, Code vs Source |
+| `large4` | `large4/` | A | Medium customization tree |
+| `large5/` | A | Smaller tree |
 | `large6.slow_*` | `large6/` | A, B, or C | Isolated ~0.5 s artificial burdens |
 | `prelude_import.*` | `prelude_import/` | B | Full Prelude package, Code vs Source |
 | `substitutions.*` | `substitutions/` | B | Nested-let identity-path probe (100 closed keys) |
@@ -190,10 +183,7 @@ why Mode A `resolve` can be much faster than a true cold CLI run (e.g. large3
 | Code `large6` normalize/multi at ~μs | Fixed — use `resolve_cold_cache_on` rows |
 | Source `large6` normalize/multi resolve ~1–8 ms | Semisemantic hit after prep; cost on **evaluation** |
 | `large3.get_config.*` evaluation ~160 μs | Tiny NF after huge resolve |
-| `large5.source` much faster than `large5.code` on resolve | Source skips building huge NF during import |
-| `prelude_import.source` faster than `.code` | Prelude under `as Source` avoids Code normalize path |
-| Early-abort NF size walk does not move import groups | The cutoff only runs on a **cold Code miss** of a **many-node** NF. Mode A resolve is cache-warm; substitutions NFs are tiny; a large `Text` payload is O(1) length. Use `semisemantic.nf_size_walk` (full vs early_abort). |
-| Opportunistic `as Source` cache fill toggle | No effect on these fixtures (no matching `ImportAlt` pattern) |
+| Early-abort NF size walk does not move import groups | The cutoff only runs on a **cold miss** of a **many-node** NF. Mode A resolve is cache-warm; substitutions NFs are tiny; a large `Text` payload is O(1) length. Use `semisemantic.nf_size_walk` (full vs early_abort). |
 
 ## Related docs
 
@@ -202,5 +192,4 @@ why Mode A `resolve` can be much faster than a true cold CLI run (e.g. large3
 - `large5/README.md` — small Code vs Source tree
 - `large6/README.md` — slow-child matrix and burden placement
 - `prelude_import/README.md` — Prelude cold import
-- `../../import-explanation.md` §10 — `as Source` performance work and bench notes
 - [`.github/workflows/README.md`](../../../.github/workflows/README.md) — CI job, `gh-pages` charts, on-demand runs

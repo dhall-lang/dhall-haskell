@@ -10,14 +10,12 @@ See `../README.md` — this fixture uses **Mode B** (`resolve_cold_cache_on`).
 | File | Imports |
 |------|---------|
 | `prelude-code.dhall` | `../../../dhall-lang/Prelude/package.dhall` |
-| `prelude-source.dhall` | same package `as Source` |
 
 ## Benchmark groups
 
 | Group | Benchmark |
 |-------|-----------|
 | `prelude_import.code` | `resolve_cold_cache_on` |
-| `prelude_import.source` | `resolve_cold_cache_on` |
 
 Each sample:
 

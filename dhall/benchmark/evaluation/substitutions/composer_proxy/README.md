@@ -24,10 +24,6 @@ There are **two** generated trees. The original flat list is a control; the
 | Cache | Mode **D** cold only (`end_to_end_cold`) |
 | Code vs Source | `pipeline-code.dhall` / `pipeline-source.dhall` |
 
-This group does **not** reproduce the customer as-source slowdown: every
-module is imported once, so Source finalization does not re-walk shared
-subtrees, and there are no hash-protected children.
-
 ## 2. Overlapping graph (`substitutions.composer_proxy.many_imports.*`)
 
 Generated at prep (not committed):
