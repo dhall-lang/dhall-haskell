@@ -199,7 +199,10 @@ Flag cross
   Manual:      True
 
 Flag network-tests
-  Description: Enable tests which depend on an internet connection
+  Description:
+    Enable doctests that fetch from the public internet (GitHub / Prelude).
+    The Tasty import suite uses a localhost test server and does not need
+    this flag.
   Default:     True
   Manual:      True
 
@@ -436,6 +439,7 @@ Test-Suite tasty
         Dhall.Test.Regression.TextReplaceNoop
         Dhall.Test.Schemas
         Dhall.Test.SemanticHash
+        Dhall.Test.SemisemanticCache
         Dhall.Test.Substitution
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference

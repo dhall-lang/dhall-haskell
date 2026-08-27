@@ -22,6 +22,7 @@ import Dhall.Core
     , ReifiedNormalizer (..)
     , URL
     )
+import Dhall.Crypto                     (SHA256Digest)
 import Dhall.Map                        (Map)
 import Dhall.Parser                     (Src)
 import Lens.Micro                       (Lens', lens)
@@ -51,10 +52,22 @@ newtype Chained = Chained
 instance Pretty Chained where
     pretty (Chained import_) = pretty import_
 
--- | An import that has been fully interpeted
-newtype ImportSemantics = ImportSemantics
+-- | Whether an imported expression has already been beta-normalized.
+data NormalizationStatus
+    = AlreadyNormalized
+    -- ^ The expression is typechecked and beta-normal.
+    | TypecheckedOnly
+    -- ^ The expression is import-free and typechecked, but not necessarily
+    --   beta-normal.
+
+-- | An import that has been fully interpreted
+data ImportSemantics = ImportSemantics
     { importSemantics :: Expr Void Void
-    -- ^ The fully resolved import, typechecked and beta-normal.
+    -- ^ The import-free expression returned after loading and resolving all
+    --   remaining transitive imports.
+
+    , importNormalizationStatus :: NormalizationStatus
+    -- ^ Whether 'importSemantics' has already been beta-normalized.
     }
 
 -- | `parent` imports (i.e. depends on) `child`
@@ -107,6 +120,23 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
+    , _merkleHashCache :: Map Chained SHA256Digest
+    -- ^ Per-run map from import to the hash used as that import's contribution
+    --   to a parent's disk-cache key. Code imports without an integrity hash
+    --   store the hash of their own syntax; @as Text@ / @as Bytes@ /
+    --   @as Location@ store a hash of their contents. Frozen imports use
+    --   their integrity hash. Caching these avoids encoding a child's full
+    --   normal form just to name the parent cache entry.
+
+    , _merkleContextFingerprint :: Maybe SHA256Digest
+    -- ^ Cached hash of '_startingContext' for merkle keys. 'Nothing' until
+    --   the first unhashed Code import. Cleared when the context is replaced.
+
+    , _merkleSubstitutionsFingerprint :: Maybe SHA256Digest
+    -- ^ Cached hash of '_substitutions' for merkle keys. Avoids CBOR-encoding
+    --   a large substitution map once per Code import. Cleared when
+    --   '_substitutions' is replaced.
+
     , _newManager :: IO Manager
     , _manager :: Maybe Manager
     -- ^ Used to cache the `Dhall.Import.Manager.Manager` when making multiple
@@ -123,6 +153,14 @@ data Status = Status
     -- ^ Like `_remote`, except for `Dhall.Syntax.Expr.Bytes`
 
     , _substitutions :: Dhall.Substitution.Substitutions Src Void
+
+    , _resolvedSubstitutions
+        :: Maybe (Dhall.Substitution.ResolvedSubstitutions Src Void)
+    -- ^ Cached result of 'Dhall.Substitution.resolveSubstitutions' for
+    --   '_substitutions'. The raw map does not change during a run (only
+    --   per-binder copies while walking an AST), so this is computed at most
+    --   once. 'Nothing' until the first import-path substitute. Cleared when
+    --   '_substitutions' is replaced.
 
     , _normalizer :: Maybe (ReifiedNormalizer Void)
 
@@ -159,9 +197,17 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _cache = Map.empty
 
+    _merkleHashCache = Map.empty
+
+    _merkleContextFingerprint = Nothing
+
+    _merkleSubstitutionsFingerprint = Nothing
+
     _manager = Nothing
 
     _substitutions = Dhall.Substitution.empty
+
+    _resolvedSubstitutions = Nothing
 
     _normalizer = Nothing
 
@@ -187,6 +233,10 @@ graph = lens _graph (\s x -> s { _graph = x })
 cache :: Lens' Status (Map Chained ImportSemantics)
 cache = lens _cache (\s x -> s { _cache = x })
 
+-- | Lens from a `Status` to its `_merkleHashCache` field
+merkleHashCache :: Lens' Status (Map Chained SHA256Digest)
+merkleHashCache = lens _merkleHashCache (\s x -> s { _merkleHashCache = x })
+
 -- | Lens from a `Status` to its `_remote` field
 remote :: Lens' Status (URL -> StateT Status IO Text)
 remote = lens _remote (\s x -> s { _remote = x })
@@ -197,7 +247,21 @@ remoteBytes = lens _remoteBytes (\s x -> s { _remoteBytes = x })
 
 -- | Lens from a `Status` to its `_substitutions` field
 substitutions :: Lens' Status (Dhall.Substitution.Substitutions Src Void)
-substitutions = lens _substitutions (\s x -> s { _substitutions = x })
+substitutions =
+    lens
+        _substitutions
+        (\s x ->
+            s { _substitutions = x
+              , _resolvedSubstitutions = Nothing
+              , _merkleSubstitutionsFingerprint = Nothing
+              }
+        )
+
+-- | Lens from a `Status` to its cached resolved substitution map
+resolvedSubstitutions
+    :: Lens' Status (Maybe (Dhall.Substitution.ResolvedSubstitutions Src Void))
+resolvedSubstitutions =
+    lens _resolvedSubstitutions (\s x -> s { _resolvedSubstitutions = x })
 
 -- | Lens from a `Status` to its `_normalizer` field
 normalizer :: Lens' Status (Maybe (ReifiedNormalizer Void))
@@ -205,7 +269,10 @@ normalizer = lens _normalizer (\s x -> s {_normalizer = x})
 
 -- | Lens from a `Status` to its `_startingContext` field
 startingContext :: Lens' Status (Context (Expr Src Void))
-startingContext = lens _startingContext (\s x -> s { _startingContext = x })
+startingContext =
+    lens
+        _startingContext
+        (\s x -> s { _startingContext = x, _merkleContextFingerprint = Nothing })
 
 -- | Lens from a `Status` to its `_cacheWarning` field
 cacheWarning :: Lens' Status CacheWarning

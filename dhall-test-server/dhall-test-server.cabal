@@ -2,11 +2,18 @@ cabal-version: 2.4
 name: dhall-test-server
 version: 0.1.0.0
 build-type: Simple
+data-files:
+  cert/cert.pem
+  cert/key.pem
 
 library
   hs-source-dirs: src
   exposed-modules:
     Dhall.Test.Server
+  other-modules:
+    Paths_dhall_test_server
+  autogen-modules:
+    Paths_dhall_test_server
   build-depends:
       async >= 2.2 && < 2.3
     , base >= 4.11 && < 5

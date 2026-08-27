@@ -9,6 +9,7 @@ import Dhall.Core        (Binding (..), Expr (..), Var (..))
 import Dhall.Src         (Src)
 
 import qualified Data.Either.Validation
+import qualified Data.Text                  as Text
 import qualified Dhall
 import qualified Dhall.Core                 as Core
 import qualified Dhall.Map
@@ -60,7 +61,8 @@ tests =
         , dependentSubstitutionsChainThreeLevels
         , dependentSubstitutionsOnlyChainForward
         , letAnnotationIsSubstituted
-        , selfReferentialSubstitutionIsANoop
+        , unusedSubstitutionsUnderManyLetsAreCheapToShift
+        , importedExpressionIsSubstituted
         ]
 
 noSubstitutionsIsIdentity :: Tasty.TestTree
@@ -211,3 +213,43 @@ selfReferentialSubstitutionIsANoop = Tasty.HUnit.testCase "A self-referential su
     let substitutions = Dhall.Map.fromList [ ("Foo", Var "Foo") ]
 
     Dhall.Substitution.substitute expr substitutions @?= Var "Foo"
+
+-- | Many unused substitution keys under nested Lets. This is the Haskell-API
+-- shape (Result / schema names that do not collide with local binders). The
+-- shift fast path must still apply the one matching substitution.
+unusedSubstitutionsUnderManyLetsAreCheapToShift :: Tasty.TestTree
+unusedSubstitutionsUnderManyLetsAreCheapToShift =
+    Tasty.HUnit.testCase "Unused substitutions under nested Lets still apply a matching variable" $ do
+        let body = Var "z" :: Expr Void Void
+
+        let expr =
+                foldr
+                    (\i acc -> Let (Core.makeBinding (varName i) (NaturalLit 0)) acc)
+                    body
+                    [0 .. 63 :: Int]
+
+        let unused =
+                [ (varName i, NaturalLit (fromIntegral i))
+                | i <- [0 .. 63 :: Int]
+                ]
+
+        let substitutions = Dhall.Map.fromList (("z", NaturalLit 42) : unused)
+
+        let expected =
+                foldr
+                    (\i acc -> Let (Core.makeBinding (varName i) (NaturalLit 0)) acc)
+                    (NaturalLit 42)
+                    [0 .. 63 :: Int]
+
+        Dhall.Substitution.substitute expr substitutions @?= expected
+  where
+    varName i = "x" <> Text.pack (show i)
+
+-- | Substitutions must apply inside imported files, not only in the entry
+-- expression. @substitution2.dhall@ is @./substitution1.dhall@, which uses
+-- the @Result@ substitution.
+importedExpressionIsSubstituted :: Tasty.TestTree
+importedExpressionIsSubstituted =
+    Tasty.HUnit.testCase "Substitutions apply inside imported files" $ do
+        res <- substituteResult "tests/tutorial/substitution2.dhall"
+        res @?= Failure 1

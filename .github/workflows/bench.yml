@@ -1,0 +1,129 @@
+# Continuous dhall benchmarks.
+#
+# History and charts live on the `gh-pages` branch (not Actions artifacts).
+# After the first successful main run, enable Pages: Settings → Pages →
+# Deploy from a branch → `gh-pages` / root. Charts then appear at
+# https://<owner>.github.io/<repo>/dev/bench/
+#
+# Manual runs (Actions → benchmarks → Run workflow) on a non-main branch
+# execute the suite and upload CSV/JSON, but do not update the charts.
+env:
+  cache_generation: 2024-06-13
+
+name: benchmarks
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      pattern:
+        description: 'Optional tasty-bench --pattern (e.g. large3). Empty runs the full dhall suite.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  deployments: write
+
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: ubuntu-latest - stack.yaml
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      BENCH_PATTERN: ${{ github.event.inputs.pattern || '' }}
+      PUBLISH_CHARTS: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: setup-haskell-cabal
+        name: "Setup Haskell environment"
+        uses: haskell-actions/setup@v2.12
+        with:
+          enable-stack: true
+          stack-version: "latest"
+          stack-no-global: true
+      - name: "Cache"
+        uses: actions/cache@v6
+        with:
+          key: ubuntu-latest-${{ runner.arch }}-${{ env.cache_generation }}-${{ hashFiles('stack.yaml') }}
+          restore-keys: |
+            ubuntu-latest-${{ runner.arch }}-${{ env.cache_generation }}-
+          path: |
+            ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      - name: "Install libsodium"
+        run: |
+          sudo apt-get install -y libsodium-dev
+          echo "::debug::'pkg-config libsodium' output:"
+          pkg-config --print-errors --libs libsodium || true
+      - name: "Run parser benchmarks"
+        if: ${{ env.BENCH_PATTERN == '' }}
+        run: |
+          stack bench dhall:dhall-parser --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/parser.csv --timeout 300"
+      - name: "Run deep-nested-large-record benchmarks"
+        if: ${{ env.BENCH_PATTERN == '' }}
+        run: |
+          stack bench dhall:deep-nested-large-record --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/deep-nested-large-record.csv --timeout 300"
+      - name: "Run evaluation benchmarks"
+        run: |
+          extra=()
+          if [ -n "${BENCH_PATTERN}" ]; then
+            extra+=(--pattern "${BENCH_PATTERN}")
+          fi
+          stack bench dhall:evaluation --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/evaluation.csv --timeout 300 ${extra[*]}"
+      - name: "Convert tasty-bench CSV to github-action-benchmark JSON"
+        if: ${{ !cancelled() }}
+        run: |
+          shopt -s nullglob
+          csvs=( "${GITHUB_WORKSPACE}"/*.csv )
+          if [ "${#csvs[@]}" -eq 0 ]; then
+            echo "No benchmark CSV files were produced"
+            exit 1
+          fi
+          python3 .github/scripts/tasty-bench-csv-to-json.py \
+            "${csvs[@]}" \
+            -o "${GITHUB_WORKSPACE}/bench.json"
+      - name: "Upload benchmark results"
+        if: ${{ !cancelled() && hashFiles('bench.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: dhall-benchmarks-${{ github.sha }}
+          path: |
+            *.csv
+            bench.json
+          retention-days: 14
+          if-no-files-found: warn
+      - name: "Ensure gh-pages branch exists"
+        if: ${{ env.PUBLISH_CHARTS == 'true' }}
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages; then
+            echo "gh-pages already exists"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          empty_tree="$(git hash-object -t tree /dev/null)"
+          commit="$(git commit-tree "${empty_tree}" -m "Initialize gh-pages for benchmark charts")"
+          git push origin "${commit}:refs/heads/gh-pages"
+      - name: "Store benchmark result"
+        if: ${{ !cancelled() && hashFiles('bench.json') != '' }}
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: dhall
+          tool: customSmallerIsBetter
+          output-file-path: bench.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ env.PUBLISH_CHARTS == 'true' }}
+          skip-fetch-gh-pages: ${{ env.PUBLISH_CHARTS != 'true' }}
+          save-data-file: ${{ env.PUBLISH_CHARTS == 'true' }}
+          fail-on-alert: false
+          summary-always: true
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench

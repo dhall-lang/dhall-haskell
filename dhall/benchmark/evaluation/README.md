@@ -60,3 +60,4 @@ Implications:
 
 - `large3/README.md` — Sourcegraph fixture and get_config notes
 - `large4/README.md` — customization tree
+- [`.github/workflows/README.md`](../../../.github/workflows/README.md) — CI job, `gh-pages` charts, on-demand runs

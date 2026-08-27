@@ -65,7 +65,7 @@ module Dhall
 import Control.Applicative    (Alternative, empty)
 import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
-import Data.Void              (Void)
+import Data.Void              (Void, absurd)
 import Dhall.Import           (Imported (..), Status)
 import Dhall.Parser           (Src (..))
 import Dhall.Syntax           (Expr (..), Import)
@@ -266,6 +266,12 @@ resolveWithSettings settings expression =
 
 -- | A version of 'resolveWithSettings' that also returns the import 'Status'
 -- together with the resolved expression.
+--
+-- Substitutions are applied to the unresolved entry expression first, then
+-- again inside import loading (so each import can be type-checked). They are
+-- not applied again to the fully inlined tree: that second whole-AST walk
+-- rebuilt the substitution map at every binder, which dominated large
+-- @as Source@ products.
 resolveAndStatusWithSettings
     :: InputSettings
     -> Expr Src Import
@@ -275,11 +281,14 @@ resolveAndStatusWithSettings settings expression = do
 
     let status = emptyStatusWithSettings _evaluateSettings _rootDirectory
 
-    (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression) status
+    let expression' =
+            Dhall.Substitution.substitute
+                expression
+                (fmap (fmap absurd) (view substitutions settings))
 
-    let substituted = Dhall.Substitution.substitute resolved (view substitutions settings)
+    (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression') status
 
-    pure (substituted, status')
+    pure (resolved, status')
 
 -- | As 'emptyStatus' but applying 'EvaluateSettings'.
 emptyStatusWithSettings :: EvaluateSettings -> FilePath -> Status

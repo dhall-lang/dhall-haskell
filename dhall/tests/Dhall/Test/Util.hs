@@ -26,6 +26,7 @@ module Dhall.Test.Util
     , pathNotIn
     , pathNotPrefixOf
     , pathNotSuffixOf
+    , pathNotInfixOf
     , toDhallPath
     , managedTestEnvironment
     ) where
@@ -408,6 +409,10 @@ pathNotPrefixOf this =
 pathNotSuffixOf :: Alternative f => FilePath -> FilePath -> f ()
 pathNotSuffixOf this =
     guard . not . List.isSuffixOf (FilePath.normalise this) . FilePath.normalise
+
+pathNotInfixOf :: Alternative f => FilePath -> FilePath -> f ()
+pathNotInfixOf this =
+    guard . not . List.isInfixOf (FilePath.normalise this) . FilePath.normalise
 
 {-| Path names on Windows are not valid Dhall paths due to using backslashes
     instead of forwardslashes to separate path components.  This utility fixes
