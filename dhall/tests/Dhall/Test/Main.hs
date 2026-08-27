@@ -105,6 +105,10 @@ main = do
     -- https://github.com/feuerbach/tasty/issues/273#issuecomment-657054281
     System.Environment.setEnv "TASTY_HIDE_SUCCESSES" "true"
 
+    -- Import tests share process-wide DHALL_HEADERS. tasty-1.5.4's default -j
+    -- is getNumProcessors (and it raises +RTS -N), so RTS -N1 is not enough.
+    System.Environment.setEnv "TASTY_NUM_THREADS" "1"
+
     Dhall.Test.Server.withServers $ do
         allTests <- getAllTests
 
