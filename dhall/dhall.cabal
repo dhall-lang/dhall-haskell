@@ -433,6 +433,7 @@ Test-Suite tasty
     Main-Is: Dhall/Test/Main.hs
     Other-Modules:
         Dhall.Test.CacheFill
+        Dhall.Test.DelayedNormalization
         Dhall.Test.Dhall
         Dhall.Test.Diff
         Dhall.Test.DirectoryTree
