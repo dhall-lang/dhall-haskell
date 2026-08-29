@@ -5,6 +5,7 @@ import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.CacheFill
+import qualified Dhall.Test.DelayedNormalization
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.Diff
 import qualified Dhall.Test.DirectoryTree
@@ -48,6 +49,8 @@ getAllTests = do
 
     cacheFillTests <- Dhall.Test.CacheFill.getTests
 
+    delayedNormalizationTests <- Dhall.Test.DelayedNormalization.getTests
+
     semisemanticCacheTests <- Dhall.Test.SemisemanticCache.getTests
 
     lintTests <- Dhall.Test.Lint.getTests
@@ -68,6 +71,7 @@ getAllTests = do
                 , parsingTests
                 , importingTests
                 , cacheFillTests
+                , delayedNormalizationTests
                 , semisemanticCacheTests
                 , typeinferenceTests
                 , formattingTests

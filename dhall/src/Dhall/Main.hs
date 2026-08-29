@@ -282,12 +282,12 @@ parseMode =
     <|> subcommand
             Interpret
             "resolve"
-            "Resolve an expression's imports"
+            "Resolve an expression's imports (import-free, not necessarily β-normal)"
             (Resolve <$> parseFile <*> parseResolveMode <*> parseSemanticCacheMode)
     <|> subcommand
             Interpret
             "type"
-            "Infer an expression's type"
+            "Infer an expression's type (after resolving imports; types may reflect unreduced lets)"
             (Type <$> parseFile <*> parseQuiet <*> parseSemanticCacheMode)
     <|> subcommand
             Interpret
@@ -802,6 +802,8 @@ command (Options {..}) = do
                  $   _cache
 
         Resolve { resolveMode = Nothing, ..} -> do
+            -- Unhashed Code imports are not β-normalized; this prints the
+            -- import-free typechecked tree, which may still contain lets.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
@@ -826,6 +828,9 @@ command (Options {..}) = do
             render System.IO.stdout characterSet alphaNormalizedExpression
 
         Type {..} -> do
+            -- Inference sees the resolved (possibly unreduced) tree, so
+            -- pretty-printed binder names may differ from a fully
+            -- normalized import.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-

@@ -1531,7 +1531,12 @@ remoteStatusWithManager newManager url =
 {-| Generalized version of `load`
 
     You can configure the desired behavior through the initial `Status` that you
-    supply
+    supply.
+
+    The result is import-free and type-checked.  Unhashed @Code@ imports are
+    not necessarily β-normal ('Dhall.Import.Types.TypecheckedOnly'); hashed
+    @Code@ imports are β-normal.  Callers that need a normal form (integrity
+    hashes, evaluation) should normalize the result themselves.
 -}
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr₀ = case expr₀ of
@@ -1673,6 +1678,12 @@ In any expression `p ? q` the opportunistic caching rule says:
   expression           -> Syntax.unsafeSubExpressions loadWith expression
 
 -- | Resolve all imports within an expression
+--
+-- The result is import-free and type-checked, but not necessarily β-normal:
+-- unhashed @Code@ imports may still contain @let@s and unsaturated
+-- applications.  Hashed @Code@ imports are β-normal.  Use
+-- 'Dhall.Core.normalize' (or @dhall normalize@) when a normal form is
+-- required.
 load :: Expr Src Import -> IO (Expr Src Void)
 load = loadWithManager defaultNewManager
 
@@ -1685,6 +1696,8 @@ loadWithManager newManager =
 
 -- | Resolve all imports within an expression, importing relative to the given
 -- directory.
+--
+-- See 'load' for the β-normalization status of the result.
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
 loadRelativeTo parentDirectory = loadWithStatus
     (makeEmptyStatus defaultNewManager defaultOriginHeaders parentDirectory)
@@ -1710,15 +1723,23 @@ encodeExpression expression = bytesStrict
 
     bytesStrict = Write.toStrictByteString encoding
 
--- | Hash a fully resolved expression
+-- | Hash a fully resolved, αβ-normal expression
+--
+-- The argument must already be β-normalized and α-normalized.  The semantic
+-- integrity check is defined as the SHA-256 of the binary encoding of that
+-- αβ-normal form.  Hashing a typechecked-but-unreduced tree (for example the
+-- result of 'load' of an unhashed @Code@ import) produces a value that is
+-- __not__ a valid integrity hash.
 hashExpression :: Expr Void Void -> Dhall.Crypto.SHA256Digest
 hashExpression = Dhall.Crypto.sha256Hash . encodeExpression
 
-{-| Convenience utility to hash a fully resolved expression and return the
-    base-16 encoded hash with the @sha256:@ prefix
+{-| Convenience utility to hash a fully resolved, αβ-normal expression and
+    return the base-16 encoded hash with the @sha256:@ prefix
 
     In other words, the output of this function can be pasted into Dhall
-    source code to add an integrity check to an import
+    source code to add an integrity check to an import.
+
+    As with 'hashExpression', the argument must already be αβ-normal.
 -}
 hashExpressionToCode :: Expr Void Void -> Text
 hashExpressionToCode expr =
