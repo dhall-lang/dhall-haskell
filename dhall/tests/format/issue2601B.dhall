@@ -2,7 +2,7 @@ let T = < Some | Type >
 
 let t
     : T
-    = T.`Some`
+    = T.Some
 
 let x
     : T

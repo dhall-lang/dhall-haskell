@@ -1,5 +1,8 @@
 1.42.3
 
+* Allow `Some` as a field selector and union constructor (`e.Some`), matching
+  `e.None` / `e.List`. `Some e` is still the Optional special form. `dhall format`
+  now prints `e.Some` without backticks.
 * BREAKING CHANGE: Remove `Expr` constructors for predefined functions
   (`NaturalFold`, `ListHead`, `TextShow`, and the rest). Those names are
   ordinary `Var`s; reduction and type-checking look them up in
