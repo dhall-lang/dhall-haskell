@@ -1317,7 +1317,7 @@ prettyPrinters characterSet =
 
     prettySelectorExpression :: Pretty a => Expr Src a -> Doc Ann
     prettySelectorExpression (Field a (Dhall.Syntax.fieldSelectionLabel -> b)) =
-        prettySelectorExpression a <> dot <> prettyAnyLabel b
+        prettySelectorExpression a <> dot <> prettyAnyLabelOrSome b
     prettySelectorExpression (Project a (Left b)) =
         prettySelectorExpression a <> dot <> prettyLabels b
     prettySelectorExpression (Project a (Right b)) =

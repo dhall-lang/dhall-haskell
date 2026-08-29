@@ -1,5 +1,8 @@
 1.42.3
 
+* Allow `Some` as a field selector and union constructor (`e.Some`), matching
+  `e.None` / `e.List`. `Some e` is still the Optional special form. `dhall format`
+  now prints `e.Some` without backticks.
 * Reuse a single HTTP `Manager` per import run by replacing `Status`'s
   `_newManager` factory with `pure manager` after the first request, instead
   of keeping a separate `_manager` field.
