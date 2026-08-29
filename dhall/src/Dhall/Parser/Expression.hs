@@ -127,7 +127,7 @@ timeNumOffset = do
 
     minute <- timeMinute
 
-    let minutes = s (hour * 60 + minute)
+    let minutes = s (fromIntegral hour * 60 + fromIntegral minute)
 
     return (TimeZoneLiteral (Time.TimeZone minutes Prelude.False ""))
 
@@ -161,9 +161,7 @@ partialTime = do
 
     (fraction, precision) <- timeSecFrac <|> pure (0, 0)
 
-    let time = Time.TimeOfDay hour minute (second + fraction)
-
-    return (TimeLiteral time precision)
+    return (TimeLiteral hour minute second fraction precision)
 
 {-| Parse a `Date`
 

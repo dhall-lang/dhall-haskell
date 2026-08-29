@@ -460,12 +460,16 @@ standardizedExpression (Annot (ToMap _ Nothing) _) =
     False
 standardizedExpression (TimeZoneLiteral (Time.TimeZone _ b t)) =
     not b && null t
-standardizedExpression (TimeLiteral (Time.TimeOfDay _ _ ss) precision) =
-    isInteger (ss * magnitude)
-  where
-    magnitude = 10 ^ precision
-
-    isInteger x = x == fromInteger (round x)
+standardizedExpression (TimeLiteral hh mm ss fraction precision) =
+       hh < 24
+    && mm < 60
+    && ss < 60
+    && fraction >= 0
+    && precision >= 0
+    && precision <= 100
+    && (  (precision == 0 && fraction == 0)
+       || (precision > 0 && fraction < 10 ^ precision)
+       )
 standardizedExpression _ =
     True
 

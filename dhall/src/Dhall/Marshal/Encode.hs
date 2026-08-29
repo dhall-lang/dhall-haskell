@@ -372,7 +372,13 @@ instance ToDhall a => ToDhall (Vector a) where
 instance ToDhall Time.TimeOfDay where
     injectWith _ = Encoder {..}
       where
-        embed timeOfDay = TimeLiteral timeOfDay 12
+        embed (Time.TimeOfDay hh mm pico) =
+            TimeLiteral (fromIntegral hh) (fromIntegral mm) (fromIntegral ss) frac 12
+          where
+            mantissa :: Integer
+            mantissa = truncate (pico * 10 ^ (12 :: Int))
+
+            (ss, frac) = mantissa `divMod` (10 ^ (12 :: Int))
 
         declared = Time
 

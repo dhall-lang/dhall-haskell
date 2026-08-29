@@ -25,6 +25,7 @@ import Data.Sequence         (Seq)
 import Data.String           (IsString (..))
 import Data.Text             (Text)
 import Data.Void             (Void)
+import Data.Word             (Word8)
 import Dhall.Map             (Map)
 import Dhall.Pretty.Internal (Ann)
 import Dhall.Syntax
@@ -202,12 +203,17 @@ diffDateLiteral :: Time.Day -> Time.Day -> Diff
 diffDateLiteral =
     diffPrimitive (token . Internal.prettyExpr @(Expr Void Void) . DateLiteral)
 
-diffTimeLiteral :: Time.TimeOfDay -> Word -> Time.TimeOfDay -> Word -> Diff
-diffTimeLiteral tL pL tR pR =
+diffTimeLiteral
+    :: (Word8, Word8, Word8, Integer, Int)
+    -> (Word8, Word8, Word8, Integer, Int)
+    -> Diff
+diffTimeLiteral l r =
     diffPrimitive
-        (token . Internal.prettyExpr @(Expr Void Void) . uncurry TimeLiteral)
-        (tL, pL)
-        (tR, pR)
+        (token . Internal.prettyExpr @(Expr Void Void) . toLit)
+        l
+        r
+  where
+    toLit (hh, mm, ss, frac, p) = TimeLiteral hh mm ss frac p
 
 diffTimeZoneLiteral :: Time.TimeZone -> Time.TimeZone -> Diff
 diffTimeZoneLiteral =
@@ -1439,8 +1445,8 @@ diffPrimitiveExpression l@(DateLiteral {}) r =
     mismatch l r
 diffPrimitiveExpression l r@(DateLiteral {}) =
     mismatch l r
-diffPrimitiveExpression (TimeLiteral tL pL) (TimeLiteral tR pR) =
-    diffTimeLiteral tL pL tR pR
+diffPrimitiveExpression (TimeLiteral hhL mmL ssL fL pL) (TimeLiteral hhR mmR ssR fR pR) =
+    diffTimeLiteral (hhL, mmL, ssL, fL, pL) (hhR, mmR, ssR, fR, pR)
 diffPrimitiveExpression l@(TimeLiteral {}) r =
     mismatch l r
 diffPrimitiveExpression l r@(TimeLiteral {}) =

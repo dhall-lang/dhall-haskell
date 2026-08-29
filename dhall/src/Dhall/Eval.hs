@@ -57,8 +57,9 @@ import Data.Foldable      (foldr', toList)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
 import Data.Text          (Text)
-import Data.Time          (Day, TimeOfDay (..), TimeZone)
+import Data.Time          (Day, TimeZone)
 import Data.Void          (Void)
+import Data.Word          (Word8)
 import Dhall.Map          (Map)
 import Dhall.Set          (Set)
 import GHC.Natural        (Natural)
@@ -238,7 +239,7 @@ data Val a
     | VDateLiteral Time.Day
     | VDateShow !(Val a)
     | VTime
-    | VTimeLiteral Time.TimeOfDay Word
+    | VTimeLiteral Word8 Word8 Word8 Integer Int
     | VTimeShow !(Val a)
     | VTimeZone
     | VTimeZoneLiteral Time.TimeZone
@@ -751,12 +752,12 @@ eval !env t0 =
                 t              -> VDateShow t
         Time ->
             VTime
-        TimeLiteral t p ->
-            VTimeLiteral t p
+        TimeLiteral hh mm ss frac p ->
+            VTimeLiteral hh mm ss frac p
         TimeShow ->
             VPrim $ \case
-                VTimeLiteral d p -> VTextLit (VChunks [] (timeShow d p))
-                t                -> VTimeShow t
+                VTimeLiteral hh mm ss frac p -> VTextLit (VChunks [] (timeShow hh mm ss frac p))
+                t                            -> VTimeShow t
         TimeZone ->
             VTimeZone
         TimeZoneLiteral z ->
@@ -996,16 +997,10 @@ dateShow :: Day -> Text
 dateShow = Text.pack . Time.formatTime Time.defaultTimeLocale "%0Y-%m-%d"
 
 -- | Utility that powers the @Time/show@ built-in
-timeShow :: TimeOfDay -> Word -> Text
-timeShow (TimeOfDay hh mm seconds) precision =
+timeShow :: Word8 -> Word8 -> Word8 -> Integer -> Int -> Text
+timeShow hh mm ss fraction precision =
     Text.pack (Printf.printf "%02d:%02d:%02d" hh mm ss <> suffix)
   where
-    magnitude :: Integer
-    magnitude = 10 ^ precision
-
-    (ss, fraction) =
-        truncate (seconds * fromInteger magnitude) `divMod` magnitude
-
     suffix
         | precision == 0 = ""
         | otherwise      = Printf.printf ".%0*d" precision fraction
@@ -1125,8 +1120,8 @@ conv !env t0 t0' =
             conv env t t'
         (VTime, VTime) ->
             True
-        (VTimeLiteral tl pl, VTimeLiteral tr pr) ->
-            tl == tr && pl == pr
+        (VTimeLiteral hhL mmL ssL fL pL, VTimeLiteral hhR mmR ssR fR pR) ->
+            hhL == hhR && mmL == mmR && ssL == ssR && fL == fR && pL == pR
         (VTimeShow t, VTimeShow t') ->
             conv env t t'
         (VTimeZone, VTimeZone) ->
@@ -1347,8 +1342,8 @@ quote !env !t0 =
             DateShow `qApp` t
         VTime ->
             Time
-        VTimeLiteral t p ->
-            TimeLiteral t p
+        VTimeLiteral hh mm ss frac p ->
+            TimeLiteral hh mm ss frac p
         VTimeShow t ->
             TimeShow `qApp` t
         VTimeZone ->
@@ -1556,8 +1551,8 @@ alphaNormalize = goEnv EmptyNames
                 DateShow
             Time ->
                 Time
-            TimeLiteral t p ->
-                TimeLiteral t p
+            TimeLiteral hh mm ss frac p ->
+                TimeLiteral hh mm ss frac p
             TimeShow ->
                 TimeShow
             TimeZone ->
