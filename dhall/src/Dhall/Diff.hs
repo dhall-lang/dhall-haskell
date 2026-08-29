@@ -1316,6 +1316,24 @@ diffPrimitiveExpression l r@DateShow =
     mismatch l r
 diffPrimitiveExpression l@DateShow r=
     mismatch l r
+diffPrimitiveExpression DateYear DateYear =
+    "…"
+diffPrimitiveExpression l r@DateYear =
+    mismatch l r
+diffPrimitiveExpression l@DateYear r=
+    mismatch l r
+diffPrimitiveExpression DateMonth DateMonth =
+    "…"
+diffPrimitiveExpression l r@DateMonth =
+    mismatch l r
+diffPrimitiveExpression l@DateMonth r=
+    mismatch l r
+diffPrimitiveExpression DateDay DateDay =
+    "…"
+diffPrimitiveExpression l r@DateDay =
+    mismatch l r
+diffPrimitiveExpression l@DateDay r=
+    mismatch l r
 diffPrimitiveExpression Time Time =
     "…"
 diffPrimitiveExpression l r@Time =
@@ -1327,6 +1345,24 @@ diffPrimitiveExpression TimeShow TimeShow =
 diffPrimitiveExpression l r@TimeShow =
     mismatch l r
 diffPrimitiveExpression l@TimeShow r=
+    mismatch l r
+diffPrimitiveExpression TimeHour TimeHour =
+    "…"
+diffPrimitiveExpression l r@TimeHour =
+    mismatch l r
+diffPrimitiveExpression l@TimeHour r=
+    mismatch l r
+diffPrimitiveExpression TimeMinute TimeMinute =
+    "…"
+diffPrimitiveExpression l r@TimeMinute =
+    mismatch l r
+diffPrimitiveExpression l@TimeMinute r=
+    mismatch l r
+diffPrimitiveExpression TimeSecond TimeSecond =
+    "…"
+diffPrimitiveExpression l r@TimeSecond =
+    mismatch l r
+diffPrimitiveExpression l@TimeSecond r=
     mismatch l r
 diffPrimitiveExpression TimeZone TimeZone =
     "…"
