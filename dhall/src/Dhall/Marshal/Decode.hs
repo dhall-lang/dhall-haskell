@@ -147,6 +147,7 @@ import Data.Either.Validation
     , eitherToValidation
     , validationToEither
     )
+import Data.Ratio                       ((%))
 import Data.Functor.Contravariant
     ( Equivalence (..)
     , Op (..)
@@ -1005,7 +1006,11 @@ strictText = Decoder {..}
 timeOfDay :: Decoder Time.TimeOfDay
 timeOfDay = Decoder {..}
   where
-    extract (TimeLiteral t _) = pure t
+    extract (TimeLiteral hh mm ss frac precision) =
+        pure (Time.TimeOfDay (fromIntegral hh) (fromIntegral mm) seconds)
+      where
+        seconds =
+            fromIntegral ss + fromRational (frac % (10 ^ precision))
     extract  expr             = typeError expected expr
 
     expected = pure Time

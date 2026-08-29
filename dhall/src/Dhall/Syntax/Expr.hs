@@ -21,6 +21,7 @@ import                Dhall.Syntax.FunctionBinding
 import                Dhall.Syntax.RecordField
 import                Dhall.Syntax.Types
 import                Dhall.Syntax.Var
+import                Data.Word                    (Word8)
 import                GHC.Generics                 (Generic)
 import                Numeric.Natural              (Natural)
 
@@ -154,11 +155,18 @@ data Expr s a
     | DateShow
     -- | > Time                                     ~  Time
     | Time
-    -- | > TimeLiteral (TimeOfDay hh mm ss) _       ~  hh:mm:ss
+    -- | > TimeLiteral hh mm ss fraction precision  ~  hh:mm:ss[.fraction]
     | TimeLiteral
-        Time.TimeOfDay
-        Word
-        -- ^ Precision
+        Word8
+        -- ^ Hour (0–23)
+        Word8
+        -- ^ Minute (0–59)
+        Word8
+        -- ^ Second, integer part (0–59)
+        Integer
+        -- ^ Fractional digits as a base-10 integer
+        Int
+        -- ^ Number of fractional digits (0 if there is no '.')
     -- | > TimeShow                                 ~  Time/show
     | TimeShow
     -- | > TimeZone                                 ~  TimeZone
