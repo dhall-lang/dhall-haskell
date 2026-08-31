@@ -30,7 +30,7 @@ markdownToHtml
     -> Text          -- ^ Text to parse
     -> Either MarkdownParseError (Html ())
 markdownToHtml relFile contents =
-    MMark.render <$> parseMarkdown relFile contents
+    MMark.render mempty <$> parseMarkdown relFile contents
 
 {-| Takes a text that could contain markdown and returns either the parsed
     markdown or, if parsing fails, the error information.
