@@ -12,6 +12,7 @@ packages:
   - dhall-toml
   - dhall-yaml
 extra-deps:
+  - mmark-0.1.0.0@sha256:7a69122e04c0ca74c741504c37a28af102b5032d585fdf5936a02a606eaf1478,4248
   - tls-2.1.6
 nix:
   packages:
