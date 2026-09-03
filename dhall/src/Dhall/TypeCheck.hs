@@ -219,7 +219,9 @@ infer typer = loop
 
         Var (V x0 n0) -> do
             let go TypesEmpty _ =
-                    die (UnboundVariable x0)
+                    case primitiveFunctionType x0 n0 of
+                        Just t  -> return t
+                        Nothing -> die (UnboundVariable x0)
                 go (TypesBind ts x t) n
                     | x == x0   = if n == 0 then return t else go ts (n - 1)
                     | otherwise = go ts n
@@ -1355,6 +1357,112 @@ infer typer = loop
             return (eval values (typer p))
       where
         die err = Left (TypeError context expression err)
+
+        primitiveFunctionType :: Text -> Int -> Maybe (Val a)
+        primitiveFunctionType x n
+            | n /= 0 = Nothing
+            | otherwise =
+                case x of
+                    "Natural/fold" ->
+                        Just
+                            (   VNatural
+                            ~>  VHPi "natural" (VConst Type) (\natural ->
+                                    VHPi "succ" (natural ~> natural) (\_succ ->
+                                        VHPi "zero" natural (\_zero ->
+                                            natural
+                                        )
+                                    )
+                                )
+                            )
+                    "Natural/build" ->
+                        Just
+                            (   VHPi "natural" (VConst Type) (\natural ->
+                                    VHPi "succ" (natural ~> natural) (\_succ ->
+                                        VHPi "zero" natural (\_zero ->
+                                            natural
+                                        )
+                                    )
+                                )
+                            ~>  VNatural
+                            )
+                    "Natural/isZero"    -> Just (VNatural ~> VBool)
+                    "Natural/even"      -> Just (VNatural ~> VBool)
+                    "Natural/odd"       -> Just (VNatural ~> VBool)
+                    "Natural/toInteger" -> Just (VNatural ~> VInteger)
+                    "Natural/show"      -> Just (VNatural ~> VText)
+                    "Natural/subtract"  -> Just (VNatural ~> VNatural ~> VNatural)
+                    "Integer/clamp"     -> Just (VInteger ~> VNatural)
+                    "Integer/negate"    -> Just (VInteger ~> VInteger)
+                    "Integer/show"      -> Just (VInteger ~> VText)
+                    "Integer/toDouble"  -> Just (VInteger ~> VDouble)
+                    "Double/show"       -> Just (VDouble ~> VText)
+                    "Text/replace"      ->
+                        Just
+                            (   VHPi "needle" VText (\_needle ->
+                                    VHPi "replacement" VText (\_replacement ->
+                                        VHPi "haystack" VText (\_haystack ->
+                                            VText
+                                        )
+                                    )
+                                )
+                            )
+                    "Text/show"         -> Just (VText ~> VText)
+                    "Date/show"         -> Just (VDate ~> VText)
+                    "Time/show"         -> Just (VTime ~> VText)
+                    "TimeZone/show"     -> Just (VTimeZone ~> VText)
+                    "List/build"        ->
+                        Just
+                            (   VHPi "a" (VConst Type) (\a ->
+                                    VHPi "_"
+                                        (VHPi "list" (VConst Type) (\list ->
+                                            VHPi "cons" (a ~> list ~> list) (\_ ->
+                                                VHPi "nil" list (\_ -> list)
+                                            )
+                                        ))
+                                        (\_ -> VList a)
+                                )
+                            )
+                    "List/fold"         ->
+                        Just
+                            (   VHPi "a" (VConst Type) (\a ->
+                                    VHPi "_" (VList a) (\_as ->
+                                        VHPi "list" (VConst Type) (\list ->
+                                            VHPi "cons" (a ~> list ~> list) (\_ ->
+                                                VHPi "nil" list (\_ ->
+                                                    list
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                    "List/length"       ->
+                        Just
+                            (VHPi "a" (VConst Type) (\a -> VList a ~> VNatural))
+                    "List/head"         ->
+                        Just
+                            (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
+                    "List/last"         ->
+                        Just
+                            (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
+                    "List/indexed"      ->
+                        Just
+                            (   VHPi "a" (VConst Type) (\a ->
+                                    VList a
+                                    ~> VList
+                                        (VRecord
+                                            (Dhall.Map.fromList
+                                                [ ("index", VNatural)
+                                                , ("value", a)
+                                                ]
+                                            )
+                                        )
+                                )
+                            )
+                    "List/reverse"      ->
+                        Just
+                            (VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
+                    _                   -> Nothing
 
         context = ctxToContext ctx
 

@@ -174,7 +174,7 @@ normalizeWith _          t = Eval.normalize t
 -}
 normalizeWithM
     :: (Monad m, Eq a) => NormalizerM m a -> Expr s a -> m (Expr t a)
-normalizeWithM ctx e0 = loop (Syntax.denote e0)
+normalizeWithM ctx e0 = fmap (Syntax.renote . rewritePrimitiveConstructorsToVars . Syntax.denote) (loop (Syntax.denote e0))
  where
   loop e = ctx e >>= \case
       Just e' -> loop e'
@@ -757,227 +757,41 @@ isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 -- Given an ill-typed expression, 'isNormalized' may fail with an error, or
 -- evaluate to either False or True!
 isNormalized :: Eq a => Expr s a -> Bool
-isNormalized e0 = loop (Syntax.denote e0)
+isNormalized e =
+    denote' e == denote' (normalize e)
   where
-    loop e = case e of
-      Const _ -> True
-      Var _ -> True
-      Lam _ (FunctionBinding Nothing _ Nothing Nothing a) b -> loop a && loop b
-      Lam _ _ _ -> False
-      Pi _ _ a b -> loop a && loop b
-      App f a -> loop f && loop a && case App f a of
-          App (Lam _ _ _) _ -> False
-          App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
-          App NaturalBuild _ -> False
-          App NaturalIsZero (NaturalLit _) -> False
-          App NaturalEven (NaturalLit _) -> False
-          App NaturalOdd (NaturalLit _) -> False
-          App NaturalShow (NaturalLit _) -> False
-          App DateShow (DateLiteral _) -> False
-          App TimeShow (TimeLiteral _ _ _ _ _) -> False
-          App TimeZoneShow (TimeZoneLiteral _) -> False
-          App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
-          App (App NaturalSubtract (NaturalLit 0)) _ -> False
-          App (App NaturalSubtract _) (NaturalLit 0) -> False
-          App (App NaturalSubtract x) y -> not (Eval.judgmentallyEqual x y)
-          App NaturalToInteger (NaturalLit _) -> False
-          App IntegerNegate (IntegerLit _) -> False
-          App IntegerClamp (IntegerLit _) -> False
-          App IntegerShow (IntegerLit _) -> False
-          App IntegerToDouble (IntegerLit _) -> False
-          App DoubleShow (DoubleLit _) -> False
-          App (App ListBuild _) _ -> False
-          App (App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _) _ -> False
-          App (App ListLength _) (ListLit _ _) -> False
-          App (App ListHead _) (ListLit _ _) -> False
-          App (App ListLast _) (ListLit _ _) -> False
-          App (App ListIndexed _) (ListLit _ _) -> False
-          App (App ListReverse _) (ListLit _ _) -> False
-          App TextShow (TextLit (Chunks [] _)) ->
-              False
-          App (App (App TextReplace (TextLit (Chunks [] ""))) _) _ ->
-              False
-          App (App (App TextReplace (TextLit (Chunks [] _))) _) (TextLit _) ->
-              False
-          _ -> True
-      Let _ _ -> False
-      Annot _ _ -> False
-      Bool -> True
-      BoolLit _ -> True
-      BoolAnd x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit _)  _          = False
-          decide  _          (BoolLit _) = False
-          decide  l           r          = not (Eval.judgmentallyEqual l r)
-      BoolOr x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit _)  _          = False
-          decide  _          (BoolLit _) = False
-          decide  l           r          = not (Eval.judgmentallyEqual l r)
-      BoolEQ x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit True)  _             = False
-          decide  _             (BoolLit True) = False
-          decide  l              r             = not (Eval.judgmentallyEqual l r)
-      BoolNE x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit False)  _               = False
-          decide  _              (BoolLit False ) = False
-          decide  l               r               = not (Eval.judgmentallyEqual l r)
-      BoolIf x y z ->
-          loop x && loop y && loop z && decide x y z
-        where
-          decide (BoolLit _)  _              _              = False
-          decide  _          (BoolLit True) (BoolLit False) = False
-          decide  _           l              r              = not (Eval.judgmentallyEqual l r)
-      Bytes -> True
-      BytesLit _ -> True
-      Natural -> True
-      NaturalLit _ -> True
-      NaturalFold -> True
-      NaturalBuild -> True
-      NaturalIsZero -> True
-      NaturalEven -> True
-      NaturalOdd -> True
-      NaturalShow -> True
-      NaturalSubtract -> True
-      NaturalToInteger -> True
-      NaturalPlus x y -> loop x && loop y && decide x y
-        where
-          decide (NaturalLit 0)  _             = False
-          decide  _             (NaturalLit 0) = False
-          decide (NaturalLit _) (NaturalLit _) = False
-          decide  _              _             = True
-      NaturalTimes x y -> loop x && loop y && decide x y
-        where
-          decide (NaturalLit 0)  _             = False
-          decide  _             (NaturalLit 0) = False
-          decide (NaturalLit 1)  _             = False
-          decide  _             (NaturalLit 1) = False
-          decide (NaturalLit _) (NaturalLit _) = False
-          decide  _              _             = True
-      Integer -> True
-      IntegerLit _ -> True
-      IntegerClamp -> True
-      IntegerNegate -> True
-      IntegerShow -> True
-      IntegerToDouble -> True
-      Double -> True
-      DoubleLit _ -> True
-      DoubleShow -> True
-      Text -> True
-      TextLit (Chunks [("", _)] "") -> False
-      TextLit (Chunks xys _) -> all (all check) xys
-        where
-          check y = loop y && case y of
-              TextLit _ -> False
-              _         -> True
-      TextAppend _ _ -> False
-      TextReplace -> True
-      TextShow -> True
-      Date -> True
-      DateLiteral _ -> True
-      DateShow -> True
-      Time -> True
-      TimeLiteral _ _ _ _ _ -> True
-      TimeShow -> True
-      TimeZone -> True
-      TimeZoneLiteral _ -> True
-      TimeZoneShow -> True
-      List -> True
-      ListLit t es -> all loop t && all loop es
-      ListAppend x y -> loop x && loop y && decide x y
-        where
-          decide (ListLit _ m)  _            | Data.Sequence.null m = False
-          decide  _            (ListLit _ n) | Data.Sequence.null n = False
-          decide (ListLit _ _) (ListLit _ _)                        = False
-          decide  _             _                                   = True
-      ListBuild -> True
-      ListFold -> True
-      ListLength -> True
-      ListHead -> True
-      ListLast -> True
-      ListIndexed -> True
-      ListReverse -> True
-      Optional -> True
-      Some a -> loop a
-      None -> True
-      Record kts -> Dhall.Map.isSorted kts && all decide kts
-        where
-          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
-          decide _ = False
-      RecordLit kvs -> Dhall.Map.isSorted kvs && all decide kvs
-        where
-          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
-          decide _ = False
-      Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
-      Combine _ _ x y -> loop x && loop y && decide x y
-        where
-          decide (RecordLit m) _ | Data.Foldable.null m = False
-          decide _ (RecordLit n) | Data.Foldable.null n = False
-          decide (RecordLit _) (RecordLit _) = False
-          decide  _ _ = True
-      CombineTypes _ x y -> loop x && loop y && decide x y
-        where
-          decide (Record m) _ | Data.Foldable.null m = False
-          decide _ (Record n) | Data.Foldable.null n = False
-          decide (Record _) (Record _) = False
-          decide  _ _ = True
-      Prefer _ _ x y -> loop x && loop y && decide x y
-        where
-          decide (RecordLit m) _ | Data.Foldable.null m = False
-          decide _ (RecordLit n) | Data.Foldable.null n = False
-          decide (RecordLit _) (RecordLit _) = False
-          decide l r = not (Eval.judgmentallyEqual l r)
-      RecordCompletion _ _ -> False
-      Merge x y t -> loop x && loop y && all loop t && case x of
-          RecordLit _ -> case y of
-              Field (Union _) _ -> False
-              App (Field (Union _) _) _ -> False
-              Some _ -> False
-              App None _ -> False
-              _ -> True
-          _ -> True
-      ToMap x t -> case x of
-          RecordLit _ -> False
-          _ -> loop x && all loop t
-      ShowConstructor x -> loop x && case x of
-          Field (Union kts) (Syntax.fieldSelectionLabel -> k) ->
-              case Dhall.Map.lookup k kts of
-                  Just Nothing -> False
-                  _            -> True
-          App (Field (Union kts) (Syntax.fieldSelectionLabel -> k)) _ ->
-              case Dhall.Map.lookup k kts of
-                  Just (Just _) -> False
-                  _             -> True
-          Some _ -> False
-          App None _ -> False
-          _ -> True
-      Field r (FieldSelection Nothing k Nothing) -> case r of
-          RecordLit _ -> False
-          Project _ _ -> False
-          Prefer _ _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Prefer _ _ _ (RecordLit _) -> False
-          Combine _ _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Combine _ _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
-          _ -> loop r
-      Field _ _ -> False
-      Project r p -> loop r &&
-          case p of
-              Left s -> case r of
-                  RecordLit _ -> False
-                  Project _ _ -> False
-                  Prefer _ _ _ (RecordLit _) -> False
-                  _ -> not (null s) && Data.Set.toList (Data.Set.fromList s) == s
-              Right e' -> case e' of
-                  Record _ -> False
-                  _ -> loop e'
-      Assert t -> loop t
-      Equivalent _ l r -> loop l && loop r
-      With{} -> False
-      Note _ e' -> loop e'
-      ImportAlt _ _ -> False
-      Embed _ -> True
+    denote' :: Expr t b -> Expr () b
+    denote' = Syntax.denote
+
+rewritePrimitiveConstructorsToVars :: Expr s a -> Expr s a
+rewritePrimitiveConstructorsToVars expression =
+    case expression of
+        NaturalFold      -> Var (V "Natural/fold" 0)
+        NaturalBuild     -> Var (V "Natural/build" 0)
+        NaturalIsZero    -> Var (V "Natural/isZero" 0)
+        NaturalEven      -> Var (V "Natural/even" 0)
+        NaturalOdd       -> Var (V "Natural/odd" 0)
+        NaturalToInteger -> Var (V "Natural/toInteger" 0)
+        NaturalShow      -> Var (V "Natural/show" 0)
+        NaturalSubtract  -> Var (V "Natural/subtract" 0)
+        IntegerClamp     -> Var (V "Integer/clamp" 0)
+        IntegerNegate    -> Var (V "Integer/negate" 0)
+        IntegerShow      -> Var (V "Integer/show" 0)
+        IntegerToDouble  -> Var (V "Integer/toDouble" 0)
+        DoubleShow       -> Var (V "Double/show" 0)
+        TextReplace      -> Var (V "Text/replace" 0)
+        TextShow         -> Var (V "Text/show" 0)
+        DateShow         -> Var (V "Date/show" 0)
+        TimeShow         -> Var (V "Time/show" 0)
+        TimeZoneShow     -> Var (V "TimeZone/show" 0)
+        ListBuild        -> Var (V "List/build" 0)
+        ListFold         -> Var (V "List/fold" 0)
+        ListLength       -> Var (V "List/length" 0)
+        ListHead         -> Var (V "List/head" 0)
+        ListLast         -> Var (V "List/last" 0)
+        ListIndexed      -> Var (V "List/indexed" 0)
+        ListReverse      -> Var (V "List/reverse" 0)
+        _                -> Lens.over Syntax.subExpressions rewritePrimitiveConstructorsToVars expression
 
 {-| Detect if the given variable is free within the given expression
 

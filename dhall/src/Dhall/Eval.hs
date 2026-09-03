@@ -499,8 +499,10 @@ eval !env t0 =
     case t0 of
         Const k ->
             VConst k
-        Var v ->
-            vVar env v
+        Var v@(V x i) ->
+            case primitiveFunctionExpression x i env of
+                Just primitive -> eval env primitive
+                Nothing        -> vVar env v
         Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a }) t ->
             VLam (eval env a) (Closure x env t)
         Pi _ x a b ->
@@ -1253,11 +1255,11 @@ quote !env !t0 =
                 Prim ->
                     quote env (t VPrimVar)
                 NaturalSubtractZero ->
-                    App NaturalSubtract (NaturalLit 0)
+                    App (primitiveVar "Natural/subtract") (NaturalLit 0)
                 TextReplaceEmpty ->
-                    App TextReplace (TextLit (Chunks [] ""))
+                    App (primitiveVar "Text/replace") (TextLit (Chunks [] ""))
                 TextReplaceEmptyArgument replacement ->
-                    App (App TextReplace (TextLit (Chunks [] "")))
+                    App (App (primitiveVar "Text/replace") (TextLit (Chunks [] "")))
                         (quote env replacement)
 
         VPi a (freshClosure -> (x, v, b)) ->
@@ -1287,43 +1289,43 @@ quote !env !t0 =
         VNaturalLit n ->
             NaturalLit n
         VNaturalFold a t u v ->
-            NaturalFold `qApp` a `qApp` t `qApp` u `qApp` v
+            primitiveVar "Natural/fold" `qApp` a `qApp` t `qApp` u `qApp` v
         VNaturalBuild t ->
-            NaturalBuild `qApp` t
+            primitiveVar "Natural/build" `qApp` t
         VNaturalIsZero t ->
-            NaturalIsZero `qApp` t
+            primitiveVar "Natural/isZero" `qApp` t
         VNaturalEven t ->
-            NaturalEven `qApp` t
+            primitiveVar "Natural/even" `qApp` t
         VNaturalOdd t ->
-            NaturalOdd `qApp` t
+            primitiveVar "Natural/odd" `qApp` t
         VNaturalToInteger t ->
-            NaturalToInteger `qApp` t
+            primitiveVar "Natural/toInteger" `qApp` t
         VNaturalShow t ->
-            NaturalShow `qApp` t
+            primitiveVar "Natural/show" `qApp` t
         VNaturalPlus t u ->
             NaturalPlus (quote env t) (quote env u)
         VNaturalTimes t u ->
             NaturalTimes (quote env t) (quote env u)
         VNaturalSubtract x y ->
-            NaturalSubtract `qApp` x `qApp` y
+            primitiveVar "Natural/subtract" `qApp` x `qApp` y
         VInteger ->
             Integer
         VIntegerLit n ->
             IntegerLit n
         VIntegerClamp t ->
-            IntegerClamp `qApp` t
+            primitiveVar "Integer/clamp" `qApp` t
         VIntegerNegate t ->
-            IntegerNegate `qApp` t
+            primitiveVar "Integer/negate" `qApp` t
         VIntegerShow t ->
-            IntegerShow `qApp` t
+            primitiveVar "Integer/show" `qApp` t
         VIntegerToDouble t ->
-            IntegerToDouble `qApp` t
+            primitiveVar "Integer/toDouble" `qApp` t
         VDouble ->
             Double
         VDoubleLit n ->
             DoubleLit n
         VDoubleShow t ->
-            DoubleShow `qApp` t
+            primitiveVar "Double/show" `qApp` t
         VText ->
             Text
         VTextLit (VChunks xys z) ->
@@ -1331,27 +1333,27 @@ quote !env !t0 =
         VTextAppend t u ->
             TextAppend (quote env t) (quote env u)
         VTextShow t ->
-            TextShow `qApp` t
+            primitiveVar "Text/show" `qApp` t
         VTextReplace a b c ->
-            TextReplace `qApp` a `qApp` b `qApp` c
+            primitiveVar "Text/replace" `qApp` a `qApp` b `qApp` c
         VDate ->
             Date
         VDateLiteral d ->
             DateLiteral d
         VDateShow t ->
-            DateShow `qApp` t
+            primitiveVar "Date/show" `qApp` t
         VTime ->
             Time
         VTimeLiteral hh mm ss frac p ->
             TimeLiteral hh mm ss frac p
         VTimeShow t ->
-            TimeShow `qApp` t
+            primitiveVar "Time/show" `qApp` t
         VTimeZone ->
             TimeZone
         VTimeZoneLiteral z ->
             TimeZoneLiteral z
         VTimeZoneShow t ->
-            TimeZoneShow `qApp` t
+            primitiveVar "TimeZone/show" `qApp` t
         VList t ->
             List `qApp` t
         VListLit ma ts ->
@@ -1359,19 +1361,19 @@ quote !env !t0 =
         VListAppend t u ->
             ListAppend (quote env t) (quote env u)
         VListBuild a t ->
-            ListBuild `qApp` a `qApp` t
+            primitiveVar "List/build" `qApp` a `qApp` t
         VListFold a l t u v ->
-            ListFold `qApp` a `qApp` l `qApp` t `qApp` u `qApp` v
+            primitiveVar "List/fold" `qApp` a `qApp` l `qApp` t `qApp` u `qApp` v
         VListLength a t ->
-            ListLength `qApp` a `qApp` t
+            primitiveVar "List/length" `qApp` a `qApp` t
         VListHead a t ->
-            ListHead `qApp` a `qApp` t
+            primitiveVar "List/head" `qApp` a `qApp` t
         VListLast a t ->
-            ListLast `qApp` a `qApp` t
+            primitiveVar "List/last" `qApp` a `qApp` t
         VListIndexed a t ->
-            ListIndexed `qApp` a `qApp` t
+            primitiveVar "List/indexed" `qApp` a `qApp` t
         VListReverse a t ->
-            ListReverse `qApp` a `qApp` t
+            primitiveVar "List/reverse" `qApp` a `qApp` t
         VOptional a ->
             Optional `qApp` a
         VSome t ->
@@ -1435,6 +1437,43 @@ quote !env !t0 =
     quoteRecordField :: Val a -> RecordField Void a
     quoteRecordField = Syntax.makeRecordField . quote env
     {-# INLINE quoteRecordField #-}
+
+    primitiveVar :: Text -> Expr Void a
+    primitiveVar name = Var (V name 0)
+
+
+primitiveFunctionExpression :: Text -> Int -> Environment a -> Maybe (Expr Void a)
+primitiveFunctionExpression x i env
+    | i /= 0 = Nothing
+    | countEnvironment x env /= 0 = Nothing
+    | otherwise =
+        case x of
+            "Natural/fold"      -> Just NaturalFold
+            "Natural/build"     -> Just NaturalBuild
+            "Natural/isZero"    -> Just NaturalIsZero
+            "Natural/even"      -> Just NaturalEven
+            "Natural/odd"       -> Just NaturalOdd
+            "Natural/toInteger" -> Just NaturalToInteger
+            "Natural/show"      -> Just NaturalShow
+            "Natural/subtract"  -> Just NaturalSubtract
+            "Integer/clamp"     -> Just IntegerClamp
+            "Integer/negate"    -> Just IntegerNegate
+            "Integer/show"      -> Just IntegerShow
+            "Integer/toDouble"  -> Just IntegerToDouble
+            "Double/show"       -> Just DoubleShow
+            "Text/replace"      -> Just TextReplace
+            "Text/show"         -> Just TextShow
+            "Date/show"         -> Just DateShow
+            "Time/show"         -> Just TimeShow
+            "TimeZone/show"     -> Just TimeZoneShow
+            "List/build"        -> Just ListBuild
+            "List/fold"         -> Just ListFold
+            "List/length"       -> Just ListLength
+            "List/head"         -> Just ListHead
+            "List/last"         -> Just ListLast
+            "List/indexed"      -> Just ListIndexed
+            "List/reverse"      -> Just ListReverse
+            _                   -> Nothing
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
