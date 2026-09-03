@@ -71,6 +71,7 @@ internalTests =
         [ notesInLetInLet
         , binderCategoryMatrix
         , binderExamples
+        , fixedSymbolLabelExamples
         ]
 
 notesInLetInLet :: TestTree
@@ -232,6 +233,28 @@ binderExamples =
             (Text.unpack code)
             (NaturalLit expected :: Expr Void Import)
             (Core.normalize expression)
+
+-- Fixed symbols remain legal as record fields, selectors, and union labels.
+fixedSymbolLabelExamples :: TestTree
+fixedSymbolLabelExamples =
+    Tasty.testGroup
+        "fixed symbol field and union labels"
+        [ Tasty.HUnit.testCase "record fields named Natural and Type type-check" $
+            Test.Util.assertTypeChecks "let x = { Natural = 123, Type = Bool } in x"
+        , Tasty.HUnit.testCase "select Natural field" $
+            Test.Util.equivalent
+                "let x = { Natural = 123, Type = Bool } in x.Natural"
+                "123"
+        , Tasty.HUnit.testCase "select Type field" $
+            Test.Util.equivalent
+                "let x = { Natural = 123, Type = Bool } in x.Type"
+                "Bool"
+        , Tasty.HUnit.testCase "union with None and Type alternatives type-checks" $
+            Test.Util.assertTypeChecks "let a = < None | Type : Kind > in a"
+        , Tasty.HUnit.testCase "union constructor Type applied to a Kind type-checks" $
+            Test.Util.assertTypeChecks
+                "let a = < None | Type : Kind > in a.Type (Type → Type)"
+        ]
 
 shouldParse :: Text -> TestTree
 shouldParse path = do
