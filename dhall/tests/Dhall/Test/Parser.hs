@@ -70,6 +70,7 @@ internalTests =
     Tasty.testGroup "internal"
         [ notesInLetInLet
         , binderCategoryMatrix
+        , binderExamples
         ]
 
 notesInLetInLet :: TestTree
@@ -188,6 +189,49 @@ binderCategoryMatrix =
         case Parser.exprFromText mempty code of
             Left _  -> pure ()
             Right _ -> Tasty.HUnit.assertFailure "Unexpected successful parse"
+
+-- Exact programs from the predefined-function binder rules, including
+-- evaluation of the cases that are supposed to succeed.
+binderExamples :: TestTree
+binderExamples =
+    Tasty.testGroup
+        "binder examples"
+        [ Tasty.HUnit.testCase "unquoted keyword merge fails" $
+            assertFails "let merge = 123 in merge"
+        , Tasty.HUnit.testCase "quoted keyword merge evaluates" $
+            assertEvaluatesTo "let `merge` = 123 in `merge`" 123
+        , Tasty.HUnit.testCase "quoted fixed symbol None fails" $
+            assertFails "let `None` = 123 in `None`"
+        , Tasty.HUnit.testCase "unquoted fixed symbol None fails" $
+            assertFails "let None = 123 in None"
+        , Tasty.HUnit.testCase "unquoted fixed symbol Type fails" $
+            assertFails "let Type = 123 in Type"
+        , Tasty.HUnit.testCase "quoted fixed symbol Type fails" $
+            assertFails "let `Type` = 123 in `Type`"
+        , Tasty.HUnit.testCase "unquoted function name evaluates" $
+            assertEvaluatesTo "let Natural/isZero = 123 in Natural/isZero" 123
+        , Tasty.HUnit.testCase "quoted function name evaluates" $
+            assertEvaluatesTo "let `Natural/isZero` = 123 in `Natural/isZero`" 123
+        , Tasty.HUnit.testCase "function name binder with quoted use evaluates" $
+            assertEvaluatesTo "let Natural/isZero = 123 in `Natural/isZero`" 123
+        ]
+  where
+    assertFails code =
+        case Parser.exprFromText mempty code of
+            Left _  -> pure ()
+            Right _ -> Tasty.HUnit.assertFailure ("Unexpected successful parse: " <> Text.unpack code)
+
+    assertEvaluatesTo code expected = do
+        expression <- case Parser.exprFromText mempty code of
+            Left err ->
+                Tasty.HUnit.assertFailure ("Unexpected parse failure: " <> show err)
+            Right parsed ->
+                pure (Core.denote parsed :: Expr Void Import)
+
+        Tasty.HUnit.assertEqual
+            (Text.unpack code)
+            (NaturalLit expected :: Expr Void Import)
+            (Core.normalize expression)
 
 shouldParse :: Text -> TestTree
 shouldParse path = do
