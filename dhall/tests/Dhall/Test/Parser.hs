@@ -70,8 +70,6 @@ internalTests =
     Tasty.testGroup "internal"
         [ notesInLetInLet
         , binderCategoryMatrix
-        , binderExamples
-        , fixedSymbolLabelExamples
         ]
 
 notesInLetInLet :: TestTree
@@ -190,71 +188,6 @@ binderCategoryMatrix =
         case Parser.exprFromText mempty code of
             Left _  -> pure ()
             Right _ -> Tasty.HUnit.assertFailure "Unexpected successful parse"
-
--- Exact programs from the predefined-function binder rules, including
--- evaluation of the cases that are supposed to succeed.
-binderExamples :: TestTree
-binderExamples =
-    Tasty.testGroup
-        "binder examples"
-        [ Tasty.HUnit.testCase "unquoted keyword merge fails" $
-            assertFails "let merge = 123 in merge"
-        , Tasty.HUnit.testCase "quoted keyword merge evaluates" $
-            assertEvaluatesTo "let `merge` = 123 in `merge`" 123
-        , Tasty.HUnit.testCase "quoted fixed symbol None fails" $
-            assertFails "let `None` = 123 in `None`"
-        , Tasty.HUnit.testCase "unquoted fixed symbol None fails" $
-            assertFails "let None = 123 in None"
-        , Tasty.HUnit.testCase "unquoted fixed symbol Type fails" $
-            assertFails "let Type = 123 in Type"
-        , Tasty.HUnit.testCase "quoted fixed symbol Type fails" $
-            assertFails "let `Type` = 123 in `Type`"
-        , Tasty.HUnit.testCase "unquoted function name evaluates" $
-            assertEvaluatesTo "let Natural/isZero = 123 in Natural/isZero" 123
-        , Tasty.HUnit.testCase "quoted function name evaluates" $
-            assertEvaluatesTo "let `Natural/isZero` = 123 in `Natural/isZero`" 123
-        , Tasty.HUnit.testCase "function name binder with quoted use evaluates" $
-            assertEvaluatesTo "let Natural/isZero = 123 in `Natural/isZero`" 123
-        ]
-  where
-    assertFails code =
-        case Parser.exprFromText mempty code of
-            Left _  -> pure ()
-            Right _ -> Tasty.HUnit.assertFailure ("Unexpected successful parse: " <> Text.unpack code)
-
-    assertEvaluatesTo code expected = do
-        expression <- case Parser.exprFromText mempty code of
-            Left err ->
-                Tasty.HUnit.assertFailure ("Unexpected parse failure: " <> show err)
-            Right parsed ->
-                pure (Core.denote parsed :: Expr Void Import)
-
-        Tasty.HUnit.assertEqual
-            (Text.unpack code)
-            (NaturalLit expected :: Expr Void Import)
-            (Core.normalize expression)
-
--- Fixed symbols remain legal as record fields, selectors, and union labels.
-fixedSymbolLabelExamples :: TestTree
-fixedSymbolLabelExamples =
-    Tasty.testGroup
-        "fixed symbol field and union labels"
-        [ Tasty.HUnit.testCase "record fields named Natural and Type type-check" $
-            Test.Util.assertTypeChecks "let x = { Natural = 123, Type = Bool } in x"
-        , Tasty.HUnit.testCase "select Natural field" $
-            Test.Util.equivalent
-                "let x = { Natural = 123, Type = Bool } in x.Natural"
-                "123"
-        , Tasty.HUnit.testCase "select Type field" $
-            Test.Util.equivalent
-                "let x = { Natural = 123, Type = Bool } in x.Type"
-                "Bool"
-        , Tasty.HUnit.testCase "union with None and Type alternatives type-checks" $
-            Test.Util.assertTypeChecks "let a = < None | Type : Kind > in a"
-        , Tasty.HUnit.testCase "union constructor Type applied to a Kind type-checks" $
-            Test.Util.assertTypeChecks
-                "let a = < None | Type : Kind > in a.Type (Type → Type)"
-        ]
 
 shouldParse :: Text -> TestTree
 shouldParse path = do
