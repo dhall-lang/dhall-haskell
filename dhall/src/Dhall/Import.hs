@@ -526,7 +526,7 @@ chainImport (Chained parent) child =
 
 -- | Load an import, resulting in a fully resolved, type-checked expression.
 --   Unhashed Code imports may still be unnormalized ('TypecheckedOnly');
---   hashed Code imports are beta-normal ('AlreadyNormalized').
+--   hashed Code imports are in the beta-normal form ('AlreadyNormalized').
 --   @loadImport@ handles the \"hot\" cache in @Status@ and defers to
 --   @loadImportWithSemanticCache@ for imports that aren't in the @Status@
 --   cache already.
@@ -541,8 +541,7 @@ loadImport import_ = do
             zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
             return importSemantics
 
--- | Force an import result to a normal form when a later path requires one
---   (for example, semantic integrity checks for Code imports).
+-- | Force an import result to a normal form; used in code paths when NF is required.
 ensureNormalized :: Chained -> ImportSemantics -> StateT Status IO ImportSemantics
 ensureNormalized _ importSemantics@ImportSemantics
     { importNormalizationStatus = AlreadyNormalized } =
@@ -708,7 +707,7 @@ applyStatusSubstitutions expression = do
 -- file's syntax plus hashes of the files it imports (see
 -- 'computeMerkleSemisemanticHash'). A hit is either a small normal form from an
 -- older cache entry or a one-byte "already type-checked" marker. New delayed
--- Code entries use the marker so cache hits and misses both return
+-- Code import entries use the marker so cache hits and misses both return
 -- 'TypecheckedOnly'.
 --
 -- Those entries live under @dhall-haskell-v2/@, not the older
@@ -855,6 +854,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
 -- `as Location` imports aren't cached since they are well-typed and normal by
 -- construction
+-- todo: code duplication after "let edgeHash"
 loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importType) Location)) = do
     let locationType = Union $ Dhall.Map.fromList
             [ ("Environment", Just Text)
@@ -1114,7 +1114,7 @@ writeToSemisemanticCache report semisemanticHash payload = do
             )
     return ()
 
--- | Fetch source code directly from disk/network
+-- | Fetch content directly from disk/network as Text.
 fetchFresh :: ImportType -> StateT Status IO Text
 fetchFresh (Local prefix file) = do
     Status { _stack, _getHomeDirectory } <- State.get
