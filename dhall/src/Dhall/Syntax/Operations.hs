@@ -15,6 +15,8 @@ module Dhall.Syntax.Operations
 
       -- * Reserved identifiers
     , reservedIdentifiers
+    , reservedFunctionNames
+    , fixedSymbolIdentifiers
     , reservedKeywords
 
       -- * Utilities
@@ -229,41 +231,11 @@ reservedKeywords =
         , "with"
         ]
 
--- | The set of reserved identifiers for the Dhall language
--- | Contains also all keywords from "reservedKeywords"
-reservedIdentifiers :: HashSet Text
-reservedIdentifiers = reservedKeywords <>
+-- | Fixed symbols (reserved identifiers that are never bindable)
+fixedSymbolIdentifiers :: HashSet Text
+fixedSymbolIdentifiers =
     Data.HashSet.fromList
-        [ -- Builtins according to the `builtin` rule in the grammar
-          "Natural/fold"
-        , "Natural/build"
-        , "Natural/isZero"
-        , "Natural/even"
-        , "Natural/odd"
-        , "Natural/toInteger"
-        , "Natural/show"
-        , "Natural/subtract"
-        , "Integer"
-        , "Integer/clamp"
-        , "Integer/negate"
-        , "Integer/show"
-        , "Integer/toDouble"
-        , "Integer/show"
-        , "Natural/subtract"
-        , "Double/show"
-        , "List/build"
-        , "List/fold"
-        , "List/length"
-        , "List/head"
-        , "List/last"
-        , "List/indexed"
-        , "List/reverse"
-        , "Text/replace"
-        , "Text/show"
-        , "Date/show"
-        , "Time/show"
-        , "TimeZone/show"
-        , "Bool"
+        [ "Bool"
         , "Bytes"
         , "True"
         , "False"
@@ -281,6 +253,42 @@ reservedIdentifiers = reservedKeywords <>
         , "Kind"
         , "Sort"
         ]
+
+-- | Predefined function names (ordinary identifiers in source syntax)
+reservedFunctionNames :: HashSet Text
+reservedFunctionNames =
+    Data.HashSet.fromList
+        [ "Natural/fold"
+        , "Natural/build"
+        , "Natural/isZero"
+        , "Natural/even"
+        , "Natural/odd"
+        , "Natural/toInteger"
+        , "Natural/show"
+        , "Natural/subtract"
+        , "Integer/clamp"
+        , "Integer/negate"
+        , "Integer/show"
+        , "Integer/toDouble"
+        , "Double/show"
+        , "List/build"
+        , "List/fold"
+        , "List/length"
+        , "List/head"
+        , "List/last"
+        , "List/indexed"
+        , "List/reverse"
+        , "Text/replace"
+        , "Text/show"
+        , "Date/show"
+        , "Time/show"
+        , "TimeZone/show"
+        ]
+
+-- | The set of reserved identifiers for the Dhall language
+-- | Contains keywords plus fixed symbols
+reservedIdentifiers :: HashSet Text
+reservedIdentifiers = reservedKeywords <> fixedSymbolIdentifiers
 
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices
