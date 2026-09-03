@@ -12,6 +12,7 @@ import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor
 import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
+import qualified Data.HashSet         as HashSet
 import qualified Data.Text            as Text
 import qualified Data.Text.Encoding   as Text.Encoding
 import qualified Data.Text.IO         as Text.IO
@@ -67,7 +68,9 @@ getTests = do
 internalTests :: TestTree
 internalTests =
     Tasty.testGroup "internal"
-        [ notesInLetInLet ]
+        [ notesInLetInLet
+        , binderCategoryMatrix
+        ]
 
 notesInLetInLet :: TestTree
 notesInLetInLet =
@@ -119,6 +122,72 @@ notesInLetInLet =
         let msg = "Unexpected parse result"
 
         Tasty.HUnit.assertEqual msg expected (simplifyNotes expression)
+
+binderCategoryMatrix :: TestTree
+binderCategoryMatrix =
+    Tasty.testGroup
+        "binder category matrix"
+        [ Tasty.testGroup "keywords"
+            [ Tasty.HUnit.testCase "quoted keyword binders parse" $
+                mapM_ assertParses quotedKeywordPrograms
+            , Tasty.HUnit.testCase "unquoted keyword binders fail" $
+                mapM_ assertFails unquotedKeywordPrograms
+            ]
+        , Tasty.testGroup "fixed symbols"
+            [ Tasty.HUnit.testCase "unquoted fixed symbols fail" $
+                mapM_ assertFails unquotedFixedSymbolPrograms
+            , Tasty.HUnit.testCase "quoted fixed symbols fail" $
+                mapM_ assertFails quotedFixedSymbolPrograms
+            ]
+        , Tasty.HUnit.testCase "function names bind quoted and unquoted" $
+            mapM_ assertParses
+                [ "let Natural/isZero = 1 in Natural/isZero"
+                , "let `Natural/isZero` = 1 in `Natural/isZero`"
+                ]
+        ]
+  where
+    keywords =
+        [ "if"
+        , "then"
+        , "else"
+        , "let"
+        , "in"
+        , "using"
+        , "missing"
+        , "as"
+        , "Infinity"
+        , "NaN"
+        , "merge"
+        , "Some"
+        , "toMap"
+        , "assert"
+        , "forall"
+        , "with"
+        ]
+
+    fixedSymbols = HashSet.toList Core.fixedSymbolIdentifiers
+
+    quotedKeywordPrograms =
+        fmap (\k -> "let `" <> k <> "` = 1 in `" <> k <> "`") keywords
+
+    unquotedKeywordPrograms =
+        fmap (\k -> "let " <> k <> " = 1 in " <> k) keywords
+
+    quotedFixedSymbolPrograms =
+        fmap (\s -> "let `" <> s <> "` = 1 in `" <> s <> "`") fixedSymbols
+
+    unquotedFixedSymbolPrograms =
+        fmap (\s -> "let " <> s <> " = 1 in " <> s) fixedSymbols
+
+    assertParses code =
+        case Parser.exprFromText mempty code of
+            Left err -> Tasty.HUnit.assertFailure ("Unexpected parse failure: " <> show err)
+            Right _  -> pure ()
+
+    assertFails code =
+        case Parser.exprFromText mempty code of
+            Left _  -> pure ()
+            Right _ -> Tasty.HUnit.assertFailure "Unexpected successful parse"
 
 shouldParse :: Text -> TestTree
 shouldParse path = do

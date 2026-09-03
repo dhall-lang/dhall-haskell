@@ -18,6 +18,7 @@ module Dhall.Parser.Token (
     char,
     file_,
     label,
+    boundLabel,
     anyLabelOrSome,
     anyLabel,
     labels,
@@ -51,26 +52,6 @@ module Dhall.Parser.Token (
     _assert,
     _Some,
     _None,
-    _NaturalFold,
-    _NaturalBuild,
-    _NaturalIsZero,
-    _NaturalEven,
-    _NaturalOdd,
-    _NaturalToInteger,
-    _NaturalShow,
-    _NaturalSubtract,
-    _IntegerClamp,
-    _IntegerNegate,
-    _IntegerShow,
-    _IntegerToDouble,
-    _DoubleShow,
-    _ListBuild,
-    _ListFold,
-    _ListLength,
-    _ListHead,
-    _ListLast,
-    _ListIndexed,
-    _ListReverse,
     _Bool,
     _Bytes,
     _Natural,
@@ -421,6 +402,11 @@ identifier = do
             return (fromIntegral n)
 
     n <- indexed <|> pure 0
+
+    Monad.when
+        (x `Data.HashSet.member` fixedSymbolIdentifiers && n /= 0)
+        (fail "Built-in identifiers cannot have a de Bruijn index")
+
     return (V x n)
 
 whitespaceChunk :: Parser ()
@@ -571,12 +557,19 @@ labels = do
 
 {-| Parse a label (e.g. a variable\/field\/alternative name)
 
-    Rejects labels that match built-in names (e.g. @Natural/even@)
+    Rejects labels that match reserved keywords or fixed symbols
 
     This corresponds to the @nonreserved-label@ rule in the official grammar
 -}
 label :: Parser Text
 label = backtickLabel <|> simpleLabel False <?> "label"
+
+-- | Binder label parser: fixed symbols are never bindable, quoted or not
+boundLabel :: Parser Text
+boundLabel = do
+    t <- label
+    Monad.guard (not (t `Data.HashSet.member` fixedSymbolIdentifiers))
+    pure t <?> "non-reserved label"
 
 {-| Same as `label` except that built-in names are allowed
 
