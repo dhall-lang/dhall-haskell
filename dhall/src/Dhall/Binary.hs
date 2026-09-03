@@ -68,6 +68,7 @@ import qualified Data.Foldable         as Foldable
 import qualified Data.List.NonEmpty    as NonEmpty
 import qualified Data.Sequence
 import qualified Data.Time             as Time
+import qualified Data.Text.Encoding    as Text.Encoding
 import qualified Dhall.Crypto
 import qualified Dhall.Map
 import qualified Dhall.Syntax          as Syntax
@@ -132,49 +133,32 @@ decodeExpressionInternal decodeEmbed = go
                 !ba <- Decoding.decodeUtf8ByteArray
 
                 let sb = Codec.CBOR.ByteArray.toShortByteString ba
-
-                case Data.ByteString.Short.length sb of
-                    4  | sb == "Bool"              -> return Bool
-                       | sb == "Date"              -> return Date
-                       | sb == "List"              -> return List
-                       | sb == "None"              -> return None
-                       | sb == "Text"              -> return Text
-                       | sb == "Time"              -> return Time
-                       | sb == "Type"              -> return (Const Type)
-                       | sb == "Kind"              -> return (Const Kind)
-                       | sb == "Sort"              -> return (Const Sort)
-                    5  | sb == "Bytes"             -> return Bytes
-                    6  | sb == "Double"            -> return Double
-                    7  | sb == "Integer"           -> return Integer
-                       | sb == "Natural"           -> return Natural
-                    8  | sb == "Optional"          -> return Optional
-                       | sb == "TimeZone"          -> return TimeZone
-                    9  | sb == "Date/show"         -> return DateShow
-                       | sb == "List/fold"         -> return ListFold
-                       | sb == "List/head"         -> return ListHead
-                       | sb == "List/last"         -> return ListLast
-                       | sb == "Text/show"         -> return TextShow
-                       | sb == "Time/show"         -> return TimeShow
-                    10 | sb == "List/build"        -> return ListBuild
-                    11 | sb == "Double/show"       -> return DoubleShow
-                       | sb == "List/length"       -> return ListLength
-                       | sb == "Natural/odd"       -> return NaturalOdd
-                    12 | sb == "Integer/show"      -> return IntegerShow
-                       | sb == "List/indexed"      -> return ListIndexed
-                       | sb == "List/reverse"      -> return ListReverse
-                       | sb == "Natural/even"      -> return NaturalEven
-                       | sb == "Natural/fold"      -> return NaturalFold
-                       | sb == "Natural/show"      -> return NaturalShow
-                       | sb == "Text/replace"      -> return TextReplace
-                    13 | sb == "Integer/clamp"     -> return IntegerClamp
-                       | sb == "Natural/build"     -> return NaturalBuild
-                       | sb == "TimeZone/show"     -> return TimeZoneShow
-                    14 | sb == "Integer/negate"    -> return IntegerNegate
-                       | sb == "Natural/isZero"    -> return NaturalIsZero
-                    16 | sb == "Integer/toDouble"  -> return IntegerToDouble
-                       | sb == "Natural/subtract"  -> return NaturalSubtract
-                    17 | sb == "Natural/toInteger" -> return NaturalToInteger
-                    _                              -> die ("Unrecognized built-in: " <> show sb)
+                if sb == "_"
+                    then die "Invalid variable name: _"
+                    else case Data.ByteString.Short.length sb of
+                        4  | sb == "Bool"              -> return Bool
+                           | sb == "Date"              -> return Date
+                           | sb == "List"              -> return List
+                           | sb == "None"              -> return None
+                           | sb == "Text"              -> return Text
+                           | sb == "Time"              -> return Time
+                           | sb == "Type"              -> return (Const Type)
+                           | sb == "Kind"              -> return (Const Kind)
+                           | sb == "Sort"              -> return (Const Sort)
+                        5  | sb == "Bytes"             -> return Bytes
+                        6  | sb == "Double"            -> return Double
+                        7  | sb == "Integer"           -> return Integer
+                           | sb == "Natural"           -> return Natural
+                        8  | sb == "Optional"          -> return Optional
+                           | sb == "TimeZone"          -> return TimeZone
+                        _                              ->
+                            return
+                                (Var
+                                    (V
+                                        (Text.Encoding.decodeUtf8 (Data.ByteString.Short.fromShort sb))
+                                        0
+                                    )
+                                )
 
             TypeListLen -> do
                 len <- Decoding.decodeListLen
@@ -683,9 +667,12 @@ encodeExpressionInternal encodeEmbed = go
             Encoding.encodeInt n
 
         Var (V x n) ->
-                Encoding.encodeListLen 2
-            <>  Encoding.encodeString x
-            <>  Encoding.encodeInt n
+            if n == 0
+                then Encoding.encodeString x
+                else
+                        Encoding.encodeListLen 2
+                    <>  Encoding.encodeString x
+                    <>  Encoding.encodeInt n
 
         NaturalBuild ->
             Encoding.encodeUtf8ByteArray "Natural/build"

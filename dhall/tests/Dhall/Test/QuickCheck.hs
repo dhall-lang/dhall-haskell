@@ -23,6 +23,7 @@ import Data.Either            (isRight)
 import Data.Either.Validation (Validation (..))
 import Data.Text              (Text)
 import Data.Void              (Void)
+import Lens.Micro             (over)
 import Dhall
     ( FromDhall (..)
     , ToDhall (..)
@@ -620,14 +621,64 @@ label = fmap Text.pack (Test.QuickCheck.listOf labelCharacter)
 
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
-        Dhall.Binary.decodeExpression (Dhall.Binary.encodeExpression denotedExpression)
-    === Right denotedExpression
+        fmap normalizePrimitiveConstructors
+            (Dhall.Binary.decodeExpression (Dhall.Binary.encodeExpression denotedExpression))
+    === Right (normalizePrimitiveConstructors denotedExpression)
   where
     denotedExpression :: Expr Void Import
     denotedExpression = denote' expression
 
     denote' :: Expr a Import -> Expr b Import
     denote' = Dhall.Core.denote . fmap denoteHttpHeaders
+
+    normalizePrimitiveConstructors :: Expr s Import -> Expr s Import
+    normalizePrimitiveConstructors expr =
+        case expr of
+            NaturalFold      -> Var (V "Natural/fold" 0)
+            NaturalBuild     -> Var (V "Natural/build" 0)
+            NaturalIsZero    -> Var (V "Natural/isZero" 0)
+            NaturalEven      -> Var (V "Natural/even" 0)
+            NaturalOdd       -> Var (V "Natural/odd" 0)
+            NaturalToInteger -> Var (V "Natural/toInteger" 0)
+            NaturalShow      -> Var (V "Natural/show" 0)
+            NaturalSubtract  -> Var (V "Natural/subtract" 0)
+            IntegerClamp     -> Var (V "Integer/clamp" 0)
+            IntegerNegate    -> Var (V "Integer/negate" 0)
+            IntegerShow      -> Var (V "Integer/show" 0)
+            IntegerToDouble  -> Var (V "Integer/toDouble" 0)
+            DoubleShow       -> Var (V "Double/show" 0)
+            TextReplace      -> Var (V "Text/replace" 0)
+            TextShow         -> Var (V "Text/show" 0)
+            DateShow         -> Var (V "Date/show" 0)
+            TimeShow         -> Var (V "Time/show" 0)
+            TimeZoneShow     -> Var (V "TimeZone/show" 0)
+            ListBuild        -> Var (V "List/build" 0)
+            ListFold         -> Var (V "List/fold" 0)
+            ListLength       -> Var (V "List/length" 0)
+            ListHead         -> Var (V "List/head" 0)
+            ListLast         -> Var (V "List/last" 0)
+            ListIndexed      -> Var (V "List/indexed" 0)
+            ListReverse      -> Var (V "List/reverse" 0)
+            Embed import_    -> Embed (normalizeImportHeaders import_)
+            _                ->
+                over Dhall.Core.subExpressions normalizePrimitiveConstructors expr
+
+    normalizeImportHeaders import_@(Import importHashed importMode) =
+        case importType importHashed of
+            Remote url ->
+                import_
+                    { importHashed =
+                        importHashed
+                            { importType =
+                                Remote
+                                    url
+                                        { headers =
+                                            fmap normalizePrimitiveConstructors (headers url)
+                                        }
+                            }
+                    , importMode = importMode
+                    }
+            _ -> import_
 
     denoteHttpHeaders import_@(Import importHashed _)
         | Remote url <- importType importHashed
