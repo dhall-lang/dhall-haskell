@@ -155,8 +155,6 @@ binderCategoryMatrix =
         , "using"
         , "missing"
         , "as"
-        , "Infinity"
-        , "NaN"
         , "merge"
         , "Some"
         , "toMap"

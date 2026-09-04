@@ -760,6 +760,8 @@ parsers embedded = Parsers{..}
                         "Type"     -> return (Const Type)
                         "Kind"     -> return (Const Kind)
                         "Sort"     -> return (Const Sort)
+                        "Infinity" -> return (DoubleLit (DhallDouble (1.0/0.0)))
+                        "NaN"      -> return (DoubleLit (DhallDouble (0.0/0.0)))
                         _          -> return (Var a)
 
             alternative38 = do
