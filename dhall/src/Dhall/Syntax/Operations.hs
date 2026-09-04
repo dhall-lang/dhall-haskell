@@ -221,8 +221,6 @@ reservedKeywords =
         , "using"
         , "missing"
         , "as"
-        , "Infinity"
-        , "NaN"
         , "merge"
         , "Some"
         , "toMap"
@@ -252,6 +250,8 @@ fixedSymbolIdentifiers =
         , "Type"
         , "Kind"
         , "Sort"
+        , "Infinity"
+        , "NaN"
         ]
 
 -- | Predefined function names (ordinary identifiers in source syntax)

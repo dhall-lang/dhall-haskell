@@ -1,5 +1,9 @@
 1.42.3
 
+* Treat `Infinity` and `NaN` as fixed symbols (like `True` / `False`): they
+  cannot be bound, even when quoted, and may be used as record field names.
+  They remain `Double` literals.
+
 * BREAKING CHANGE: `TimeLiteral` now stores hour, minute, and second as
   `Word8`, the fractional digits as `Integer`, and the digit count as `Int`,
   instead of `TimeOfDay` plus a `Word` precision. Dhall `Time` literals keep
