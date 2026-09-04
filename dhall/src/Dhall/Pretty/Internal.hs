@@ -1268,6 +1268,7 @@ prettyPrinters characterSet =
             Merge a b Nothing -> app (keyword "merge") (a : b : args)
             ToMap a Nothing   -> app (keyword "toMap") (a : args)
             ShowConstructor a -> app (keyword "showConstructor") (a : args)
+            ReadConstructor a -> app (keyword "readConstructor") (a : args)
             e | Note _ b <- e ->
                   go args b
               | null args ->
