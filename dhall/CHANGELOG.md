@@ -1,5 +1,9 @@
 1.42.3
 
+* Look up predefined functions from a name table when a variable is free
+  (empty environment / leftover De Bruijn index 0), including `x@1` under one
+  binder of `x`. Types and values live in `Dhall.Eval.unboundBuiltinTypes` /
+  `unboundBuiltinValues`.
 * Treat `Infinity` and `NaN` as fixed symbols (like `True` / `False`): they
   cannot be bound, even when quoted, and may be used as record field names.
   They remain `Double` literals.

@@ -45,6 +45,7 @@ module Dhall.Eval (
   , Environment(..)
   , Val(..)
   , (~>)
+  , unboundBuiltinTypes
   , textShow
   , dateShow
   , timeShow
@@ -80,6 +81,7 @@ import Dhall.Syntax
     )
 
 import qualified Data.Char
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Sequence as Sequence
 import qualified Data.Set
 import qualified Data.Text     as Text
@@ -301,7 +303,9 @@ instantiate (Closure x env t) !u = eval (Extend env x u) t
 {-# INLINE instantiate #-}
 
 -- Out-of-env variables have negative de Bruijn levels.
-vVar :: Environment a -> Var -> Val a
+-- A leftover index of 0 at Empty is a predefined function when the name is
+-- registered below (including after walking past a shadowing binder).
+vVar :: Eq a => Environment a -> Var -> Val a
 vVar env0 (V x i0) = go env0 i0
   where
     go (Extend env x' v) i
@@ -314,6 +318,9 @@ vVar env0 (V x i0) = go env0 i0
             if i == 0 then VVar x (countEnvironment x env) else go env (i - 1)
         | otherwise =
             go env i
+    go Empty 0
+        | Just builtin <- HashMap.lookup x unboundBuiltinValues =
+            builtin
     go Empty i =
         VVar x (negate i - 1)
 
@@ -499,10 +506,8 @@ eval !env t0 =
     case t0 of
         Const k ->
             VConst k
-        Var v@(V x i) ->
-            case primitiveFunctionExpression x i env of
-                Just primitive -> eval env primitive
-                Nothing        -> vVar env v
+        Var v ->
+            vVar env v
         Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a }) t ->
             VLam (eval env a) (Closure x env t)
         Pi _ x a b ->
@@ -1442,38 +1447,138 @@ quote !env !t0 =
     primitiveVar name = Var (V name 0)
 
 
-primitiveFunctionExpression :: Text -> Int -> Environment a -> Maybe (Expr Void a)
-primitiveFunctionExpression x i env
-    | i /= 0 = Nothing
-    | countEnvironment x env /= 0 = Nothing
-    | otherwise =
-        case x of
-            "Natural/fold"      -> Just NaturalFold
-            "Natural/build"     -> Just NaturalBuild
-            "Natural/isZero"    -> Just NaturalIsZero
-            "Natural/even"      -> Just NaturalEven
-            "Natural/odd"       -> Just NaturalOdd
-            "Natural/toInteger" -> Just NaturalToInteger
-            "Natural/show"      -> Just NaturalShow
-            "Natural/subtract"  -> Just NaturalSubtract
-            "Integer/clamp"     -> Just IntegerClamp
-            "Integer/negate"    -> Just IntegerNegate
-            "Integer/show"      -> Just IntegerShow
-            "Integer/toDouble"  -> Just IntegerToDouble
-            "Double/show"       -> Just DoubleShow
-            "Text/replace"      -> Just TextReplace
-            "Text/show"         -> Just TextShow
-            "Date/show"         -> Just DateShow
-            "Time/show"         -> Just TimeShow
-            "TimeZone/show"     -> Just TimeZoneShow
-            "List/build"        -> Just ListBuild
-            "List/fold"         -> Just ListFold
-            "List/length"       -> Just ListLength
-            "List/head"         -> Just ListHead
-            "List/last"         -> Just ListLast
-            "List/indexed"      -> Just ListIndexed
-            "List/reverse"      -> Just ListReverse
-            _                   -> Nothing
+-- | Predefined functions implemented as ordinary variables with known names.
+-- Parsing, pretty-printing, and CBOR treat them as plain variables.  Evaluation
+-- and type-checking recognize a free name (De Bruijn leftover 0) via these
+-- tables, including after a binder of the same name is peeled (@x@1).
+data BuiltinPrim a = BuiltinPrim
+    { primName :: Text
+    , primType :: Val a
+    , primVal  :: Val a
+    }
+
+unboundPrimitives :: Eq a => [BuiltinPrim a]
+unboundPrimitives =
+    [ BuiltinPrim "Natural/fold"      naturalFoldType      (eval Empty NaturalFold)
+    , BuiltinPrim "Natural/build"     naturalBuildType     (eval Empty NaturalBuild)
+    , BuiltinPrim "Natural/isZero"    (VNatural ~> VBool)  (eval Empty NaturalIsZero)
+    , BuiltinPrim "Natural/even"      (VNatural ~> VBool)  (eval Empty NaturalEven)
+    , BuiltinPrim "Natural/odd"       (VNatural ~> VBool)  (eval Empty NaturalOdd)
+    , BuiltinPrim "Natural/toInteger" (VNatural ~> VInteger) (eval Empty NaturalToInteger)
+    , BuiltinPrim "Natural/show"      (VNatural ~> VText)  (eval Empty NaturalShow)
+    , BuiltinPrim "Natural/subtract"  (VNatural ~> VNatural ~> VNatural) (eval Empty NaturalSubtract)
+    , BuiltinPrim "Integer/clamp"     (VInteger ~> VNatural) (eval Empty IntegerClamp)
+    , BuiltinPrim "Integer/negate"    (VInteger ~> VInteger) (eval Empty IntegerNegate)
+    , BuiltinPrim "Integer/show"      (VInteger ~> VText)  (eval Empty IntegerShow)
+    , BuiltinPrim "Integer/toDouble"  (VInteger ~> VDouble) (eval Empty IntegerToDouble)
+    , BuiltinPrim "Double/show"       (VDouble ~> VText)   (eval Empty DoubleShow)
+    , BuiltinPrim "Text/replace"      textReplaceType      (eval Empty TextReplace)
+    , BuiltinPrim "Text/show"         (VText ~> VText)     (eval Empty TextShow)
+    , BuiltinPrim "Date/show"         (VDate ~> VText)     (eval Empty DateShow)
+    , BuiltinPrim "Time/show"         (VTime ~> VText)     (eval Empty TimeShow)
+    , BuiltinPrim "TimeZone/show"     (VTimeZone ~> VText) (eval Empty TimeZoneShow)
+    , BuiltinPrim "List/build"        listBuildType        (eval Empty ListBuild)
+    , BuiltinPrim "List/fold"         listFoldType         (eval Empty ListFold)
+    , BuiltinPrim "List/length"       listLengthType       (eval Empty ListLength)
+    , BuiltinPrim "List/head"         listHeadType         (eval Empty ListHead)
+    , BuiltinPrim "List/last"         listLastType         (eval Empty ListLast)
+    , BuiltinPrim "List/indexed"      listIndexedType      (eval Empty ListIndexed)
+    , BuiltinPrim "List/reverse"      listReverseType      (eval Empty ListReverse)
+    ]
+  where
+    naturalFoldType =
+            VNatural
+        ~>  VHPi "natural" (VConst Type) (\natural ->
+                VHPi "succ" (natural ~> natural) (\_succ ->
+                    VHPi "zero" natural (\_zero ->
+                        natural
+                    )
+                )
+            )
+
+    naturalBuildType =
+            VHPi "natural" (VConst Type) (\natural ->
+                VHPi "succ" (natural ~> natural) (\_succ ->
+                    VHPi "zero" natural (\_zero ->
+                        natural
+                    )
+                )
+            )
+        ~>  VNatural
+
+    textReplaceType =
+        VHPi "needle" VText (\_needle ->
+            VHPi "replacement" VText (\_replacement ->
+                VHPi "haystack" VText (\_haystack ->
+                    VText
+                )
+            )
+        )
+
+    listBuildType =
+        VHPi "a" (VConst Type) (\a ->
+            VHPi "_"
+                (VHPi "list" (VConst Type) (\list ->
+                    VHPi "cons" (a ~> list ~> list) (\_ ->
+                        VHPi "nil" list (\_ -> list)
+                    )
+                ))
+                (\_ -> VList a)
+        )
+
+    listFoldType =
+        VHPi "a" (VConst Type) (\a ->
+            VHPi "_" (VList a) (\_as ->
+                VHPi "list" (VConst Type) (\list ->
+                    VHPi "cons" (a ~> list ~> list) (\_ ->
+                        VHPi "nil" list (\_ ->
+                            list
+                        )
+                    )
+                )
+            )
+        )
+
+    listLengthType =
+        VHPi "a" (VConst Type) (\a -> VList a ~> VNatural)
+
+    listHeadType =
+        VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a)
+
+    listLastType =
+        VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a)
+
+    listIndexedType =
+        VHPi "a" (VConst Type) (\a ->
+            VList a
+            ~> VList
+                (VRecord
+                    (Map.fromList
+                        [ ("index", VNatural)
+                        , ("value", a)
+                        ]
+                    )
+                )
+        )
+
+    listReverseType =
+        VHPi "a" (VConst Type) (\a -> VList a ~> VList a)
+
+-- | Types of predefined functions when the name is free (empty type context).
+unboundBuiltinTypes :: Eq a => HashMap.HashMap Text (Val a)
+unboundBuiltinTypes =
+    HashMap.fromList
+        [ (primName prim, primType prim)
+        | prim <- unboundPrimitives
+        ]
+
+-- | Values of predefined functions when the name is free (empty environment).
+unboundBuiltinValues :: Eq a => HashMap.HashMap Text (Val a)
+unboundBuiltinValues =
+    HashMap.fromList
+        [ (primName prim, primVal prim)
+        | prim <- unboundPrimitives
+        ]
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
