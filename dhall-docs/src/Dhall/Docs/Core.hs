@@ -380,7 +380,7 @@ makeHtml baseImportUrl packageName characterSet RenderedFile{..} = do
                     Text.Lazy.toStrict $ Lucid.renderText $ markdownFileToHtml
                         path
                         contents
-                        (render mempty mmark)
+                        (render mmark)
                         DocParams{ relativeResourcesPath, packageName, characterSet, baseImportUrl }
             return htmlAsText
 
