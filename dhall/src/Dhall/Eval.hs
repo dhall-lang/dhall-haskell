@@ -572,87 +572,6 @@ eval !env t0 =
             VNatural
         NaturalLit n ->
             VNaturalLit n
-        NaturalFold ->
-            VPrim $ \n ->
-            VPrim $ \natural ->
-            VPrim $ \succ ->
-            VPrim $ \zero ->
-            let inert = VNaturalFold n natural succ zero
-            in  case zero of
-                VPrimVar -> inert
-                _ -> case succ of
-                    VPrimVar -> inert
-                    _ -> case natural of
-                        VPrimVar -> inert
-                        _ -> case n of
-                            VNaturalLit n' ->
-                                -- Use an `Integer` for the loop, due to the
-                                -- following issue:
-                                --
-                                -- https://github.com/ghcjs/ghcjs/issues/782
-                                --
-                                -- Note about the short-circuit optimization for Natural/fold:
-                                -- If `succ acc == acc` then we stop the loop and return `acc`.
-                                -- This is helpful for numerical and other "bounded" types but
-                                -- should not be done when the accumulator is a large structure
-                                -- (lists, functions, etc.) that can grow indefinitely; in those cases
-                                -- Natural/fold will probably not benefit from the shortcut.
-                                go zero (fromIntegral n' :: Integer)
-                                  where
-                                    enableShortcut = boundedType natural
-
-                                    go !acc 0 = acc
-                                    go acc m =
-                                      -- Detect a shortcut: if succ acc == acc then return acc immediately.
-                                      -- Making !next strict, as `conv` is not always applied to `next`.
-                                      let !next = vApp succ acc
-                                      in  if enableShortcut && conv env next acc
-                                          then acc
-                                          else go next (m - 1)
-                            _ -> inert
-        NaturalBuild ->
-            VPrim $ \case
-                VPrimVar ->
-                    VNaturalBuild VPrimVar
-                t ->       t
-                    `vApp` VNatural
-                    `vApp` VHLam (Typed "n" VNatural) (\n -> vNaturalPlus n (VNaturalLit 1))
-                    `vApp` VNaturalLit 0
-
-        NaturalIsZero -> VPrim $ \case
-            VNaturalLit n -> VBoolLit (n == 0)
-            n             -> VNaturalIsZero n
-        NaturalEven -> VPrim $ \case
-            VNaturalLit n -> VBoolLit (even n)
-            n             -> VNaturalEven n
-        NaturalOdd -> VPrim $ \case
-            VNaturalLit n -> VBoolLit (odd n)
-            n             -> VNaturalOdd n
-        NaturalToInteger -> VPrim $ \case
-            VNaturalLit n -> VIntegerLit (fromIntegral n)
-            n             -> VNaturalToInteger n
-        NaturalShow -> VPrim $ \case
-            VNaturalLit n -> VTextLit (VChunks [] (Text.pack (show n)))
-            n             -> VNaturalShow n
-        NaturalSubtract -> VPrim $ \case
-            VNaturalLit 0 ->
-                VHLam NaturalSubtractZero id
-            x@(VNaturalLit m) ->
-                VPrim $ \case
-                    VNaturalLit n
-                        | n >= m ->
-                            -- Use an `Integer` for the subtraction, due to the
-                            -- following issue:
-                            --
-                            -- https://github.com/ghcjs/ghcjs/issues/782
-                            VNaturalLit (fromIntegral (subtract (fromIntegral m :: Integer) (fromIntegral n :: Integer)))
-                        | otherwise -> VNaturalLit 0
-                    y -> VNaturalSubtract x y
-            x ->
-                VPrim $ \case
-                    VNaturalLit 0    -> VNaturalLit 0
-                    y | conv env x y -> VNaturalLit 0
-                    y                -> VNaturalSubtract x y
         NaturalPlus t u ->
             vNaturalPlus (eval env t) (eval env u)
         NaturalTimes t u ->
@@ -667,37 +586,10 @@ eval !env t0 =
             VInteger
         IntegerLit n ->
             VIntegerLit n
-        IntegerClamp ->
-            VPrim $ \case
-                VIntegerLit n
-                    | 0 <= n    -> VNaturalLit (fromInteger n)
-                    | otherwise -> VNaturalLit 0
-                n -> VIntegerClamp n
-        IntegerNegate ->
-            VPrim $ \case
-                VIntegerLit n -> VIntegerLit (negate n)
-                n             -> VIntegerNegate n
-        IntegerShow ->
-            VPrim $ \case
-                VIntegerLit n
-                    | 0 <= n    -> VTextLit (VChunks [] (Text.pack ('+':show n)))
-                    | otherwise -> VTextLit (VChunks [] (Text.pack (show n)))
-                n -> VIntegerShow n
-        IntegerToDouble ->
-            VPrim $ \case
-                VIntegerLit n -> VDoubleLit (DhallDouble (read (show n)))
-                -- `(read . show)` is used instead of `fromInteger`
-                -- because `read` uses the correct rounding rule.
-                -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
-                n             -> VIntegerToDouble n
         Double ->
             VDouble
         DoubleLit n ->
             VDoubleLit n
-        DoubleShow ->
-            VPrim $ \case
-                VDoubleLit (DhallDouble n) -> VTextLit (VChunks [] (Text.pack (show n)))
-                n                          -> VDoubleShow n
         Text ->
             VText
         TextLit cs ->
@@ -706,165 +598,24 @@ eval !env t0 =
                 vcs                  -> VTextLit vcs
         TextAppend t u ->
             eval env (TextLit (Chunks [("", t), ("", u)] ""))
-        TextShow ->
-            VPrim $ \case
-                VTextLit (VChunks [] x) -> VTextLit (VChunks [] (textShow x))
-                t                       -> VTextShow t
-        TextReplace ->
-            VPrim $ \needle ->
-            let hLamInfo0 = case needle of
-                    VTextLit (VChunks [] "") -> TextReplaceEmpty
-                    _                        -> Prim
-
-            in  VHLam hLamInfo0 $ \replacement ->
-            let hLamInfo1 = case needle of
-                    VTextLit (VChunks [] "") ->
-                        TextReplaceEmptyArgument replacement
-                    _ ->
-                        Prim
-            in  VHLam hLamInfo1 $ \haystack ->
-                    case needle of
-                        VTextLit (VChunks [] "") ->
-                            haystack
-
-                        VTextLit (VChunks [] needleText) ->
-                            case haystack of
-                                VTextLit (VChunks [] haystackText) ->
-                                    case replacement of
-                                        VTextLit (VChunks [] replacementText) ->
-                                            VTextLit $ VChunks []
-                                                (Text.replace
-                                                    needleText
-                                                    replacementText
-                                                    haystackText
-                                                )
-                                        _ ->
-                                            VTextLit
-                                                (vTextReplace
-                                                    needleText
-                                                    replacement
-                                                    haystackText
-                                                )
-                                _ ->
-                                    VTextReplace needle replacement haystack
-                        _ ->
-                            VTextReplace needle replacement haystack
         Date ->
             VDate
         DateLiteral d ->
             VDateLiteral d
-        DateShow ->
-            VPrim $ \case
-                VDateLiteral d -> VTextLit (VChunks [] (dateShow d))
-                t              -> VDateShow t
         Time ->
             VTime
         TimeLiteral hh mm ss frac p ->
             VTimeLiteral hh mm ss frac p
-        TimeShow ->
-            VPrim $ \case
-                VTimeLiteral hh mm ss frac p -> VTextLit (VChunks [] (timeShow hh mm ss frac p))
-                t                            -> VTimeShow t
         TimeZone ->
             VTimeZone
         TimeZoneLiteral z ->
             VTimeZoneLiteral z
-        TimeZoneShow ->
-            VPrim $ \case
-                VTimeZoneLiteral d -> VTextLit (VChunks [] (timezoneShow d))
-                t                  -> VTimeZoneShow t
         List ->
             VPrim VList
         ListLit ma ts ->
             VListLit (fmap (eval env) ma) (fmap (eval env) ts)
         ListAppend t u ->
             vListAppend (eval env t) (eval env u)
-        ListBuild ->
-            VPrim $ \a ->
-            VPrim $ \case
-                VPrimVar ->
-                    VListBuild a VPrimVar
-                t ->       t
-                    `vApp` VList a
-                    `vApp` VHLam (Typed "a" a) (\x ->
-                           VHLam (Typed "as" (VList a)) (\as ->
-                           vListAppend (VListLit Nothing (pure x)) as))
-                    `vApp` VListLit (Just (VList a)) mempty
-
-        ListFold ->
-            VPrim $ \a ->
-            VPrim $ \as ->
-            VPrim $ \list ->
-            VPrim $ \cons ->
-            VPrim $ \nil ->
-            let inert = VListFold a as list cons nil
-            in  case nil of
-                VPrimVar -> inert
-                _ -> case cons of
-                    VPrimVar -> inert
-                    _ -> case list of
-                        VPrimVar -> inert
-                        _ -> case a of
-                            VPrimVar -> inert
-                            _ -> case as of
-                                VListLit _ as' ->
-                                    foldr' (\x b -> cons `vApp` x `vApp` b) nil as'
-                                _ -> inert
-        ListLength ->
-            VPrim $ \ a ->
-            VPrim $ \case
-                VListLit _ as -> VNaturalLit (fromIntegral (Sequence.length as))
-                as            -> VListLength a as
-        ListHead ->
-            VPrim $ \ a ->
-            VPrim $ \case
-                VListLit _ as ->
-                    case Sequence.viewl as of
-                        y :< _ -> VSome y
-                        _      -> VNone a
-                as ->
-                    VListHead a as
-        ListLast ->
-            VPrim $ \ a ->
-            VPrim $ \case
-                VListLit _ as ->
-                    case Sequence.viewr as of
-                        _ :> t -> VSome t
-                        _      -> VNone a
-                as -> VListLast a as
-        ListIndexed ->
-            VPrim $ \ a ->
-            VPrim $ \case
-                VListLit _ as ->
-                    let a' =
-                            if null as
-                            then Just (VList (VRecord (Map.unorderedFromList [("index", VNatural), ("value", a)])))
-                            else Nothing
-
-                        as' =
-                            Sequence.mapWithIndex
-                                (\i t ->
-                                    VRecordLit
-                                        (Map.unorderedFromList
-                                            [ ("index", VNaturalLit (fromIntegral i))
-                                            , ("value", t)
-                                            ]
-                                        )
-                                )
-                                as
-
-                        in  VListLit a' as'
-                t ->
-                    VListIndexed a t
-        ListReverse ->
-            VPrim $ \ ~a ->
-            VPrim $ \case
-                VListLit t as | null as ->
-                    VListLit t as
-                VListLit _ as ->
-                    VListLit Nothing (Sequence.reverse as)
-                t ->
-                    VListReverse a t
         Optional ->
             VPrim VOptional
         Some t ->
@@ -1444,7 +1195,7 @@ quote !env !t0 =
     {-# INLINE quoteRecordField #-}
 
     primitiveVar :: Text -> Expr Void a
-    primitiveVar name = Var (V name 0)
+    primitiveVar name = Var (V name (countNames name env))
 
 
 -- | Predefined functions implemented as ordinary variables with known names.
@@ -1459,31 +1210,31 @@ data BuiltinPrim a = BuiltinPrim
 
 unboundPrimitives :: Eq a => [BuiltinPrim a]
 unboundPrimitives =
-    [ BuiltinPrim "Natural/fold"      naturalFoldType      (eval Empty NaturalFold)
-    , BuiltinPrim "Natural/build"     naturalBuildType     (eval Empty NaturalBuild)
-    , BuiltinPrim "Natural/isZero"    (VNatural ~> VBool)  (eval Empty NaturalIsZero)
-    , BuiltinPrim "Natural/even"      (VNatural ~> VBool)  (eval Empty NaturalEven)
-    , BuiltinPrim "Natural/odd"       (VNatural ~> VBool)  (eval Empty NaturalOdd)
-    , BuiltinPrim "Natural/toInteger" (VNatural ~> VInteger) (eval Empty NaturalToInteger)
-    , BuiltinPrim "Natural/show"      (VNatural ~> VText)  (eval Empty NaturalShow)
-    , BuiltinPrim "Natural/subtract"  (VNatural ~> VNatural ~> VNatural) (eval Empty NaturalSubtract)
-    , BuiltinPrim "Integer/clamp"     (VInteger ~> VNatural) (eval Empty IntegerClamp)
-    , BuiltinPrim "Integer/negate"    (VInteger ~> VInteger) (eval Empty IntegerNegate)
-    , BuiltinPrim "Integer/show"      (VInteger ~> VText)  (eval Empty IntegerShow)
-    , BuiltinPrim "Integer/toDouble"  (VInteger ~> VDouble) (eval Empty IntegerToDouble)
-    , BuiltinPrim "Double/show"       (VDouble ~> VText)   (eval Empty DoubleShow)
-    , BuiltinPrim "Text/replace"      textReplaceType      (eval Empty TextReplace)
-    , BuiltinPrim "Text/show"         (VText ~> VText)     (eval Empty TextShow)
-    , BuiltinPrim "Date/show"         (VDate ~> VText)     (eval Empty DateShow)
-    , BuiltinPrim "Time/show"         (VTime ~> VText)     (eval Empty TimeShow)
-    , BuiltinPrim "TimeZone/show"     (VTimeZone ~> VText) (eval Empty TimeZoneShow)
-    , BuiltinPrim "List/build"        listBuildType        (eval Empty ListBuild)
-    , BuiltinPrim "List/fold"         listFoldType         (eval Empty ListFold)
-    , BuiltinPrim "List/length"       listLengthType       (eval Empty ListLength)
-    , BuiltinPrim "List/head"         listHeadType         (eval Empty ListHead)
-    , BuiltinPrim "List/last"         listLastType         (eval Empty ListLast)
-    , BuiltinPrim "List/indexed"      listIndexedType      (eval Empty ListIndexed)
-    , BuiltinPrim "List/reverse"      listReverseType      (eval Empty ListReverse)
+    [ BuiltinPrim "Natural/fold"      naturalFoldType      naturalFoldVal
+    , BuiltinPrim "Natural/build"     naturalBuildType     naturalBuildVal
+    , BuiltinPrim "Natural/isZero"    (VNatural ~> VBool)  naturalIsZeroVal
+    , BuiltinPrim "Natural/even"      (VNatural ~> VBool)  naturalEvenVal
+    , BuiltinPrim "Natural/odd"       (VNatural ~> VBool)  naturalOddVal
+    , BuiltinPrim "Natural/toInteger" (VNatural ~> VInteger) naturalToIntegerVal
+    , BuiltinPrim "Natural/show"      (VNatural ~> VText)  naturalShowVal
+    , BuiltinPrim "Natural/subtract"  (VNatural ~> VNatural ~> VNatural) naturalSubtractVal
+    , BuiltinPrim "Integer/clamp"     (VInteger ~> VNatural) integerClampVal
+    , BuiltinPrim "Integer/negate"    (VInteger ~> VInteger) integerNegateVal
+    , BuiltinPrim "Integer/show"      (VInteger ~> VText)  integerShowVal
+    , BuiltinPrim "Integer/toDouble"  (VInteger ~> VDouble) integerToDoubleVal
+    , BuiltinPrim "Double/show"       (VDouble ~> VText)   doubleShowVal
+    , BuiltinPrim "Text/replace"      textReplaceType      textReplaceVal
+    , BuiltinPrim "Text/show"         (VText ~> VText)     textShowVal
+    , BuiltinPrim "Date/show"         (VDate ~> VText)     dateShowVal
+    , BuiltinPrim "Time/show"         (VTime ~> VText)     timeShowVal
+    , BuiltinPrim "TimeZone/show"     (VTimeZone ~> VText) timeZoneShowVal
+    , BuiltinPrim "List/build"        listBuildType        listBuildVal
+    , BuiltinPrim "List/fold"         listFoldType         listFoldVal
+    , BuiltinPrim "List/length"       listLengthType       listLengthVal
+    , BuiltinPrim "List/head"         listHeadType         listHeadVal
+    , BuiltinPrim "List/last"         listLastType         listLastVal
+    , BuiltinPrim "List/indexed"      listIndexedType      listIndexedVal
+    , BuiltinPrim "List/reverse"      listReverseType      listReverseVal
     ]
   where
     naturalFoldType =
@@ -1564,6 +1315,271 @@ unboundPrimitives =
     listReverseType =
         VHPi "a" (VConst Type) (\a -> VList a ~> VList a)
 
+    naturalFoldVal =
+        VPrim $ \n ->
+        VPrim $ \natural ->
+        VPrim $ \succ ->
+        VPrim $ \zero ->
+        let inert = VNaturalFold n natural succ zero
+        in  case zero of
+            VPrimVar -> inert
+            _ -> case succ of
+                VPrimVar -> inert
+                _ -> case natural of
+                    VPrimVar -> inert
+                    _ -> case n of
+                        VNaturalLit n' ->
+                            -- Use an `Integer` for the loop, due to the
+                            -- following issue:
+                            --
+                            -- https://github.com/ghcjs/ghcjs/issues/782
+                            --
+                            -- If `succ acc == acc` then we stop the loop.
+                            -- Helpful for numerical/"bounded" types, but not
+                            -- for accumulators that can grow indefinitely.
+                            go zero (fromIntegral n' :: Integer)
+                              where
+                                enableShortcut = boundedType natural
+
+                                go !acc 0 = acc
+                                go acc m =
+                                  let !next = vApp succ acc
+                                  in  if enableShortcut && conv Empty next acc
+                                      then acc
+                                      else go next (m - 1)
+                        _ -> inert
+
+    naturalBuildVal =
+        VPrim $ \case
+            VPrimVar ->
+                VNaturalBuild VPrimVar
+            t ->       t
+                `vApp` VNatural
+                `vApp` VHLam (Typed "n" VNatural) (\n -> vNaturalPlus n (VNaturalLit 1))
+                `vApp` VNaturalLit 0
+
+    naturalIsZeroVal = VPrim $ \case
+        VNaturalLit n -> VBoolLit (n == 0)
+        n             -> VNaturalIsZero n
+
+    naturalEvenVal = VPrim $ \case
+        VNaturalLit n -> VBoolLit (even n)
+        n             -> VNaturalEven n
+
+    naturalOddVal = VPrim $ \case
+        VNaturalLit n -> VBoolLit (odd n)
+        n             -> VNaturalOdd n
+
+    naturalToIntegerVal = VPrim $ \case
+        VNaturalLit n -> VIntegerLit (fromIntegral n)
+        n             -> VNaturalToInteger n
+
+    naturalShowVal = VPrim $ \case
+        VNaturalLit n -> VTextLit (VChunks [] (Text.pack (show n)))
+        n             -> VNaturalShow n
+
+    naturalSubtractVal = VPrim $ \case
+        VNaturalLit 0 ->
+            VHLam NaturalSubtractZero id
+        x@(VNaturalLit m) ->
+            VPrim $ \case
+                VNaturalLit n
+                    | n >= m ->
+                        -- Use an `Integer` for the subtraction, due to:
+                        -- https://github.com/ghcjs/ghcjs/issues/782
+                        VNaturalLit (fromIntegral (subtract (fromIntegral m :: Integer) (fromIntegral n :: Integer)))
+                    | otherwise -> VNaturalLit 0
+                y -> VNaturalSubtract x y
+        x ->
+            VPrim $ \case
+                VNaturalLit 0    -> VNaturalLit 0
+                y | conv Empty x y -> VNaturalLit 0
+                y                  -> VNaturalSubtract x y
+
+    integerClampVal =
+        VPrim $ \case
+            VIntegerLit n
+                | 0 <= n    -> VNaturalLit (fromInteger n)
+                | otherwise -> VNaturalLit 0
+            n -> VIntegerClamp n
+
+    integerNegateVal =
+        VPrim $ \case
+            VIntegerLit n -> VIntegerLit (negate n)
+            n             -> VIntegerNegate n
+
+    integerShowVal =
+        VPrim $ \case
+            VIntegerLit n
+                | 0 <= n    -> VTextLit (VChunks [] (Text.pack ('+':show n)))
+                | otherwise -> VTextLit (VChunks [] (Text.pack (show n)))
+            n -> VIntegerShow n
+
+    integerToDoubleVal =
+        VPrim $ \case
+            VIntegerLit n -> VDoubleLit (DhallDouble (read (show n)))
+            -- `(read . show)` is used instead of `fromInteger`
+            -- because `read` uses the correct rounding rule.
+            -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
+            n             -> VIntegerToDouble n
+
+    doubleShowVal =
+        VPrim $ \case
+            VDoubleLit (DhallDouble n) -> VTextLit (VChunks [] (Text.pack (show n)))
+            n                          -> VDoubleShow n
+
+    textShowVal =
+        VPrim $ \case
+            VTextLit (VChunks [] x) -> VTextLit (VChunks [] (textShow x))
+            t                       -> VTextShow t
+
+    textReplaceVal =
+        VPrim $ \needle ->
+        let hLamInfo0 = case needle of
+                VTextLit (VChunks [] "") -> TextReplaceEmpty
+                _                        -> Prim
+
+        in  VHLam hLamInfo0 $ \replacement ->
+        let hLamInfo1 = case needle of
+                VTextLit (VChunks [] "") ->
+                    TextReplaceEmptyArgument replacement
+                _ ->
+                    Prim
+        in  VHLam hLamInfo1 $ \haystack ->
+                case needle of
+                    VTextLit (VChunks [] "") ->
+                        haystack
+
+                    VTextLit (VChunks [] needleText) ->
+                        case haystack of
+                            VTextLit (VChunks [] haystackText) ->
+                                case replacement of
+                                    VTextLit (VChunks [] replacementText) ->
+                                        VTextLit $ VChunks []
+                                            (Text.replace
+                                                needleText
+                                                replacementText
+                                                haystackText
+                                            )
+                                    _ ->
+                                        VTextLit
+                                            (vTextReplace
+                                                needleText
+                                                replacement
+                                                haystackText
+                                            )
+                            _ ->
+                                VTextReplace needle replacement haystack
+                    _ ->
+                        VTextReplace needle replacement haystack
+
+    dateShowVal =
+        VPrim $ \case
+            VDateLiteral d -> VTextLit (VChunks [] (dateShow d))
+            t              -> VDateShow t
+
+    timeShowVal =
+        VPrim $ \case
+            VTimeLiteral hh mm ss frac p -> VTextLit (VChunks [] (timeShow hh mm ss frac p))
+            t                            -> VTimeShow t
+
+    timeZoneShowVal =
+        VPrim $ \case
+            VTimeZoneLiteral d -> VTextLit (VChunks [] (timezoneShow d))
+            t                  -> VTimeZoneShow t
+
+    listBuildVal =
+        VPrim $ \a ->
+        VPrim $ \case
+            VPrimVar ->
+                VListBuild a VPrimVar
+            t ->       t
+                `vApp` VList a
+                `vApp` VHLam (Typed "a" a) (\x ->
+                       VHLam (Typed "as" (VList a)) (\as ->
+                       vListAppend (VListLit Nothing (pure x)) as))
+                `vApp` VListLit (Just (VList a)) mempty
+
+    listFoldVal =
+        VPrim $ \a ->
+        VPrim $ \as ->
+        VPrim $ \list ->
+        VPrim $ \cons ->
+        VPrim $ \nil ->
+        let inert = VListFold a as list cons nil
+        in  case nil of
+            VPrimVar -> inert
+            _ -> case cons of
+                VPrimVar -> inert
+                _ -> case list of
+                    VPrimVar -> inert
+                    _ -> case a of
+                        VPrimVar -> inert
+                        _ -> case as of
+                            VListLit _ as' ->
+                                foldr' (\x b -> cons `vApp` x `vApp` b) nil as'
+                            _ -> inert
+
+    listLengthVal =
+        VPrim $ \ a ->
+        VPrim $ \case
+            VListLit _ as -> VNaturalLit (fromIntegral (Sequence.length as))
+            as            -> VListLength a as
+
+    listHeadVal =
+        VPrim $ \ a ->
+        VPrim $ \case
+            VListLit _ as ->
+                case Sequence.viewl as of
+                    y :< _ -> VSome y
+                    _      -> VNone a
+            as ->
+                VListHead a as
+
+    listLastVal =
+        VPrim $ \ a ->
+        VPrim $ \case
+            VListLit _ as ->
+                case Sequence.viewr as of
+                    _ :> t -> VSome t
+                    _      -> VNone a
+            as -> VListLast a as
+
+    listIndexedVal =
+        VPrim $ \ a ->
+        VPrim $ \case
+            VListLit _ as ->
+                let a' =
+                        if null as
+                        then Just (VList (VRecord (Map.unorderedFromList [("index", VNatural), ("value", a)])))
+                        else Nothing
+
+                    as' =
+                        Sequence.mapWithIndex
+                            (\i t ->
+                                VRecordLit
+                                    (Map.unorderedFromList
+                                        [ ("index", VNaturalLit (fromIntegral i))
+                                        , ("value", t)
+                                        ]
+                                    )
+                            )
+                            as
+
+                    in  VListLit a' as'
+            t ->
+                VListIndexed a t
+
+    listReverseVal =
+        VPrim $ \ ~a ->
+        VPrim $ \case
+            VListLit t as | null as ->
+                VListLit t as
+            VListLit _ as ->
+                VListLit Nothing (Sequence.reverse as)
+            t ->
+                VListReverse a t
+
 -- | Types of predefined functions when the name is free (empty type context).
 unboundBuiltinTypes :: Eq a => HashMap.HashMap Text (Val a)
 unboundBuiltinTypes =
@@ -1639,22 +1655,6 @@ alphaNormalize = goEnv EmptyNames
                 Natural
             NaturalLit n ->
                 NaturalLit n
-            NaturalFold ->
-                NaturalFold
-            NaturalBuild ->
-                NaturalBuild
-            NaturalIsZero ->
-                NaturalIsZero
-            NaturalEven ->
-                NaturalEven
-            NaturalOdd ->
-                NaturalOdd
-            NaturalToInteger ->
-                NaturalToInteger
-            NaturalShow ->
-                NaturalShow
-            NaturalSubtract ->
-                NaturalSubtract
             NaturalPlus t u ->
                 NaturalPlus (go t) (go u)
             NaturalTimes t u ->
@@ -1663,68 +1663,34 @@ alphaNormalize = goEnv EmptyNames
                 Integer
             IntegerLit n ->
                 IntegerLit n
-            IntegerClamp ->
-                IntegerClamp
-            IntegerNegate ->
-                IntegerNegate
-            IntegerShow ->
-                IntegerShow
-            IntegerToDouble ->
-                IntegerToDouble
             Double ->
                 Double
             DoubleLit n ->
                 DoubleLit n
-            DoubleShow ->
-                DoubleShow
             Text ->
                 Text
             TextLit cs ->
                 TextLit (goChunks cs)
             TextAppend t u ->
                 TextAppend (go t) (go u)
-            TextShow ->
-                TextShow
-            TextReplace ->
-                TextReplace
             Date ->
                 Date
             DateLiteral d ->
                 DateLiteral d
-            DateShow ->
-                DateShow
             Time ->
                 Time
             TimeLiteral hh mm ss frac p ->
                 TimeLiteral hh mm ss frac p
-            TimeShow ->
-                TimeShow
             TimeZone ->
                 TimeZone
             TimeZoneLiteral z ->
                 TimeZoneLiteral z
-            TimeZoneShow ->
-                TimeZoneShow
             List ->
                 List
             ListLit ma ts ->
                 ListLit (fmap go ma) (fmap go ts)
             ListAppend t u ->
                 ListAppend (go t) (go u)
-            ListBuild ->
-                ListBuild
-            ListFold ->
-                ListFold
-            ListLength ->
-                ListLength
-            ListHead ->
-                ListHead
-            ListLast ->
-                ListLast
-            ListIndexed ->
-                ListIndexed
-            ListReverse ->
-                ListReverse
             Optional ->
                 Optional
             Some t ->

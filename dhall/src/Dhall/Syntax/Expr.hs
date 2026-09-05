@@ -99,22 +99,6 @@ data Expr s a
     | Natural
     -- | > NaturalLit n                             ~  n
     | NaturalLit Natural
-    -- | > NaturalFold                              ~  Natural/fold
-    | NaturalFold
-    -- | > NaturalBuild                             ~  Natural/build
-    | NaturalBuild
-    -- | > NaturalIsZero                            ~  Natural/isZero
-    | NaturalIsZero
-    -- | > NaturalEven                              ~  Natural/even
-    | NaturalEven
-    -- | > NaturalOdd                               ~  Natural/odd
-    | NaturalOdd
-    -- | > NaturalToInteger                         ~  Natural/toInteger
-    | NaturalToInteger
-    -- | > NaturalShow                              ~  Natural/show
-    | NaturalShow
-    -- | > NaturalSubtract                          ~  Natural/subtract
-    | NaturalSubtract
     -- | > NaturalPlus x y                          ~  x + y
     | NaturalPlus (Expr s a) (Expr s a)
     -- | > NaturalTimes x y                         ~  x * y
@@ -123,36 +107,20 @@ data Expr s a
     | Integer
     -- | > IntegerLit n                             ~  ±n
     | IntegerLit Integer
-    -- | > IntegerClamp                             ~  Integer/clamp
-    | IntegerClamp
-    -- | > IntegerNegate                            ~  Integer/negate
-    | IntegerNegate
-    -- | > IntegerShow                              ~  Integer/show
-    | IntegerShow
-    -- | > IntegerToDouble                          ~  Integer/toDouble
-    | IntegerToDouble
     -- | > Double                                   ~  Double
     | Double
     -- | > DoubleLit n                              ~  n
     | DoubleLit DhallDouble
-    -- | > DoubleShow                               ~  Double/show
-    | DoubleShow
     -- | > Text                                     ~  Text
     | Text
     -- | > TextLit (Chunks [(t1, e1), (t2, e2)] t3) ~  "t1${e1}t2${e2}t3"
     | TextLit (Chunks s a)
     -- | > TextAppend x y                           ~  x ++ y
     | TextAppend (Expr s a) (Expr s a)
-    -- | > TextReplace                              ~ Text/replace
-    | TextReplace
-    -- | > TextShow                                 ~  Text/show
-    | TextShow
     -- | > Date                                     ~  Date
     | Date
     -- | > DateLiteral (fromGregorian _YYYY _MM _DD) ~ YYYY-MM-DD
     | DateLiteral Time.Day
-    -- | > DateShow                                 ~  Date/show
-    | DateShow
     -- | > Time                                     ~  Time
     | Time
     -- | > TimeLiteral hh mm ss fraction precision  ~  hh:mm:ss[.fraction]
@@ -167,15 +135,11 @@ data Expr s a
         -- ^ Fractional digits as a base-10 integer
         Int
         -- ^ Number of fractional digits (0 if there is no '.')
-    -- | > TimeShow                                 ~  Time/show
-    | TimeShow
     -- | > TimeZone                                 ~  TimeZone
     | TimeZone
     -- | > TimeZoneLiteral (TimeZone ( 60 * _HH + _MM) _ _) ~ +HH:MM
     -- | > TimeZoneLiteral (TimeZone (-60 * _HH + _MM) _ _) ~ -HH:MM
     | TimeZoneLiteral Time.TimeZone
-    -- | > TimeZoneShow                             ~  TimeZone/Show
-    | TimeZoneShow
     -- | > List                                     ~  List
     | List
     -- | > ListLit (Just t ) []                     ~  [] : t
@@ -195,20 +159,6 @@ data Expr s a
     | ListLit (Maybe (Expr s a)) (Seq (Expr s a))
     -- | > ListAppend x y                           ~  x # y
     | ListAppend (Expr s a) (Expr s a)
-    -- | > ListBuild                                ~  List/build
-    | ListBuild
-    -- | > ListFold                                 ~  List/fold
-    | ListFold
-    -- | > ListLength                               ~  List/length
-    | ListLength
-    -- | > ListHead                                 ~  List/head
-    | ListHead
-    -- | > ListLast                                 ~  List/last
-    | ListLast
-    -- | > ListIndexed                              ~  List/indexed
-    | ListIndexed
-    -- | > ListReverse                              ~  List/reverse
-    | ListReverse
     -- | > Optional                                 ~  Optional
     | Optional
     -- | > Some e                                   ~  Some e

@@ -449,48 +449,6 @@ infer typer = loop
         NaturalLit _ ->
             return VNatural
 
-        NaturalFold ->
-            return
-                (   VNatural
-                ~>  VHPi "natural" (VConst Type) (\natural ->
-                        VHPi "succ" (natural ~> natural) (\_succ ->
-                            VHPi "zero" natural (\_zero ->
-                                natural
-                            )
-                        )
-                    )
-                )
-
-        NaturalBuild ->
-            return
-                (   VHPi "natural" (VConst Type) (\natural ->
-                        VHPi "succ" (natural ~> natural) (\_succ ->
-                            VHPi "zero" natural (\_zero ->
-                                natural
-                            )
-                        )
-                    )
-                ~>  VNatural
-                )
-
-        NaturalIsZero ->
-            return (VNatural ~> VBool)
-
-        NaturalEven ->
-            return (VNatural ~> VBool)
-
-        NaturalOdd ->
-            return (VNatural ~> VBool)
-
-        NaturalToInteger ->
-            return (VNatural ~> VInteger)
-
-        NaturalShow ->
-            return (VNatural ~> VText)
-
-        NaturalSubtract ->
-            return (VNatural ~> VNatural ~> VNatural)
-
         NaturalPlus l r -> do
             tl' <- loop ctx l
 
@@ -527,26 +485,11 @@ infer typer = loop
         IntegerLit _ ->
             return VInteger
 
-        IntegerClamp ->
-            return (VInteger ~> VNatural)
-
-        IntegerNegate ->
-            return (VInteger ~> VInteger)
-
-        IntegerShow ->
-            return (VInteger ~> VText)
-
-        IntegerToDouble ->
-            return (VInteger ~> VDouble)
-
         Double ->
             return (VConst Type)
 
         DoubleLit _ ->
             return VDouble
-
-        DoubleShow ->
-            return (VDouble ~> VText)
 
         Text ->
             return (VConst Type)
@@ -578,27 +521,11 @@ infer typer = loop
 
             return VText
 
-        TextReplace ->
-            return
-                (   VHPi "needle" VText  (\_needle ->
-                        VHPi "replacement" VText (\_replacement ->
-                            VHPi "haystack" VText (\_haystack ->
-                                VText
-                            )
-                        )
-                    )
-                )
-        TextShow ->
-            return (VText ~> VText)
-
         Date ->
             return (VConst Type)
 
         DateLiteral _ ->
             return VDate
-
-        DateShow ->
-            return (VDate ~> VText)
 
         Time ->
             return (VConst Type)
@@ -606,17 +533,11 @@ infer typer = loop
         TimeLiteral _ _ _ _ _ ->
             return VTime
 
-        TimeShow ->
-            return (VTime ~> VText)
-
         TimeZone ->
             return (VConst Type)
 
         TimeZoneLiteral _ ->
             return VTimeZone
-
-        TimeZoneShow ->
-            return (VTimeZone ~> VText)
 
         List ->
             return (VConst Type ~> VConst Type)
@@ -696,56 +617,6 @@ infer typer = loop
                     die (ListAppendMismatch _A₀'' _A₁'')
 
             return (VList _A₀')
-
-        ListBuild ->
-            return
-                (   VHPi "a" (VConst Type) (\a ->
-                            VHPi "list" (VConst Type) (\list ->
-                                VHPi "cons" (a ~> list ~> list) (\_cons ->
-                                    (VHPi "nil" list (\_nil -> list))
-                                )
-                            )
-                        ~>  VList a
-                    )
-                )
-
-        ListFold ->
-            return
-                (   VHPi "a" (VConst Type) (\a ->
-                            VList a
-                        ~>  VHPi "list" (VConst Type) (\list ->
-                                VHPi "cons" (a ~> list ~> list) (\_cons ->
-                                    (VHPi "nil" list (\_nil -> list))
-                                )
-                            )
-                    )
-                )
-
-        ListLength ->
-            return (VHPi "a" (VConst Type) (\a -> VList a ~> VNatural))
-
-        ListHead ->
-            return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
-
-        ListLast ->
-            return (VHPi "a" (VConst Type) (\a -> VList a ~> VOptional a))
-
-        ListIndexed ->
-            return
-                (   VHPi "a" (VConst Type) (\a ->
-                            VList a
-                        ~>  VList
-                                (VRecord
-                                    (Dhall.Map.unorderedFromList
-                                        [ ("index", VNatural)
-                                        , ("value", a       )
-                                        ]
-                                    )
-                                )
-                    )
-                )
-        ListReverse ->
-            return (VHPi "a" (VConst Type) (\a -> VList a ~> VList a))
 
         Optional ->
             return (VConst Type ~> VConst Type)
