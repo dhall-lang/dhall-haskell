@@ -808,30 +808,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.NaturalLit a ->
             Core.NaturalLit a
 
-        Core.NaturalFold ->
-            Core.NaturalFold
-
-        Core.NaturalBuild ->
-            Core.NaturalBuild
-
-        Core.NaturalIsZero ->
-            Core.NaturalIsZero
-
-        Core.NaturalEven ->
-            Core.NaturalEven
-
-        Core.NaturalOdd ->
-            Core.NaturalOdd
-
-        Core.NaturalToInteger ->
-            Core.NaturalToInteger
-
-        Core.NaturalShow ->
-            Core.NaturalShow
-
-        Core.NaturalSubtract ->
-            Core.NaturalSubtract
-
         Core.NaturalPlus a b ->
             Core.NaturalPlus a' b'
           where
@@ -850,26 +826,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.IntegerLit a ->
             Core.IntegerLit a
 
-        Core.IntegerClamp ->
-            Core.IntegerClamp
-
-        Core.IntegerNegate ->
-            Core.IntegerNegate
-
-        Core.IntegerShow ->
-            Core.IntegerShow
-
-        Core.IntegerToDouble ->
-            Core.IntegerToDouble
-
         Core.Double ->
             Core.Double
 
         Core.DoubleLit a ->
             Core.DoubleLit a
-
-        Core.DoubleShow ->
-            Core.DoubleShow
 
         Core.Text ->
             Core.Text
@@ -885,20 +846,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
             a' = loop a
             b' = loop b
 
-        Core.TextReplace ->
-            Core.TextReplace
-
-        Core.TextShow ->
-            Core.TextShow
-
         Core.Date ->
             Core.Date
 
         Core.DateLiteral d ->
             Core.DateLiteral d
-
-        Core.DateShow ->
-            Core.DateShow
 
         Core.Time ->
             Core.Time
@@ -906,17 +858,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.TimeLiteral hh mm ss frac p ->
             Core.TimeLiteral hh mm ss frac p
 
-        Core.TimeShow ->
-            Core.TimeShow
-
         Core.TimeZone ->
             Core.TimeZone
 
         Core.TimeZoneLiteral z ->
             Core.TimeZoneLiteral z
-
-        Core.TimeZoneShow ->
-            Core.TimeZoneShow
 
         Core.List ->
             Core.List
@@ -976,27 +922,6 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = loop a
             b' = loop b
-
-        Core.ListBuild ->
-            Core.ListBuild
-
-        Core.ListFold ->
-            Core.ListFold
-
-        Core.ListLength ->
-            Core.ListLength
-
-        Core.ListHead ->
-            Core.ListHead
-
-        Core.ListLast ->
-            Core.ListLast
-
-        Core.ListIndexed ->
-            Core.ListIndexed
-
-        Core.ListReverse ->
-            Core.ListReverse
 
         Core.Optional ->
             Core.Optional

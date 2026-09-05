@@ -263,7 +263,7 @@ parsers embedded = Parsers{..}
     letBinding = do
         src0 <- try (_let *> src nonemptyWhitespace)
 
-        c <- label
+        c <- boundLabel
 
         src1 <- src whitespace
 
@@ -305,7 +305,7 @@ parsers embedded = Parsers{..}
             whitespace
             _openParens
             src0 <- src whitespace
-            a <- label
+            a <- boundLabel
             src1 <- src whitespace
             _colon
             src2 <- src nonemptyWhitespace
@@ -358,7 +358,7 @@ parsers embedded = Parsers{..}
         alternative3 = do
             cs <- try (_forall <* whitespace <* _openParens)
             whitespace
-            a <- label
+            a <- boundLabel
             whitespace
             _colon
             nonemptyWhitespace
@@ -701,44 +701,23 @@ parsers embedded = Parsers{..}
                 case c of
                     'N' ->
                         choice
-                            [ NaturalFold      <$ _NaturalFold
-                            , NaturalBuild     <$ _NaturalBuild
-                            , NaturalIsZero    <$ _NaturalIsZero
-                            , NaturalEven      <$ _NaturalEven
-                            , NaturalOdd       <$ _NaturalOdd
-                            , NaturalSubtract  <$ _NaturalSubtract
-                            , NaturalToInteger <$ _NaturalToInteger
-                            , NaturalShow      <$ _NaturalShow
-                            , Natural          <$ _Natural
+                            [ Natural          <$ _Natural
                             , None             <$ _None
                             , DoubleLit nan    <$ _NaN
                             ]
                     'I' ->
                         choice
-                            [ IntegerClamp     <$ _IntegerClamp
-                            , IntegerNegate    <$ _IntegerNegate
-                            , IntegerShow      <$ _IntegerShow
-                            , IntegerToDouble  <$ _IntegerToDouble
-                            , Integer          <$ _Integer
+                            [ Integer          <$ _Integer
                             ]
 
                     'D' ->
                         choice
-                            [ DateShow         <$ _DateShow
-                            , Date             <$ _Date
-                            , DoubleShow       <$ _DoubleShow
+                            [ Date             <$ _Date
                             , Double           <$ _Double
                             ]
                     'L' ->
                         choice
-                            [ ListBuild        <$ _ListBuild
-                            , ListFold         <$ _ListFold
-                            , ListLength       <$ _ListLength
-                            , ListHead         <$ _ListHead
-                            , ListLast         <$ _ListLast
-                            , ListIndexed      <$ _ListIndexed
-                            , ListReverse      <$ _ListReverse
-                            , List             <$ _List
+                            [ List             <$ _List
                             ]
                     'O' ->    Optional         <$ _Optional
                     'B' ->
@@ -749,12 +728,8 @@ parsers embedded = Parsers{..}
                     'S' ->    Const Sort       <$ _Sort
                     'T' ->
                         choice
-                            [ TextReplace      <$ _TextReplace
-                            , TextShow         <$ _TextShow
-                            , Text             <$ _Text
-                            , TimeZoneShow     <$ _TimeZoneShow
+                            [ Text             <$ _Text
                             , TimeZone         <$ _TimeZone
-                            , TimeShow         <$ _TimeShow
                             , Time             <$ _Time
                             , BoolLit True     <$ _True
                             , Const Type       <$ _Type
@@ -764,8 +739,30 @@ parsers embedded = Parsers{..}
                     _   ->    empty
 
             alternative37 = do
-                a <- identifier
-                return (Var a)
+                a@(V x n) <- identifier
+                if n /= 0
+                    then return (Var a)
+                    else case x of
+                        "Bool"     -> return Bool
+                        "Bytes"    -> return Bytes
+                        "Natural"  -> return Natural
+                        "Integer"  -> return Integer
+                        "Double"   -> return Double
+                        "Text"     -> return Text
+                        "Date"     -> return Date
+                        "Time"     -> return Time
+                        "TimeZone" -> return TimeZone
+                        "List"     -> return List
+                        "Optional" -> return Optional
+                        "None"     -> return None
+                        "True"     -> return (BoolLit True)
+                        "False"    -> return (BoolLit False)
+                        "Type"     -> return (Const Type)
+                        "Kind"     -> return (Const Kind)
+                        "Sort"     -> return (Const Sort)
+                        "Infinity" -> return (DoubleLit (DhallDouble (1.0/0.0)))
+                        "NaN"      -> return (DoubleLit (DhallDouble (0.0/0.0)))
+                        _          -> return (Var a)
 
             alternative38 = do
                 _openParens

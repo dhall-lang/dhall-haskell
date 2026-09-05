@@ -174,7 +174,7 @@ normalizeWith _          t = Eval.normalize t
 -}
 normalizeWithM
     :: (Monad m, Eq a) => NormalizerM m a -> Expr s a -> m (Expr t a)
-normalizeWithM ctx e0 = loop (Syntax.denote e0)
+normalizeWithM ctx e0 = fmap (Syntax.renote . Syntax.denote) (loop (Syntax.denote e0))
  where
   loop e = ctx e >>= \case
       Just e' -> loop e'
@@ -203,7 +203,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     loop b₂
                 _ ->
                   case App f' a' of
-                    App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
+                    App (App (App (App (Var (V "Natural/fold" 0)) (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
                       -- `boundedType` is checked once, not repeated in the loop.
                       if boundedType t' then strict else lazy
@@ -228,18 +228,18 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
 
                         lazyLoop 0 = zero
                         lazyLoop !n = App succ' (lazyLoop (n - 1))
-                    App NaturalBuild g -> loop (App (App (App g Natural) succ) zero)
+                    App (Var (V "Natural/build" 0)) g -> loop (App (App (App g Natural) succ) zero)
                       where
                         succ = Lam mempty (Syntax.makeFunctionBinding "n" Natural) (NaturalPlus "n" (NaturalLit 1))
 
                         zero = NaturalLit 0
-                    App NaturalIsZero (NaturalLit n) -> pure (BoolLit (n == 0))
-                    App NaturalEven (NaturalLit n) -> pure (BoolLit (even n))
-                    App NaturalOdd (NaturalLit n) -> pure (BoolLit (odd n))
-                    App NaturalToInteger (NaturalLit n) -> pure (IntegerLit (toInteger n))
-                    App NaturalShow (NaturalLit n) ->
+                    App (Var (V "Natural/isZero" 0)) (NaturalLit n) -> pure (BoolLit (n == 0))
+                    App (Var (V "Natural/even" 0)) (NaturalLit n) -> pure (BoolLit (even n))
+                    App (Var (V "Natural/odd" 0)) (NaturalLit n) -> pure (BoolLit (odd n))
+                    App (Var (V "Natural/toInteger" 0)) (NaturalLit n) -> pure (IntegerLit (toInteger n))
+                    App (Var (V "Natural/show" 0)) (NaturalLit n) ->
                         pure (TextLit (Chunks [] (Text.pack (show n))))
-                    App (App NaturalSubtract (NaturalLit x)) (NaturalLit y)
+                    App (App (Var (V "Natural/subtract" 0)) (NaturalLit x)) (NaturalLit y)
                         -- Use an `Integer` for the subtraction, due to the
                         -- following issue:
                         --
@@ -248,24 +248,24 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             pure (NaturalLit (fromIntegral (subtract (fromIntegral x :: Integer) (fromIntegral y :: Integer))))
                         | otherwise ->
                             pure (NaturalLit 0)
-                    App (App NaturalSubtract (NaturalLit 0)) y -> pure y
-                    App (App NaturalSubtract _) (NaturalLit 0) -> pure (NaturalLit 0)
-                    App (App NaturalSubtract x) y | Eval.judgmentallyEqual x y -> pure (NaturalLit 0)
-                    App IntegerClamp (IntegerLit n)
+                    App (App (Var (V "Natural/subtract" 0)) (NaturalLit 0)) y -> pure y
+                    App (App (Var (V "Natural/subtract" 0)) _) (NaturalLit 0) -> pure (NaturalLit 0)
+                    App (App (Var (V "Natural/subtract" 0)) x) y | Eval.judgmentallyEqual x y -> pure (NaturalLit 0)
+                    App (Var (V "Integer/clamp" 0)) (IntegerLit n)
                         | 0 <= n -> pure (NaturalLit (fromInteger n))
                         | otherwise -> pure (NaturalLit 0)
-                    App IntegerNegate (IntegerLit n) ->
+                    App (Var (V "Integer/negate" 0)) (IntegerLit n) ->
                         pure (IntegerLit (negate n))
-                    App IntegerShow (IntegerLit n)
+                    App (Var (V "Integer/show" 0)) (IntegerLit n)
                         | 0 <= n    -> pure (TextLit (Chunks [] ("+" <> Text.pack (show n))))
                         | otherwise -> pure (TextLit (Chunks [] (Text.pack (show n))))
                     -- `(read . show)` is used instead of `fromInteger` because `read` uses
                     -- the correct rounding rule.
                     -- See https://gitlab.haskell.org/ghc/ghc/issues/17231.
-                    App IntegerToDouble (IntegerLit n) -> pure (DoubleLit ((DhallDouble . read . show) n))
-                    App DoubleShow (DoubleLit (DhallDouble n)) ->
+                    App (Var (V "Integer/toDouble" 0)) (IntegerLit n) -> pure (DoubleLit ((DhallDouble . read . show) n))
+                    App (Var (V "Double/show" 0)) (DoubleLit (DhallDouble n)) ->
                         pure (TextLit (Chunks [] (Text.pack (show n))))
-                    App (App ListBuild _A₀) g -> loop (App (App (App g list) cons) nil)
+                    App (App (Var (V "List/build" 0)) _A₀) g -> loop (App (App (App g list) cons) nil)
                       where
                         _A₁ = Syntax.shift 1 "a" _A₀
 
@@ -279,7 +279,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                 )
 
                         nil = ListLit (Just (App List _A₀)) empty
-                    App (App (App (App (App ListFold _) (ListLit _ xs)) t) cons) nil -> do
+                    App (App (App (App (App (Var (V "List/fold" 0)) _) (ListLit _ xs)) t) cons) nil -> do
                       t' <- loop t
                       if boundedType t' then strict else lazy
                       where
@@ -292,19 +292,19 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         strictCons y ys =
                           App (App cons y) <$> ys >>= loop
                         lazyCons   y ys =       App (App cons y) ys
-                    App (App ListLength _) (ListLit _ ys) ->
+                    App (App (Var (V "List/length" 0)) _) (ListLit _ ys) ->
                         pure (NaturalLit (fromIntegral (Data.Sequence.length ys)))
-                    App (App ListHead t) (ListLit _ ys) -> loop o
+                    App (App (Var (V "List/head" 0)) t) (ListLit _ ys) -> loop o
                       where
                         o = case Data.Sequence.viewl ys of
                                 y :< _ -> Some y
                                 _      -> App None t
-                    App (App ListLast t) (ListLit _ ys) -> loop o
+                    App (App (Var (V "List/last" 0)) t) (ListLit _ ys) -> loop o
                       where
                         o = case Data.Sequence.viewr ys of
                                 _ :> y -> Some y
                                 _      -> App None t
-                    App (App ListIndexed _A₀) (ListLit _ as₀) -> loop (ListLit t as₁)
+                    App (App (Var (V "List/indexed" 0)) _A₀) (ListLit _ as₀) -> loop (ListLit t as₁)
                       where
                         as₁ = Data.Sequence.mapWithIndex adapt as₀
 
@@ -323,18 +323,18 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                             kvs = [ ("index", Syntax.makeRecordField $ NaturalLit (fromIntegral n))
                                   , ("value", Syntax.makeRecordField a_)
                                   ]
-                    App (App ListReverse _) (ListLit t xs) ->
+                    App (App (Var (V "List/reverse" 0)) _) (ListLit t xs) ->
                         loop (ListLit t (Data.Sequence.reverse xs))
-                    App TextShow (TextLit (Chunks [] oldText)) ->
+                    App (Var (V "Text/show" 0)) (TextLit (Chunks [] oldText)) ->
                         loop (TextLit (Chunks [] newText))
                       where
                         newText = Eval.textShow oldText
                     App
-                        (App (App TextReplace (TextLit (Chunks [] ""))) _)
+                        (App (App (Var (V "Text/replace" 0)) (TextLit (Chunks [] ""))) _)
                         haystack ->
                             return haystack
                     App (App
-                            (App TextReplace (TextLit (Chunks [] needleText)))
+                            (App (Var (V "Text/replace" 0)) (TextLit (Chunks [] needleText)))
                             replacement
                         )
                         (TextLit (Chunks [] lastText)) -> do
@@ -349,16 +349,16 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                                                 (Text.length needleText)
                                                 suffix
 
-                                    loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App TextReplace (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks [] remainder))))
-                    App DateShow (DateLiteral date) ->
+                                    loop (TextAppend (TextLit (Chunks [(prefix, replacement)] "")) (App (App (App (Var (V "Text/replace" 0)) (TextLit (Chunks [] needleText))) replacement) (TextLit (Chunks [] remainder))))
+                    App (Var (V "Date/show" 0)) (DateLiteral date) ->
                         loop (TextLit (Chunks [] text))
                       where
                         text = Eval.dateShow date
-                    App TimeShow (TimeLiteral hh mm ss frac precision) ->
+                    App (Var (V "Time/show" 0)) (TimeLiteral hh mm ss frac precision) ->
                         loop (TextLit (Chunks [] text))
                       where
                         text = Eval.timeShow hh mm ss frac precision
-                    App TimeZoneShow (TimeZoneLiteral timezone) ->
+                    App (Var (V "TimeZone/show" 0)) (TimeZoneLiteral timezone) ->
                         loop (TextLit (Chunks [] text))
                       where
                         text = Eval.timezoneShow timezone
@@ -419,14 +419,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
           BytesLit b -> pure (BytesLit b)
           Natural -> pure Natural
           NaturalLit n -> pure (NaturalLit n)
-          NaturalFold -> pure NaturalFold
-          NaturalBuild -> pure NaturalBuild
-          NaturalIsZero -> pure NaturalIsZero
-          NaturalEven -> pure NaturalEven
-          NaturalOdd -> pure NaturalOdd
-          NaturalToInteger -> pure NaturalToInteger
-          NaturalShow -> pure NaturalShow
-          NaturalSubtract -> pure NaturalSubtract
           NaturalPlus x y -> decide <$> loop x <*> loop y
             where
               decide (NaturalLit 0)  r             = r
@@ -443,13 +435,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
               decide  l              r             = NaturalTimes l r
           Integer -> pure Integer
           IntegerLit n -> pure (IntegerLit n)
-          IntegerClamp -> pure IntegerClamp
-          IntegerNegate -> pure IntegerNegate
-          IntegerShow -> pure IntegerShow
-          IntegerToDouble -> pure IntegerToDouble
           Double -> pure Double
           DoubleLit n -> pure (DoubleLit n)
-          DoubleShow -> pure DoubleShow
           Text -> pure Text
           TextLit (Chunks xys z) -> do
               chunks' <- mconcat <$> chunks
@@ -466,17 +453,18 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                   TextLit c -> pure [Chunks [] x, c]
                   _         -> pure [Chunks [(x, y')] mempty]
           TextAppend x y -> loop (TextLit (Chunks [("", x), ("", y)] ""))
-          TextReplace -> pure TextReplace
-          TextShow -> pure TextShow
-          Date -> pure Date
-          DateLiteral d -> pure (DateLiteral d)
-          DateShow -> pure DateShow
-          Time -> pure Time
-          TimeLiteral hh mm ss frac p -> pure (TimeLiteral hh mm ss frac p)
-          TimeShow -> pure TimeShow
-          TimeZone -> pure TimeZone
-          TimeZoneLiteral z -> pure (TimeZoneLiteral z)
-          TimeZoneShow -> pure TimeZoneShow
+          Date ->
+              pure Date
+          DateLiteral d ->
+              pure (DateLiteral d)
+          Time ->
+              pure Time
+          TimeLiteral hh mm ss frac p ->
+              pure (TimeLiteral hh mm ss frac p)
+          TimeZone ->
+              pure TimeZone
+          TimeZoneLiteral z ->
+              pure (TimeZoneLiteral z)
           List -> pure List
           ListLit t es
               | Data.Sequence.null es -> ListLit <$> t' <*> pure Data.Sequence.empty
@@ -490,13 +478,6 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
               decide  l            (ListLit _ n) | Data.Sequence.null n = l
               decide (ListLit t m) (ListLit _ n)                        = ListLit t (m <> n)
               decide  l             r                                   = ListAppend l r
-          ListBuild -> pure ListBuild
-          ListFold -> pure ListFold
-          ListLength -> pure ListLength
-          ListHead -> pure ListHead
-          ListLast -> pure ListLast
-          ListIndexed -> pure ListIndexed
-          ListReverse -> pure ListReverse
           Optional -> pure Optional
           Some a -> Some <$> a'
             where
@@ -757,227 +738,11 @@ isNormalizedWith ctx e = e == normalizeWith (Just (ReifiedNormalizer ctx)) e
 -- Given an ill-typed expression, 'isNormalized' may fail with an error, or
 -- evaluate to either False or True!
 isNormalized :: Eq a => Expr s a -> Bool
-isNormalized e0 = loop (Syntax.denote e0)
+isNormalized e =
+    denote' e == denote' (normalize e)
   where
-    loop e = case e of
-      Const _ -> True
-      Var _ -> True
-      Lam _ (FunctionBinding Nothing _ Nothing Nothing a) b -> loop a && loop b
-      Lam _ _ _ -> False
-      Pi _ _ a b -> loop a && loop b
-      App f a -> loop f && loop a && case App f a of
-          App (Lam _ _ _) _ -> False
-          App (App (App (App NaturalFold (NaturalLit _)) _) _) _ -> False
-          App NaturalBuild _ -> False
-          App NaturalIsZero (NaturalLit _) -> False
-          App NaturalEven (NaturalLit _) -> False
-          App NaturalOdd (NaturalLit _) -> False
-          App NaturalShow (NaturalLit _) -> False
-          App DateShow (DateLiteral _) -> False
-          App TimeShow (TimeLiteral _ _ _ _ _) -> False
-          App TimeZoneShow (TimeZoneLiteral _) -> False
-          App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
-          App (App NaturalSubtract (NaturalLit 0)) _ -> False
-          App (App NaturalSubtract _) (NaturalLit 0) -> False
-          App (App NaturalSubtract x) y -> not (Eval.judgmentallyEqual x y)
-          App NaturalToInteger (NaturalLit _) -> False
-          App IntegerNegate (IntegerLit _) -> False
-          App IntegerClamp (IntegerLit _) -> False
-          App IntegerShow (IntegerLit _) -> False
-          App IntegerToDouble (IntegerLit _) -> False
-          App DoubleShow (DoubleLit _) -> False
-          App (App ListBuild _) _ -> False
-          App (App (App (App (App (App ListFold _) (ListLit _ _)) _) _) _) _ -> False
-          App (App ListLength _) (ListLit _ _) -> False
-          App (App ListHead _) (ListLit _ _) -> False
-          App (App ListLast _) (ListLit _ _) -> False
-          App (App ListIndexed _) (ListLit _ _) -> False
-          App (App ListReverse _) (ListLit _ _) -> False
-          App TextShow (TextLit (Chunks [] _)) ->
-              False
-          App (App (App TextReplace (TextLit (Chunks [] ""))) _) _ ->
-              False
-          App (App (App TextReplace (TextLit (Chunks [] _))) _) (TextLit _) ->
-              False
-          _ -> True
-      Let _ _ -> False
-      Annot _ _ -> False
-      Bool -> True
-      BoolLit _ -> True
-      BoolAnd x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit _)  _          = False
-          decide  _          (BoolLit _) = False
-          decide  l           r          = not (Eval.judgmentallyEqual l r)
-      BoolOr x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit _)  _          = False
-          decide  _          (BoolLit _) = False
-          decide  l           r          = not (Eval.judgmentallyEqual l r)
-      BoolEQ x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit True)  _             = False
-          decide  _             (BoolLit True) = False
-          decide  l              r             = not (Eval.judgmentallyEqual l r)
-      BoolNE x y -> loop x && loop y && decide x y
-        where
-          decide (BoolLit False)  _               = False
-          decide  _              (BoolLit False ) = False
-          decide  l               r               = not (Eval.judgmentallyEqual l r)
-      BoolIf x y z ->
-          loop x && loop y && loop z && decide x y z
-        where
-          decide (BoolLit _)  _              _              = False
-          decide  _          (BoolLit True) (BoolLit False) = False
-          decide  _           l              r              = not (Eval.judgmentallyEqual l r)
-      Bytes -> True
-      BytesLit _ -> True
-      Natural -> True
-      NaturalLit _ -> True
-      NaturalFold -> True
-      NaturalBuild -> True
-      NaturalIsZero -> True
-      NaturalEven -> True
-      NaturalOdd -> True
-      NaturalShow -> True
-      NaturalSubtract -> True
-      NaturalToInteger -> True
-      NaturalPlus x y -> loop x && loop y && decide x y
-        where
-          decide (NaturalLit 0)  _             = False
-          decide  _             (NaturalLit 0) = False
-          decide (NaturalLit _) (NaturalLit _) = False
-          decide  _              _             = True
-      NaturalTimes x y -> loop x && loop y && decide x y
-        where
-          decide (NaturalLit 0)  _             = False
-          decide  _             (NaturalLit 0) = False
-          decide (NaturalLit 1)  _             = False
-          decide  _             (NaturalLit 1) = False
-          decide (NaturalLit _) (NaturalLit _) = False
-          decide  _              _             = True
-      Integer -> True
-      IntegerLit _ -> True
-      IntegerClamp -> True
-      IntegerNegate -> True
-      IntegerShow -> True
-      IntegerToDouble -> True
-      Double -> True
-      DoubleLit _ -> True
-      DoubleShow -> True
-      Text -> True
-      TextLit (Chunks [("", _)] "") -> False
-      TextLit (Chunks xys _) -> all (all check) xys
-        where
-          check y = loop y && case y of
-              TextLit _ -> False
-              _         -> True
-      TextAppend _ _ -> False
-      TextReplace -> True
-      TextShow -> True
-      Date -> True
-      DateLiteral _ -> True
-      DateShow -> True
-      Time -> True
-      TimeLiteral _ _ _ _ _ -> True
-      TimeShow -> True
-      TimeZone -> True
-      TimeZoneLiteral _ -> True
-      TimeZoneShow -> True
-      List -> True
-      ListLit t es -> all loop t && all loop es
-      ListAppend x y -> loop x && loop y && decide x y
-        where
-          decide (ListLit _ m)  _            | Data.Sequence.null m = False
-          decide  _            (ListLit _ n) | Data.Sequence.null n = False
-          decide (ListLit _ _) (ListLit _ _)                        = False
-          decide  _             _                                   = True
-      ListBuild -> True
-      ListFold -> True
-      ListLength -> True
-      ListHead -> True
-      ListLast -> True
-      ListIndexed -> True
-      ListReverse -> True
-      Optional -> True
-      Some a -> loop a
-      None -> True
-      Record kts -> Dhall.Map.isSorted kts && all decide kts
-        where
-          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
-          decide _ = False
-      RecordLit kvs -> Dhall.Map.isSorted kvs && all decide kvs
-        where
-          decide (RecordField Nothing exp' Nothing Nothing) = loop exp'
-          decide _ = False
-      Union kts -> Dhall.Map.isSorted kts && all (all loop) kts
-      Combine _ _ x y -> loop x && loop y && decide x y
-        where
-          decide (RecordLit m) _ | Data.Foldable.null m = False
-          decide _ (RecordLit n) | Data.Foldable.null n = False
-          decide (RecordLit _) (RecordLit _) = False
-          decide  _ _ = True
-      CombineTypes _ x y -> loop x && loop y && decide x y
-        where
-          decide (Record m) _ | Data.Foldable.null m = False
-          decide _ (Record n) | Data.Foldable.null n = False
-          decide (Record _) (Record _) = False
-          decide  _ _ = True
-      Prefer _ _ x y -> loop x && loop y && decide x y
-        where
-          decide (RecordLit m) _ | Data.Foldable.null m = False
-          decide _ (RecordLit n) | Data.Foldable.null n = False
-          decide (RecordLit _) (RecordLit _) = False
-          decide l r = not (Eval.judgmentallyEqual l r)
-      RecordCompletion _ _ -> False
-      Merge x y t -> loop x && loop y && all loop t && case x of
-          RecordLit _ -> case y of
-              Field (Union _) _ -> False
-              App (Field (Union _) _) _ -> False
-              Some _ -> False
-              App None _ -> False
-              _ -> True
-          _ -> True
-      ToMap x t -> case x of
-          RecordLit _ -> False
-          _ -> loop x && all loop t
-      ShowConstructor x -> loop x && case x of
-          Field (Union kts) (Syntax.fieldSelectionLabel -> k) ->
-              case Dhall.Map.lookup k kts of
-                  Just Nothing -> False
-                  _            -> True
-          App (Field (Union kts) (Syntax.fieldSelectionLabel -> k)) _ ->
-              case Dhall.Map.lookup k kts of
-                  Just (Just _) -> False
-                  _             -> True
-          Some _ -> False
-          App None _ -> False
-          _ -> True
-      Field r (FieldSelection Nothing k Nothing) -> case r of
-          RecordLit _ -> False
-          Project _ _ -> False
-          Prefer _ _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Prefer _ _ _ (RecordLit _) -> False
-          Combine _ _ (RecordLit m) _ -> Dhall.Map.keys m == [k] && loop r
-          Combine _ _ _ (RecordLit m) -> Dhall.Map.keys m == [k] && loop r
-          _ -> loop r
-      Field _ _ -> False
-      Project r p -> loop r &&
-          case p of
-              Left s -> case r of
-                  RecordLit _ -> False
-                  Project _ _ -> False
-                  Prefer _ _ _ (RecordLit _) -> False
-                  _ -> not (null s) && Data.Set.toList (Data.Set.fromList s) == s
-              Right e' -> case e' of
-                  Record _ -> False
-                  _ -> loop e'
-      Assert t -> loop t
-      Equivalent _ l r -> loop l && loop r
-      With{} -> False
-      Note _ e' -> loop e'
-      ImportAlt _ _ -> False
-      Embed _ -> True
+    denote' :: Expr t b -> Expr () b
+    denote' = Syntax.denote
 
 {-| Detect if the given variable is free within the given expression
 
