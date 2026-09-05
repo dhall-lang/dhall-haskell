@@ -369,49 +369,24 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "BytesLit")
             % (1 :: W "Natural")
             % (7 :: W "NaturalLit")
-            % (1 :: W "NaturalFold")
-            % (1 :: W "NaturalBuild")
-            % (1 :: W "NaturalIsZero")
-            % (1 :: W "NaturalEven")
-            % (1 :: W "NaturalOdd")
-            % (1 :: W "NaturalToInteger")
-            % (1 :: W "NaturalShow")
-            % (1 :: W "NaturalSubtract")
             % (1 :: W "NaturalPlus")
             % (1 :: W "NaturalTimes")
             % (1 :: W "Integer")
             % (7 :: W "IntegerLit")
-            % (1 :: W "IntegerClamp")
-            % (1 :: W "IntegerNegate")
-            % (1 :: W "IntegerShow")
-            % (1 :: W "IntegerToDouble")
             % (1 :: W "Double")
             % (7 :: W "DoubleLit")
-            % (1 :: W "DoubleShow")
             % (1 :: W "Text")
             % (1 :: W "TextLit")
             % (1 :: W "TextAppend")
-            % (1 :: W "TextReplace")
-            % (1 :: W "TextShow")
             % (1 :: W "Date")
             % (1 :: W "DateLiteral")
-            % (1 :: W "DateShow")
             % (1 :: W "Time")
             % (1 :: W "TimeLiteral")
-            % (1 :: W "TimeShow")
             % (1 :: W "TimeZone")
             % (1 :: W "TimeZoneLiteral")
-            % (1 :: W "TimeZoneShow")
             % (1 :: W "List")
             % (1 :: W "ListLit")
             % (1 :: W "ListAppend")
-            % (1 :: W "ListBuild")
-            % (1 :: W "ListFold")
-            % (1 :: W "ListLength")
-            % (1 :: W "ListHead")
-            % (1 :: W "ListLast")
-            % (1 :: W "ListIndexed")
-            % (1 :: W "ListReverse")
             % (1 :: W "Optional")
             % (7 :: W "Some")
             % (1 :: W "None")
@@ -621,47 +596,26 @@ label = fmap Text.pack (Test.QuickCheck.listOf labelCharacter)
 
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
-        fmap normalizePrimitiveConstructors
-            (Dhall.Binary.decodeExpression (Dhall.Binary.encodeExpression denotedExpression))
-    === Right (normalizePrimitiveConstructors denotedExpression)
+        fmap normalizeImportHeaders' decoded
+    === Right (normalizeImportHeaders' denotedExpression)
   where
     denotedExpression :: Expr Void Import
     denotedExpression = denote' expression
 
+    decoded :: Either Dhall.Binary.DecodingFailure (Expr Void Import)
+    decoded =
+        Dhall.Binary.decodeExpression
+            (Dhall.Binary.encodeExpression denotedExpression)
+
     denote' :: Expr a Import -> Expr b Import
     denote' = Dhall.Core.denote . fmap denoteHttpHeaders
 
-    normalizePrimitiveConstructors :: Expr s Import -> Expr s Import
-    normalizePrimitiveConstructors expr =
-        case expr of
-            NaturalFold      -> Var (V "Natural/fold" 0)
-            NaturalBuild     -> Var (V "Natural/build" 0)
-            NaturalIsZero    -> Var (V "Natural/isZero" 0)
-            NaturalEven      -> Var (V "Natural/even" 0)
-            NaturalOdd       -> Var (V "Natural/odd" 0)
-            NaturalToInteger -> Var (V "Natural/toInteger" 0)
-            NaturalShow      -> Var (V "Natural/show" 0)
-            NaturalSubtract  -> Var (V "Natural/subtract" 0)
-            IntegerClamp     -> Var (V "Integer/clamp" 0)
-            IntegerNegate    -> Var (V "Integer/negate" 0)
-            IntegerShow      -> Var (V "Integer/show" 0)
-            IntegerToDouble  -> Var (V "Integer/toDouble" 0)
-            DoubleShow       -> Var (V "Double/show" 0)
-            TextReplace      -> Var (V "Text/replace" 0)
-            TextShow         -> Var (V "Text/show" 0)
-            DateShow         -> Var (V "Date/show" 0)
-            TimeShow         -> Var (V "Time/show" 0)
-            TimeZoneShow     -> Var (V "TimeZone/show" 0)
-            ListBuild        -> Var (V "List/build" 0)
-            ListFold         -> Var (V "List/fold" 0)
-            ListLength       -> Var (V "List/length" 0)
-            ListHead         -> Var (V "List/head" 0)
-            ListLast         -> Var (V "List/last" 0)
-            ListIndexed      -> Var (V "List/indexed" 0)
-            ListReverse      -> Var (V "List/reverse" 0)
-            Embed import_    -> Embed (normalizeImportHeaders import_)
-            _                ->
-                over Dhall.Core.subExpressions normalizePrimitiveConstructors expr
+    normalizeImportHeaders' :: Expr s Import -> Expr s Import
+    normalizeImportHeaders' expr =
+        over Dhall.Core.subExpressions normalizeImportHeaders' $
+            case expr of
+                Embed import_ -> Embed (normalizeImportHeaders import_)
+                _             -> expr
 
     normalizeImportHeaders import_@(Import importHashed importMode) =
         case importType importHashed of
@@ -673,7 +627,7 @@ binaryRoundtrip expression =
                                 Remote
                                     url
                                         { headers =
-                                            fmap normalizePrimitiveConstructors (headers url)
+                                            fmap normalizeImportHeaders' (headers url)
                                         }
                             }
                     , importMode = importMode

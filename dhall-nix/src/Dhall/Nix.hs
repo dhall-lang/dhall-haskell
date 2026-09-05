@@ -169,6 +169,7 @@ import Nix.Expr
     , (@@)
     )
 
+import qualified Data.Map
 import qualified Data.Text
 import qualified Dhall.Context
 import qualified Dhall.Core
@@ -303,9 +304,159 @@ dhallToNix e = do
     -- not require a `Pretty s` constraint.
     annotated <- annotateMergeScrutinees Dhall.Context.empty
         (Dhall.Core.denote (rewriteShadowed (Dhall.Core.normalize e)))
-    loop annotated
+    loop' Data.Map.empty annotated
   where
     untranslatable = Nix.attrsE []
+
+    increment x = Data.Map.insertWith (+) x 1
+
+    -- Nix translations for free predefined functions (leftover De Bruijn index 0).
+    nixPredefined :: Text -> Maybe NExpr
+    nixPredefined "Natural/fold" = Just $
+        let naturalFold =
+                    "n"
+                ==> "t"
+                ==> "succ"
+                ==> "zero"
+                ==> Nix.mkIf ("n" $<= Nix.mkInt 0)
+                        "zero"
+                        (   "succ"
+                        @@  (   "naturalFold"
+                            @@  ("n" $- Nix.mkInt 1)
+                            @@  "t"
+                            @@  "succ"
+                            @@  "zero"
+                            )
+                        )
+        in  Nix.letsE [ ("naturalFold", naturalFold) ] "naturalFold"
+    nixPredefined "Natural/build" = Just
+        (   "k"
+        ==> (   "k"
+            @@  untranslatable
+            @@  ("n" ==> ("n" $+ Nix.mkInt 1))
+            @@  Nix.mkInt 0
+            )
+        )
+    nixPredefined "Natural/isZero" = Just ("n" ==> ("n" $== Nix.mkInt 0))
+    nixPredefined "Natural/even" = Just ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $== "n")
+    nixPredefined "Natural/odd" = Just ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $!= "n")
+    nixPredefined "Natural/show" = Just "toString"
+    nixPredefined "Natural/subtract" = Just
+        (   "x"
+        ==> "y"
+        ==> Nix.letE "z" ("y" $- "x")
+                (Nix.mkIf ("z" $< Nix.mkInt 0) (Nix.mkInt 0) "z")
+        )
+    nixPredefined "Natural/toInteger" = Just ("n" ==> "n")
+    nixPredefined "Integer/clamp" = Just ("x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") "x" (Nix.mkInt 0))
+    nixPredefined "Integer/negate" = Just ("x" ==> (Nix.mkInt 0 $- "x"))
+    nixPredefined "Integer/show" = Just $
+        let e0 = "toString" @@ "x"
+        in  "x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") (Nix.mkStr "+" $+ e0) e0
+    nixPredefined "Integer/toDouble" = Just ("x" ==> "x")
+    nixPredefined "Double/show" = Just "toString"
+    nixPredefined "Text/replace" = Just
+        (   "needle"
+        ==> "replacement"
+        ==> "haystack"
+        ==> ("builtins" @. "replaceStrings" @@ Nix.mkList [ "needle" ] @@ Nix.mkList [ "replacement" ] @@ "haystack")
+        )
+    nixPredefined "Text/show" = Just $
+        let from =
+                Nix.mkList
+                    [ Nix.mkStr "\""
+                    , Nix.mkStr "$"
+                    , Nix.mkStr "\\"
+                    , Nix.mkStr "\n"
+                    , Nix.mkStr "\r"
+                    , Nix.mkStr "\t"
+                    ]
+            to =
+                Nix.mkList
+                    [ Nix.mkStr "\\\""
+                    , Nix.mkStr "\\u0024"
+                    , Nix.mkStr "\\\\"
+                    , Nix.mkStr "\\n"
+                    , Nix.mkStr "\\r"
+                    , Nix.mkStr "\\t"
+                    ]
+            replaced = "builtins" @. "replaceStrings" @@ from @@ to @@ "t"
+            quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
+        in  "t" ==> quoted
+    nixPredefined "List/build" = Just
+        (   "t"
+        ==> "k"
+        ==> (   "k"
+            @@  untranslatable
+            @@  ("x" ==> "xs" ==> (Nix.mkList ["x"] $++ "xs"))
+            @@  Nix.mkList []
+            )
+        )
+    nixPredefined "List/fold" = Just
+        (   "t"
+        ==> "xs"
+        ==> "t"
+        ==> "cons"
+        ==> (   "builtins.foldl'"
+            @@  (   "f"
+                ==> "y"
+                ==> "ys"
+                ==> ("f" @@ ("cons" @@ "y" @@ "ys"))
+                )
+            @@  ("ys" ==> "ys")
+            @@  "xs"
+            )
+        )
+    nixPredefined "List/length" = Just ("t" ==> "builtins.length")
+    nixPredefined "List/head" = Just
+        (   "t"
+        ==> "xs"
+        ==> Nix.mkIf ("xs" $== Nix.mkList [])
+                Nix.mkNull
+                ("builtins.head" @@ "xs")
+        )
+    nixPredefined "List/last" = Just
+        (   "t"
+        ==> "xs"
+        ==> Nix.mkIf ("xs" $== Nix.mkList [])
+                Nix.mkNull
+                (   "builtins.elemAt"
+                @@ "xs"
+                @@ (("builtins.length" @@ "xs") $- Nix.mkInt 1)
+                )
+        )
+    nixPredefined "List/indexed" = Just
+        (   "t"
+        ==> "xs"
+        ==> (   "builtins.genList"
+            @@  (   "i"
+                ==> Nix.attrsE
+                        [ ("index", "i")
+                        , ("value", "builtins.elemAt" @@ "xs" @@ "i")
+                        ]
+                )
+            @@  ("builtins.length" @@ "xs")
+            )
+        )
+    nixPredefined "List/reverse" = Just
+        (   "t"
+        ==> "xs"
+        ==> Nix.letE "n" ("builtins.length" @@ "xs")
+                (   "builtins.genList"
+                @@  (   "i"
+                    ==> (   "builtins.elemAt"
+                        @@  "xs"
+                        @@  ("n" $- "i" $- Nix.mkInt 1)
+                        )
+                    )
+                @@  "n"
+                )
+        )
+    -- Date/Time/TimeZone literals are modeled as strings in Nix.
+    nixPredefined "Date/show" = Just ("date" ==> "date")
+    nixPredefined "Time/show" = Just ("time" ==> "time")
+    nixPredefined "TimeZone/show" = Just ("timeZone" ==> "timeZone")
+    nixPredefined _ = Nothing
 
     -- This is an intermediate utility used to remove all occurrences of
     -- shadowing (since Nix does not support references to shadowed variables)
@@ -373,287 +524,116 @@ dhallToNix e = do
     rewriteShadowed =
         rewriteOf Dhall.Core.subExpressions renameShadowed
 
-    loop (Const _) = return untranslatable
-    loop (Var (V a 0)) = return (Nix.mkSym (zEncodeSymbol a))
-    loop (Var  a     ) = Left (CannotReferenceShadowedVariable a)
-    loop (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
-        c' <- loop c
+    loop' bound (Const _) = return untranslatable
+    loop' bound (Var (V a n))
+        | n == binders, Just nix <- nixPredefined a =
+            return nix
+        | n == 0 =
+            return (Nix.mkSym (zEncodeSymbol a))
+        | otherwise =
+            Left (CannotReferenceShadowedVariable (V a n))
+      where
+        binders = Data.Map.findWithDefault 0 a bound
+    loop' bound (Lam _ FunctionBinding { functionBindingVariable = a } c) = do
+        c' <- loop' (increment a bound) c
         return (Param (VarName $ zEncodeSymbol a) ==> c')
-    loop (Pi _ _ _ _) = return untranslatable
-    loop (App None _) =
+    loop' bound (Pi _ _ _ _) = return untranslatable
+    loop' bound (App None _) =
       return Nix.mkNull
-    loop (App (Field (Union _kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
-        v' <- loop v
+    loop' bound (App (Field (Union _kts) (Dhall.Core.fieldSelectionLabel -> k)) v) = do
+        v' <- loop' bound v
         return (unionChoice (VarName k) (Just v'))
-    loop (App a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (App a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' @@ b')
-    loop (Let a0 b0) = do
+    loop' bound (Let a0 b0) = do
         let MultiLet bindings b = Dhall.Core.multiLet a0 b0
         bindings' <- for bindings $ \Binding{ variable, value } -> do
-          value' <- loop value
+          value' <- loop' bound value
           pure (zEncodeSymbol variable, value')
-        b' <- loop b
+        let bound' = foldl (\m Binding{ variable } -> increment variable m) bound bindings
+        b' <- loop' bound' b
         return (Nix.letsE (toList bindings') b')
-    loop (Annot a _) = loop a
-    loop Bool = return untranslatable
-    loop (BoolLit b) = return (Nix.mkBool b)
-    loop (BoolAnd a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (Annot a _) = loop' bound a
+    loop' bound Bool = return untranslatable
+    loop' bound (BoolLit b) = return (Nix.mkBool b)
+    loop' bound (BoolAnd a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $&& b')
-    loop (BoolOr a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (BoolOr a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $|| b')
-    loop (BoolEQ a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (BoolEQ a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $== b')
-    loop (BoolNE a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (BoolNE a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $!= b')
-    loop (BoolIf a b c) = do
-        a' <- loop a
-        b' <- loop b
-        c' <- loop c
+    loop' bound (BoolIf a b c) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
+        c' <- loop' bound c
         return (Nix.mkIf a' b' c')
-    loop Bytes = return untranslatable
-    loop (BytesLit _) = do
+    loop' bound Bytes = return untranslatable
+    loop' bound (BytesLit _) = do
         Left BytesUnsupported
-    loop Natural = return untranslatable
-    loop (NaturalLit n) = return (Nix.mkInt (fromIntegral n))
-    loop NaturalFold = do
-        let naturalFold =
-                    "n"
-                ==> "t"
-                ==> "succ"
-                ==> "zero"
-                ==> Nix.mkIf ("n" $<= Nix.mkInt 0)
-                        "zero"
-                        (   "succ"
-                        @@  (   "naturalFold"
-                            @@  ("n" $- Nix.mkInt 1)
-                            @@  "t"
-                            @@  "succ"
-                            @@  "zero"
-                            )
-                        )
-        return (Nix.letsE [ ("naturalFold", naturalFold) ] "naturalFold")
-    loop NaturalBuild = do
-        return
-            (   "k"
-            ==> (   "k"
-                @@  untranslatable
-                @@  ("n" ==> ("n" $+ Nix.mkInt 1))
-                @@  Nix.mkInt 0
-                )
-            )
-    loop NaturalIsZero = do
-        return ("n" ==> ("n" $== Nix.mkInt 0))
-    loop NaturalEven = do
-        return ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $== "n")
-    loop NaturalOdd = do
-        return ("n" ==> ("n" $/ Nix.mkInt 2) $* Nix.mkInt 2 $!= "n")
-    loop NaturalShow =
-        return "toString"
-    loop NaturalSubtract = do
-        return
-            (   "x"
-            ==> "y"
-            ==> Nix.letE "z" ("y" $- "x")
-                    (Nix.mkIf ("z" $< Nix.mkInt 0) (Nix.mkInt 0) "z")
-            )
-    loop NaturalToInteger =
-        return ("n" ==> "n")
-    loop (NaturalPlus a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound Natural = return untranslatable
+    loop' bound (NaturalLit n) = return (Nix.mkInt (fromIntegral n))
+    loop' bound (NaturalPlus a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $+ b')
-    loop (NaturalTimes a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (NaturalTimes a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $* b')
-    loop Integer = return untranslatable
-    loop (IntegerLit n) = return (Nix.mkInt n)
-    loop IntegerClamp = do
-        return ("x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") "x" (Nix.mkInt 0))
-    loop IntegerNegate = do
-        return ("x" ==> (Nix.mkInt 0 $- "x"))
-    loop IntegerShow = do
-        let e0 = "toString" @@ "x"
-        return ("x" ==> Nix.mkIf (Nix.mkInt 0 $<= "x") (Nix.mkStr "+" $+ e0) e0)
-    loop IntegerToDouble =
-        return ("x" ==> "x")
-    loop Double = return untranslatable
-    loop (DoubleLit (DhallDouble n)) = return (Nix.mkFloat (realToFrac n))
-    loop DoubleShow =
-        return "toString"
-    loop Text = return untranslatable
-    loop (TextLit (Chunks abs_ c)) = do
+    loop' bound Integer = return untranslatable
+    loop' bound (IntegerLit n) = return (Nix.mkInt n)
+    loop' bound Double = return untranslatable
+    loop' bound (DoubleLit (DhallDouble n)) = return (Nix.mkFloat (realToFrac n))
+    loop' bound Text = return untranslatable
+    loop' bound (TextLit (Chunks abs_ c)) = do
         let process (a, b) = do
-                b' <- loop b
+                b' <- loop' bound b
                 return [Plain a, Antiquoted b']
         abs' <- mapM process abs_
 
         let chunks = concat abs' ++ [Plain c]
         return (Fix (NStr (DoubleQuoted chunks)))
-    loop (TextAppend a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (TextAppend a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $+ b')
-    loop TextReplace = do
-        let from = Nix.mkList [ "needle" ]
-
-        let to = Nix.mkList [ "replacement" ]
-
-        return
-            (   "needle"
-            ==> "replacement"
-            ==> "haystack"
-            ==> ("builtins" @. "replaceStrings" @@ from @@ to @@ "haystack")
-            )
-    loop TextShow = do
-        let from =
-                Nix.mkList
-                    [ Nix.mkStr "\""
-                    , Nix.mkStr "$"
-                    , Nix.mkStr "\\"
-                 -- Nix doesn't support \b and \f
-                 -- , Nix.mkStr "\b"
-                 -- , Nix.mkStr "\f"
-                    , Nix.mkStr "\n"
-                    , Nix.mkStr "\r"
-                    , Nix.mkStr "\t"
-                    ]
-
-        let to =
-                Nix.mkList
-                    [ Nix.mkStr "\\\""
-                    , Nix.mkStr "\\u0024"
-                    , Nix.mkStr "\\\\"
-                 -- , Nix.mkStr "\\b"
-                 -- , Nix.mkStr "\\f"
-                    , Nix.mkStr "\\n"
-                    , Nix.mkStr "\\r"
-                    , Nix.mkStr "\\t"
-                    ]
-
-        let replaced = "builtins" @. "replaceStrings" @@ from @@ to @@ "t"
-
-        let quoted = Nix.mkStr "\"" $+ replaced $+ Nix.mkStr "\""
-
-        return ("t" ==> quoted)
-    loop Date = return untranslatable
-    loop Time = return untranslatable
-    loop TimeZone = return untranslatable
-    loop List = return ("t" ==> untranslatable)
-    loop (ListAppend a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound Date = return untranslatable
+    loop' bound Time = return untranslatable
+    loop' bound TimeZone = return untranslatable
+    loop' bound List = return ("t" ==> untranslatable)
+    loop' bound (ListAppend a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (a' $++ b')
-    loop (ListLit _ bs) = do
-        bs' <- mapM loop (toList bs)
+    loop' bound (ListLit _ bs) = do
+        bs' <- mapM (loop' bound) (toList bs)
         return (Nix.mkList bs')
-    loop ListBuild = do
-        return
-            (   "t"
-            ==> "k"
-            ==> (   "k"
-                @@  untranslatable
-                @@  ("x" ==> "xs" ==> (Nix.mkList ["x"] $++ "xs"))
-                @@  Nix.mkList []
-                )
-            )
-    loop ListFold = do
-        return
-            (   "t"
-            ==> "xs"
-            ==> "t"
-            ==> "cons"
-            ==> (   "builtins.foldl'"
-                @@  (   "f"
-                    ==> "y"
-                    ==> "ys"
-                    ==> ("f" @@ ("cons" @@ "y" @@ "ys"))
-                    )
-                @@  ("ys" ==> "ys")
-                @@  "xs"
-                )
-            )
-    loop ListLength = return ("t" ==> "builtins.length")
-    loop ListHead = do
-        return
-            (   "t"
-            ==> "xs"
-            ==> Nix.mkIf ("xs" $== Nix.mkList [])
-                    Nix.mkNull
-                    ("builtins.head" @@ "xs")
-            )
-    loop ListLast = do
-        return
-            (   "t"
-            ==> "xs"
-            ==> Nix.mkIf ("xs" $== Nix.mkList [])
-                    Nix.mkNull
-                    (   "builtins.elemAt"
-                    @@ "xs"
-                    @@ (("builtins.length" @@ "xs") $- Nix.mkInt 1)
-                    )
-            )
-    loop ListIndexed = do
-        return
-            (   "t"
-            ==> "xs"
-            ==> (   "builtins.genList"
-                @@  (   "i"
-                    ==> Nix.attrsE
-                            [ ("index", "i")
-                            , ("value", "builtins.elemAt" @@ "xs" @@ "i")
-                            ]
-                    )
-                @@  ("builtins.length" @@ "xs")
-                )
-            )
-    loop ListReverse = do
-        return
-            (   "t"
-            ==> "xs"
-            ==> Nix.letE "n" ("builtins.length" @@ "xs")
-                    (   "builtins.genList"
-                    @@  (   "i"
-                        ==> (   "builtins.elemAt"
-                            @@  "xs"
-                            @@  ("n" $- "i" $- Nix.mkInt 1)
-                            )
-                        )
-                    @@  "n"
-                    )
-            )
-    loop Optional = return ("t" ==> untranslatable)
-    loop (Some a) = loop a
-    loop None = return ("t" ==> Nix.mkNull)
-    loop t
+    loop' bound Optional = return ("t" ==> untranslatable)
+    loop' bound (Some a) = loop' bound a
+    loop' bound None = return ("t" ==> Nix.mkNull)
+    loop' bound t
         | Just text <- Dhall.Pretty.temporalToText t = do
-            loop (Dhall.Core.TextLit (Dhall.Core.Chunks [] text))
+            loop' bound (Dhall.Core.TextLit (Dhall.Core.Chunks [] text))
     -- The next three cases are not necessary, because they are handled by the
     -- previous case
-    loop DateLiteral{} = undefined
-    loop TimeLiteral{} = undefined
-    loop TimeZoneLiteral{} = undefined
-    -- We currently model `Date`/`Time`/`TimeZone` literals as strings in Nix,
-    -- so the corresponding show functions are the identity function
-    loop DateShow =
-        return ("date" ==> "date")
-    loop TimeShow =
-        return ("time" ==> "time")
-    loop TimeZoneShow =
-        return ("timeZone" ==> "timeZone")
-    loop (Record _) = return untranslatable
-    loop (RecordLit a) = do
-        a' <- traverse (loop . Dhall.Core.recordFieldValue) a
+    loop' bound DateLiteral{} = undefined
+    loop' bound TimeLiteral{} = undefined
+    loop' bound TimeZoneLiteral{} = undefined
+    loop' bound (Record _) = return untranslatable
+    loop' bound (RecordLit a) = do
+        a' <- traverse (loop' bound . Dhall.Core.recordFieldValue) a
         return (nixAttrs (Dhall.Map.toList a'))
       where
         -- nonrecursive attrset that uses correctly quoted keys
@@ -662,10 +642,10 @@ dhallToNix e = do
           Fix $ NSet NonRecursive $
           (\(key, val) -> NamedVar ((mkDoubleQuotedIfNecessary (VarName key)) :| []) val Nix.nullPos)
           <$> pairs
-    loop (Union _) = return untranslatable
-    loop (Combine _ _ a b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (Union _) = return untranslatable
+    loop' bound (Combine _ _ a b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
 
         let defL = "builtins.hasAttr" @@ "k" @@ "kvsL"
         let defR = "builtins.hasAttr" @@ "k" @@ "kvsR"
@@ -712,8 +692,8 @@ dhallToNix e = do
                 )
                 ("combine" @@ a' @@ b')
             )
-    loop (CombineTypes _ _ _) = return untranslatable
-    loop (Merge handlers union0 _) = do
+    loop' bound (CombineTypes _ _ _) = return untranslatable
+    loop' bound (Merge handlers union0 _) = do
         -- `Optional` is encoded as `null` / an unwrapped payload, whereas
         -- unions are Church-encoded functions.  Handler names alone cannot
         -- distinguish `Optional` from a union whose alternatives are also
@@ -730,28 +710,28 @@ dhallToNix e = do
                 -- constructor shape, then the historical union encoding.
                 case dropAnnot union of
                     Some x -> do
-                        handlers' <- loop handlers
-                        x' <- loop x
+                        handlers' <- loop' bound handlers
+                        x' <- loop' bound x
                         return ((handlers' @. "Some") @@ x')
                     App None _ -> do
-                        handlers' <- loop handlers
+                        handlers' <- loop' bound handlers
                         return (handlers' @. "None")
                     _ ->
                         translateUnionMerge handlers union
       where
         translateUnionMerge hs u = do
-            hs' <- loop hs
-            u' <- loop u
+            hs' <- loop' bound hs
+            u' <- loop' bound u
             return (u' @@ hs')
 
         translateOptionalMerge hs u =
             case dropAnnot u of
                 Some x -> do
-                    hs' <- loop hs
-                    x' <- loop x
+                    hs' <- loop' bound hs
+                    x' <- loop' bound x
                     return ((hs' @. "Some") @@ x')
                 App None _ -> do
-                    hs' <- loop hs
+                    hs' <- loop' bound hs
                     return (hs' @. "None")
                 _ ->
                     case dropAnnot hs of
@@ -759,16 +739,16 @@ dhallToNix e = do
                             | Just none <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "None" fields
                             , Just some <- Dhall.Core.recordFieldValue <$> Dhall.Map.lookup "Some" fields
                             , Dhall.Map.size fields == 2 -> do
-                                none' <- loop none
-                                some' <- loop some
-                                u' <- loop u
+                                none' <- loop' bound none
+                                some' <- loop' bound some
+                                u' <- loop' bound u
                                 return (nixOptionalMerge none' some' u')
                         _ -> do
-                            hs' <- loop hs
-                            u' <- loop u
+                            hs' <- loop' bound hs
+                            u' <- loop' bound u
                             return (nixOptionalMerge (hs' @. "None") (hs' @. "Some") u')
-    loop (ToMap a _) = do
-        a' <- loop a
+    loop' bound (ToMap a _) = do
+        a' <- loop' bound a
         return
             (Nix.letE "kvs" a'
                 (   "map"
@@ -781,18 +761,18 @@ dhallToNix e = do
                 @@  ("builtins.attrNames" @@ "kvs")
                 )
             )
-    loop (ShowConstructor _) = do
+    loop' bound (ShowConstructor _) = do
         Left CannotShowConstructor
-    loop (Prefer _ _ b c) = do
-        b' <- loop b
-        c' <- loop c
+    loop' bound (Prefer _ _ b c) = do
+        b' <- loop' bound b
+        c' <- loop' bound c
         return (b' $// c')
-    loop (RecordCompletion a b) =
-        loop (Annot (Prefer mempty PreferFromCompletion (Field a def) b) (Field a typ))
+    loop' bound (RecordCompletion a b) =
+        loop' bound (Annot (Prefer mempty PreferFromCompletion (Field a def) b) (Field a typ))
       where
         def = Dhall.Core.makeFieldSelection "default"
         typ = Dhall.Core.makeFieldSelection "Type"
-    loop (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) =
+    loop' bound (Field (Union kts) (Dhall.Core.fieldSelectionLabel -> k)) =
         case Dhall.Map.lookup k kts of
             -- If the selected alternative has an associated payload, then we
             -- need introduce the partial application through an extra abstraction
@@ -801,39 +781,39 @@ dhallToNix e = do
             -- This translates `< Foo : T >.Foo` to `x: { Foo }: Foo x`
             Just (Just _) -> return ("x" ==> (unionChoice (VarName k) (Just "x")))
             _ -> return (unionChoice (VarName k) Nothing)
-    loop (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
-        a' <- loop a
+    loop' bound (Field a (Dhall.Core.fieldSelectionLabel -> b)) = do
+        a' <- loop' bound a
         return (Fix (Nix.NSelect Nothing a' (mkDoubleQuotedIfNecessary (VarName b) :| [])))
-    loop (Project a (Left b)) = do
-        a' <- loop a
+    loop' bound (Project a (Left b)) = do
+        a' <- loop' bound a
         return (Nix.mkNonRecSet [ Nix.inheritFrom a' (fmap VarName b) ])
-    loop (Project _ (Right _)) =
+    loop' bound (Project _ (Right _)) =
         Left CannotProjectByType
-    loop (Assert _) =
+    loop' bound (Assert _) =
         return untranslatable
-    loop (Equivalent _ _ _) =
+    loop' bound (Equivalent _ _ _) =
         return untranslatable
-    loop (With a (WithLabel k :| []) b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (With a (WithLabel k :| []) b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
 
         return (a' $// Nix.attrsE [(k, b')])
-    loop (With a (WithLabel k :| k' : ks) b) = do
-        a' <- loop a
-        b' <- loop (With (Field "_" (FieldSelection Nothing k Nothing)) (k' :| ks) (Dhall.Core.shift 1 "_" b))
+    loop' bound (With a (WithLabel k :| k' : ks) b) = do
+        a' <- loop' bound a
+        b' <- loop' bound (With (Field "_" (FieldSelection Nothing k Nothing)) (k' :| ks) (Dhall.Core.shift 1 "_" b))
 
         return (Nix.letE "_" a' ("_" $// Nix.attrsE [(k, b')]))
-    loop (With a (WithQuestion :| []) b) = do
-        a' <- loop a
-        b' <- loop b
+    loop' bound (With a (WithQuestion :| []) b) = do
+        a' <- loop' bound a
+        b' <- loop' bound b
         return (Nix.mkIf (a' $== Nix.mkNull) Nix.mkNull b')
-    loop (With a (WithQuestion :| k : ks) b) = do
-        a' <- loop a
-        b' <- loop (With "_" (k :| ks) (Dhall.Core.shift 1 "_" b))
+    loop' bound (With a (WithQuestion :| k : ks) b) = do
+        a' <- loop' bound a
+        b' <- loop' bound (With "_" (k :| ks) (Dhall.Core.shift 1 "_" b))
         return (Nix.letE "_" a' (Nix.mkIf (a' $== Nix.mkNull) Nix.mkNull b'))
-    loop (ImportAlt a _) = loop a
-    loop (Note _ b) = loop b
-    loop (Embed x) = absurd x
+    loop' bound (ImportAlt a _) = loop' bound a
+    loop' bound (Note _ b) = loop' bound b
+    loop' bound (Embed x) = absurd x
 
 -- | Strip source notes and type ascriptions so that `Merge` can match on the
 -- underlying constructor.

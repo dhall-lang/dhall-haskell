@@ -674,66 +674,6 @@ encodeExpressionInternal encodeEmbed = go
                     <>  Encoding.encodeString x
                     <>  Encoding.encodeInt n
 
-        NaturalBuild ->
-            Encoding.encodeUtf8ByteArray "Natural/build"
-
-        NaturalFold ->
-            Encoding.encodeUtf8ByteArray "Natural/fold"
-
-        NaturalIsZero ->
-            Encoding.encodeUtf8ByteArray "Natural/isZero"
-
-        NaturalEven ->
-            Encoding.encodeUtf8ByteArray "Natural/even"
-
-        NaturalOdd ->
-            Encoding.encodeUtf8ByteArray "Natural/odd"
-
-        NaturalToInteger ->
-            Encoding.encodeUtf8ByteArray "Natural/toInteger"
-
-        NaturalShow ->
-            Encoding.encodeUtf8ByteArray "Natural/show"
-
-        NaturalSubtract ->
-            Encoding.encodeUtf8ByteArray "Natural/subtract"
-
-        IntegerToDouble ->
-            Encoding.encodeUtf8ByteArray "Integer/toDouble"
-
-        IntegerClamp ->
-            Encoding.encodeUtf8ByteArray "Integer/clamp"
-
-        IntegerNegate ->
-            Encoding.encodeUtf8ByteArray "Integer/negate"
-
-        IntegerShow ->
-            Encoding.encodeUtf8ByteArray "Integer/show"
-
-        DoubleShow ->
-            Encoding.encodeUtf8ByteArray "Double/show"
-
-        ListBuild ->
-            Encoding.encodeUtf8ByteArray "List/build"
-
-        ListFold ->
-            Encoding.encodeUtf8ByteArray "List/fold"
-
-        ListLength ->
-            Encoding.encodeUtf8ByteArray "List/length"
-
-        ListHead ->
-            Encoding.encodeUtf8ByteArray "List/head"
-
-        ListLast ->
-            Encoding.encodeUtf8ByteArray "List/last"
-
-        ListIndexed ->
-            Encoding.encodeUtf8ByteArray "List/indexed"
-
-        ListReverse ->
-            Encoding.encodeUtf8ByteArray "List/reverse"
-
         Bool ->
             Encoding.encodeUtf8ByteArray "Bool"
 
@@ -758,29 +698,14 @@ encodeExpressionInternal encodeEmbed = go
         Text ->
             Encoding.encodeUtf8ByteArray "Text"
 
-        TextReplace ->
-            Encoding.encodeUtf8ByteArray "Text/replace"
-
-        TextShow ->
-            Encoding.encodeUtf8ByteArray "Text/show"
-
         Date ->
             Encoding.encodeUtf8ByteArray "Date"
-
-        DateShow ->
-            Encoding.encodeUtf8ByteArray "Date/show"
 
         Time ->
             Encoding.encodeUtf8ByteArray "Time"
 
-        TimeShow ->
-            Encoding.encodeUtf8ByteArray "Time/show"
-
         TimeZone ->
             Encoding.encodeUtf8ByteArray "TimeZone"
-
-        TimeZoneShow ->
-            Encoding.encodeUtf8ByteArray "TimeZone/show"
 
         List ->
             Encoding.encodeUtf8ByteArray "List"
