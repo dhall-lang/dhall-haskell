@@ -13,6 +13,7 @@ packages:
   - dhall-toml
   - dhall-yaml
 extra-deps:
+  - mmark-0.1.0.0@sha256:7a69122e04c0ca74c741504c37a28af102b5032d585fdf5936a02a606eaf1478,4248
   - turtle-1.6.2
 # turtle is not on Nightly and still upper-bounds optparse-applicative < 0.19
 # and ansi-wl-pprint < 1.1; Nightly has newer versions of both.
