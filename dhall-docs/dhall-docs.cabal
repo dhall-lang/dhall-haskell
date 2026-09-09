@@ -76,7 +76,7 @@ Library
         filepath             >= 1.4       && < 1.6 ,
         microlens            >= 0.4       && < 0.6 ,
         lucid                >= 2.9.12    && < 2.12,
-        mmark >=0.0.7.0 && <0.2 ,
+        mmark                >= 0.0.7.0   && < 0.2 ,
         -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
         megaparsec           >= 7         && < 10  ,
         path                 >= 0.7.0     && < 0.10,
