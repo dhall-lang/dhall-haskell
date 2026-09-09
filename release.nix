@@ -7,24 +7,19 @@ in { src ? { rev = ""; }
 let
   callShared = args: import ./nix/shared.nix ({ inherit nixpkgs; } // args);
 
-  # Legacy GHCJS 8.10 (`haskell.packages.ghcjs`) was removed in Nixpkgs 25.11.
-  # Re-enable via `pkgsCross.ghcjs` once `dhall-try` is ported off `ghcjs-base`.
-
-  # shared_ghcjs = callShared { compiler = "ghcjs"; };
-
   shared = callShared { };
 
   shared_linux = callShared { system = "x86_64-linux"; };
 
   coverage = callShared { coverage = true; };
 
+  javascript = import ./nix/javascript.nix { inherit nixpkgs; };
+
 in
   { dhall = shared.aggregate
       { name = "dhall";
 
         constituents = [
-          # shared_ghcjs.dhall-try
-
           shared.tarball-dhall
           shared.tarball-dhall-bash
           shared.tarball-dhall-csv
@@ -98,4 +93,9 @@ in
       image-dhall-toml
       image-dhall-yaml
     ;
+
+    # Separate from the `dhall` aggregate so a JS compile failure does not
+    # block native tarballs. See nix/javascript.nix.
+    javascript-dhall     = javascript.dhall;
+    javascript-dhall-try = javascript.dhall-try;
   }

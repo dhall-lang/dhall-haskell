@@ -1,1 +1,1 @@
-(import ../nix/shared.nix { compiler = "ghcjs"; }).dhall-try
+(import ../nix/javascript.nix {}).dhall-try

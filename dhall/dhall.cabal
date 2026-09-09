@@ -208,6 +208,15 @@ Flag cross
   Default:     False
   Manual:      True
 
+Flag javascript
+  Description:
+    Select the JavaScript FFI sources (ghcjs-src).  Cabal also selects
+    those sources automatically for arch(javascript) / impl(ghcjs); this
+    flag exists so cabal2nix, which evaluates the Cabal file on the
+    build platform, generates the JS dependency set.
+  Default:     False
+  Manual:      True
+
 Flag network-tests
   Description:
     Enable doctests that fetch from the public internet (GitHub / Prelude).
@@ -265,11 +274,14 @@ Common common
         th-lift-instances           >= 0.1.13   && < 0.2 ,
         time >=1.9 && <1.17,
         transformers                >= 0.5.2.0  && < 0.7 ,
-        unix-compat                 >= 0.4.2    && < 0.8 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
         vector                      >= 0.11.0.0 && < 0.14
 
-    if !os(windows)
+    if !(arch(javascript) || impl(ghcjs) || flag(javascript))
+      Build-Depends:
+        unix-compat                 >= 0.4.2    && < 0.8
+
+    if !os(windows) && !arch(javascript) && !impl(ghcjs) && !flag(javascript)
       Build-Depends:
         unix                        >= 2.7      && < 2.9 ,
 
@@ -290,11 +302,8 @@ Common common
 Library
     Import: common
     Hs-Source-Dirs: src
-    if impl(ghcjs)
+    if flag(javascript) || impl(ghcjs) || arch(javascript)
       Hs-Source-Dirs: ghcjs-src
-      Build-Depends:
-        ghcjs-base ,
-        ghcjs-xhr
     else
       Hs-Source-Dirs: ghc-src
       Build-Depends:
