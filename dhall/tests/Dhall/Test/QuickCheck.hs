@@ -23,6 +23,7 @@ import Data.Either            (isRight)
 import Data.Either.Validation (Validation (..))
 import Data.Text              (Text)
 import Data.Void              (Void)
+import Lens.Micro             (over)
 import Dhall
     ( FromDhall (..)
     , ToDhall (..)
@@ -368,49 +369,24 @@ instance (Arbitrary s, Arbitrary a) => Arbitrary (Expr s a) where
             % (1 :: W "BytesLit")
             % (1 :: W "Natural")
             % (7 :: W "NaturalLit")
-            % (1 :: W "NaturalFold")
-            % (1 :: W "NaturalBuild")
-            % (1 :: W "NaturalIsZero")
-            % (1 :: W "NaturalEven")
-            % (1 :: W "NaturalOdd")
-            % (1 :: W "NaturalToInteger")
-            % (1 :: W "NaturalShow")
-            % (1 :: W "NaturalSubtract")
             % (1 :: W "NaturalPlus")
             % (1 :: W "NaturalTimes")
             % (1 :: W "Integer")
             % (7 :: W "IntegerLit")
-            % (1 :: W "IntegerClamp")
-            % (1 :: W "IntegerNegate")
-            % (1 :: W "IntegerShow")
-            % (1 :: W "IntegerToDouble")
             % (1 :: W "Double")
             % (7 :: W "DoubleLit")
-            % (1 :: W "DoubleShow")
             % (1 :: W "Text")
             % (1 :: W "TextLit")
             % (1 :: W "TextAppend")
-            % (1 :: W "TextReplace")
-            % (1 :: W "TextShow")
             % (1 :: W "Date")
             % (1 :: W "DateLiteral")
-            % (1 :: W "DateShow")
             % (1 :: W "Time")
             % (1 :: W "TimeLiteral")
-            % (1 :: W "TimeShow")
             % (1 :: W "TimeZone")
             % (1 :: W "TimeZoneLiteral")
-            % (1 :: W "TimeZoneShow")
             % (1 :: W "List")
             % (1 :: W "ListLit")
             % (1 :: W "ListAppend")
-            % (1 :: W "ListBuild")
-            % (1 :: W "ListFold")
-            % (1 :: W "ListLength")
-            % (1 :: W "ListHead")
-            % (1 :: W "ListLast")
-            % (1 :: W "ListIndexed")
-            % (1 :: W "ListReverse")
             % (1 :: W "Optional")
             % (7 :: W "Some")
             % (1 :: W "None")
@@ -620,14 +596,43 @@ label = fmap Text.pack (Test.QuickCheck.listOf labelCharacter)
 
 binaryRoundtrip :: Expr () Import -> Property
 binaryRoundtrip expression =
-        Dhall.Binary.decodeExpression (Dhall.Binary.encodeExpression denotedExpression)
-    === Right denotedExpression
+        fmap normalizeImportHeaders' decoded
+    === Right (normalizeImportHeaders' denotedExpression)
   where
     denotedExpression :: Expr Void Import
     denotedExpression = denote' expression
 
+    decoded :: Either Dhall.Binary.DecodingFailure (Expr Void Import)
+    decoded =
+        Dhall.Binary.decodeExpression
+            (Dhall.Binary.encodeExpression denotedExpression)
+
     denote' :: Expr a Import -> Expr b Import
     denote' = Dhall.Core.denote . fmap denoteHttpHeaders
+
+    normalizeImportHeaders' :: Expr s Import -> Expr s Import
+    normalizeImportHeaders' expr =
+        over Dhall.Core.subExpressions normalizeImportHeaders' $
+            case expr of
+                Embed import_ -> Embed (normalizeImportHeaders import_)
+                _             -> expr
+
+    normalizeImportHeaders import_@(Import importHashed importMode) =
+        case importType importHashed of
+            Remote url ->
+                import_
+                    { importHashed =
+                        importHashed
+                            { importType =
+                                Remote
+                                    url
+                                        { headers =
+                                            fmap normalizeImportHeaders' (headers url)
+                                        }
+                            }
+                    , importMode = importMode
+                    }
+            _ -> import_
 
     denoteHttpHeaders import_@(Import importHashed _)
         | Remote url <- importType importHashed

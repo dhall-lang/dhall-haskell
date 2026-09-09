@@ -1185,9 +1185,16 @@ functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
   where
     normalizer_ = Just (getInputNormalizer inputNormalizer)
 
-    extractOut e = pure (\i -> case extractIn (Core.normalizeWith normalizer_ (App e (embed i))) of
-        Success o  -> o
-        Failure _e -> error "FromDhall: You cannot decode a function if it does not have the correct type" )
+    extractOut e = pure (\i ->
+        let applied = App e (embed i)
+        in case extractIn (Core.normalizeWith normalizer_ applied) of
+            Success o  -> o
+            Failure _ ->
+                case extractIn (Core.normalize applied) of
+                    Success o  -> o
+                    Failure _e ->
+                        error "FromDhall: You cannot decode a function if it does not have the correct type"
+        )
 
     expectedOut = Pi mempty "_" declared <$> expectedIn
 

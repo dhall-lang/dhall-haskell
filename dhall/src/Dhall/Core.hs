@@ -71,6 +71,8 @@ module Dhall.Core (
     -- * Miscellaneous
     , internalError
     , reservedIdentifiers
+    , reservedFunctionNames
+    , fixedSymbolIdentifiers
     , escapeText
     , pathCharacter
     , throws

@@ -122,15 +122,15 @@ data Status = Status
 
     , _merkleHashCache :: Map Chained SHA256Digest
     -- ^ Per-run map from import to the hash used as that import's contribution
-    --   to a parent's disk-cache key. Code imports without an integrity hash
-    --   store the hash of their own syntax; @as Text@ / @as Bytes@ /
+    --   to a parent's semisemantic cache key. Code imports without an integrity hash
+    --   store the hash of their own (unreduced) syntax; @as Text@ / @as Bytes@ /
     --   @as Location@ store a hash of their contents. Frozen imports use
-    --   their integrity hash. Caching these avoids encoding a child's full
-    --   normal form just to name the parent cache entry.
+    --   their integrity hash. Caching these avoids computing a child's full
+    --   normal form just to get the key for the parent's semisemantic cache entry.
 
     , _merkleContextFingerprint :: Maybe SHA256Digest
     -- ^ Cached hash of '_startingContext' for merkle keys. 'Nothing' until
-    --   the first unhashed Code import. Cleared when the context is replaced.
+    --   the first unhashed Code import is loaded. Cleared when the context is replaced.
 
     , _merkleSubstitutionsFingerprint :: Maybe SHA256Digest
     -- ^ Cached hash of '_substitutions' for merkle keys. Avoids CBOR-encoding
