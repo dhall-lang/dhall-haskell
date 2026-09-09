@@ -1,11 +1,13 @@
 {-| Contains all utilities related to markdown processing
 -}
+{-# LANGUAGE CPP #-}
+
 module Dhall.Docs.Markdown
     ( MarkdownParseError(..)
     , MMark
     , parseMarkdown
     , markdownToHtml
-    , MMark.render
+    , render
     ) where
 
 import Data.Text       (Text)
@@ -30,7 +32,15 @@ markdownToHtml
     -> Text          -- ^ Text to parse
     -> Either MarkdownParseError (Html ())
 markdownToHtml relFile contents =
-    MMark.render <$> parseMarkdown relFile contents
+    render <$> parseMarkdown relFile contents
+
+-- | Render markdown without extensions across supported MMark versions.
+render :: MMark -> Html ()
+#if MIN_VERSION_mmark(0,1,0)
+render = MMark.render mempty
+#else
+render = MMark.render
+#endif
 
 {-| Takes a text that could contain markdown and returns either the parsed
     markdown or, if parsing fails, the error information.
