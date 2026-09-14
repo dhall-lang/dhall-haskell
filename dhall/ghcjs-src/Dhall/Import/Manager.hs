@@ -1,12 +1,11 @@
-{-| Both the GHC and GHCJS implementations of `Dhall.Import.Manager.Manager`
+{-| Both the GHC and JavaScript implementations of `Dhall.Import.Manager.Manager`
     export a `Dhall.Import.Manager.Manager` type suitable for use within the
     "Dhall.Import" module
 
     For the GHC implementation the `Dhall.Import.Manager.Manager` type is a real
-    `Network.HTTP.Client.Manager` from the @http-client@ package.  For the GHCJS
-    implementation the `Dhall.Import.Manager.Manager` type is a synonym for
-    @`Data.Void.Void`@ since GHCJS does not use a
-    `Network.HTTP.Client.Manager` for HTTP requests.
+    `Network.HTTP.Client.Manager` from the @http-client@ package.  For the
+    JavaScript backend the `Dhall.Import.Manager.Manager` type is @()@ since
+    that backend does not use a `Network.HTTP.Client.Manager` for HTTP requests.
 -}
 module Dhall.Import.Manager
     ( -- * Manager
@@ -14,11 +13,11 @@ module Dhall.Import.Manager
     , defaultNewManager
     ) where
 
-{-| The GHCJS implementation does not require a `Network.HTTP.Client.Manager`
+{-| The JavaScript implementation does not require a `Network.HTTP.Client.Manager`
 
     The purpose of this synonym is so that "Dhall.Import.Types" can import a
     `Dhall.Import.Manager.Manager` type from "Dhall.Import.HTTP" that does the
-    correct thing for both the GHC and GHCJS implementations
+    correct thing for both the GHC and JavaScript implementations
 -}
 type Manager = ()
 
