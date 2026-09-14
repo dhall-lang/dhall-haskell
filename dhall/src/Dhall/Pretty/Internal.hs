@@ -1345,42 +1345,12 @@ prettyPrinters characterSet =
         builtin "Bytes"
     prettyPrimitiveExpression Natural =
         builtin "Natural"
-    prettyPrimitiveExpression NaturalFold =
-        builtin "Natural/fold"
-    prettyPrimitiveExpression NaturalBuild =
-        builtin "Natural/build"
-    prettyPrimitiveExpression NaturalIsZero =
-        builtin "Natural/isZero"
-    prettyPrimitiveExpression NaturalEven =
-        builtin "Natural/even"
-    prettyPrimitiveExpression NaturalOdd =
-        builtin "Natural/odd"
-    prettyPrimitiveExpression NaturalToInteger =
-        builtin "Natural/toInteger"
-    prettyPrimitiveExpression NaturalShow =
-        builtin "Natural/show"
-    prettyPrimitiveExpression NaturalSubtract =
-        builtin "Natural/subtract"
     prettyPrimitiveExpression Integer =
         builtin "Integer"
-    prettyPrimitiveExpression IntegerClamp =
-        builtin "Integer/clamp"
-    prettyPrimitiveExpression IntegerNegate =
-        builtin "Integer/negate"
-    prettyPrimitiveExpression IntegerShow =
-        builtin "Integer/show"
-    prettyPrimitiveExpression IntegerToDouble =
-        builtin "Integer/toDouble"
     prettyPrimitiveExpression Double =
         builtin "Double"
-    prettyPrimitiveExpression DoubleShow =
-        builtin "Double/show"
     prettyPrimitiveExpression Text =
         builtin "Text"
-    prettyPrimitiveExpression TextReplace =
-        builtin "Text/replace"
-    prettyPrimitiveExpression TextShow =
-        builtin "Text/show"
     prettyPrimitiveExpression Date =
         builtin "Date"
     prettyPrimitiveExpression (DateLiteral day) =
@@ -1392,9 +1362,7 @@ prettyPrinters characterSet =
             <>  Pretty.pretty (Printf.printf "%02d" _DD :: String)
             )
       where
-        (_HHHH, _MM, _DD) = Time.toGregorian day
-    prettyPrimitiveExpression DateShow =
-        builtin "Date/show"
+            (_HHHH, _MM, _DD) = Time.toGregorian day
     prettyPrimitiveExpression Time =
         builtin "Time"
     prettyPrimitiveExpression (TimeLiteral hh mm ss fraction precision) =
@@ -1410,8 +1378,6 @@ prettyPrinters characterSet =
         suffix
             | precision == 0 = ""
             | otherwise      = "." <> Pretty.pretty (Printf.printf "%0*d" precision fraction :: String)
-    prettyPrimitiveExpression TimeShow =
-        builtin "Time/show"
     prettyPrimitiveExpression TimeZone =
         builtin "TimeZone"
     prettyPrimitiveExpression (TimeZoneLiteral (Time.TimeZone minutes _ _)) =
@@ -1425,24 +1391,8 @@ prettyPrinters characterSet =
         sign = if 0 <= minutes then "+" else "-"
 
         (_HH, _MM) = abs minutes `divMod` 60
-    prettyPrimitiveExpression TimeZoneShow =
-        builtin "TimeZone/show"
     prettyPrimitiveExpression List =
         builtin "List"
-    prettyPrimitiveExpression ListBuild =
-        builtin "List/build"
-    prettyPrimitiveExpression ListFold =
-        builtin "List/fold"
-    prettyPrimitiveExpression ListLength =
-        builtin "List/length"
-    prettyPrimitiveExpression ListHead =
-        builtin "List/head"
-    prettyPrimitiveExpression ListLast =
-        builtin "List/last"
-    prettyPrimitiveExpression ListIndexed =
-        builtin "List/indexed"
-    prettyPrimitiveExpression ListReverse =
-        builtin "List/reverse"
     prettyPrimitiveExpression Optional =
         builtin "Optional"
     prettyPrimitiveExpression None =

@@ -15,6 +15,8 @@ module Dhall.Syntax.Operations
 
       -- * Reserved identifiers
     , reservedIdentifiers
+    , reservedFunctionNames
+    , fixedSymbolIdentifiers
     , reservedKeywords
 
       -- * Utilities
@@ -88,49 +90,24 @@ unsafeSubExpressions _ Bytes = pure Bytes
 unsafeSubExpressions _ (BytesLit a) = pure (BytesLit a)
 unsafeSubExpressions _ Natural = pure Natural
 unsafeSubExpressions _ (NaturalLit n) = pure (NaturalLit n)
-unsafeSubExpressions _ NaturalFold = pure NaturalFold
-unsafeSubExpressions _ NaturalBuild = pure NaturalBuild
-unsafeSubExpressions _ NaturalIsZero = pure NaturalIsZero
-unsafeSubExpressions _ NaturalEven = pure NaturalEven
-unsafeSubExpressions _ NaturalOdd = pure NaturalOdd
-unsafeSubExpressions _ NaturalToInteger = pure NaturalToInteger
-unsafeSubExpressions _ NaturalShow = pure NaturalShow
-unsafeSubExpressions _ NaturalSubtract = pure NaturalSubtract
 unsafeSubExpressions f (NaturalPlus a b) = NaturalPlus <$> f a <*> f b
 unsafeSubExpressions f (NaturalTimes a b) = NaturalTimes <$> f a <*> f b
 unsafeSubExpressions _ Integer = pure Integer
 unsafeSubExpressions _ (IntegerLit n) = pure (IntegerLit n)
-unsafeSubExpressions _ IntegerClamp = pure IntegerClamp
-unsafeSubExpressions _ IntegerNegate = pure IntegerNegate
-unsafeSubExpressions _ IntegerShow = pure IntegerShow
-unsafeSubExpressions _ IntegerToDouble = pure IntegerToDouble
 unsafeSubExpressions _ Double = pure Double
 unsafeSubExpressions _ (DoubleLit n) = pure (DoubleLit n)
-unsafeSubExpressions _ DoubleShow = pure DoubleShow
 unsafeSubExpressions _ Text = pure Text
 unsafeSubExpressions f (TextLit chunks) = TextLit <$> chunkExprs f chunks
 unsafeSubExpressions f (TextAppend a b) = TextAppend <$> f a <*> f b
-unsafeSubExpressions _ TextReplace = pure TextReplace
-unsafeSubExpressions _ TextShow = pure TextShow
 unsafeSubExpressions _ Date = pure Date
 unsafeSubExpressions _ (DateLiteral a) = pure (DateLiteral a)
-unsafeSubExpressions _ DateShow = pure DateShow
 unsafeSubExpressions _ Time = pure Time
 unsafeSubExpressions _ (TimeLiteral a b c d e) = pure (TimeLiteral a b c d e)
-unsafeSubExpressions _ TimeShow = pure TimeShow
 unsafeSubExpressions _ TimeZone = pure TimeZone
 unsafeSubExpressions _ (TimeZoneLiteral a) = pure (TimeZoneLiteral a)
-unsafeSubExpressions _ TimeZoneShow = pure TimeZoneShow
 unsafeSubExpressions _ List = pure List
 unsafeSubExpressions f (ListLit a b) = ListLit <$> traverse f a <*> traverse f b
 unsafeSubExpressions f (ListAppend a b) = ListAppend <$> f a <*> f b
-unsafeSubExpressions _ ListBuild = pure ListBuild
-unsafeSubExpressions _ ListFold = pure ListFold
-unsafeSubExpressions _ ListLength = pure ListLength
-unsafeSubExpressions _ ListHead = pure ListHead
-unsafeSubExpressions _ ListLast = pure ListLast
-unsafeSubExpressions _ ListIndexed = pure ListIndexed
-unsafeSubExpressions _ ListReverse = pure ListReverse
 unsafeSubExpressions _ Optional = pure Optional
 unsafeSubExpressions f (Some a) = Some <$> f a
 unsafeSubExpressions _ None = pure None
@@ -219,8 +196,6 @@ reservedKeywords =
         , "using"
         , "missing"
         , "as"
-        , "Infinity"
-        , "NaN"
         , "merge"
         , "Some"
         , "toMap"
@@ -229,41 +204,11 @@ reservedKeywords =
         , "with"
         ]
 
--- | The set of reserved identifiers for the Dhall language
--- | Contains also all keywords from "reservedKeywords"
-reservedIdentifiers :: HashSet Text
-reservedIdentifiers = reservedKeywords <>
+-- | Fixed symbols (reserved identifiers that are never bindable)
+fixedSymbolIdentifiers :: HashSet Text
+fixedSymbolIdentifiers =
     Data.HashSet.fromList
-        [ -- Builtins according to the `builtin` rule in the grammar
-          "Natural/fold"
-        , "Natural/build"
-        , "Natural/isZero"
-        , "Natural/even"
-        , "Natural/odd"
-        , "Natural/toInteger"
-        , "Natural/show"
-        , "Natural/subtract"
-        , "Integer"
-        , "Integer/clamp"
-        , "Integer/negate"
-        , "Integer/show"
-        , "Integer/toDouble"
-        , "Integer/show"
-        , "Natural/subtract"
-        , "Double/show"
-        , "List/build"
-        , "List/fold"
-        , "List/length"
-        , "List/head"
-        , "List/last"
-        , "List/indexed"
-        , "List/reverse"
-        , "Text/replace"
-        , "Text/show"
-        , "Date/show"
-        , "Time/show"
-        , "TimeZone/show"
-        , "Bool"
+        [ "Bool"
         , "Bytes"
         , "True"
         , "False"
@@ -280,7 +225,45 @@ reservedIdentifiers = reservedKeywords <>
         , "Type"
         , "Kind"
         , "Sort"
+        , "Infinity"
+        , "NaN"
         ]
+
+-- | Predefined function names (ordinary identifiers in source syntax)
+reservedFunctionNames :: HashSet Text
+reservedFunctionNames =
+    Data.HashSet.fromList
+        [ "Natural/fold"
+        , "Natural/build"
+        , "Natural/isZero"
+        , "Natural/even"
+        , "Natural/odd"
+        , "Natural/toInteger"
+        , "Natural/show"
+        , "Natural/subtract"
+        , "Integer/clamp"
+        , "Integer/negate"
+        , "Integer/show"
+        , "Integer/toDouble"
+        , "Double/show"
+        , "List/build"
+        , "List/fold"
+        , "List/length"
+        , "List/head"
+        , "List/last"
+        , "List/indexed"
+        , "List/reverse"
+        , "Text/replace"
+        , "Text/show"
+        , "Date/show"
+        , "Time/show"
+        , "TimeZone/show"
+        ]
+
+-- | The set of reserved identifiers for the Dhall language
+-- | Contains keywords plus fixed symbols
+reservedIdentifiers :: HashSet Text
+reservedIdentifiers = reservedKeywords <> fixedSymbolIdentifiers
 
 {-| `shift` is used by both normalization and type-checking to avoid variable
     capture by shifting variable indices

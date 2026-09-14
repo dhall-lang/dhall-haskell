@@ -1202,83 +1202,11 @@ diffPrimitiveExpression l@Natural r =
     mismatch l r
 diffPrimitiveExpression l r@Natural =
     mismatch l r
-diffPrimitiveExpression NaturalFold NaturalFold =
-    "…"
-diffPrimitiveExpression l@NaturalFold r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalFold =
-    mismatch l r
-diffPrimitiveExpression NaturalBuild NaturalBuild =
-    "…"
-diffPrimitiveExpression l@NaturalBuild r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalBuild =
-    mismatch l r
-diffPrimitiveExpression NaturalIsZero NaturalIsZero =
-    "…"
-diffPrimitiveExpression l@NaturalIsZero r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalIsZero =
-    mismatch l r
-diffPrimitiveExpression NaturalEven NaturalEven =
-    "…"
-diffPrimitiveExpression l@NaturalEven r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalEven =
-    mismatch l r
-diffPrimitiveExpression NaturalOdd NaturalOdd =
-    "…"
-diffPrimitiveExpression l@NaturalOdd r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalOdd =
-    mismatch l r
-diffPrimitiveExpression NaturalToInteger NaturalToInteger =
-    "…"
-diffPrimitiveExpression l@NaturalToInteger r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalToInteger =
-    mismatch l r
-diffPrimitiveExpression NaturalShow NaturalShow =
-    "…"
-diffPrimitiveExpression l@NaturalShow r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalShow =
-    mismatch l r
-diffPrimitiveExpression NaturalSubtract NaturalSubtract =
-    "…"
-diffPrimitiveExpression l@NaturalSubtract r =
-    mismatch l r
-diffPrimitiveExpression l r@NaturalSubtract =
-    mismatch l r
 diffPrimitiveExpression Integer Integer =
     "…"
 diffPrimitiveExpression l@Integer r =
     mismatch l r
 diffPrimitiveExpression l r@Integer =
-    mismatch l r
-diffPrimitiveExpression IntegerClamp IntegerClamp =
-    "…"
-diffPrimitiveExpression l@IntegerClamp r =
-    mismatch l r
-diffPrimitiveExpression l r@IntegerClamp =
-    mismatch l r
-diffPrimitiveExpression IntegerNegate IntegerNegate =
-    "…"
-diffPrimitiveExpression l@IntegerNegate r =
-    mismatch l r
-diffPrimitiveExpression l r@IntegerNegate =
-    mismatch l r
-diffPrimitiveExpression IntegerShow IntegerShow =
-    "…"
-diffPrimitiveExpression l@IntegerShow r =
-    mismatch l r
-diffPrimitiveExpression l r@IntegerShow =
-    mismatch l r
-diffPrimitiveExpression IntegerToDouble IntegerToDouble =
-    "…"
-diffPrimitiveExpression l@IntegerToDouble r =
-    mismatch l r
-diffPrimitiveExpression l r@IntegerToDouble =
     mismatch l r
 diffPrimitiveExpression Double Double =
     "…"
@@ -1286,29 +1214,11 @@ diffPrimitiveExpression l@Double r =
     mismatch l r
 diffPrimitiveExpression l r@Double =
     mismatch l r
-diffPrimitiveExpression DoubleShow DoubleShow =
-    "…"
-diffPrimitiveExpression l@DoubleShow r =
-    mismatch l r
-diffPrimitiveExpression l r@DoubleShow =
-    mismatch l r
 diffPrimitiveExpression Text Text =
     "…"
 diffPrimitiveExpression l@Text r =
     mismatch l r
 diffPrimitiveExpression l r@Text =
-    mismatch l r
-diffPrimitiveExpression TextReplace TextReplace =
-    "…"
-diffPrimitiveExpression l@TextReplace r =
-    mismatch l r
-diffPrimitiveExpression l r@TextReplace =
-    mismatch l r
-diffPrimitiveExpression TextShow TextShow =
-    "…"
-diffPrimitiveExpression l@TextShow r =
-    mismatch l r
-diffPrimitiveExpression l r@TextShow =
     mismatch l r
 diffPrimitiveExpression Date Date =
     "…"
@@ -1316,35 +1226,17 @@ diffPrimitiveExpression l r@Date =
     mismatch l r
 diffPrimitiveExpression l@Date r=
     mismatch l r
-diffPrimitiveExpression DateShow DateShow =
-    "…"
-diffPrimitiveExpression l r@DateShow =
-    mismatch l r
-diffPrimitiveExpression l@DateShow r=
-    mismatch l r
 diffPrimitiveExpression Time Time =
     "…"
 diffPrimitiveExpression l r@Time =
     mismatch l r
 diffPrimitiveExpression l@Time r=
     mismatch l r
-diffPrimitiveExpression TimeShow TimeShow =
-    "…"
-diffPrimitiveExpression l r@TimeShow =
-    mismatch l r
-diffPrimitiveExpression l@TimeShow r=
-    mismatch l r
 diffPrimitiveExpression TimeZone TimeZone =
     "…"
 diffPrimitiveExpression l r@TimeZone =
     mismatch l r
 diffPrimitiveExpression l@TimeZone r=
-    mismatch l r
-diffPrimitiveExpression TimeZoneShow TimeZoneShow =
-    "…"
-diffPrimitiveExpression l r@TimeZoneShow =
-    mismatch l r
-diffPrimitiveExpression l@TimeZoneShow r=
     mismatch l r
 diffPrimitiveExpression List List =
     "…"
@@ -1355,48 +1247,6 @@ diffPrimitiveExpression l r@List =
 diffPrimitiveExpression (ListLit Nothing bL) (ListLit Nothing bR) = align doc
   where
     doc = format " " (diffList bL bR)
-diffPrimitiveExpression ListBuild ListBuild =
-    "…"
-diffPrimitiveExpression l@ListBuild r =
-    mismatch l r
-diffPrimitiveExpression l r@ListBuild =
-    mismatch l r
-diffPrimitiveExpression ListFold ListFold =
-    "…"
-diffPrimitiveExpression l@ListFold r =
-    mismatch l r
-diffPrimitiveExpression l r@ListFold =
-    mismatch l r
-diffPrimitiveExpression ListLength ListLength =
-    "…"
-diffPrimitiveExpression l@ListLength r =
-    mismatch l r
-diffPrimitiveExpression l r@ListLength =
-    mismatch l r
-diffPrimitiveExpression ListHead ListHead =
-    "…"
-diffPrimitiveExpression l@ListHead r =
-    mismatch l r
-diffPrimitiveExpression l r@ListHead =
-    mismatch l r
-diffPrimitiveExpression ListLast ListLast =
-    "…"
-diffPrimitiveExpression l@ListLast r =
-    mismatch l r
-diffPrimitiveExpression l r@ListLast =
-    mismatch l r
-diffPrimitiveExpression ListIndexed ListIndexed =
-    "…"
-diffPrimitiveExpression l@ListIndexed r =
-    mismatch l r
-diffPrimitiveExpression l r@ListIndexed =
-    mismatch l r
-diffPrimitiveExpression ListReverse ListReverse =
-    "…"
-diffPrimitiveExpression l@ListReverse r =
-    mismatch l r
-diffPrimitiveExpression l r@ListReverse =
-    mismatch l r
 diffPrimitiveExpression Optional Optional =
     "…"
 diffPrimitiveExpression l@Optional r =
