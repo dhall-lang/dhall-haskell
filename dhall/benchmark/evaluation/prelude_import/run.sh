@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CLI timings matching prelude_import.code.
+# CLI timings matching prelude_import.code / prelude_import.source.
 # Runnable from any directory.
 set -euo pipefail
 
@@ -15,3 +15,4 @@ time_dhall() {
 }
 
 time_dhall prelude-code.dhall
+time_dhall prelude-source.dhall
