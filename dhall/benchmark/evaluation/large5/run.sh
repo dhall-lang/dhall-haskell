@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # CLI timings matching large5.code.
+# CLI timings matching large5.code / large5.source.
 # Run from this directory.
 set -euo pipefail
 
@@ -11,3 +12,4 @@ time_dhall() {
 }
 
 time_dhall pipeline-code.dhall
+time_dhall pipeline-source.dhall
