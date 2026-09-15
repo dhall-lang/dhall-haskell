@@ -577,7 +577,12 @@ labels = do
     This corresponds to the @nonreserved-label@ rule in the official grammar
 -}
 label :: Parser Text
-label = backtickLabel <|> simpleLabel False <?> "label"
+label = backtickNonSomeLabel <|> simpleLabel False <?> "label"
+  where
+    backtickNonSomeLabel = do
+        t <- backtickLabel
+        Monad.guard (t /= "Some")
+        return t
 
 {-| Same as `label` except that built-in names are allowed
 
