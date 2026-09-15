@@ -983,15 +983,25 @@ loadImportWithSemanticCache
     loadImportWithSemisemanticCache import_
 
 loadImportWithSemanticCache
-  import_@(Chained (Import (ImportHashed (Just semanticHash) _) Source)) = do
+  import_@(Chained (Import (ImportHashed (Just semanticHash) importType) Source)) = do
     -- Frozen `as Source` imports cache the finalized import-free expression,
     -- not the intermediate source artifact with preserved import references.
+    --
+    -- Cache hits are only used for @missing sha256:… as Source@. For a real
+    -- origin (file / URL / env), the integrity hash must be checked against
+    -- that origin's Source product. A Code normal-form stored under the same
+    -- hash in @dhall/@ must not satisfy an @as Source@ check.
     Status { .. } <- State.get
+
+    let cacheEligible = case importType of
+            Missing -> True
+            _       -> False
+
     mCached <-
-        case _semanticCacheMode of
-            UseSemanticCache ->
+        case (_semanticCacheMode, cacheEligible) of
+            (UseSemanticCache, True) ->
                 zoom cacheWarning (fetchFromSemanticCache _reportWarning semanticHash)
-            IgnoreSemanticCache ->
+            _ ->
                 pure Nothing
 
     case mCached of
@@ -1753,11 +1763,20 @@ memoizedMerkleFingerprints = do
     return (contextHash, substitutionsHash)
 
 loadSourceImportArtifact :: Chained -> StateT Status IO (Expr Void Import)
-loadSourceImportArtifact (Chained (Import (ImportHashed _ importType) _)) = do
+loadSourceImportArtifact import_@(Chained (Import (ImportHashed _ importType) _)) = do
+    importStack <- use stack
+
+    -- Nested Here/Parent imports chain against 'stack'. Push this file so
+    -- callers that parse it without going through 'loadImports' still
+    -- resolve children relative to it rather than an outer parent.
+    assign stack (NonEmpty.cons import_ importStack)
+
     parsedImport <- parseImportedExpression importType
 
     -- Preserve hashed child imports as references while inlining unhashed ones.
     resolvedExpr <- loadWithSource PreserveHashedImports parsedImport
+
+    assign stack importStack
 
     return (Core.denote resolvedExpr)
 
@@ -1772,8 +1791,7 @@ finalizeSourceImport sourceArtifact = do
         assertNoImports expandedExpr
     Status {..} <- State.get
 
-    let substitutedExpr =
-          Dhall.Substitution.substitute importFreeExpr _substitutions
+    substitutedExpr <- applyStatusSubstitutions importFreeExpr
 
     case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
         Left  err -> throwMissingImport (Imported _stack err)
@@ -3033,6 +3051,12 @@ zoom :: Monad m => Lens' s a -> State.StateT a m r -> State.StateT s m r
 zoom l action = State.StateT $ \s -> do
     (r, a) <- State.runStateT action (view l s)
     return (r, set l a s)
+
+use :: Monad m => Lens' s a -> State.StateT s m a
+use l = State.gets (view l)
+
+assign :: Monad m => Lens' s a -> a -> State.StateT s m ()
+assign l a = State.modify (set l a)
 
 {-| This function is used by the @--transitive@ option of the
     @dhall {freeze,format,lint}@ subcommands to determine which dependencies
