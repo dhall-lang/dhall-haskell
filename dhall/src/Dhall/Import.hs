@@ -176,6 +176,7 @@ import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
 import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
 import Data.Maybe                 (fromMaybe, isJust, isNothing)
+import Data.Monoid                (Any (..), getAny)
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
@@ -662,25 +663,6 @@ data FrozenImportResolutionMode
     | InlineHashedImports
   deriving (Eq, Ord)
 
-{-| Manual toggle for source-path opportunistic semantic cache fill.
-
-    When 'False' (default), @loadWithSource@ does not write semantic cache
-    entries after a successful @ImportAlt@ fallback during an @as Source@
-    preserve pass. This avoids an extra @finalizeSourceImport@ typecheck when
-    a fallback succeeds.
-
-    When 'True', after @missing sha256:… as Source ? …@ resolves via the
-    right-hand branch (and that branch contains an @as Source@ import), the
-    interpreter finalizes the fallback result and writes it to the semantic
-    cache when the computed hash matches the hash on the left. Change this
-    constant and recompile to compare benchmark results with opportunistic
-    fill enabled vs disabled.
-
-    See @trySourceOpportunisticCacheFill@.
--}
-sourceOpportunisticCacheFillEnabled :: Bool
-sourceOpportunisticCacheFillEnabled = False
-
 findImportHashAndMode
     :: Expr s Import -> Maybe (Dhall.Crypto.SHA256Digest, ImportMode)
 findImportHashAndMode expr = case Core.shallowDenote expr of
@@ -688,17 +670,23 @@ findImportHashAndMode expr = case Core.shallowDenote expr of
     ImportAlt left right -> findImportHashAndMode left <|> findImportHashAndMode right
     _ -> Nothing
 
+-- | 'True' if any embedded import in the expression uses 'Source' mode.
 branchContainsSourceImport :: Expr s Import -> Bool
-branchContainsSourceImport expr = case Core.shallowDenote expr of
-    Embed Import{ importMode = Source } -> True
-    ImportAlt left right ->
-        branchContainsSourceImport left || branchContainsSourceImport right
-    Note _ e ->
-        branchContainsSourceImport e
-    _ -> False
+branchContainsSourceImport expr =
+    case Core.shallowDenote expr of
+        Embed Import{ importMode = Source } ->
+            True
+        unwrapped ->
+            let FunctorConst.Const found =
+                    Syntax.subExpressions
+                        (\child ->
+                            FunctorConst.Const (Any (branchContainsSourceImport child))
+                        )
+                        unwrapped
+            in  getAny found
 
 -- | Opportunistically populate the semantic cache during an @as Source@
---   preserve pass when @sourceOpportunisticCacheFillEnabled@ is 'True'.
+--   preserve pass.
 --
 --   This runs inside @loadWithSource@ after @ImportAlt@ resolves the missing
 --   left-hand import via the fallback branch @fallbackBranch@. The computed
@@ -711,31 +699,30 @@ trySourceOpportunisticCacheFill
     -> Expr Src Import
     -> StateT Status IO ()
 trySourceOpportunisticCacheFill frozenImportResolutionMode left fallbackBranch result =
-    when sourceOpportunisticCacheFillEnabled $
-        case findImportHashAndMode left of
-            Just (expectedHash, expectedMode)
-                | expectedMode == Source
-                , frozenImportResolutionMode == PreserveHashedImports
-                , branchContainsSourceImport fallbackBranch -> do
-                    Status { _reportWarning, _semanticCacheMode } <- State.get
+    case findImportHashAndMode left of
+        Just (expectedHash, expectedMode)
+            | expectedMode == Source
+            , frozenImportResolutionMode == PreserveHashedImports
+            , branchContainsSourceImport fallbackBranch -> do
+                Status { _reportWarning, _semanticCacheMode } <- State.get
 
-                    case _semanticCacheMode of
-                        IgnoreSemanticCache ->
-                            return ()
+                case _semanticCacheMode of
+                    IgnoreSemanticCache ->
+                        return ()
 
-                        UseSemanticCache -> do
-                            ImportSemantics { importSemantics } <-
-                                finalizeSourceImport (Core.denote result)
+                    UseSemanticCache -> do
+                        ImportSemantics { importSemantics } <-
+                            finalizeSourceImport (Core.denote result)
 
-                            let bytes = encodeExpression importSemantics
+                        let bytes = encodeExpression importSemantics
 
-                            let actualHash = Dhall.Crypto.sha256Hash bytes
+                        let actualHash = Dhall.Crypto.sha256Hash bytes
 
-                            when (actualHash == expectedHash) $
-                                zoom cacheWarning
-                                    (writeToSemanticCache _reportWarning expectedHash bytes)
-            _ ->
-                return ()
+                        when (actualHash == expectedHash) $
+                            zoom cacheWarning
+                                (writeToSemanticCache _reportWarning expectedHash bytes)
+        _ ->
+            return ()
 
 -- | Load an import from the 'semantic cache'. Defers to
 --   @loadImportWithSemisemanticCache@ for imports that aren't frozen (and
