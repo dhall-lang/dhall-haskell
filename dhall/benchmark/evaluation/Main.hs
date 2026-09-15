@@ -17,6 +17,9 @@
 --   Mode E (warm): parse-only prep plus one cache-warming run in a stable
 --     temp XDG_CACHE_HOME; timed samples reuse that directory.
 --
+--   Mode C (implicit): some as Source large6 costs appear on evaluation, not
+--     resolve. See large6/README.md matrix.
+--
 -- Suites live in Bench.* modules; this file only loads and assembles them.
 --
 module Main where
