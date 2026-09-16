@@ -43,9 +43,12 @@
 module Dhall.Eval (
     judgmentallyEqual
   , normalize
+  , normalizeGraph
+  , normalizeGraphWith
   , alphaNormalize
   , eval
   , quote
+  , quoteGraph
   , envNames
   , countNames
   , conv
@@ -62,13 +65,15 @@ module Dhall.Eval (
   , timezoneShow
   ) where
 
-import Data.Bifunctor     (first)
+import Control.Monad      (foldM)
+import Control.Monad.ST   (ST, runST)
 import Data.ByteString    (ByteString)
 import Data.Foldable      (foldr', toList)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Sequence      (Seq, ViewL (..), ViewR (..))
 import Data.Text          (Text)
 import Data.Time          (Day, TimeZone)
+import Data.Traversable   (for)
 import Data.Void          (Void)
 import Data.Word          (Word8)
 import Dhall.Map          (Map)
@@ -97,6 +102,7 @@ import qualified Data.Set
 import qualified Data.Text     as Text
 import qualified Data.Time     as Time
 import qualified Dhall.Map     as Map
+import qualified Dhall.Core.DAG as DAG
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf   as Printf
@@ -1139,215 +1145,283 @@ countNames x = go 0
     go !acc EmptyNames         = acc
     go  acc (Bind env x') = go (if x == x' then acc + 1 else acc) env
 
--- | Quote a value into beta-normal form.
+-- | Quote a value by interning 'Dhall.Core.DAG.CoreNode's, then rebuild a
+-- physically shared 'Expr'.
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
-quote !env !t0 =
-    case t0 of
-        VConst k ->
-            Const k
-        VVar !x !i ->
-            Var (V x (countNames x env - i - 1))
-        VApp t u ->
-            quote env t `qApp` u
-        VLam a (freshClosure -> (x, v, t)) ->
-            Lam
-                mempty
-                (Syntax.makeFunctionBinding x (quote env a))
-                (quoteBind x (instantiate t v))
-        VHLam i t ->
-            case i of
-                Typed (fresh -> (x, v)) a ->
-                    Lam mempty
-                        (Syntax.makeFunctionBinding x (quote env a))
-                        (quoteBind x (t v))
-                Prim ->
-                    quote env (t VPrimVar)
-                NaturalSubtractZero ->
-                    App (primitiveVar "Natural/subtract") (NaturalLit 0)
-                TextReplaceEmpty ->
-                    App (primitiveVar "Text/replace") (TextLit (Chunks [] ""))
-                TextReplaceEmptyArgument replacement ->
-                    App (App (primitiveVar "Text/replace") (TextLit (Chunks [] "")))
-                        (quote env replacement)
+quote !env !t0 = runST $ do
+    b <- DAG.newBuilder DAG.SharingOn
+    nid <- quoteGraph b env t0
+    g <- DAG.freeze b nid
+    return (DAG.toSharedExpr g)
 
-        VPi a (freshClosure -> (x, v, b)) ->
-            Pi mempty x (quote env a) (quoteBind x (instantiate b v))
-        VHPi (fresh -> (x, v)) a b ->
-            Pi mempty x (quote env a) (quoteBind x (b v))
-        VBool ->
-            Bool
-        VBoolLit b ->
-            BoolLit b
-        VBoolAnd t u ->
-            BoolAnd (quote env t) (quote env u)
-        VBoolOr t u ->
-            BoolOr (quote env t) (quote env u)
-        VBoolEQ t u ->
-            BoolEQ (quote env t) (quote env u)
-        VBoolNE t u ->
-            BoolNE (quote env t) (quote env u)
-        VBoolIf t u v ->
-            BoolIf (quote env t) (quote env u) (quote env v)
-        VBytes ->
-            Bytes
-        VBytesLit b ->
-            BytesLit b
-        VNatural ->
-            Natural
-        VNaturalLit n ->
-            NaturalLit n
-        VNaturalFold a t u v ->
-            primitiveVar "Natural/fold" `qApp` a `qApp` t `qApp` u `qApp` v
-        VNaturalBuild t ->
-            primitiveVar "Natural/build" `qApp` t
-        VNaturalIsZero t ->
-            primitiveVar "Natural/isZero" `qApp` t
-        VNaturalEven t ->
-            primitiveVar "Natural/even" `qApp` t
-        VNaturalOdd t ->
-            primitiveVar "Natural/odd" `qApp` t
-        VNaturalToInteger t ->
-            primitiveVar "Natural/toInteger" `qApp` t
-        VNaturalShow t ->
-            primitiveVar "Natural/show" `qApp` t
-        VNaturalPlus t u ->
-            NaturalPlus (quote env t) (quote env u)
-        VNaturalTimes t u ->
-            NaturalTimes (quote env t) (quote env u)
-        VNaturalSubtract x y ->
-            primitiveVar "Natural/subtract" `qApp` x `qApp` y
-        VInteger ->
-            Integer
-        VIntegerLit n ->
-            IntegerLit n
-        VIntegerClamp t ->
-            primitiveVar "Integer/clamp" `qApp` t
-        VIntegerNegate t ->
-            primitiveVar "Integer/negate" `qApp` t
-        VIntegerShow t ->
-            primitiveVar "Integer/show" `qApp` t
-        VIntegerToDouble t ->
-            primitiveVar "Integer/toDouble" `qApp` t
-        VDouble ->
-            Double
-        VDoubleLit n ->
-            DoubleLit n
-        VDoubleShow t ->
-            primitiveVar "Double/show" `qApp` t
-        VText ->
-            Text
-        VTextLit (VChunks xys z) ->
-            TextLit (Chunks (fmap (fmap (quote env)) xys) z)
-        VTextAppend t u ->
-            TextAppend (quote env t) (quote env u)
-        VTextShow t ->
-            primitiveVar "Text/show" `qApp` t
-        VTextReplace a b c ->
-            primitiveVar "Text/replace" `qApp` a `qApp` b `qApp` c
-        VDate ->
-            Date
-        VDateLiteral d ->
-            DateLiteral d
-        VDateShow t ->
-            primitiveVar "Date/show" `qApp` t
-        VTime ->
-            Time
-        VTimeLiteral hh mm ss frac p ->
-            TimeLiteral hh mm ss frac p
-        VTimeShow t ->
-            primitiveVar "Time/show" `qApp` t
-        VTimeZone ->
-            TimeZone
-        VTimeZoneLiteral z ->
-            TimeZoneLiteral z
-        VTimeZoneShow t ->
-            primitiveVar "TimeZone/show" `qApp` t
-        VList t ->
-            List `qApp` t
-        VListLit ma ts ->
-            ListLit (fmap (quote env) ma) (fmap (quote env) ts)
-        VListAppend t u ->
-            ListAppend (quote env t) (quote env u)
-        VListBuild a t ->
-            primitiveVar "List/build" `qApp` a `qApp` t
-        VListFold a l t u v ->
-            primitiveVar "List/fold" `qApp` a `qApp` l `qApp` t `qApp` u `qApp` v
-        VListLength a t ->
-            primitiveVar "List/length" `qApp` a `qApp` t
-        VListHead a t ->
-            primitiveVar "List/head" `qApp` a `qApp` t
-        VListLast a t ->
-            primitiveVar "List/last" `qApp` a `qApp` t
-        VListIndexed a t ->
-            primitiveVar "List/indexed" `qApp` a `qApp` t
-        VListReverse a t ->
-            primitiveVar "List/reverse" `qApp` a `qApp` t
-        VOptional a ->
-            Optional `qApp` a
-        VSome t ->
-            Some (quote env t)
-        VNone t ->
-            None `qApp` t
-        VRecord m ->
-            Record (fmap quoteRecordField m)
-        VRecordLit m ->
-            RecordLit (fmap quoteRecordField m)
-        VUnion m ->
-            Union (fmap (fmap (quote env)) m)
-        VCombine mk t u ->
-            Combine mempty mk (quote env t) (quote env u)
-        VCombineTypes t u ->
-            CombineTypes mempty (quote env t) (quote env u)
-        VPrefer t u ->
-            Prefer mempty PreferFromSource (quote env t) (quote env u)
-        VMerge t u ma ->
-            Merge (quote env t) (quote env u) (fmap (quote env) ma)
-        VToMap t ma ->
-            ToMap (quote env t) (fmap (quote env) ma)
-        VShowConstructor t ->
-            ShowConstructor (quote env t)
-        VField t k ->
-            Field (quote env t) $ Syntax.makeFieldSelection k
-        VProject t p ->
-            Project (quote env t) (first Dhall.Set.toList (fmap (quote env) p))
-        VAssert t ->
-            Assert (quote env t)
-        VEquivalent t u ->
-            Equivalent mempty (quote env t) (quote env u)
-        VWith e ks v ->
-            With (quote env e) ks (quote env v)
-        VInject m k Nothing ->
-            Field (Union (fmap (fmap (quote env)) m)) $ Syntax.makeFieldSelection k
-        VInject m k (Just t) ->
-            Field (Union (fmap (fmap (quote env)) m)) (Syntax.makeFieldSelection k) `qApp` t
-        VEmbed a ->
-            Embed a
-        VPrimVar ->
-            error errorMsg
+-- | Quote into an existing intern builder. Child nodes are interned before parents.
+quoteGraph :: forall s a. Eq a => DAG.Builder s a -> Names -> Val a -> ST s DAG.NodeId
+quoteGraph b = go
   where
-    fresh :: Text -> (Text, Val a)
-    fresh x = (x, VVar x (countNames x env))
+    internN = DAG.intern b
+
+    go :: Names -> Val a -> ST s DAG.NodeId
+    go !env !t0 =
+        case t0 of
+            VConst k ->
+                internN (DAG.CConst k)
+            VVar !x !i ->
+                internN (DAG.CVar (V x (countNames x env - i - 1)))
+            VApp t u -> do
+                t' <- go env t
+                qApp env t' u
+            VLam a (freshClosure env -> (x, v, t)) -> do
+                a' <- go env a
+                body <- go (Bind env x) (instantiate t v)
+                internN (DAG.CLam x a' body)
+            VHLam i t ->
+                case i of
+                    Typed (fresh env -> (x, v)) a -> do
+                        a' <- go env a
+                        body <- go (Bind env x) (t v)
+                        internN (DAG.CLam x a' body)
+                    Prim ->
+                        go env (t VPrimVar)
+                    NaturalSubtractZero -> do
+                        f <- primitiveVar env "Natural/subtract"
+                        z <- internN (DAG.CNaturalLit 0)
+                        internN (DAG.CApp f z)
+                    TextReplaceEmpty -> do
+                        f <- primitiveVar env "Text/replace"
+                        z <- internN (DAG.CTextLit [] "")
+                        internN (DAG.CApp f z)
+                    TextReplaceEmptyArgument replacement -> do
+                        f <- primitiveVar env "Text/replace"
+                        z <- internN (DAG.CTextLit [] "")
+                        app <- internN (DAG.CApp f z)
+                        r <- go env replacement
+                        internN (DAG.CApp app r)
+            VPi a (freshClosure env -> (x, v, t)) -> do
+                a' <- go env a
+                body <- go (Bind env x) (instantiate t v)
+                internN (DAG.CPi x a' body)
+            VHPi (fresh env -> (x, v)) a t -> do
+                a' <- go env a
+                body <- go (Bind env x) (t v)
+                internN (DAG.CPi x a' body)
+            VBool ->
+                internN DAG.CBool
+            VBoolLit x ->
+                internN (DAG.CBoolLit x)
+            VBoolAnd t u ->
+                bin env DAG.CBoolAnd t u
+            VBoolOr t u ->
+                bin env DAG.CBoolOr t u
+            VBoolEQ t u ->
+                bin env DAG.CBoolEQ t u
+            VBoolNE t u ->
+                bin env DAG.CBoolNE t u
+            VBoolIf t u v -> do
+                t' <- go env t
+                u' <- go env u
+                v' <- go env v
+                internN (DAG.CBoolIf t' u' v')
+            VBytes ->
+                internN DAG.CBytes
+            VBytesLit x ->
+                internN (DAG.CBytesLit x)
+            VNatural ->
+                internN DAG.CNatural
+            VNaturalLit n ->
+                internN (DAG.CNaturalLit n)
+            VNaturalFold a t u v ->
+                primApps env "Natural/fold" [a, t, u, v]
+            VNaturalBuild t ->
+                primApps env "Natural/build" [t]
+            VNaturalIsZero t ->
+                primApps env "Natural/isZero" [t]
+            VNaturalEven t ->
+                primApps env "Natural/even" [t]
+            VNaturalOdd t ->
+                primApps env "Natural/odd" [t]
+            VNaturalToInteger t ->
+                primApps env "Natural/toInteger" [t]
+            VNaturalShow t ->
+                primApps env "Natural/show" [t]
+            VNaturalPlus t u ->
+                bin env DAG.CNaturalPlus t u
+            VNaturalTimes t u ->
+                bin env DAG.CNaturalTimes t u
+            VNaturalSubtract x y ->
+                primApps env "Natural/subtract" [x, y]
+            VInteger ->
+                internN DAG.CInteger
+            VIntegerLit n ->
+                internN (DAG.CIntegerLit n)
+            VIntegerClamp t ->
+                primApps env "Integer/clamp" [t]
+            VIntegerNegate t ->
+                primApps env "Integer/negate" [t]
+            VIntegerShow t ->
+                primApps env "Integer/show" [t]
+            VIntegerToDouble t ->
+                primApps env "Integer/toDouble" [t]
+            VDouble ->
+                internN DAG.CDouble
+            VDoubleLit n ->
+                internN (DAG.CDoubleLit n)
+            VDoubleShow t ->
+                primApps env "Double/show" [t]
+            VText ->
+                internN DAG.CText
+            VTextLit (VChunks xys z) -> do
+                chunks <- for xys $ \(t, e) -> (,) t <$> go env e
+                internN (DAG.CTextLit chunks z)
+            VTextAppend t u ->
+                bin env DAG.CTextAppend t u
+            VTextShow t ->
+                primApps env "Text/show" [t]
+            VTextReplace a c d ->
+                primApps env "Text/replace" [a, c, d]
+            VDate ->
+                internN DAG.CDate
+            VDateLiteral d ->
+                internN (DAG.CDateLiteral d)
+            VDateShow t ->
+                primApps env "Date/show" [t]
+            VTime ->
+                internN DAG.CTime
+            VTimeLiteral hh mm ss frac p ->
+                internN (DAG.CTimeLiteral hh mm ss frac p)
+            VTimeShow t ->
+                primApps env "Time/show" [t]
+            VTimeZone ->
+                internN DAG.CTimeZone
+            VTimeZoneLiteral z ->
+                internN (DAG.CTimeZoneLiteral z)
+            VTimeZoneShow t ->
+                primApps env "TimeZone/show" [t]
+            VList t -> do
+                list <- internN DAG.CList
+                qApp env list t
+            VListLit ma ts -> do
+                ma' <- traverse (go env) ma
+                ts' <- traverse (go env) (toList ts)
+                internN (DAG.CListLit ma' ts')
+            VListAppend t u ->
+                bin env DAG.CListAppend t u
+            VListBuild a t ->
+                primApps env "List/build" [a, t]
+            VListFold a l t u v ->
+                primApps env "List/fold" [a, l, t, u, v]
+            VListLength a t ->
+                primApps env "List/length" [a, t]
+            VListHead a t ->
+                primApps env "List/head" [a, t]
+            VListLast a t ->
+                primApps env "List/last" [a, t]
+            VListIndexed a t ->
+                primApps env "List/indexed" [a, t]
+            VListReverse a t ->
+                primApps env "List/reverse" [a, t]
+            VOptional a -> do
+                opt <- internN DAG.COptional
+                qApp env opt a
+            VSome t ->
+                go env t >>= internN . DAG.CSome
+            VNone t -> do
+                none <- internN DAG.CNone
+                qApp env none t
+            VRecord m -> do
+                kvs <- for (Map.toList m) $ \(k, v) -> (,) k <$> go env v
+                internN (DAG.CRecord kvs)
+            VRecordLit m -> do
+                kvs <- for (Map.toList m) $ \(k, v) -> (,) k <$> go env v
+                internN (DAG.CRecordLit kvs)
+            VUnion m -> do
+                kvs <- for (Map.toList m) $ \(k, mv) -> (,) k <$> traverse (go env) mv
+                internN (DAG.CUnion kvs)
+            VCombine mk t u -> do
+                t' <- go env t
+                u' <- go env u
+                internN (DAG.CCombine mk t' u')
+            VCombineTypes t u ->
+                bin env DAG.CCombineTypes t u
+            VPrefer t u -> do
+                t' <- go env t
+                u' <- go env u
+                internN (DAG.CPrefer PreferFromSource t' u')
+            VMerge t u ma -> do
+                t' <- go env t
+                u' <- go env u
+                ma' <- traverse (go env) ma
+                internN (DAG.CMerge t' u' ma')
+            VToMap t ma -> do
+                t' <- go env t
+                ma' <- traverse (go env) ma
+                internN (DAG.CToMap t' ma')
+            VShowConstructor t ->
+                go env t >>= internN . DAG.CShowConstructor
+            VField t k -> do
+                t' <- go env t
+                internN (DAG.CField t' k)
+            VProject t p -> do
+                t' <- go env t
+                p' <- case p of
+                    Left ks -> return (Left (Dhall.Set.toList ks))
+                    Right e -> Right <$> go env e
+                internN (DAG.CProject t' p')
+            VAssert t ->
+                go env t >>= internN . DAG.CAssert
+            VEquivalent t u ->
+                bin env DAG.CEquivalent t u
+            VWith e ks v -> do
+                e' <- go env e
+                v' <- go env v
+                internN (DAG.CWith e' ks v')
+            VInject m k Nothing -> do
+                kvs <- for (Map.toList m) $ \(l, mv) -> (,) l <$> traverse (go env) mv
+                union <- internN (DAG.CUnion kvs)
+                internN (DAG.CField union k)
+            VInject m k (Just t) -> do
+                kvs <- for (Map.toList m) $ \(l, mv) -> (,) l <$> traverse (go env) mv
+                union <- internN (DAG.CUnion kvs)
+                field <- internN (DAG.CField union k)
+                qApp env field t
+            VEmbed a ->
+                internN (DAG.CEmbed a)
+            VPrimVar ->
+                error errorMsg
+
+    fresh :: Names -> Text -> (Text, Val a)
+    fresh env x = (x, VVar x (countNames x env))
     {-# INLINE fresh #-}
 
-    freshClosure :: Closure a -> (Text, Val a, Closure a)
-    freshClosure closure@(Closure x _ _) = (x, snd (fresh x), closure)
+    freshClosure :: Names -> Closure a -> (Text, Val a, Closure a)
+    freshClosure env closure@(Closure x _ _) = (x, snd (fresh env x), closure)
     {-# INLINE freshClosure #-}
 
-    quoteBind :: Text -> Val a -> Expr Void a
-    quoteBind x = quote (Bind env x)
-    {-# INLINE quoteBind #-}
-
-    qApp :: Expr Void a -> Val a -> Expr Void a
-    qApp t VPrimVar = t
-    qApp t u        = App t (quote env u)
+    qApp :: Names -> DAG.NodeId -> Val a -> ST s DAG.NodeId
+    qApp _ t VPrimVar = return t
+    qApp env t u = do
+        u' <- go env u
+        internN (DAG.CApp t u')
     {-# INLINE qApp #-}
 
-    quoteRecordField :: Val a -> RecordField Void a
-    quoteRecordField = Syntax.makeRecordField . quote env
-    {-# INLINE quoteRecordField #-}
+    bin
+        :: Names
+        -> (DAG.NodeId -> DAG.NodeId -> DAG.CoreNode a)
+        -> Val a
+        -> Val a
+        -> ST s DAG.NodeId
+    bin env cons t u = do
+        t' <- go env t
+        u' <- go env u
+        internN (cons t' u')
 
-    primitiveVar :: Text -> Expr Void a
-    primitiveVar name = Var (V name (countNames name env))
+    primitiveVar :: Names -> Text -> ST s DAG.NodeId
+    primitiveVar env name =
+        internN (DAG.CVar (V name (countNames name env)))
+
+    primApps :: Names -> Text -> [Val a] -> ST s DAG.NodeId
+    primApps env name args = do
+        f0 <- primitiveVar env name
+        foldM (\f arg -> qApp env f arg) f0 args
 
 
 -- | Predefined functions implemented as ordinary variables with known names.
@@ -1767,7 +1841,19 @@ unboundBuiltinValues =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env = Syntax.renote . quote (envNames env) . eval env . Syntax.denote
+nf !env e = Syntax.renote (quote (envNames env) (eval env (Syntax.denote e)))
+
+-- | Normalize into a frozen hash-consed graph (sharing on). Compatibility
+-- 'normalize' rebuilds a physically shared 'Expr' from this graph.
+normalizeGraph :: Eq a => Expr s a -> DAG.CoreGraph a
+normalizeGraph = normalizeGraphWith DAG.SharingOn
+
+-- | Same as 'normalizeGraph' with an explicit intern-sharing mode (oracle).
+normalizeGraphWith :: Eq a => DAG.SharingMode -> Expr s a -> DAG.CoreGraph a
+normalizeGraphWith mode e = runST $ do
+    b <- DAG.newBuilder mode
+    nid <- quoteGraph b EmptyNames (eval Empty (Syntax.denote e))
+    DAG.freeze b nid
 
 normalize :: Eq a => Expr s a -> Expr t a
 normalize = nf Empty

@@ -9,6 +9,10 @@ import Dhall.Core
     , alphaNormalize
     , denote
     , makeFunctionBinding
+    , normalize
+    , normalizeGraph
+    , normalizeGraphWith
+    , pretty
     , shift
     , subst
     )
@@ -22,6 +26,7 @@ import Dhall.Core.DAG
     , fromExprWith
     , graphMetrics
     , nodeCount
+    , prettyGraph
     , shiftGraph
     , substGraph
     , toSharedExpr
@@ -110,14 +115,40 @@ tests =
             internHits (graphMetrics on) > 0 @?= True
             internHits (graphMetrics off) @?= 0
             internMisses (graphMetrics off) @?= fromIntegral (uniqueNodes (graphMetrics off))
+
+        , HUnit.testCase "normalizeGraph matches normalize" $ do
+            let e = NaturalPlus (NaturalLit 1) (NaturalLit 1) :: Expr Void Void
+            toSharedExpr (normalizeGraph e) @?= denote (normalize e)
+
+        , HUnit.testCase "normalize sharing on/off same tree" $ do
+            toSharedExpr (normalizeGraph repeatedOpenPlus)
+                @?= toSharedExpr (normalizeGraphWith SharingOff repeatedOpenPlus)
+
+        , HUnit.testCase "quote does not expand unique nodes" $ do
+            let g = normalizeGraph repeatedOpenPlus
+            uniqueNodes (graphMetrics g) @?= 4
+            internHits (graphMetrics g) > 0 @?= True
+            case validate g of
+                Left err -> HUnit.assertFailure err
+                Right () -> pure ()
+
+        , HUnit.testCase "prettyGraph matches pretty of normalize" $ do
+            prettyGraph (normalizeGraph repeatedOpenPlus)
+                @?= pretty (normalize repeatedOpenPlus :: Expr Void Void)
         ]
 
 fromPure :: Expr Void Void -> CoreGraph Void
 fromPure = fromExpr
 
--- Unique nodes = depth+1; expanded occurrences = 2^(depth+1)-1.
+-- Unique nodes = depth+1; expanded occurrences = 2^(n+1)-1.
 repeatedPlus :: Int -> Expr Void Void
 repeatedPlus depth = go depth
   where
     go 0 = NaturalLit 0
     go n = let t = go (n - 1) in NaturalPlus t t
+
+-- λ(x : Natural) → x + x  — quote shares the two uses of x.
+repeatedOpenPlus :: Expr Void Void
+repeatedOpenPlus =
+    Lam AutoInferCharSet (makeFunctionBinding "x" Natural)
+        (NaturalPlus (Var (V "x" 0)) (Var (V "x" 0)))

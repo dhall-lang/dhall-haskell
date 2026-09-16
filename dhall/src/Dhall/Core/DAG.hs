@@ -40,6 +40,7 @@ module Dhall.Core.DAG
     , internExpr
     , internGraph
     , freeze
+    , prettyGraph
     ) where
 
 import Control.Monad.ST (ST, runST)
@@ -54,7 +55,7 @@ import Dhall.Core.DAG.Node
     , childIds
     , edgeCount
     )
-import Dhall.Pretty.Internal (ChooseCharacterSet (..))
+import Dhall.Pretty.Internal (ChooseCharacterSet (..), pretty_)
 import Dhall.Syntax
     ( Binding (..)
     , Chunks (..)
@@ -68,12 +69,14 @@ import Dhall.Syntax
     , makeFunctionBinding
     , makeRecordField
     )
+import Prettyprinter (Pretty)
 
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Sequence       as Seq
 import qualified Data.Vector         as V
 import qualified Dhall.Map
-import qualified Dhall.Normalize     as Normalize
+import qualified Dhall.Syntax        as Syntax
+import qualified Lens.Micro          as Lens
 
 -- | Whether interned nodes are maximally shared.
 data SharingMode = SharingOn | SharingOff
@@ -222,7 +225,7 @@ traverseIds f = \case
     CRecord kvs -> CRecord <$> traverse (\(k, n) -> (,) k <$> f n) kvs
     CRecordLit kvs -> CRecordLit <$> traverse (\(k, n) -> (,) k <$> f n) kvs
     CUnion kts -> CUnion <$> traverse (\(k, m) -> (,) k <$> traverse f m) kts
-    CCombine x y -> CCombine <$> f x <*> f y
+    CCombine m x y -> CCombine m <$> f x <*> f y
     CCombineTypes x y -> CCombineTypes <$> f x <*> f y
     CPrefer p x y -> CPrefer p <$> f x <*> f y
     CRecordCompletion x y -> CRecordCompletion <$> f x <*> f y
@@ -324,7 +327,10 @@ internExpr b = go
         Union kts -> do
             kvs <- traverse (\(k, m) -> (,) k <$> traverse go m) (Dhall.Map.toList kts)
             intern b (CUnion kvs)
-        Combine _ _ x y -> bin CCombine x y
+        Combine _ mk x y -> do
+            x' <- go x
+            y' <- go y
+            intern b (CCombine mk x' y')
         CombineTypes _ x y -> bin CCombineTypes x y
         Prefer _ p x y -> do
             x' <- go x
@@ -420,7 +426,7 @@ toSharedExpr g =
         CRecord kvs -> Record (fromFields kvs)
         CRecordLit kvs -> RecordLit (fromFields kvs)
         CUnion kts -> Union (Dhall.Map.fromList [ (k, fmap at m) | (k, m) <- kts ])
-        CCombine x y -> Combine AutoInferCharSet Nothing (at x) (at y)
+        CCombine m x y -> Combine AutoInferCharSet m (at x) (at y)
         CCombineTypes x y -> CombineTypes AutoInferCharSet (at x) (at y)
         CPrefer p x y -> Prefer AutoInferCharSet p (at x) (at y)
         CRecordCompletion x y -> RecordCompletion (at x) (at y)
@@ -437,6 +443,11 @@ toSharedExpr g =
 
     fromFields kvs =
         Dhall.Map.fromList [ (k, makeRecordField (at n)) | (k, n) <- kvs ]
+
+-- | Render a graph as Dhall text. The 'Expr' skeleton is physically shared;
+-- layout still emits repeated source text for repeated occurrences.
+prettyGraph :: Pretty a => CoreGraph a -> Text
+prettyGraph = pretty_ . toSharedExpr
 
 -- | Drop unreachable nodes and renumber densely from 0 in child-before-parent order.
 compact :: (Eq a) => CoreGraph a -> CoreGraph a
@@ -547,11 +558,34 @@ shiftGraph d (V x n0) g = runST $ do
     freeze b root
 
 -- | Graph substitution. Binders in the body still shift the replacement the
--- same way as 'Normalize.subst'; the result is re-interned.
-substGraph :: (Eq a) => Var -> CoreGraph a -> CoreGraph a -> CoreGraph a
+-- same way as tree 'subst'; the result is re-interned.
+substGraph :: Eq a => Var -> CoreGraph a -> CoreGraph a -> CoreGraph a
 substGraph var replacement body =
-    fromExpr
-        (Normalize.subst var (toSharedExpr replacement) (toSharedExpr body))
+    fromExpr (substExpr var (toSharedExpr replacement) (toSharedExpr body))
+
+substExpr :: Var -> Expr s a -> Expr s a -> Expr s a
+substExpr _ _ (Const a) = Const a
+substExpr (V x n) e (Lam cs (FunctionBinding src0 y src1 src2 _A) b) =
+    Lam cs (FunctionBinding src0 y src1 src2 _A') b'
+  where
+    _A' = substExpr (V x n ) e _A
+    b'  = substExpr (V x n') (Syntax.shift 1 (V y 0) e) b
+    n'  = if x == y then n + 1 else n
+substExpr (V x n) e (Pi cs y _A _B) = Pi cs y _A' _B'
+  where
+    _A' = substExpr (V x n ) e _A
+    _B' = substExpr (V x n') (Syntax.shift 1 (V y 0) e) _B
+    n'  = if x == y then n + 1 else n
+substExpr v e (Var v') = if v == v' then e else Var v'
+substExpr (V x n) e (Let (Binding src0 f src1 mt src2 r) b) =
+    Let (Binding src0 f src1 mt' src2 r') b'
+  where
+    b' = substExpr (V x n') (Syntax.shift 1 (V f 0) e) b
+      where
+        n' = if x == f then n + 1 else n
+    mt' = fmap (fmap (substExpr (V x n) e)) mt
+    r'  = substExpr (V x n) e r
+substExpr x e expression = Lens.over Syntax.subExpressions (substExpr x e) expression
 
 alphaNormalizeGraph :: (Eq a) => CoreGraph a -> CoreGraph a
 alphaNormalizeGraph g = runST $ do

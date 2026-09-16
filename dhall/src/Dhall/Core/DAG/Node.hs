@@ -82,7 +82,7 @@ data CoreNode a
     | CRecord ![(Text, NodeId)]
     | CRecordLit ![(Text, NodeId)]
     | CUnion ![(Text, Maybe NodeId)]
-    | CCombine !NodeId !NodeId
+    | CCombine !(Maybe Text) !NodeId !NodeId
     | CCombineTypes !NodeId !NodeId
     | CPrefer !PreferAnnotation !NodeId !NodeId
     | CRecordCompletion !NodeId !NodeId
@@ -163,7 +163,7 @@ instance Eq a => Hashable (CoreNode a) where
         CRecord kvs -> s `hashWithSalt` (39 :: Int) `hashWithSalt` kvs
         CRecordLit kvs -> s `hashWithSalt` (40 :: Int) `hashWithSalt` kvs
         CUnion kts -> s `hashWithSalt` (41 :: Int) `hashWithSalt` kts
-        CCombine a b -> s `hashWithSalt` (42 :: Int) `hashWithSalt` a `hashWithSalt` b
+        CCombine m a b -> s `hashWithSalt` (42 :: Int) `hashWithSalt` m `hashWithSalt` a `hashWithSalt` b
         CCombineTypes a b -> s `hashWithSalt` (43 :: Int) `hashWithSalt` a `hashWithSalt` b
         CPrefer p a b -> s `hashWithSalt` (44 :: Int) `hashWithSalt` p `hashWithSalt` a `hashWithSalt` b
         CRecordCompletion a b -> s `hashWithSalt` (45 :: Int) `hashWithSalt` a `hashWithSalt` b
@@ -223,7 +223,7 @@ childIds = \case
     CRecord kvs -> map snd kvs
     CRecordLit kvs -> map snd kvs
     CUnion kts -> [ n | (_, Just n) <- kts ]
-    CCombine a b -> [a, b]
+    CCombine _ a b -> [a, b]
     CCombineTypes a b -> [a, b]
     CPrefer _ a b -> [a, b]
     CRecordCompletion a b -> [a, b]

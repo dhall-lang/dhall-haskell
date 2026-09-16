@@ -37,6 +37,8 @@ module Dhall.Core (
     -- * Normalization
     , alphaNormalize
     , normalize
+    , normalizeGraph
+    , normalizeGraphWith
     , normalizeWith
     , normalizeWithM
     , Normalizer
@@ -94,12 +96,22 @@ import Prettyprinter          (Pretty)
 
 import qualified Control.Exception
 import qualified Data.Text
+import qualified Dhall.Core.DAG    as DAG
 import qualified Dhall.Eval        as Eval
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
 pretty = pretty_
 {-# INLINE pretty #-}
+
+-- | Hash-consed beta-normal form. 'normalize' is this graph rebuilt as a
+-- physically shared 'Expr'.
+normalizeGraph :: Eq a => Expr s a -> DAG.CoreGraph a
+normalizeGraph = Eval.normalizeGraph
+
+-- | Same as 'normalizeGraph' with intern sharing enabled or disabled.
+normalizeGraphWith :: Eq a => DAG.SharingMode -> Expr s a -> DAG.CoreGraph a
+normalizeGraphWith = Eval.normalizeGraphWith
 
 {-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 
