@@ -2,6 +2,7 @@
 
 module Dhall.Test.Parser where
 
+import Data.List       (isInfixOf)
 import Data.Text       (Text)
 import Data.Void       (Void)
 import Dhall.Core      (Binding (..), Expr (..), Import, Var (..))
@@ -67,7 +68,9 @@ getTests = do
 internalTests :: TestTree
 internalTests =
     Tasty.testGroup "internal"
-        [ notesInLetInLet ]
+        [ notesInLetInLet
+        , reservedSomeLabelError
+        ]
 
 notesInLetInLet :: TestTree
 notesInLetInLet =
@@ -119,6 +122,20 @@ notesInLetInLet =
         let msg = "Unexpected parse result"
 
         Tasty.HUnit.assertEqual msg expected (simplifyNotes expression)
+
+reservedSomeLabelError :: TestTree
+reservedSomeLabelError =
+    Tasty.HUnit.testCase "Reserved `Some` label has informative parse error" $
+        case Parser.exprFromText mempty "let `Some` = 1 in `Some`" of
+            Left parseError ->
+                let rendered = show parseError
+                    mentionsSome = "`Some`" `isInfixOf` rendered
+                    avoidsGeneric = not ("unknown parse error" `isInfixOf` rendered)
+                 in Tasty.HUnit.assertBool
+                        ("Expected parse error to mention `Some` and avoid generic output.\nActual error:\n" <> rendered)
+                        (mentionsSome && avoidsGeneric)
+            Right _ ->
+                Tasty.HUnit.assertFailure "Unexpected successful parse"
 
 shouldParse :: Text -> TestTree
 shouldParse path = do

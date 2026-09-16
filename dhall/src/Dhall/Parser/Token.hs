@@ -580,8 +580,9 @@ label = backtickNonSomeLabel <|> simpleLabel False <?> "label"
   where
     backtickNonSomeLabel = do
         t <- backtickLabel
-        Monad.guard (t /= "Some")
-        return t
+        if t == "Some"
+            then fail "Cannot use `Some` as a variable name because it is a fixed symbol"
+            else return t
 
 {-| Same as `label` except that built-in names are allowed
 
