@@ -1,6 +1,9 @@
 # GitHub Actions
 
-- [`main.yml`](main.yml) — build and test matrix on pull requests
+- [`main.yml`](main.yml) — Stack build and test matrix on pull requests, the
+  current merge gate
+- [`cabal.yml`](cabal.yml) — cabal build and test matrix on pull requests,
+  advisory only (see [the CI/CD migration plan](../../docs/ci-cd-migration-plan.md))
 - [`renovatebot.yml`](renovatebot.yml) — scheduled Renovate
 - [`bench.yml`](bench.yml) — `dhall` package benchmarks (below)
 

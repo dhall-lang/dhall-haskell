@@ -1,0 +1,83 @@
+# Advisory cabal build+test matrix, added alongside the Stack-based `main`
+# workflow as part of the CI/CD migration (docs/ci-cd-migration-plan.md,
+# step 2). Not yet a merge gate: no job here is named in .mergify.yml.
+# `cabal.project` encodes the GHC-conditional package set (dhall-nix and
+# dhall-nixpkgs excluded below GHC 9.8), so there is no per-package skip
+# logic to hand-maintain here the way main.yml's bash `if` blocks do for
+# Stack.
+name: cabal
+on: [pull_request]
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - runner: 'ubuntu-22.04'
+          - runner: 'ubuntu-24.04-arm'
+          - runner: 'macos-latest'
+          - runner: 'macos-13'
+          - runner: 'windows-latest'
+        ghc:
+          - 'latest'
+        include:
+          - os: { runner: 'ubuntu-22.04' }
+            ghc: '8.10'
+          - os: { runner: 'ubuntu-22.04' }
+            ghc: '9.2'
+          - os: { runner: 'ubuntu-22.04' }
+            ghc: '9.4'
+          - os: { runner: 'ubuntu-22.04' }
+            ghc: '9.6'
+          - os: { runner: 'ubuntu-22.04' }
+            ghc: '9.8'
+          - os: { runner: 'ubuntu-22.04' }
+            ghc: '9.10'
+          - os: { runner: 'ubuntu-22.04' }
+            ghc: '9.12'
+    name: ${{ matrix.os.runner }} - ghc-${{ matrix.ghc }}
+    runs-on: ${{ matrix.os.runner }}
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - id: setup
+        name: "Setup Haskell environment"
+        uses: haskell-actions/setup@v2.12
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: 'latest'
+      - name: "Install libsodium"
+        if: ${{ startsWith(matrix.os.runner, 'ubuntu') }}
+        shell: bash
+        run: sudo apt-get install -y libsodium-dev
+      - name: "Configure"
+        shell: bash
+        run: cabal configure --enable-tests
+      - name: "Generate the plan"
+        shell: bash
+        run: cabal build all --dry-run --enable-tests
+      - name: "Restore cached dependencies"
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ matrix.os.runner }}-ghc${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: |
+            ${{ matrix.os.runner }}-ghc${{ steps.setup.outputs.ghc-version }}-
+      - name: "Install dependencies"
+        shell: bash
+        run: cabal build all --only-dependencies --enable-tests
+      - name: "Save dependencies cache"
+        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: "Build"
+        shell: bash
+        run: cabal build all --enable-tests
+      - name: "Test"
+        shell: bash
+        run: cabal test all --enable-tests --test-show-details streaming
