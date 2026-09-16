@@ -15,6 +15,7 @@ import qualified Data.ByteString as StrictByteString
 import qualified Data.Functor.Const as FunctorConst
 import qualified Data.Text as Text
 import qualified Dhall.Core as Core
+import qualified Dhall.Core.DAG as DAG
 
 -- | Shared @x + x@ tree for @semisemantic.nf_size_walk@. Unique nodes =
 -- depth+1; a full walk visits @2^(depth+1)-1@ constructors (no DAG memo).
@@ -89,7 +90,16 @@ nfSizeWalkLabels =
     [ "semisemantic.nf_size_walk"
     , "semisemantic.nf_size_walk.full"
     , "semisemantic.nf_size_walk.early_abort"
+    , "semisemantic.graph_metrics"
+    , "semisemantic.graph_metrics.unique_nodes"
     ]
+
+-- | Unique-node / occurrence metrics for the shared @x + x@ tree.
+-- Sharing-on intern uses @depth+1@ unique nodes; a tree fold visits
+-- @2^(depth+1)-1@ constructors.
+graphMetricsOfSharedTree :: Int -> DAG.GraphMetrics
+graphMetricsOfSharedTree depth =
+    DAG.graphMetrics (DAG.fromExpr (sharedNaturalPlusTree depth))
 
 
 
@@ -106,4 +116,6 @@ nfSizeWalkBenchGroup =
             (nf (nfSizeWalkEstimate . sharedNaturalPlusTree) nfSizeWalkDepth)
         , bench "early_abort"
             (nf (nfSizeWalkExceedsThreshold . sharedNaturalPlusTree) nfSizeWalkDepth)
+        , bench "unique_nodes"
+            (nf (DAG.uniqueNodes . graphMetricsOfSharedTree) nfSizeWalkDepth)
         ]

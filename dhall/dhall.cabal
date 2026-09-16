@@ -340,6 +340,7 @@ Library
         Dhall.Binary
         Dhall.Context
         Dhall.Core
+        Dhall.Core.DAG
         Dhall.Crypto
         Dhall.Diff
         Dhall.DirectoryTree
@@ -374,6 +375,7 @@ Library
         Exposed-Modules:
           Dhall.Deriving
     Other-Modules:
+        Dhall.Core.DAG.Node
         Dhall.DirectoryTree.Types
         Dhall.Eval
         Dhall.Import.Types
@@ -435,6 +437,7 @@ Test-Suite tasty
         Dhall.Test.CacheFill
         Dhall.Test.DelayedNormalization
         Dhall.Test.Dhall
+        Dhall.Test.DAG
         Dhall.Test.Diff
         Dhall.Test.DirectoryTree
         Dhall.Test.Tags

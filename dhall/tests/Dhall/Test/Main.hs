@@ -7,6 +7,7 @@ import Test.Tasty      (TestTree)
 import qualified Dhall.Test.CacheFill
 import qualified Dhall.Test.DelayedNormalization
 import qualified Dhall.Test.Dhall
+import qualified Dhall.Test.DAG
 import qualified Dhall.Test.Diff
 import qualified Dhall.Test.DirectoryTree
 import qualified Dhall.Test.Format
@@ -87,6 +88,7 @@ getAllTests = do
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
                 , Dhall.Test.Dhall.tests
+                , Dhall.Test.DAG.tests
 #ifndef CROSS
                 , Dhall.Test.TH.tests
 #endif
