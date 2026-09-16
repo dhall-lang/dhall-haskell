@@ -5,6 +5,7 @@ import System.FilePath ((</>))
 import Test.Tasty      (TestTree)
 
 import qualified Dhall.Test.CacheFill
+import qualified Dhall.Test.CSE
 import qualified Dhall.Test.DelayedNormalization
 import qualified Dhall.Test.Dhall
 import qualified Dhall.Test.DAG
@@ -89,6 +90,7 @@ getAllTests = do
                 , Dhall.Test.QuickCheck.tests
                 , Dhall.Test.Dhall.tests
                 , Dhall.Test.DAG.tests
+                , Dhall.Test.CSE.tests
 #ifndef CROSS
                 , Dhall.Test.TH.tests
 #endif

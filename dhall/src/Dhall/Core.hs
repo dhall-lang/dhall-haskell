@@ -52,6 +52,11 @@ module Dhall.Core (
     , denote
     , renote
     , shallowDenote
+    , cse
+    , cseWith
+    , cseGraph
+    , CseOptions(..)
+    , defaultCseOptions
     , freeIn
 
     -- * Pretty-printing
@@ -86,6 +91,13 @@ module Dhall.Core (
 import Control.Exception      (Exception)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Text              (Text)
+import Dhall.Core.CSE
+    ( CseOptions (..)
+    , cse
+    , cseGraph
+    , cseWith
+    , defaultCseOptions
+    )
 import Dhall.Normalize
 import Dhall.Pretty.Internal
 import Dhall.Src              (Src (..))

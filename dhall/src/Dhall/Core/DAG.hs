@@ -13,6 +13,7 @@ module Dhall.Core.DAG
     ( -- * Graph
       NodeId(..)
     , CoreNode(..)
+    , childIds
     , CoreGraph
     , SharingMode(..)
     , GraphMetrics(..)
@@ -39,6 +40,9 @@ module Dhall.Core.DAG
     , intern
     , internExpr
     , internGraph
+    , internFrom
+    , subgraph
+    , traverseIds
     , freeze
     , prettyGraph
     ) where
@@ -167,7 +171,11 @@ freeze (Builder ref) root = do
 
 -- | Reintern every reachable node of an existing graph into this builder.
 internGraph :: (Eq a) => Builder s a -> CoreGraph a -> ST s NodeId
-internGraph b g = do
+internGraph b g = internFrom b g (graphRoot g)
+
+-- | Reintern the subgraph reachable from a given node.
+internFrom :: (Eq a) => Builder s a -> CoreGraph a -> NodeId -> ST s NodeId
+internFrom b g start = do
     memo <- newSTRef (HashMap.empty :: HashMap.HashMap Word32 NodeId)
     let go (NodeId i) = do
             m <- readSTRef memo
@@ -175,11 +183,18 @@ internGraph b g = do
                 Just nid -> return nid
                 Nothing -> do
                     let node = lookupNode g (NodeId i)
-                    node' <- traverseIds (go) node
+                    node' <- traverseIds go node
                     nid <- intern b node'
                     modifySTRef' memo (HashMap.insert i nid)
                     return nid
-    go (graphRoot g)
+    go start
+
+-- | Frozen copy of the subgraph reachable from 'NodeId'.
+subgraph :: (Eq a) => CoreGraph a -> NodeId -> CoreGraph a
+subgraph g nid = runST $ do
+    b <- newBuilder SharingOn
+    root <- internFrom b g nid
+    freeze b root
 
 traverseIds :: Monad m => (NodeId -> m NodeId) -> CoreNode a -> m (CoreNode a)
 traverseIds f = \case

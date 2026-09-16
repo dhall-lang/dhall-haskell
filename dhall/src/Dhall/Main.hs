@@ -149,6 +149,7 @@ data Mode
           , semanticCacheMode :: SemanticCacheMode
           }
     | Normalize { file :: Input , alpha :: Bool }
+    | Cse { file :: Input }
     | Repl
     | Format { deprecatedInPlace :: Bool, transitivity :: Transitivity, outputMode :: OutputMode, inputs :: NonEmpty Input }
     | Freeze { deprecatedInPlace :: Bool, transitivity :: Transitivity, all_ :: Bool, cache :: Bool, outputMode :: OutputMode, inputs :: NonEmpty Input }
@@ -294,6 +295,11 @@ parseMode =
             "normalize"
             "Normalize an expression"
             (Normalize <$> parseFile <*> parseAlpha)
+    <|> subcommand
+            Manipulate
+            "cse"
+            "Factor repeated subexpressions into let bindings (not a normal form)"
+            (Cse <$> parseFile)
     <|> subcommand
             Convert
             "encode"
@@ -826,6 +832,17 @@ command (Options {..}) = do
                     else normalizedExpression
 
             render System.IO.stdout characterSet alphaNormalizedExpression
+
+        Cse {..} -> do
+            (expression, characterSet) <- getExpressionAndCharacterSet file
+
+            resolvedExpression <-
+                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+
+            let compactedExpression =
+                    Dhall.Core.renote (Dhall.Core.cse (Dhall.Core.denote resolvedExpression))
+
+            render System.IO.stdout characterSet compactedExpression
 
         Type {..} -> do
             -- Inference sees the resolved (possibly unreduced) tree, so
