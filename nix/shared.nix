@@ -85,11 +85,7 @@ let
                   else
                     pkgsNew.haskell.lib.dontCheck drv;
 
-                failOnAllWarnings = drv:
-                  # GHCJS incorrectly detects non-exhaustive pattern matches
-                  if compiler == "ghcjs"
-                  then drv
-                  else pkgsNew.haskell.lib.failOnAllWarnings drv;
+                failOnAllWarnings = pkgsNew.haskell.lib.failOnAllWarnings;
 
                 failOnMissingHaddocks = drv:
                   # Haddock 2.29 (GHC 9.6) emits "out of scope" / missing-docs
@@ -100,24 +96,20 @@ let
 
                 doCheckExtension =
                   mass pkgsNew.haskell.lib.doCheck
-                    (   [ "dhall-bash"
-                          "dhall-csv"
-                          "dhall-docs"
-                          # The test suite fails due to a relative reference
-                          # to ../dhall/dhall-lang/
-                          # "dhall-lsp-server"
-                          "dhall-nix"
-                          "dhall-nixpkgs"
-                          "dhall-openapi"
-                          "dhall-toml"
-                          "dhall-yaml"
-                        ]
-                        # Test suite doesn't work on GHCJS
-                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs")) "dhall"
-                        # Test suite fails on GHCJS due to `aeson` ordering
-                        # HashMap values in a different order
-                    ++  pkgsNew.lib.optional (!(compiler == "ghcjs")) "dhall-json"
-                    );
+                    [ "dhall"
+                      "dhall-bash"
+                      "dhall-csv"
+                      "dhall-docs"
+                      "dhall-json"
+                      # The test suite fails due to a relative reference
+                      # to ../dhall/dhall-lang/
+                      # "dhall-lsp-server"
+                      "dhall-nix"
+                      "dhall-nixpkgs"
+                      "dhall-openapi"
+                      "dhall-toml"
+                      "dhall-yaml"
+                    ];
 
                 doBenchmarkExtension =
                   mass pkgsNew.haskell.lib.doBenchmark allDhallPackages;
@@ -238,20 +230,6 @@ let
                         "dhall-yaml"
                         (pkgsNew.haskellSrc ../dhall-yaml)
                         { };
-
-                    dhall-try =
-                      pkgsNew.haskell.lib.overrideCabal
-                        (haskellPackagesNew.callCabal2nix
-                          "dhall-try"
-                          (pkgsNew.haskellSrc ../dhall-try)
-                          { }
-                        )
-                        (old: {
-                            postInstall = (old.postInstall or "") + ''
-                              ${pkgsNew.closurecompiler}/bin/closure-compiler $out/bin/dhall-try.jsexe/all.js --jscomp_off=checkVars --externs=$out/bin/dhall-try.jsexe/all.js.externs > $out/bin/dhall-try.jsexe/all.min.js
-                            '';
-                          }
-                        );
                   };
 
               in
@@ -445,7 +423,6 @@ in
       dhall-nixpkgs
       dhall-openapi
       dhall-toml
-      dhall-try
       dhall-yaml
     ;
 
@@ -461,7 +438,6 @@ in
     shell-dhall-nixpkgs    = toShell pkgs.haskell.packages."${compiler}".dhall-nixpkgs   ;
     shell-dhall-openapi    = toShell pkgs.haskell.packages."${compiler}".dhall-openapi   ;
     shell-dhall-toml       = toShell pkgs.haskell.packages."${compiler}".dhall-toml      ;
-    shell-dhall-try        = toShell pkgs.haskell.packages."${compiler}".dhall-try       ;
     shell-dhall-yaml       = toShell pkgs.haskell.packages."${compiler}".dhall-yaml      ;
 
     image-dhall            = toDockerImage "dhall"           ;
