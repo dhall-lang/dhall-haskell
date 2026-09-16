@@ -581,7 +581,7 @@ label = backtickNonSomeLabel <|> simpleLabel False <?> "label"
     backtickNonSomeLabel = do
         t <- backtickLabel
         if t == "Some"
-            then fail "Cannot use `Some` as a variable name because it is a fixed symbol"
+            then fail "Cannot use `Some` as a variable name because it is a reserved symbol"
             else return t
 
 {-| Same as `label` except that built-in names are allowed
