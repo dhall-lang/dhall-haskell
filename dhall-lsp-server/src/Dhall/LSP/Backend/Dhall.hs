@@ -80,8 +80,9 @@ newtype Normal = Normal {fromNormal :: Expr Src Void}
 -- An import graph, represented by list of import dependencies.
 type ImportGraph = [Import.Depends]
 
--- | A cache maps Dhall imports to fully normalised expressions. By reusing
---   caches we can speeds up diagnostics etc. significantly!
+-- | A cache maps Dhall imports to loaded 'Import.ImportSemantics'. Unhashed
+--   Code imports may be typechecked but not β-normal; hashed Code imports are
+--   β-normal. By reusing caches we can speed up diagnostics etc. significantly!
 data Cache = Cache ImportGraph (Dhall.Map.Map Import.Chained Import.ImportSemantics)
 
 -- | The initial cache.

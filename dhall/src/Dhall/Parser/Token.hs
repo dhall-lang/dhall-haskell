@@ -132,10 +132,9 @@ import Dhall.Parser.Combinators
 
 import Control.Applicative     (Alternative (..), optional)
 import Data.Bits               ((.&.))
-import Data.Fixed              (Pico)
 import Data.Functor            (void, ($>))
-import Data.Ratio              ((%))
 import Data.Text               (Text)
+import Data.Word               (Word8)
 import Dhall.Syntax
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -352,13 +351,13 @@ dateMday = do
 
     This corresponds to the @time-hour@ rule from the official grammar
 -}
-timeHour :: Parser Int
+timeHour :: Parser Word8
 timeHour = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
 
     let hour = digits `base` 10
 
-    if 0 <= hour && hour < 24
+    if hour < 24
         then return hour
         else fail "Invalid hour"
 
@@ -366,13 +365,13 @@ timeHour = do
 
     This corresponds to the @time-minute@ rule from the official grammar
 -}
-timeMinute :: Parser Int
+timeMinute :: Parser Word8
 timeMinute = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
 
     let minute = digits `base` 10
 
-    if 0 <= minute && minute < 60
+    if minute < 60
         then return minute
         else fail "Invalid minute"
 
@@ -380,13 +379,13 @@ timeMinute = do
 
     This corresponds to the @time-second@ rule from the official grammar
 -}
-timeSecond :: Parser Pico
+timeSecond :: Parser Word8
 timeSecond = do
     digits <- Monad.replicateM 2 (Text.Parser.Char.satisfy digit)
 
     let second = digits `base` 10
 
-    if 0 <= second && second < 60
+    if second < 60
         then return second
         else fail "Invalid second"
 
@@ -394,15 +393,15 @@ timeSecond = do
 
     This corresponds to the @time-secfrac@ rule from the official grammar
 -}
-timeSecFrac :: Parser (Pico, Word)
+timeSecFrac :: Parser (Integer, Int)
 timeSecFrac = do
     _ <- Text.Parser.Char.text "."
 
     digits <- some (Text.Parser.Char.satisfy digit)
 
-    let precision = fromIntegral (length digits)
+    let precision = length digits
 
-    return (fromRational ((digits `base` 10) % (10 ^ precision)), precision)
+    return (digits `base` 10, precision)
 
 {-| Parse an identifier (i.e. a variable or built-in)
 

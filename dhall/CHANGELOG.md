@@ -3,6 +3,12 @@
 * Allow `Some` as a field selector and union constructor (`e.Some`), matching
   `e.None` / `e.List`. `Some e` is still the Optional special form. `dhall format`
   now prints `e.Some` without backticks.
+* BREAKING CHANGE: `TimeLiteral` now stores hour, minute, and second as
+  `Word8`, the fractional digits as `Integer`, and the digit count as `Int`,
+  instead of `TimeOfDay` plus a `Word` precision. Dhall `Time` literals keep
+  unlimited fractional-second precision (including trailing zeros), matching
+  the language standard. `ToDhall`/`FromDhall Time.TimeOfDay` remain limited
+  to picoseconds at the Haskell boundary.
 * Reuse a single HTTP `Manager` per import run by replacing `Status`'s
   `_newManager` factory with `pure manager` after the first request, instead
   of keeping a separate `_manager` field.

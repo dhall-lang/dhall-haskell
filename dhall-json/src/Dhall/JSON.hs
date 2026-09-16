@@ -903,8 +903,8 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
         Core.Time ->
             Core.Time
 
-        Core.TimeLiteral t p ->
-            Core.TimeLiteral t p
+        Core.TimeLiteral hh mm ss frac p ->
+            Core.TimeLiteral hh mm ss frac p
 
         Core.TimeShow ->
             Core.TimeShow

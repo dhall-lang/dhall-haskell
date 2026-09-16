@@ -258,7 +258,11 @@ expectWithSettings settings Decoder{..} expression = do
 {-| Resolve an expression, using the supplied `InputSettings`
 
     Note that this also applies any substitutions specified in the
-    `InputSettings`
+    `InputSettings`.
+
+    The result is import-free and type-checked, but not necessarily
+    β-normal: unhashed @Code@ imports may still contain @let@s.  Use
+    'normalizeWithSettings' when a normal form is required.
 -}
 resolveWithSettings :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
 resolveWithSettings settings expression =

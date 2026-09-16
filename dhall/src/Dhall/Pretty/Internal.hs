@@ -1397,7 +1397,7 @@ prettyPrinters characterSet =
         builtin "Date/show"
     prettyPrimitiveExpression Time =
         builtin "Time"
-    prettyPrimitiveExpression (TimeLiteral (Time.TimeOfDay hh mm seconds) precision) =
+    prettyPrimitiveExpression (TimeLiteral hh mm ss fraction precision) =
         literal
             (   Pretty.pretty (Printf.printf "%02d" hh :: String)
             <>  ":"
@@ -1407,11 +1407,6 @@ prettyPrinters characterSet =
             <>  suffix
             )
       where
-        magnitude :: Integer
-        magnitude = 10 ^ precision
-
-        (ss, fraction) = truncate (seconds * fromInteger magnitude) `divMod` magnitude
-
         suffix
             | precision == 0 = ""
             | otherwise      = "." <> Pretty.pretty (Printf.printf "%0*d" precision fraction :: String)

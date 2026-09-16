@@ -354,10 +354,10 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         loop (TextLit (Chunks [] text))
                       where
                         text = Eval.dateShow date
-                    App TimeShow (TimeLiteral time precision) ->
+                    App TimeShow (TimeLiteral hh mm ss frac precision) ->
                         loop (TextLit (Chunks [] text))
                       where
-                        text = Eval.timeShow time precision
+                        text = Eval.timeShow hh mm ss frac precision
                     App TimeZoneShow (TimeZoneLiteral timezone) ->
                         loop (TextLit (Chunks [] text))
                       where
@@ -472,7 +472,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
           DateLiteral d -> pure (DateLiteral d)
           DateShow -> pure DateShow
           Time -> pure Time
-          TimeLiteral t p -> pure (TimeLiteral t p)
+          TimeLiteral hh mm ss frac p -> pure (TimeLiteral hh mm ss frac p)
           TimeShow -> pure TimeShow
           TimeZone -> pure TimeZone
           TimeZoneLiteral z -> pure (TimeZoneLiteral z)
@@ -774,7 +774,7 @@ isNormalized e0 = loop (Syntax.denote e0)
           App NaturalOdd (NaturalLit _) -> False
           App NaturalShow (NaturalLit _) -> False
           App DateShow (DateLiteral _) -> False
-          App TimeShow (TimeLiteral _ _) -> False
+          App TimeShow (TimeLiteral _ _ _ _ _) -> False
           App TimeZoneShow (TimeZoneLiteral _) -> False
           App (App NaturalSubtract (NaturalLit _)) (NaturalLit _) -> False
           App (App NaturalSubtract (NaturalLit 0)) _ -> False
@@ -879,7 +879,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       DateLiteral _ -> True
       DateShow -> True
       Time -> True
-      TimeLiteral _ _ -> True
+      TimeLiteral _ _ _ _ _ -> True
       TimeShow -> True
       TimeZone -> True
       TimeZoneLiteral _ -> True

@@ -51,7 +51,6 @@ import Dhall.Syntax
     )
 
 import Data.Foldable (toList)
-import Data.Ratio    ((%))
 import Data.Void     (Void, absurd)
 import GHC.Float     (double2Float, float2Double)
 import Numeric.Half  (fromHalf, toHalf)
@@ -641,11 +640,13 @@ decodeExpressionInternal decodeEmbed = go
                                         Decoding.decodeInteger
                                     _ ->
                                         die ("Unexpected token type for mantissa: " <> show tokenType₂)
-                                let precision = fromIntegral (negate exponent)
+                                let precision = fromIntegral (negate exponent) :: Int
 
-                                let ss = fromRational (mantissa % (10 ^ precision))
+                                let magnitude = 10 ^ precision
 
-                                return (TimeLiteral (Time.TimeOfDay hh mm ss) precision)
+                                let (ss, fraction) = mantissa `divMod` magnitude
+
+                                return (TimeLiteral (fromIntegral hh) (fromIntegral mm) (fromIntegral ss) fraction precision)
                             32 -> do
                                 b   <- Decoding.decodeBool
                                 _HH <- Decoding.decodeInt
@@ -1073,21 +1074,21 @@ encodeExpressionInternal encodeEmbed = go
           where
             (_YYYY, _MM, _DD) = Time.toGregorian day
 
-        TimeLiteral (Time.TimeOfDay hh mm ss) precision ->
+        TimeLiteral hh mm ss fraction precision ->
             encodeList4
                 (Encoding.encodeInt 31)
-                (Encoding.encodeInt hh)
-                (Encoding.encodeInt mm)
+                (Encoding.encodeInt (fromIntegral hh))
+                (Encoding.encodeInt (fromIntegral mm))
                 (   Encoding.encodeTag 4
                 <>  encodeList2
                         (Encoding.encodeInt exponent)
                         encodedMantissa
                 )
           where
-            exponent = negate (fromIntegral precision)
+            exponent = negate precision
 
             mantissa :: Integer
-            mantissa = truncate (ss * 10 ^ precision)
+            mantissa = fromIntegral ss * 10 ^ precision + fraction
 
             encodedMantissa
                 |  fromIntegral (minBound :: Int) <= mantissa

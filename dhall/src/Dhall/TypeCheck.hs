@@ -598,7 +598,7 @@ infer typer = loop
         Time ->
             return (VConst Type)
 
-        TimeLiteral _ _ ->
+        TimeLiteral _ _ _ _ _ ->
             return VTime
 
         TimeShow ->
