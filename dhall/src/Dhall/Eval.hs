@@ -47,18 +47,56 @@ module Dhall.Eval (
   , normalizeGraphWith
   , alphaNormalize
   , eval
+  , evalInRun
   , quote
+  , quoteInRun
   , quoteGraph
   , envNames
   , countNames
   , conv
+  , convInRun
   , toVHPi
   , Closure(..)
   , Names(..)
   , Environment(..)
-  , Val(..)
+  , skip
+  , extend
+  , envId
+  , Val
+  , valId
+  , valClosed
+  , valF
+  , pattern VConst, pattern VVar, pattern VPrimVar, pattern VApp
+  , pattern VLam, pattern VHLam, pattern VPi, pattern VHPi, pattern VPiND
+  , pattern VBool, pattern VBoolLit, pattern VBoolAnd, pattern VBoolOr
+  , pattern VBoolEQ, pattern VBoolNE, pattern VBoolIf
+  , pattern VBytes, pattern VBytesLit
+  , pattern VNatural, pattern VNaturalLit, pattern VNaturalFold
+  , pattern VNaturalBuild, pattern VNaturalIsZero, pattern VNaturalEven
+  , pattern VNaturalOdd, pattern VNaturalToInteger, pattern VNaturalShow
+  , pattern VNaturalSubtract, pattern VNaturalPlus, pattern VNaturalTimes
+  , pattern VInteger, pattern VIntegerLit, pattern VIntegerClamp
+  , pattern VIntegerNegate, pattern VIntegerShow, pattern VIntegerToDouble
+  , pattern VDouble, pattern VDoubleLit, pattern VDoubleShow
+  , pattern VText, pattern VTextLit, pattern VTextAppend, pattern VTextShow
+  , pattern VTextReplace
+  , pattern VDate, pattern VDateLiteral, pattern VDateShow
+  , pattern VTime, pattern VTimeLiteral, pattern VTimeShow
+  , pattern VTimeZone, pattern VTimeZoneLiteral, pattern VTimeZoneShow
+  , pattern VList, pattern VListLit, pattern VListAppend, pattern VListBuild
+  , pattern VListFold, pattern VListLength, pattern VListHead, pattern VListLast
+  , pattern VListIndexed, pattern VListReverse
+  , pattern VOptional, pattern VSome, pattern VNone
+  , pattern VRecord, pattern VRecordLit, pattern VUnion
+  , pattern VCombine, pattern VCombineTypes, pattern VPrefer, pattern VMerge
+  , pattern VToMap, pattern VShowConstructor, pattern VField, pattern VInject
+  , pattern VProject, pattern VAssert, pattern VEquivalent, pattern VWith
+  , pattern VEmbed, pattern VPrim
   , (~>)
   , unboundBuiltinTypes
+  , EvalConfig(..), EvalStats(..)
+  , defaultEvalConfig, cacheOnConfig, cacheOffConfig
+  , withEvalRun, readEvalStats
   , textShow
   , dateShow
   , timeShow
@@ -102,6 +140,29 @@ import qualified Data.Set
 import qualified Data.Text     as Text
 import qualified Data.Time     as Time
 import qualified Dhall.Map     as Map
+import Dhall.Eval.Run
+    ( EnvId (..)
+    , EvalConfig (..)
+    , EvalKey (..)
+    , EvalStats (..)
+    , ValId (..)
+    , cacheOffConfig
+    , cacheOnConfig
+    , defaultEvalConfig
+    , freshEnvId
+    , freshValId
+    , insertConvMemo
+    , insertEvalMemo
+    , insertQuoteMemo
+    , internBody
+    , lookupConvMemo
+    , lookupEvalMemo
+    , lookupQuoteMemo
+    , readEvalStats
+    , withEvalRun
+    )
+import Dhall.Core.DAG.Node (NodeId (..))
+
 import qualified Dhall.Core.DAG as DAG
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
@@ -112,10 +173,34 @@ import qualified Text.Printf   as Printf
 -- are not forced. The environment spine ('Empty'/'Skip'/'Extend') is strict.
 data Environment a
     = Empty
-    | Skip   !(Environment a) {-# UNPACK #-} !Text
-    | Extend !(Environment a) {-# UNPACK #-} !Text (Val a)
+    | Skip   !(Environment a) {-# UNPACK #-} !Text {-# UNPACK #-} !EnvId
+    | Extend !(Environment a) {-# UNPACK #-} !Text (Val a) {-# UNPACK #-} !EnvId
 
-deriving instance (Show a, Show (Val a -> Val a)) => Show (Environment a)
+instance (Show a, Show (Val a -> Val a)) => Show (Environment a) where
+    showsPrec _ Empty =
+        showString "Empty"
+    showsPrec d (Skip env x _) =
+        showParen (d > 10) $
+            showString "Skip " . showsPrec 11 env . showChar ' ' . showsPrec 11 x
+    showsPrec d (Extend env x v _) =
+        showParen (d > 10) $
+            showString "Extend "
+                . showsPrec 11 env . showChar ' '
+                . showsPrec 11 x . showChar ' '
+                . showsPrec 11 v
+
+-- | Skip a binder in the value environment (fresh 'EnvId').
+skip :: Environment a -> Text -> Environment a
+skip env x = Skip env x (freshEnvId ())
+
+-- | Extend the value environment with a bound value (fresh 'EnvId').
+extend :: Environment a -> Text -> Val a -> Environment a
+extend env x v = Extend env x v (freshEnvId ())
+
+envId :: Environment a -> EnvId
+envId Empty             = EnvId 0
+envId (Skip _ _ i)      = i
+envId (Extend _ _ _ i)  = i
 
 errorMsg :: String
 errorMsg = unlines
@@ -133,9 +218,20 @@ errorMsg = unlines
     _ERROR = "\ESC[1;31mError\ESC[0m"
 
 
-data Closure a = Closure !Text !(Environment a) !(Expr Void a)
+data Closure a = Closure
+    { cloName   :: !Text
+    , cloEnv    :: !(Environment a)
+    , cloBody   :: !(Expr Void a)
+    , cloBodyId :: !NodeId
+    }
 
-deriving instance (Show a, Show (Val a -> Val a)) => Show (Closure a)
+instance (Show a, Show (Val a -> Val a)) => Show (Closure a) where
+    showsPrec d (Closure x env t _) =
+        showParen (d > 10) $
+            showString "Closure "
+                . showsPrec 11 x . showChar ' '
+                . showsPrec 11 env . showChar ' '
+                . showsPrec 11 t
 
 data VChunks a = VChunks ![(Text, Val a)] !Text
 
@@ -169,19 +265,6 @@ data HLamInfo a
 
 deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 
-pattern VPrim :: (Val a -> Val a) -> Val a
-pattern VPrim f = VHLam Prim f
-
--- | View a function type as a Haskell function on values. Dependent 'VPi'
--- closures go through 'instantiate', which is lazy in the argument: the
--- argument is forced only if the type body mentions it. Non-dependent types
--- are 'VHPi' and ignore the argument entirely (see 'boundVarOccurs').
-toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
-toVHPi (VPi a b@(Closure x _ _)) = Just (x, a, instantiate b)
-toVHPi (VHPi x a b             ) = Just (x, a, b)
-toVHPi  _                        = Nothing
-{-# INLINABLE toVHPi #-}
-
 -- | Whether @V x i@ occurs free in an expression (avoids importing
 -- `Dhall.Normalize.freeIn`, which would create an import cycle).
 --
@@ -207,105 +290,544 @@ boundVarOccurs x i = go i
         expression ->
             anyOf Syntax.subExpressions (go j) expression
     
-data Val a
-    = VConst !Const
-    | VVar !Text !Int
-    | VPrimVar
-    | VApp !(Val a) !(Val a)
+data ValF a
+    = VFConst !Const
+    | VFVar !Text !Int
+    | VFPrimVar
+    | VFApp (Val a) (Val a)
+    | VFLam (Val a) {-# UNPACK #-} !(Closure a)
+    | VFHLam (HLamInfo a) !(Val a -> Val a)
+    | VFPi (Val a) {-# UNPACK #-} !(Closure a)
+    | VFHPi !Text (Val a) !(Val a -> Val a)
+    | VFPiND !Text (Val a) (Val a)
+    | VFBool
+    | VFBoolLit !Bool
+    | VFBoolAnd (Val a) (Val a)
+    | VFBoolOr (Val a) (Val a)
+    | VFBoolEQ (Val a) (Val a)
+    | VFBoolNE (Val a) (Val a)
+    | VFBoolIf (Val a) (Val a) (Val a)
+    | VFBytes
+    | VFBytesLit ByteString
+    | VFNatural
+    | VFNaturalLit !Natural
+    | VFNaturalFold (Val a) (Val a) (Val a) (Val a)
+    | VFNaturalBuild (Val a)
+    | VFNaturalIsZero (Val a)
+    | VFNaturalEven (Val a)
+    | VFNaturalOdd (Val a)
+    | VFNaturalToInteger (Val a)
+    | VFNaturalShow (Val a)
+    | VFNaturalSubtract (Val a) (Val a)
+    | VFNaturalPlus (Val a) (Val a)
+    | VFNaturalTimes (Val a) (Val a)
+    | VFInteger
+    | VFIntegerLit !Integer
+    | VFIntegerClamp (Val a)
+    | VFIntegerNegate (Val a)
+    | VFIntegerShow (Val a)
+    | VFIntegerToDouble (Val a)
+    | VFDouble
+    | VFDoubleLit DhallDouble
+    | VFDoubleShow (Val a)
+    | VFText
+    | VFTextLit (VChunks a)
+    | VFTextAppend (Val a) (Val a)
+    | VFTextShow (Val a)
+    | VFTextReplace (Val a) (Val a) (Val a)
+    | VFDate
+    | VFDateLiteral Time.Day
+    | VFDateShow (Val a)
+    | VFTime
+    | VFTimeLiteral !Word8 !Word8 !Word8 !Integer !Int
+    | VFTimeShow (Val a)
+    | VFTimeZone
+    | VFTimeZoneLiteral Time.TimeZone
+    | VFTimeZoneShow (Val a)
+    | VFList (Val a)
+    | VFListLit (Maybe (Val a)) (Seq (Val a))
+    | VFListAppend (Val a) (Val a)
+    | VFListBuild (Val a) (Val a)
+    | VFListFold (Val a) (Val a) (Val a) (Val a) (Val a)
+    | VFListLength (Val a) (Val a)
+    | VFListHead (Val a) (Val a)
+    | VFListLast (Val a) (Val a)
+    | VFListIndexed (Val a) (Val a)
+    | VFListReverse (Val a) (Val a)
+    | VFOptional (Val a)
+    | VFSome (Val a)
+    | VFNone (Val a)
+    | VFRecord (Map Text (Val a))
+    | VFRecordLit (Map Text (Val a))
+    | VFUnion (Map Text (Maybe (Val a)))
+    | VFCombine (Maybe Text) (Val a) (Val a)
+    | VFCombineTypes (Val a) (Val a)
+    | VFPrefer (Val a) (Val a)
+    | VFMerge (Val a) (Val a) (Maybe (Val a))
+    | VFToMap (Val a) (Maybe (Val a))
+    | VFShowConstructor (Val a)
+    | VFField (Val a) !Text
+    | VFInject (Map Text (Maybe (Val a))) !Text (Maybe (Val a))
+    | VFProject (Val a) (Either (Set Text) (Val a))
+    | VFAssert (Val a)
+    | VFEquivalent (Val a) (Val a)
+    | VFWith (Val a) (NonEmpty WithComponent) (Val a)
+    | VFEmbed a
 
-    | VLam (Val a) {-# UNPACK #-} !(Closure a)
-    | VHLam !(HLamInfo a) !(Val a -> Val a)
+deriving instance (Show a, Show (Val a -> Val a)) => Show (ValF a)
 
-    | VPi (Val a) {-# UNPACK #-} !(Closure a)
-    | VHPi !Text (Val a) !(Val a -> Val a)
+data Val a = Val
+    { valId     :: {-# UNPACK #-} !ValId
+    , valClosed :: !Bool
+    , valF      :: !(ValF a)
+    }
 
-    | VBool
-    | VBoolLit !Bool
-    | VBoolAnd !(Val a) !(Val a)
-    | VBoolOr !(Val a) !(Val a)
-    | VBoolEQ !(Val a) !(Val a)
-    | VBoolNE !(Val a) !(Val a)
-    | VBoolIf !(Val a) !(Val a) !(Val a)
+instance (Show a, Show (Val a -> Val a)) => Show (Val a) where
+    showsPrec n (Val _ _ p) = showsPrec n p
 
-    | VBytes
-    | VBytesLit ByteString
+mkVal :: Bool -> ValF a -> Val a
+mkVal closed payload = Val (freshValId ()) closed payload
+{-# INLINE mkVal #-}
 
-    | VNatural
-    | VNaturalLit !Natural
-    | VNaturalFold !(Val a) !(Val a) !(Val a) !(Val a)
-    | VNaturalBuild !(Val a)
-    | VNaturalIsZero !(Val a)
-    | VNaturalEven !(Val a)
-    | VNaturalOdd !(Val a)
-    | VNaturalToInteger !(Val a)
-    | VNaturalShow !(Val a)
-    | VNaturalSubtract !(Val a) !(Val a)
-    | VNaturalPlus !(Val a) !(Val a)
-    | VNaturalTimes !(Val a) !(Val a)
+makeClosure :: Eq a => Text -> Environment a -> Expr Void a -> Closure a
+makeClosure x env t = Closure x env t (internBody t)
 
-    | VInteger
-    | VIntegerLit !Integer
-    | VIntegerClamp !(Val a)
-    | VIntegerNegate !(Val a)
-    | VIntegerShow !(Val a)
-    | VIntegerToDouble !(Val a)
+closureClosed :: Closure a -> Bool
+closureClosed (Closure _ env _ _) = envClosed env
 
-    | VDouble
-    | VDoubleLit !DhallDouble
-    | VDoubleShow !(Val a)
+envClosed :: Environment a -> Bool
+envClosed Empty              = True
+envClosed (Skip env _ _)     = envClosed env
+envClosed (Extend env _ v _) = envClosed env && valClosed v
 
-    | VText
-    | VTextLit !(VChunks a)
-    | VTextAppend !(Val a) !(Val a)
-    | VTextShow !(Val a)
-    | VTextReplace !(Val a) !(Val a) !(Val a)
+vChunksClosed :: VChunks a -> Bool
+vChunksClosed (VChunks xys _) = all (valClosed . snd) xys
 
-    | VDate
-    | VDateLiteral Time.Day
-    | VDateShow !(Val a)
-    | VTime
-    | VTimeLiteral Word8 Word8 Word8 Integer Int
-    | VTimeShow !(Val a)
-    | VTimeZone
-    | VTimeZoneLiteral Time.TimeZone
-    | VTimeZoneShow !(Val a)
+-- Pattern synonyms preserve the existing Val constructor API.
+pattern VConst :: Const -> Val a
+pattern VConst k <- Val _ _ (VFConst k)
+  where
+    VConst k = mkVal (True) (VFConst k)
 
-    | VList !(Val a)
-    | VListLit !(Maybe (Val a)) !(Seq (Val a))
-    | VListAppend !(Val a) !(Val a)
-    | VListBuild   (Val a) !(Val a)
-    | VListFold    (Val a) !(Val a) !(Val a) !(Val a) !(Val a)
-    | VListLength  (Val a) !(Val a)
-    | VListHead    (Val a) !(Val a)
-    | VListLast    (Val a) !(Val a)
-    | VListIndexed (Val a) !(Val a)
-    | VListReverse (Val a) !(Val a)
+pattern VVar :: Text -> Int -> Val a
+pattern VVar x i <- Val _ _ (VFVar x i)
+  where
+    VVar x i = mkVal (False) (VFVar x i)
 
-    | VOptional (Val a)
-    | VSome (Val a)
-    | VNone (Val a)
-    | VRecord !(Map Text (Val a))
-    | VRecordLit !(Map Text (Val a))
-    | VUnion !(Map Text (Maybe (Val a)))
-    | VCombine !(Maybe Text) !(Val a) !(Val a)
-    | VCombineTypes !(Val a) !(Val a)
-    | VPrefer !(Val a) !(Val a)
-    | VMerge !(Val a) !(Val a) !(Maybe (Val a))
-    | VToMap !(Val a) !(Maybe (Val a))
-    | VShowConstructor !(Val a)
-    | VField !(Val a) !Text
-    | VInject !(Map Text (Maybe (Val a))) !Text !(Maybe (Val a))
-    | VProject !(Val a) !(Either (Set Text) (Val a))
-    | VAssert !(Val a)
-    | VEquivalent !(Val a) !(Val a)
-    | VWith !(Val a) (NonEmpty WithComponent) !(Val a)
-    | VEmbed a
+pattern VPrimVar :: Val a
+pattern VPrimVar <- Val _ _ VFPrimVar
+  where
+    VPrimVar = mkVal False VFPrimVar
 
--- | For use with "Text.Show.Functions".
-deriving instance (Show a, Show (Val a -> Val a)) => Show (Val a)
+pattern VApp :: (Val a) -> (Val a) -> Val a
+pattern VApp t u <- Val _ _ (VFApp t u)
+  where
+    VApp t u = mkVal (valClosed t && valClosed u) (VFApp t u)
+
+pattern VLam :: (Val a) -> (Closure a) -> Val a
+pattern VLam ty c <- Val _ _ (VFLam ty c)
+  where
+    VLam ty c = mkVal (valClosed ty && closureClosed c) (VFLam ty c)
+
+pattern VHLam :: (HLamInfo a) -> (Val a -> Val a) -> Val a
+pattern VHLam i f <- Val _ _ (VFHLam i f)
+  where
+    VHLam i f = mkVal (False) (VFHLam i f)
+
+pattern VPi :: (Val a) -> (Closure a) -> Val a
+pattern VPi ty c <- Val _ _ (VFPi ty c)
+  where
+    VPi ty c = mkVal (valClosed ty && closureClosed c) (VFPi ty c)
+
+pattern VHPi :: Text -> (Val a) -> (Val a -> Val a) -> Val a
+pattern VHPi x ty f <- Val _ _ (VFHPi x ty f)
+  where
+    VHPi x ty f = mkVal (False) (VFHPi x ty f)
+
+pattern VPiND :: Text -> (Val a) -> (Val a) -> Val a
+pattern VPiND x ty b <- Val _ _ (VFPiND x ty b)
+  where
+    VPiND x ty b = mkVal (valClosed ty && valClosed b) (VFPiND x ty b)
+
+pattern VBool :: Val a
+pattern VBool <- Val _ _ VFBool
+  where
+    VBool = mkVal True VFBool
+
+pattern VBoolLit :: Bool -> Val a
+pattern VBoolLit b <- Val _ _ (VFBoolLit b)
+  where
+    VBoolLit b = mkVal (True) (VFBoolLit b)
+
+pattern VBoolAnd :: (Val a) -> (Val a) -> Val a
+pattern VBoolAnd t u <- Val _ _ (VFBoolAnd t u)
+  where
+    VBoolAnd t u = mkVal (valClosed t && valClosed u) (VFBoolAnd t u)
+
+pattern VBoolOr :: (Val a) -> (Val a) -> Val a
+pattern VBoolOr t u <- Val _ _ (VFBoolOr t u)
+  where
+    VBoolOr t u = mkVal (valClosed t && valClosed u) (VFBoolOr t u)
+
+pattern VBoolEQ :: (Val a) -> (Val a) -> Val a
+pattern VBoolEQ t u <- Val _ _ (VFBoolEQ t u)
+  where
+    VBoolEQ t u = mkVal (valClosed t && valClosed u) (VFBoolEQ t u)
+
+pattern VBoolNE :: (Val a) -> (Val a) -> Val a
+pattern VBoolNE t u <- Val _ _ (VFBoolNE t u)
+  where
+    VBoolNE t u = mkVal (valClosed t && valClosed u) (VFBoolNE t u)
+
+pattern VBoolIf :: (Val a) -> (Val a) -> (Val a) -> Val a
+pattern VBoolIf t u v <- Val _ _ (VFBoolIf t u v)
+  where
+    VBoolIf t u v = mkVal (valClosed t && valClosed u && valClosed v) (VFBoolIf t u v)
+
+pattern VBytes :: Val a
+pattern VBytes <- Val _ _ VFBytes
+  where
+    VBytes = mkVal True VFBytes
+
+pattern VBytesLit :: ByteString -> Val a
+pattern VBytesLit b <- Val _ _ (VFBytesLit b)
+  where
+    VBytesLit b = mkVal (True) (VFBytesLit b)
+
+pattern VNatural :: Val a
+pattern VNatural <- Val _ _ VFNatural
+  where
+    VNatural = mkVal True VFNatural
+
+pattern VNaturalLit :: Natural -> Val a
+pattern VNaturalLit n <- Val _ _ (VFNaturalLit n)
+  where
+    VNaturalLit n = mkVal (True) (VFNaturalLit n)
+
+pattern VNaturalFold :: (Val a) -> (Val a) -> (Val a) -> (Val a) -> Val a
+pattern VNaturalFold a t u v <- Val _ _ (VFNaturalFold a t u v)
+  where
+    VNaturalFold a t u v = mkVal (valClosed a && valClosed t && valClosed u && valClosed v) (VFNaturalFold a t u v)
+
+pattern VNaturalBuild :: (Val a) -> Val a
+pattern VNaturalBuild t <- Val _ _ (VFNaturalBuild t)
+  where
+    VNaturalBuild t = mkVal (valClosed t) (VFNaturalBuild t)
+
+pattern VNaturalIsZero :: (Val a) -> Val a
+pattern VNaturalIsZero t <- Val _ _ (VFNaturalIsZero t)
+  where
+    VNaturalIsZero t = mkVal (valClosed t) (VFNaturalIsZero t)
+
+pattern VNaturalEven :: (Val a) -> Val a
+pattern VNaturalEven t <- Val _ _ (VFNaturalEven t)
+  where
+    VNaturalEven t = mkVal (valClosed t) (VFNaturalEven t)
+
+pattern VNaturalOdd :: (Val a) -> Val a
+pattern VNaturalOdd t <- Val _ _ (VFNaturalOdd t)
+  where
+    VNaturalOdd t = mkVal (valClosed t) (VFNaturalOdd t)
+
+pattern VNaturalToInteger :: (Val a) -> Val a
+pattern VNaturalToInteger t <- Val _ _ (VFNaturalToInteger t)
+  where
+    VNaturalToInteger t = mkVal (valClosed t) (VFNaturalToInteger t)
+
+pattern VNaturalShow :: (Val a) -> Val a
+pattern VNaturalShow t <- Val _ _ (VFNaturalShow t)
+  where
+    VNaturalShow t = mkVal (valClosed t) (VFNaturalShow t)
+
+pattern VNaturalSubtract :: (Val a) -> (Val a) -> Val a
+pattern VNaturalSubtract x y <- Val _ _ (VFNaturalSubtract x y)
+  where
+    VNaturalSubtract x y = mkVal (valClosed x && valClosed y) (VFNaturalSubtract x y)
+
+pattern VNaturalPlus :: (Val a) -> (Val a) -> Val a
+pattern VNaturalPlus t u <- Val _ _ (VFNaturalPlus t u)
+  where
+    VNaturalPlus t u = mkVal (valClosed t && valClosed u) (VFNaturalPlus t u)
+
+pattern VNaturalTimes :: (Val a) -> (Val a) -> Val a
+pattern VNaturalTimes t u <- Val _ _ (VFNaturalTimes t u)
+  where
+    VNaturalTimes t u = mkVal (valClosed t && valClosed u) (VFNaturalTimes t u)
+
+pattern VInteger :: Val a
+pattern VInteger <- Val _ _ VFInteger
+  where
+    VInteger = mkVal True VFInteger
+
+pattern VIntegerLit :: Integer -> Val a
+pattern VIntegerLit n <- Val _ _ (VFIntegerLit n)
+  where
+    VIntegerLit n = mkVal (True) (VFIntegerLit n)
+
+pattern VIntegerClamp :: (Val a) -> Val a
+pattern VIntegerClamp t <- Val _ _ (VFIntegerClamp t)
+  where
+    VIntegerClamp t = mkVal (valClosed t) (VFIntegerClamp t)
+
+pattern VIntegerNegate :: (Val a) -> Val a
+pattern VIntegerNegate t <- Val _ _ (VFIntegerNegate t)
+  where
+    VIntegerNegate t = mkVal (valClosed t) (VFIntegerNegate t)
+
+pattern VIntegerShow :: (Val a) -> Val a
+pattern VIntegerShow t <- Val _ _ (VFIntegerShow t)
+  where
+    VIntegerShow t = mkVal (valClosed t) (VFIntegerShow t)
+
+pattern VIntegerToDouble :: (Val a) -> Val a
+pattern VIntegerToDouble t <- Val _ _ (VFIntegerToDouble t)
+  where
+    VIntegerToDouble t = mkVal (valClosed t) (VFIntegerToDouble t)
+
+pattern VDouble :: Val a
+pattern VDouble <- Val _ _ VFDouble
+  where
+    VDouble = mkVal True VFDouble
+
+pattern VDoubleLit :: DhallDouble -> Val a
+pattern VDoubleLit n <- Val _ _ (VFDoubleLit n)
+  where
+    VDoubleLit n = mkVal (True) (VFDoubleLit n)
+
+pattern VDoubleShow :: (Val a) -> Val a
+pattern VDoubleShow t <- Val _ _ (VFDoubleShow t)
+  where
+    VDoubleShow t = mkVal (valClosed t) (VFDoubleShow t)
+
+pattern VText :: Val a
+pattern VText <- Val _ _ VFText
+  where
+    VText = mkVal True VFText
+
+pattern VTextLit :: (VChunks a) -> Val a
+pattern VTextLit cs <- Val _ _ (VFTextLit cs)
+  where
+    VTextLit cs = mkVal (vChunksClosed cs) (VFTextLit cs)
+
+pattern VTextAppend :: (Val a) -> (Val a) -> Val a
+pattern VTextAppend t u <- Val _ _ (VFTextAppend t u)
+  where
+    VTextAppend t u = mkVal (valClosed t && valClosed u) (VFTextAppend t u)
+
+pattern VTextShow :: (Val a) -> Val a
+pattern VTextShow t <- Val _ _ (VFTextShow t)
+  where
+    VTextShow t = mkVal (valClosed t) (VFTextShow t)
+
+pattern VTextReplace :: (Val a) -> (Val a) -> (Val a) -> Val a
+pattern VTextReplace a b c <- Val _ _ (VFTextReplace a b c)
+  where
+    VTextReplace a b c = mkVal (valClosed a && valClosed b && valClosed c) (VFTextReplace a b c)
+
+pattern VDate :: Val a
+pattern VDate <- Val _ _ VFDate
+  where
+    VDate = mkVal True VFDate
+
+pattern VDateLiteral :: Time.Day -> Val a
+pattern VDateLiteral d <- Val _ _ (VFDateLiteral d)
+  where
+    VDateLiteral d = mkVal (True) (VFDateLiteral d)
+
+pattern VDateShow :: (Val a) -> Val a
+pattern VDateShow t <- Val _ _ (VFDateShow t)
+  where
+    VDateShow t = mkVal (valClosed t) (VFDateShow t)
+
+pattern VTime :: Val a
+pattern VTime <- Val _ _ VFTime
+  where
+    VTime = mkVal True VFTime
+
+pattern VTimeLiteral :: Word8 -> Word8 -> Word8 -> Integer -> Int -> Val a
+pattern VTimeLiteral hh mm ss frac p <- Val _ _ (VFTimeLiteral hh mm ss frac p)
+  where
+    VTimeLiteral hh mm ss frac p = mkVal (True) (VFTimeLiteral hh mm ss frac p)
+
+pattern VTimeShow :: (Val a) -> Val a
+pattern VTimeShow t <- Val _ _ (VFTimeShow t)
+  where
+    VTimeShow t = mkVal (valClosed t) (VFTimeShow t)
+
+pattern VTimeZone :: Val a
+pattern VTimeZone <- Val _ _ VFTimeZone
+  where
+    VTimeZone = mkVal True VFTimeZone
+
+pattern VTimeZoneLiteral :: Time.TimeZone -> Val a
+pattern VTimeZoneLiteral z <- Val _ _ (VFTimeZoneLiteral z)
+  where
+    VTimeZoneLiteral z = mkVal (True) (VFTimeZoneLiteral z)
+
+pattern VTimeZoneShow :: (Val a) -> Val a
+pattern VTimeZoneShow t <- Val _ _ (VFTimeZoneShow t)
+  where
+    VTimeZoneShow t = mkVal (valClosed t) (VFTimeZoneShow t)
+
+pattern VList :: (Val a) -> Val a
+pattern VList t <- Val _ _ (VFList t)
+  where
+    VList t = mkVal (valClosed t) (VFList t)
+
+pattern VListLit :: (Maybe (Val a)) -> (Seq (Val a)) -> Val a
+pattern VListLit ma ts <- Val _ _ (VFListLit ma ts)
+  where
+    VListLit ma ts = mkVal (maybe True valClosed ma && all valClosed ts) (VFListLit ma ts)
+
+pattern VListAppend :: (Val a) -> (Val a) -> Val a
+pattern VListAppend t u <- Val _ _ (VFListAppend t u)
+  where
+    VListAppend t u = mkVal (valClosed t && valClosed u) (VFListAppend t u)
+
+pattern VListBuild :: (Val a) -> (Val a) -> Val a
+pattern VListBuild a t <- Val _ _ (VFListBuild a t)
+  where
+    VListBuild a t = mkVal (valClosed a && valClosed t) (VFListBuild a t)
+
+pattern VListFold :: (Val a) -> (Val a) -> (Val a) -> (Val a) -> (Val a) -> Val a
+pattern VListFold a l t u v <- Val _ _ (VFListFold a l t u v)
+  where
+    VListFold a l t u v = mkVal (valClosed a && valClosed l && valClosed t && valClosed u && valClosed v) (VFListFold a l t u v)
+
+pattern VListLength :: (Val a) -> (Val a) -> Val a
+pattern VListLength a t <- Val _ _ (VFListLength a t)
+  where
+    VListLength a t = mkVal (valClosed a && valClosed t) (VFListLength a t)
+
+pattern VListHead :: (Val a) -> (Val a) -> Val a
+pattern VListHead a t <- Val _ _ (VFListHead a t)
+  where
+    VListHead a t = mkVal (valClosed a && valClosed t) (VFListHead a t)
+
+pattern VListLast :: (Val a) -> (Val a) -> Val a
+pattern VListLast a t <- Val _ _ (VFListLast a t)
+  where
+    VListLast a t = mkVal (valClosed a && valClosed t) (VFListLast a t)
+
+pattern VListIndexed :: (Val a) -> (Val a) -> Val a
+pattern VListIndexed a t <- Val _ _ (VFListIndexed a t)
+  where
+    VListIndexed a t = mkVal (valClosed a && valClosed t) (VFListIndexed a t)
+
+pattern VListReverse :: (Val a) -> (Val a) -> Val a
+pattern VListReverse a t <- Val _ _ (VFListReverse a t)
+  where
+    VListReverse a t = mkVal (valClosed a && valClosed t) (VFListReverse a t)
+
+pattern VOptional :: (Val a) -> Val a
+pattern VOptional t <- Val _ _ (VFOptional t)
+  where
+    VOptional t = mkVal (valClosed t) (VFOptional t)
+
+pattern VSome :: (Val a) -> Val a
+pattern VSome t <- Val _ _ (VFSome t)
+  where
+    VSome t = mkVal (valClosed t) (VFSome t)
+
+pattern VNone :: (Val a) -> Val a
+pattern VNone t <- Val _ _ (VFNone t)
+  where
+    VNone t = mkVal (valClosed t) (VFNone t)
+
+pattern VRecord :: (Map Text (Val a)) -> Val a
+pattern VRecord m <- Val _ _ (VFRecord m)
+  where
+    VRecord m = mkVal (all valClosed m) (VFRecord m)
+
+pattern VRecordLit :: (Map Text (Val a)) -> Val a
+pattern VRecordLit m <- Val _ _ (VFRecordLit m)
+  where
+    VRecordLit m = mkVal (all valClosed m) (VFRecordLit m)
+
+pattern VUnion :: (Map Text (Maybe (Val a))) -> Val a
+pattern VUnion m <- Val _ _ (VFUnion m)
+  where
+    VUnion m = mkVal (all (all valClosed) m) (VFUnion m)
+
+pattern VCombine :: (Maybe Text) -> (Val a) -> (Val a) -> Val a
+pattern VCombine mk t u <- Val _ _ (VFCombine mk t u)
+  where
+    VCombine mk t u = mkVal (valClosed t && valClosed u) (VFCombine mk t u)
+
+pattern VCombineTypes :: (Val a) -> (Val a) -> Val a
+pattern VCombineTypes t u <- Val _ _ (VFCombineTypes t u)
+  where
+    VCombineTypes t u = mkVal (valClosed t && valClosed u) (VFCombineTypes t u)
+
+pattern VPrefer :: (Val a) -> (Val a) -> Val a
+pattern VPrefer t u <- Val _ _ (VFPrefer t u)
+  where
+    VPrefer t u = mkVal (valClosed t && valClosed u) (VFPrefer t u)
+
+pattern VMerge :: (Val a) -> (Val a) -> (Maybe (Val a)) -> Val a
+pattern VMerge t u ma <- Val _ _ (VFMerge t u ma)
+  where
+    VMerge t u ma = mkVal (valClosed t && valClosed u && maybe True valClosed ma) (VFMerge t u ma)
+
+pattern VToMap :: (Val a) -> (Maybe (Val a)) -> Val a
+pattern VToMap t ma <- Val _ _ (VFToMap t ma)
+  where
+    VToMap t ma = mkVal (valClosed t && maybe True valClosed ma) (VFToMap t ma)
+
+pattern VShowConstructor :: (Val a) -> Val a
+pattern VShowConstructor t <- Val _ _ (VFShowConstructor t)
+  where
+    VShowConstructor t = mkVal (valClosed t) (VFShowConstructor t)
+
+pattern VField :: (Val a) -> Text -> Val a
+pattern VField t k <- Val _ _ (VFField t k)
+  where
+    VField t k = mkVal (valClosed t) (VFField t k)
+
+pattern VInject :: (Map Text (Maybe (Val a))) -> Text -> (Maybe (Val a)) -> Val a
+pattern VInject m k mt <- Val _ _ (VFInject m k mt)
+  where
+    VInject m k mt = mkVal (all (all valClosed) m && maybe True valClosed mt) (VFInject m k mt)
+
+pattern VProject :: (Val a) -> (Either (Set Text) (Val a)) -> Val a
+pattern VProject t p <- Val _ _ (VFProject t p)
+  where
+    VProject t p = mkVal (valClosed t && either (const True) valClosed p) (VFProject t p)
+
+pattern VAssert :: (Val a) -> Val a
+pattern VAssert t <- Val _ _ (VFAssert t)
+  where
+    VAssert t = mkVal (valClosed t) (VFAssert t)
+
+pattern VEquivalent :: (Val a) -> (Val a) -> Val a
+pattern VEquivalent t u <- Val _ _ (VFEquivalent t u)
+  where
+    VEquivalent t u = mkVal (valClosed t && valClosed u) (VFEquivalent t u)
+
+pattern VWith :: (Val a) -> (NonEmpty WithComponent) -> (Val a) -> Val a
+pattern VWith e ks v <- Val _ _ (VFWith e ks v)
+  where
+    VWith e ks v = mkVal (valClosed e && valClosed v) (VFWith e ks v)
+
+pattern VEmbed :: a -> Val a
+pattern VEmbed x <- Val _ _ (VFEmbed x)
+  where
+    VEmbed x = mkVal (True) (VFEmbed x)
+
+{-# COMPLETE VConst, VVar, VPrimVar, VApp, VLam, VHLam, VPi, VHPi, VPiND, VBool, VBoolLit, VBoolAnd, VBoolOr, VBoolEQ, VBoolNE, VBoolIf, VBytes, VBytesLit, VNatural, VNaturalLit, VNaturalFold, VNaturalBuild, VNaturalIsZero, VNaturalEven, VNaturalOdd, VNaturalToInteger, VNaturalShow, VNaturalSubtract, VNaturalPlus, VNaturalTimes, VInteger, VIntegerLit, VIntegerClamp, VIntegerNegate, VIntegerShow, VIntegerToDouble, VDouble, VDoubleLit, VDoubleShow, VText, VTextLit, VTextAppend, VTextShow, VTextReplace, VDate, VDateLiteral, VDateShow, VTime, VTimeLiteral, VTimeShow, VTimeZone, VTimeZoneLiteral, VTimeZoneShow, VList, VListLit, VListAppend, VListBuild, VListFold, VListLength, VListHead, VListLast, VListIndexed, VListReverse, VOptional, VSome, VNone, VRecord, VRecordLit, VUnion, VCombine, VCombineTypes, VPrefer, VMerge, VToMap, VShowConstructor, VField, VInject, VProject, VAssert, VEquivalent, VWith, VEmbed #-}
+
+pattern VPrim :: (Val a -> Val a) -> Val a
+pattern VPrim f = VHLam Prim f
+
+toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
+toVHPi (VPi a b@(Closure x _ _ _)) = Just (x, a, instantiate b)
+toVHPi (VPiND x a b)               = Just (x, a, \_ -> b)
+toVHPi (VHPi x a b)                = Just (x, a, b)
+toVHPi  _                          = Nothing
+{-# INLINABLE toVHPi #-}
 
 (~>) :: Val a -> Val a -> Val a
-(~>) a b = VHPi "_" a (\_ -> b)
+(~>) a b = VPiND "_" a b
 {-# INLINE (~>) #-}
 
 infixr 5 ~>
@@ -313,9 +835,9 @@ infixr 5 ~>
 countEnvironment :: Text -> Environment a -> Int
 countEnvironment x = go (0 :: Int)
   where
-    go !acc Empty             = acc
-    go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
-    go  acc (Extend env x' _) = go (if x == x' then acc + 1 else acc) env
+    go !acc Empty               = acc
+    go  acc (Skip env x' _)     = go (if x == x' then acc + 1 else acc) env
+    go  acc (Extend env x' _ _) = go (if x == x' then acc + 1 else acc) env
 
 -- | Instantiate a user-lambda closure.
 --
@@ -331,7 +853,11 @@ countEnvironment x = go (0 :: Int)
 -- variable occurs in the body (that would be slow); non-dependent @Pi@ types
 -- are classified once as 'VHPi' via 'boundVarOccurs'.
 instantiate :: Eq a => Closure a -> Val a -> Val a
-instantiate (Closure x env t) u = eval (Extend env x u) t
+instantiate (Closure x env t bid) !u =
+    let key = EvalKey (unNodeId bid) (unEnvId (envId env)) x (unValId (valId u))
+    in  case lookupEvalMemo key of
+            Just v  -> v
+            Nothing -> insertEvalMemo key (evalImpl (extend env x u) t)
 {-# INLINE instantiate #-}
 
 -- Out-of-env variables have negative de Bruijn levels.
@@ -340,12 +866,12 @@ instantiate (Closure x env t) u = eval (Extend env x u) t
 vVar :: Eq a => Environment a -> Var -> Val a
 vVar env0 (V x i0) = go env0 i0
   where
-    go (Extend env x' v) i
+    go (Extend env x' v _) i
         | x == x' =
             if i == 0 then v else go env (i - 1)
         | otherwise =
             go env i
-    go (Skip env x') i
+    go (Skip env x' _) i
         | x == x' =
             if i == 0 then VVar x (countEnvironment x env) else go env (i - 1)
         | otherwise =
@@ -413,7 +939,7 @@ vPrefer env t u =
             t'
         (VRecordLit m, VRecordLit m') ->
             VRecordLit (Map.union m' m)
-        (t', u') | conv env t' u' ->
+        (t', u') | convImpl env t' u' ->
             t'
         (t', u') ->
             VPrefer t' u'
@@ -658,69 +1184,77 @@ skipListField = \case
 {-# INLINE skipListField #-}
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
-eval !env t0 =
+eval env t0 = withEvalRun defaultEvalConfig (evalImpl env t0)
+
+evalInRun :: forall a. Eq a => Environment a -> Expr Void a -> Val a
+evalInRun = evalImpl
+
+-- | Like 'eval' but uses the ambient 'withEvalRun' (no cache reset).
+evalImpl :: forall a. Eq a => Environment a -> Expr Void a -> Val a
+evalImpl !env t0 =
     case t0 of
         Const k ->
             VConst k
         Var v ->
             vVar env v
         Lam _ (FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = a }) t ->
-            VLam (eval env a) (Closure x env t)
+            VLam (evalImpl env a) (makeClosure x env t)
         Pi _ x a b ->
-            -- Classify once: non-dependent Pis become lazy VHPi so applying
-            -- the type during type-checking does not force an unused argument
-            -- (e.g. @List a → List b@).  Dependent Pis stay as VPi closures.
-            let !a' = eval env a
+            -- Classify once: non-dependent Pis become first-order VPiND so
+            -- applying the type during type-checking does not force an unused
+            -- argument (e.g. @List a → List b@).  Dependent Pis stay as VPi
+            -- closures with interned bodies.
+            let !a' = evalImpl env a
             in  if boundVarOccurs x 0 b
-                then VPi a' (Closure x env b)
-                else VHPi x a' (\_ -> eval (Skip env x) b)
+                then VPi a' (makeClosure x env b)
+                else VPiND x a' (evalImpl (skip env x) b)
         App t u ->
-            vApp (eval env t) (eval env u)
+            vApp (evalImpl env t) (evalImpl env u)
         Let (Binding _ x _ _mA _ a) b ->
-            -- `Extend` is lazy in the bound `Val`, so an unused let is not
+            -- `extend` is lazy in the bound `Val`, so an unused let is not
             -- evaluated. `!env'` only forces the environment spine.
-            let !env' = Extend env x (eval env a)
-            in  eval env' b
+            let !env' = extend env x (evalImpl env a)
+            in  evalImpl env' b
         Annot t _ ->
-            eval env t
+            evalImpl env t
         Bool ->
             VBool
         BoolLit b ->
             VBoolLit b
         BoolAnd t u ->
-            case (eval env t, eval env u) of
+            case (evalImpl env t, evalImpl env u) of
                 (VBoolLit True, u')       -> u'
                 (VBoolLit False, _)       -> VBoolLit False
                 (t', VBoolLit True)       -> t'
                 (_ , VBoolLit False)      -> VBoolLit False
-                (t', u') | conv env t' u' -> t'
+                (t', u') | convImpl env t' u' -> t'
                 (t', u')                  -> VBoolAnd t' u'
         BoolOr t u ->
-            case (eval env t, eval env u) of
+            case (evalImpl env t, evalImpl env u) of
                 (VBoolLit False, u')      -> u'
                 (VBoolLit True, _)        -> VBoolLit True
                 (t', VBoolLit False)      -> t'
                 (_ , VBoolLit True)       -> VBoolLit True
-                (t', u') | conv env t' u' -> t'
+                (t', u') | convImpl env t' u' -> t'
                 (t', u')                  -> VBoolOr t' u'
         BoolEQ t u ->
-            case (eval env t, eval env u) of
+            case (evalImpl env t, evalImpl env u) of
                 (VBoolLit True, u')       -> u'
                 (t', VBoolLit True)       -> t'
-                (t', u') | conv env t' u' -> VBoolLit True
+                (t', u') | convImpl env t' u' -> VBoolLit True
                 (t', u')                  -> VBoolEQ t' u'
         BoolNE t u ->
-            case (eval env t, eval env u) of
+            case (evalImpl env t, evalImpl env u) of
                 (VBoolLit False, u')      -> u'
                 (t', VBoolLit False)      -> t'
-                (t', u') | conv env t' u' -> VBoolLit False
+                (t', u') | convImpl env t' u' -> VBoolLit False
                 (t', u')                  -> VBoolNE t' u'
         BoolIf b t f ->
-            case (eval env b, eval env t, eval env f) of
+            case (evalImpl env b, evalImpl env t, evalImpl env f) of
                 (VBoolLit True,  t', _ )            -> t'
                 (VBoolLit False, _ , f')            -> f'
                 (b', VBoolLit True, VBoolLit False) -> b'
-                (_, t', f') | conv env t' f'        -> t'
+                (_, t', f') | convImpl env t' f'        -> t'
                 (b', t', f')                        -> VBoolIf b' t' f'
         Bytes ->
             VBytes
@@ -731,9 +1265,9 @@ eval !env t0 =
         NaturalLit n ->
             VNaturalLit n
         NaturalPlus t u ->
-            vNaturalPlus (eval env t) (eval env u)
+            vNaturalPlus (evalImpl env t) (evalImpl env u)
         NaturalTimes t u ->
-            case (eval env t, eval env u) of
+            case (evalImpl env t, evalImpl env u) of
                 (VNaturalLit 1, u'           ) -> u'
                 (t'           , VNaturalLit 1) -> t'
                 (VNaturalLit 0, _            ) -> VNaturalLit 0
@@ -755,7 +1289,7 @@ eval !env t0 =
                 VChunks [("", t)] "" -> t
                 vcs                  -> VTextLit vcs
         TextAppend t u ->
-            eval env (TextLit (Chunks [("", t), ("", u)] ""))
+            evalImpl env (TextLit (Chunks [("", t), ("", u)] ""))
         Date ->
             VDate
         DateLiteral d ->
@@ -771,34 +1305,34 @@ eval !env t0 =
         List ->
             VPrim VList
         ListLit ma ts ->
-            VListLit (fmap (eval env) ma) (fmap (eval env) ts)
+            VListLit (fmap (evalImpl env) ma) (fmap (evalImpl env) ts)
         ListAppend t u ->
-            vListAppend (eval env t) (eval env u)
+            vListAppend (evalImpl env t) (evalImpl env u)
         Optional ->
             VPrim VOptional
         Some t ->
-            VSome (eval env t)
+            VSome (evalImpl env t)
         None ->
             VPrim $ \ ~a -> VNone a
         Record kts ->
-            VRecord (Map.sort (eval env . recordFieldValue <$> kts))
+            VRecord (Map.sort (evalImpl env . recordFieldValue <$> kts))
         RecordLit kts ->
-            VRecordLit (Map.sort (eval env . recordFieldValue <$> kts))
+            VRecordLit (Map.sort (evalImpl env . recordFieldValue <$> kts))
         Union kts ->
-            VUnion (Map.sort (fmap (fmap (eval env)) kts))
+            VUnion (Map.sort (fmap (fmap (evalImpl env)) kts))
         Combine _ mk t u ->
-            vCombine mk (eval env t) (eval env u)
+            vCombine mk (evalImpl env t) (evalImpl env u)
         CombineTypes _ t u ->
-            vCombineTypes (eval env t) (eval env u)
+            vCombineTypes (evalImpl env t) (evalImpl env u)
         Prefer _ _ t u ->
-            vPrefer env (eval env t) (eval env u)
+            vPrefer env (evalImpl env t) (evalImpl env u)
         RecordCompletion t u ->
-            eval env (Annot (Prefer mempty PreferFromCompletion (Field t def) u) (Field t typ))
+            evalImpl env (Annot (Prefer mempty PreferFromCompletion (Field t def) u) (Field t typ))
           where
             def = Syntax.makeFieldSelection "default"
             typ = Syntax.makeFieldSelection "Type"
         Merge x y ma ->
-            case (eval env x, eval env y, fmap (eval env) ma) of
+            case (evalImpl env x, evalImpl env y, fmap (evalImpl env) ma) of
                 (VRecordLit m, VInject _ k mt, _)
                     | Just f <- Map.lookup k m -> maybe f (vApp f) mt
                     | otherwise                -> error errorMsg
@@ -810,7 +1344,7 @@ eval !env t0 =
                     | otherwise                     -> error errorMsg
                 (x', y', ma') -> VMerge x' y' ma'
         ToMap x ma ->
-            case (eval env x, fmap (eval env) ma) of
+            case (evalImpl env x, fmap (evalImpl env) ma) of
                 (VRecordLit m, ma'@(Just _)) | null m ->
                     VListLit ma' Sequence.empty
                 (VRecordLit m, _) ->
@@ -828,7 +1362,7 @@ eval !env t0 =
                 (x', ma') ->
                     VToMap x' ma'
         ShowConstructor x ->
-            case eval env x of
+            case evalImpl env x of
                 VInject m k _
                     | Just _ <- Map.lookup k m -> VTextLit (VChunks [] k)
                     | otherwise                -> error errorMsg
@@ -836,25 +1370,25 @@ eval !env t0 =
                 VNone _ -> VTextLit (VChunks [] "None")
                 x' -> VShowConstructor x'
         Field t (Syntax.fieldSelectionLabel -> k) ->
-            vField (eval env t) k
+            vField (evalImpl env t) k
         Project t (Left ks) ->
-            vProjectByFields env (eval env t) (Dhall.Set.sort (Dhall.Set.fromList ks))
+            vProjectByFields env (evalImpl env t) (Dhall.Set.sort (Dhall.Set.fromList ks))
         Project t (Right e) ->
-            case eval env e of
+            case evalImpl env e of
                 VRecord kts ->
-                    vProjectByFields env (eval env t) (Dhall.Set.fromSet (Map.keysSet kts))
+                    vProjectByFields env (evalImpl env t) (Dhall.Set.fromSet (Map.keysSet kts))
                 e' ->
-                    VProject (eval env t) (Right e')
+                    VProject (evalImpl env t) (Right e')
         Assert t ->
-            VAssert (eval env t)
+            VAssert (evalImpl env t)
         Equivalent _ t u ->
-            VEquivalent (eval env t) (eval env u)
+            VEquivalent (evalImpl env t) (evalImpl env u)
         With e₀ ks v ->
-            vWith (eval env e₀) ks (eval env v)
+            vWith (evalImpl env e₀) ks (evalImpl env v)
         Note _ e ->
-            eval env e
+            evalImpl env e
         ImportAlt t _ ->
-            eval env t
+            evalImpl env t
         Embed a ->
             VEmbed a
   where
@@ -862,7 +1396,7 @@ eval !env t0 =
     evalChunks (Chunks xys z) = foldr' cons nil xys
       where
         cons (x, t) vcs =
-            case eval env t of
+            case evalImpl env t of
                 VTextLit vcs' -> VChunks [] x <> vcs' <> vcs
                 t'            -> VChunks [(x, t')] mempty <> vcs
 
@@ -926,7 +1460,27 @@ timezoneShow :: TimeZone -> Text
 timezoneShow = Text.pack . Time.formatTime Time.defaultTimeLocale "%Ez"
 
 conv :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
-conv !env t0 t0' =
+conv env0 t0 t0' = withEvalRun defaultEvalConfig (convImpl env0 t0 t0')
+
+-- | Conversion using the ambient evaluation run (no cache reset).
+convInRun :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
+convInRun = convImpl
+
+convImpl :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
+convImpl !env t0 t0'
+    | valId t0 == valId t0' =
+        True
+    | valClosed t0 && valClosed t0'
+    , Just cached <- lookupConvMemo (valId t0) (valId t0') =
+        cached
+    | otherwise =
+        let result = convBody env t0 t0'
+        in  if valClosed t0 && valClosed t0'
+            then insertConvMemo (valId t0) (valId t0') result
+            else result
+
+convBody :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
+convBody !env t0 t0' =
     case (t0, t0') of
         (VConst k, VConst k') ->
             k == k'
@@ -949,29 +1503,40 @@ conv !env t0 t0' =
         (t, VHLam _ t'  ) ->
             let (x, v) = fresh "x" in convSkip x (vApp t v) (t' v)
         (VApp t u, VApp t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VPi a b, VPi a' (freshClosure -> (x, v, b'))) ->
-            conv env a a' && convSkip x (instantiate b v) (instantiate b' v)
+            convImpl env a a' && convSkip x (instantiate b v) (instantiate b' v)
         (VPi a b, VHPi (fresh -> (x, v)) a' b') ->
-            conv env a a' && convSkip x (instantiate b v) (b' v)
+            convImpl env a a' && convSkip x (instantiate b v) (b' v)
         (VHPi _ a b, VPi a' (freshClosure -> (x, v, b'))) ->
-            conv env a a' && convSkip x (b v) (instantiate b' v)
+            convImpl env a a' && convSkip x (b v) (instantiate b' v)
+        (VPi a b, VPiND x a' b') ->
+            convImpl env a a' && convSkip x (instantiate b v) b'
+              where (v) = snd (fresh x)
+        (VPiND x a b, VPi a' (freshClosure -> (_, v, b'))) ->
+            convImpl env a a' && convSkip x b (instantiate b' v)
+        (VPiND _ a b, VPiND x a' b') ->
+            convImpl env a a' && convSkip x b b'
+        (VPiND x a b, VHPi (fresh -> (_, v)) a' b') ->
+            convImpl env a a' && convSkip x b (b' v)
+        (VHPi _ a b, VPiND x a' b') ->
+            convImpl env a a' && convSkip x (b (snd (fresh x))) b'
         (VHPi _ a b, VHPi (fresh -> (x, v)) a' b') ->
-            conv env a a' && convSkip x (b v) (b' v)
+            convImpl env a a' && convSkip x (b v) (b' v)
         (VBool, VBool) ->
             True
         (VBoolLit b, VBoolLit b') ->
             b == b'
         (VBoolAnd t u, VBoolAnd t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VBoolOr t u, VBoolOr t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VBoolEQ t u, VBoolEQ t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VBoolNE t u, VBoolNE t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VBoolIf t u v, VBoolIf t' u' v') ->
-            conv env t t' && conv env u u' && conv env v v'
+            convImpl env t t' && convImpl env u u' && convImpl env v v'
         (VBytes, VBytes) ->
             True
         (VBytesLit l, VBytesLit r) ->
@@ -981,127 +1546,127 @@ conv !env t0 t0' =
         (VNaturalLit n, VNaturalLit n') ->
             n == n'
         (VNaturalFold t _ u v, VNaturalFold t' _ u' v') ->
-            conv env t t' && conv env u u' && conv env v v'
+            convImpl env t t' && convImpl env u u' && convImpl env v v'
         (VNaturalBuild t, VNaturalBuild t') ->
-            conv env t t'
+            convImpl env t t'
         (VNaturalIsZero t, VNaturalIsZero t') ->
-            conv env t t'
+            convImpl env t t'
         (VNaturalEven t, VNaturalEven t') ->
-            conv env t t'
+            convImpl env t t'
         (VNaturalOdd t, VNaturalOdd t') ->
-            conv env t t'
+            convImpl env t t'
         (VNaturalToInteger t, VNaturalToInteger t') ->
-            conv env t t'
+            convImpl env t t'
         (VNaturalShow t, VNaturalShow t') ->
-            conv env t t'
+            convImpl env t t'
         (VNaturalSubtract x y, VNaturalSubtract x' y') ->
-            conv env x x' && conv env y y'
+            convImpl env x x' && convImpl env y y'
         (VNaturalPlus t u, VNaturalPlus t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VNaturalTimes t u, VNaturalTimes t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VInteger, VInteger) ->
             True
         (VIntegerLit t, VIntegerLit t') ->
             t == t'
         (VIntegerClamp t, VIntegerClamp t') ->
-            conv env t t'
+            convImpl env t t'
         (VIntegerNegate t, VIntegerNegate t') ->
-            conv env t t'
+            convImpl env t t'
         (VIntegerShow t, VIntegerShow t') ->
-            conv env t t'
+            convImpl env t t'
         (VIntegerToDouble t, VIntegerToDouble t') ->
-            conv env t t'
+            convImpl env t t'
         (VDouble, VDouble) ->
             True
         (VDoubleLit n, VDoubleLit n') ->
             n == n'
         (VDoubleShow t, VDoubleShow t') ->
-            conv env t t'
+            convImpl env t t'
         (VText, VText) ->
             True
         (VTextLit cs, VTextLit cs') ->
             convChunks cs cs'
         (VTextAppend t u, VTextAppend t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VTextShow t, VTextShow t') ->
-            conv env t t'
+            convImpl env t t'
         (VTextReplace a b c, VTextReplace a' b' c') ->
-            conv env a a' && conv env b b' && conv env c c'
+            convImpl env a a' && convImpl env b b' && convImpl env c c'
         (VDate, VDate) ->
             True
         (VDateLiteral l, VDateLiteral r) ->
             l == r
         (VDateShow t, VDateShow t') ->
-            conv env t t'
+            convImpl env t t'
         (VTime, VTime) ->
             True
         (VTimeLiteral hhL mmL ssL fL pL, VTimeLiteral hhR mmR ssR fR pR) ->
             hhL == hhR && mmL == mmR && ssL == ssR && fL == fR && pL == pR
         (VTimeShow t, VTimeShow t') ->
-            conv env t t'
+            convImpl env t t'
         (VTimeZone, VTimeZone) ->
             True
         (VTimeZoneLiteral l, VTimeZoneLiteral r) ->
             l == r
         (VTimeZoneShow t, VTimeZoneShow t') ->
-            conv env t t'
+            convImpl env t t'
         (VList a, VList a') ->
-            conv env a a'
+            convImpl env a a'
         (VListLit _ xs, VListLit _ xs') ->
-            eqListBy (conv env) (toList xs) (toList xs')
+            eqListBy (convImpl env) (toList xs) (toList xs')
         (VListAppend t u, VListAppend t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VListBuild _ t, VListBuild _ t') ->
-            conv env t t'
+            convImpl env t t'
         (VListLength a t, VListLength a' t') ->
-            conv env a a' && conv env t t'
+            convImpl env a a' && convImpl env t t'
         (VListHead _ t, VListHead _ t') ->
-            conv env t t'
+            convImpl env t t'
         (VListLast _ t, VListLast _ t') ->
-            conv env t t'
+            convImpl env t t'
         (VListIndexed _ t, VListIndexed _ t') ->
-            conv env t t'
+            convImpl env t t'
         (VListReverse _ t, VListReverse _ t') ->
-            conv env t t'
+            convImpl env t t'
         (VListFold a l _ t u, VListFold a' l' _ t' u') ->
-            conv env a a' && conv env l l' && conv env t t' && conv env u u'
+            convImpl env a a' && convImpl env l l' && convImpl env t t' && convImpl env u u'
         (VOptional a, VOptional a') ->
-            conv env a a'
+            convImpl env a a'
         (VSome t, VSome t') ->
-            conv env t t'
+            convImpl env t t'
         (VNone _, VNone _) ->
             True
         (VRecord m, VRecord m') ->
-            eqMapsBy (conv env) m m'
+            eqMapsBy (convImpl env) m m'
         (VRecordLit m, VRecordLit m') ->
-            eqMapsBy (conv env) m m'
+            eqMapsBy (convImpl env) m m'
         (VUnion m, VUnion m') ->
-            eqMapsBy (eqMaybeBy (conv env)) m m'
+            eqMapsBy (eqMaybeBy (convImpl env)) m m'
         (VCombine _ t u, VCombine _ t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VCombineTypes t u, VCombineTypes t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VPrefer t u, VPrefer t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VMerge t u _, VMerge t' u' _) ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VToMap t _, VToMap t' _) ->
-            conv env t t'
+            convImpl env t t'
         (VShowConstructor t, VShowConstructor t') ->
-            conv env t t'
+            convImpl env t t'
         (VField t k, VField t' k') ->
-            conv env t t' && k == k'
+            convImpl env t t' && k == k'
         (VProject t (Left ks), VProject t' (Left ks')) ->
-            conv env t t' && ks == ks'
+            convImpl env t t' && ks == ks'
         (VProject t (Right e), VProject t' (Right e')) ->
-            conv env t t' && conv env e e'
+            convImpl env t t' && convImpl env e e'
         (VAssert t, VAssert t') ->
-            conv env t t'
+            convImpl env t t'
         (VEquivalent t u, VEquivalent t' u') ->
-            conv env t t' && conv env u u'
+            convImpl env t t' && convImpl env u u'
         (VInject m k mt, VInject m' k' mt') ->
-            eqMapsBy (eqMaybeBy (conv env)) m m' && k == k' && eqMaybeBy (conv env) mt mt'
+            eqMapsBy (eqMaybeBy (convImpl env)) m m' && k == k' && eqMaybeBy (convImpl env) mt mt'
         (VEmbed a, VEmbed a') ->
             a == a'
         (_, _) ->
@@ -1112,21 +1677,22 @@ conv !env t0 t0' =
     {-# INLINE fresh #-}
 
     freshClosure :: Closure a -> (Text, Val a, Closure a)
-    freshClosure closure@(Closure x _ _) = (x, snd (fresh x), closure)
+    freshClosure closure@(Closure x _ _ _) = (x, snd (fresh x), closure)
     {-# INLINE freshClosure #-}
 
     convChunks :: VChunks a -> VChunks a -> Bool
     convChunks (VChunks xys z) (VChunks xys' z') =
-      eqListBy (\(x, y) (x', y') -> x == x' && conv env y y') xys xys' && z == z'
+      eqListBy (\(x, y) (x', y') -> x == x' && convImpl env y y') xys xys' && z == z'
     {-# INLINE convChunks #-}
 
     convSkip :: Text -> Val a -> Val a -> Bool
-    convSkip x = conv (Skip env x)
+    convSkip x = convImpl (skip env x)
     {-# INLINE convSkip #-}
 
 judgmentallyEqual :: Eq a => Expr s a -> Expr t a -> Bool
 judgmentallyEqual (Syntax.denote -> t) (Syntax.denote -> u) =
-    conv Empty (eval Empty t) (eval Empty u)
+    withEvalRun defaultEvalConfig
+        (convImpl Empty (evalImpl Empty t) (evalImpl Empty u))
 {-# INLINABLE judgmentallyEqual #-}
 
 data Names
@@ -1135,9 +1701,9 @@ data Names
   deriving Show
 
 envNames :: Environment a -> Names
-envNames Empty = EmptyNames
-envNames (Skip   env x  ) = Bind (envNames env) x
-envNames (Extend env x _) = Bind (envNames env) x
+envNames Empty              = EmptyNames
+envNames (Skip   env x _  ) = Bind (envNames env) x
+envNames (Extend env x _ _) = Bind (envNames env) x
 
 countNames :: Text -> Names -> Int
 countNames x = go 0
@@ -1148,7 +1714,7 @@ countNames x = go 0
 -- | Quote a value by interning 'Dhall.Core.DAG.CoreNode's, then rebuild a
 -- physically shared 'Expr'.
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
-quote !env !t0 = runST $ do
+quote env t0 = withEvalRun defaultEvalConfig $ runST $ do
     b <- DAG.newBuilder DAG.SharingOn
     nid <- quoteGraph b env t0
     g <- DAG.freeze b nid
@@ -1161,7 +1727,18 @@ quoteGraph b = go
     internN = DAG.intern b
 
     go :: Names -> Val a -> ST s DAG.NodeId
-    go !env !t0 =
+    go !env !t0 = do
+        let quoteClosed = valClosed t0
+        case (quoteClosed, lookupQuoteMemo (valId t0)) of
+            (True, Just nid) -> return nid
+            _ -> do
+                nid <- goUncached env t0
+                if quoteClosed
+                    then return (insertQuoteMemo (valId t0) nid)
+                    else return nid
+
+    goUncached :: Names -> Val a -> ST s DAG.NodeId
+    goUncached !env !t0 =
         case t0 of
             VConst k ->
                 internN (DAG.CConst k)
@@ -1203,6 +1780,10 @@ quoteGraph b = go
             VHPi (fresh env -> (x, v)) a t -> do
                 a' <- go env a
                 body <- go (Bind env x) (t v)
+                internN (DAG.CPi x a' body)
+            VPiND x a t -> do
+                a' <- go env a
+                body <- go (Bind env x) t
                 internN (DAG.CPi x a' body)
             VBool ->
                 internN DAG.CBool
@@ -1393,7 +1974,7 @@ quoteGraph b = go
     {-# INLINE fresh #-}
 
     freshClosure :: Names -> Closure a -> (Text, Val a, Closure a)
-    freshClosure env closure@(Closure x _ _) = (x, snd (fresh env x), closure)
+    freshClosure env closure@(Closure x _ _ _) = (x, snd (fresh env x), closure)
     {-# INLINE freshClosure #-}
 
     qApp :: Names -> DAG.NodeId -> Val a -> ST s DAG.NodeId
@@ -1578,7 +2159,7 @@ unboundPrimitives =
                                     go !acc 0 = acc
                                     go !acc m =
                                         let !next = forceAccWHNF natural (vApp succ acc)
-                                        in  if conv Empty next acc
+                                        in  if convImpl Empty next acc
                                             then acc
                                             else go next (m - 1)
                                 strictFold = go zero
@@ -1633,7 +2214,7 @@ unboundPrimitives =
         x ->
             VPrim $ \case
                 VNaturalLit 0    -> VNaturalLit 0
-                y | conv Empty x y -> VNaturalLit 0
+                y | convImpl Empty x y -> VNaturalLit 0
                 y                  -> VNaturalSubtract x y
 
     integerClampVal =
@@ -1841,7 +2422,18 @@ unboundBuiltinValues =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env e = Syntax.renote (quote (envNames env) (eval env (Syntax.denote e)))
+nf !env e = withEvalRun defaultEvalConfig $
+    Syntax.renote (quoteImpl (envNames env) (evalImpl env (Syntax.denote e)))
+
+quoteInRun :: forall a. Eq a => Names -> Val a -> Expr Void a
+quoteInRun = quoteImpl
+
+quoteImpl :: forall a. Eq a => Names -> Val a -> Expr Void a
+quoteImpl env t0 = runST $ do
+    b <- DAG.newBuilder DAG.SharingOn
+    nid <- quoteGraph b env t0
+    g <- DAG.freeze b nid
+    return (DAG.toSharedExpr g)
 
 -- | Normalize into a frozen hash-consed graph (sharing on). Compatibility
 -- 'normalize' rebuilds a physically shared 'Expr' from this graph.
@@ -1850,10 +2442,11 @@ normalizeGraph = normalizeGraphWith DAG.SharingOn
 
 -- | Same as 'normalizeGraph' with an explicit intern-sharing mode (oracle).
 normalizeGraphWith :: Eq a => DAG.SharingMode -> Expr s a -> DAG.CoreGraph a
-normalizeGraphWith mode e = runST $ do
-    b <- DAG.newBuilder mode
-    nid <- quoteGraph b EmptyNames (eval Empty (Syntax.denote e))
-    DAG.freeze b nid
+normalizeGraphWith mode e =
+    withEvalRun defaultEvalConfig { internSharing = mode } $ runST $ do
+        b <- DAG.newBuilder mode
+        nid <- quoteGraph b EmptyNames (evalImpl Empty (Syntax.denote e))
+        DAG.freeze b nid
 
 normalize :: Eq a => Expr s a -> Expr t a
 normalize = nf Empty

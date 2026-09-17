@@ -902,7 +902,9 @@ command (Options {..}) = do
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
             let normalizedExpression =
-                    Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+                    Dhall.Core.toSharedExpr
+                        (Dhall.Core.alphaNormalizeGraph
+                            (Dhall.Core.normalizeGraph resolvedExpression))
 
             if cache
                 then Dhall.Import.writeExpressionToSemanticCache normalizedExpression

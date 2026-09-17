@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -41,11 +42,34 @@ import Data.Text                         (Text)
 import Data.Typeable                     (Typeable)
 import Data.Void                         (Void, absurd)
 import Dhall.Context                     (Context)
+-- Val constructor API is pattern synonyms (ValId/closed wrapper).
+import Dhall.Eval hiding
+    ( Names
+    , eval
+    , quote
+    , quoteGraph
+    , normalize
+    , normalizeGraph
+    , normalizeGraphWith
+    , alphaNormalize
+    , judgmentallyEqual
+    , conv
+    , envNames
+    , countNames
+    )
 import Dhall.Eval
-    ( Environment (..)
-    , Names (..)
-    , Val (..)
-    , (~>)
+    ( Names (..)
+    )
+import Dhall.Core.DAG
+    ( NodeId (..)
+    )
+import Dhall.Eval.Run
+    ( EnvId (..)
+    , InferKey (..)
+    , freshEnvId
+    , insertInferMemo
+    , internBody
+    , lookupInferMemo
     )
 import Dhall.Pretty                      (Ann, UnescapedLabel (..))
 import Dhall.Src                         (Src)
@@ -140,7 +164,9 @@ typeWithA
     -> Expr s a
     -> Either (TypeError s a) (Expr s a)
 typeWithA tpa context expression =
-    fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
+    Eval.withEvalRun Eval.defaultEvalConfig $
+        fmap (Dhall.Core.renote . Eval.quoteInRun EmptyNames)
+            (infer tpa ctx expression)
   where
     ctx = contextToCtx context
 
@@ -151,35 +177,41 @@ contextToCtx context = loop (Dhall.Context.toList context)
         Ctx Empty TypesEmpty
 
     loop ((x, t):rest) =
-        Ctx (Skip vs x) (TypesBind ts x (Eval.eval vs (Dhall.Core.denote t)))
+        Ctx (skip vs x) (TypesBind (freshEnvId ()) ts x (Eval.evalInRun vs (Dhall.Core.denote t)))
       where
         Ctx vs ts = loop rest
 
 ctxToContext :: Eq a => Ctx a -> Context (Expr s a)
 ctxToContext (Ctx {..}) = loop types
   where
-    loop (TypesBind ts x t) = Dhall.Context.insert x t' (loop ts)
+    loop (TypesBind _ ts x t) = Dhall.Context.insert x t' (loop ts)
       where
         ns = typesToNames ts
 
-        t' = Dhall.Core.renote (Eval.quote ns t)
+        t' = Dhall.Core.renote (Eval.quoteInRun ns t)
     loop TypesEmpty = Dhall.Context.empty
 
 typesToNames :: Types a -> Names
-typesToNames (TypesBind ts x _) = Bind ns x
+typesToNames (TypesBind _ ts x _) = Bind ns x
   where
     ns = typesToNames ts
 typesToNames TypesEmpty = EmptyNames
 
-data Types a = TypesEmpty | TypesBind !(Types a) {-# UNPACK #-} !Text (Val a)
+data Types a
+    = TypesEmpty
+    | TypesBind {-# UNPACK #-} !EnvId !(Types a) {-# UNPACK #-} !Text (Val a)
+
+typesId :: Types a -> EnvId
+typesId TypesEmpty          = EnvId 0
+typesId (TypesBind i _ _ _) = i
 
 data Ctx a = Ctx { values :: !(Environment a), types :: !(Types a) }
 
 addType :: Text -> Val a -> Ctx a -> Ctx a
-addType x t (Ctx vs ts) = Ctx (Skip vs x) (TypesBind ts x t)
+addType x t (Ctx vs ts) = Ctx (skip vs x) (TypesBind (freshEnvId ()) ts x t)
 
 addTypeValue :: Text -> Val a -> Val a -> Ctx a -> Ctx a
-addTypeValue x t v (Ctx vs ts) = Ctx (Extend vs x v) (TypesBind ts x t)
+addTypeValue x t v (Ctx vs ts) = Ctx (extend vs x v) (TypesBind (freshEnvId ()) ts x t)
 
 fresh :: Ctx a -> Text -> Val a
 fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
@@ -193,7 +225,7 @@ fresh Ctx{..} x = VVar x (Eval.countNames x (Eval.envNames values))
     no longer need to substitute `let` expressions at all (which is very
     expensive!).
 
-    However, this means that we need to use `Dhall.Eval.conv` to perform
+    However, this means that we need to use `Dhall.Eval.convInRun` to perform
     equivalence checking instead of `Dhall.Core.judgmentallyEqual` since
     only `Dhall.Core.judgmentallyEqual` is unable to use the information stored
     in the extended context for accurate equivalence checking.
@@ -214,7 +246,21 @@ infer typer = loop
        * Two primes (`x''`): An `Expr` generated from `quote`ing a `Val`
     -}
     loop :: Ctx a -> Expr s a -> Either (TypeError s a) (Val a)
-    loop ctx@Ctx{..} expression = case expression of
+    loop ctx@Ctx{..} expression =
+        let nid = internBody (Dhall.Core.denote expression)
+            key = InferKey
+                (unNodeId nid)
+                (unEnvId (envId values))
+                (unEnvId (typesId types))
+        in  case lookupInferMemo key of
+                Just v  -> Right v
+                Nothing ->
+                    case loop1 ctx expression of
+                        Left err -> Left err
+                        Right v  -> Right (insertInferMemo key v)
+
+    loop1 :: Ctx a -> Expr s a -> Either (TypeError s a) (Val a)
+    loop1 ctx@Ctx{..} expression = case expression of
         Const c ->
             fmap VConst (axiom c)
 
@@ -225,7 +271,7 @@ infer typer = loop
                         Nothing -> die (UnboundVariable x0)
                 go TypesEmpty _ =
                     die (UnboundVariable x0)
-                go (TypesBind ts x t) n
+                go (TypesBind _ ts x t) n
                     | x == x0   = if n == 0 then return t else go ts (n - 1)
                     | otherwise = go ts n
 
@@ -252,7 +298,7 @@ infer typer = loop
                 VConst _ -> return ()
                 _        -> die (InvalidOutputType _B'')
 
-            return (VHPi x _A' (\u -> Eval.eval (Extend values x u) _B''))
+            return (VHPi x _A' (\u -> Eval.evalInRun (extend values x u) _B''))
 
         Pi _ x _A _B -> do
             tA' <- loop ctx _A
@@ -280,7 +326,7 @@ infer typer = loop
                 Just (_x, _A₀', _B') -> do
                     _A₁' <- loop ctx a
 
-                    if Eval.conv values _A₀' _A₁'
+                    if Eval.convInRun values _A₀' _A₁'
                         then do
                             -- Evaluate the argument, but do not force it here.
                             -- Non-dependent Pis are `VHPi` and ignore `a'`.
@@ -313,7 +359,7 @@ infer typer = loop
 
                     _A₁' <- loop ctx a₀
 
-                    if Eval.conv values _A₀' _A₁'
+                    if Eval.convInRun values _A₀' _A₁'
                         then
                             return ()
 
@@ -338,7 +384,7 @@ infer typer = loop
 
             _T₁' <- loop ctx t
 
-            if Eval.conv values _T₀' _T₁'
+            if Eval.convInRun values _T₀' _T₁'
                 then
                     return _T₁'
 
@@ -432,7 +478,7 @@ infer typer = loop
 
             let _R'' = quote names _R'
 
-            if Eval.conv values _L' _R'
+            if Eval.convInRun values _L' _R'
                 then return ()
                 else die (IfBranchMismatch l r _L'' _R'')
 
@@ -559,7 +605,7 @@ infer typer = loop
                     let process i t₁ = do
                             _T₁' <- loop ctx t₁
 
-                            if Eval.conv values _T₀' _T₁'
+                            if Eval.convInRun values _T₀' _T₁'
                                 then
                                     return ()
 
@@ -610,7 +656,7 @@ infer typer = loop
                 VList _A₁' -> return _A₁'
                 _          -> die (CantListAppend y (quote names ty'))
 
-            if Eval.conv values _A₀' _A₁'
+            if Eval.convInRun values _A₀' _A₁'
                 then return ()
                 else do
                     let _A₀'' = quote names _A₀'
@@ -867,7 +913,7 @@ infer typer = loop
                 match y handler' (Just _A₁') =
                     case Eval.toVHPi handler' of
                         Just (x, _A₀', _T₀') ->
-                            if Eval.conv values _A₀' _A₁'
+                            if Eval.convInRun values _A₀' _A₁'
                                 then do
                                     let _T₁' = _T₀' (fresh ctx x)
 
@@ -921,7 +967,7 @@ infer typer = loop
                         return (Just (y₁, _T₁'))
 
                     go yT₀'@(Just (y₀, _T₀')) (y₁, _T₁') =
-                        if Eval.conv values _T₀' _T₁'
+                        if Eval.convInRun values _T₀' _T₁'
                             then return yT₀'
 
                             else do
@@ -944,7 +990,7 @@ infer typer = loop
                 (Just _T₀', Nothing) ->
                     return _T₀'
                 (Just _T₀', Just _T₁') ->
-                    if Eval.conv values _T₀' _T₁'
+                    if Eval.convInRun values _T₀' _T₁'
                         then return _T₀'
 
                         else do
@@ -975,7 +1021,7 @@ infer typer = loop
                     Just (Right _T₀')
 
                 compareFieldTypes _T₀' r@(Just (Right _T₁'))
-                    | Eval.conv values _T₀' _T₁' = r
+                    | Eval.convInRun values _T₀' _T₁' = r
                     | otherwise = do
                         let _T₀'' = quote names _T₀'
                         let _T₁'' = quote names _T₁'
@@ -1006,14 +1052,14 @@ infer typer = loop
                     pure (mapType _T')
                 (Nothing, Just _T₁'@(VList (VRecord itemTypes)))
                    | Just _T' <- Dhall.Map.lookup "mapValue" itemTypes
-                   , Eval.conv values (mapType _T') _T₁' ->
+                   , Eval.convInRun values (mapType _T') _T₁' ->
                        pure _T₁'
                 (Nothing, Just _T₁') -> do
                     let _T₁'' = quote names _T₁'
 
                     die (InvalidToMapType _T₁'')
                 (Just (Right _T'), Just _T₁')
-                   | Eval.conv values (mapType _T') _T₁' ->
+                   | Eval.convInRun values (mapType _T') _T₁' ->
                        pure (mapType _T')
                    | otherwise -> do
                        let _T₁'' = quote names _T₁'
@@ -1108,7 +1154,7 @@ infer typer = loop
                                             die (MissingField x _E'')
 
                                         Just _E' ->
-                                            if Eval.conv values _E' _S'
+                                            if Eval.convInRun values _E' _S'
                                                 then return ()
                                                 else die (ProjectionTypeMismatch x _E'' _S'' expectedSubset actualSubset)
 
@@ -1134,7 +1180,7 @@ infer typer = loop
                     let x'' = quote names x'
                     let y'' = quote names y'
 
-                    if Eval.conv values x' y'
+                    if Eval.convInRun values x' y'
                         then return _T'
                         else die (AssertionFailed x'' y'')
 
@@ -1162,7 +1208,7 @@ infer typer = loop
                 VConst Type -> return ()
                 _           -> die (IncomparableExpression y)
 
-            if Eval.conv values _A₀' _A₁'
+            if Eval.convInRun values _A₀' _A₁'
                 then return ()
                 else die (EquivalenceTypeMismatch x _A₀'' y _A₁'')
 
@@ -1199,14 +1245,14 @@ infer typer = loop
                         -- (Some x) with ? = v is valid iff the type of x is the same as the type of v.
                       WithQuestion :| [] -> do
                         tV' <- loop ctx v
-                        if Eval.conv values _O' tV'
+                        if Eval.convInRun values _O' tV'
                           then return (VOptional _O')
                           else die OptionalWithTypeMismatch
 
                         -- (Some x) with ?.a.b = v is valid iff the type of x.a.b is the same as the type of v.
                       WithQuestion :| k₁ : ks' -> do
                         tV' <- with _O' (k₁ :| ks') v
-                        if Eval.conv values _O' tV'
+                        if Eval.convInRun values _O' tV'
                           then return (VOptional _O')
                           else die OptionalWithTypeMismatch
 
@@ -1237,9 +1283,9 @@ infer typer = loop
 
         names = typesToNames types
 
-        eval vs e = Eval.eval vs (Dhall.Core.denote e)
+        eval vs e = Eval.evalInRun vs (Dhall.Core.denote e)
 
-        quote ns value = Dhall.Core.renote (Eval.quote ns value)
+        quote ns value = Dhall.Core.renote (Eval.quoteInRun ns value)
 
 {-| `typeOf` is the same as `typeWith` with an empty context, meaning that the
     expression must be closed (i.e. no free variables), otherwise type-checking

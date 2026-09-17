@@ -1183,6 +1183,8 @@ functionWith
 functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
     Decoder extractOut expectedOut
   where
+    -- 'Core.normalize' rebuilds a physically shared 'Expr' from a
+    -- hash-consed graph; generic tree walks remain occurrence-sensitive.
     normalizer_ = Just (getInputNormalizer inputNormalizer)
 
     extractOut e = pure (\i ->

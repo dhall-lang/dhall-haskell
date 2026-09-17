@@ -70,6 +70,33 @@ module Dhall.Core (
     , recordFieldExprs
     , functionBindingExprs
 
+    -- * Hash-consed core
+    , DAG.CoreGraph
+    , DAG.SharingMode(..)
+    , DAG.fromExpr
+    , DAG.toSharedExpr
+    , DAG.prettyGraph
+    , DAG.graphMetrics
+    , DAG.GraphMetrics(..)
+    , DAG.alphaNormalizeGraph
+    , hashExpressionGraph
+    -- * Experimental DAG CBOR (not the default semantic hash)
+    , DAGCBOR.encodeGraph
+    , DAGCBOR.decodeGraph
+    -- * Identified evaluation
+    , Eval.EvalConfig(..)
+    , Eval.EvalStats(..)
+    , Eval.defaultEvalConfig
+    , Eval.cacheOnConfig
+    , Eval.cacheOffConfig
+    , Eval.withEvalRun
+    , Eval.readEvalStats
+    , Eval.evalInRun
+    , Eval.quoteInRun
+    , Eval.quoteGraph
+    , Eval.Environment(Empty)
+    , Eval.Names(EmptyNames)
+
     -- * Let-blocks
     , multiLet
     , wrapInLets
@@ -91,6 +118,7 @@ module Dhall.Core (
 import Control.Exception      (Exception)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Text              (Text)
+import Data.Void              (Void)
 import Dhall.Core.CSE
     ( CseOptions (..)
     , cse
@@ -108,8 +136,10 @@ import Prettyprinter          (Pretty)
 
 import qualified Control.Exception
 import qualified Data.Text
-import qualified Dhall.Core.DAG    as DAG
-import qualified Dhall.Eval        as Eval
+import qualified Dhall.Core.DAG      as DAG
+import qualified Dhall.Core.DAG.CBOR as DAGCBOR
+import qualified Dhall.Crypto
+import qualified Dhall.Eval          as Eval
 
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
@@ -124,6 +154,11 @@ normalizeGraph = Eval.normalizeGraph
 -- | Same as 'normalizeGraph' with intern sharing enabled or disabled.
 normalizeGraphWith :: Eq a => DAG.SharingMode -> Expr s a -> DAG.CoreGraph a
 normalizeGraphWith = Eval.normalizeGraphWith
+
+-- | SHA-256 of the *legacy tree* CBOR of a graph. Same bytes as hashing
+-- 'toSharedExpr'; DAG CBOR is experimental and is not used here.
+hashExpressionGraph :: DAG.CoreGraph Void -> Dhall.Crypto.SHA256Digest
+hashExpressionGraph = DAGCBOR.hashGraphLegacy
 
 {-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 

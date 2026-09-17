@@ -35,7 +35,8 @@ Sharing on/off and tree/graph conversions compare **denoted** `Expr` values
 |-------|------------------|
 | 2 | `normalize` via graph equals tree `normalize`; quote does not expand unique nodes |
 | 3 | CSE is opt-in; `judgmentallyEqual e (cse e)`; shadowed binders not merged |
-| 4 | Val/Env ids unobservable; cache-off inserts nothing; sharing on/off byte-identical |
-| 5 | Typecheck verdicts match; diagnostics keep occurrence `Src` |
-| 6 | Import/hash/pretty consumers do not expand large graphs to trees |
-| 7–8 | DAG CBOR is deterministic and independent of intern order; default stays tree CBOR until the coordinated switch |
+| 4 | Val/Env ids unobservable in `Show`; cache-off inserts nothing; sharing on/off byte-identical; same `ValId` quotes to the same node |
+| 5 | Typecheck verdicts match; diagnostics keep occurrence `Src`; infer memo keys `(NodeId, EnvId, typesId)` |
+| 6 | Public `CoreGraph` normalize/hash/pretty/CSE; `hashExpressionGraph` is legacy tree bytes of `toSharedExpr` |
+| 7 | Experimental DAG CBOR is deterministic and independent of intern order; default stays tree CBOR |
+| 8 | Default tree CBOR/hashes unchanged; cache namespace and refreeze documented for a future switch |

@@ -341,6 +341,7 @@ Library
         Dhall.Context
         Dhall.Core
         Dhall.Core.DAG
+        Dhall.Core.DAG.CBOR
         Dhall.Crypto
         Dhall.Diff
         Dhall.DirectoryTree
@@ -379,6 +380,7 @@ Library
         Dhall.Core.CSE
         Dhall.DirectoryTree.Types
         Dhall.Eval
+        Dhall.Eval.Run
         Dhall.Import.Types
         Dhall.Import.Headers
         Dhall.Marshal.Internal

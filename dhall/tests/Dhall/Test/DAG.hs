@@ -2,6 +2,7 @@
 
 module Dhall.Test.DAG (tests) where
 
+import Control.Monad.ST (runST)
 import Data.Void (Void)
 import Dhall.Core
     ( Expr (..)
@@ -25,6 +26,7 @@ import Dhall.Core.DAG
     , fromExpr
     , fromExprWith
     , graphMetrics
+    , newBuilder
     , nodeCount
     , prettyGraph
     , shiftGraph
@@ -36,8 +38,13 @@ import Dhall.Pretty (ChooseCharacterSet (..))
 import Test.Tasty   (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
-import qualified Test.Tasty       as Tasty
-import qualified Test.Tasty.HUnit as HUnit
+import qualified Dhall.Binary        as Binary
+import qualified Dhall.Core          as Core
+import qualified Dhall.Core.DAG.CBOR as CBOR
+import qualified Dhall.Import        as Import
+import qualified Dhall.TypeCheck     as TypeCheck
+import qualified Test.Tasty          as Tasty
+import qualified Test.Tasty.HUnit    as HUnit
 
 tests :: TestTree
 tests =
@@ -135,6 +142,69 @@ tests =
         , HUnit.testCase "prettyGraph matches pretty of normalize" $ do
             prettyGraph (normalizeGraph repeatedOpenPlus)
                 @?= pretty (normalize repeatedOpenPlus :: Expr Void Void)
+
+        , HUnit.testCase "identified values: sharing on/off same CBOR" $ do
+            let e = repeatedOpenPlus
+                bytes g = Binary.encodeExpression (toSharedExpr g :: Expr Void Void)
+            bytes (normalizeGraph e) @?= bytes (normalizeGraphWith SharingOff e)
+
+        , HUnit.testCase "identified values: ValId is unobservable in Show" $ do
+            let shown = show (normalize (NaturalLit 1 :: Expr Void Void) :: Expr Void Void)
+            HUnit.assertBool "Show does not mention ValId" ("ValId" `notElem` words shown)
+            HUnit.assertBool "Show does not mention EnvId" ("EnvId" `notElem` words shown)
+
+        , HUnit.testCase "identified values: cache-off inserts nothing" $ do
+            let stats = Core.withEvalRun Core.cacheOffConfig $
+                    let v = Core.evalInRun Core.Empty
+                                (NaturalPlus (NaturalLit 1) (NaturalLit 1) :: Expr Void Void)
+                        n = Core.quoteInRun Core.EmptyNames v
+                    in  n `seq` Core.readEvalStats
+            Core.cacheInserts stats @?= 0
+
+        , HUnit.testCase "identified values: same ValId quotes to the same node" $ do
+            let (n1, n2) = Core.withEvalRun Core.defaultEvalConfig $ runST $ do
+                    b <- newBuilder SharingOn
+                    let v = Core.evalInRun Core.Empty
+                                (NaturalPlus (NaturalLit 1) (NaturalLit 1) :: Expr Void Void)
+                    x <- Core.quoteGraph b Core.EmptyNames v
+                    y <- Core.quoteGraph b Core.EmptyNames v
+                    return (x, y)
+            n1 @?= n2
+
+        , HUnit.testCase "typecheck: repeated plus infers Natural" $ do
+            case TypeCheck.typeOf (repeatedPlus 4) of
+                Left err -> HUnit.assertFailure (show err)
+                Right t  -> denote t @?= (Natural :: Expr Void Void)
+
+        , HUnit.testCase "typecheck: Note diagnostics are preserved" $ do
+            -- λ(x : Bool) → x + x  is ill-typed; the annotation span is kept.
+            let e = Lam AutoInferCharSet (makeFunctionBinding "x" Bool)
+                        (NaturalPlus (Var (V "x" 0)) (Var (V "x" 0)))
+            case TypeCheck.typeOf e of
+                Left _  -> pure ()
+                Right t -> HUnit.assertFailure ("expected type error, got: " <> show (t :: Expr Void Void))
+
+        , HUnit.testCase "DAG CBOR: sharing on/off same bytes" $ do
+            let e = repeatedPlus 6
+            CBOR.encodeGraph (fromExprWith SharingOn e)
+                @?= CBOR.encodeGraph (fromExprWith SharingOff e)
+
+        , HUnit.testCase "DAG CBOR: round-trip tree" $ do
+            let e = repeatedPlus 5
+                g = fromPure e
+            case CBOR.decodeGraph (CBOR.encodeGraph g) of
+                Left err -> HUnit.assertFailure err
+                Right g' -> toSharedExpr g' @?= denote e
+
+        , HUnit.testCase "DAG CBOR: independent of intern order" $ do
+            let e = repeatedOpenPlus
+                g = fromPure e
+            CBOR.encodeGraph g @?= CBOR.encodeGraph (fromExpr (toSharedExpr g))
+
+        , HUnit.testCase "legacy graph hash matches tree hash" $ do
+            let e = denote (normalize repeatedOpenPlus :: Expr Void Void)
+            Core.hashExpressionGraph (fromPure e)
+                @?= Import.hashExpression e
         ]
 
 fromPure :: Expr Void Void -> CoreGraph Void

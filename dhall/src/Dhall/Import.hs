@@ -111,8 +111,10 @@ module Dhall.Import (
     , loadWith
     , localToPath
     , hashExpression
+    , hashExpressionGraph
     , hashExpressionToCode
     , estimateExprSize
+    , estimateGraphSize
     , exceedsNFSizeThreshold
     , semisemanticNFSizeThreshold
     , writeExpressionToSemanticCache
@@ -911,6 +913,11 @@ estimateExprSize expression =
                         (\child -> FunctorConst.Const [estimateExprSize child])
                         expression
             in  1 + sum childSizes
+
+-- | Unique-node count of a hash-consed graph. Prefer this over a full-tree
+-- walk when the term is already interned.
+estimateGraphSize :: Core.CoreGraph a -> Int
+estimateGraphSize g = Core.uniqueNodes (Core.graphMetrics g)
 
 -- | 'True' when the expression's estimated size is strictly greater than
 -- 'semisemanticNFSizeThreshold'. Same metric as 'estimateExprSize', but
@@ -1732,6 +1739,12 @@ encodeExpression expression = bytesStrict
 -- __not__ a valid integrity hash.
 hashExpression :: Expr Void Void -> Dhall.Crypto.SHA256Digest
 hashExpression = Dhall.Crypto.sha256Hash . encodeExpression
+
+-- | Same integrity hash as 'hashExpression', from a hash-consed graph.
+-- Uses the legacy tree CBOR of 'Core.toSharedExpr'; experimental DAG CBOR
+-- is not the default semantic hash.
+hashExpressionGraph :: Core.CoreGraph Void -> Dhall.Crypto.SHA256Digest
+hashExpressionGraph g = hashExpression (Core.toSharedExpr g)
 
 {-| Convenience utility to hash a fully resolved, αβ-normal expression and
     return the base-16 encoded hash with the @sha256:@ prefix
