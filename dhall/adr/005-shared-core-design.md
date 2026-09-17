@@ -1,309 +1,626 @@
-# Shared Dhall Core: Design Document
+# Shared Dhall Core: a code-centered guide
 
-Status: describes the design as implemented on `feature/shared-dhall-core`
-(Phases 0–8 of the shared-core plan). Companion ADRs:
+Status: this document explains the design on `feature/shared-dhall-core`.
+It describes what the code does today, including the parts that are
+experimental or disabled by default.
 
-| Doc | Topic |
-|-----|--------|
-| [001-shared-core.md](001-shared-core.md) | Representation decision (`CoreGraph`) |
-| [002-test-matrix.md](002-test-matrix.md) | Invariants and oracles |
-| [003-dag-cbor.md](003-dag-cbor.md) | Experimental DAG CBOR |
-| [004-format-migration.md](004-format-migration.md) | Future hash/cache switch (not flipped) |
+The shorter decision records are:
 
-This document is the narrative design: layers, ownership, memo keys, APIs, and
-what is intentionally *not* the default.
+- [001-shared-core.md](001-shared-core.md): why the shared representation was chosen
+- [002-test-matrix.md](002-test-matrix.md): behavior that the tests compare
+- [003-dag-cbor.md](003-dag-cbor.md): the experimental binary format
+- [004-format-migration.md](004-format-migration.md): steps required before that
+  binary format can become the default
 
----
+## 1. The problem, shown in code
 
-## 1. Problem
+Consider this Haskell value:
 
-The public `Expr` type is a source-facing **tree**: each constructor owns its
-children. Evaluation and quoting therefore copy structure. A small source
-program can produce a huge normal form in which the same union type or record
-shape is allocated thousands of times. Peak memory and many walks then scale
-with **expanded occurrences**, not with unique subtrees.
+```haskell
+one :: Expr Void Void
+one = NaturalLit 1
 
-We need:
-
-1. An in-memory representation that shares identical denoted subterms.
-2. Memoization that is sound under binders and shadowing.
-3. Compatibility with the existing `Expr` API, diagnostics, TH, and (for now)
-   legacy tree CBOR / semantic hashes.
-
----
-
-## 2. Architectural split: surface vs semantic core
-
-```text
-  Parse / format / TH / optics / errors
-                 │
-                 ▼
-            Expr s a          ← public, spans, Note, Import, …
-                 │ denote / resolve
-                 ▼
-            CoreGraph a       ← hash-consed denoted syntax (NodeId arena)
-                 │ NbE
-                 ▼
-            Val a             ← runtime values (ValId / EnvId)
-                 │ quoteGraph
-                 ▼
-            CoreGraph a       ← shared normal form
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
-  toSharedExpr      encodeGraph (experimental)
-  (physically       DAG CBOR — not default hash
-   shared Expr)
-        │
-        ▼
-  hashExpression / freeze / CLI  ← still legacy tree CBOR
+expression :: Expr Void Void
+expression = NaturalPlus one one
 ```
 
-**Keep `Expr`.** Changing its constructors would force an ecosystem-wide rewrite
-(Template Haskell, `Data`/`Generic`, optics, LSP, pattern-matching clients).
-The semantic engine gains a DAG; the surface stays a tree.
-
-**Add `CoreGraph`.** Annotation-free denoted syntax in an append-only arena.
-Child fields are `NodeId`s, not recursive Haskell pointers inside the payload.
-
----
-
-## 3. Hash-consing (`CoreGraph`)
-
-### 3.1 What it is
-
-Whenever the builder would allocate a node that is structurally identical to an
-existing one, it reuses the existing `NodeId`. After construction, equal
-structure and equal identity coincide for interned nodes.
-
-### 3.2 Contract
-
-| Property | Choice |
-|----------|--------|
-| Storage | Dense `NodeId` (`Word32`) into a frozen `Vector` of `CoreNode` |
-| Intern key | Exact **denoted** payload (no `Src`/`Note`; cosmetics as in `denote`) |
-| Hash role | Non-cryptographic table index only; shallow `Eq` decides merges |
-| Builder | `ST`-scoped mutable table + arena; freeze drops the table |
-| ID scope | Meaningful only inside the owning graph; merge = reintern |
-| Sharing mode | `SharingOn` / `SharingOff` (oracle: same `toSharedExpr`) |
-
-Alpha-equivalence is **not** an intern key. `alphaNormalizeGraph` is an
-explicit transformation. Open terms may share syntax under different binders;
-evaluation interprets free variables relative to the ambient environment.
-
-### 3.3 API surface (modules)
-
-- `Dhall.Core.DAG` / `Dhall.Core.DAG.Node` — graph, builder, metrics, shift /
-  subst / alpha, `toSharedExpr`, `prettyGraph`
-- `Dhall.Core` re-exports: `normalizeGraph`, `fromExpr`, `toSharedExpr`,
-  `graphMetrics`, `hashExpressionGraph` (legacy tree bytes of shared Expr),
-  experimental `encodeGraph` / `decodeGraph`
-- `Dhall.Core.CSE` — opt-in let-factoring for compact text (not β-NF, not hash)
-
-### 3.4 Physical sharing vs algorithmic sharing
-
-`toSharedExpr` rebuilds an `Expr` while memoizing `NodeId → Expr`, so the
-Haskell heap reuses child pointers (`O(U)` unique nodes). Naive
-`Foldable`/`Eq` walks that do not memoize still revisit every occurrence.
-
-Large-NF tools should prefer graph APIs; casual pattern-matching keeps working
-via adapters.
-
----
-
-## 4. Normalization by evaluation
-
-### 4.1 Flow
-
-1. `denote` the input.
-2. `eval` into `Val` under an `Environment`.
-3. `quoteGraph` into a `Builder`, then `freeze` → `CoreGraph`.
-4. Compatibility `normalize` = `toSharedExpr` of that graph.
-
-`normalizeGraph` / `normalizeGraphWith` expose the graph directly.
-`SharingOff` remains an oracle for byte/tree parity.
-
-### 4.2 Identified values (`Val` / `Environment`)
-
-Each `Val` carries:
-
-- `valId` — monotonic `ValId` from the ambient eval run
-- `valClosed` — whether the value is closed (gates quote/conv memos)
-- payload — first-order data; closures hold binder, env, and body `NodeId`
-
-`Environment` frames carry `EnvId`. Cons-list shape is preserved so closures
-share tails cheaply.
-
-Pattern synonyms preserve the old constructor-style API for `TypeCheck` and
-callers (`VLam`, `VHPi`, `VPiND`, …). Non-dependent Pis from eval use `VPiND`
-when possible; higher-order `VHLam`/`VHPi` remain for builtins and some
-typechecker-synthesized Pis.
-
-**Ids never appear** in `Show`, `Eq` of public terms, diagnostics, hashes, or
-CBOR. Counter reset across runs must not collide with CAF builtin values:
-`withEvalRun` clears caches/builder but **preserves** process-wide
-`ValId`/`EnvId` counters.
-
-### 4.3 Eval-run state (`Dhall.Eval.Run`)
-
-One global run (IORef), reset at public entry points via `withEvalRun`:
-
-| Piece | Role |
-|-------|------|
-| `ValId` / `EnvId` counters | Identity for memos |
-| Intern builder | Bodies for closure/`infer` keys |
-| Eval memo | `(body NodeId, EnvId, binder, arg ValId) → Val` |
-| Quote memo | closed `ValId → NodeId` |
-| Conv memo | closed `(ValId, ValId) → Bool` |
-| Infer memo | `(NodeId, EnvId, typesId) → Val` |
-| Caps / stats | Bound insertions; hit/miss counters |
-
-**Default: speed caches off** (`defaultEvalConfig`). Opt in with
-`cacheOnConfig`. Under `-threaded` Template Haskell, re-entrant
-`unsafePerformIO` + `atomicModifyIORef'` memos previously blackhole-deadlocked
-the RTS; forcing values under the lock was unsafe. Inserts now evaluate
-*before* taking the lock, but caches stay off by default until a proven
-non-reentrant design is measured.
-
-`cacheOffConfig` is the oracle: zero insertions.
-
-### 4.4 Conversion
-
-`convImpl`:
-
-1. Same `ValId` → equal (positive fast path).
-2. Both closed → closed-pair memo (when caches on).
-3. Else structural walk (binders via fresh vars / skip).
-
----
-
-## 5. Typechecking
-
-`typeWithA` runs inside one `withEvalRun`. Inference retains `Val`s in an
-extended context (`Ctx`: value env + type env).
-
-`TypesBind` carries an `EnvId` (`typesId`). Infer memo key:
+`expression` has three occurrences:
 
 ```text
-InferKey (denoted NodeId, value EnvId, types EnvId)
+NaturalPlus
+├── NaturalLit 1
+└── NaturalLit 1
 ```
 
-A node-only cache would be unsound for open terms. The typer is constant for a
-given `typeWithA` run.
+The two children have exactly the same contents. In a large Dhall normal form,
+the repeated part may be a record or union with thousands of fields rather
+than the small `NaturalLit 1` above.
 
-Diagnostics still use occurrence `Note`/`Src` on the surface expression, not a
-global `NodeId → Src` map. Quotes for error messages go through `quoteInRun`.
+The old representation describes this shape as a recursive tree. A program
+walking that tree visits both copies. Rebuilding a large repeated value can
+also allocate both copies.
 
----
+The new representation stores each distinct piece once:
 
-## 6. CSE (presentation only)
+```text
+0: NaturalLit 1
+1: NaturalPlus 0 0
+root: 1
+```
 
-`Dhall.Core.CSE` factors repeated structure into `let` bindings for compact
-human-readable text.
+Here `0` and `1` are positions in an indexed collection. Both children of the
+addition point to position `0`.
 
-- Candidates keyed by `(NodeId, capture environment)`, not `NodeId` alone.
-- Must not merge shadowed open terms.
-- Result is judgmentally equal / same type / same normalize, but **not** β-NF.
-- Never used for `normalize`, `hashExpression`, or canonical CBOR.
+This shape is called a *directed acyclic graph*, usually abbreviated to
+**DAG**:
 
----
+- **graph**: entries may point to other entries;
+- **directed**: a parent points to its children;
+- **acyclic**: following child references can never return to the starting
+  entry.
 
-## 7. Consumers and hashing
+The implementation calls this representation `CoreGraph`.
 
-| Path | Behavior |
-|------|----------|
-| `normalize` | Graph → physically shared `Expr` |
-| `hashExpression` | SHA-256 of **legacy tree** CBOR |
-| `hashExpressionGraph` | Same, via `toSharedExpr` |
-| `dhall hash` | `normalizeGraph` → `alphaNormalizeGraph` → shared Expr → hash |
-| `estimateGraphSize` | Unique-node count from `graphMetrics` |
-| Marshal decode | Still uses `normalize`; comment notes physical sharing |
+## 2. The main types
 
-Default integrity hashes are **unchanged**. Experimental DAG CBOR is separate.
+The essential definitions are in `Dhall.Core.DAG.Node` and
+`Dhall.Core.DAG`. The following is a shortened version of the real code:
 
----
+```haskell
+newtype NodeId = NodeId { unNodeId :: Word32 }
 
-## 8. Experimental DAG CBOR
+data CoreNode a
+    = CVar Var
+    | CApp NodeId NodeId
+    | CNaturalLit Natural
+    | CNaturalPlus NodeId NodeId
+    | CLam Text NodeId NodeId
+    -- one case for each kind of denoted Dhall expression
 
-Envelope: `["Dhall-DAG", 1, nodes, root]`.
+data CoreGraph a = CoreGraph
+    { graphRoot  :: NodeId
+    , graphNodes :: Vector (CoreNode a)
+    }
+```
 
-- Re-intern with sharing on; number nodes by DFS postorder.
-- Child edges as `Var "_" n` referring to `nodes[n]`.
-- Child-before-parent; node-count bound; reject trailing data / bad versions.
-- Module: `Dhall.Core.DAG.CBOR` (`encodeGraph` / `decodeGraph` /
-  `hashGraphLegacy`).
+A `NodeId` is simply an index into `graphNodes`. It is not a hash and it is not
+a permanent identifier. `Word32` is Haskell's type for an unsigned 32-bit
+integer.
 
-Not the default semantic hash. See ADR 003. Future default switch is ADR 004
-(versioned cache namespace, refreeze, coordinated standard bump)—**not done**.
+The type parameter `a` is the value carried by Dhall's `Embed` case. The type
+parameter `s` used by `Expr s a` is source information, such as a location in
+the input file. `Void` means that the corresponding kind of value is absent.
 
----
+For the earlier addition example, the value is conceptually:
 
-## 9. Shadowing and memo soundness
+```haskell
+CoreGraph
+    { graphRoot = NodeId 1
+    , graphNodes =
+        [ CNaturalLit 1
+        , CNaturalPlus (NodeId 0) (NodeId 0)
+        ]
+    }
+```
 
-Example:
+The actual `CoreGraph` constructor is kept private. Callers use functions such
+as `fromExpr`, `lookupNode`, `rootId`, `foldUnique`, and `toSharedExpr`.
+
+### Why `NodeId` cannot be copied between graphs
+
+`NodeId 0` only means “the first entry in this graph.” In another graph the
+first entry can contain something unrelated.
+
+Therefore, combining two graphs does not copy their numbers. `internGraph`
+reads each reachable node from the source graph, copies its contents into the
+destination builder, and receives new numbers belonging to the destination.
+
+## 3. Building a graph, one node at a time
+
+Graph construction uses a `Builder`:
+
+```haskell
+data BuilderState a = BuilderState
+    { bsNodes   :: Seq (CoreNode a)
+    , bsTable   :: HashMap (CoreNode a) Word32
+    , bsSharing :: Bool
+    }
+```
+
+`bsNodes` is the growing sequence of nodes. `bsTable` answers the question:
+“Have we already stored a node with these contents?”
+
+The operation that adds a node is named `intern`:
+
+```haskell
+intern :: Eq a => Builder s a -> CoreNode a -> ST s NodeId
+intern builder node =
+    case HashMap.lookup node existingNodes of
+        Just oldIndex ->
+            return (NodeId oldIndex)
+
+        Nothing -> do
+            let newIndex = length nodes
+            append node
+            remember node newIndex
+            return (NodeId newIndex)
+```
+
+This sample omits bookkeeping, but shows the decision:
+
+1. Build the children first.
+2. Construct a `CoreNode` containing the children's `NodeId`s.
+3. Look for an equal `CoreNode`.
+4. Reuse its index if it exists.
+5. Otherwise append the new node and return its new index.
+
+“Hash-consing” is the traditional name for this lookup-and-reuse technique.
+In this document it is simply called **structural sharing**.
+
+The hash used by `HashMap` only makes lookup faster. Correctness does not
+depend on two hashes being different: `HashMap` also compares the complete
+`CoreNode` values for equality.
+
+After construction, `freeze` converts the growing sequence to an immutable
+`Vector` and discards the lookup table:
+
+```haskell
+freeze :: Builder s a -> NodeId -> ST s (CoreGraph a)
+```
+
+The word `ST` in these signatures means that Haskell permits local mutation
+while building the value, but prevents that mutable state from escaping.
+Users of a completed `CoreGraph` see an immutable value.
+
+### What counts as “the same node”
+
+The builder shares exact *denoted* syntax. `denote` removes source locations
+(`Note` and `Src`) and printing preferences that do not affect meaning.
+
+The builder does not silently rename bound variables. For example, these
+lambdas are equivalent after renaming but are not the same exact node:
+
+```dhall
+λ(x : Natural) → x
+λ(y : Natural) → y
+```
+
+`alphaNormalizeGraph` performs that renaming explicitly when it is wanted.
+
+## 4. Converting between `Expr` and `CoreGraph`
+
+The public `Expr` type remains unchanged. Parsing, formatting, source
+locations, error messages, Template Haskell, and existing client code still
+use it.
+
+To enter the shared representation:
+
+```haskell
+fromExpr :: Eq a => Expr s a -> CoreGraph a
+```
+
+To return to the existing API:
+
+```haskell
+toSharedExpr :: CoreGraph a -> Expr Void a
+```
+
+`toSharedExpr` creates one `Expr` value for every graph node:
+
+```haskell
+decoded = Vector.generate nodeCount $ \index ->
+    decode (graphNodes Vector.! index)
+
+at (NodeId index) = decoded Vector.! fromIntegral index
+```
+
+When two parent fields contain the same `NodeId`, `at` returns the same
+already-created Haskell value. The resulting `Expr` therefore shares memory
+even though its type still looks like a recursive tree.
+
+There is an important limit to this compatibility:
+
+```haskell
+normalize expression
+```
+
+returns an `Expr` that shares memory, but a generic recursive function can
+still visit a shared child more than once. Code processing very large normal
+forms should use `CoreGraph` functions such as `foldUnique` instead.
+
+## 5. Normalization, step by step
+
+Dhall normalization evaluates an expression and then converts the evaluated
+value back to syntax. The implementation calls these two operations `eval`
+and `quote`.
+
+The new graph-returning path is:
+
+```haskell
+normalizeGraph :: Eq a => Expr s a -> CoreGraph a
+normalizeGraph = normalizeGraphWith SharingOn
+
+normalizeGraphWith mode expression =
+    withEvalRun defaultEvalConfig $ runST $ do
+        builder <- newBuilder mode
+        let value = evalImpl Empty (denote expression)
+        root <- quoteGraph builder EmptyNames value
+        freeze builder root
+```
+
+The steps are:
+
+1. `denote expression` removes source-only information.
+2. `evalImpl` computes a `Val`, the evaluator's internal form of a Dhall value.
+3. `quoteGraph` converts that value directly into shared `CoreNode`s.
+4. `freeze` returns the completed `CoreGraph`.
+
+The existing API still works:
+
+```haskell
+normalize :: Eq a => Expr s a -> Expr t a
+```
+
+It follows the same evaluate-and-quote design and returns a physically shared
+`Expr`.
+
+For testing, `normalizeGraphWith SharingOff` always appends nodes instead of
+reusing equal ones. The tests compare its result with `SharingOn`. Turning
+sharing on must change memory use only, never Dhall behavior or output.
+
+## 6. Evaluated values and their identifiers
+
+The evaluator uses `Val` while computing. A shortened version of the real type
+is:
+
+```haskell
+data Val a = Val
+    { valId     :: ValId
+    , valClosed :: Bool
+    , valF      :: ValF a
+    }
+```
+
+`valF` contains the actual value, for example a natural number, list, record,
+function, or unevaluated variable.
+
+`ValId` is a newly allocated number attached to each `Val`. It has two jobs:
+
+1. Comparing a value with itself can return `True` immediately.
+2. Optional result caches can refer to a value without deeply comparing it.
+
+`valClosed` is `True` when the value contains no reference to a variable
+outside itself. Caching a closed value is simpler because its meaning cannot
+change when it appears under a different set of variable bindings.
+
+The identifiers are internal. The `Show` instance deliberately ignores them:
+
+```haskell
+instance (...) => Show (Val a) where
+    showsPrec n (Val _ _ contents) = showsPrec n contents
+```
+
+They are also absent from Dhall text, error messages, CBOR, and semantic
+hashes.
+
+### Functions remember the variables available when they were created
+
+An evaluated Dhall function contains a `Closure`:
+
+```haskell
+data Closure a = Closure
+    { cloName   :: Text
+    , cloEnv    :: Environment a
+    , cloBody   :: Expr Void a
+    , cloBodyId :: NodeId
+    }
+```
+
+A closure means: “evaluate this body later, using the variable values that
+were in scope when the function was created.” `cloBodyId` gives the body
+a compact identity for the optional result cache.
+
+Each `Environment` update also receives an `EnvId`. Thus two evaluations of
+the same open body can be distinguished when their variables have different
+values.
+
+## 7. Optional result caches
+
+A result cache remembers the answer to a previous computation. This is also
+called memoization. Four caches exist in `Dhall.Eval.Run`:
+
+```haskell
+-- Applying a function:
+EvalKey bodyNode environment binder argumentValue
+
+-- Converting a value back to syntax:
+ValId -> NodeId
+
+-- Checking whether two closed values are equal:
+(ValId, ValId) -> Bool
+
+-- Inferring a type:
+InferKey expressionNode valueEnvironment typeEnvironment
+```
+
+The complete input must be part of the key. For example, caching function
+application only by `bodyNode` would be wrong: the body may read a variable
+whose value differs between calls.
+
+Entries are bounded by `cacheCap`, so a long computation cannot keep every
+intermediate value alive indefinitely.
+
+### Current default
+
+These speed caches are currently **off by default**:
+
+```haskell
+defaultEvalConfig = EvalConfig
+    { enableCache   = False
+    , cacheCap      = 10000
+    , internSharing = SharingOn
+    }
+
+cacheOnConfig = defaultEvalConfig { enableCache = True }
+```
+
+The reason is concrete: when the caches were enabled during threaded Template
+Haskell compilation, re-entering the global cache while a cached value was
+being evaluated caused GHC to wait forever. Cache insertion now evaluates its
+value before updating the shared state, but the safer default remains “off”
+until the enabled mode has a design that cannot re-enter the same shared
+state.
+
+Structural sharing in `CoreGraph` remains on by default and does not depend on
+these caches.
+
+## 8. Equality of evaluated values
+
+The evaluator's equality function starts with the cheapest safe check:
+
+```haskell
+convImpl environment left right
+    | valId left == valId right =
+        True
+
+    | valClosed left && valClosed right
+    , Just answer <- lookupConvMemo (valId left) (valId right) =
+        answer
+
+    | otherwise =
+        convBody environment left right
+```
+
+If the identifiers match, both arguments are the very same evaluated value.
+Otherwise `convBody` compares their contents. When caches are enabled, the
+answer for two closed values can be reused.
+
+## 9. Typechecking and variable context
+
+Typechecking keeps two related collections:
+
+```haskell
+data Ctx a = Ctx
+    { values :: Environment a
+    , types  :: Types a
+    }
+
+data Types a
+    = TypesEmpty
+    | TypesBind EnvId (Types a) Text (Val a)
+```
+
+`values` says what a variable evaluates to. `types` says what type the
+variable has. Each new type binding receives an `EnvId`.
+
+Before inferring an expression's type, the typechecker constructs this key:
+
+```haskell
+let node = internBody (denote expression)
+    key  = InferKey
+        (unNodeId node)
+        (unEnvId (envId values))
+        (unEnvId (typesId types))
+```
+
+Why are all three numbers needed? Consider:
+
+```dhall
+λ(x : Natural) → x
+λ(x : Bool)    → x
+```
+
+The body syntax is `x` in both places, so it may have the same `NodeId`.
+However, its inferred type is `Natural` in the first function and `Bool` in
+the second. The two type environments have different identifiers, so their
+cache keys differ.
+
+Errors still come from the original `Expr s a`, including its `Note` and
+`Src` values. Sharing denoted expressions therefore does not replace a useful
+source location with the location of some other occurrence.
+
+## 10. Shadowed variable names
+
+The same name can refer to different variables:
 
 ```dhall
 let x = 1
-let y = f x
+let first = x
 let x = 2
-in  f x
+in  [ first, x ]
 ```
 
-| Layer | Rule |
-|-------|------|
-| Syntax DAG | Identical open syntax may share one `NodeId` |
-| Eval / infer memos | Key includes `EnvId` / `typesId` |
-| CSE | Key includes capture env; do not merge across different `x` binders |
-| Closed duplicates | Safe to share, CSE at root, memo by id |
+The two occurrences printed as `x` do not have the same meaning. The first
+refers to the outer binding and the second to the inner binding.
 
----
+The implementation handles this separately at each stage:
 
-## 10. What we deliberately did not do
+1. `CoreGraph` may share identical open syntax. This is safe because it stores
+   syntax, not the result of evaluating that syntax.
+2. Evaluation cache keys include `EnvId`, so the same syntax with different
+   variable values does not reuse the wrong result.
+3. Type cache keys include the value and type environments.
+4. Common-subexpression extraction records which binding each free variable
+   refers to before introducing a `let`.
 
-- Replace public `Expr` constructors.
-- Hash-cons every `Val` into a second full term arena (RSS risk).
-- Flip default CBOR / semantic hashes.
-- Treat CSE output as normative NF.
-- Use interner hashes as integrity hashes.
-- Reset `ValId` counters on every `withEvalRun` (collides with CAF builtins).
-- Enable speed caches by default under threaded TH.
+## 11. Compact Dhall text with `cse`
 
----
+`Dhall.Core.CSE` is an optional transformation for readable output. “CSE”
+means *common-subexpression elimination*: repeated text is named once with a
+`let`.
 
-## 11. Module map
+For example, an expression shaped like:
 
-| Module | Responsibility |
-|--------|----------------|
-| `Dhall.Core.DAG.Node` | `NodeId`, `CoreNode`, `childIds` |
-| `Dhall.Core.DAG` | Builder, freeze, convert, graph ops, metrics |
-| `Dhall.Core.DAG.CBOR` | Experimental DAG encode/decode |
-| `Dhall.Core.CSE` | Opt-in let CSE |
-| `Dhall.Eval` | NbE: `Val`, env, eval/quote/conv/normalizeGraph |
-| `Dhall.Eval.Run` | Ids, caches, `withEvalRun`, stats |
-| `Dhall.TypeCheck` | Infer with context-complete memo |
-| `Dhall.Core` | Public re-exports |
-| `Dhall.Import` | `hashExpression` / `hashExpressionGraph` / graph size |
+```dhall
+[ largeExpression, largeExpression ]
+```
 
----
+can be printed as:
 
-## 12. Testing oracles
+```dhall
+let shared0 = largeExpression
+in  [ shared0, shared0 ]
+```
 
-From the test matrix (ADR 002):
+This is a Dhall program with the same meaning, but it is not the normal form:
+normalizing the `let` expands its uses again. Consequently, `cse` is never
+used to calculate semantic hashes.
 
-1. **Tree engine** — existing normalize / typecheck / hash goldens.
-2. **Sharing-off** — same builder with intern lookup disabled; denoted/`toSharedExpr` parity.
-3. **Cache-off** — zero memo insertions; output identical.
-4. **Ids unobservable** — `Show` of normalized terms must not mention `ValId`/`EnvId`.
-5. **DAG CBOR** — sharing on/off same bytes; round-trip denoted tree; independent of intern order; legacy graph hash matches tree hash.
+For an open expression such as `f x`, equality of `NodeId` alone is not
+enough. The CSE implementation also records which surrounding variable each
+free name refers to, preventing an expression from being moved across a
+different or shadowing binder.
 
----
+## 12. Binary encoding
 
-## 13. Migration posture
+CBOR is the binary data format used to calculate Dhall semantic hashes. The
+current Dhall standard encodes a recursive expression tree, so repeated
+subexpressions produce repeated bytes.
 
-Today: engine may use graphs and identified values; **on-disk and `sha256:`
-remain legacy tree CBOR**.
+`Dhall.Core.DAG.CBOR` prototypes a shared binary form:
 
-When flipping (future release): bump language standard, new cache directory,
-refreeze imports, update all hash goldens together, cross-check with an
-independent codec. Until then, experimental DAG CBOR is for measurement and
-tooling only.
+```text
+["Dhall-DAG", 1, nodes, root]
+```
+
+For the addition example, its logical shape is:
+
+```text
+nodes[0] = NaturalLit 1
+nodes[1] = NaturalPlus (reference 0) (reference 0)
+root     = 1
+```
+
+Before encoding, `canonicalize` performs these steps:
+
+1. Rebuild the graph with structural sharing enabled.
+2. Visit children before their parent.
+3. Give nodes new consecutive numbers in that visit order.
+4. Encode each node once.
+
+This makes the bytes independent of the order in which the original graph was
+built. During decoding, a child may refer only to an earlier node. This rule
+prevents cycles. The decoder also rejects an empty node list, an unsupported
+version, trailing bytes, an invalid root, and more than one million nodes.
+
+### This format is not the default
+
+The public semantic hash remains:
+
+```haskell
+hashGraphLegacy =
+    sha256Hash
+        . Lazy.toStrict
+        . Dhall.Binary.encodeExpression
+        . toSharedExpr
+```
+
+In other words, it still hashes the standard tree encoding. Changing the
+default binary form would change every frozen `sha256:` import. ADR 004 lists
+the coordinated standard update, new cache directory, refreezing, and
+cross-implementation testing required before such a change.
+
+## 13. Template Haskell
+
+“TH” in the code and tests means **Template Haskell**. `Dhall.TH` can run
+Dhall during Haskell compilation and generate Haskell declarations:
+
+```haskell
+Dhall.TH.makeHaskellTypes
+    [ MultipleConstructors "Department" "./tests/th/Department.dhall"
+    , SingleConstructor
+        "Employee"
+        "MakeEmployee"
+        "./tests/th/Employee.dhall"
+    ]
+```
+
+GHC executes these declarations while compiling `Dhall.Test.TH`. They parse,
+resolve, typecheck, and normalize the referenced Dhall files. This test is
+important because it exercises the evaluator from inside a threaded GHC
+process; that is how the unsafe default cache behavior was found.
+
+Template Haskell continues to consume ordinary `Expr` values. It is one
+reason the public syntax type was not replaced by `CoreGraph`.
+
+## 14. Public entry points
+
+Code that needs an ordinary expression can keep using:
+
+```haskell
+normalize :: Eq a => Expr s a -> Expr t a
+```
+
+Code that wants to process a large result without repeatedly walking shared
+children can use:
+
+```haskell
+normalizeGraph      :: Eq a => Expr s a -> CoreGraph a
+fromExpr            :: Eq a => Expr s a -> CoreGraph a
+toSharedExpr        :: CoreGraph a -> Expr Void a
+graphMetrics        :: CoreGraph a -> GraphMetrics
+alphaNormalizeGraph :: Eq a => CoreGraph a -> CoreGraph a
+prettyGraph         :: Pretty a => CoreGraph a -> Text
+hashExpressionGraph :: CoreGraph Void -> SHA256Digest
+```
+
+The experimental binary functions are:
+
+```haskell
+encodeGraph :: CoreGraph Void -> ByteString
+decodeGraph :: ByteString -> Either String (CoreGraph Void)
+```
+
+## 15. Where to read the implementation
+
+Read these files in this order:
+
+1. `Dhall/Core/DAG/Node.hs` — `NodeId` and the node cases.
+2. `Dhall/Core/DAG.hs` — construction, lookup, conversion, and graph walks.
+3. `Dhall/Eval.hs` — evaluated values and direct graph output from `quoteGraph`.
+4. `Dhall/Eval/Run.hs` — identifiers, optional caches, and statistics.
+5. `Dhall/TypeCheck.hs` — context identifiers and type inference.
+6. `Dhall/Core/CSE.hs` — optional `let` extraction for compact text.
+7. `Dhall/Core/DAG/CBOR.hs` — the experimental binary encoder and decoder.
+8. `Dhall/Test/DAG.hs` — small executable examples of the required behavior.
+
+## 16. Behaviors checked by tests
+
+The tests check, among other things:
+
+- converting `Expr -> CoreGraph -> Expr` preserves denoted syntax;
+- sharing on and sharing off produce the same expression;
+- repeated children use fewer stored nodes when sharing is on;
+- graph-based shift, substitution, and alpha-normalization match the existing
+  expression operations;
+- graph normalization matches `normalize`;
+- `ValId` and `EnvId` do not appear in output;
+- disabling caches performs no cache insertions;
+- typechecking repeated expressions returns the expected type;
+- experimental binary bytes do not depend on sharing mode or construction
+  order;
+- decoding experimental bytes reconstructs the same expression;
+- the legacy graph hash equals the existing expression hash.
+
+These comparisons let the implementation change its storage without silently
+changing Dhall semantics, text, or standard hashes.
