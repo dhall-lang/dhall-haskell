@@ -17,9 +17,10 @@
     'vApp' forces a 'VLam' argument at the call site when 'whnfCheapType'
     (primitives and function types; not lists). That bang must sit on 'vApp'
     itself: putting it in lazy 'Extend' only wraps a thunk and still leaves
-    ChurchEval as @s (s (s z))@ towers. 'Natural/fold' always bangs the
-    accumulator to WHNF; the @succ acc ≡ acc@ shortcut is only for
-    'boundedType'. Church-encoded *list* constructors stay lazy: see 'vApp'.
+    ChurchEval as @s (s (s z))@ towers. 'Natural/fold' bangs each step with
+    'forceAccWHNF' (list spines and record fields, not list elements); the
+    @succ acc ≡ acc@ shortcut is only for 'boundedType'. Church-encoded
+    *list* constructors stay lazy: see 'vApp'.
 
     Potential optimizations without changing Expr:
 
@@ -543,8 +544,8 @@ vWith e₀ ks v₀ = VWith e₀ ks v₀
 --
 -- * 'True' — Natural/Integer/Text/Bool/Double, Optional of those,
 --   records/unions of those. The fold may stop early via @succ acc ≡ acc@.
--- * 'False' — lists, functions, and mixed records. The fold still bangs
---   each step to WHNF, but does not run 'conv'.
+-- * 'False' — lists, functions, and mixed records. The fold still uses
+--   'forceAccWHNF' each step, but does not run 'conv'.
 boundedType :: Val a -> Bool
 boundedType = \case
     VBool       -> True
@@ -578,6 +579,30 @@ whnfCheapType = \case
     VRecord m   -> all whnfCheapType m
     VUnion m    -> all (all whnfCheapType) m
     _           -> False
+
+-- | Force a 'Natural/fold' accumulator far enough that the next step does
+-- not see a thunk tower, without forcing list *elements*.
+--
+-- Matching a 'VListLit' already bangs the 'Seq' spine (@<>@ is O(log n)).
+-- Matching a 'VRecordLit' does *not* force fields: 'Dhall.Map' stores an
+-- unbanged inner 'Data.Map', so @let !next = vApp succ acc@ only forced the
+-- record constructor (IterateAlt / ListBench). This walks fields: primitives,
+-- lambdas, nested records, and list spines. It does not map over 'Seq'
+-- elements and does not enter 'VLam'/'VHLam' bodies (large5 unused records
+-- are not fold accumulators; they stay lazy at 'vApp').
+forceAccWHNF :: Val a -> Val a
+forceAccWHNF !v =
+    case v of
+        VRecordLit m ->
+            let m' = Map.mapWithKey (\_ x -> let !x' = forceAccWHNF x in x') m
+                !_ = Map.size m'
+            in  VRecordLit m'
+        VSome t ->
+            let !t' = forceAccWHNF t
+            in  VSome t'
+        _ ->
+            v
+{-# INLINE forceAccWHNF #-}
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
 eval !env t0 =
@@ -671,16 +696,14 @@ eval !env t0 =
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 --
-                                -- Always bang `next` to WHNF. For a list that
-                                -- is `VListLit`, that is the `Seq` spine:
-                                -- `<>` is O(log n) and does not force
-                                -- elements. Lazy `VHLam` cons / list-binder
-                                -- `VLam` are what keep Iterate *elements*
-                                -- unforced (#2831). A lazy fold here was an
-                                -- overcorrection (Iterate / ListBench thunk
-                                -- tax). The `succ acc ≡ acc` shortcut stays
-                                -- `boundedType`-only (`conv` on functions
-                                -- and lists is not cheap).
+                                -- Bang `next` with `forceAccWHNF`: list spines
+                                -- and record fields, not list elements. Lazy
+                                -- `VHLam` cons / list-binder `VLam` keep
+                                -- Iterate *elements* unforced (#2831). A
+                                -- constructor-only bang left IterateAlt /
+                                -- ListBench as thunky `{ next, rest }` records.
+                                -- The `succ acc ≡ acc` shortcut stays
+                                -- `boundedType`-only.
                                 let steps = fromIntegral n' :: Integer
                                 in  if boundedType natural
                                     then shortcutFold steps
@@ -690,7 +713,7 @@ eval !env t0 =
                                   where
                                     go !acc 0 = acc
                                     go !acc m =
-                                        let !next = vApp succ acc
+                                        let !next = forceAccWHNF (vApp succ acc)
                                         in  if conv env next acc
                                             then acc
                                             else go next (m - 1)
@@ -698,7 +721,7 @@ eval !env t0 =
                                   where
                                     go !acc 0 = acc
                                     go !acc m =
-                                        let !next = vApp succ acc
+                                        let !next = forceAccWHNF (vApp succ acc)
                                         in  go next (m - 1)
                             _ -> inert
         NaturalBuild ->
