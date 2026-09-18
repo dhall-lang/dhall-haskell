@@ -100,7 +100,11 @@ subst x e expression = Lens.over Syntax.subExpressions (subst x e) expression
     normalize the final result at the end of the fold
 
     For @Natural/fold@ on "bounded types", the short-circuit optimization will be applied.
-    See @Dhall.Eval.boundedType@ for comparison.
+    See @Dhall.Eval.boundedType@ for comparison. @Dhall.Eval@ uses the same
+    shortcut on bounded types, but bangs every @Natural/fold@ accumulator
+    with @forceAccWHNF@ (list spines; non-list record fields). @vApp@
+    forces a user-lambda argument at the call site iff @whnfCheapType@
+    (primitives, function types, and one field-level of those).
 -}
 boundedType :: Expr s a -> Bool
 boundedType Bool             = True
@@ -206,6 +210,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                     App (App (App (App NaturalFold (NaturalLit n0)) t) succ') zero -> do
                       t' <- loop t
                       -- `boundedType` is checked once, not repeated in the loop.
+                      -- `Dhall.Eval`'s `Natural/fold` uses the same split.
                       if boundedType t' then strict else lazy
                       where
                         -- Use an `Integer` for the loop, due to the following

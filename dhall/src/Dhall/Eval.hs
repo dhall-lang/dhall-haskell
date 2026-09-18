@@ -14,6 +14,16 @@
     normal forms. Fairly similar to GHCI's STG machine algorithmically, but much
     simpler, with no known call optimization or environment trimming.
 
+    'vApp' forces a 'VLam' argument at the call site when 'whnfCheapType'
+    (primitives, function types, and one field-level of those; not lists,
+    not nested records). That bang must sit on 'vApp'
+    itself: putting it in lazy 'Extend' only wraps a thunk and still leaves
+    ChurchEval as @s (s (s z))@ towers. 'Natural/fold' bangs each step with
+    'forceAccWHNF' (list spines; record fields that are not lists); the
+    @succ acc ≡ acc@ shortcut is only for 'boundedType'. 'forceAccWHNF' is
+    'NOINLINE' so that record-field walker does not inflate 'eval' (large5).
+    Church-encoded *list* constructors stay lazy: see 'vApp'.
+
     Potential optimizations without changing Expr:
 
     * In conversion checking, get non-shadowing variables not by linear
@@ -89,6 +99,9 @@ import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf   as Printf
 
+-- | Evaluation environment. The 'Val' in 'Extend' is intentionally lazy:
+-- unused @let@-bound values (and unused lambda arguments, once instantiated)
+-- are not forced. The environment spine ('Empty'/'Skip'/'Extend') is strict.
 data Environment a
     = Empty
     | Skip   !(Environment a) {-# UNPACK #-} !Text
@@ -151,6 +164,10 @@ deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
 
+-- | View a function type as a Haskell function on values. Dependent 'VPi'
+-- closures go through 'instantiate', which is lazy in the argument: the
+-- argument is forced only if the type body mentions it. Non-dependent types
+-- are 'VHPi' and ignore the argument entirely (see 'boundVarOccurs').
 toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
 toVHPi (VPi a b@(Closure x _ _)) = Just (x, a, instantiate b)
 toVHPi (VHPi x a b             ) = Just (x, a, b)
@@ -292,12 +309,21 @@ countEnvironment x = go (0 :: Int)
     go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
     go  acc (Extend env x' _) = go (if x == x' then acc + 1 else acc) env
 
--- | Instantiate a closure.  Kept strict in the argument for NbE performance.
--- Non-dependent @Pi@ types are evaluated to lazy @VHPi@ instead, so
--- type-checking does not rely on a free-variable check here.
--- And `instantiate` does not check for free variables in the closure (this would be slow).
+-- | Instantiate a user-lambda closure.
+--
+-- The argument is stored in 'Extend' without an extra bang here. Forcing
+-- belongs in 'vApp' (call-site @!u@), not here: 'Extend' is lazy in the
+-- value, so a @forceWHNF u@ passed into 'instantiate' is only another thunk.
+-- Constructor-like lambdas such as @λ(x : List a) → λ(as : List a) → [x] # as@
+-- have a non-cheap binder, so @x@ stays a thunk in the list spine. A blanket
+-- @!u@ here would reintroduce the Iterate O(n²) blow-up for that encoding.
+--
+-- Bodies that inspect the argument (arithmetic, @conv@, @quote@, …) still
+-- force it when they pattern-match. 'instantiate' does not check whether the
+-- variable occurs in the body (that would be slow); non-dependent @Pi@ types
+-- are classified once as 'VHPi' via 'boundVarOccurs'.
 instantiate :: Eq a => Closure a -> Val a -> Val a
-instantiate (Closure x env t) !u = eval (Extend env x u) t
+instantiate (Closure x env t) u = eval (Extend env x u) t
 {-# INLINE instantiate #-}
 
 -- Out-of-env variables have negative de Bruijn levels.
@@ -319,21 +345,48 @@ vVar env0 (V x i0) = go env0 i0
 
 -- | Apply a function value.
 --
--- User lambdas ('VLam') remain call-by-value: 'instantiate' is strict in the
--- argument. Builtin 'VHLam's are lazy in the argument so constructor-like
--- builtins — especially 'List/build''s @cons@ — can store unevaluated elements
--- in a 'VListLit' spine. That matches the laziness of the β-normal form
--- @ [f x] # xs @, which builds list literals via @fmap eval@.
+-- The function is forced (@!t@) so we can see whether it is a lambda, a
+-- builtin, or a neutral.
 --
--- Without this, an *unnormalized* Prelude @List/iterate@ (still containing
--- 'List/build', as after delayed Code-import normalization) forces every
--- @Natural/fold@ while building the list. @List/length (iterate n …)@ then
--- becomes quadratic in @n@ and OOMs on the evaluation Iterate benchmark
--- (@n = 300000@).
+-- [Lazy 'VHLam'] Builtins and other Haskell-encoded functions. Eliminators
+-- ('List/length', 'Natural/isZero', …) force the argument themselves by
+-- pattern-matching. Constructors must not: 'List/build' synthesizes
+--
+-- @
+-- cons = \\x -> \\as -> vListAppend (VListLit Nothing (pure x)) as
+-- @
+--
+-- which is the same as the β-normal @ [x] # xs @, whose source 'ListLit' is
+-- built with lazy @fmap eval@. A bang on @u@ at this call site would force
+-- @x@ *before* that Haskell function ran (a lazy @\\ ~x ->@ cannot undo it).
+--
+-- After delayed β-normalization of unhashed Code imports (#2808), Prelude
+-- @List/iterate@ is inlined still containing 'List/build'. Strict 'VHLam'
+-- application then forced every @Natural/fold@ while building the spine, so
+-- @List/length (iterate n …)@ became O(n²) and OOMed the Iterate benchmark
+-- at @n = 300000@ (#2831).
+--
+-- ['VLam' and 'whnfCheapType'] User lambdas go through 'instantiate'. If the
+-- binder type is 'whnfCheapType' ('Natural', 'Bool', function types, a flat
+-- record of those, …), the argument is forced to WHNF *in this function*
+-- (@let !u' = u@) before 'instantiate'. That is the original @vApp !t !u@
+-- behaviour, gated so that @s (s (s z))@ in ChurchEval is a tight loop of
+-- 'VNaturalLit's rather than a tower of @eval@ thunks. A @forceWHNF@ stored
+-- in lazy 'Extend' does *not* suffice: 'vApp' would still return without
+-- entering the inner application. Nested record types are not cheap (see
+-- 'whnfCheapTypeNested'): classifying @λ(base : baseSchema.Type)@ must not
+-- walk the k8s product on every apply (large4).
+--
+-- List binders stay lazy, so a user Church @cons@ @λ(x : List a) → [x] # xs@
+-- does not force @x@. Do not use 'whnfCheapType' to bang 'VHLam' arguments:
+-- 'List/build''s @cons@ is 'Typed' at the element type, which may be
+-- 'Natural', but must still park the element without forcing it.
 vApp :: Eq a => Val a -> Val a -> Val a
 vApp !t u =
     case t of
-        VLam _ t'  -> instantiate t' u
+        VLam ty t'
+            | whnfCheapType ty -> let !u' = u in instantiate t' u'
+            | otherwise        -> instantiate t' u
         VHLam _ t' -> t' u
         t'        -> VApp t' u
 {-# INLINE vApp #-}
@@ -490,10 +543,13 @@ vWith e₀ ks v₀ = VWith e₀ ks v₀
 
 -- | Val-level counterpart of @Dhall.Normalize.boundedType@.
 --
--- Used once before a @Natural/fold@ loop to decide whether to perform shortcut
--- check during the loop. Returns True for Natural/Integer/Text/Bool/Double,
--- Optional of those, and records/unions of those; False for lists, functions,
--- and other potentially large accumulators.
+-- Decides the 'Natural/fold' *shortcut* (see the @NaturalFold@ case of
+-- 'eval'): conversion @succ acc ≡ acc@ is only cheap on small types.
+--
+-- * 'True' — Natural/Integer/Text/Bool/Double, Optional of those,
+--   records/unions of those. The fold may stop early via @succ acc ≡ acc@.
+-- * 'False' — lists, functions, and mixed records. The fold still uses
+--   'forceAccWHNF' each step, but does not run 'conv'.
 boundedType :: Val a -> Bool
 boundedType = \case
     VBool       -> True
@@ -506,6 +562,87 @@ boundedType = \case
     VRecord m   -> all boundedType m
     VUnion m    -> all (all boundedType) m
     _           -> False
+
+-- | Types whose WHNF is a lambda or a small primitive. Used to decide
+-- whether 'vApp' bangs a 'VLam' argument (not used by 'Natural/fold').
+--
+-- Functions are included: WHNF is 'VLam'/'VHLam'. Lists are not: a user
+-- Church @cons@ @λ(x : List a) → [x] # xs@ must park @x@ without forcing
+-- it.
+--
+-- Records and unions are cheap only one field-level deep: every immediate
+-- field or payload must be 'whnfCheapTypeNested'. That bangs ListBench
+-- @λ(p : { next : Natural, rest : list → list })@ without walking nested
+-- products such as large4 @baseSchema.Type@ on every apply.
+whnfCheapType :: Val a -> Bool
+whnfCheapType = \case
+    VRecord m   -> all whnfCheapTypeNested m
+    VUnion m    -> all (all whnfCheapTypeNested) m
+    VOptional t -> whnfCheapType t
+    t           -> whnfCheapTypeNested t
+
+-- | Leaves of 'whnfCheapType': primitives, function types, and 'Optional' of
+-- those. A nested 'VRecord'/'VUnion' is not cheap — do not recurse.
+whnfCheapTypeNested :: Val a -> Bool
+whnfCheapTypeNested = \case
+    VBool       -> True
+    VNatural    -> True
+    VInteger    -> True
+    VDouble     -> True
+    VText       -> True
+    VPi _ _     -> True
+    VHPi _ _ _  -> True
+    VOptional t -> whnfCheapTypeNested t
+    _           -> False
+{-# INLINE whnfCheapTypeNested #-}
+
+-- | Force a 'Natural/fold' accumulator far enough that the next step does
+-- not see a thunk tower, without forcing list *elements* or list-typed
+-- record fields.
+--
+-- Matching a 'VListLit' already bangs the 'Seq' spine (@<>@ is O(log n)).
+-- Matching a 'VRecordLit' does *not* force fields: 'Dhall.Map' stores an
+-- unbanged inner 'Data.Map'. This walks fields whose *type* is not a list
+-- (ListBench @next : Natural@, @rest : list → list@). List-typed fields are
+-- left as thunks: IterateAlt's @next : List Natural@ is not needed by
+-- @List/length@ of the outer spine, and forcing it built lists of length
+-- @1..n@. Does not enter 'VLam'/'VHLam' bodies.
+--
+-- The first argument is the accumulator type from 'Natural/fold' (so we can
+-- skip list fields without matching the value, which would force a 'Seq').
+--
+-- Not inlined into 'eval': the walker is a 'VRecordLit' fold, and inlining it
+-- into the 'NaturalFold' branch bloated 'eval' enough to regress large5
+-- (128 copies of a large record, no 'Natural/fold' in the tree).
+forceAccWHNF :: Val a -> Val a -> Val a
+forceAccWHNF accTy !v =
+    case (accTy, v) of
+        (VRecord tm, VRecordLit vm) ->
+            let !_ = Map.foldMapWithKey (seqField tm) vm
+            in  v
+        (VOptional t, VSome x) ->
+            let !x' = forceAccWHNF t x
+            in  VSome x'
+        _ ->
+            v
+{-# NOINLINE forceAccWHNF #-}
+
+-- | @()@ if this record field should stay a thunk ('VList'); otherwise
+-- force it with 'forceAccWHNF'. Must not pattern-match a list field: that
+-- would bang the 'Seq' spine.
+seqField :: Map Text (Val a) -> Text -> Val a -> ()
+seqField tm k x =
+    case Map.lookup k tm of
+        Just fty | skipListField fty -> ()
+        Just fty -> forceAccWHNF fty x `seq` ()
+        Nothing  -> ()
+
+skipListField :: Val a -> Bool
+skipListField = \case
+    VList _     -> True
+    VOptional t -> skipListField t
+    _           -> False
+{-# INLINE skipListField #-}
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
 eval !env t0 =
@@ -527,6 +664,8 @@ eval !env t0 =
         App t u ->
             vApp (eval env t) (eval env u)
         Let (Binding _ x _ _mA _ a) b ->
+            -- `Extend` is lazy in the bound `Val`, so an unused let is not
+            -- evaluated. `!env'` only forces the environment spine.
             let !env' = Extend env x (eval env a)
             in  eval env' b
         Annot t _ ->
@@ -597,24 +736,33 @@ eval !env t0 =
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 --
-                                -- Note about the short-circuit optimization for Natural/fold:
-                                -- If `succ acc == acc` then we stop the loop and return `acc`.
-                                -- This is helpful for numerical and other "bounded" types but
-                                -- should not be done when the accumulator is a large structure
-                                -- (lists, functions, etc.) that can grow indefinitely; in those cases
-                                -- Natural/fold will probably not benefit from the shortcut.
-                                go zero (fromIntegral n' :: Integer)
+                                -- Bang `next` with `forceAccWHNF` at the fold
+                                -- type: list spines; non-list record fields
+                                -- (ListBench Naturals). List-typed record
+                                -- fields stay lazy (IterateAlt inner lists).
+                                -- Lazy `VHLam` cons / list-binder `VLam` keep
+                                -- Iterate *elements* unforced (#2831). The
+                                -- `succ acc ≡ acc` shortcut stays
+                                -- `boundedType`-only.
+                                let steps = fromIntegral n' :: Integer
+                                in  if boundedType natural
+                                    then shortcutFold steps
+                                    else strictFold steps
+                              where
+                                shortcutFold = go zero
                                   where
-                                    enableShortcut = boundedType natural
-
                                     go !acc 0 = acc
-                                    go acc m =
-                                      -- Detect a shortcut: if succ acc == acc then return acc immediately.
-                                      -- Making !next strict, as `conv` is not always applied to `next`.
-                                      let !next = vApp succ acc
-                                      in  if enableShortcut && conv env next acc
-                                          then acc
-                                          else go next (m - 1)
+                                    go !acc m =
+                                        let !next = forceAccWHNF natural (vApp succ acc)
+                                        in  if conv env next acc
+                                            then acc
+                                            else go next (m - 1)
+                                strictFold = go zero
+                                  where
+                                    go !acc 0 = acc
+                                    go !acc m =
+                                        let !next = forceAccWHNF natural (vApp succ acc)
+                                        in  go next (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
@@ -792,6 +940,8 @@ eval !env t0 =
                     VListBuild a VPrimVar
                 t ->       t
                     `vApp` VList a
+                    -- Constructor: must not force `x`. Laziness is `vApp`'s
+                    -- `VHLam` branch (a `~x` pattern here cannot undo `vApp !u`).
                     `vApp` VHLam (Typed "a" a) (\x ->
                            VHLam (Typed "as" (VList a)) (\as ->
                            vListAppend (VListLit Nothing (pure x)) as))
