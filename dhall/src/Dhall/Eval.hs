@@ -317,8 +317,21 @@ vVar env0 (V x i0) = go env0 i0
     go Empty i =
         VVar x (negate i - 1)
 
+-- | Apply a function value.
+--
+-- User lambdas ('VLam') remain call-by-value: 'instantiate' is strict in the
+-- argument. Builtin 'VHLam's are lazy in the argument so constructor-like
+-- builtins — especially 'List/build''s @cons@ — can store unevaluated elements
+-- in a 'VListLit' spine. That matches the laziness of the β-normal form
+-- @ [f x] # xs @, which builds list literals via @fmap eval@.
+--
+-- Without this, an *unnormalized* Prelude @List/iterate@ (still containing
+-- 'List/build', as after delayed Code-import normalization) forces every
+-- @Natural/fold@ while building the list. @List/length (iterate n …)@ then
+-- becomes quadratic in @n@ and OOMs on the evaluation Iterate benchmark
+-- (@n = 300000@).
 vApp :: Eq a => Val a -> Val a -> Val a
-vApp !t !u =
+vApp !t u =
     case t of
         VLam _ t'  -> instantiate t' u
         VHLam _ t' -> t' u
