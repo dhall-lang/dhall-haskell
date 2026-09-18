@@ -319,8 +319,7 @@ nestedFrozenChildWithRelativeImportsSurvivesAsSource =
 
             State.evalStateT
                 (Test.Util.loadWith parsedMain)
-                (Lens.set Import.reportWarning (\_ -> return ())
-                    (Import.emptyStatus directory))
+                ((Import.emptyStatus directory) { Import._reportWarning = \_ -> return () })
 
         expected <- Core.throws
             (Parser.exprFromText "(expected)" "{ clientConfig = { url = \"https://example.com\" } }")
