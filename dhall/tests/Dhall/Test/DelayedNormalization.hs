@@ -23,6 +23,7 @@ import qualified Dhall.Parser           as Parser
 import qualified System.Directory       as Directory
 import qualified System.Environment     as Environment
 import qualified System.IO.Temp         as Temp
+import qualified System.Timeout         as Timeout
 import qualified Test.Tasty             as Tasty
 
 getTests :: IO TestTree
@@ -34,6 +35,8 @@ getTests = return
             hashedResolveIsNormalTest
         , testCase "freeze writes the αβ-normal form to the semantic cache"
             freezeWritesNormalizedCacheTest
+        , testCase "List/length of unnormalized List/build iterate stays near-linear"
+            listBuildIterateLengthIsNearLinearTest
         ])
 
 withTempCache :: (FilePath -> IO a) -> IO a
@@ -159,3 +162,68 @@ freezeWritesNormalizedCacheTest = withTempCache $ \cacheDir -> do
         decoded
 
     Directory.removeFile tempFile
+
+-- | The evaluation Iterate benchmark imports Prelude @List/iterate@ without a
+-- hash. After delayed Code normalization that import stays in the
+-- @List/build@ / @cons (Natural/fold …)@ shape. Strict application of that
+-- @cons@ forces every element while building the spine and turns
+-- @List/length (iterate n …)@ into an O(n²) loop (OOM at n≈300000).
+--
+-- Builtin @VHLam@ application must keep list elements lazy so length only
+-- pays for the spine — matching the β-normal @[f x] # xs@ encoding.
+listBuildIterateLengthIsNearLinearTest :: IO ()
+listBuildIterateLengthIsNearLinearTest = do
+    -- Large enough that a quadratic implementation times out; small enough
+    -- that the linear path finishes quickly under @tasty@.
+    let n = 8000 :: Int
+    let src =
+            Text.pack $
+                "List/length (List Natural)\n\
+                \  ( List/build\n\
+                \      (List Natural)\n\
+                \      ( λ(list : Type) →\n\
+                \        λ(cons : List Natural → list → list) →\n\
+                \          List/fold\n\
+                \            { index : Natural, value : {} }\n\
+                \            ( List/indexed\n\
+                \                {}\n\
+                \                ( List/build\n\
+                \                    {}\n\
+                \                    ( λ(list : Type) →\n\
+                \                      λ(cons : {} → list → list) →\n\
+                \                        Natural/fold "
+                    <> show n
+                    <> " list (cons {=})\n\
+                \                    )\n\
+                \                )\n\
+                \            )\n\
+                \            list\n\
+                \            ( λ(y : { index : Natural, value : {} }) →\n\
+                \                cons\n\
+                \                  ( Natural/fold\n\
+                \                      y.index\n\
+                \                      (List Natural)\n\
+                \                      (λ(x : List Natural) → x # [ 1 ])\n\
+                \                      [ 1 ]\n\
+                \                  )\n\
+                \            )\n\
+                \      )\n\
+                \  )\n"
+
+    parsed <- Core.throws (Parser.exprFromText "list-build-iterate" src)
+
+    mResult <- Timeout.timeout 2000000 $ do
+        let resolved = fmap (\_ -> error "unexpected import") parsed
+        let nf = Core.normalize (Core.denote resolved) :: Core.Expr Void Void
+        assertEqual
+            "List/length of the List/build iterate spine"
+            (Core.NaturalLit (fromIntegral n))
+            nf
+
+    case mResult of
+        Nothing ->
+            assertFailure
+                "timed out normalizing List/length of List/build iterate; \
+                \strict List/build cons is likely forcing every Natural/fold"
+        Just () ->
+            return ()
