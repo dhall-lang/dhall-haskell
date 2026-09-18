@@ -238,8 +238,8 @@ listBuildIterateLengthIsNearLinearTest = do
 
 -- | Same cost model as 'listBuildIterateLengthIsNearLinearTest', but the
 -- outer cons is a *user* @VLam@ (@λ(x) → λ(acc) → [x] # acc@) driven by
--- 'Natural/fold' at an unbounded list type. The binder is @List _@, so
--- 'whnfCheapType' is false and 'vApp' does not force the element; a blanket
+-- 'Natural/fold' at a list type. The fold bangs the list *spine* each step;
+-- the binder is @List _@, so 'vApp' does not force the element. A blanket
 -- strict 'instantiate' would force each element's @Natural/fold@.
 userLamChurchConsIterateLengthIsNearLinearTest :: IO ()
 userLamChurchConsIterateLengthIsNearLinearTest = do
@@ -309,8 +309,8 @@ churchNumeralPlusOneIsNearLinearTest = do
             return ()
 
 -- | Scaled-down FunCompose: @Natural/fold@ at type @Natural → Natural@.
--- Function types are not 'boundedType'; the fold must still bang each
--- closure WHNF or this allocates a million thunks.
+-- Function types are not 'boundedType' (no @conv@ shortcut), but every fold
+-- step still bangs the closure to WHNF.
 funComposePlusOneIsNearLinearTest :: IO ()
 funComposePlusOneIsNearLinearTest = do
     let n = 100000 :: Int

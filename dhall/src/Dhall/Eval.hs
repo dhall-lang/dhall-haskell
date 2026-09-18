@@ -17,10 +17,9 @@
     'vApp' forces a 'VLam' argument at the call site when 'whnfCheapType'
     (primitives and function types; not lists). That bang must sit on 'vApp'
     itself: putting it in lazy 'Extend' only wraps a thunk and still leaves
-    ChurchEval as @s (s (s z))@ towers. 'Natural/fold' is strict + shortcut
-    for 'boundedType', strict-without-shortcut for other 'whnfCheapType'
-    accumulators (FunCompose @a → a@), and lazy for lists. Church-encoded
-    *list* constructors stay lazy: see 'vApp'.
+    ChurchEval as @s (s (s z))@ towers. 'Natural/fold' always bangs the
+    accumulator to WHNF; the @succ acc ≡ acc@ shortcut is only for
+    'boundedType'. Church-encoded *list* constructors stay lazy: see 'vApp'.
 
     Potential optimizations without changing Expr:
 
@@ -543,10 +542,9 @@ vWith e₀ ks v₀ = VWith e₀ ks v₀
 -- 'eval'): conversion @succ acc ≡ acc@ is only cheap on small types.
 --
 -- * 'True' — Natural/Integer/Text/Bool/Double, Optional of those,
---   records/unions of those. The fold is strict and may stop early.
--- * 'False' — lists, functions, and mixed records. See 'whnfCheapType'
---   for a coarser split that still allows a strict fold *without* the
---   shortcut (FunCompose).
+--   records/unions of those. The fold may stop early via @succ acc ≡ acc@.
+-- * 'False' — lists, functions, and mixed records. The fold still bangs
+--   each step to WHNF, but does not run 'conv'.
 boundedType :: Val a -> Bool
 boundedType = \case
     VBool       -> True
@@ -561,13 +559,11 @@ boundedType = \case
     _           -> False
 
 -- | Types whose WHNF is a lambda or a small primitive. Used to decide
--- whether 'vApp' bangs a 'VLam' argument and whether 'Natural/fold' bangs
--- @next@ (without the 'boundedType' shortcut).
+-- whether 'vApp' bangs a 'VLam' argument (not used by 'Natural/fold').
 --
--- Functions are included: WHNF is 'VLam'/'VHLam', so FunCompose's
--- @Natural/fold n (a → a)@ stays a tight loop of closures. Lists are not:
--- forcing a list spine at each cons is the Iterate O(n²) blow-up. A record
--- is cheap only if every field is.
+-- Functions are included: WHNF is 'VLam'/'VHLam'. Lists are not: a user
+-- Church @cons@ @λ(x : List a) → [x] # xs@ must park @x@ without forcing
+-- it. A record is cheap only if every field is.
 whnfCheapType :: Val a -> Bool
 whnfCheapType = \case
     VBool       -> True
@@ -675,22 +671,20 @@ eval !env t0 =
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 --
-                                -- Match `Dhall.Normalize` on the shortcut:
-                                -- strict + `succ acc ≡ acc` iff `boundedType`.
-                                -- `whnfCheapType` is coarser: function types
-                                -- (FunCompose) and records of cheap fields
-                                -- still bang `next` so the loop does not
-                                -- allocate a thunk per step, but they skip
-                                -- `conv` (comparing functions is not cheap).
-                                -- Lists stay on `lazyFold` — banging a list
-                                -- accumulator rebuilds the spine each step
-                                -- (Iterate / IterateAlt with `a = List _`).
+                                -- Always bang `next` to WHNF. For a list that
+                                -- is `VListLit`, that is the `Seq` spine:
+                                -- `<>` is O(log n) and does not force
+                                -- elements. Lazy `VHLam` cons / list-binder
+                                -- `VLam` are what keep Iterate *elements*
+                                -- unforced (#2831). A lazy fold here was an
+                                -- overcorrection (Iterate / ListBench thunk
+                                -- tax). The `succ acc ≡ acc` shortcut stays
+                                -- `boundedType`-only (`conv` on functions
+                                -- and lists is not cheap).
                                 let steps = fromIntegral n' :: Integer
                                 in  if boundedType natural
                                     then shortcutFold steps
-                                    else if whnfCheapType natural
-                                    then strictFold steps
-                                    else lazyFold steps
+                                    else strictFold steps
                               where
                                 shortcutFold = go zero
                                   where
@@ -706,10 +700,6 @@ eval !env t0 =
                                     go !acc m =
                                         let !next = vApp succ acc
                                         in  go next (m - 1)
-                                lazyFold = go zero
-                                  where
-                                    go acc 0 = acc
-                                    go acc m = go (vApp succ acc) (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
