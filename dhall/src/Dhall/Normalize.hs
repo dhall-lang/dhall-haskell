@@ -103,7 +103,8 @@ subst x e expression = Lens.over Syntax.subExpressions (subst x e) expression
     See @Dhall.Eval.boundedType@ for comparison. @Dhall.Eval@ uses the same
     shortcut on bounded types, but bangs every @Natural/fold@ accumulator
     with @forceAccWHNF@ (list spines; non-list record fields). @vApp@
-    forces a user-lambda argument at the call site iff @whnfCheapType@.
+    forces a user-lambda argument at the call site iff @whnfCheapType@
+    (primitives, function types, and one field-level of those).
 -}
 boundedType :: Expr s a -> Bool
 boundedType Bool             = True

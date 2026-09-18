@@ -15,7 +15,8 @@
     simpler, with no known call optimization or environment trimming.
 
     'vApp' forces a 'VLam' argument at the call site when 'whnfCheapType'
-    (primitives and function types; not lists). That bang must sit on 'vApp'
+    (primitives, function types, and one field-level of those; not lists,
+    not nested records). That bang must sit on 'vApp'
     itself: putting it in lazy 'Extend' only wraps a thunk and still leaves
     ChurchEval as @s (s (s z))@ towers. 'Natural/fold' bangs each step with
     'forceAccWHNF' (list spines; record fields that are not lists); the
@@ -366,13 +367,15 @@ vVar env0 (V x i0) = go env0 i0
 -- at @n = 300000@ (#2831).
 --
 -- ['VLam' and 'whnfCheapType'] User lambdas go through 'instantiate'. If the
--- binder type is 'whnfCheapType' ('Natural', 'Bool', function types, …), the
--- argument is forced to WHNF *in this function* (@let !u' = u@) before
--- 'instantiate'. That is the original @vApp !t !u@ behaviour, gated so that
--- @s (s (s z))@ in ChurchEval is a tight loop of 'VNaturalLit's rather than
--- a tower of @eval@ thunks. A @forceWHNF@ stored in lazy 'Extend' does
--- *not* suffice: 'vApp' would still return without entering the inner
--- application.
+-- binder type is 'whnfCheapType' ('Natural', 'Bool', function types, a flat
+-- record of those, …), the argument is forced to WHNF *in this function*
+-- (@let !u' = u@) before 'instantiate'. That is the original @vApp !t !u@
+-- behaviour, gated so that @s (s (s z))@ in ChurchEval is a tight loop of
+-- 'VNaturalLit's rather than a tower of @eval@ thunks. A @forceWHNF@ stored
+-- in lazy 'Extend' does *not* suffice: 'vApp' would still return without
+-- entering the inner application. Nested record types are not cheap (see
+-- 'whnfCheapTypeNested'): classifying @λ(base : baseSchema.Type)@ must not
+-- walk the k8s product on every apply (large4).
 --
 -- List binders stay lazy, so a user Church @cons@ @λ(x : List a) → [x] # xs@
 -- does not force @x@. Do not use 'whnfCheapType' to bang 'VHLam' arguments:
@@ -565,9 +568,23 @@ boundedType = \case
 --
 -- Functions are included: WHNF is 'VLam'/'VHLam'. Lists are not: a user
 -- Church @cons@ @λ(x : List a) → [x] # xs@ must park @x@ without forcing
--- it. A record is cheap only if every field is.
+-- it.
+--
+-- Records and unions are cheap only one field-level deep: every immediate
+-- field or payload must be 'whnfCheapTypeNested'. That bangs ListBench
+-- @λ(p : { next : Natural, rest : list → list })@ without walking nested
+-- products such as large4 @baseSchema.Type@ on every apply.
 whnfCheapType :: Val a -> Bool
 whnfCheapType = \case
+    VRecord m   -> all whnfCheapTypeNested m
+    VUnion m    -> all (all whnfCheapTypeNested) m
+    VOptional t -> whnfCheapType t
+    t           -> whnfCheapTypeNested t
+
+-- | Leaves of 'whnfCheapType': primitives, function types, and 'Optional' of
+-- those. A nested 'VRecord'/'VUnion' is not cheap — do not recurse.
+whnfCheapTypeNested :: Val a -> Bool
+whnfCheapTypeNested = \case
     VBool       -> True
     VNatural    -> True
     VInteger    -> True
@@ -575,11 +592,9 @@ whnfCheapType = \case
     VText       -> True
     VPi _ _     -> True
     VHPi _ _ _  -> True
-    VList _     -> False
-    VOptional t -> whnfCheapType t
-    VRecord m   -> all whnfCheapType m
-    VUnion m    -> all (all whnfCheapType) m
+    VOptional t -> whnfCheapTypeNested t
     _           -> False
+{-# INLINE whnfCheapTypeNested #-}
 
 -- | Force a 'Natural/fold' accumulator far enough that the next step does
 -- not see a thunk tower, without forcing list *elements* or list-typed
