@@ -85,17 +85,32 @@ large2Labels =
 large3Labels :: [String]
 large3Labels = phaseLabels "large3"
 
+large3SourceLabels :: [String]
+large3SourceLabels = phaseLabels "large3.source"
+
 large3GetConfigLabels :: [String]
-large3GetConfigLabels = phaseLabels "large3.get_config"
+large3GetConfigLabels = phaseLabels "large3.get_config.code"
+
+large3GetConfigAsSourceLabels :: [String]
+large3GetConfigAsSourceLabels = phaseLabels "large3.get_config.source"
 
 large4Labels :: [String]
 large4Labels = phaseLabels "large4"
 
+large4SourceLabels :: [String]
+large4SourceLabels = phaseLabels "large4.source"
+
 large5CodeLabels :: [String]
-large5CodeLabels = phaseLabels "large5"
+large5CodeLabels = phaseLabels "large5.code"
+
+large5SourceLabels :: [String]
+large5SourceLabels = phaseLabels "large5.source"
 
 preludeImportCodeLabels :: [String]
-preludeImportCodeLabels = coldResolveLabels "prelude_import"
+preludeImportCodeLabels = coldResolveLabels "prelude_import.code"
+
+preludeImportSourceLabels :: [String]
+preludeImportSourceLabels = coldResolveLabels "prelude_import.source"
 
 k8sLabels :: String -> [String]
 k8sLabels name =
@@ -151,8 +166,18 @@ loadLarge6PhaseVariants :: Maybe String -> IO [PipelineBench]
 loadLarge6PhaseVariants mPattern = do
     -- Mode A large6 rows (see large6/README.md matrix).
     let candidates =
-            [ ("large6.slow_parse", "pipeline-code-long-parse.dhall")
-            , ("large6.slow_walk", "pipeline-code-long-walk.dhall")
+            [ ("large6.slow_parse.as_code", "pipeline-code-long-parse.dhall")
+            , ("large6.slow_parse.as_source", "pipeline-source-long-parse.dhall")
+            , ("large6.slow_eval.as_source", "pipeline-source-long-eval.dhall")
+            , ("large6.slow_typecheck.as_source", "pipeline-source-long-typecheck.dhall")
+            , ("large6.slow_normalize.as_source", "pipeline-source-long-normalize.dhall")
+            , ("large6.slow_multi.as_source", "pipeline-source-long-multi.dhall")
+            -- Structural-walk probe: large import-free List Natural.
+            -- Measures whether as Source pays a second denote/walk after
+            -- Code hash-check (should be near-parity after denoted reuse).
+            -- Matrix: large6/README.md.
+            , ("large6.slow_walk.as_code", "pipeline-code-long-walk.dhall")
+            , ("large6.slow_walk.as_source", "pipeline-source-long-walk.dhall")
             ]
         selected =
             [ entry
@@ -199,10 +224,10 @@ loadLarge6ColdResolveVariants :: Maybe String -> IO [ColdResolveBench]
 loadLarge6ColdResolveVariants mPattern = do
     -- Mode B large6 Code rows where prep would hide resolve cost.
     let candidates =
-            [ ("large6.slow_eval", "pipeline-code-long-eval.dhall")
-            , ("large6.slow_typecheck", "pipeline-code-long-typecheck.dhall")
-            , ("large6.slow_normalize", "pipeline-code-long-normalize.dhall")
-            , ("large6.slow_multi", "pipeline-code-long-multi.dhall")
+            [ ("large6.slow_eval.as_code", "pipeline-code-long-eval.dhall")
+            , ("large6.slow_typecheck.as_code", "pipeline-code-long-typecheck.dhall")
+            , ("large6.slow_normalize.as_code", "pipeline-code-long-normalize.dhall")
+            , ("large6.slow_multi.as_code", "pipeline-code-long-multi.dhall")
             ]
         selected =
             [ entry
@@ -344,17 +369,44 @@ benchmarks mPattern = do
                 say "Skipping large3 (does not match pattern)"
                 pure Nothing
 
+    let wantLarge3Source = any (couldMatch mPattern) large3SourceLabels
+    large3Source <-
+        if wantLarge3Source
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large3.source"
+                        large3Directory
+                        "pipeline-source.dhall"
+            else do
+                say "Skipping large3.source (does not match pattern)"
+                pure Nothing
+
     let wantLarge3GetConfig = any (couldMatch mPattern) large3GetConfigLabels
     large3GetConfig <-
         if wantLarge3GetConfig
             then
                 Just
                     <$> loadPipelineBench
-                        "large3.get_config"
+                        "large3.get_config.code"
                         large3Directory
                         "get_config.dhall"
             else do
-                say "Skipping large3.get_config (does not match pattern)"
+                say "Skipping large3.get_config.code (does not match pattern)"
+                pure Nothing
+
+    let wantLarge3GetConfigAsSource =
+            any (couldMatch mPattern) large3GetConfigAsSourceLabels
+    large3GetConfigAsSource <-
+        if wantLarge3GetConfigAsSource
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large3.get_config.source"
+                        large3Directory
+                        "get_config_as_source.dhall"
+            else do
+                say "Skipping large3.get_config.source (does not match pattern)"
                 pure Nothing
 
     let wantLarge4 = any (couldMatch mPattern) large4Labels
@@ -365,17 +417,43 @@ benchmarks mPattern = do
                 say "Skipping large4 (does not match pattern)"
                 pure Nothing
 
+    let wantLarge4Source = any (couldMatch mPattern) large4SourceLabels
+    large4Source <-
+        if wantLarge4Source
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large4.source"
+                        large4Directory
+                        "generate-example-source.dhall"
+            else do
+                say "Skipping large4.source (does not match pattern)"
+                pure Nothing
+
     let wantLarge5Code = any (couldMatch mPattern) large5CodeLabels
     large5Code <-
         if wantLarge5Code
             then
                 Just
                     <$> loadPipelineBench
-                        "large5"
+                        "large5.code"
                         large5Directory
                         "pipeline-code.dhall"
             else do
-                say "Skipping large5 (does not match pattern)"
+                say "Skipping large5.code (does not match pattern)"
+                pure Nothing
+
+    let wantLarge5Source = any (couldMatch mPattern) large5SourceLabels
+    large5Source <-
+        if wantLarge5Source
+            then
+                Just
+                    <$> loadPipelineBench
+                        "large5.source"
+                        large5Directory
+                        "pipeline-source.dhall"
+            else do
+                say "Skipping large5.source (does not match pattern)"
                 pure Nothing
 
     large6Variants <- loadLarge6PhaseVariants mPattern
@@ -387,11 +465,24 @@ benchmarks mPattern = do
             then
                 Just
                     <$> loadColdResolveBench
-                        "prelude_import"
+                        "prelude_import.code"
                         preludeImportDirectory
                         "prelude-code.dhall"
             else do
-                say "Skipping prelude_import (does not match pattern)"
+                say "Skipping prelude_import.code (does not match pattern)"
+                pure Nothing
+
+    let wantPreludeImportSource = any (couldMatch mPattern) preludeImportSourceLabels
+    preludeImportSource <-
+        if wantPreludeImportSource
+            then
+                Just
+                    <$> loadColdResolveBench
+                        "prelude_import.source"
+                        preludeImportDirectory
+                        "prelude-source.dhall"
+            else do
+                say "Skipping prelude_import.source (does not match pattern)"
                 pure Nothing
 
     pure $ concat
@@ -436,10 +527,15 @@ benchmarks mPattern = do
           | not (null k8sExamples)
           ]
         , [ pipelineBenchGroup fixture | Just fixture <- [large3] ]
+        , [ pipelineBenchGroup fixture | Just fixture <- [large3Source] ]
         , [ pipelineBenchGroup fixture | Just fixture <- [large3GetConfig] ]
+        , [ pipelineBenchGroup fixture | Just fixture <- [large3GetConfigAsSource] ]
         , [ pipelineBenchGroup fixture | Just fixture <- [large4] ]
+        , [ pipelineBenchGroup fixture | Just fixture <- [large4Source] ]
         , [ pipelineBenchGroup fixture | Just fixture <- [large5Code] ]
+        , [ pipelineBenchGroup fixture | Just fixture <- [large5Source] ]
         , map pipelineBenchGroup large6Variants
         , map coldResolveBenchGroup large6ColdResolveVariants
         , [ coldResolveBenchGroup fixture | Just fixture <- [preludeImportCode] ]
+        , [ coldResolveBenchGroup fixture | Just fixture <- [preludeImportSource] ]
         ]

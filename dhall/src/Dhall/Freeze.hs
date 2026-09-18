@@ -200,14 +200,9 @@ freezeImportWithSettings settings directory import_ = do
         Left  exception -> Exception.throwIO exception
         Right _         -> return ()
 
-    let normalizedExpression = Core.alphaNormalize (Core.normalizeWith (view Dhall.normalizer settings) expression)
-
-    -- The semantic cache product is the encoded αβ-normal form.  Unhashed
-    -- Code imports are no longer β-normalized by `loadWith`, so we must
-    -- write `normalizedExpression` rather than the raw load product.
-    Dhall.Import.writeExpressionToSemanticCache normalizedExpression
-
-    let expressionHash = Dhall.Import.hashExpression normalizedExpression
+    -- Code: αβ-normal form (unhashed Code is not β-normalized by loadWith).
+    -- Source: finalized import-free expression, not β-normalized.
+    expressionHash <- State.evalStateT (Dhall.Import.cacheProductHash unprotectedImport) status
 
     let newImportHashed = (importHashed import_) { hash = Just expressionHash }
 
