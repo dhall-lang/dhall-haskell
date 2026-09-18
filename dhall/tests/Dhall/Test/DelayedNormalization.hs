@@ -233,11 +233,10 @@ listBuildIterateLengthIsNearLinearTest = do
             return ()
 
 -- | Same cost model as 'listBuildIterateLengthIsNearLinearTest', but the
--- outer cons is a *user* @VLam@ (@λ(x) → λ(as) → [x] # as@) driven by
--- 'Natural/fold' at an unbounded list type. Strict 'instantiate' would force
--- each element's @Natural/fold@; a strict unbounded 'Natural/fold' loop would
--- still be linear here (it only forces the outer spine). This locks in lazy
--- user-lambda application.
+-- outer cons is a *user* @VLam@ (@λ(x) → λ(acc) → [x] # acc@) driven by
+-- 'Natural/fold' at an unbounded list type. The binder is @List _@, so
+-- 'boundedType' is false and 'vApp' does not force the element; a blanket
+-- strict 'instantiate' would force each element's @Natural/fold@.
 userLamChurchConsIterateLengthIsNearLinearTest :: IO ()
 userLamChurchConsIterateLengthIsNearLinearTest = do
     let n = 8000 :: Int

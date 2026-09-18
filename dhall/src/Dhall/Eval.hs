@@ -14,11 +14,12 @@
     normal forms. Fairly similar to GHCI's STG machine algorithmically, but much
     simpler, with no known call optimization or environment trimming.
 
-    Application is lazy in the argument: 'vApp' does not bang the argument,
-    'instantiate' stores it unevaluated in 'Extend', and 'Natural/fold' is
-    strict in the accumulator only for 'boundedType' (with a @succ acc ≡ acc@
-    shortcut). That is required for Church-encoded constructors after delayed
-    β-normalization of unhashed Code imports: see 'vApp'.
+    Application is lazy in the argument except where 'boundedType' says the
+    binder is a small type ('Natural', 'Bool', …): then 'vApp' forces a 'VLam'
+    argument to WHNF (ChurchEval-style @λ(x : Natural) → x + 1@). 'instantiate'
+    still stores the value unevaluated; 'Natural/fold' is strict in the
+    accumulator only for 'boundedType' (with a @succ acc ≡ acc@ shortcut).
+    Church-encoded *list* constructors stay lazy: see 'vApp'.
 
     Potential optimizations without changing Expr:
 
@@ -307,17 +308,17 @@ countEnvironment x = go (0 :: Int)
 
 -- | Instantiate a user-lambda closure.
 --
--- The argument is lazy: it is stored in 'Extend' and forced only if the body
--- mentions the bound variable. That matches Dhall β-reduction (not CBV) and
--- is the user-lambda counterpart of lazy 'VHLam' application in 'vApp'.
--- Constructor-like lambdas such as @λ(x : a) → λ(as : List a) → [x] # as@
--- can therefore park an unevaluated element in a list spine; a strict
--- @!u@ here would reintroduce the Iterate O(n²) blow-up for that encoding.
+-- The argument is stored in 'Extend' without an extra bang here.
+-- 'vApp' may already have forced it when the binder type is 'boundedType'
+-- (see there). Constructor-like lambdas such as
+-- @λ(x : List a) → λ(as : List a) → [x] # as@ have a non-bounded binder, so
+-- @x@ stays a thunk in the list spine. A blanket @!u@ here would reintroduce
+-- the Iterate O(n²) blow-up for that encoding.
 --
--- Bodies that inspect the argument (arithmetic, @conv@, @quote@, folds on
--- bounded types, …) still force it when they pattern-match. 'instantiate'
--- does not check whether the variable occurs in the body (that would be slow);
--- non-dependent @Pi@ types are classified once as 'VHPi' via 'boundVarOccurs'.
+-- Bodies that inspect the argument (arithmetic, @conv@, @quote@, …) still
+-- force it when they pattern-match. 'instantiate' does not check whether the
+-- variable occurs in the body (that would be slow); non-dependent @Pi@ types
+-- are classified once as 'VHPi' via 'boundVarOccurs'.
 instantiate :: Eq a => Closure a -> Val a -> Val a
 instantiate (Closure x env t) u = eval (Extend env x u) t
 {-# INLINE instantiate #-}
@@ -342,7 +343,7 @@ vVar env0 (V x i0) = go env0 i0
 -- | Apply a function value.
 --
 -- The function is forced (@!t@) so we can see whether it is a lambda, a
--- builtin, or a neutral. The argument @u@ is not forced here.
+-- builtin, or a neutral.
 --
 -- [Lazy 'VHLam'] Builtins and other Haskell-encoded functions. Eliminators
 -- ('List/length', 'Natural/isZero', …) force the argument themselves by
@@ -362,16 +363,32 @@ vVar env0 (V x i0) = go env0 i0
 -- @List/length (iterate n …)@ became O(n²) and OOMed the Iterate benchmark
 -- at @n = 300000@ (#2831).
 --
--- [Lazy 'VLam'] User lambdas go through 'instantiate', which is also lazy in
--- the argument (see there). The same Church @cons@ written as a Dhall lambda
--- then has the same element laziness as the builtin encoding.
+-- ['VLam' and 'boundedType'] User lambdas go through 'instantiate'. If the
+-- binder type is 'boundedType' ('Natural', 'Bool', 'Text', …), the argument
+-- is forced to WHNF first. That keeps Church numerals / @x + 1@ loops
+-- (ChurchEval, FunCompose, ListBench @countTo@) from building a thunk per
+-- step. If the binder is a list or function, the argument stays lazy, so a
+-- user Church @cons@ @λ(x : List a) → [x] # xs@ does not force @x@.
+--
+-- Do not use 'boundedType' to bang 'VHLam' arguments: 'List/build''s @cons@
+-- is 'Typed' at the element type, which may be 'Natural', but must still
+-- park the element without forcing it.
 vApp :: Eq a => Val a -> Val a -> Val a
 vApp !t u =
     case t of
-        VLam _ t'  -> instantiate t' u
+        VLam ty t'
+            | boundedType ty -> instantiate t' (forceWHNF u)
+            | otherwise      -> instantiate t' u
         VHLam _ t' -> t' u
         t'        -> VApp t' u
 {-# INLINE vApp #-}
+
+-- | Force a value to WHNF. Used when applying a 'VLam' whose binder is a
+-- 'boundedType', so numeric loops stay a tight CBV loop rather than a
+-- tower of @instantiate@ thunks.
+forceWHNF :: Val a -> Val a
+forceWHNF !v = v
+{-# INLINE forceWHNF #-}
 
 vPrefer :: Eq a => Environment a -> Val a -> Val a -> Val a
 vPrefer env t u =
@@ -526,14 +543,16 @@ vWith e₀ ks v₀ = VWith e₀ ks v₀
 -- | Val-level counterpart of @Dhall.Normalize.boundedType@.
 --
 -- Decides the 'Natural/fold' evaluation strategy (see the @NaturalFold@ case
--- of 'eval'):
+-- of 'eval') and whether 'vApp' forces a 'VLam' argument (see 'vApp'):
 --
--- * 'True' — accumulator is a small type (Natural/Integer/Text/Bool/Double,
---   Optional of those, records/unions of those). The fold is strict in the
---   accumulator and may stop early when @succ acc ≡ acc@.
--- * 'False' — lists, functions, and other potentially unbounded accumulators.
---   The fold is lazy in the accumulator (same as @Dhall.Normalize@'s
---   @lazyLoop@) so constructor-like successors are not forced at every step.
+-- * 'True' — a small type (Natural/Integer/Text/Bool/Double, Optional of
+--   those, records/unions of those). 'Natural/fold' is strict in the
+--   accumulator and may stop early when @succ acc ≡ acc@. 'vApp' forces a
+--   'VLam' argument of this type to WHNF.
+-- * 'False' — lists, functions, and other potentially unbounded types.
+--   'Natural/fold' is lazy in the accumulator (same as @Dhall.Normalize@'s
+--   @lazyLoop@). 'vApp' leaves a 'VLam' argument lazy so constructor-like
+--   successors are not forced at every step.
 boundedType :: Val a -> Bool
 boundedType = \case
     VBool       -> True
