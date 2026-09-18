@@ -14,6 +14,12 @@
     normal forms. Fairly similar to GHCI's STG machine algorithmically, but much
     simpler, with no known call optimization or environment trimming.
 
+    Application is lazy in the argument: 'vApp' does not bang the argument,
+    'instantiate' stores it unevaluated in 'Extend', and 'Natural/fold' is
+    strict in the accumulator only for 'boundedType' (with a @succ acc ≡ acc@
+    shortcut). That is required for Church-encoded constructors after delayed
+    β-normalization of unhashed Code imports: see 'vApp'.
+
     Potential optimizations without changing Expr:
 
     * In conversion checking, get non-shadowing variables not by linear
@@ -89,6 +95,9 @@ import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
 import qualified Text.Printf   as Printf
 
+-- | Evaluation environment. The 'Val' in 'Extend' is intentionally lazy:
+-- unused @let@-bound values (and unused lambda arguments, once instantiated)
+-- are not forced. The environment spine ('Empty'/'Skip'/'Extend') is strict.
 data Environment a
     = Empty
     | Skip   !(Environment a) {-# UNPACK #-} !Text
@@ -151,6 +160,10 @@ deriving instance (Show a, Show (Val a -> Val a)) => Show (HLamInfo a)
 pattern VPrim :: (Val a -> Val a) -> Val a
 pattern VPrim f = VHLam Prim f
 
+-- | View a function type as a Haskell function on values. Dependent 'VPi'
+-- closures go through 'instantiate', which is lazy in the argument: the
+-- argument is forced only if the type body mentions it. Non-dependent types
+-- are 'VHPi' and ignore the argument entirely (see 'boundVarOccurs').
 toVHPi :: Eq a => Val a -> Maybe (Text, Val a, Val a -> Val a)
 toVHPi (VPi a b@(Closure x _ _)) = Just (x, a, instantiate b)
 toVHPi (VHPi x a b             ) = Just (x, a, b)
@@ -292,12 +305,21 @@ countEnvironment x = go (0 :: Int)
     go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
     go  acc (Extend env x' _) = go (if x == x' then acc + 1 else acc) env
 
--- | Instantiate a closure.  Kept strict in the argument for NbE performance.
--- Non-dependent @Pi@ types are evaluated to lazy @VHPi@ instead, so
--- type-checking does not rely on a free-variable check here.
--- And `instantiate` does not check for free variables in the closure (this would be slow).
+-- | Instantiate a user-lambda closure.
+--
+-- The argument is lazy: it is stored in 'Extend' and forced only if the body
+-- mentions the bound variable. That matches Dhall β-reduction (not CBV) and
+-- is the user-lambda counterpart of lazy 'VHLam' application in 'vApp'.
+-- Constructor-like lambdas such as @λ(x : a) → λ(as : List a) → [x] # as@
+-- can therefore park an unevaluated element in a list spine; a strict
+-- @!u@ here would reintroduce the Iterate O(n²) blow-up for that encoding.
+--
+-- Bodies that inspect the argument (arithmetic, @conv@, @quote@, folds on
+-- bounded types, …) still force it when they pattern-match. 'instantiate'
+-- does not check whether the variable occurs in the body (that would be slow);
+-- non-dependent @Pi@ types are classified once as 'VHPi' via 'boundVarOccurs'.
 instantiate :: Eq a => Closure a -> Val a -> Val a
-instantiate (Closure x env t) !u = eval (Extend env x u) t
+instantiate (Closure x env t) u = eval (Extend env x u) t
 {-# INLINE instantiate #-}
 
 -- Out-of-env variables have negative de Bruijn levels.
@@ -319,17 +341,30 @@ vVar env0 (V x i0) = go env0 i0
 
 -- | Apply a function value.
 --
--- User lambdas ('VLam') remain call-by-value: 'instantiate' is strict in the
--- argument. Builtin 'VHLam's are lazy in the argument so constructor-like
--- builtins — especially 'List/build''s @cons@ — can store unevaluated elements
--- in a 'VListLit' spine. That matches the laziness of the β-normal form
--- @ [f x] # xs @, which builds list literals via @fmap eval@.
+-- The function is forced (@!t@) so we can see whether it is a lambda, a
+-- builtin, or a neutral. The argument @u@ is not forced here.
 --
--- Without this, an *unnormalized* Prelude @List/iterate@ (still containing
--- 'List/build', as after delayed Code-import normalization) forces every
--- @Natural/fold@ while building the list. @List/length (iterate n …)@ then
--- becomes quadratic in @n@ and OOMs on the evaluation Iterate benchmark
--- (@n = 300000@).
+-- [Lazy 'VHLam'] Builtins and other Haskell-encoded functions. Eliminators
+-- ('List/length', 'Natural/isZero', …) force the argument themselves by
+-- pattern-matching. Constructors must not: 'List/build' synthesizes
+--
+-- @
+-- cons = \\x -> \\as -> vListAppend (VListLit Nothing (pure x)) as
+-- @
+--
+-- which is the same as the β-normal @ [x] # xs @, whose source 'ListLit' is
+-- built with lazy @fmap eval@. A bang on @u@ at this call site would force
+-- @x@ *before* that Haskell function ran (a lazy @\\ ~x ->@ cannot undo it).
+--
+-- After delayed β-normalization of unhashed Code imports (#2808), Prelude
+-- @List/iterate@ is inlined still containing 'List/build'. Strict 'VHLam'
+-- application then forced every @Natural/fold@ while building the spine, so
+-- @List/length (iterate n …)@ became O(n²) and OOMed the Iterate benchmark
+-- at @n = 300000@ (#2831).
+--
+-- [Lazy 'VLam'] User lambdas go through 'instantiate', which is also lazy in
+-- the argument (see there). The same Church @cons@ written as a Dhall lambda
+-- then has the same element laziness as the builtin encoding.
 vApp :: Eq a => Val a -> Val a -> Val a
 vApp !t u =
     case t of
@@ -490,10 +525,15 @@ vWith e₀ ks v₀ = VWith e₀ ks v₀
 
 -- | Val-level counterpart of @Dhall.Normalize.boundedType@.
 --
--- Used once before a @Natural/fold@ loop to decide whether to perform shortcut
--- check during the loop. Returns True for Natural/Integer/Text/Bool/Double,
--- Optional of those, and records/unions of those; False for lists, functions,
--- and other potentially large accumulators.
+-- Decides the 'Natural/fold' evaluation strategy (see the @NaturalFold@ case
+-- of 'eval'):
+--
+-- * 'True' — accumulator is a small type (Natural/Integer/Text/Bool/Double,
+--   Optional of those, records/unions of those). The fold is strict in the
+--   accumulator and may stop early when @succ acc ≡ acc@.
+-- * 'False' — lists, functions, and other potentially unbounded accumulators.
+--   The fold is lazy in the accumulator (same as @Dhall.Normalize@'s
+--   @lazyLoop@) so constructor-like successors are not forced at every step.
 boundedType :: Val a -> Bool
 boundedType = \case
     VBool       -> True
@@ -527,6 +567,8 @@ eval !env t0 =
         App t u ->
             vApp (eval env t) (eval env u)
         Let (Binding _ x _ _mA _ a) b ->
+            -- `Extend` is lazy in the bound `Val`, so an unused let is not
+            -- evaluated. `!env'` only forces the environment spine.
             let !env' = Extend env x (eval env a)
             in  eval env' b
         Annot t _ ->
@@ -597,24 +639,36 @@ eval !env t0 =
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 --
-                                -- Note about the short-circuit optimization for Natural/fold:
-                                -- If `succ acc == acc` then we stop the loop and return `acc`.
-                                -- This is helpful for numerical and other "bounded" types but
-                                -- should not be done when the accumulator is a large structure
-                                -- (lists, functions, etc.) that can grow indefinitely; in those cases
-                                -- Natural/fold will probably not benefit from the shortcut.
-                                go zero (fromIntegral n' :: Integer)
+                                -- Match `Dhall.Normalize`: strict + shortcut
+                                -- iff `boundedType natural`. The shortcut is
+                                -- `succ acc ≡ acc` (e.g. `λ(_ : Natural) → 0`
+                                -- or saturating subtract). That comparison
+                                -- needs WHNF, so the bounded path bangs
+                                -- `next`. Making the unbounded path strict
+                                -- as well would rebuild a thunk tower's WHNF
+                                -- at every step — the same class of bug as
+                                -- Iterate for a user-lambda successor that
+                                -- stores work in the accumulator. The lazy
+                                -- path is `go (vApp succ acc)` with no bangs;
+                                -- `quote` / `conv` / a later eliminator force
+                                -- the result.
+                                let steps = fromIntegral n' :: Integer
+                                in  if boundedType natural
+                                    then strictFold steps
+                                    else lazyFold steps
+                              where
+                                strictFold = go zero
                                   where
-                                    enableShortcut = boundedType natural
-
                                     go !acc 0 = acc
-                                    go acc m =
-                                      -- Detect a shortcut: if succ acc == acc then return acc immediately.
-                                      -- Making !next strict, as `conv` is not always applied to `next`.
-                                      let !next = vApp succ acc
-                                      in  if enableShortcut && conv env next acc
-                                          then acc
-                                          else go next (m - 1)
+                                    go !acc m =
+                                        let !next = vApp succ acc
+                                        in  if conv env next acc
+                                            then acc
+                                            else go next (m - 1)
+                                lazyFold = go zero
+                                  where
+                                    go acc 0 = acc
+                                    go acc m = go (vApp succ acc) (m - 1)
                             _ -> inert
         NaturalBuild ->
             VPrim $ \case
@@ -792,6 +846,8 @@ eval !env t0 =
                     VListBuild a VPrimVar
                 t ->       t
                     `vApp` VList a
+                    -- Constructor: must not force `x`. Laziness is `vApp`'s
+                    -- `VHLam` branch (a `~x` pattern here cannot undo `vApp !u`).
                     `vApp` VHLam (Typed "a" a) (\x ->
                            VHLam (Typed "as" (VList a)) (\as ->
                            vListAppend (VListLit Nothing (pure x)) as))

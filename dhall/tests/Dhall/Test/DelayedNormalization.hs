@@ -37,6 +37,10 @@ getTests = return
             freezeWritesNormalizedCacheTest
         , testCase "List/length of unnormalized List/build iterate stays near-linear"
             listBuildIterateLengthIsNearLinearTest
+        , testCase "List/length of user-lambda Church cons iterate stays near-linear"
+            userLamChurchConsIterateLengthIsNearLinearTest
+        , testCase "Natural/fold shortcut on bounded types still fires"
+            naturalFoldBoundedShortcutTest
         ])
 
 withTempCache :: (FilePath -> IO a) -> IO a
@@ -225,5 +229,67 @@ listBuildIterateLengthIsNearLinearTest = do
             assertFailure
                 "timed out normalizing List/length of List/build iterate; \
                 \strict List/build cons is likely forcing every Natural/fold"
+        Just () ->
+            return ()
+
+-- | Same cost model as 'listBuildIterateLengthIsNearLinearTest', but the
+-- outer cons is a *user* @VLam@ (@λ(x) → λ(as) → [x] # as@) driven by
+-- 'Natural/fold' at an unbounded list type. Strict 'instantiate' would force
+-- each element's @Natural/fold@; a strict unbounded 'Natural/fold' loop would
+-- still be linear here (it only forces the outer spine). This locks in lazy
+-- user-lambda application.
+userLamChurchConsIterateLengthIsNearLinearTest :: IO ()
+userLamChurchConsIterateLengthIsNearLinearTest = do
+    let n = 8000 :: Int
+    let src = Text.unlines
+            [ "let n = " <> Text.pack (show n)
+            , "let t = List (List Natural)"
+            , "let succ ="
+            , "      λ(acc : t) →"
+            , "        [ Natural/fold (List/length (List Natural) acc) (List Natural) (λ(x : List Natural) → x # [ 1 ]) [ 1 ] ] # acc"
+            , "let xs = Natural/fold n t succ ([] : t)"
+            , "in  List/length (List Natural) xs"
+            ]
+
+    parsed <- Core.throws (Parser.exprFromText "user-lam-church-cons" src)
+
+    mResult <- Timeout.timeout 2000000 $ do
+        let resolved = fmap (\_ -> error "unexpected import") parsed
+        let nf = Core.normalize (Core.denote resolved) :: Core.Expr Void Void
+        assertEqual
+            "List/length of user-lambda Church cons iterate"
+            (Core.NaturalLit (fromIntegral n))
+            nf
+
+    case mResult of
+        Nothing ->
+            assertFailure
+                "timed out; user-lambda Church cons is likely forcing each \
+                \element Natural/fold (strict instantiate)"
+        Just () ->
+            return ()
+
+-- | Identity on Natural is a fixed point, so a strict bounded fold must
+-- return after one @succ@ rather than walking @n@ steps.
+naturalFoldBoundedShortcutTest :: IO ()
+naturalFoldBoundedShortcutTest = do
+    let src = Text.unlines
+            [ "Natural/fold 100000000 Natural (λ(x : Natural) → x) 7"
+            ]
+
+    parsed <- Core.throws (Parser.exprFromText "natural-fold-shortcut" src)
+
+    mResult <- Timeout.timeout 2000000 $ do
+        let resolved = fmap (\_ -> error "unexpected import") parsed
+        let nf = Core.normalize (Core.denote resolved) :: Core.Expr Void Void
+        assertEqual
+            "bounded Natural/fold identity shortcuts"
+            (Core.NaturalLit 7)
+            nf
+
+    case mResult of
+        Nothing ->
+            assertFailure
+                "timed out; bounded Natural/fold shortcut is not firing"
         Just () ->
             return ()
