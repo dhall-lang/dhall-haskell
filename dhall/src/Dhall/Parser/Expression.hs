@@ -601,7 +601,7 @@ parsers embedded = Parsers{..}
                     src0 <- src whitespace
 
                     let fieldSelection = do
-                            l <- anyLabel
+                            l <- anyLabelOrSome
 
                             pos <- Text.Megaparsec.getSourcePos
 

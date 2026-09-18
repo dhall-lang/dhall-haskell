@@ -1,5 +1,8 @@
 1.42.3
 
+* Allow `Some` as a field selector and union constructor (`e.Some`), matching
+  `e.None` / `e.List`. `Some e` is still the Optional special form. `dhall format`
+  now prints `e.Some` without backticks.
 * BREAKING CHANGE: `TimeLiteral` now stores hour, minute, and second as
   `Word8`, the fractional digits as `Integer`, and the digit count as `Int`,
   instead of `TimeOfDay` plus a `Word` precision. Dhall `Time` literals keep
