@@ -19,8 +19,9 @@
     itself: putting it in lazy 'Extend' only wraps a thunk and still leaves
     ChurchEval as @s (s (s z))@ towers. 'Natural/fold' bangs each step with
     'forceAccWHNF' (list spines; record fields that are not lists); the
-    @succ acc ≡ acc@ shortcut is only for 'boundedType'. Church-encoded
-    *list* constructors stay lazy: see 'vApp'.
+    @succ acc ≡ acc@ shortcut is only for 'boundedType'. 'forceAccWHNF' is
+    'NOINLINE' so that record-field walker does not inflate 'eval' (large5).
+    Church-encoded *list* constructors stay lazy: see 'vApp'.
 
     Potential optimizations without changing Expr:
 
@@ -594,6 +595,10 @@ whnfCheapType = \case
 --
 -- The first argument is the accumulator type from 'Natural/fold' (so we can
 -- skip list fields without matching the value, which would force a 'Seq').
+--
+-- Not inlined into 'eval': the walker is a 'VRecordLit' fold, and inlining it
+-- into the 'NaturalFold' branch bloated 'eval' enough to regress large5
+-- (128 copies of a large record, no 'Natural/fold' in the tree).
 forceAccWHNF :: Val a -> Val a -> Val a
 forceAccWHNF accTy !v =
     case (accTy, v) of
@@ -605,7 +610,7 @@ forceAccWHNF accTy !v =
             in  VSome x'
         _ ->
             v
-{-# INLINE forceAccWHNF #-}
+{-# NOINLINE forceAccWHNF #-}
 
 -- | @()@ if this record field should stay a thunk ('VList'); otherwise
 -- force it with 'forceAccWHNF'. Must not pattern-match a list field: that
