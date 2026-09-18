@@ -352,27 +352,42 @@ intermediate value alive indefinitely.
 
 ### Current default
 
-These speed caches are currently **off by default**:
+These speed caches are currently **off by default**.
 
 ```haskell
 defaultEvalConfig = EvalConfig
-    { enableCache   = False
-    , cacheCap      = 10000
-    , internSharing = SharingOn
+    { enableCache     = False
+    , cacheCap        = 10000
+    , internSharing   = SharingOn
+    , assignIds       = True
+    , internOnClosure = True
     }
 
 cacheOnConfig = defaultEvalConfig { enableCache = True }
 ```
 
-The reason is concrete: when the caches were enabled during threaded Template
-Haskell compilation, re-entering the global cache while a cached value was
-being evaluated caused GHC to wait forever. Cache insertion now evaluates its
-value before updating the shared state, but the safer default remains “off”
-until the enabled mode has a design that cannot re-enter the same shared
-state.
+The reason is concrete: when the caches are enabled during threaded Template
+Haskell compilation (`Dhall.Test.TH`), GHC blackholes even after insert paths
+force values before updating the shared `IORef`. Until a design cannot
+re-enter the same shared state from TH, the default stays off. Use
+`cacheOnConfig` for runtime-only measurement.
+
+`assignIds` and `internOnClosure` are diagnostic knobs: set them to `False` to
+measure the cost of per-value identity allocation and closure-body interning
+without changing the public API.
 
 Structural sharing in `CoreGraph` remains on by default and does not depend on
 these caches.
+
+### ValId allocation bug (fixed)
+
+An early implementation allocated ids with `freshValId ()` while rewriting the
+whole `EvalRun` record under `atomicModifyIORef'`. GHC floated that into a
+CAF, so every `Val` shared one id. `Natural/fold`'s shortcut then treated
+`succ acc == acc` on the first step and returned the seed (e.g.
+`Natural/fold 10 Natural (+1) 0` normalized to `0`). Ids now live in dedicated
+`IORef` counters, `mkVal` is `NOINLINE`, and the fold shortcut uses structural
+`convBody` rather than `convImpl`'s identity fast path.
 
 ## 8. Equality of evaluated values
 
@@ -561,7 +576,9 @@ important because it exercises the evaluator from inside a threaded GHC
 process; that is how the unsafe default cache behavior was found.
 
 Template Haskell continues to consume ordinary `Expr` values. It is one
-reason the public syntax type was not replaced by `CoreGraph`.
+reason the public syntax type was not replaced by `CoreGraph`. Speed caches
+remain off by default because enabling them still blackholes threaded TH
+compilation of `Dhall.Test.TH`.
 
 ## 14. Public entry points
 

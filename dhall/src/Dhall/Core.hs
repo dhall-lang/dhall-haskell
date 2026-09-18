@@ -90,7 +90,11 @@ module Dhall.Core (
     , Eval.cacheOnConfig
     , Eval.cacheOffConfig
     , Eval.withEvalRun
+    , Eval.withEvalRunIO
     , Eval.readEvalStats
+    , Eval.readEvalStatsIO
+    , Eval.normalizeWithConfig
+    , Eval.normalizeWithStats
     , Eval.evalInRun
     , Eval.quoteInRun
     , Eval.quoteGraph

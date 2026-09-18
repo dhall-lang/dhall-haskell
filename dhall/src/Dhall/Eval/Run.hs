@@ -18,9 +18,12 @@ module Dhall.Eval.Run
     , cacheOnConfig
     , cacheOffConfig
     , withEvalRun
+    , withEvalRunIO
     , readEvalStats
+    , readEvalStatsIO
     , freshValId
     , freshEnvId
+    , recordMkVal
     , internBody
     , lookupEvalMemo
     , insertEvalMemo
@@ -35,12 +38,19 @@ module Dhall.Eval.Run
 import Control.Exception    (evaluate)
 import Control.Monad.ST     (RealWorld, stToIO)
 import Data.Hashable        (Hashable)
-import Data.IORef           (IORef, atomicModifyIORef', newIORef, readIORef)
+import Data.IORef
+    ( IORef
+    , atomicModifyIORef'
+    , newIORef
+    , readIORef
+    , writeIORef
+    )
 import Data.Text            (Text)
 import Data.Word            (Word32, Word64)
 import Dhall.Core.DAG       (Builder, NodeId (..), SharingMode (..), internExpr, newBuilder)
 import Dhall.Syntax         (Expr)
 import GHC.Generics         (Generic)
+import GHC.IO.Unsafe        (unsafeDupablePerformIO)
 import System.IO.Unsafe     (unsafePerformIO)
 
 import qualified Data.HashMap.Strict as HashMap
@@ -68,21 +78,33 @@ data InferKey = InferKey !Word32 !Word64 !Word64
 instance Hashable InferKey
 
 data EvalConfig = EvalConfig
-    { enableCache  :: !Bool
-    , cacheCap     :: !Int
-    , internSharing :: !SharingMode
+    { enableCache       :: !Bool
+    , cacheCap          :: !Int
+    , internSharing     :: !SharingMode
+      -- | When 'False', every value gets 'ValId' 0 / every env frame
+      -- 'EnvId' 0 (A/B: measure identity-allocation tax).
+    , assignIds         :: !Bool
+      -- | When 'False', 'makeClosure' skips ST interning (A/B).
+    , internOnClosure   :: !Bool
+      -- | When 'True', count 'mkVal' calls (extra atomic; profiling only).
+    , countMkVal        :: !Bool
     }
 
--- | Default: identity counters on; speed caches off until a non-reentrant
--- memo design is proven under @-threaded@ TH (blackhole risk).
+-- | Default: identity counters on; speed caches off. Enabling caches is still
+-- unsafe under threaded Template Haskell: insert-before-force was fixed, but
+-- TH compilation of @Dhall.Test.TH@ still blackholes with caches on. Use
+-- 'cacheOnConfig' for runtime measurement outside TH.
 defaultEvalConfig :: EvalConfig
 defaultEvalConfig = EvalConfig
-    { enableCache   = False
-    , cacheCap      = 10000
-    , internSharing = SharingOn
+    { enableCache     = False
+    , cacheCap        = 10000
+    , internSharing   = SharingOn
+    , assignIds       = True
+    , internOnClosure = True
+    , countMkVal      = False
     }
 
--- | Opt-in bounded memos for measurement (not the default).
+-- | Opt-in bounded memos for runtime measurement (not safe as the TH default).
 cacheOnConfig :: EvalConfig
 cacheOnConfig = defaultEvalConfig { enableCache = True }
 
@@ -91,32 +113,67 @@ cacheOffConfig :: EvalConfig
 cacheOffConfig = defaultEvalConfig { enableCache = False, cacheCap = 0 }
 
 data EvalStats = EvalStats
-    { evalHits    :: !Word64
-    , evalMisses  :: !Word64
-    , quoteHits   :: !Word64
-    , quoteMisses :: !Word64
-    , convHits    :: !Word64
-    , convMisses  :: !Word64
-    , cacheInserts :: !Int
+    { evalHits         :: !Word64
+    , evalMisses       :: !Word64
+    , quoteHits        :: !Word64
+    , quoteMisses      :: !Word64
+    , convHits         :: !Word64
+    , convMisses       :: !Word64
+    , cacheInserts     :: !Int
+    , valIdsIssued     :: !Word64
+    , envIdsIssued     :: !Word64
+    , internBodyCalls  :: !Word64
+    , mkValCalls       :: !Word64
+    , evalNanos        :: !Word64
+    , quoteNanos       :: !Word64
     } deriving (Eq, Show)
 
 data EvalRun = EvalRun
-    { erConfig      :: !EvalConfig
-    , erNextVal     :: !Word64
-    , erNextEnv     :: !Word64
-    , erBuilder     :: !(Builder RealWorld Exts.Any)
-    , erEvalMemo    :: !(HashMap.HashMap EvalKey Exts.Any)
-    , erInferMemo   :: !(HashMap.HashMap InferKey Exts.Any)
-    , erQuoteMemo   :: !(HashMap.HashMap Word64 NodeId)
-    , erConvMemo    :: !(HashMap.HashMap (Word64, Word64) Bool)
-    , erEvalHits    :: !Word64
-    , erEvalMisses  :: !Word64
-    , erQuoteHits   :: !Word64
-    , erQuoteMisses :: !Word64
-    , erConvHits    :: !Word64
-    , erConvMisses  :: !Word64
-    , erInserts     :: !Int
+    { erConfig          :: !EvalConfig
+    , erValIdBase       :: !Word64
+    , erEnvIdBase       :: !Word64
+    , erInternBodyCalls :: !Word64
+    , erMkValBase       :: !Word64
+    , erBuilder         :: !(Builder RealWorld Exts.Any)
+    , erEvalMemo        :: !(HashMap.HashMap EvalKey Exts.Any)
+    , erInferMemo       :: !(HashMap.HashMap InferKey Exts.Any)
+    , erQuoteMemo       :: !(HashMap.HashMap Word64 NodeId)
+    , erConvMemo        :: !(HashMap.HashMap (Word64, Word64) Bool)
+    , erEvalHits        :: !Word64
+    , erEvalMisses      :: !Word64
+    , erQuoteHits       :: !Word64
+    , erQuoteMisses     :: !Word64
+    , erConvHits        :: !Word64
+    , erConvMisses      :: !Word64
+    , erInserts         :: !Int
     }
+
+-- | Dedicated counters (not fields of 'globalRun') so identity allocation does
+-- not rewrite the whole memoizing 'EvalRun', and so 'unsafePerformIO' cannot
+-- CAF a single shared 'ValId' for every 'mkVal'.
+{-# NOINLINE valIdRef #-}
+valIdRef :: IORef Word64
+valIdRef = unsafePerformIO (newIORef 1)
+
+{-# NOINLINE envIdRef #-}
+envIdRef :: IORef Word64
+envIdRef = unsafePerformIO (newIORef 1)
+
+{-# NOINLINE mkValRef #-}
+mkValRef :: IORef Word64
+mkValRef = unsafePerformIO (newIORef 0)
+
+{-# NOINLINE assignIdsRef #-}
+assignIdsRef :: IORef Bool
+assignIdsRef = unsafePerformIO (newIORef True)
+
+{-# NOINLINE internOnClosureRef #-}
+internOnClosureRef :: IORef Bool
+internOnClosureRef = unsafePerformIO (newIORef True)
+
+{-# NOINLINE countMkValRef #-}
+countMkValRef :: IORef Bool
+countMkValRef = unsafePerformIO (newIORef False)
 
 {-# NOINLINE globalRun #-}
 globalRun :: IORef EvalRun
@@ -126,73 +183,140 @@ globalRun = unsafePerformIO $ do
 
 emptyRun :: EvalConfig -> Builder RealWorld Exts.Any -> EvalRun
 emptyRun cfg b = EvalRun
-    { erConfig      = cfg
-    , erNextVal     = 1
-    , erNextEnv     = 1
-    , erBuilder     = b
-    , erEvalMemo    = HashMap.empty
-    , erInferMemo   = HashMap.empty
-    , erQuoteMemo   = HashMap.empty
-    , erConvMemo    = HashMap.empty
-    , erEvalHits    = 0
-    , erEvalMisses  = 0
-    , erQuoteHits   = 0
-    , erQuoteMisses = 0
-    , erConvHits    = 0
-    , erConvMisses  = 0
-    , erInserts     = 0
+    { erConfig          = cfg
+    , erValIdBase       = 1
+    , erEnvIdBase       = 1
+    , erInternBodyCalls = 0
+    , erMkValBase       = 0
+    , erBuilder         = b
+    , erEvalMemo        = HashMap.empty
+    , erInferMemo       = HashMap.empty
+    , erQuoteMemo       = HashMap.empty
+    , erConvMemo        = HashMap.empty
+    , erEvalHits        = 0
+    , erEvalMisses      = 0
+    , erQuoteHits       = 0
+    , erQuoteMisses     = 0
+    , erConvHits        = 0
+    , erConvMisses      = 0
+    , erInserts         = 0
+    }
+
+resetRun :: EvalConfig -> Builder RealWorld Exts.Any -> Word64 -> Word64 -> Word64 -> EvalRun
+resetRun cfg b valBase envBase mkBase = EvalRun
+    { erConfig          = cfg
+    , erValIdBase       = valBase
+    , erEnvIdBase       = envBase
+    , erInternBodyCalls = 0
+    , erMkValBase       = mkBase
+    , erBuilder         = b
+    , erEvalMemo        = HashMap.empty
+    , erInferMemo       = HashMap.empty
+    , erQuoteMemo       = HashMap.empty
+    , erConvMemo        = HashMap.empty
+    , erEvalHits        = 0
+    , erEvalMisses      = 0
+    , erQuoteHits       = 0
+    , erQuoteMisses     = 0
+    , erConvHits        = 0
+    , erConvMisses      = 0
+    , erInserts         = 0
     }
 
 -- | Clear caches and rebuild the intern builder, but keep process-wide
 -- 'ValId'/'EnvId' counters. Resetting ids would collide with CAF builtin
 -- values allocated before the run.
 withEvalRun :: EvalConfig -> a -> a
-withEvalRun cfg x = unsafePerformIO $ do
-    b <- stToIO (newBuilder (internSharing cfg))
-    atomicModifyIORef' globalRun $ \st ->
-        ( (emptyRun cfg b)
-            { erNextVal = erNextVal st
-            , erNextEnv = erNextEnv st
-            }
-        , ()
-        )
-    evaluate x
+withEvalRun cfg x = unsafePerformIO $ withEvalRunIO cfg (evaluate x)
 {-# NOINLINE withEvalRun #-}
 
-readEvalStats :: EvalStats
-readEvalStats = unsafePerformIO $ do
-    st <- readIORef globalRun
-    return EvalStats
-        { evalHits     = erEvalHits st
-        , evalMisses   = erEvalMisses st
-        , quoteHits    = erQuoteHits st
-        , quoteMisses  = erQuoteMisses st
-        , convHits     = erConvHits st
-        , convMisses   = erConvMisses st
-        , cacheInserts = erInserts st
+-- | IO variant used by profiling entry points that need phase timers.
+withEvalRunIO :: EvalConfig -> IO a -> IO a
+withEvalRunIO cfg action = do
+    b <- stToIO (newBuilder (internSharing cfg))
+    writeIORef assignIdsRef (assignIds cfg)
+    writeIORef internOnClosureRef (internOnClosure cfg)
+    writeIORef countMkValRef (countMkVal cfg)
+    valBase <- readIORef valIdRef
+    envBase <- readIORef envIdRef
+    mkBase  <- readIORef mkValRef
+    atomicModifyIORef' globalRun $ \_ -> (resetRun cfg b valBase envBase mkBase, ())
+    action
+
+statsFromRun :: EvalRun -> Word64 -> Word64 -> Word64 -> EvalStats
+statsFromRun st valNow envNow mkNow =
+    EvalStats
+        { evalHits        = erEvalHits st
+        , evalMisses      = erEvalMisses st
+        , quoteHits       = erQuoteHits st
+        , quoteMisses     = erQuoteMisses st
+        , convHits        = erConvHits st
+        , convMisses      = erConvMisses st
+        , cacheInserts    = erInserts st
+        , valIdsIssued    = valNow - erValIdBase st
+        , envIdsIssued    = envNow - erEnvIdBase st
+        , internBodyCalls = erInternBodyCalls st
+        , mkValCalls      = mkNow - erMkValBase st
+        , evalNanos       = 0
+        , quoteNanos      = 0
         }
+
+readEvalStats :: EvalStats
+readEvalStats = unsafePerformIO readEvalStatsIO
 {-# NOINLINE readEvalStats #-}
 
-freshValId :: () -> ValId
-freshValId _ = unsafePerformIO $
-    atomicModifyIORef' globalRun $ \st ->
-        let i = erNextVal st
-        in  (st { erNextVal = i + 1 }, ValId i)
+readEvalStatsIO :: IO EvalStats
+readEvalStatsIO = do
+    st <- readIORef globalRun
+    valNow <- readIORef valIdRef
+    envNow <- readIORef envIdRef
+    mkNow  <- readIORef mkValRef
+    return (statsFromRun st valNow envNow mkNow)
+
+-- | Allocate a fresh 'ValId'. The argument is evaluated so GHC cannot float the
+-- call into a process-wide CAF (which previously made every 'Val' share one
+-- id and broke 'Natural/fold' shortcut conversion).
+freshValId :: a -> ValId
+freshValId a = unsafeDupablePerformIO $ do
+    _ <- evaluate a
+    assign <- readIORef assignIdsRef
+    if not assign
+        then return (ValId 0)
+        else atomicModifyIORef' valIdRef $ \i -> (i + 1, ValId i)
 {-# NOINLINE freshValId #-}
 
-freshEnvId :: () -> EnvId
-freshEnvId _ = unsafePerformIO $
-    atomicModifyIORef' globalRun $ \st ->
-        let i = erNextEnv st
-        in  (st { erNextEnv = i + 1 }, EnvId i)
+freshEnvId :: a -> EnvId
+freshEnvId a = unsafeDupablePerformIO $ do
+    _ <- evaluate a
+    assign <- readIORef assignIdsRef
+    if not assign
+        then return (EnvId 0)
+        else atomicModifyIORef' envIdRef $ \i -> (i + 1, EnvId i)
 {-# NOINLINE freshEnvId #-}
+
+-- | Count every 'mkVal' call when 'countMkVal' is enabled.
+recordMkVal :: a -> ()
+recordMkVal a = unsafeDupablePerformIO $ do
+    count <- readIORef countMkValRef
+    if not count
+        then return ()
+        else do
+            _ <- evaluate a
+            atomicModifyIORef' mkValRef $ \i -> (i + 1, ())
+{-# NOINLINE recordMkVal #-}
 
 -- | Intern a denoted body into this run's builder. Ids are run-local.
 internBody :: (Eq a) => Expr t a -> NodeId
 internBody e = unsafePerformIO $ do
-    st <- readIORef globalRun
-    nid <- stToIO (internExpr (Unsafe.unsafeCoerce (erBuilder st)) e)
-    return nid
+    intern <- readIORef internOnClosureRef
+    if not intern
+        then return (NodeId 0)
+        else do
+            atomicModifyIORef' globalRun $ \st ->
+                (st { erInternBodyCalls = erInternBodyCalls st + 1 }, ())
+            st <- readIORef globalRun
+            nid <- stToIO (internExpr (Unsafe.unsafeCoerce (erBuilder st)) e)
+            return nid
 {-# NOINLINE internBody #-}
 
 lookupEvalMemo :: EvalKey -> Maybe v

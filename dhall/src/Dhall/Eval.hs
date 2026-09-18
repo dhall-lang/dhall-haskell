@@ -43,6 +43,8 @@
 module Dhall.Eval (
     judgmentallyEqual
   , normalize
+  , normalizeWithConfig
+  , normalizeWithStats
   , normalizeGraph
   , normalizeGraphWith
   , alphaNormalize
@@ -96,7 +98,7 @@ module Dhall.Eval (
   , unboundBuiltinTypes
   , EvalConfig(..), EvalStats(..)
   , defaultEvalConfig, cacheOnConfig, cacheOffConfig
-  , withEvalRun, readEvalStats
+  , withEvalRun, withEvalRunIO, readEvalStats, readEvalStatsIO
   , textShow
   , dateShow
   , timeShow
@@ -105,6 +107,7 @@ module Dhall.Eval (
 
 import Control.Monad      (foldM)
 import Control.Monad.ST   (ST, runST)
+import GHC.Clock          (getMonotonicTimeNSec)
 import Data.ByteString    (ByteString)
 import Data.Foldable      (foldr', toList)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -159,7 +162,10 @@ import Dhall.Eval.Run
     , lookupEvalMemo
     , lookupQuoteMemo
     , readEvalStats
+    , readEvalStatsIO
+    , recordMkVal
     , withEvalRun
+    , withEvalRunIO
     )
 import Dhall.Core.DAG.Node (NodeId (..))
 
@@ -191,11 +197,11 @@ instance (Show a, Show (Val a -> Val a)) => Show (Environment a) where
 
 -- | Skip a binder in the value environment (fresh 'EnvId').
 skip :: Environment a -> Text -> Environment a
-skip env x = Skip env x (freshEnvId ())
+skip env x = Skip env x (freshEnvId x)
 
 -- | Extend the value environment with a bound value (fresh 'EnvId').
 extend :: Environment a -> Text -> Val a -> Environment a
-extend env x v = Extend env x v (freshEnvId ())
+extend env x v = Extend env x v (freshEnvId v)
 
 envId :: Environment a -> EnvId
 envId Empty             = EnvId 0
@@ -386,8 +392,10 @@ instance (Show a, Show (Val a -> Val a)) => Show (Val a) where
     showsPrec n (Val _ _ p) = showsPrec n p
 
 mkVal :: Bool -> ValF a -> Val a
-mkVal closed payload = Val (freshValId ()) closed payload
-{-# INLINE mkVal #-}
+mkVal closed payload =
+    case recordMkVal payload of
+        () -> Val (freshValId payload) closed payload
+{-# NOINLINE mkVal #-}
 
 makeClosure :: Eq a => Text -> Environment a -> Expr Void a -> Closure a
 makeClosure x env t = Closure x env t (internBody t)
@@ -1468,7 +1476,11 @@ convInRun = convImpl
 
 convImpl :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 convImpl !env t0 t0'
-    | valId t0 == valId t0' =
+    -- 'ValId' 0 is the stub id used when 'assignIds' is off; never treat it as
+    -- pointer equality. Distinct values must not share a real id.
+    | let vid = valId t0
+    , vid /= ValId 0
+    , vid == valId t0' =
         True
     | valClosed t0 && valClosed t0'
     , Just cached <- lookupConvMemo (valId t0) (valId t0') =
@@ -2159,7 +2171,9 @@ unboundPrimitives =
                                     go !acc 0 = acc
                                     go !acc m =
                                         let !next = forceAccWHNF natural (vApp succ acc)
-                                        in  if convImpl Empty next acc
+                                            -- Use structural conversion only: a shared
+                                            -- 'ValId' CAF must not stop the loop early.
+                                        in  if convBody Empty next acc
                                             then acc
                                             else go next (m - 1)
                                 strictFold = go zero
@@ -2422,8 +2436,38 @@ unboundBuiltinValues =
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
 nf :: Eq a => Environment a -> Expr s a -> Expr t a
-nf !env e = withEvalRun defaultEvalConfig $
+nf !env e = nfWithConfig defaultEvalConfig env e
+
+nfWithConfig :: Eq a => EvalConfig -> Environment a -> Expr s a -> Expr t a
+nfWithConfig cfg !env e = withEvalRun cfg $
     Syntax.renote (quoteImpl (envNames env) (evalImpl env (Syntax.denote e)))
+
+-- | Like 'normalize' with an explicit 'EvalConfig' (A/B and cache oracles).
+normalizeWithConfig :: Eq a => EvalConfig -> Expr s a -> Expr t a
+normalizeWithConfig cfg = nfWithConfig cfg Empty
+
+-- | Normalize under 'withEvalRunIO', reporting allocation stats and eval/quote
+-- wall time. Intended for micro-profiling, not Criterion loops.
+normalizeWithStats
+    :: Eq a
+    => EvalConfig
+    -> Expr s a
+    -> IO (Expr Void a, EvalStats)
+normalizeWithStats cfg e = withEvalRunIO cfg $ do
+    let denoted = Syntax.denote e
+    t0 <- getMonotonicTimeNSec
+    let !v = evalImpl Empty denoted
+    t1 <- getMonotonicTimeNSec
+    let !nfExpr = quoteImpl EmptyNames v
+    t2 <- getMonotonicTimeNSec
+    stats <- readEvalStatsIO
+    return
+        ( nfExpr
+        , stats
+            { evalNanos  = t1 - t0
+            , quoteNanos = t2 - t1
+            }
+        )
 
 quoteInRun :: forall a. Eq a => Names -> Val a -> Expr Void a
 quoteInRun = quoteImpl
