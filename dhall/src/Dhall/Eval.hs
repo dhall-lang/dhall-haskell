@@ -67,7 +67,6 @@ module Dhall.Eval (
   , Val
   , valId
   , valClosed
-  , valF
   , pattern VConst, pattern VVar, pattern VPrimVar, pattern VApp
   , pattern VLam, pattern VHLam, pattern VPi, pattern VHPi, pattern VPiND
   , pattern VBool, pattern VBoolLit, pattern VBoolAnd, pattern VBoolOr
@@ -108,6 +107,7 @@ module Dhall.Eval (
 import Control.Monad      (foldM)
 import Control.Monad.ST   (ST, runST)
 import GHC.Clock          (getMonotonicTimeNSec)
+import GHC.Float          (castDoubleToWord64)
 import Data.ByteString    (ByteString)
 import Data.Foldable      (foldr', toList)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -148,10 +148,13 @@ import Dhall.Eval.Run
     , EvalConfig (..)
     , EvalKey (..)
     , EvalStats (..)
+    , ValueKey (..)
+    , AtomicKey (..)
     , ValId (..)
     , cacheOffConfig
     , cacheOnConfig
     , defaultEvalConfig
+    , evalCacheEnabled
     , freshEnvId
     , freshValId
     , insertConvMemo
@@ -163,7 +166,6 @@ import Dhall.Eval.Run
     , lookupQuoteMemo
     , readEvalStats
     , readEvalStatsIO
-    , recordMkVal
     , withEvalRun
     , withEvalRunIO
     )
@@ -296,9 +298,32 @@ boundVarOccurs x i = go i
         expression ->
             anyOf Syntax.subExpressions (go j) expression
     
+-- | Small closed primitives. These are compared and quoted structurally; they
+-- do not carry a 'ValId' because identity tagging costs more than the value.
+data AtomicVal a
+    = AConst !Const
+    | ABool
+    | ABoolLit !Bool
+    | ABytes
+    | ANatural
+    | ANaturalLit !Natural
+    | AInteger
+    | AIntegerLit !Integer
+    | ADouble
+    | ADoubleLit DhallDouble
+    | AText
+    | ADate
+    | ADateLiteral Time.Day
+    | ATime
+    | ATimeLiteral !Word8 !Word8 !Word8 !Integer !Int
+    | ATimeZone
+    | ATimeZoneLiteral Time.TimeZone
+
+deriving instance Eq (AtomicVal a)
+deriving instance Show (AtomicVal a)
+
 data ValF a
-    = VFConst !Const
-    | VFVar !Text !Int
+    = VFVar !Text !Int
     | VFPrimVar
     | VFApp (Val a) (Val a)
     | VFLam (Val a) {-# UNPACK #-} !(Closure a)
@@ -306,17 +331,12 @@ data ValF a
     | VFPi (Val a) {-# UNPACK #-} !(Closure a)
     | VFHPi !Text (Val a) !(Val a -> Val a)
     | VFPiND !Text (Val a) (Val a)
-    | VFBool
-    | VFBoolLit !Bool
     | VFBoolAnd (Val a) (Val a)
     | VFBoolOr (Val a) (Val a)
     | VFBoolEQ (Val a) (Val a)
     | VFBoolNE (Val a) (Val a)
     | VFBoolIf (Val a) (Val a) (Val a)
-    | VFBytes
     | VFBytesLit ByteString
-    | VFNatural
-    | VFNaturalLit !Natural
     | VFNaturalFold (Val a) (Val a) (Val a) (Val a)
     | VFNaturalBuild (Val a)
     | VFNaturalIsZero (Val a)
@@ -327,28 +347,17 @@ data ValF a
     | VFNaturalSubtract (Val a) (Val a)
     | VFNaturalPlus (Val a) (Val a)
     | VFNaturalTimes (Val a) (Val a)
-    | VFInteger
-    | VFIntegerLit !Integer
     | VFIntegerClamp (Val a)
     | VFIntegerNegate (Val a)
     | VFIntegerShow (Val a)
     | VFIntegerToDouble (Val a)
-    | VFDouble
-    | VFDoubleLit DhallDouble
     | VFDoubleShow (Val a)
-    | VFText
     | VFTextLit (VChunks a)
     | VFTextAppend (Val a) (Val a)
     | VFTextShow (Val a)
     | VFTextReplace (Val a) (Val a) (Val a)
-    | VFDate
-    | VFDateLiteral Time.Day
     | VFDateShow (Val a)
-    | VFTime
-    | VFTimeLiteral !Word8 !Word8 !Word8 !Integer !Int
     | VFTimeShow (Val a)
-    | VFTimeZone
-    | VFTimeZoneLiteral Time.TimeZone
     | VFTimeZoneShow (Val a)
     | VFList (Val a)
     | VFListLit (Maybe (Val a)) (Seq (Val a))
@@ -382,20 +391,59 @@ data ValF a
 
 deriving instance (Show a, Show (Val a -> Val a)) => Show (ValF a)
 
-data Val a = Val
-    { valId     :: {-# UNPACK #-} !ValId
-    , valClosed :: !Bool
-    , valF      :: !(ValF a)
-    }
+data Val a
+    = Atomic !(AtomicVal a)
+    | Identified {-# UNPACK #-} !ValId !Bool !(ValF a)
 
 instance (Show a, Show (Val a -> Val a)) => Show (Val a) where
-    showsPrec n (Val _ _ p) = showsPrec n p
+    showsPrec n (Atomic p)         = showsPrec n p
+    showsPrec n (Identified _ _ p) = showsPrec n p
+
+-- | Identity of an identified value. 'Nothing' for primitives.
+valId :: Val a -> Maybe ValId
+valId (Atomic _)         = Nothing
+valId (Identified i _ _) = Just i
+{-# INLINE valId #-}
+
+valClosed :: Val a -> Bool
+valClosed (Atomic _)         = True
+valClosed (Identified _ c _) = c
+{-# INLINE valClosed #-}
 
 mkVal :: Bool -> ValF a -> Val a
-mkVal closed payload =
-    case recordMkVal payload of
-        () -> Val (freshValId payload) closed payload
-{-# NOINLINE mkVal #-}
+mkVal closed payload = Identified (freshValId payload) closed payload
+{-# INLINE mkVal #-}
+
+atomicKey :: AtomicVal a -> AtomicKey
+atomicKey = \case
+    AConst Type  -> KType
+    AConst Kind  -> KKind
+    AConst Sort  -> KSort
+    ABool        -> KBoolType
+    ABoolLit b   -> KBool b
+    ABytes       -> KBytesType
+    ANatural     -> KNaturalType
+    ANaturalLit n -> KNatural n
+    AInteger     -> KIntegerType
+    AIntegerLit n -> KInteger n
+    ADouble      -> KDoubleType
+    ADoubleLit (DhallDouble d) -> KDouble (castDoubleToWord64 d)
+    AText        -> KTextType
+    ADate        -> KDateType
+    ADateLiteral d -> KDate (Time.toModifiedJulianDay d)
+    ATime        -> KTimeType
+    ATimeLiteral hh mm ss frac p -> KTime hh mm ss frac p
+    ATimeZone    -> KTimeZoneType
+    ATimeZoneLiteral z ->
+        KTimeZone
+            (Time.timeZoneMinutes z)
+            (Time.timeZoneSummerOnly z)
+            (Text.pack (Time.timeZoneName z))
+
+argKey :: Val a -> ValueKey
+argKey (Identified (ValId i) _ _) = ArgIdentified i
+argKey (Atomic a)                 = ArgAtomic (atomicKey a)
+{-# INLINE argKey #-}
 
 makeClosure :: Eq a => Text -> Environment a -> Expr Void a -> Closure a
 makeClosure x env t = Closure x env t (internBody t)
@@ -413,414 +461,381 @@ vChunksClosed (VChunks xys _) = all (valClosed . snd) xys
 
 -- Pattern synonyms preserve the existing Val constructor API.
 pattern VConst :: Const -> Val a
-pattern VConst k <- Val _ _ (VFConst k)
-  where
-    VConst k = mkVal (True) (VFConst k)
+pattern VConst k = Atomic (AConst k)
 
 pattern VVar :: Text -> Int -> Val a
-pattern VVar x i <- Val _ _ (VFVar x i)
+pattern VVar x i <- Identified _ _ (VFVar x i)
   where
-    VVar x i = mkVal (False) (VFVar x i)
+    VVar x i = mkVal False (VFVar x i)
 
 pattern VPrimVar :: Val a
-pattern VPrimVar <- Val _ _ VFPrimVar
+pattern VPrimVar <- Identified _ _ VFPrimVar
   where
     VPrimVar = mkVal False VFPrimVar
 
 pattern VApp :: (Val a) -> (Val a) -> Val a
-pattern VApp t u <- Val _ _ (VFApp t u)
+pattern VApp t u <- Identified _ _ (VFApp t u)
   where
     VApp t u = mkVal (valClosed t && valClosed u) (VFApp t u)
 
 pattern VLam :: (Val a) -> (Closure a) -> Val a
-pattern VLam ty c <- Val _ _ (VFLam ty c)
+pattern VLam ty c <- Identified _ _ (VFLam ty c)
   where
     VLam ty c = mkVal (valClosed ty && closureClosed c) (VFLam ty c)
 
 pattern VHLam :: (HLamInfo a) -> (Val a -> Val a) -> Val a
-pattern VHLam i f <- Val _ _ (VFHLam i f)
+pattern VHLam i f <- Identified _ _ (VFHLam i f)
   where
-    VHLam i f = mkVal (False) (VFHLam i f)
+    VHLam i f = mkVal False (VFHLam i f)
 
 pattern VPi :: (Val a) -> (Closure a) -> Val a
-pattern VPi ty c <- Val _ _ (VFPi ty c)
+pattern VPi ty c <- Identified _ _ (VFPi ty c)
   where
     VPi ty c = mkVal (valClosed ty && closureClosed c) (VFPi ty c)
 
 pattern VHPi :: Text -> (Val a) -> (Val a -> Val a) -> Val a
-pattern VHPi x ty f <- Val _ _ (VFHPi x ty f)
+pattern VHPi x ty f <- Identified _ _ (VFHPi x ty f)
   where
-    VHPi x ty f = mkVal (False) (VFHPi x ty f)
+    VHPi x ty f = mkVal False (VFHPi x ty f)
 
 pattern VPiND :: Text -> (Val a) -> (Val a) -> Val a
-pattern VPiND x ty b <- Val _ _ (VFPiND x ty b)
+pattern VPiND x ty b <- Identified _ _ (VFPiND x ty b)
   where
     VPiND x ty b = mkVal (valClosed ty && valClosed b) (VFPiND x ty b)
 
 pattern VBool :: Val a
-pattern VBool <- Val _ _ VFBool
-  where
-    VBool = mkVal True VFBool
+pattern VBool = Atomic ABool
 
 pattern VBoolLit :: Bool -> Val a
-pattern VBoolLit b <- Val _ _ (VFBoolLit b)
-  where
-    VBoolLit b = mkVal (True) (VFBoolLit b)
+pattern VBoolLit b = Atomic (ABoolLit b)
 
 pattern VBoolAnd :: (Val a) -> (Val a) -> Val a
-pattern VBoolAnd t u <- Val _ _ (VFBoolAnd t u)
+pattern VBoolAnd t u <- Identified _ _ (VFBoolAnd t u)
   where
     VBoolAnd t u = mkVal (valClosed t && valClosed u) (VFBoolAnd t u)
 
 pattern VBoolOr :: (Val a) -> (Val a) -> Val a
-pattern VBoolOr t u <- Val _ _ (VFBoolOr t u)
+pattern VBoolOr t u <- Identified _ _ (VFBoolOr t u)
   where
     VBoolOr t u = mkVal (valClosed t && valClosed u) (VFBoolOr t u)
 
 pattern VBoolEQ :: (Val a) -> (Val a) -> Val a
-pattern VBoolEQ t u <- Val _ _ (VFBoolEQ t u)
+pattern VBoolEQ t u <- Identified _ _ (VFBoolEQ t u)
   where
     VBoolEQ t u = mkVal (valClosed t && valClosed u) (VFBoolEQ t u)
 
 pattern VBoolNE :: (Val a) -> (Val a) -> Val a
-pattern VBoolNE t u <- Val _ _ (VFBoolNE t u)
+pattern VBoolNE t u <- Identified _ _ (VFBoolNE t u)
   where
     VBoolNE t u = mkVal (valClosed t && valClosed u) (VFBoolNE t u)
 
 pattern VBoolIf :: (Val a) -> (Val a) -> (Val a) -> Val a
-pattern VBoolIf t u v <- Val _ _ (VFBoolIf t u v)
+pattern VBoolIf t u v <- Identified _ _ (VFBoolIf t u v)
   where
     VBoolIf t u v = mkVal (valClosed t && valClosed u && valClosed v) (VFBoolIf t u v)
 
 pattern VBytes :: Val a
-pattern VBytes <- Val _ _ VFBytes
-  where
-    VBytes = mkVal True VFBytes
+pattern VBytes = Atomic ABytes
 
 pattern VBytesLit :: ByteString -> Val a
-pattern VBytesLit b <- Val _ _ (VFBytesLit b)
+pattern VBytesLit b <- Identified _ _ (VFBytesLit b)
   where
-    VBytesLit b = mkVal (True) (VFBytesLit b)
+    VBytesLit b = mkVal True (VFBytesLit b)
 
 pattern VNatural :: Val a
-pattern VNatural <- Val _ _ VFNatural
-  where
-    VNatural = mkVal True VFNatural
+pattern VNatural = Atomic ANatural
 
 pattern VNaturalLit :: Natural -> Val a
-pattern VNaturalLit n <- Val _ _ (VFNaturalLit n)
-  where
-    VNaturalLit n = mkVal (True) (VFNaturalLit n)
+pattern VNaturalLit n = Atomic (ANaturalLit n)
 
 pattern VNaturalFold :: (Val a) -> (Val a) -> (Val a) -> (Val a) -> Val a
-pattern VNaturalFold a t u v <- Val _ _ (VFNaturalFold a t u v)
+pattern VNaturalFold a t u v <- Identified _ _ (VFNaturalFold a t u v)
   where
     VNaturalFold a t u v = mkVal (valClosed a && valClosed t && valClosed u && valClosed v) (VFNaturalFold a t u v)
 
 pattern VNaturalBuild :: (Val a) -> Val a
-pattern VNaturalBuild t <- Val _ _ (VFNaturalBuild t)
+pattern VNaturalBuild t <- Identified _ _ (VFNaturalBuild t)
   where
     VNaturalBuild t = mkVal (valClosed t) (VFNaturalBuild t)
 
 pattern VNaturalIsZero :: (Val a) -> Val a
-pattern VNaturalIsZero t <- Val _ _ (VFNaturalIsZero t)
+pattern VNaturalIsZero t <- Identified _ _ (VFNaturalIsZero t)
   where
     VNaturalIsZero t = mkVal (valClosed t) (VFNaturalIsZero t)
 
 pattern VNaturalEven :: (Val a) -> Val a
-pattern VNaturalEven t <- Val _ _ (VFNaturalEven t)
+pattern VNaturalEven t <- Identified _ _ (VFNaturalEven t)
   where
     VNaturalEven t = mkVal (valClosed t) (VFNaturalEven t)
 
 pattern VNaturalOdd :: (Val a) -> Val a
-pattern VNaturalOdd t <- Val _ _ (VFNaturalOdd t)
+pattern VNaturalOdd t <- Identified _ _ (VFNaturalOdd t)
   where
     VNaturalOdd t = mkVal (valClosed t) (VFNaturalOdd t)
 
 pattern VNaturalToInteger :: (Val a) -> Val a
-pattern VNaturalToInteger t <- Val _ _ (VFNaturalToInteger t)
+pattern VNaturalToInteger t <- Identified _ _ (VFNaturalToInteger t)
   where
     VNaturalToInteger t = mkVal (valClosed t) (VFNaturalToInteger t)
 
 pattern VNaturalShow :: (Val a) -> Val a
-pattern VNaturalShow t <- Val _ _ (VFNaturalShow t)
+pattern VNaturalShow t <- Identified _ _ (VFNaturalShow t)
   where
     VNaturalShow t = mkVal (valClosed t) (VFNaturalShow t)
 
 pattern VNaturalSubtract :: (Val a) -> (Val a) -> Val a
-pattern VNaturalSubtract x y <- Val _ _ (VFNaturalSubtract x y)
+pattern VNaturalSubtract x y <- Identified _ _ (VFNaturalSubtract x y)
   where
     VNaturalSubtract x y = mkVal (valClosed x && valClosed y) (VFNaturalSubtract x y)
 
 pattern VNaturalPlus :: (Val a) -> (Val a) -> Val a
-pattern VNaturalPlus t u <- Val _ _ (VFNaturalPlus t u)
+pattern VNaturalPlus t u <- Identified _ _ (VFNaturalPlus t u)
   where
     VNaturalPlus t u = mkVal (valClosed t && valClosed u) (VFNaturalPlus t u)
 
 pattern VNaturalTimes :: (Val a) -> (Val a) -> Val a
-pattern VNaturalTimes t u <- Val _ _ (VFNaturalTimes t u)
+pattern VNaturalTimes t u <- Identified _ _ (VFNaturalTimes t u)
   where
     VNaturalTimes t u = mkVal (valClosed t && valClosed u) (VFNaturalTimes t u)
 
 pattern VInteger :: Val a
-pattern VInteger <- Val _ _ VFInteger
-  where
-    VInteger = mkVal True VFInteger
+pattern VInteger = Atomic AInteger
 
 pattern VIntegerLit :: Integer -> Val a
-pattern VIntegerLit n <- Val _ _ (VFIntegerLit n)
-  where
-    VIntegerLit n = mkVal (True) (VFIntegerLit n)
+pattern VIntegerLit n = Atomic (AIntegerLit n)
 
 pattern VIntegerClamp :: (Val a) -> Val a
-pattern VIntegerClamp t <- Val _ _ (VFIntegerClamp t)
+pattern VIntegerClamp t <- Identified _ _ (VFIntegerClamp t)
   where
     VIntegerClamp t = mkVal (valClosed t) (VFIntegerClamp t)
 
 pattern VIntegerNegate :: (Val a) -> Val a
-pattern VIntegerNegate t <- Val _ _ (VFIntegerNegate t)
+pattern VIntegerNegate t <- Identified _ _ (VFIntegerNegate t)
   where
     VIntegerNegate t = mkVal (valClosed t) (VFIntegerNegate t)
 
 pattern VIntegerShow :: (Val a) -> Val a
-pattern VIntegerShow t <- Val _ _ (VFIntegerShow t)
+pattern VIntegerShow t <- Identified _ _ (VFIntegerShow t)
   where
     VIntegerShow t = mkVal (valClosed t) (VFIntegerShow t)
 
 pattern VIntegerToDouble :: (Val a) -> Val a
-pattern VIntegerToDouble t <- Val _ _ (VFIntegerToDouble t)
+pattern VIntegerToDouble t <- Identified _ _ (VFIntegerToDouble t)
   where
     VIntegerToDouble t = mkVal (valClosed t) (VFIntegerToDouble t)
 
 pattern VDouble :: Val a
-pattern VDouble <- Val _ _ VFDouble
-  where
-    VDouble = mkVal True VFDouble
+pattern VDouble = Atomic ADouble
 
 pattern VDoubleLit :: DhallDouble -> Val a
-pattern VDoubleLit n <- Val _ _ (VFDoubleLit n)
-  where
-    VDoubleLit n = mkVal (True) (VFDoubleLit n)
+pattern VDoubleLit n = Atomic (ADoubleLit n)
 
 pattern VDoubleShow :: (Val a) -> Val a
-pattern VDoubleShow t <- Val _ _ (VFDoubleShow t)
+pattern VDoubleShow t <- Identified _ _ (VFDoubleShow t)
   where
     VDoubleShow t = mkVal (valClosed t) (VFDoubleShow t)
 
 pattern VText :: Val a
-pattern VText <- Val _ _ VFText
-  where
-    VText = mkVal True VFText
+pattern VText = Atomic AText
 
 pattern VTextLit :: (VChunks a) -> Val a
-pattern VTextLit cs <- Val _ _ (VFTextLit cs)
+pattern VTextLit cs <- Identified _ _ (VFTextLit cs)
   where
     VTextLit cs = mkVal (vChunksClosed cs) (VFTextLit cs)
 
 pattern VTextAppend :: (Val a) -> (Val a) -> Val a
-pattern VTextAppend t u <- Val _ _ (VFTextAppend t u)
+pattern VTextAppend t u <- Identified _ _ (VFTextAppend t u)
   where
     VTextAppend t u = mkVal (valClosed t && valClosed u) (VFTextAppend t u)
 
 pattern VTextShow :: (Val a) -> Val a
-pattern VTextShow t <- Val _ _ (VFTextShow t)
+pattern VTextShow t <- Identified _ _ (VFTextShow t)
   where
     VTextShow t = mkVal (valClosed t) (VFTextShow t)
 
 pattern VTextReplace :: (Val a) -> (Val a) -> (Val a) -> Val a
-pattern VTextReplace a b c <- Val _ _ (VFTextReplace a b c)
+pattern VTextReplace a b c <- Identified _ _ (VFTextReplace a b c)
   where
     VTextReplace a b c = mkVal (valClosed a && valClosed b && valClosed c) (VFTextReplace a b c)
 
 pattern VDate :: Val a
-pattern VDate <- Val _ _ VFDate
-  where
-    VDate = mkVal True VFDate
+pattern VDate = Atomic ADate
 
 pattern VDateLiteral :: Time.Day -> Val a
-pattern VDateLiteral d <- Val _ _ (VFDateLiteral d)
-  where
-    VDateLiteral d = mkVal (True) (VFDateLiteral d)
+pattern VDateLiteral d = Atomic (ADateLiteral d)
 
 pattern VDateShow :: (Val a) -> Val a
-pattern VDateShow t <- Val _ _ (VFDateShow t)
+pattern VDateShow t <- Identified _ _ (VFDateShow t)
   where
     VDateShow t = mkVal (valClosed t) (VFDateShow t)
 
 pattern VTime :: Val a
-pattern VTime <- Val _ _ VFTime
-  where
-    VTime = mkVal True VFTime
+pattern VTime = Atomic ATime
 
 pattern VTimeLiteral :: Word8 -> Word8 -> Word8 -> Integer -> Int -> Val a
-pattern VTimeLiteral hh mm ss frac p <- Val _ _ (VFTimeLiteral hh mm ss frac p)
-  where
-    VTimeLiteral hh mm ss frac p = mkVal (True) (VFTimeLiteral hh mm ss frac p)
+pattern VTimeLiteral hh mm ss frac p = Atomic (ATimeLiteral hh mm ss frac p)
 
 pattern VTimeShow :: (Val a) -> Val a
-pattern VTimeShow t <- Val _ _ (VFTimeShow t)
+pattern VTimeShow t <- Identified _ _ (VFTimeShow t)
   where
     VTimeShow t = mkVal (valClosed t) (VFTimeShow t)
 
 pattern VTimeZone :: Val a
-pattern VTimeZone <- Val _ _ VFTimeZone
-  where
-    VTimeZone = mkVal True VFTimeZone
+pattern VTimeZone = Atomic ATimeZone
 
 pattern VTimeZoneLiteral :: Time.TimeZone -> Val a
-pattern VTimeZoneLiteral z <- Val _ _ (VFTimeZoneLiteral z)
-  where
-    VTimeZoneLiteral z = mkVal (True) (VFTimeZoneLiteral z)
+pattern VTimeZoneLiteral z = Atomic (ATimeZoneLiteral z)
 
 pattern VTimeZoneShow :: (Val a) -> Val a
-pattern VTimeZoneShow t <- Val _ _ (VFTimeZoneShow t)
+pattern VTimeZoneShow t <- Identified _ _ (VFTimeZoneShow t)
   where
     VTimeZoneShow t = mkVal (valClosed t) (VFTimeZoneShow t)
 
 pattern VList :: (Val a) -> Val a
-pattern VList t <- Val _ _ (VFList t)
+pattern VList t <- Identified _ _ (VFList t)
   where
     VList t = mkVal (valClosed t) (VFList t)
 
 pattern VListLit :: (Maybe (Val a)) -> (Seq (Val a)) -> Val a
-pattern VListLit ma ts <- Val _ _ (VFListLit ma ts)
+pattern VListLit ma ts <- Identified _ _ (VFListLit ma ts)
   where
     VListLit ma ts = mkVal (maybe True valClosed ma && all valClosed ts) (VFListLit ma ts)
 
 pattern VListAppend :: (Val a) -> (Val a) -> Val a
-pattern VListAppend t u <- Val _ _ (VFListAppend t u)
+pattern VListAppend t u <- Identified _ _ (VFListAppend t u)
   where
     VListAppend t u = mkVal (valClosed t && valClosed u) (VFListAppend t u)
 
 pattern VListBuild :: (Val a) -> (Val a) -> Val a
-pattern VListBuild a t <- Val _ _ (VFListBuild a t)
+pattern VListBuild a t <- Identified _ _ (VFListBuild a t)
   where
     VListBuild a t = mkVal (valClosed a && valClosed t) (VFListBuild a t)
 
 pattern VListFold :: (Val a) -> (Val a) -> (Val a) -> (Val a) -> (Val a) -> Val a
-pattern VListFold a l t u v <- Val _ _ (VFListFold a l t u v)
+pattern VListFold a l t u v <- Identified _ _ (VFListFold a l t u v)
   where
     VListFold a l t u v = mkVal (valClosed a && valClosed l && valClosed t && valClosed u && valClosed v) (VFListFold a l t u v)
 
 pattern VListLength :: (Val a) -> (Val a) -> Val a
-pattern VListLength a t <- Val _ _ (VFListLength a t)
+pattern VListLength a t <- Identified _ _ (VFListLength a t)
   where
     VListLength a t = mkVal (valClosed a && valClosed t) (VFListLength a t)
 
 pattern VListHead :: (Val a) -> (Val a) -> Val a
-pattern VListHead a t <- Val _ _ (VFListHead a t)
+pattern VListHead a t <- Identified _ _ (VFListHead a t)
   where
     VListHead a t = mkVal (valClosed a && valClosed t) (VFListHead a t)
 
 pattern VListLast :: (Val a) -> (Val a) -> Val a
-pattern VListLast a t <- Val _ _ (VFListLast a t)
+pattern VListLast a t <- Identified _ _ (VFListLast a t)
   where
     VListLast a t = mkVal (valClosed a && valClosed t) (VFListLast a t)
 
 pattern VListIndexed :: (Val a) -> (Val a) -> Val a
-pattern VListIndexed a t <- Val _ _ (VFListIndexed a t)
+pattern VListIndexed a t <- Identified _ _ (VFListIndexed a t)
   where
     VListIndexed a t = mkVal (valClosed a && valClosed t) (VFListIndexed a t)
 
 pattern VListReverse :: (Val a) -> (Val a) -> Val a
-pattern VListReverse a t <- Val _ _ (VFListReverse a t)
+pattern VListReverse a t <- Identified _ _ (VFListReverse a t)
   where
     VListReverse a t = mkVal (valClosed a && valClosed t) (VFListReverse a t)
 
 pattern VOptional :: (Val a) -> Val a
-pattern VOptional t <- Val _ _ (VFOptional t)
+pattern VOptional t <- Identified _ _ (VFOptional t)
   where
     VOptional t = mkVal (valClosed t) (VFOptional t)
 
 pattern VSome :: (Val a) -> Val a
-pattern VSome t <- Val _ _ (VFSome t)
+pattern VSome t <- Identified _ _ (VFSome t)
   where
     VSome t = mkVal (valClosed t) (VFSome t)
 
 pattern VNone :: (Val a) -> Val a
-pattern VNone t <- Val _ _ (VFNone t)
+pattern VNone t <- Identified _ _ (VFNone t)
   where
     VNone t = mkVal (valClosed t) (VFNone t)
 
 pattern VRecord :: (Map Text (Val a)) -> Val a
-pattern VRecord m <- Val _ _ (VFRecord m)
+pattern VRecord m <- Identified _ _ (VFRecord m)
   where
     VRecord m = mkVal (all valClosed m) (VFRecord m)
 
 pattern VRecordLit :: (Map Text (Val a)) -> Val a
-pattern VRecordLit m <- Val _ _ (VFRecordLit m)
+pattern VRecordLit m <- Identified _ _ (VFRecordLit m)
   where
     VRecordLit m = mkVal (all valClosed m) (VFRecordLit m)
 
 pattern VUnion :: (Map Text (Maybe (Val a))) -> Val a
-pattern VUnion m <- Val _ _ (VFUnion m)
+pattern VUnion m <- Identified _ _ (VFUnion m)
   where
     VUnion m = mkVal (all (all valClosed) m) (VFUnion m)
 
 pattern VCombine :: (Maybe Text) -> (Val a) -> (Val a) -> Val a
-pattern VCombine mk t u <- Val _ _ (VFCombine mk t u)
+pattern VCombine mk t u <- Identified _ _ (VFCombine mk t u)
   where
     VCombine mk t u = mkVal (valClosed t && valClosed u) (VFCombine mk t u)
 
 pattern VCombineTypes :: (Val a) -> (Val a) -> Val a
-pattern VCombineTypes t u <- Val _ _ (VFCombineTypes t u)
+pattern VCombineTypes t u <- Identified _ _ (VFCombineTypes t u)
   where
     VCombineTypes t u = mkVal (valClosed t && valClosed u) (VFCombineTypes t u)
 
 pattern VPrefer :: (Val a) -> (Val a) -> Val a
-pattern VPrefer t u <- Val _ _ (VFPrefer t u)
+pattern VPrefer t u <- Identified _ _ (VFPrefer t u)
   where
     VPrefer t u = mkVal (valClosed t && valClosed u) (VFPrefer t u)
 
 pattern VMerge :: (Val a) -> (Val a) -> (Maybe (Val a)) -> Val a
-pattern VMerge t u ma <- Val _ _ (VFMerge t u ma)
+pattern VMerge t u ma <- Identified _ _ (VFMerge t u ma)
   where
     VMerge t u ma = mkVal (valClosed t && valClosed u && maybe True valClosed ma) (VFMerge t u ma)
 
 pattern VToMap :: (Val a) -> (Maybe (Val a)) -> Val a
-pattern VToMap t ma <- Val _ _ (VFToMap t ma)
+pattern VToMap t ma <- Identified _ _ (VFToMap t ma)
   where
     VToMap t ma = mkVal (valClosed t && maybe True valClosed ma) (VFToMap t ma)
 
 pattern VShowConstructor :: (Val a) -> Val a
-pattern VShowConstructor t <- Val _ _ (VFShowConstructor t)
+pattern VShowConstructor t <- Identified _ _ (VFShowConstructor t)
   where
     VShowConstructor t = mkVal (valClosed t) (VFShowConstructor t)
 
 pattern VField :: (Val a) -> Text -> Val a
-pattern VField t k <- Val _ _ (VFField t k)
+pattern VField t k <- Identified _ _ (VFField t k)
   where
     VField t k = mkVal (valClosed t) (VFField t k)
 
 pattern VInject :: (Map Text (Maybe (Val a))) -> Text -> (Maybe (Val a)) -> Val a
-pattern VInject m k mt <- Val _ _ (VFInject m k mt)
+pattern VInject m k mt <- Identified _ _ (VFInject m k mt)
   where
     VInject m k mt = mkVal (all (all valClosed) m && maybe True valClosed mt) (VFInject m k mt)
 
 pattern VProject :: (Val a) -> (Either (Set Text) (Val a)) -> Val a
-pattern VProject t p <- Val _ _ (VFProject t p)
+pattern VProject t p <- Identified _ _ (VFProject t p)
   where
     VProject t p = mkVal (valClosed t && either (const True) valClosed p) (VFProject t p)
 
 pattern VAssert :: (Val a) -> Val a
-pattern VAssert t <- Val _ _ (VFAssert t)
+pattern VAssert t <- Identified _ _ (VFAssert t)
   where
     VAssert t = mkVal (valClosed t) (VFAssert t)
 
 pattern VEquivalent :: (Val a) -> (Val a) -> Val a
-pattern VEquivalent t u <- Val _ _ (VFEquivalent t u)
+pattern VEquivalent t u <- Identified _ _ (VFEquivalent t u)
   where
     VEquivalent t u = mkVal (valClosed t && valClosed u) (VFEquivalent t u)
 
 pattern VWith :: (Val a) -> (NonEmpty WithComponent) -> (Val a) -> Val a
-pattern VWith e ks v <- Val _ _ (VFWith e ks v)
+pattern VWith e ks v <- Identified _ _ (VFWith e ks v)
   where
     VWith e ks v = mkVal (valClosed e && valClosed v) (VFWith e ks v)
 
 pattern VEmbed :: a -> Val a
-pattern VEmbed x <- Val _ _ (VFEmbed x)
+pattern VEmbed x <- Identified _ _ (VFEmbed x)
   where
-    VEmbed x = mkVal (True) (VFEmbed x)
+    VEmbed x = mkVal True (VFEmbed x)
+
 
 {-# COMPLETE VConst, VVar, VPrimVar, VApp, VLam, VHLam, VPi, VHPi, VPiND, VBool, VBoolLit, VBoolAnd, VBoolOr, VBoolEQ, VBoolNE, VBoolIf, VBytes, VBytesLit, VNatural, VNaturalLit, VNaturalFold, VNaturalBuild, VNaturalIsZero, VNaturalEven, VNaturalOdd, VNaturalToInteger, VNaturalShow, VNaturalSubtract, VNaturalPlus, VNaturalTimes, VInteger, VIntegerLit, VIntegerClamp, VIntegerNegate, VIntegerShow, VIntegerToDouble, VDouble, VDoubleLit, VDoubleShow, VText, VTextLit, VTextAppend, VTextShow, VTextReplace, VDate, VDateLiteral, VDateShow, VTime, VTimeLiteral, VTimeShow, VTimeZone, VTimeZoneLiteral, VTimeZoneShow, VList, VListLit, VListAppend, VListBuild, VListFold, VListLength, VListHead, VListLast, VListIndexed, VListReverse, VOptional, VSome, VNone, VRecord, VRecordLit, VUnion, VCombine, VCombineTypes, VPrefer, VMerge, VToMap, VShowConstructor, VField, VInject, VProject, VAssert, VEquivalent, VWith, VEmbed #-}
 
@@ -862,10 +877,13 @@ countEnvironment x = go (0 :: Int)
 -- are classified once as 'VHPi' via 'boundVarOccurs'.
 instantiate :: Eq a => Closure a -> Val a -> Val a
 instantiate (Closure x env t bid) !u =
-    let key = EvalKey (unNodeId bid) (unEnvId (envId env)) x (unValId (valId u))
-    in  case lookupEvalMemo key of
-            Just v  -> v
-            Nothing -> insertEvalMemo key (evalImpl (extend env x u) t)
+    if evalCacheEnabled u
+        then
+            let key = EvalKey (unNodeId bid) (unEnvId (envId env)) x (argKey u)
+            in  case lookupEvalMemo key of
+                    Just v  -> v
+                    Nothing -> insertEvalMemo key (evalImpl (extend env x u) t)
+        else evalImpl (extend env x u) t
 {-# INLINE instantiate #-}
 
 -- Out-of-env variables have negative de Bruijn levels.
@@ -1475,21 +1493,24 @@ convInRun :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 convInRun = convImpl
 
 convImpl :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
-convImpl !env t0 t0'
-    -- 'ValId' 0 is the stub id used when 'assignIds' is off; never treat it as
-    -- pointer equality. Distinct values must not share a real id.
-    | let vid = valId t0
-    , vid /= ValId 0
-    , vid == valId t0' =
-        True
-    | valClosed t0 && valClosed t0'
-    , Just cached <- lookupConvMemo (valId t0) (valId t0') =
-        cached
-    | otherwise =
-        let result = convBody env t0 t0'
-        in  if valClosed t0 && valClosed t0'
-            then insertConvMemo (valId t0) (valId t0') result
-            else result
+convImpl !env t0 t0' =
+    case (t0, t0') of
+        (Atomic a, Atomic b) ->
+            a == b
+        (Identified i _ _, Identified j _ _)
+            | i == j
+            , i /= ValId 0 ->
+                True
+        (Identified i True _, Identified j True _)
+            | Just cached <- lookupConvMemo i j ->
+                cached
+        _ ->
+            let result = convBody env t0 t0'
+            in  case (t0, t0') of
+                    (Identified i True _, Identified j True _) ->
+                        insertConvMemo i j result
+                    _ ->
+                        result
 
 convBody :: forall a. Eq a => Environment a -> Val a -> Val a -> Bool
 convBody !env t0 t0' =
@@ -1739,15 +1760,19 @@ quoteGraph b = go
     internN = DAG.intern b
 
     go :: Names -> Val a -> ST s DAG.NodeId
-    go !env !t0 = do
-        let quoteClosed = valClosed t0
-        case (quoteClosed, lookupQuoteMemo (valId t0)) of
-            (True, Just nid) -> return nid
-            _ -> do
-                nid <- goUncached env t0
-                if quoteClosed
-                    then return (insertQuoteMemo (valId t0) nid)
-                    else return nid
+    go !env !t0 =
+        case t0 of
+            Atomic _ ->
+                goUncached env t0
+            Identified vid closed _ ->
+                if closed then
+                    case lookupQuoteMemo vid of
+                        Just nid -> return nid
+                        Nothing -> do
+                            nid <- goUncached env t0
+                            return (insertQuoteMemo vid nid)
+                else
+                    goUncached env t0
 
     goUncached :: Names -> Val a -> ST s DAG.NodeId
     goUncached !env !t0 =

@@ -2,6 +2,7 @@
 
 module Dhall.Test.DAG (tests) where
 
+import Control.Exception (evaluate)
 import Control.Monad.ST (runST)
 import Data.Void (Void)
 import Dhall.Core
@@ -42,7 +43,9 @@ import qualified Dhall.Binary        as Binary
 import qualified Dhall.Core          as Core
 import qualified Dhall.Core.DAG.CBOR as CBOR
 import qualified Dhall.Import        as Import
+import qualified Dhall.Parser        as Parser
 import qualified Dhall.TypeCheck     as TypeCheck
+import qualified System.Timeout      as Timeout
 import qualified Test.Tasty          as Tasty
 import qualified Test.Tasty.HUnit    as HUnit
 
@@ -170,6 +173,34 @@ tests =
                     y <- Core.quoteGraph b Core.EmptyNames v
                     return (x, y)
             n1 @?= n2
+
+        , HUnit.testCase "primitive literals have no ValId" $ do
+            let n = Core.evalInRun Core.Empty (NaturalLit 7 :: Expr Void Void)
+                b = Core.evalInRun Core.Empty (BoolLit True :: Expr Void Void)
+            Core.valId n @?= Nothing
+            Core.valId b @?= Nothing
+
+        , HUnit.testCase "Natural/fold does not stop on the first successor" $ do
+            let e = App (App (App (App (Var (V "Natural/fold" 0)) (NaturalLit 10)) Natural)
+                        (Lam AutoInferCharSet (makeFunctionBinding "x" Natural)
+                            (NaturalPlus (Var (V "x" 0)) (NaturalLit 1))))
+                        (NaturalLit 0)
+            normalize e @?= (NaturalLit 10 :: Expr Void Void)
+
+        , HUnit.testCase "typecheck does not force unused let values" $ do
+            -- Building a 200k-element list is expensive if the let is evaluated.
+            -- Typechecking only needs the type of the binding.
+            let src =
+                    "let x = List/length Natural (List/build Natural (λ(list : Type) → λ(cons : Natural → list → list) → λ(nil : list) → Natural/fold 200000 list (cons 1) nil)) in 1"
+            expr <- case Parser.exprFromText "unused-let" src of
+                Left err -> HUnit.assertFailure (show err)
+                Right parsed ->
+                    pure (fmap (\_ -> error "unexpected import") (denote parsed) :: Expr Void Void)
+            result <- Timeout.timeout 500000 $ evaluate $
+                case TypeCheck.typeOf expr of
+                    Left err -> error (show err)
+                    Right t  -> denote t
+            result @?= Just (Natural :: Expr Void Void)
 
         , HUnit.testCase "typecheck: repeated plus infers Natural" $ do
             case TypeCheck.typeOf (repeatedPlus 4) of

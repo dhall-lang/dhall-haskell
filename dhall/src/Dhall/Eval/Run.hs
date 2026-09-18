@@ -1,7 +1,9 @@
-{-# LANGUAGE BangPatterns      #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE MagicHash           #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UnboxedTuples       #-}
 
 -- | Per-evaluation-run identity counters and bounded speed caches.
 --
@@ -21,9 +23,11 @@ module Dhall.Eval.Run
     , withEvalRunIO
     , readEvalStats
     , readEvalStatsIO
+    , ValueKey (..)
+    , AtomicKey (..)
     , freshValId
     , freshEnvId
-    , recordMkVal
+    , evalCacheEnabled
     , internBody
     , lookupEvalMemo
     , insertEvalMemo
@@ -36,8 +40,11 @@ module Dhall.Eval.Run
     ) where
 
 import Control.Exception    (evaluate)
+import Control.Monad        (when)
 import Control.Monad.ST     (RealWorld, stToIO)
 import Data.Hashable        (Hashable)
+import GHC.Exts             (touch#)
+import GHC.IO               (IO (..))
 import Data.IORef
     ( IORef
     , atomicModifyIORef'
@@ -46,7 +53,8 @@ import Data.IORef
     , writeIORef
     )
 import Data.Text            (Text)
-import Data.Word            (Word32, Word64)
+import Data.Word            (Word8, Word32, Word64)
+import GHC.Natural          (Natural)
 import Dhall.Core.DAG       (Builder, NodeId (..), SharingMode (..), internExpr, newBuilder)
 import Dhall.Syntax         (Expr)
 import GHC.Generics         (Generic)
@@ -59,14 +67,49 @@ import qualified Unsafe.Coerce       as Unsafe
 
 -- | Monotonic value identity for one evaluation run.
 newtype ValId = ValId { unValId :: Word64 }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 -- | Monotonic environment-frame identity for one evaluation run.
 newtype EnvId = EnvId { unEnvId :: Word64 }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
+
+-- | Memo key for a closure argument. Identified values use their 'ValId';
+-- primitives use a structural key so they can share cache entries without
+-- allocating an identity.
+data ValueKey
+    = ArgIdentified {-# UNPACK #-} !Word64
+    | ArgAtomic !AtomicKey
+    deriving (Eq, Generic)
+
+instance Hashable ValueKey
+
+-- | Structural identity of a primitive (no 'ValId').
+data AtomicKey
+    = KType
+    | KKind
+    | KSort
+    | KBoolType
+    | KBool !Bool
+    | KBytesType
+    | KNaturalType
+    | KNatural !Natural
+    | KIntegerType
+    | KInteger !Integer
+    | KDoubleType
+    | KDouble {-# UNPACK #-} !Word64
+    | KTextType
+    | KDateType
+    | KDate !Integer
+    | KTimeType
+    | KTime !Word8 !Word8 !Word8 !Integer !Int
+    | KTimeZoneType
+    | KTimeZone !Int !Bool !Text
+    deriving (Eq, Generic)
+
+instance Hashable AtomicKey
 
 -- | Closure-instantiation memo key: body node, captured env, binder, argument.
-data EvalKey = EvalKey !Word32 !Word64 !Text !Word64
+data EvalKey = EvalKey !Word32 !Word64 !Text !ValueKey
     deriving (Eq, Generic)
 
 instance Hashable EvalKey
@@ -175,6 +218,10 @@ internOnClosureRef = unsafePerformIO (newIORef True)
 countMkValRef :: IORef Bool
 countMkValRef = unsafePerformIO (newIORef False)
 
+{-# NOINLINE cacheEnabledRef #-}
+cacheEnabledRef :: IORef Bool
+cacheEnabledRef = unsafePerformIO (newIORef False)
+
 {-# NOINLINE globalRun #-}
 globalRun :: IORef EvalRun
 globalRun = unsafePerformIO $ do
@@ -237,6 +284,7 @@ withEvalRunIO cfg action = do
     writeIORef assignIdsRef (assignIds cfg)
     writeIORef internOnClosureRef (internOnClosure cfg)
     writeIORef countMkValRef (countMkVal cfg)
+    writeIORef cacheEnabledRef (enableCache cfg)
     valBase <- readIORef valIdRef
     envBase <- readIORef envIdRef
     mkBase  <- readIORef mkValRef
@@ -273,37 +321,43 @@ readEvalStatsIO = do
     mkNow  <- readIORef mkValRef
     return (statsFromRun st valNow envNow mkNow)
 
--- | Allocate a fresh 'ValId'. The argument is evaluated so GHC cannot float the
--- call into a process-wide CAF (which previously made every 'Val' share one
--- id and broke 'Natural/fold' shortcut conversion).
+-- | Keep @a@ alive without evaluating it, so 'unsafePerformIO' cannot be
+-- floated into a CAF while also not forcing thunks (needed for lazy 'extend').
+keepAlive :: a -> b -> b
+keepAlive a b = unsafeDupablePerformIO $ IO $ \s ->
+    case touch# a s of
+        s' -> (# s', b #)
+{-# NOINLINE keepAlive #-}
+
+-- | Cheap cache-enabled check. The argument is kept alive so this cannot CAF.
+evalCacheEnabled :: a -> Bool
+evalCacheEnabled a =
+    keepAlive a (unsafeDupablePerformIO (readIORef cacheEnabledRef))
+{-# NOINLINE evalCacheEnabled #-}
+
+-- | Allocate a fresh 'ValId'. The argument is kept alive (not evaluated) so
+-- GHC cannot float the call into a process-wide CAF.
 freshValId :: a -> ValId
-freshValId a = unsafeDupablePerformIO $ do
-    _ <- evaluate a
-    assign <- readIORef assignIdsRef
-    if not assign
-        then return (ValId 0)
-        else atomicModifyIORef' valIdRef $ \i -> (i + 1, ValId i)
+freshValId a = keepAlive a $
+    unsafeDupablePerformIO $ do
+        assign <- readIORef assignIdsRef
+        if not assign
+            then return (ValId 0)
+            else do
+                count <- readIORef countMkValRef
+                when count $
+                    atomicModifyIORef' mkValRef $ \n -> (n + 1, ())
+                atomicModifyIORef' valIdRef $ \i -> (i + 1, ValId i)
 {-# NOINLINE freshValId #-}
 
 freshEnvId :: a -> EnvId
-freshEnvId a = unsafeDupablePerformIO $ do
-    _ <- evaluate a
-    assign <- readIORef assignIdsRef
-    if not assign
-        then return (EnvId 0)
-        else atomicModifyIORef' envIdRef $ \i -> (i + 1, EnvId i)
+freshEnvId a = keepAlive a $
+    unsafeDupablePerformIO $ do
+        assign <- readIORef assignIdsRef
+        if not assign
+            then return (EnvId 0)
+            else atomicModifyIORef' envIdRef $ \i -> (i + 1, EnvId i)
 {-# NOINLINE freshEnvId #-}
-
--- | Count every 'mkVal' call when 'countMkVal' is enabled.
-recordMkVal :: a -> ()
-recordMkVal a = unsafeDupablePerformIO $ do
-    count <- readIORef countMkValRef
-    if not count
-        then return ()
-        else do
-            _ <- evaluate a
-            atomicModifyIORef' mkValRef $ \i -> (i + 1, ())
-{-# NOINLINE recordMkVal #-}
 
 -- | Intern a denoted body into this run's builder. Ids are run-local.
 internBody :: (Eq a) => Expr t a -> NodeId

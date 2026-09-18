@@ -98,6 +98,7 @@ module Dhall.Core (
     , Eval.evalInRun
     , Eval.quoteInRun
     , Eval.quoteGraph
+    , Eval.valId
     , Eval.Environment(Empty)
     , Eval.Names(EmptyNames)
 
