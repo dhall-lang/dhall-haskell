@@ -335,16 +335,22 @@ evalCacheEnabled a =
     keepAlive a (unsafeDupablePerformIO (readIORef cacheEnabledRef))
 {-# NOINLINE evalCacheEnabled #-}
 
--- | Allocate a fresh 'ValId'. The argument is kept alive (not evaluated) so
--- GHC cannot float the call into a process-wide CAF.
+-- | Allocate a fresh 'ValId'. @touch#@ lives in the same 'IO' as the
+-- counter bump so GHC cannot CAF the 'unsafePerformIO' result (wrapping
+-- 'keepAlive' around a closed 'unsafePerformIO' still lets that inner
+-- result float, after which every 'Identified' value shares one id and
+-- 'convImpl' reports distinct types as equal).
 --
 -- Uses 'unsafePerformIO' (not 'unsafeDupablePerformIO'): duplicating the
 -- allocation can hand the same 'ValId' to distinct values, after which
 -- 'convImpl'\'s identity fast path spuriously treats them as convertible
 -- (e.g. @n === Natural/subtract 1 n@), collapsing integrity hashes.
 freshValId :: a -> ValId
-freshValId a = keepAlive a $
-    unsafePerformIO $ do
+freshValId a = unsafePerformIO $ IO $ \s0 ->
+    case touch# a s0 of
+        s1 -> case allocate of IO k -> k s1
+  where
+    allocate = do
         assign <- readIORef assignIdsRef
         if not assign
             then return (ValId 0)
@@ -356,8 +362,11 @@ freshValId a = keepAlive a $
 {-# NOINLINE freshValId #-}
 
 freshEnvId :: a -> EnvId
-freshEnvId a = keepAlive a $
-    unsafePerformIO $ do
+freshEnvId a = unsafePerformIO $ IO $ \s0 ->
+    case touch# a s0 of
+        s1 -> case allocate of IO k -> k s1
+  where
+    allocate = do
         assign <- readIORef assignIdsRef
         if not assign
             then return (EnvId 0)
