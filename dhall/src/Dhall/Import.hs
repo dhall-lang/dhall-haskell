@@ -136,6 +136,7 @@ module Dhall.Import (
     , fetchRemote
     , stack
     , cache
+    , parsedImportCache
     , Depends(..)
     , graph
     , remote
@@ -1334,15 +1335,21 @@ loadSourceImportArtifact import_@(Chained (Import (ImportHashed _ importType) _)
 
     return (Core.denote resolvedExpr)
 
+-- | Expand a source artifact to an import-free expression (no typecheck).
+expandSourceArtifact
+    :: Expr Void Import
+    -> StateT Status IO (Expr Src Void)
+expandSourceArtifact sourceArtifact = do
+    expandedExpr <- loadWithSource InlineHashedImports (Core.renote sourceArtifact)
+    assertNoImports expandedExpr
+
 finalizeSourceImport
     :: Expr Void Import
     -> StateT Status IO ImportSemantics
 finalizeSourceImport sourceArtifact = do
     -- Expand preserved hashed imports and produce import-free semantics for
     -- typechecking and semantic-cache storage.
-    importFreeExpr <- do
-        expandedExpr <- loadWithSource InlineHashedImports (Core.renote sourceArtifact)
-        assertNoImports expandedExpr
+    importFreeExpr <- expandSourceArtifact sourceArtifact
     Status {..} <- State.get
 
     substitutedExpr <- applyStatusSubstitutions importFreeExpr
@@ -1350,6 +1357,28 @@ finalizeSourceImport sourceArtifact = do
     case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
         Left  err -> throwMissingImport (Imported _stack err)
         Right _   -> return ()
+
+    let importSemantics = Core.denote substitutedExpr
+
+    return
+        ( ImportSemantics
+            { importSemantics
+            , importNormalizationStatus = TypecheckedOnly
+            }
+        )
+
+-- | Like 'finalizeSourceImport', but skip typechecking.
+--
+-- Used when expanding a hashed child under @as Source@: the hashed child was
+-- already validated in its original mode, and the root @finalizeSourceImport@
+-- typechecks the fully expanded parent artifact.
+finalizeSourceImportWithoutTypecheck
+    :: Expr Void Import
+    -> StateT Status IO ImportSemantics
+finalizeSourceImportWithoutTypecheck sourceArtifact = do
+    importFreeExpr <- expandSourceArtifact sourceArtifact
+
+    substitutedExpr <- applyStatusSubstitutions importFreeExpr
 
     let importSemantics = Core.denote substitutedExpr
 
@@ -1373,9 +1402,9 @@ loadSourceChildArtifact child@(Chained import_) =
         sourceArtifact <- loadSourceImportArtifact importChild
 
         -- NOTE: We intentionally do not eagerly call `finalizeSourceImport`
-        -- here during the preserve pass. That prefill added an extra
-        -- source-finalization typecheck per transitive child with no warm-cache
-        -- benefit on the benchmarked slow paths.
+        -- here during the preserve pass. Finalization/typecheck happens once
+        -- at the root `as Source` import (or via the hashed-child expand path
+        -- below, without a redundant child typecheck).
 
         return sourceArtifact
 
@@ -1400,8 +1429,12 @@ loadSourceChild child@(Chained import_) =
                 -- their original mode, then expanded under `as Source` so a
                 -- later transitive freeze does not change the surrounding
                 -- source-preserving result.
+                --
+                -- Skip the unhashed-Source finalize typecheck here: Code
+                -- validation already typechecked the child, and the root
+                -- `finalizeSourceImport` typechecks the expanded parent.
                 _ <- loadImport importChild
-                loadImport
+                loadSourceChildSemanticsWithoutTypecheck
                     ( chainedChangeMode Source
                     ( chainedRemoveHash importChild
                     )
@@ -1411,8 +1444,28 @@ loadSourceChild child@(Chained import_) =
                 loadImport
                     (chainedChangeMode Source importChild)
 
+-- | Expand an unhashed @as Source@ child to import semantics without
+--   typechecking, caching the result for the rest of the run.
+loadSourceChildSemanticsWithoutTypecheck
+    :: Chained -> StateT Status IO ImportSemantics
+loadSourceChildSemanticsWithoutTypecheck sourceChild = do
+    Status { _cache } <- State.get
+
+    case Dhall.Map.lookup sourceChild _cache of
+        Just importSemantics ->
+            return importSemantics
+
+        Nothing -> do
+            sourceArtifact <- loadSourceImportArtifact sourceChild
+            importSemantics <- finalizeSourceImportWithoutTypecheck sourceArtifact
+            zoom cache (State.modify (Dhall.Map.insert sourceChild importSemantics))
+            return importSemantics
+
 -- | Warm the in-memory import cache for a hashed child during the preserve
 --   pass of an `as Source` traversal.
+--
+--   Only builds and caches the unhashed @as Source@ expansion; it does not
+--   typecheck. Root finalization typechecks the expanded parent artifact.
 prefillSourceImportSemantics :: Chained -> StateT Status IO ()
 prefillSourceImportSemantics importChild = do
     let sourceChild =
@@ -1425,7 +1478,7 @@ prefillSourceImportSemantics importChild = do
             return ()
 
         Nothing -> do
-            _ <- loadImport sourceChild
+            _ <- loadSourceChildSemanticsWithoutTypecheck sourceChild
             return ()
 
 fetchFromSemisemanticCache
@@ -1506,30 +1559,52 @@ parseImportedExpression :: ImportType -> StateT Status IO (Expr Src Import)
 parseImportedExpression importType = do
     Status {..} <- State.get
 
-    text <- fetchFresh importType
-
-    path <- case importType of
+    -- Canonical fetch identity for the per-run parsed-import cache. Local
+    -- imports are keyed by absolute path so relative/absolute spellings of the
+    -- same file share a cache entry; remote imports keep headers in the key so
+    -- differently-headered fetches do not collide.
+    cacheKey <- case importType of
         Local prefix file -> liftIO $ do
             path <- localToPathWith _getHomeDirectory prefix file
             absolutePath <- Directory.makeAbsolute path
-            return absolutePath
-        Remote url -> do
-            let urlText = Core.pretty (url { headers = Nothing })
-            return (Text.unpack urlText)
-        Env env -> return $ Text.unpack env
-        Missing -> throwM (MissingImports [])
+            return (Text.pack absolutePath)
+        Remote url ->
+            return (Core.pretty url)
+        Env env ->
+            return ("env:" <> env)
+        Missing ->
+            throwM (MissingImports [])
 
-    let parser = unParser $ do
-            Text.Parser.Token.whiteSpace
-            r <- Dhall.Parser.expr
-            Text.Parser.Combinators.eof
-            return r
-
-    case Text.Megaparsec.parse parser path text of
-        Left errInfo ->
-            throwMissingImport (Imported _stack (ParseError errInfo text))
-        Right expr ->
+    case Dhall.Map.lookup cacheKey _parsedImportCache of
+        Just expr ->
             return expr
+        Nothing -> do
+            text <- fetchFresh importType
+
+            path <- case importType of
+                Local _ _ ->
+                    return (Text.unpack cacheKey)
+                Remote url -> do
+                    let urlText = Core.pretty (url { headers = Nothing })
+                    return (Text.unpack urlText)
+                Env env ->
+                    return (Text.unpack env)
+                Missing ->
+                    throwM (MissingImports [])
+
+            let parser = unParser $ do
+                    Text.Parser.Token.whiteSpace
+                    r <- Dhall.Parser.expr
+                    Text.Parser.Combinators.eof
+                    return r
+
+            case Text.Megaparsec.parse parser path text of
+                Left errInfo ->
+                    throwMissingImport (Imported _stack (ParseError errInfo text))
+                Right expr -> do
+                    zoom parsedImportCache
+                        (State.modify (Dhall.Map.insert cacheKey expr))
+                    return expr
 
 -- | Fetch the text contents of a URL
 fetchRemote :: URL -> StateT Status IO Data.Text.Text
