@@ -1,5 +1,17 @@
 1.42.3
 
+* BREAKING CHANGE: Remove `Expr` constructors for predefined functions
+  (`NaturalFold`, `ListHead`, `TextShow`, and the rest). Those names are
+  ordinary `Var`s; reduction and type-checking look them up in
+  `Dhall.Eval.unboundBuiltinTypes` / `unboundBuiltinValues`.
+* Look up predefined functions from a name table when a variable is free
+  (empty environment / leftover De Bruijn index 0), including `x@1` under one
+  binder of `x`. Types and values live in `Dhall.Eval.unboundBuiltinTypes` /
+  `unboundBuiltinValues`.
+* Treat `Infinity` and `NaN` as fixed symbols (like `True` / `False`): they
+  cannot be bound, even when quoted, and may be used as record field names.
+  They remain `Double` literals.
+
 * BREAKING CHANGE: `TimeLiteral` now stores hour, minute, and second as
   `Word8`, the fractional digits as `Integer`, and the digit count as `Int`,
   instead of `TimeOfDay` plus a `Word` precision. Dhall `Time` literals keep

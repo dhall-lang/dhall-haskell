@@ -18,6 +18,7 @@ module Dhall.Parser.Token (
     char,
     file_,
     label,
+    boundLabel,
     anyLabelOrSome,
     anyLabel,
     labels,
@@ -51,40 +52,15 @@ module Dhall.Parser.Token (
     _assert,
     _Some,
     _None,
-    _NaturalFold,
-    _NaturalBuild,
-    _NaturalIsZero,
-    _NaturalEven,
-    _NaturalOdd,
-    _NaturalToInteger,
-    _NaturalShow,
-    _NaturalSubtract,
-    _IntegerClamp,
-    _IntegerNegate,
-    _IntegerShow,
-    _IntegerToDouble,
-    _DoubleShow,
-    _ListBuild,
-    _ListFold,
-    _ListLength,
-    _ListHead,
-    _ListLast,
-    _ListIndexed,
-    _ListReverse,
     _Bool,
     _Bytes,
     _Natural,
     _Integer,
     _Double,
     _Text,
-    _TextReplace,
-    _TextShow,
     _Date,
-    _DateShow,
     _Time,
-    _TimeShow,
     _TimeZone,
-    _TimeZoneShow,
     _List,
     _True,
     _False,
@@ -421,6 +397,11 @@ identifier = do
             return (fromIntegral n)
 
     n <- indexed <|> pure 0
+
+    Monad.when
+        (x `Data.HashSet.member` fixedSymbolIdentifiers && n /= 0)
+        (fail "Built-in identifiers cannot have a de Bruijn index")
+
     return (V x n)
 
 whitespaceChunk :: Parser ()
@@ -571,12 +552,19 @@ labels = do
 
 {-| Parse a label (e.g. a variable\/field\/alternative name)
 
-    Rejects labels that match built-in names (e.g. @Natural/even@)
+    Rejects labels that match reserved keywords or fixed symbols
 
     This corresponds to the @nonreserved-label@ rule in the official grammar
 -}
 label :: Parser Text
 label = backtickLabel <|> simpleLabel False <?> "label"
+
+-- | Binder label parser: fixed symbols are never bindable, quoted or not
+boundLabel :: Parser Text
+boundLabel = do
+    t <- label
+    Monad.guard (not (t `Data.HashSet.member` fixedSymbolIdentifiers))
+    pure t <?> "non-reserved label"
 
 {-| Same as `label` except that built-in names are allowed
 
@@ -975,146 +963,6 @@ _Some = keyword "Some"
 _None :: Parser ()
 _None = builtin "None"
 
-{-| Parse the @Natural/fold@ built-in
-
-    This corresponds to the @Natural-fold@ rule from the official grammar
--}
-_NaturalFold :: Parser ()
-_NaturalFold = builtin "Natural/fold"
-
-{-| Parse the @Natural/build@ built-in
-
-    This corresponds to the @Natural-build@ rule from the official grammar
--}
-_NaturalBuild :: Parser ()
-_NaturalBuild = builtin "Natural/build"
-
-{-| Parse the @Natural/isZero@ built-in
-
-    This corresponds to the @Natural-isZero@ rule from the official grammar
--}
-_NaturalIsZero :: Parser ()
-_NaturalIsZero = builtin "Natural/isZero"
-
-{-| Parse the @Natural/even@ built-in
-
-    This corresponds to the @Natural-even@ rule from the official grammar
--}
-_NaturalEven :: Parser ()
-_NaturalEven = builtin "Natural/even"
-
-{-| Parse the @Natural/odd@ built-in
-
-    This corresponds to the @Natural-odd@ rule from the official grammar
--}
-_NaturalOdd :: Parser ()
-_NaturalOdd = builtin "Natural/odd"
-
-{-| Parse the @Natural/toInteger@ built-in
-
-    This corresponds to the @Natural-toInteger@ rule from the official grammar
--}
-_NaturalToInteger :: Parser ()
-_NaturalToInteger = builtin "Natural/toInteger"
-
-{-| Parse the @Natural/show@ built-in
-
-    This corresponds to the @Natural-show@ rule from the official grammar
--}
-_NaturalShow :: Parser ()
-_NaturalShow = builtin "Natural/show"
-
-{-| Parse the @Natural/subtract@ built-in
-
-    This corresponds to the @Natural-subtract@ rule from the official grammar
--}
-_NaturalSubtract :: Parser ()
-_NaturalSubtract = builtin "Natural/subtract"
-
-{-| Parse the @Integer/clamp@ built-in
-
-    This corresponds to the @Integer-clamp@ rule from the official grammar
--}
-_IntegerClamp :: Parser ()
-_IntegerClamp = builtin "Integer/clamp"
-
-{-| Parse the @Integer/negate@ built-in
-
-    This corresponds to the @Integer-negate@ rule from the official grammar
--}
-_IntegerNegate :: Parser ()
-_IntegerNegate = builtin "Integer/negate"
-
-{-| Parse the @Integer/show@ built-in
-
-    This corresponds to the @Integer-show@ rule from the official grammar
--}
-_IntegerShow :: Parser ()
-_IntegerShow = builtin "Integer/show"
-
-{-| Parse the @Integer/toDouble@ built-in
-
-    This corresponds to the @Integer-toDouble@ rule from the official grammar
--}
-_IntegerToDouble :: Parser ()
-_IntegerToDouble = builtin "Integer/toDouble"
-
-{-| Parse the @Double/show@ built-in
-
-    This corresponds to the @Double-show@ rule from the official grammar
--}
-_DoubleShow :: Parser ()
-_DoubleShow = builtin "Double/show"
-
-{-| Parse the @List/build@ built-in
-
-    This corresponds to the @List-build@ rule from the official grammar
--}
-_ListBuild :: Parser ()
-_ListBuild = builtin "List/build"
-
-{-| Parse the @List/fold@ built-in
-
-    This corresponds to the @List-fold@ rule from the official grammar
--}
-_ListFold :: Parser ()
-_ListFold = builtin "List/fold"
-
-{-| Parse the @List/length@ built-in
-
-    This corresponds to the @List-length@ rule from the official grammar
--}
-_ListLength :: Parser ()
-_ListLength = builtin "List/length"
-
-{-| Parse the @List/head@ built-in
-
-    This corresponds to the @List-head@ rule from the official grammar
--}
-_ListHead :: Parser ()
-_ListHead = builtin "List/head"
-
-{-| Parse the @List/last@ built-in
-
-    This corresponds to the @List-last@ rule from the official grammar
--}
-_ListLast :: Parser ()
-_ListLast = builtin "List/last"
-
-{-| Parse the @List/indexed@ built-in
-
-    This corresponds to the @List-indexed@ rule from the official grammar
--}
-_ListIndexed :: Parser ()
-_ListIndexed = builtin "List/indexed"
-
-{-| Parse the @List/reverse@ built-in
-
-    This corresponds to the @List-reverse@ rule from the official grammar
--}
-_ListReverse :: Parser ()
-_ListReverse = builtin "List/reverse"
-
 {-| Parse the @Bool@ built-in
 
     This corresponds to the @Bool@ rule from the official grammar
@@ -1164,33 +1012,12 @@ _Double = builtin "Double"
 _Text :: Parser ()
 _Text = builtin "Text"
 
-{-| Parse the @Text/replace@ built-in
-
-    This corresponds to the @Text-replace@ rule from the official grammar
--}
-_TextReplace :: Parser ()
-_TextReplace = builtin "Text/replace"
-
-{-| Parse the @Text/show@ built-in
-
-    This corresponds to the @Text-show@ rule from the official grammar
--}
-_TextShow :: Parser ()
-_TextShow = builtin "Text/show"
-
 {-| Parse the @Date@ bult-in
 
     This corresponds to the @Date@ rule from the official grammar
 -}
 _Date :: Parser ()
 _Date = builtin "Date"
-
-{-| Parse the @Date/show@ built-in
-
-    This corresponds to the @Date-show@ rule from the official grammar
--}
-_DateShow :: Parser ()
-_DateShow = builtin "Date/show"
 
 {-| Parse the @Time@ bult-in
 
@@ -1199,26 +1026,12 @@ _DateShow = builtin "Date/show"
 _Time :: Parser ()
 _Time = builtin "Time"
 
-{-| Parse the @Time/show@ built-in
-
-    This corresponds to the @Time-show@ rule from the official grammar
--}
-_TimeShow :: Parser ()
-_TimeShow = builtin "Time/show"
-
 {-| Parse the @TimeZone@ bult-in
 
     This corresponds to the @TimeZone@ rule from the official grammar
 -}
 _TimeZone :: Parser ()
 _TimeZone = builtin "TimeZone"
-
-{-| Parse the @TimeZone/show@ built-in
-
-    This corresponds to the @TimeZone-show@ rule from the official grammar
--}
-_TimeZoneShow :: Parser ()
-_TimeZoneShow = builtin "TimeZone/show"
 
 {-| Parse the @List@ built-in
 
