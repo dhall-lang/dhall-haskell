@@ -39,6 +39,10 @@ getTests = return
             listBuildIterateLengthIsNearLinearTest
         , testCase "List/length of user-lambda Church cons iterate stays near-linear"
             userLamChurchConsIterateLengthIsNearLinearTest
+        , testCase "Church numeral plus-one evaluates without a thunk tower"
+            churchNumeralPlusOneIsNearLinearTest
+        , testCase "Natural/fold of (Natural → Natural) plus-one stays near-linear"
+            funComposePlusOneIsNearLinearTest
         , testCase "Natural/fold shortcut on bounded types still fires"
             naturalFoldBoundedShortcutTest
         ])
@@ -235,7 +239,7 @@ listBuildIterateLengthIsNearLinearTest = do
 -- | Same cost model as 'listBuildIterateLengthIsNearLinearTest', but the
 -- outer cons is a *user* @VLam@ (@λ(x) → λ(acc) → [x] # acc@) driven by
 -- 'Natural/fold' at an unbounded list type. The binder is @List _@, so
--- 'boundedType' is false and 'vApp' does not force the element; a blanket
+-- 'whnfCheapType' is false and 'vApp' does not force the element; a blanket
 -- strict 'instantiate' would force each element's @Natural/fold@.
 userLamChurchConsIterateLengthIsNearLinearTest :: IO ()
 userLamChurchConsIterateLengthIsNearLinearTest = do
@@ -265,6 +269,77 @@ userLamChurchConsIterateLengthIsNearLinearTest = do
             assertFailure
                 "timed out; user-lambda Church cons is likely forcing each \
                 \element Natural/fold (strict instantiate)"
+        Just () ->
+            return ()
+
+-- | Scaled-down ChurchEval: nested Church multiplication applied to
+-- @λ(x : Natural) → x + 1@. If 'vApp' does not bang a 'Natural' argument
+-- *at the call site*, this builds a thunk tower and times out.
+churchNumeralPlusOneIsNearLinearTest :: IO ()
+churchNumeralPlusOneIsNearLinearTest = do
+    let src = Text.unlines
+            [ "let Nat = ∀(N : Type) → (N → N) → N → N"
+            , "let n2 = λ(N : Type) → λ(s : N → N) → λ(z : N) → s (s z)"
+            , "let n5 = λ(N : Type) → λ(s : N → N) → λ(z : N) → s (s (s (s (s z))))"
+            , "let mul ="
+            , "      λ(a : Nat) → λ(b : Nat) → λ(N : Type) → λ(s : N → N) → λ(z : N) →"
+            , "        a N (b N s) z"
+            , "let n10 = mul n2 n5"
+            , "let n100 = mul n10 n10"
+            , "let n1k = mul n10 n100"
+            , "in  n1k Natural (λ(x : Natural) → x + 1) 0"
+            ]
+
+    parsed <- Core.throws (Parser.exprFromText "church-plus-one" src)
+
+    mResult <- Timeout.timeout 2000000 $ do
+        let resolved = fmap (\_ -> error "unexpected import") parsed
+        let nf = Core.normalize (Core.denote resolved) :: Core.Expr Void Void
+        assertEqual
+            "Church numeral 1000 plus-one"
+            (Core.NaturalLit 1000)
+            nf
+
+    case mResult of
+        Nothing ->
+            assertFailure
+                "timed out; VLam Natural application is not call-site strict \
+                \(ChurchEval thunk tower)"
+        Just () ->
+            return ()
+
+-- | Scaled-down FunCompose: @Natural/fold@ at type @Natural → Natural@.
+-- Function types are not 'boundedType'; the fold must still bang each
+-- closure WHNF or this allocates a million thunks.
+funComposePlusOneIsNearLinearTest :: IO ()
+funComposePlusOneIsNearLinearTest = do
+    let n = 100000 :: Int
+    let src = Text.unlines
+            [ "let compose ="
+            , "      λ(f : Natural → Natural) → λ(g : Natural → Natural) →"
+            , "      λ(x : Natural) → f (g x)"
+            , "let n = " <> Text.pack (show n)
+            , "in  Natural/fold n (Natural → Natural)"
+            , "      (compose (λ(x : Natural) → x + 1))"
+            , "      (λ(x : Natural) → x)"
+            , "      0"
+            ]
+
+    parsed <- Core.throws (Parser.exprFromText "fun-compose-plus-one" src)
+
+    mResult <- Timeout.timeout 2000000 $ do
+        let resolved = fmap (\_ -> error "unexpected import") parsed
+        let nf = Core.normalize (Core.denote resolved) :: Core.Expr Void Void
+        assertEqual
+            "Natural/fold compose plus-one"
+            (Core.NaturalLit (fromIntegral n))
+            nf
+
+    case mResult of
+        Nothing ->
+            assertFailure
+                "timed out; Natural/fold at a function type is not WHNF-strict \
+                \(FunCompose thunk tower)"
         Just () ->
             return ()
 

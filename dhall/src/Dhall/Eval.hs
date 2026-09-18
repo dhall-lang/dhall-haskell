@@ -14,12 +14,13 @@
     normal forms. Fairly similar to GHCI's STG machine algorithmically, but much
     simpler, with no known call optimization or environment trimming.
 
-    Application is lazy in the argument except where 'boundedType' says the
-    binder is a small type ('Natural', 'Bool', …): then 'vApp' forces a 'VLam'
-    argument to WHNF (ChurchEval-style @λ(x : Natural) → x + 1@). 'instantiate'
-    still stores the value unevaluated; 'Natural/fold' is strict in the
-    accumulator only for 'boundedType' (with a @succ acc ≡ acc@ shortcut).
-    Church-encoded *list* constructors stay lazy: see 'vApp'.
+    'vApp' forces a 'VLam' argument at the call site when 'whnfCheapType'
+    (primitives and function types; not lists). That bang must sit on 'vApp'
+    itself: putting it in lazy 'Extend' only wraps a thunk and still leaves
+    ChurchEval as @s (s (s z))@ towers. 'Natural/fold' is strict + shortcut
+    for 'boundedType', strict-without-shortcut for other 'whnfCheapType'
+    accumulators (FunCompose @a → a@), and lazy for lists. Church-encoded
+    *list* constructors stay lazy: see 'vApp'.
 
     Potential optimizations without changing Expr:
 
@@ -308,12 +309,12 @@ countEnvironment x = go (0 :: Int)
 
 -- | Instantiate a user-lambda closure.
 --
--- The argument is stored in 'Extend' without an extra bang here.
--- 'vApp' may already have forced it when the binder type is 'boundedType'
--- (see there). Constructor-like lambdas such as
--- @λ(x : List a) → λ(as : List a) → [x] # as@ have a non-bounded binder, so
--- @x@ stays a thunk in the list spine. A blanket @!u@ here would reintroduce
--- the Iterate O(n²) blow-up for that encoding.
+-- The argument is stored in 'Extend' without an extra bang here. Forcing
+-- belongs in 'vApp' (call-site @!u@), not here: 'Extend' is lazy in the
+-- value, so a @forceWHNF u@ passed into 'instantiate' is only another thunk.
+-- Constructor-like lambdas such as @λ(x : List a) → λ(as : List a) → [x] # as@
+-- have a non-cheap binder, so @x@ stays a thunk in the list spine. A blanket
+-- @!u@ here would reintroduce the Iterate O(n²) blow-up for that encoding.
 --
 -- Bodies that inspect the argument (arithmetic, @conv@, @quote@, …) still
 -- force it when they pattern-match. 'instantiate' does not check whether the
@@ -363,32 +364,28 @@ vVar env0 (V x i0) = go env0 i0
 -- @List/length (iterate n …)@ became O(n²) and OOMed the Iterate benchmark
 -- at @n = 300000@ (#2831).
 --
--- ['VLam' and 'boundedType'] User lambdas go through 'instantiate'. If the
--- binder type is 'boundedType' ('Natural', 'Bool', 'Text', …), the argument
--- is forced to WHNF first. That keeps Church numerals / @x + 1@ loops
--- (ChurchEval, FunCompose, ListBench @countTo@) from building a thunk per
--- step. If the binder is a list or function, the argument stays lazy, so a
--- user Church @cons@ @λ(x : List a) → [x] # xs@ does not force @x@.
+-- ['VLam' and 'whnfCheapType'] User lambdas go through 'instantiate'. If the
+-- binder type is 'whnfCheapType' ('Natural', 'Bool', function types, …), the
+-- argument is forced to WHNF *in this function* (@let !u' = u@) before
+-- 'instantiate'. That is the original @vApp !t !u@ behaviour, gated so that
+-- @s (s (s z))@ in ChurchEval is a tight loop of 'VNaturalLit's rather than
+-- a tower of @eval@ thunks. A @forceWHNF@ stored in lazy 'Extend' does
+-- *not* suffice: 'vApp' would still return without entering the inner
+-- application.
 --
--- Do not use 'boundedType' to bang 'VHLam' arguments: 'List/build''s @cons@
--- is 'Typed' at the element type, which may be 'Natural', but must still
--- park the element without forcing it.
+-- List binders stay lazy, so a user Church @cons@ @λ(x : List a) → [x] # xs@
+-- does not force @x@. Do not use 'whnfCheapType' to bang 'VHLam' arguments:
+-- 'List/build''s @cons@ is 'Typed' at the element type, which may be
+-- 'Natural', but must still park the element without forcing it.
 vApp :: Eq a => Val a -> Val a -> Val a
 vApp !t u =
     case t of
         VLam ty t'
-            | boundedType ty -> instantiate t' (forceWHNF u)
-            | otherwise      -> instantiate t' u
+            | whnfCheapType ty -> let !u' = u in instantiate t' u'
+            | otherwise        -> instantiate t' u
         VHLam _ t' -> t' u
         t'        -> VApp t' u
 {-# INLINE vApp #-}
-
--- | Force a value to WHNF. Used when applying a 'VLam' whose binder is a
--- 'boundedType', so numeric loops stay a tight CBV loop rather than a
--- tower of @instantiate@ thunks.
-forceWHNF :: Val a -> Val a
-forceWHNF !v = v
-{-# INLINE forceWHNF #-}
 
 vPrefer :: Eq a => Environment a -> Val a -> Val a -> Val a
 vPrefer env t u =
@@ -542,17 +539,14 @@ vWith e₀ ks v₀ = VWith e₀ ks v₀
 
 -- | Val-level counterpart of @Dhall.Normalize.boundedType@.
 --
--- Decides the 'Natural/fold' evaluation strategy (see the @NaturalFold@ case
--- of 'eval') and whether 'vApp' forces a 'VLam' argument (see 'vApp'):
+-- Decides the 'Natural/fold' *shortcut* (see the @NaturalFold@ case of
+-- 'eval'): conversion @succ acc ≡ acc@ is only cheap on small types.
 --
--- * 'True' — a small type (Natural/Integer/Text/Bool/Double, Optional of
---   those, records/unions of those). 'Natural/fold' is strict in the
---   accumulator and may stop early when @succ acc ≡ acc@. 'vApp' forces a
---   'VLam' argument of this type to WHNF.
--- * 'False' — lists, functions, and other potentially unbounded types.
---   'Natural/fold' is lazy in the accumulator (same as @Dhall.Normalize@'s
---   @lazyLoop@). 'vApp' leaves a 'VLam' argument lazy so constructor-like
---   successors are not forced at every step.
+-- * 'True' — Natural/Integer/Text/Bool/Double, Optional of those,
+--   records/unions of those. The fold is strict and may stop early.
+-- * 'False' — lists, functions, and mixed records. See 'whnfCheapType'
+--   for a coarser split that still allows a strict fold *without* the
+--   shortcut (FunCompose).
 boundedType :: Val a -> Bool
 boundedType = \case
     VBool       -> True
@@ -564,6 +558,29 @@ boundedType = \case
     VOptional t -> boundedType t
     VRecord m   -> all boundedType m
     VUnion m    -> all (all boundedType) m
+    _           -> False
+
+-- | Types whose WHNF is a lambda or a small primitive. Used to decide
+-- whether 'vApp' bangs a 'VLam' argument and whether 'Natural/fold' bangs
+-- @next@ (without the 'boundedType' shortcut).
+--
+-- Functions are included: WHNF is 'VLam'/'VHLam', so FunCompose's
+-- @Natural/fold n (a → a)@ stays a tight loop of closures. Lists are not:
+-- forcing a list spine at each cons is the Iterate O(n²) blow-up. A record
+-- is cheap only if every field is.
+whnfCheapType :: Val a -> Bool
+whnfCheapType = \case
+    VBool       -> True
+    VNatural    -> True
+    VInteger    -> True
+    VDouble     -> True
+    VText       -> True
+    VPi _ _     -> True
+    VHPi _ _ _  -> True
+    VList _     -> False
+    VOptional t -> whnfCheapType t
+    VRecord m   -> all whnfCheapType m
+    VUnion m    -> all (all whnfCheapType) m
     _           -> False
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
@@ -658,25 +675,24 @@ eval !env t0 =
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 --
-                                -- Match `Dhall.Normalize`: strict + shortcut
-                                -- iff `boundedType natural`. The shortcut is
-                                -- `succ acc ≡ acc` (e.g. `λ(_ : Natural) → 0`
-                                -- or saturating subtract). That comparison
-                                -- needs WHNF, so the bounded path bangs
-                                -- `next`. Making the unbounded path strict
-                                -- as well would rebuild a thunk tower's WHNF
-                                -- at every step — the same class of bug as
-                                -- Iterate for a user-lambda successor that
-                                -- stores work in the accumulator. The lazy
-                                -- path is `go (vApp succ acc)` with no bangs;
-                                -- `quote` / `conv` / a later eliminator force
-                                -- the result.
+                                -- Match `Dhall.Normalize` on the shortcut:
+                                -- strict + `succ acc ≡ acc` iff `boundedType`.
+                                -- `whnfCheapType` is coarser: function types
+                                -- (FunCompose) and records of cheap fields
+                                -- still bang `next` so the loop does not
+                                -- allocate a thunk per step, but they skip
+                                -- `conv` (comparing functions is not cheap).
+                                -- Lists stay on `lazyFold` — banging a list
+                                -- accumulator rebuilds the spine each step
+                                -- (Iterate / IterateAlt with `a = List _`).
                                 let steps = fromIntegral n' :: Integer
                                 in  if boundedType natural
+                                    then shortcutFold steps
+                                    else if whnfCheapType natural
                                     then strictFold steps
                                     else lazyFold steps
                               where
-                                strictFold = go zero
+                                shortcutFold = go zero
                                   where
                                     go !acc 0 = acc
                                     go !acc m =
@@ -684,6 +700,12 @@ eval !env t0 =
                                         in  if conv env next acc
                                             then acc
                                             else go next (m - 1)
+                                strictFold = go zero
+                                  where
+                                    go !acc 0 = acc
+                                    go !acc m =
+                                        let !next = vApp succ acc
+                                        in  go next (m - 1)
                                 lazyFold = go zero
                                   where
                                     go acc 0 = acc

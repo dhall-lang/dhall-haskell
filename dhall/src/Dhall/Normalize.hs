@@ -101,10 +101,10 @@ subst x e expression = Lens.over Syntax.subExpressions (subst x e) expression
 
     For @Natural/fold@ on "bounded types", the short-circuit optimization will be applied.
     See @Dhall.Eval.boundedType@ for comparison. @Dhall.Eval@ uses the same
-    split for @Natural/fold@: strict accumulator plus @succ acc ≡ acc@ early
-    exit when @boundedType@ is true, and a lazy loop (no per-step bang)
-    otherwise. It also uses @boundedType@ in @vApp@ to force a user-lambda
-    argument iff the binder is a small type.
+    shortcut on bounded types. Function types are not bounded, but their
+    WHNF is a lambda, so @Dhall.Eval@ still bangs each @Natural/fold@ step
+    for those (FunCompose) via @whnfCheapType@. Lists stay lazy. @vApp@
+    forces a user-lambda argument at the call site iff @whnfCheapType@.
 -}
 boundedType :: Expr s a -> Bool
 boundedType Bool             = True
