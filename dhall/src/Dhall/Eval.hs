@@ -18,7 +18,7 @@
     (primitives and function types; not lists). That bang must sit on 'vApp'
     itself: putting it in lazy 'Extend' only wraps a thunk and still leaves
     ChurchEval as @s (s (s z))@ towers. 'Natural/fold' bangs each step with
-    'forceAccWHNF' (list spines and record fields, not list elements); the
+    'forceAccWHNF' (list spines; record fields that are not lists); the
     @succ acc ≡ acc@ shortcut is only for 'boundedType'. Church-encoded
     *list* constructors stay lazy: see 'vApp'.
 
@@ -581,28 +581,48 @@ whnfCheapType = \case
     _           -> False
 
 -- | Force a 'Natural/fold' accumulator far enough that the next step does
--- not see a thunk tower, without forcing list *elements*.
+-- not see a thunk tower, without forcing list *elements* or list-typed
+-- record fields.
 --
 -- Matching a 'VListLit' already bangs the 'Seq' spine (@<>@ is O(log n)).
 -- Matching a 'VRecordLit' does *not* force fields: 'Dhall.Map' stores an
--- unbanged inner 'Data.Map', so @let !next = vApp succ acc@ only forced the
--- record constructor (IterateAlt / ListBench). This walks fields: primitives,
--- lambdas, nested records, and list spines. It does not map over 'Seq'
--- elements and does not enter 'VLam'/'VHLam' bodies (large5 unused records
--- are not fold accumulators; they stay lazy at 'vApp').
-forceAccWHNF :: Val a -> Val a
-forceAccWHNF !v =
-    case v of
-        VRecordLit m ->
-            let m' = Map.mapWithKey (\_ x -> let !x' = forceAccWHNF x in x') m
-                !_ = Map.size m'
-            in  VRecordLit m'
-        VSome t ->
-            let !t' = forceAccWHNF t
-            in  VSome t'
+-- unbanged inner 'Data.Map'. This walks fields whose *type* is not a list
+-- (ListBench @next : Natural@, @rest : list → list@). List-typed fields are
+-- left as thunks: IterateAlt's @next : List Natural@ is not needed by
+-- @List/length@ of the outer spine, and forcing it built lists of length
+-- @1..n@. Does not enter 'VLam'/'VHLam' bodies.
+--
+-- The first argument is the accumulator type from 'Natural/fold' (so we can
+-- skip list fields without matching the value, which would force a 'Seq').
+forceAccWHNF :: Val a -> Val a -> Val a
+forceAccWHNF accTy !v =
+    case (accTy, v) of
+        (VRecord tm, VRecordLit vm) ->
+            let !_ = Map.foldMapWithKey (seqField tm) vm
+            in  v
+        (VOptional t, VSome x) ->
+            let !x' = forceAccWHNF t x
+            in  VSome x'
         _ ->
             v
 {-# INLINE forceAccWHNF #-}
+
+-- | @()@ if this record field should stay a thunk ('VList'); otherwise
+-- force it with 'forceAccWHNF'. Must not pattern-match a list field: that
+-- would bang the 'Seq' spine.
+seqField :: Map Text (Val a) -> Text -> Val a -> ()
+seqField tm k x =
+    case Map.lookup k tm of
+        Just fty | skipListField fty -> ()
+        Just fty -> forceAccWHNF fty x `seq` ()
+        Nothing  -> ()
+
+skipListField :: Val a -> Bool
+skipListField = \case
+    VList _     -> True
+    VOptional t -> skipListField t
+    _           -> False
+{-# INLINE skipListField #-}
 
 eval :: forall a. Eq a => Environment a -> Expr Void a -> Val a
 eval !env t0 =
@@ -696,13 +716,13 @@ eval !env t0 =
                                 --
                                 -- https://github.com/ghcjs/ghcjs/issues/782
                                 --
-                                -- Bang `next` with `forceAccWHNF`: list spines
-                                -- and record fields, not list elements. Lazy
-                                -- `VHLam` cons / list-binder `VLam` keep
-                                -- Iterate *elements* unforced (#2831). A
-                                -- constructor-only bang left IterateAlt /
-                                -- ListBench as thunky `{ next, rest }` records.
-                                -- The `succ acc ≡ acc` shortcut stays
+                                -- Bang `next` with `forceAccWHNF` at the fold
+                                -- type: list spines; non-list record fields
+                                -- (ListBench Naturals). List-typed record
+                                -- fields stay lazy (IterateAlt inner lists).
+                                -- Lazy `VHLam` cons / list-binder `VLam` keep
+                                -- Iterate *elements* unforced (#2831). The
+                                -- `succ acc ≡ acc` shortcut stays
                                 -- `boundedType`-only.
                                 let steps = fromIntegral n' :: Integer
                                 in  if boundedType natural
@@ -713,7 +733,7 @@ eval !env t0 =
                                   where
                                     go !acc 0 = acc
                                     go !acc m =
-                                        let !next = forceAccWHNF (vApp succ acc)
+                                        let !next = forceAccWHNF natural (vApp succ acc)
                                         in  if conv env next acc
                                             then acc
                                             else go next (m - 1)
@@ -721,7 +741,7 @@ eval !env t0 =
                                   where
                                     go !acc 0 = acc
                                     go !acc m =
-                                        let !next = forceAccWHNF (vApp succ acc)
+                                        let !next = forceAccWHNF natural (vApp succ acc)
                                         in  go next (m - 1)
                             _ -> inert
         NaturalBuild ->
