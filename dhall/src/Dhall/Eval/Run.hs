@@ -337,9 +337,14 @@ evalCacheEnabled a =
 
 -- | Allocate a fresh 'ValId'. The argument is kept alive (not evaluated) so
 -- GHC cannot float the call into a process-wide CAF.
+--
+-- Uses 'unsafePerformIO' (not 'unsafeDupablePerformIO'): duplicating the
+-- allocation can hand the same 'ValId' to distinct values, after which
+-- 'convImpl'\'s identity fast path spuriously treats them as convertible
+-- (e.g. @n === Natural/subtract 1 n@), collapsing integrity hashes.
 freshValId :: a -> ValId
 freshValId a = keepAlive a $
-    unsafeDupablePerformIO $ do
+    unsafePerformIO $ do
         assign <- readIORef assignIdsRef
         if not assign
             then return (ValId 0)
@@ -352,7 +357,7 @@ freshValId a = keepAlive a $
 
 freshEnvId :: a -> EnvId
 freshEnvId a = keepAlive a $
-    unsafeDupablePerformIO $ do
+    unsafePerformIO $ do
         assign <- readIORef assignIdsRef
         if not assign
             then return (EnvId 0)

@@ -880,7 +880,7 @@ countEnvironment x = go (0 :: Int)
 -- variable occurs in the body (that would be slow); non-dependent @Pi@ types
 -- are classified once as 'VHPi' via 'boundVarOccurs'.
 instantiate :: Eq a => Closure a -> Val a -> Val a
-instantiate (Closure x env t bid) !u =
+instantiate (Closure x env t bid) u =
     if evalCacheEnabled u
         then
             let key = EvalKey (unNodeId bid) (unEnvId (envId env)) x (argKey u)

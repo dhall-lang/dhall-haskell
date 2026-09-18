@@ -527,10 +527,8 @@ chainImport (Chained parent) child =
     return (Chained (canonicalize (parent <> child)))
 
 -- | Load an import, resulting in a fully resolved, type-checked expression.
---   The semisemantic disk cache may record unhashed Code imports as
---   'TypecheckedOnly', but 'loadWith' β-normalizes Code imports before
---   inlining them (see 'ensureNormalized' at the 'Embed' case). Hashed Code
---   imports are already 'AlreadyNormalized'.
+--   Unhashed Code imports may still be unnormalized ('TypecheckedOnly');
+--   hashed Code imports are in the beta-normal form ('AlreadyNormalized').
 --   @loadImport@ handles the \"hot\" cache in @Status@ and defers to
 --   @loadImportWithSemanticCache@ for imports that aren't in the @Status@
 --   cache already.
@@ -1542,10 +1540,10 @@ remoteStatusWithManager newManager url =
     You can configure the desired behavior through the initial `Status` that you
     supply.
 
-    The result is import-free, type-checked, and β-normalized for inlined
-    @Code@ imports ('ensureNormalized' at each 'Embed').  Hashed @Code@
-    imports are already normal from the semantic cache.  Callers can still
-    re-normalize the whole tree after substitutions or custom normalizers.
+    The result is import-free and type-checked.  Unhashed @Code@ imports are
+    not necessarily β-normal ('Dhall.Import.Types.TypecheckedOnly'); hashed
+    @Code@ imports are β-normal.  Callers that need a normal form (integrity
+    hashes, evaluation) should normalize the result themselves.
 -}
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr₀ = case expr₀ of
@@ -1578,16 +1576,7 @@ loadWith expr₀ = case expr₀ of
     let stackWithChild = NonEmpty.cons child _stack
 
     zoom stack (State.put stackWithChild)
-    sem0 <- loadImport child
-    -- Unhashed Code imports may be cached as 'TypecheckedOnly'.  Inlining them
-    -- without β-normalization leaves forms like @List/build@ of Prelude
-    -- @iterate@, which under CBV forces every element and turns
-    -- @List/length (iterate n …)@ into an O(n²) (or worse) loop.  Normalized
-    -- imports use @[f x] # xs@ spines whose elements stay lazy until demanded.
-    ImportSemantics { importSemantics } <-
-        case importMode (chainedImport child) of
-            Code -> ensureNormalized child sem0
-            _    -> return sem0
+    ImportSemantics { importSemantics } <- loadImport child
     zoom stack (State.put _stack)
 
     return (Core.renote importSemantics)
