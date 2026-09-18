@@ -393,7 +393,11 @@ deriving instance (Show a, Show (Val a -> Val a)) => Show (ValF a)
 
 data Val a
     = Atomic !(AtomicVal a)
-    | Identified {-# UNPACK #-} !ValId !Bool !(ValF a)
+    -- | The closedness flag is intentionally lazy: a strict 'Bool' would force
+    -- 'valClosed' on every child when building 'VListLit'/'VRecordLit'/etc.,
+    -- which defeats the lazy @Seq@/@Map@ spines that make @List/length@ of a
+    -- large @List/build@ (e.g. Prelude 'iterate') run in near-linear time.
+    | Identified {-# UNPACK #-} !ValId Bool !(ValF a)
 
 instance (Show a, Show (Val a -> Val a)) => Show (Val a) where
     showsPrec n (Atomic p)         = showsPrec n p

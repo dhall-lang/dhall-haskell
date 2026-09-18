@@ -808,8 +808,7 @@ command (Options {..}) = do
                  $   _cache
 
         Resolve { resolveMode = Nothing, ..} -> do
-            -- Unhashed Code imports are not β-normalized; this prints the
-            -- import-free typechecked tree, which may still contain lets.
+            -- Code imports are β-normalized when inlined by loadWith.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
@@ -845,9 +844,8 @@ command (Options {..}) = do
             render System.IO.stdout characterSet compactedExpression
 
         Type {..} -> do
-            -- Inference sees the resolved (possibly unreduced) tree, so
-            -- pretty-printed binder names may differ from a fully
-            -- normalized import.
+            -- Code imports are β-normalized when inlined; binder names in the
+            -- inferred type therefore match the normalized import tree.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-

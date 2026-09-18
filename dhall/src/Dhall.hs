@@ -260,9 +260,9 @@ expectWithSettings settings Decoder{..} expression = do
     Note that this also applies any substitutions specified in the
     `InputSettings`.
 
-    The result is import-free and type-checked, but not necessarily
-    β-normal: unhashed @Code@ imports may still contain @let@s.  Use
-    'normalizeWithSettings' when a normal form is required.
+    The result is import-free, type-checked, and β-normalized for inlined
+    @Code@ imports.  Use 'normalizeWithSettings' when a custom normalizer must
+    be applied to the whole tree after resolution.
 -}
 resolveWithSettings :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
 resolveWithSettings settings expression =
