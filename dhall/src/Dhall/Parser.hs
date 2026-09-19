@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE BangPatterns #-}
 
 -- | This module contains Dhall's parsing logic
 
@@ -22,7 +21,6 @@ module Dhall.Parser (
     , Parser(..)
     ) where
 
-import Control.Applicative (many)
 import Control.Exception   (Exception)
 import Data.Text           (Text)
 import Data.Void           (Void)
@@ -37,7 +35,8 @@ import qualified Text.Megaparsec.Error as Megaparsec.Error
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Expression
-import Dhall.Parser.Token       hiding (text)
+import Dhall.Parser.Grammar     (parseFile)
+import Dhall.Parser.Lex         (convertBundle, lexErrorBundle, lexText, parseTokens)
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
@@ -155,14 +154,24 @@ exprAndHeaderFromText
               --   used in parsing error messages
     -> Text   -- ^ Input expression to parse
     -> Either ParseError (Header, Expr Src Import)
-exprAndHeaderFromText delta text = case result of
-    Left errInfo   -> Left (ParseError { unwrap = nudgeEofEmptyLine errInfo, input = text })
-    Right (txt, r) -> Right (createHeader txt, r)
-  where
-    parser = do
-        (!bytes, _) <- Text.Megaparsec.match (many shebang *> whitespace)
-        r <- expr
-        Text.Megaparsec.eof
-        return (bytes, r)
-
-    result = Text.Megaparsec.parse (unParser parser) delta text
+exprAndHeaderFromText delta text =
+    case lexText delta text of
+        Left lexErr ->
+            Left
+                ( ParseError
+                    { unwrap = nudgeEofEmptyLine (lexErrorBundle delta text lexErr)
+                    , input  = text
+                    }
+                )
+        Right stream ->
+            case parseTokens parseFile delta stream of
+                Left errInfo ->
+                    Left
+                        ( ParseError
+                            { unwrap =
+                                nudgeEofEmptyLine (convertBundle text delta stream errInfo)
+                            , input  = text
+                            }
+                        )
+                Right (txt, r) ->
+                    Right (createHeader txt, r)
