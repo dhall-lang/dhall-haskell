@@ -25,6 +25,7 @@ Data-Files:
     man/dhall.1
 Extra-Source-Files:
     CHANGELOG.md
+    src/Dhall/Parser/Lexer.x
     benchmark/deep-nested-large-record/**/*.dhall
     benchmark/evaluation/k8s/*.dhall
     benchmark/evaluation/large1/**/*.dhall
@@ -267,7 +268,8 @@ Common common
         transformers                >= 0.5.2.0  && < 0.7 ,
         unix-compat                 >= 0.4.2    && < 0.8 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
-        vector                      >= 0.11.0.0 && < 0.14
+        vector                      >= 0.11.0.0 && < 0.14 ,
+        array                                          < 0.6
 
     if !os(windows)
       Build-Depends:
@@ -381,6 +383,10 @@ Library
         Dhall.Marshal.Internal
         Dhall.Normalize
         Dhall.Parser.Combinators
+        Dhall.Parser.Grammar
+        Dhall.Parser.Lex
+        Dhall.Parser.Lexer
+        Dhall.Parser.TokenType
         Dhall.Pretty.Internal
         Dhall.Syntax
         Dhall.Syntax.Binding
@@ -411,6 +417,9 @@ Library
         Paths_dhall
     Autogen-Modules:
         Paths_dhall
+        Dhall.Parser.Lexer
+    Build-Tool-Depends:
+        alex:alex >= 3.2 && < 4
     if flag(with-http)
       Other-Modules:
         Dhall.Import.HTTP
