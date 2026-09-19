@@ -12,6 +12,7 @@ import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor
 import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
+import qualified Data.List            as List
 import qualified Data.Text            as Text
 import qualified Data.Text.Encoding   as Text.Encoding
 import qualified Data.Text.IO         as Text.IO
@@ -67,7 +68,85 @@ getTests = do
 internalTests :: TestTree
 internalTests =
     Tasty.testGroup "internal"
-        [ notesInLetInLet ]
+        [ notesInLetInLet
+        , errorLocationTests
+        ]
+
+errorLocationTests :: TestTree
+errorLocationTests =
+    Tasty.testGroup "error locations and hints"
+        [ failsAtInnerMistake
+            "#1592 application of malformed lambda"
+            "a (\\(x:Natural) -> x)"
+            ["unexpected '('"]
+        , failsAtInnerMistake
+            "#1592 list of malformed lambda"
+            "[ \\(x:Natural) -> x ]"
+            ["unexpected '['"]
+        , failsAtInnerMistake
+            "#2009 toMap without space"
+            "foo (toMap{bar=\"baz\"})"
+            ["unexpected '('"]
+        , failsAtInnerMistake
+            "#2605 leading zero in nested record"
+            "[ { x = { y = 13 } }, { x = { y = 07 } }]"
+            ["unexpected '{'"]
+        , messageContains
+            "lambda missing space after ':'"
+            "\\(x:Natural) -> x"
+            "Whitespace is required after :"
+        , messageContains
+            "invalid escape sequence"
+            "\"\\latex\""
+            "Invalid escape sequence"
+        , messageContains
+            "missing comma in record"
+            "{ x = 1 y = 2 }"
+            "Missing ',' in record literal"
+        , messageContains
+            "record type missing space after ':'"
+            "{ x:Natural }"
+            "Whitespace is required after :"
+        , messageContains
+            "annotation missing space after ':'"
+            "x:Natural"
+            "Whitespace is required after :"
+        , failsAtInnerMistake
+            "leading zero in list"
+            "[07]"
+            ["unexpected '['"]
+        ]
+
+failsAtInnerMistake :: String -> Text -> [String] -> TestTree
+failsAtInnerMistake name input bannedSubstrings =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
+            Right _ ->
+                Tasty.HUnit.assertFailure "Unexpected successful parse"
+            Left err -> do
+                let msg = show err
+                Monad.forM_ bannedSubstrings $ \banned ->
+                    Tasty.HUnit.assertBool
+                        ("Parse error should not blame the outer construct with "
+                            <> show banned
+                            <> ":\n"
+                            <> msg)
+                        (not (banned `List.isInfixOf` msg))
+
+messageContains :: String -> Text -> String -> TestTree
+messageContains name input expected =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
+            Right _ ->
+                Tasty.HUnit.assertFailure "Unexpected successful parse"
+            Left err -> do
+                let msg = show err
+                Tasty.HUnit.assertBool
+                    ("Expected parse error to contain "
+                        <> show expected
+                        <> ":\n"
+                        <> msg)
+                    (expected `List.isInfixOf` msg)
 
 notesInLetInLet :: TestTree
 notesInLetInLet =
