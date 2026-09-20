@@ -334,6 +334,8 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
                         loop (TextLit (Chunks [] newText))
                       where
                         newText = Eval.textShow oldText
+                    App (App TextEqual (TextLit (Chunks [] x))) (TextLit (Chunks [] y)) ->
+                        pure (BoolLit (x == y))
                     App
                         (App (App TextReplace (TextLit (Chunks [] ""))) _)
                         haystack ->
@@ -473,6 +475,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
           TextAppend x y -> loop (TextLit (Chunks [("", x), ("", y)] ""))
           TextReplace -> pure TextReplace
           TextShow -> pure TextShow
+          TextEqual -> pure TextEqual
           Date -> pure Date
           DateLiteral d -> pure (DateLiteral d)
           DateShow -> pure DateShow
@@ -800,6 +803,9 @@ isNormalized e0 = loop (Syntax.denote e0)
           App (App ListReverse _) (ListLit _ _) -> False
           App TextShow (TextLit (Chunks [] _)) ->
               False
+          App (App TextEqual (TextLit (Chunks [] _))) (TextLit (Chunks [] _)) ->
+              False
+          App (App TextEqual x) y -> not (Eval.judgmentallyEqual x y)
           App (App (App TextReplace (TextLit (Chunks [] ""))) _) _ ->
               False
           App (App (App TextReplace (TextLit (Chunks [] _))) _) (TextLit _) ->
@@ -880,6 +886,7 @@ isNormalized e0 = loop (Syntax.denote e0)
       TextAppend _ _ -> False
       TextReplace -> True
       TextShow -> True
+      TextEqual -> True
       Date -> True
       DateLiteral _ -> True
       DateShow -> True
