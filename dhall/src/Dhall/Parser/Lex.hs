@@ -14,6 +14,7 @@ module Dhall.Parser.Lex
     , LexError(..)
     , lexText
     , parseTokens
+    , tokensText
     , whitespace
     , nonemptyWhitespace
     , satisfyKind
@@ -46,8 +47,11 @@ import qualified Data.Set           as Set
 import qualified Data.Text          as Text
 import qualified Text.Megaparsec    as Megaparsec
 
--- | Stream of tokens produced by 'lexText'.
-newtype TokenStream = TokenStream { unTokenStream :: [Tok] }
+-- | Token stream produced by 'lexText', retaining the original source.
+data TokenStream = TokenStream
+    { tsSource :: !Text
+    , tsTokens :: ![Tok]
+    }
     deriving (Eq, Show)
 
 -- | Token-level parser.
@@ -69,19 +73,19 @@ instance Megaparsec.Stream TokenStream where
     chunkLength   Proxy.Proxy = length
     chunkEmpty    Proxy.Proxy = null
 
-    take1_ (TokenStream [])     = Nothing
-    take1_ (TokenStream (t:ts)) = Just (t, TokenStream ts)
+    take1_ (TokenStream _ [])     = Nothing
+    take1_ (TokenStream src (t:ts)) = Just (t, TokenStream src ts)
 
-    takeN_ n s@(TokenStream ts)
+    takeN_ n s@(TokenStream src ts)
         | n <= 0    = Just ([], s)
         | null ts   = Nothing
         | otherwise =
             let (pre, post) = splitAt n ts
-            in  Just (pre, TokenStream post)
+            in  Just (pre, TokenStream src post)
 
-    takeWhile_ p (TokenStream ts) =
+    takeWhile_ p (TokenStream src ts) =
         let (pre, post) = span p ts
-        in  (pre, TokenStream post)
+        in  (pre, TokenStream src post)
 
 instance Megaparsec.VisualStream TokenStream where
     tokensLength Proxy.Proxy = length
@@ -92,16 +96,16 @@ instance Megaparsec.TraversableStream TokenStream where
     reachOffset o pst@Megaparsec.PosState{..} =
         ( Just preview
         , pst
-            { Megaparsec.pstateInput     = TokenStream rest
+            { Megaparsec.pstateInput     = TokenStream src rest
             , Megaparsec.pstateOffset    = max pstateOffset o
             , Megaparsec.pstateSourcePos = pos
             }
         )
       where
-        TokenStream ts = pstateInput
-        dropped        = max 0 (o - pstateOffset)
-        rest           = drop dropped ts
-        pos            = case rest of
+        TokenStream src ts = pstateInput
+        dropped            = max 0 (o - pstateOffset)
+        rest               = drop dropped ts
+        pos                = case rest of
             (t:_) -> tokStart t
             []    -> case reverse (take dropped ts) of
                 (t:_) -> tokEnd t
@@ -112,24 +116,32 @@ instance Megaparsec.TraversableStream TokenStream where
 
     reachOffsetNoLine o pst@Megaparsec.PosState{..} =
         pst
-            { Megaparsec.pstateInput     = TokenStream rest
+            { Megaparsec.pstateInput     = TokenStream src rest
             , Megaparsec.pstateOffset    = max pstateOffset o
             , Megaparsec.pstateSourcePos = pos
             }
       where
-        TokenStream ts = pstateInput
-        dropped        = max 0 (o - pstateOffset)
-        rest           = drop dropped ts
-        pos            = case rest of
+        TokenStream src ts = pstateInput
+        dropped            = max 0 (o - pstateOffset)
+        rest               = drop dropped ts
+        pos                = case rest of
             (t:_) -> tokStart t
             []    -> pstateSourcePos
+
+-- | Slice the original source covered by a non-empty token list.
+tokensText :: TokenStream -> [Tok] -> Text
+tokensText _ [] = ""
+tokensText (TokenStream src _) toks =
+    let t0 = head toks
+        t1 = last toks
+    in  Text.take (tokEndOff t1 - tokOff t0) (Text.drop (tokOff t0) src)
 
 -- | Lex @Text@ into a token stream.  Positions use @file@ as the source name.
 lexText :: String -> Text -> Either LexError TokenStream
 lexText file text =
-    case runAlex (Text.unpack text) scanAll of
+    case runAlex text scanAll of
         Left err   -> Left (LexError err text)
-        Right toks -> Right (TokenStream (assignOffsets 0 toks))
+        Right toks -> Right (TokenStream text toks)
   where
     scanAll = do
         ust <- alexGetUserState
@@ -141,10 +153,6 @@ lexText file text =
         case tokKind tok of
             TkEOF -> return (reverse acc)
             _     -> collect (tok : acc)
-
-    assignOffsets !_ [] = []
-    assignOffsets !o (t:ts) =
-        t { tokOff = o } : assignOffsets (o + Text.length (tokText t)) ts
 
 -- | Run a token parser.
 parseTokens
@@ -180,29 +188,32 @@ peekKind = Megaparsec.lookAhead $ do
     whitespace
     tokKind <$> Megaparsec.anySingle
 
--- | Source span of a token parser (concatenated 'tokText').
+-- | Source span of a token parser (slice of the original input).
 src :: TParser a -> TParser Src
 src parser = do
+    stream <- Megaparsec.getInput
     before <- Megaparsec.getSourcePos
     (toks, _) <- Megaparsec.match parser
     after <- Megaparsec.getSourcePos
-    return (Src before after (mconcat (map tokText toks)))
+    return (Src before after (tokensText stream toks))
 
 -- | Like 'src', also returning the value.
 srcAnd :: TParser a -> TParser (Src, a)
 srcAnd parser = do
+    stream <- Megaparsec.getInput
     before <- Megaparsec.getSourcePos
     (toks, x) <- Megaparsec.match parser
     after <- Megaparsec.getSourcePos
-    return (Src before after (mconcat (map tokText toks)), x)
+    return (Src before after (tokensText stream toks), x)
 
 -- | Wrap an expression in 'Note'.
 noted :: TParser (Expr Src a) -> TParser (Expr Src a)
 noted parser = do
+    stream <- Megaparsec.getInput
     before <- Megaparsec.getSourcePos
     (toks, e) <- Megaparsec.match parser
     after <- Megaparsec.getSourcePos
-    let src0 = Src before after (mconcat (map tokText toks))
+    let src0 = Src before after (tokensText stream toks)
     case e of
         Note src1 _ | laxSrcEq src0 src1 -> return e
         _                                -> return (Note src0 e)
@@ -221,7 +232,7 @@ convertBundle
     -> TokenStream
     -> ParseErrorBundle TokenStream Void
     -> ParseErrorBundle Text Void
-convertBundle original file (TokenStream toks) bundle =
+convertBundle original file (TokenStream _ toks) bundle =
     ParseErrorBundle
         { bundleErrors  = fmap convertError (bundleErrors bundle)
         , bundlePosState =

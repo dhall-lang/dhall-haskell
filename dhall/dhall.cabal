@@ -419,7 +419,7 @@ Library
         Paths_dhall
         Dhall.Parser.Lexer
     Build-Tool-Depends:
-        alex:alex >= 3.2 && < 4
+        alex:alex >= 3.4 && < 4
     if flag(with-http)
       Other-Modules:
         Dhall.Import.HTTP

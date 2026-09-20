@@ -58,8 +58,9 @@ importExpression embedded = importExpression_
 -- | Header text plus the expression, requiring EOF.
 parseFile :: TParser (Text, Expr Src Import)
 parseFile = do
+    stream <- Megaparsec.getInput
     (headerToks, _) <- Megaparsec.match (Megaparsec.many (satisfyKind isTrivia))
-    let header = mconcat (map tokText headerToks)
+    let header = tokensText stream headerToks
     e <- completeExpression importP
     whitespace
     Megaparsec.eof
@@ -141,13 +142,13 @@ _combineTypes = do
 labelText :: TParser Text
 labelText = do
     t <- satisfyKind $ \k -> case k of
-        TkQuotedLabel _    -> True
-        TkIdent _          -> True
-        TkShowConstructor  -> True
-        _                  -> False
+        TkQuotedLabel    -> True
+        TkIdent          -> True
+        TkShowConstructor -> True
+        _                -> False
     case tokKind t of
-        TkQuotedLabel x   -> return x
-        TkIdent x         -> return x
+        TkQuotedLabel     -> return (quotedLabelInner t)
+        TkIdent           -> return (tokText t)
         TkShowConstructor -> return "showConstructor"
         _                 -> empty
 
@@ -155,12 +156,8 @@ anyLabelText :: TParser Text
 anyLabelText = labelText <|> builtinName
   where
     builtinName = do
-        t <- satisfyKind $ \k -> case k of
-            TkBuiltin _ -> True
-            _           -> False
-        case tokKind t of
-            TkBuiltin x -> return x
-            _           -> empty
+        t <- satisfyKind (== TkBuiltin)
+        return (tokText t)
 
 label :: TParser Text
 label = labelText <?> "label"
@@ -452,9 +449,10 @@ parsers embedded = Parsers{..}
             a <- adapt (noted importExpression_)
 
             bs <- Megaparsec.many $ do
+                stream <- Megaparsec.getInput
                 (sepToks, _) <- Megaparsec.match $
                     try (nonemptyWhitespace <* Megaparsec.lookAhead (satisfyKind startsImportExpression))
-                let sep = mconcat (map tokText sepToks)
+                let sep = tokensText stream sepToks
                 b <- importExpression_
                 return (sep, b)
 
@@ -577,13 +575,13 @@ parsers embedded = Parsers{..}
 
             builtin = do
                 t <- satisfyKind $ \k -> case k of
-                    TkBuiltin _ -> True
-                    TkNaN       -> True
-                    _           -> False
+                    TkBuiltin -> True
+                    TkNaN     -> True
+                    _         -> False
                 let nan = DhallDouble (0.0/0.0)
                 case tokKind t of
                     TkNaN -> return (DoubleLit nan)
-                    TkBuiltin name -> case name of
+                    TkBuiltin -> case tokText t of
                         "Natural/fold"      -> return NaturalFold
                         "Natural/build"     -> return NaturalBuild
                         "Natural/isZero"    -> return NaturalIsZero
@@ -648,10 +646,8 @@ parsers embedded = Parsers{..}
             _          -> empty
 
     temporalLiteral = do
-        t <- satisfyKind $ \k -> case k of TkTemporal _ -> True; _ -> False
-        case tokKind t of
-            TkTemporal txt -> runSnippet CharExpr.temporalLiteral txt
-            _              -> empty
+        t <- satisfyKind (== TkTemporal)
+        runSnippet CharExpr.temporalLiteral (tokText t)
 
     textLiteral = (do
         literal <- doubleQuotedLiteral <|> singleQuoteLiteral
@@ -685,16 +681,14 @@ parsers embedded = Parsers{..}
                 kindEq TkInterpClose
                 rest <- singleQuoteChunks
                 return (Chunks [(mempty, e)] mempty <> rest)
-            TkStringChunk raw -> do
+            TkStringChunk -> do
                 rest <- singleQuoteChunks
-                return (Chunks [] (unescapeSingle raw) <> rest)
+                return (Chunks [] (unescapeSingle (tokText t)) <> rest)
             _ -> fail "unexpected token in single-quoted string"
 
     stringChunk unescape = do
-        t <- satisfyKind $ \k -> case k of TkStringChunk _ -> True; _ -> False
-        case tokKind t of
-            TkStringChunk raw -> return (Chunks [] (unescape raw))
-            _                 -> empty
+        t <- satisfyKind (== TkStringChunk)
+        return (Chunks [] (unescape (tokText t)))
 
     recordTypeOrLiteral firstSrc0 =
             choice
@@ -835,9 +829,9 @@ import_ = (do
   where
     alternative = do
         try (whitespace *> kindEq TkAs *> nonemptyWhitespace)
-        (void (satisfyKind (isBuiltin "Text")) $> RawText)
-            <|> (void (satisfyKind (isIdent "Location")) $> Location)
-            <|> (void (satisfyKind (isBuiltin "Bytes")) $> RawBytes)
+        (void (Megaparsec.satisfy (isBuiltin "Text")) $> RawText)
+            <|> (void (Megaparsec.satisfy (isIdent "Location")) $> Location)
+            <|> (void (Megaparsec.satisfy (isBuiltin "Bytes")) $> RawBytes)
 
 importHashed_ :: TParser ImportHashed
 importHashed_ = do
@@ -853,17 +847,13 @@ missing = kindEq TkMissing $> Missing
 
 local :: TParser ImportType
 local = do
-    t <- satisfyKind $ \k -> case k of TkPath _ -> True; _ -> False
-    case tokKind t of
-        TkPath txt -> runSnippet CharExpr.localOnly txt
-        _          -> empty
+    t <- satisfyKind (== TkPath)
+    runSnippet CharExpr.localOnly (tokText t)
 
 http :: TParser ImportType
 http = do
-    t <- satisfyKind $ \k -> case k of TkHttpRaw _ -> True; _ -> False
-    url <- case tokKind t of
-        TkHttpRaw txt -> runSnippet CharToken.httpRaw txt
-        _             -> empty
+    t <- satisfyKind (== TkHttpRaw)
+    url <- runSnippet CharToken.httpRaw (tokText t)
     headers <- optional (do
         try (whitespace *> kindEq TkUsing *> nonemptyWhitespace)
         importExpression importP)
@@ -871,25 +861,24 @@ http = do
 
 env :: TParser ImportType
 env = do
-    t <- satisfyKind $ \k -> case k of TkEnv _ -> True; _ -> False
-    case tokKind t of
-        TkEnv txt -> runSnippet CharExpr.env txt
-        _         -> empty
+    t <- satisfyKind (== TkEnv)
+    runSnippet CharExpr.env (tokText t)
 
 importHash_ :: TParser Dhall.Crypto.SHA256Digest
 importHash_ = do
-    t <- satisfyKind $ \k -> case k of TkHash _ -> True; _ -> False
-    case tokKind t of
-        TkHash txt -> runSnippet CharExpr.importHash_ txt
-        _          -> empty
+    t <- satisfyKind (== TkHash)
+    runSnippet CharExpr.importHash_ (tokText t)
 
-isBuiltin :: Text -> TokKind -> Bool
-isBuiltin n (TkBuiltin x) = x == n
-isBuiltin _ _             = False
+quotedLabelInner :: Tok -> Text
+quotedLabelInner t =
+    let txt = tokText t
+    in  Text.take (max 0 (Text.length txt - 2)) (Text.drop 1 txt)
 
-isIdent :: Text -> TokKind -> Bool
-isIdent n (TkIdent x) = x == n
-isIdent _ _           = False
+isBuiltin :: Text -> Tok -> Bool
+isBuiltin n t = tokKind t == TkBuiltin && tokText t == n
+
+isIdent :: Text -> Tok -> Bool
+isIdent n t = tokKind t == TkIdent && tokText t == n
 
 unescapeDouble :: Text -> Text
 unescapeDouble t
