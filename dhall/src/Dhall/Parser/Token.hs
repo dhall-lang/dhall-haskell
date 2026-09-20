@@ -576,7 +576,13 @@ labels = do
     This corresponds to the @nonreserved-label@ rule in the official grammar
 -}
 label :: Parser Text
-label = backtickLabel <|> simpleLabel False <?> "label"
+label = backtickNonSomeLabel <|> simpleLabel False <?> "label"
+  where
+    backtickNonSomeLabel = do
+        t <- backtickLabel
+        if t == "Some"
+            then fail "Cannot use `Some` as a variable name because it is a reserved symbol"
+            else return t
 
 {-| Same as `label` except that built-in names are allowed
 
