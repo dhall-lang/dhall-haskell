@@ -92,6 +92,14 @@ errorLocationTests =
             "[ { x = { y = 13 } }, { x = { y = 07 } }]"
             ["unexpected '{'"]
         , messageContains
+            "#2605 leading zero message"
+            "[ { x = { y = 13 } }, { x = { y = 07 } }]"
+            "Natural literals cannot have leading zeros"
+        , messageContains
+            "leading zero in list message"
+            "[07]"
+            "Natural literals cannot have leading zeros"
+        , messageContains
             "lambda missing space after ':'"
             "\\(x:Natural) -> x"
             "Whitespace is required after :"

@@ -315,10 +315,10 @@ naturalLiteral = (zeroPrefixed <|> nonZeroDecimal) <?> "literal"
         binary <|> hexadecimal <|> afterZero
 
     afterZero = do
-        leadingDigit <- optional (Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy digit))
-        case leadingDigit of
-            Just _  -> fail "Natural literals cannot have leading zeros"
-            Nothing -> pure 0
+        extra <- Dhall.Parser.Combinators.takeWhile digit
+        if Data.Text.null extra
+            then pure 0
+            else fail "Natural literals cannot have leading zeros"
     binary = char 'b' >> Text.Megaparsec.Char.Lexer.binary
     hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
     nonZeroDecimal = do
