@@ -15,7 +15,7 @@ module Dhall.Parser.Grammar
     ) where
 
 import Control.Applicative     (Alternative (..), optional)
-import Control.Monad           (void)
+import Control.Monad           (unless, void, when)
 import Data.Foldable           (foldl')
 import Data.Functor            (($>))
 import Data.List.NonEmpty      (NonEmpty (..))
@@ -82,13 +82,65 @@ requireWhsp1 :: String -> TParser ()
 requireWhsp1 after =
     nonemptyWhitespace <|> fail ("Whitespace is required after " <> after)
 
-commaOrCloser :: TokKind -> TParser ()
-commaOrCloser closer = do
+expectClose :: TokKind -> String -> String -> TParser ()
+expectClose closer extraMsg missingMsg = do
     whitespace
+    atClose <- (True <$ Megaparsec.lookAhead (kindEq closer)) <|> pure False
+    atComma <- (True <$ Megaparsec.lookAhead (kindEq TkComma)) <|> pure False
+    case (atClose, atComma) of
+        (True, _) -> return ()
+        (_, True) -> fail extraMsg
+        _         -> fail missingMsg
+
+expectCloseBrace :: String -> String -> TParser ()
+expectCloseBrace extraMsg missingMsg =
+    expectClose TkBraceR extraMsg missingMsg
+
+keywordAsLabelName :: TokKind -> Maybe Text
+keywordAsLabelName k = case k of
+    TkIf              -> Just "if"
+    TkThen            -> Just "then"
+    TkElse            -> Just "else"
+    TkLet             -> Just "let"
+    TkIn              -> Just "in"
+    TkAs              -> Just "as"
+    TkUsing           -> Just "using"
+    TkMerge           -> Just "merge"
+    TkToMap           -> Just "toMap"
+    TkShowConstructor -> Just "showConstructor"
+    TkAssert          -> Just "assert"
+    TkWith            -> Just "with"
+    TkMissing         -> Just "missing"
+    _                 -> Nothing
+
+anyLabelOrSomeOrKeywordHint :: TParser Text
+anyLabelOrSomeOrKeywordHint = do
     k <- peekKind
-    if k == TkComma || k == closer
-        then return ()
-        else fail "Missing ',' in list/record literal"
+    case keywordAsLabelName k of
+        Just name ->
+            fail
+                (  "Keyword "
+                <> Text.unpack name
+                <> " cannot be used as a label; quote it as `"
+                <> Text.unpack name
+                <> "`"
+                )
+        Nothing -> anyLabelOrSome
+
+startsRecordFieldLabel :: TokKind -> Bool
+startsRecordFieldLabel k =
+    case k of
+        TkIdent         -> True
+        TkQuotedLabel   -> True
+        TkSome          -> True
+        TkShowConstructor -> True
+        _               -> keywordAsLabelName k /= Nothing
+
+peekRecordFieldStart :: TParser ()
+peekRecordFieldStart =
+    Megaparsec.lookAhead $ do
+        whitespace
+        void (satisfyKind startsRecordFieldLabel)
 
 _lambda :: TParser CharacterSet
 _lambda = do
@@ -213,6 +265,24 @@ labels = do
 parsers :: forall a. TParser a -> Parsers a
 parsers embedded = Parsers{..}
   where
+    typedBinder = do
+        src0 <- src whitespace
+        k <- peekKind
+        when (k == TkBraceL) $
+            fail "Binders require a variable name before the type, not a record pattern"
+        when (k == TkColon) $
+            fail "Missing binder variable name"
+        when (k == TkParenR) $
+            fail "Missing binder variable name"
+        a <- label <?> "binder variable name"
+        src1 <- src whitespace
+        kindEq TkColon
+        src2 <- src (requireWhsp1 ":")
+        b <- expression
+        whitespace
+        kindEq TkParenR
+        return (src0, a, src1, src2, b)
+
     completeExpression_ =
             whitespace
         *>  expression
@@ -258,14 +328,7 @@ parsers embedded = Parsers{..}
             cs <- _lambda
             whitespace
             kindEq TkParenL
-            src0 <- src whitespace
-            a <- label
-            src1 <- src whitespace
-            kindEq TkColon
-            src2 <- src (requireWhsp1 ":")
-            b <- expression
-            whitespace
-            kindEq TkParenR
+            (src0, a, src1, src2, b) <- typedBinder
             whitespace
             cs' <- _arrow
             whitespace
@@ -291,14 +354,7 @@ parsers embedded = Parsers{..}
 
         alternative3 = do
             cs <- try (_forall <* whitespace <* kindEq TkParenL)
-            whitespace
-            a <- label
-            whitespace
-            kindEq TkColon
-            requireWhsp1 ":"
-            b <- expression
-            whitespace
-            kindEq TkParenR
+            (_, a, _, _, b) <- typedBinder
             whitespace
             cs' <- _arrow
             whitespace
@@ -421,11 +477,21 @@ parsers embedded = Parsers{..}
     applicationExpressionWithInfo = do
             let alternative0 = do
                     try (kindEq TkMerge *> nonemptyWhitespace)
-                    a <- importExpression_ <* nonemptyWhitespace
+                    a <-
+                        importExpression_
+                            <* (nonemptyWhitespace <?> "second argument to ❰merge❱")
                     return (\b -> Merge a b Nothing, Just "second argument to ❰merge❱")
 
             let alternative1 = do
-                    try (kindEq TkSome *> nonemptyWhitespace)
+                    kindEq TkSome
+                    hasArg <- (True <$ nonemptyWhitespace) <|> pure False
+                    unless hasArg Megaparsec.eof
+                    when (not hasArg) $
+                        fail "argument to ❰Some❱"
+                    k <- peekKind
+                    when (k == TkColon) $
+                        fail
+                            "Some is a constructor and cannot be annotated like a type; write Some <value> : Optional T"
                     return (Some, Just "argument to ❰Some❱")
 
             let alternative2 = do
@@ -703,7 +769,8 @@ parsers embedded = Parsers{..}
         whitespace
         return (RecordLit mempty)
 
-    emptyRecordType = return (Record mempty)
+    emptyRecordType =
+        Megaparsec.lookAhead (kindEq TkBraceR) *> return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
@@ -727,6 +794,9 @@ parsers embedded = Parsers{..}
                         return (c, RecordField (Just src0') d (Just src1) (Just src2))
                     _ <- optional (whitespace *> kindEq TkComma)
                     whitespace
+                    expectCloseBrace
+                        "Unexpected extra ',' in record type"
+                        "Missing ',' in record type"
                     m <- tToMap
                         ((a, RecordField (Just firstSrc0) b (Just firstKeySrc1) (Just firstKeySrc2)) : e)
                     return (Record m)
@@ -735,7 +805,7 @@ parsers embedded = Parsers{..}
                     firstSrc0' <- case maybeSrc of
                         Just src0 -> return src0
                         Nothing   -> src whitespace
-                    firstLabel <- anyLabelOrSome
+                    firstLabel <- anyLabelOrSomeOrKeywordHint
                     firstSrc1 <- src whitespace
                     let parseLabelWithWhsp = try $ do
                             kindEq TkDot
@@ -759,18 +829,22 @@ parsers embedded = Parsers{..}
                                 (s0, x, s1) :| [] ->
                                     return (x, RecordField (Just s0) (Var (V x 0)) (Just s1) Nothing)
                                 _ -> empty
+                    atColon <- (True <$ Megaparsec.lookAhead (kindEq TkColon)) <|> pure False
+                    when atColon $
+                        fail
+                            "Record literals use '=' for field values, not ':'; ':' starts a record type"
                     (normalRecordEntry <|> punnedEntry) <* whitespace
 
             let nonEmptyRecordLiteral = do
                     a <- keysValue (Just firstSrc0)
-                    commaOrCloser TkBraceR
                     as <- many $ do
-                        try (kindEq TkComma <* Megaparsec.lookAhead (whitespace *> Megaparsec.notFollowedBy (kindEq TkBraceR)))
-                        kv <- keysValue Nothing
-                        commaOrCloser TkBraceR
-                        return kv
+                        try (kindEq TkComma <* peekRecordFieldStart)
+                        keysValue Nothing
                     _ <- optional (whitespace *> kindEq TkComma)
                     whitespace
+                    expectCloseBrace
+                        "Unexpected extra ',' in record literal"
+                        "Missing ',' in record literal"
                     let combine k = liftA2 $ \rf rf' -> makeRecordField $ Combine mempty (Just k)
                                                             (recordFieldValue rf')
                                                             (recordFieldValue rf)
@@ -809,14 +883,16 @@ parsers embedded = Parsers{..}
             let nonEmptyListLiteral = do
                     a <- expression
                     whitespace
-                    commaOrCloser TkBrackR
                     as <- many $ do
                         try (kindEq TkComma *> whitespace <* Megaparsec.notFollowedBy (kindEq TkBrackR))
                         e <- expression
                         whitespace
-                        commaOrCloser TkBrackR
                         return e
                     _ <- optional (kindEq TkComma *> whitespace)
+                    expectClose
+                        TkBrackR
+                        "Unexpected extra ',' in list literal"
+                        "Missing ',' in list literal"
                     kindEq TkBrackR
                     return (ListLit Nothing (Data.Sequence.fromList (a : as)))
             emptyListLiteral <|> nonEmptyListLiteral) <?> "literal"

@@ -57,7 +57,7 @@ $sqplain  = [^\x27\x24]
 
 tokens :-
 
-<0>  $white+                             { trivia }
+<0>  $white                               { whiteRun }
 <0>  \r\n                               { trivia }
 <0>  "--" [^\n]* \n                     { trivia }
 <0>  "--" [^\n]* \r\n                   { trivia }
@@ -153,6 +153,7 @@ tokens :-
 <0>  @integer                           { integerTok }
 <0>  "0x" $hexdig                       { hexNaturalTok }
 <0>  "0b" $bindig                       { binNaturalTok }
+<0>  0 [0-9] $digit*                    { leadingZeroTok }
 <0>  @natural                           { naturalTok }
 <0>  @ident                             { identTok }
 
@@ -214,6 +215,9 @@ movePos (AlexPn a l c) _    = AlexPn (a + 1) l (c + 1)
 advancePosText :: AlexPosn -> Text -> AlexPosn
 advancePosText p t = Text.foldl' movePos p t
 
+advancePosAscii :: AlexPosn -> Int -> AlexPosn
+advancePosAscii (AlexPn a l c) n = AlexPn (a + n) l (c + n)
+
 matched :: AlexInput -> Int -> (AlexPosn, Text)
 matched (pos, _, _, str) len = (pos, Text.take len str)
 
@@ -246,6 +250,26 @@ keyword = emitKind
 
 trivia :: AlexInput -> Int -> Alex Tok
 trivia inp len = emitKind TkTrivia inp len
+
+isWhiteSpace :: Char -> Bool
+isWhiteSpace c = c == ' ' || c == '\t' || c == '\n' || c == '\r'
+
+whiteRun :: AlexInput -> Int -> Alex Tok
+whiteRun inp len = do
+    after <- alexGetInput
+    let (start, _) = matched inp len
+        (_, _, _, rest) = after
+        extra           = Text.takeWhile isWhiteSpace rest
+        n               = len + Text.length extra
+        (_, _, _, str)  = inp
+        full            = Text.take n str
+        end             =
+            if Text.all (\c -> c == ' ') full
+                then advancePosAscii start n
+                else advancePosText start full
+        leftover        = Text.drop n str
+    alexSetInput (end, '\n', [], leftover)
+    mkTokM start end full TkTrivia
 
 extendRun :: AlexInput -> Int -> (Char -> Bool) -> TokKind -> Alex Tok
 extendRun inp len isPlain kind = do
@@ -294,6 +318,9 @@ isBuiltin txt =
         , "TimeZone","List","Type","Kind","Sort"
         ]
 
+leadingZeroTok :: AlexInput -> Int -> Alex Tok
+leadingZeroTok _ _ = alexError "Natural literals cannot have leading zeros"
+
 naturalTok :: AlexInput -> Int -> Alex Tok
 naturalTok inp len = do
     after <- alexGetInput
@@ -321,11 +348,13 @@ isBinDigit c = c == '0' || c == '1'
 signedPrefixedNatural :: AlexInput -> Int -> (Char -> Bool) -> Alex Tok
 signedPrefixedNatural inp len isDigit = do
     after <- alexGetInput
-    let (start, prefix) = matched inp len
+    let (start, _) = matched inp len
         (_, _, _, rest) = after
         (more, leftover) = Text.span isDigit rest
-        full = prefix <> more
-        end  = advancePosText start full
+        n                = len + Text.length more
+        (_, _, _, str)   = inp
+        full             = Text.take n str
+        end              = advancePosAscii start n
     alexSetInput (end, '\n', [], leftover)
     let (sign, unsigned) = case Text.uncons full of
             Just ('-', xs) -> (-1, xs)
@@ -338,11 +367,13 @@ signedPrefixedNatural inp len isDigit = do
 prefixedNatural :: AlexInput -> Int -> (Char -> Bool) -> Alex Tok
 prefixedNatural inp len isDigit = do
     after <- alexGetInput
-    let (start, prefix) = matched inp len
+    let (start, _) = matched inp len
         (_, _, _, rest) = after
         (more, leftover) = Text.span isDigit rest
-        full = prefix <> more
-        end  = advancePosText start full
+        n                = len + Text.length more
+        (_, _, _, str)   = inp
+        full             = Text.take n str
+        end              = advancePosAscii start n
     alexSetInput (end, '\n', [], leftover)
     case parseNaturalText full of
         Nothing -> alexError ("invalid natural: " ++ Text.unpack full)
