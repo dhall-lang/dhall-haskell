@@ -596,11 +596,7 @@ labels = do
     This corresponds to the @nonreserved-label@ rule in the official grammar
 -}
 label :: Parser Text
-label = (do
-    l <- backtickLabel <|> simpleLabel False
-    -- `Some` is a fixed symbol even when quoted; it is not a binder or identifier.
-    Monad.guard (l /= "Some")
-    return l) <?> "label"
+label = backtickLabel <|> simpleLabel False <?> "label"
 
 {-| Same as `label` except that built-in names are allowed
 
