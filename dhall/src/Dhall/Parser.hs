@@ -83,14 +83,21 @@ nudgeEofEmptyLine
     :: ParseErrorBundle Text Void
     -> ParseErrorBundle Text Void
 nudgeEofEmptyLine bundle =
-    bundle { bundleErrors = fmap nudge (bundleErrors bundle) }
+    bundle
+        { bundleErrors = fmap (nudgeParseError source) (bundleErrors bundle) }
   where
     source = pstateInput (bundlePosState bundle)
 
-    nudge (Megaparsec.Error.TrivialError off u e) =
-        Megaparsec.Error.TrivialError (skipTrailingBlankLines source off) u e
-    nudge (Megaparsec.Error.FancyError off x) =
-        Megaparsec.Error.FancyError (skipTrailingBlankLines source off) x
+-- GHC 8.10 and 9.2 reject reconstructing ParseError without this signature
+-- (they infer an illegal Token s1 ~ Token s2 constraint).
+nudgeParseError
+    :: Text
+    -> Megaparsec.Error.ParseError Text Void
+    -> Megaparsec.Error.ParseError Text Void
+nudgeParseError source (Megaparsec.Error.TrivialError off u e) =
+    Megaparsec.Error.TrivialError (skipTrailingBlankLines source off) u e
+nudgeParseError source (Megaparsec.Error.FancyError off x) =
+    Megaparsec.Error.FancyError (skipTrailingBlankLines source off) x
 
 skipTrailingBlankLines :: Text -> Int -> Int
 skipTrailingBlankLines txt off
