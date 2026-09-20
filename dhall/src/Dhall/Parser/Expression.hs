@@ -579,7 +579,11 @@ parsers embedded = Parsers{..}
 
             let alternative1 = do
                     try (_Some *> nonemptyWhitespace)
-
+                    colonNext <-
+                            (True <$ Text.Megaparsec.lookAhead _colon)
+                        <|> pure False
+                    Control.Monad.when colonNext $
+                        fail "Some is a constructor and cannot be annotated like a type; write Some <value> : Optional T"
                     return (Some, Just "argument to ❰Some❱")
 
             let alternative2 = do

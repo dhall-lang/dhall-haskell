@@ -112,6 +112,10 @@ errorLocationTests =
             "{ a = \"a\", b = { a = \"foo\",, } }"
             ["unexpected 'b'"]
         , messageContains
+            "#1654 annotating Some like a type"
+            "Some : Bool -> Optional Bool"
+            "Some is a constructor and cannot be annotated like a type"
+        , messageContains
             "record type missing space after ':'"
             "{ x:Natural }"
             "Whitespace is required after :"
