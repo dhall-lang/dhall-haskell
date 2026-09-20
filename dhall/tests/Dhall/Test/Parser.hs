@@ -112,6 +112,19 @@ errorLocationTests =
             "{ a = \"a\", b = { a = \"foo\",, } }"
             ["unexpected 'b'"]
         , messageContains
+            "#2402 assert field in record"
+            "{ assert = 1 }"
+            "quote it as `assert`"
+        , messageContains
+            "#2403 if field in record"
+            "{ if = True }"
+            "quote it as `if`"
+        , messageContains
+            "#2402 keyword field after comma"
+            "{ a = 1, assert = 2 }"
+            "quote it as `assert`"
+        , quotedKeywordLabelParses
+        , messageContains
             "#1654 annotating Some like a type"
             "Some : Bool -> Optional Bool"
             "Some is a constructor and cannot be annotated like a type"
@@ -128,6 +141,15 @@ errorLocationTests =
             "[07]"
             ["unexpected '['"]
         ]
+
+quotedKeywordLabelParses :: TestTree
+quotedKeywordLabelParses =
+    Tasty.HUnit.testCase "#2403 quoted assert is a valid label" $ do
+        case Parser.exprFromText "quoted assert" "{ `assert` = 1 }" of
+            Left err ->
+                Tasty.HUnit.assertFailure (show err)
+            Right _ ->
+                return ()
 
 failsAtInnerMistake :: String -> Text -> [String] -> TestTree
 failsAtInnerMistake name input bannedSubstrings =

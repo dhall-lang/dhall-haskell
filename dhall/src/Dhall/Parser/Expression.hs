@@ -1091,7 +1091,7 @@ parsers embedded = Parsers{..}
                     firstSrc0' <- case maybeSrc of
                         Just src0 -> return src0
                         Nothing -> src whitespace
-                    firstLabel <- anyLabelOrSome
+                    firstLabel <- anyLabelOrSomeOrKeywordHint
                     firstSrc1 <- src whitespace
 
                     let parseLabelWithWhsp = try $ do
@@ -1130,7 +1130,8 @@ parsers embedded = Parsers{..}
                     a <- keysValue (Just firstSrc0)
 
                     as <- many $ do
-                        try (_comma <* Text.Megaparsec.lookAhead (whitespace *> void anyLabelOrSome))
+                        try (_comma <* Text.Megaparsec.lookAhead
+                            (whitespace *> void (anyLabelOrSome <|> bareKeyword)))
                         keysValue Nothing
 
                     _ <- optional (whitespace *> _comma)

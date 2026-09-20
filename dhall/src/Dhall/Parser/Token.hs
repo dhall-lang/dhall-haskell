@@ -20,6 +20,8 @@ module Dhall.Parser.Token (
     file_,
     label,
     anyLabelOrSome,
+    anyLabelOrSomeOrKeywordHint,
+    bareKeyword,
     anyLabel,
     labels,
     httpRaw,
@@ -573,13 +575,13 @@ labels = do
         pure []
 
     nonEmptyLabels = do
-        x <- anyLabelOrSome
+        x <- anyLabelOrSomeOrKeywordHint
 
         whitespace
 
         xs <- many $ do
             try (_comma *> whitespace <* Text.Megaparsec.notFollowedBy _closeBrace)
-            l <- anyLabelOrSome
+            l <- anyLabelOrSomeOrKeywordHint
             whitespace
             return l
 
@@ -614,6 +616,30 @@ anyLabel = (do
 
 anyLabelOrSome :: Parser Text
 anyLabelOrSome = try anyLabel <|> ("Some" <$ _Some)
+
+-- | A reserved keyword parsed as a simple label (not backtick-quoted).
+bareKeyword :: Parser Text
+bareKeyword = try $ do
+    c    <- Text.Parser.Char.satisfy headCharacter
+    rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
+    let t = Data.Text.cons c rest
+    Monad.guard (t `Data.HashSet.member` reservedKeywords)
+    return t
+
+-- | Like `anyLabelOrSome`, but if the next token is a bare keyword then fail
+-- with a hint to quote it (e.g. @{ assert = 1 }@ → @`assert`@).
+anyLabelOrSomeOrKeywordHint :: Parser Text
+anyLabelOrSomeOrKeywordHint = anyLabelOrSome <|> failBareKeywordAsLabel
+  where
+    failBareKeywordAsLabel = do
+        name <- bareKeyword
+        fail
+            (  "Keyword "
+            <> Data.Text.unpack name
+            <> " cannot be used as a label; quote it as `"
+            <> Data.Text.unpack name
+            <> "`"
+            )
 
 {-| Parse a valid Bash environment variable name
 
