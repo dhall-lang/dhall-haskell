@@ -1,4 +1,5 @@
 {
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Dhall.Parser.Lexer
     ( Alex(..)
@@ -15,7 +16,8 @@ module Dhall.Parser.Lexer
     ) where
 
 import Data.Bits       ((.&.))
-import Data.Char       (GeneralCategory (..), chr, digitToInt, generalCategory, isDigit, isHexDigit)
+import Data.Char       (GeneralCategory (..), chr, digitToInt, generalCategory, isHexDigit)
+import Data.List       (foldl')
 import Data.Text       (Text)
 import Numeric         (readHex)
 import Numeric.Natural (Natural)
@@ -25,9 +27,9 @@ import Dhall.Parser.Combinators (Parser(..), unParser)
 import Dhall.Parser.TokenType
 import Dhall.Syntax             (CharacterSet(..))
 
-import qualified Data.ByteString.Base16 as Base16
-import qualified Data.Text              as Text
-import qualified Data.Text.Encoding     as Text.Encoding
+import qualified Data.ByteString.Base16   as Base16
+import qualified Data.Text                as Text
+import qualified Data.Text.Encoding       as Text.Encoding
 import qualified Dhall.Parser.Expression as Expression
 import qualified Dhall.Parser.Token      as Token
 import qualified Text.Megaparsec
@@ -40,8 +42,11 @@ $digit    = [0-9]
 $hexdig   = [0-9A-Fa-f]
 $bindig   = [01]
 $ident0   = [A-Za-z_]
+$ident1   = [A-Za-z0-9_\x2D\x2F]
+$dqplain  = [^\x22\x24\x5C]
+$sqplain  = [^\x27\x24]
 
-@ident    = $ident0 ([A-Za-z0-9_] | "/" | "-")*
+@ident    = $ident0 $ident1*
 @natural  = "0b" $bindig+ | "0x" $hexdig+ | [1-9] $digit* | 0
 @integer  = [\+\-] @natural
 @exp      = [eE] [\+\-]? $digit+
@@ -148,16 +153,11 @@ tokens :-
 <0>  @natural                         { naturalTok }
 <0>  @ident                           { identTok }
 
-<comment> "{-"                        { nestComment }
-<comment> "-}"                        { unnestComment }
-<comment> .                           { commentChar }
-<comment> \n                          { commentChar }
-<comment> \r                          { commentChar }
-
 <strDq> \"                            { endDq }
 <strDq> "${"                          { interpOpen }
 <strDq> \\                            { dqEscape }
-<strDq> .                             { strChunk }
+<strDq> $dqplain+                     { strChunk }
+<strDq> \$                            { strChunk }
 <strDq> \n                            { strChunk }
 <strDq> \r                            { strChunk }
 
@@ -165,28 +165,24 @@ tokens :-
 <strSq> "''${"                        { strChunk }
 <strSq> "${"                          { interpOpen }
 <strSq> "''"                          { endSq }
+<strSq> $sqplain+                     { strChunk }
+<strSq> \$                            { strChunk }
 <strSq> .                             { strChunk }
 <strSq> \n                            { strChunk }
 <strSq> \r                            { strChunk }
 
 {
 data AlexUserState = AlexUserState
-    { usFile         :: String
-    , usInterpStack  :: [(Int, Int)]  -- (start code, brace depth)
-    , usBraceDepth   :: Int
-    , usCommentDepth :: Int
-    , usCommentBuf   :: String
-    , usCommentPos   :: AlexPosn
+    { usFile        :: String
+    , usInterpStack :: [(Int, Int)]  -- (start code, brace depth)
+    , usBraceDepth  :: Int
     }
 
 alexInitUserState :: AlexUserState
 alexInitUserState = AlexUserState
-    { usFile         = ""
-    , usInterpStack  = []
-    , usBraceDepth   = 0
-    , usCommentDepth = 0
-    , usCommentBuf   = ""
-    , usCommentPos   = AlexPn 0 1 1
+    { usFile        = ""
+    , usInterpStack = []
+    , usBraceDepth  = 0
     }
 
 alexEOF :: Alex Tok
@@ -195,7 +191,6 @@ alexEOF = do
     let (pos, _, _, _) = inp
     sc <- alexGetStartCode
     case sc of
-        _ | sc == comment -> alexError "unterminated block comment"
         _ | sc == strDq   -> alexError "unterminated double-quoted string"
         _ | sc == strSq   -> alexError "unterminated single-quoted string"
         _                 -> mkTokM pos pos "" TkEOF
@@ -204,23 +199,32 @@ posnToSourcePos :: String -> AlexPosn -> SourcePos
 posnToSourcePos file (AlexPn _ line col) =
     SourcePos file (mkPos line) (mkPos col)
 
+movePos :: AlexPosn -> Char -> AlexPosn
+movePos (AlexPn a l _) '\n' = AlexPn (a + 1) (l + 1) 1
+movePos (AlexPn a l c) '\t' =
+    AlexPn (a + 1) l (c + 8 - ((c - 1) `mod` 8))
+movePos (AlexPn a l c) _    = AlexPn (a + 1) l (c + 1)
+
 advancePos :: AlexPosn -> String -> AlexPosn
-advancePos p [] = p
-advancePos (AlexPn a l _) ('\n':xs) = advancePos (AlexPn (a + 1) (l + 1) 1) xs
-advancePos (AlexPn a l c) (_:xs)    = advancePos (AlexPn (a + 1) l (c + 1)) xs
+advancePos p xs = foldl' movePos p xs
 
 mkTokM :: AlexPosn -> AlexPosn -> String -> TokKind -> Alex Tok
-mkTokM start end txt kind = do
+mkTokM start end txt kind = mkTokText start end (Text.pack txt) kind
+
+mkTokText :: AlexPosn -> AlexPosn -> Text -> TokKind -> Alex Tok
+mkTokText start end txt kind = do
     file <- usFile <$> alexGetUserState
-    return (Tok 0 (posnToSourcePos file start) (posnToSourcePos file end) (Text.pack txt) kind)
+    return (Tok 0 (posnToSourcePos file start) (posnToSourcePos file end) txt kind)
 
 matched :: AlexInput -> Int -> (AlexPosn, String)
 matched (pos, _, _, str) len = (pos, take len str)
 
+-- | End position is whatever Alex already computed; do not re-walk the lexeme.
 emitKind :: TokKind -> AlexInput -> Int -> Alex Tok
 emitKind kind inp len = do
+    after <- alexGetInput
     let (pos, txt) = matched inp len
-        end = advancePos pos txt
+        (end, _, _, _) = after
     mkTokM pos end txt kind
 
 keyword :: TokKind -> AlexInput -> Int -> Alex Tok
@@ -267,21 +271,25 @@ isBuiltin s =
 
 naturalTok :: AlexInput -> Int -> Alex Tok
 naturalTok inp len = do
-    let txt = snd (matched inp len)
+    after <- alexGetInput
+    let (pos, txt) = matched inp len
+        (end, _, _, _) = after
     case parseNatural txt of
         Nothing -> alexError ("invalid natural: " ++ txt)
-        Just n  -> emitKind (TkNatural n) inp len
+        Just n  -> mkTokM pos end txt (TkNatural n)
 
 integerTok :: AlexInput -> Int -> Alex Tok
 integerTok inp len = do
-    let txt = snd (matched inp len)
+    after <- alexGetInput
+    let (pos, txt) = matched inp len
+        (end, _, _, _) = after
         (sign, rest) = case txt of
             '+':xs -> (1, xs)
             '-':xs -> (-1, xs)
             xs     -> (1, xs)
     case parseNatural rest of
         Nothing -> alexError ("invalid integer: " ++ txt)
-        Just n  -> emitKind (TkInteger (sign * fromIntegral n)) inp len
+        Just n  -> mkTokM pos end txt (TkInteger (sign * fromIntegral n))
 
 doubleTok :: AlexInput -> Int -> Alex Tok
 doubleTok inp len = do
@@ -304,17 +312,15 @@ temporalTok inp len =
 
 parseNatural :: String -> Maybe Natural
 parseNatural ('0':'b':rest)
-    | not (null rest) && all (\c -> c == '0' || c == '1') rest =
-        Just (fromIntegral (foldl (\n c -> n * 2 + digitToInt c) 0 rest))
+    | not (null rest) =
+        Just (fromIntegral (foldl (\n c -> n * 2 + toInteger (digitToInt c)) 0 rest))
 parseNatural ('0':'x':rest)
-    | not (null rest) && all isHexDigit rest =
-        case readHex rest of
-            [(n, "")] -> Just (fromIntegral (n :: Integer))
-            _         -> Nothing
+    | not (null rest) =
+        Just (fromIntegral (foldl (\n c -> n * 16 + toInteger (digitToInt c)) 0 rest))
 parseNatural "0" = Just 0
 parseNatural s@(d:rest)
-    | d >= '1' && d <= '9' && all isDigit rest =
-        Just (fromIntegral (read s :: Integer))
+    | d >= '1' && d <= '9' =
+        Just (fromIntegral (foldl (\n c -> n * 10 + toInteger (digitToInt c)) (toInteger (digitToInt d)) rest))
 parseNatural _ = Nothing
 
 parseMatch :: Parser a -> String -> Either String Text
@@ -427,48 +433,30 @@ extendEnv = extendWith Expression.env TkEnv
 extendHash :: AlexInput -> Int -> Alex Tok
 extendHash = extendWith Expression.importHash_ TkHash
 
+-- | Scan a nested block comment in a tight loop.  Alex start-codes would
+-- otherwise produce one action per character (and a million-deep @Alex@ bind).
+takeBlockComment :: String -> Maybe Int
+takeBlockComment = go 0 1
+  where
+    go !n 0 _                   = Just n
+    go !_ !_ []                 = Nothing
+    go !n !d ('{':'-':rest)     = go (n + 2) (d + 1) rest
+    go !n !d ('-':'}':rest)     = go (n + 2) (d - 1) rest
+    go !n !d (_:rest)           = go (n + 1) d rest
+
 beginComment :: AlexInput -> Int -> Alex Tok
 beginComment inp len = do
-    ust <- alexGetUserState
-    let (pos, txt) = matched inp len
-    alexSetUserState ust
-        { usCommentDepth = 1
-        , usCommentBuf   = txt
-        , usCommentPos   = pos
-        }
-    alexSetStartCode comment
-    alexMonadScan
-
-nestComment :: AlexInput -> Int -> Alex Tok
-nestComment inp len = do
-    ust <- alexGetUserState
-    alexSetUserState ust
-        { usCommentDepth = usCommentDepth ust + 1
-        , usCommentBuf   = usCommentBuf ust ++ snd (matched inp len)
-        }
-    alexMonadScan
-
-unnestComment :: AlexInput -> Int -> Alex Tok
-unnestComment inp len = do
-    ust <- alexGetUserState
-    let depth = usCommentDepth ust - 1
-        buf   = usCommentBuf ust ++ snd (matched inp len)
-    if depth <= 0
-        then do
-            alexSetUserState ust { usCommentDepth = 0, usCommentBuf = "" }
-            alexSetStartCode 0
-            let start = usCommentPos ust
-                end   = advancePos start buf
-            mkTokM start end buf (TkTrivia (Text.pack buf))
-        else do
-            alexSetUserState ust { usCommentDepth = depth, usCommentBuf = buf }
-            alexMonadScan
-
-commentChar :: AlexInput -> Int -> Alex Tok
-commentChar inp len = do
-    ust <- alexGetUserState
-    alexSetUserState ust { usCommentBuf = usCommentBuf ust ++ snd (matched inp len) }
-    alexMonadScan
+    let (start, open) = matched inp len
+    after <- alexGetInput
+    let (_, _, _, rest) = after
+    case takeBlockComment rest of
+        Nothing -> alexError "unterminated block comment"
+        Just n  -> do
+            let (body, leftover) = splitAt n rest
+                full = open ++ body
+                end  = advancePos start full
+            alexSetInput (end, '\n', [], leftover)
+            mkTokM start end full (TkTrivia (Text.pack full))
 
 beginDq :: AlexInput -> Int -> Alex Tok
 beginDq inp len = do
@@ -490,9 +478,28 @@ endSq inp len = do
     alexSetStartCode 0
     emitKind TkSQuoteEnd inp len
 
+isDqPlain :: Char -> Bool
+isDqPlain c = c /= '"' && c /= '\x24' && c /= '\\'
+
+isSqPlain :: Char -> Bool
+isSqPlain c = c /= '\'' && c /= '\x24'
+
+-- | Extend an Alex string run in Haskell so a million-character literal is one token.
 strChunk :: AlexInput -> Int -> Alex Tok
-strChunk inp len =
-    emitKind (TkStringChunk (Text.pack (snd (matched inp len)))) inp len
+strChunk inp len = do
+    sc <- alexGetStartCode
+    after <- alexGetInput
+    let (start, prefix) = matched inp len
+        (_, _, _, rest) = after
+        plain = if sc == strSq then isSqPlain else isDqPlain
+        (extra, leftover) =
+            if all plain prefix
+                then span plain rest
+                else ([], rest)
+        full = prefix ++ extra
+        end  = advancePos start full
+    alexSetInput (end, '\n', [], leftover)
+    mkTokM start end full (TkStringChunk (Text.pack full))
 
 interpOpen :: AlexInput -> Int -> Alex Tok
 interpOpen inp len = do
