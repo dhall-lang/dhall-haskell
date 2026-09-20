@@ -108,6 +108,66 @@ errorLocationTests =
             "\"\\latex\""
             "Invalid escape sequence"
         , messageContains
+            "invalid escape in Optional/fold argument"
+            "Optional/fold Text optional Text (\\(text : Text) -> \"\\latexcommand{${text}}\") \"\""
+            "Invalid escape sequence"
+        , messageContains
+            "missing comma in list"
+            "[ \"a\", \"b\", \"c\", t\"d\" ]"
+            "Missing ',' in list literal"
+        , messageContains
+            "missing comma in list argument"
+            "List/length Text [ \"a\", \"b\", \"c\", t\"d\" ]"
+            "Missing ',' in list literal"
+        , messageContains
+            "lambda record pattern is not a label"
+            "\\({ pressed_channel : Integer, played_channel : Integer }) -> 1"
+            "unexpected '{'"
+        , messageContains
+            "lambda record pattern nested in record"
+            "{ a = { b = { c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 } } }"
+            "unexpected '{'"
+        , messageContains
+            "keyword let as nested record label"
+            "{ a = { let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 } }"
+            "quote it as `let`"
+        , messageContains
+            "lambda record pattern inside let in record"
+            "{ a = { x = let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 } }"
+            "unexpected '{'"
+        , messageContains
+            "lambda record pattern inside let"
+            "{ x = let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 }"
+            "unexpected '{'"
+        , messageContains
+            "empty list in record without annotation"
+            "{ a = \"\", b = [] }"
+            "Empty list literal without annotation"
+        , messageContains
+            "bare Some missing argument"
+            "Some"
+            "argument to"
+        , messageContains
+            "merge empty record missing second argument"
+            "merge {=}"
+            "second argument to"
+        , messageContains
+            "#2009 toMap without space in parentheses"
+            "(toMap{bar=\"baz\"})"
+            "expecting expression or whitespace"
+        , messageContains
+            "#2035 missing comma in record completion"
+            "foo bar::{a = 1 b = 2}"
+            "Missing ',' in record literal"
+        , messageContains
+            "invalid escape in record field"
+            "{ a = \"foo\", b = \"\\e\" }"
+            "Invalid escape sequence"
+        , messageContains
+            "lambda missing body at eof"
+            "\\(a : Type) ->"
+            "expecting expression or whitespace"
+        , messageContains
             "missing comma in record"
             "{ x = 1 y = 2 }"
             "Missing ',' in record literal"
