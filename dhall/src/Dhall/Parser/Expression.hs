@@ -1117,7 +1117,7 @@ parsers embedded = Parsers{..}
                     a <- keysValue (Just firstSrc0)
 
                     as <- many $ do
-                        try (_comma *> whitespace <* Text.Megaparsec.lookAhead (void anyLabelOrSome))
+                        try (_comma <* Text.Megaparsec.lookAhead (whitespace *> void anyLabelOrSome))
                         keysValue Nothing
 
                     _ <- optional (whitespace *> _comma)
@@ -1193,7 +1193,8 @@ parsers embedded = Parsers{..}
                     whitespace
 
                     as <- many $ do
-                        try (_comma *> whitespace <* Text.Megaparsec.notFollowedBy _closeBracket)
+                        try (_comma <* Text.Megaparsec.lookAhead
+                            (whitespace *> void (Text.Megaparsec.notFollowedBy _closeBracket)))
                         b <- expression
                         whitespace
                         return b
