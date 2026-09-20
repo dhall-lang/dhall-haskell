@@ -11,6 +11,7 @@ module Dhall.Parser.Token (
     lineCommentPrefix,
     blockComment,
     nonemptyWhitespace,
+    requireWhsp1,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
     ComponentType(..),
@@ -19,6 +20,8 @@ module Dhall.Parser.Token (
     file_,
     label,
     anyLabelOrSome,
+    anyLabelOrSomeOrKeywordHint,
+    bareKeyword,
     anyLabel,
     labels,
     httpRaw,
@@ -132,7 +135,7 @@ import Dhall.Parser.Combinators
 
 import Control.Applicative     (Alternative (..), optional)
 import Data.Bits               ((.&.))
-import Data.Functor            (void, ($>))
+import Data.Functor            (void)
 import Data.Text               (Text)
 import Data.Word               (Word8)
 import Dhall.Syntax
@@ -182,6 +185,15 @@ whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
 -}
 nonemptyWhitespace :: Parser ()
 nonemptyWhitespace = Text.Parser.Combinators.skipSome whitespaceChunk
+
+{-| Parse 1 or more whitespace characters, or fail with a dedicated message.
+
+    This is used after tokens such as @:@ where the standard requires @whsp1@
+    and a missing space is a common mistake.
+-}
+requireWhsp1 :: String -> Parser ()
+requireWhsp1 after =
+    nonemptyWhitespace <|> fail ("Whitespace is required after " <> after)
 
 alpha :: Char -> Bool
 alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
@@ -300,9 +312,13 @@ naturalLiteral = (zeroPrefixed <|> nonZeroDecimal) <?> "literal"
   where
     zeroPrefixed = do
         _ <- char '0'
-        binary <|> hexadecimal <|> nonDigitAfterZero
+        binary <|> hexadecimal <|> afterZero
 
-    nonDigitAfterZero = Text.Megaparsec.notFollowedBy (Text.Parser.Char.satisfy digit) $> 0
+    afterZero = do
+        extra <- Dhall.Parser.Combinators.takeWhile digit
+        if Data.Text.null extra
+            then pure 0
+            else fail "Natural literals cannot have leading zeros"
     binary = char 'b' >> Text.Megaparsec.Char.Lexer.binary
     hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
     nonZeroDecimal = do
@@ -549,19 +565,25 @@ labels = do
 
     whitespace
 
+    _ <- optional (_comma *> whitespace)
+
     nonEmptyLabels <|> emptyLabels
   where
     emptyLabels = do
-        try (optional (_comma *> whitespace) *> _closeBrace)
+        _closeBrace
 
         pure []
 
     nonEmptyLabels = do
-        x  <- try (optional (_comma *> whitespace) *> anyLabelOrSome)
+        x <- anyLabelOrSomeOrKeywordHint
 
         whitespace
 
-        xs <- many (try (_comma *> whitespace *> anyLabelOrSome) <* whitespace)
+        xs <- many $ do
+            try (_comma *> whitespace <* Text.Megaparsec.notFollowedBy _closeBrace)
+            l <- anyLabelOrSomeOrKeywordHint
+            whitespace
+            return l
 
         _ <- optional (_comma *> whitespace)
 
@@ -594,6 +616,30 @@ anyLabel = (do
 
 anyLabelOrSome :: Parser Text
 anyLabelOrSome = try anyLabel <|> ("Some" <$ _Some)
+
+-- | A reserved keyword parsed as a simple label (not backtick-quoted).
+bareKeyword :: Parser Text
+bareKeyword = try $ do
+    c    <- Text.Parser.Char.satisfy headCharacter
+    rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
+    let t = Data.Text.cons c rest
+    Monad.guard (t `Data.HashSet.member` reservedKeywords)
+    return t
+
+-- | Like `anyLabelOrSome`, but if the next token is a bare keyword then fail
+-- with a hint to quote it (e.g. @{ assert = 1 }@ → @`assert`@).
+anyLabelOrSomeOrKeywordHint :: Parser Text
+anyLabelOrSomeOrKeywordHint = anyLabelOrSome <|> failBareKeywordAsLabel
+  where
+    failBareKeywordAsLabel = do
+        name <- bareKeyword
+        fail
+            (  "Keyword "
+            <> Data.Text.unpack name
+            <> " cannot be used as a label; quote it as `"
+            <> Data.Text.unpack name
+            <> "`"
+            )
 
 {-| Parse a valid Bash environment variable name
 

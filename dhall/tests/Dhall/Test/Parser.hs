@@ -12,6 +12,7 @@ import qualified Control.Monad        as Monad
 import qualified Data.Bifunctor       as Bifunctor
 import qualified Data.ByteString      as ByteString
 import qualified Data.ByteString.Lazy as ByteString.Lazy
+import qualified Data.List            as List
 import qualified Data.Text            as Text
 import qualified Data.Text.Encoding   as Text.Encoding
 import qualified Data.Text.IO         as Text.IO
@@ -67,7 +68,247 @@ getTests = do
 internalTests :: TestTree
 internalTests =
     Tasty.testGroup "internal"
-        [ notesInLetInLet ]
+        [ notesInLetInLet
+        , errorLocationTests
+        ]
+
+errorLocationTests :: TestTree
+errorLocationTests =
+    Tasty.testGroup "error locations and hints"
+        [ failsAtInnerMistake
+            "#1592 application of malformed lambda"
+            "a (\\(x:Natural) -> x)"
+            ["unexpected '('"]
+        , failsAtInnerMistake
+            "#1592 list of malformed lambda"
+            "[ \\(x:Natural) -> x ]"
+            ["unexpected '['"]
+        , failsAtInnerMistake
+            "#2009 toMap without space"
+            "foo (toMap{bar=\"baz\"})"
+            ["unexpected '('"]
+        , failsAtInnerMistake
+            "#2605 leading zero in nested record"
+            "[ { x = { y = 13 } }, { x = { y = 07 } }]"
+            ["unexpected '{'"]
+        , messageContains
+            "#2605 leading zero message"
+            "[ { x = { y = 13 } }, { x = { y = 07 } }]"
+            "Natural literals cannot have leading zeros"
+        , messageContains
+            "leading zero in list message"
+            "[07]"
+            "Natural literals cannot have leading zeros"
+        , messageContains
+            "lambda missing space after ':'"
+            "\\(x:Natural) -> x"
+            "Whitespace is required after :"
+        , messageContains
+            "invalid escape sequence"
+            "\"\\latex\""
+            "Invalid escape sequence"
+        , messageContains
+            "invalid escape in Optional/fold argument"
+            "Optional/fold Text optional Text (\\(text : Text) -> \"\\latexcommand{${text}}\") \"\""
+            "Invalid escape sequence"
+        , messageContains
+            "missing comma in list"
+            "[ \"a\", \"b\", \"c\", t\"d\" ]"
+            "Missing ',' in list literal"
+        , messageContains
+            "missing comma in list argument"
+            "List/length Text [ \"a\", \"b\", \"c\", t\"d\" ]"
+            "Missing ',' in list literal"
+        , messageContains
+            "lambda record pattern is not a label"
+            "\\({ pressed_channel : Integer, played_channel : Integer }) -> 1"
+            "not a record pattern"
+        , messageContains
+            "lambda record pattern nested in record"
+            "{ a = { b = { c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 } } }"
+            "not a record pattern"
+        , messageContains
+            "keyword let as nested record label"
+            "{ a = { let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 } }"
+            "quote it as `let`"
+        , messageContains
+            "lambda record pattern inside let in record"
+            "{ a = { x = let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 } }"
+            "not a record pattern"
+        , messageContains
+            "lambda record pattern inside let"
+            "{ x = let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 }"
+            "not a record pattern"
+        , messageContains
+            "empty list in record without annotation"
+            "{ a = \"\", b = [] }"
+            "Empty list literal without annotation"
+        , messageContains
+            "bare Some missing argument"
+            "Some"
+            "argument to"
+        , messageContains
+            "merge empty record missing second argument"
+            "merge {=}"
+            "second argument to"
+        , messageContains
+            "#2009 toMap without space in parentheses"
+            "(toMap{bar=\"baz\"})"
+            "expecting expression or whitespace"
+        , messageContains
+            "#2035 missing comma in record completion"
+            "foo bar::{a = 1 b = 2}"
+            "Missing ',' in record literal"
+        , messageContains
+            "invalid escape in record field"
+            "{ a = \"foo\", b = \"\\e\" }"
+            "Invalid escape sequence"
+        , messageContains
+            "lambda missing body at eof"
+            "\\(a : Type) ->"
+            "expecting expression or whitespace"
+        , messageContains
+            "missing comma in record"
+            "{ x = 1 y = 2 }"
+            "Missing ',' in record literal"
+        , messageContains
+            "#2265 extra comma in record"
+            "{ a = \"a\", b = { a = \"foo\",, } }"
+            "Unexpected extra ',' in record literal"
+        , failsAtInnerMistake
+            "#2265 extra comma does not blame the outer field"
+            "{ a = \"a\", b = { a = \"foo\",, } }"
+            ["unexpected 'b'", "Missing ','"]
+        , messageContains
+            "#2402 assert field in record"
+            "{ assert = 1 }"
+            "quote it as `assert`"
+        , messageContains
+            "#2403 if field in record"
+            "{ if = True }"
+            "quote it as `if`"
+        , messageContains
+            "#2402 keyword field after comma"
+            "{ a = 1, assert = 2 }"
+            "quote it as `assert`"
+        , quotedKeywordLabelParses
+        , messageContains
+            "#1654 annotating Some like a type"
+            "Some : Bool -> Optional Bool"
+            "Some is a constructor and cannot be annotated like a type"
+        , messageContains
+            "#1655 merge missing second argument"
+            "merge { Foo = True }"
+            "second argument to"
+        , messageContains
+            "#1655 merge missing second argument with newline"
+            "merge { Foo = True }\n"
+            "second argument to"
+        , noFakeEmptyLine
+            "#1655 merge missing second argument does not invent a line"
+            "merge { Foo = True }\n"
+        , messageContains
+            "record type missing space after ':'"
+            "{ x:Natural }"
+            "Whitespace is required after :"
+        , messageContains
+            "annotation missing space after ':'"
+            "x:Natural"
+            "Whitespace is required after :"
+        , noFakeEmptyLine
+            "#2211 eof after newline"
+            "\\(a : Type) -> \n"
+        , failsAtInnerMistake
+            "leading zero in list"
+            "[07]"
+            ["unexpected '['"]
+        , failsAtInnerMistake
+            "#1592 application of malformed number"
+            "a (3f)"
+            ["unexpected '('"]
+        , messageContains
+            "#1592 inner error in parenthesized argument"
+            "a (3f)"
+            "unexpected 'f'"
+        , messageContains
+            "lambda missing binder name before type"
+            "\\(: Type) -> x"
+            "Missing binder variable name"
+        , messageContains
+            "lambda empty binder"
+            "\\() -> x"
+            "Missing binder variable name"
+        , messageContains
+            "forall record pattern is not a binder"
+            "forall ({ a : Type }) -> Type"
+            "not a record pattern"
+        , messageContains
+            "colon instead of equal in record literal"
+            "{ a = 1, b : 2 }"
+            "Record literals use '='"
+        , parsesSuccessfully
+            "record-typed binder"
+            "\\(x : { a : Type }) -> x"
+        , parsesSuccessfully
+            "empty record type"
+            "{ }"
+        ]
+
+quotedKeywordLabelParses :: TestTree
+quotedKeywordLabelParses =
+    parsesSuccessfully "#2403 quoted assert is a valid label" "{ `assert` = 1 }"
+
+parsesSuccessfully :: String -> Text -> TestTree
+parsesSuccessfully name input =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
+            Left err ->
+                Tasty.HUnit.assertFailure (show err)
+            Right _ ->
+                return ()
+
+noFakeEmptyLine :: String -> Text -> TestTree
+noFakeEmptyLine name input =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
+            Right _ ->
+                Tasty.HUnit.assertFailure "Unexpected successful parse"
+            Left err -> do
+                let msg = show err
+                Tasty.HUnit.assertBool
+                    ("Parse error should not invent an empty line:\n" <> msg)
+                    (not ("<empty line>" `List.isInfixOf` msg))
+
+failsAtInnerMistake :: String -> Text -> [String] -> TestTree
+failsAtInnerMistake name input bannedSubstrings =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
+            Right _ ->
+                Tasty.HUnit.assertFailure "Unexpected successful parse"
+            Left err -> do
+                let msg = show err
+                Monad.forM_ bannedSubstrings $ \banned ->
+                    Tasty.HUnit.assertBool
+                        ("Parse error should not blame the outer construct with "
+                            <> show banned
+                            <> ":\n"
+                            <> msg)
+                        (not (banned `List.isInfixOf` msg))
+
+messageContains :: String -> Text -> String -> TestTree
+messageContains name input expected =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
+            Right _ ->
+                Tasty.HUnit.assertFailure "Unexpected successful parse"
+            Left err -> do
+                let msg = show err
+                Tasty.HUnit.assertBool
+                    ("Expected parse error to contain "
+                        <> show expected
+                        <> ":\n"
+                        <> msg)
+                    (expected `List.isInfixOf` msg)
 
 notesInLetInLet :: TestTree
 notesInLetInLet =
