@@ -108,8 +108,8 @@ stack bench evaluation --ba '--pattern substitutions.composer_proxy.many_imports
 stack bench evaluation --ba '--pattern substitutions.shift_cost'
 ```
 
-CLI wall-clock of the same four pipelines, **without** Haskell substitutions,
-from this directory (`./run.sh`):
+CLI wall-clock of the same four pipelines, **without** Haskell substitutions
+(`./run.sh` from this directory, or from the repository root):
 
 - nested-let `pipeline-code.dhall`
 - many-files tree generated into a temp directory (not checked in)

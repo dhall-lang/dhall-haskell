@@ -12,10 +12,12 @@
 #
 # Each timed run uses a fresh XDG_CACHE_HOME (Mode B analogue).
 #
-# Run from this directory, or via ./run.sh from elsewhere.
+# Runnable from any directory.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
+cd "${HERE}"
+DHALL="${DHALL:-dhall}"
 # Keep in sync with manyFilesModuleCount in evaluation/Main.hs.
 MANY_FILES_MODULE_COUNT=200
 
@@ -30,7 +32,7 @@ time_dhall() {
     echo "=== ${label}: dhall --file ${file} (fresh XDG_CACHE_HOME) ==="
     (
         export XDG_CACHE_HOME="${cache}"
-        time dhall --file "${file}" > /dev/null
+        time "${DHALL}" --file "${file}" > /dev/null
     )
     rm -rf "${cache}"
     echo
