@@ -580,7 +580,8 @@ parsers embedded = Parsers{..}
                     return (\b -> Merge a b Nothing, Just "second argument to ❰merge❱")
 
             let alternative1 = do
-                    try (_Some *> nonemptyWhitespace)
+                    -- Also commit at EOF so a bare `Some` reports a missing argument.
+                    try (_Some *> (nonemptyWhitespace <|> Text.Megaparsec.eof))
                     colonNext <-
                             (True <$ Text.Megaparsec.lookAhead _colon)
                         <|> pure False
