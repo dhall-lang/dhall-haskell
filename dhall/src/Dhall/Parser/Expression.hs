@@ -307,9 +307,12 @@ parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers{..}
   where
     expectClose closer extraMsg missingMsg = do
-        void (Text.Megaparsec.lookAhead closer)
-            <|> (void (Text.Megaparsec.lookAhead _comma) *> fail extraMsg)
-            <|> fail missingMsg
+        atClose <- (True <$ Text.Megaparsec.lookAhead closer) <|> pure False
+        atComma <- (True <$ Text.Megaparsec.lookAhead _comma) <|> pure False
+        case (atClose, atComma) of
+            (True, _) -> return ()
+            (_, True) -> fail extraMsg
+            _         -> fail missingMsg
 
     expectCloseBrace extraMsg missingMsg =
         expectClose _closeBrace extraMsg missingMsg
