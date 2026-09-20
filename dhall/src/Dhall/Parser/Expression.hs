@@ -1193,8 +1193,7 @@ parsers embedded = Parsers{..}
                     whitespace
 
                     as <- many $ do
-                        try (_comma <* Text.Megaparsec.lookAhead
-                            (whitespace *> void (Text.Megaparsec.notFollowedBy _closeBracket)))
+                        try (_comma *> whitespace <* Text.Megaparsec.notFollowedBy _closeBracket)
                         b <- expression
                         whitespace
                         return b
