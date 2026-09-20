@@ -104,6 +104,14 @@ errorLocationTests =
             "{ x = 1 y = 2 }"
             "Missing ',' in record literal"
         , messageContains
+            "#2265 extra comma in record"
+            "{ a = \"a\", b = { a = \"foo\",, } }"
+            "Unexpected extra ',' in record literal"
+        , failsAtInnerMistake
+            "#2265 extra comma does not blame the outer field"
+            "{ a = \"a\", b = { a = \"foo\",, } }"
+            ["unexpected 'b'"]
+        , messageContains
             "record type missing space after ':'"
             "{ x:Natural }"
             "Whitespace is required after :"

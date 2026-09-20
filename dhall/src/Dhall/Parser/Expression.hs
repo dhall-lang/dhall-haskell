@@ -306,6 +306,14 @@ peekSelectorStart =
 parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers{..}
   where
+    expectClose closer extraMsg missingMsg = do
+        void (Text.Megaparsec.lookAhead closer)
+            <|> (void (Text.Megaparsec.lookAhead _comma) *> fail extraMsg)
+            <|> fail missingMsg
+
+    expectCloseBrace extraMsg missingMsg =
+        expectClose _closeBrace extraMsg missingMsg
+
     completeExpression_ =
             whitespace
         *>  expression
@@ -1067,8 +1075,9 @@ parsers embedded = Parsers{..}
                     _ <- optional (whitespace *> _comma)
                     whitespace
 
-                    (void (Text.Megaparsec.lookAhead _closeBrace)
-                        <|> fail "Missing ',' in record type")
+                    expectCloseBrace
+                        "Unexpected extra ',' in record type"
+                        "Missing ',' in record type"
 
                     m <- toMap ((a, RecordField (Just firstSrc0) b (Just firstKeySrc1) (Just firstKeySrc2)) : e)
 
@@ -1124,8 +1133,9 @@ parsers embedded = Parsers{..}
 
                     whitespace
 
-                    (void (Text.Megaparsec.lookAhead _closeBrace)
-                        <|> fail "Missing ',' in record literal")
+                    expectCloseBrace
+                        "Unexpected extra ',' in record literal"
+                        "Missing ',' in record literal"
 
                     let combine k = liftA2 $ \rf rf' -> makeRecordField $ Combine mempty (Just k)
                                                             (recordFieldValue rf')
@@ -1200,8 +1210,10 @@ parsers embedded = Parsers{..}
 
                     _ <- optional (_comma *> whitespace)
 
-                    (void (Text.Megaparsec.lookAhead _closeBracket)
-                        <|> fail "Missing ',' in list literal")
+                    expectClose
+                        _closeBracket
+                        "Unexpected extra ',' in list literal"
+                        "Missing ',' in list literal"
 
                     _closeBracket
 
