@@ -575,9 +575,8 @@ parsers embedded = Parsers{..}
     applicationExpressionWithInfo = do
             let alternative0 = do
                     try (_merge *> nonemptyWhitespace)
-
-                    a <- importExpression_ <* nonemptyWhitespace
-
+                    a <- importExpression_
+                            <* (nonemptyWhitespace <?> "second argument to ❰merge❱")
                     return (\b -> Merge a b Nothing, Just "second argument to ❰merge❱")
 
             let alternative1 = do

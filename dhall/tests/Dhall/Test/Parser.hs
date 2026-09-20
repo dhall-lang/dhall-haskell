@@ -129,6 +129,17 @@ errorLocationTests =
             "Some : Bool -> Optional Bool"
             "Some is a constructor and cannot be annotated like a type"
         , messageContains
+            "#1655 merge missing second argument"
+            "merge { Foo = True }"
+            "second argument to"
+        , messageContains
+            "#1655 merge missing second argument with newline"
+            "merge { Foo = True }\n"
+            "second argument to"
+        , noFakeEmptyLine
+            "#1655 merge missing second argument does not invent a line"
+            "merge { Foo = True }\n"
+        , messageContains
             "record type missing space after ':'"
             "{ x:Natural }"
             "Whitespace is required after :"
