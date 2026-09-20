@@ -23,12 +23,22 @@ Pattern matching is infix (tasty default): `--pattern slow_walk` matches
 ## CLI timings (`run.sh`)
 
 Each fixture directory has a `run.sh` that times a plain `dhall --file …`
-(or, for `k8s/`, `dhall` on the `.mkPod` expression). Run it from that
-subdirectory. This is a full CLI evaluate (parse + resolve + typecheck +
-normalize), not a Mode A phase split.
+(or, for `k8s/`, `dhall` on the `.mkPod` expression). Scripts locate their
+own directory, so they can be run from the repository root. Set `DHALL` to
+override the executable (default: `dhall` on `PATH`). This is a full CLI
+evaluate (parse + resolve + typecheck + normalize), not a Mode A phase split.
 
 ```sh
-cd dhall/benchmark/evaluation/large5 && ./run.sh
+./dhall/benchmark/evaluation/large5/run.sh
+DHALL=/path/to/dhall ./dhall/benchmark/evaluation/k8s/run.sh
+```
+
+To run every `run.sh` and write `evaluation-results-<short-hash>.csv` (one
+end-to-end sample per CLI invocation):
+
+```sh
+# Edit DHALL at the top of the script, or override it:
+DHALL=/path/to/dhall ./run_cli_evaluation_benchmarks.sh
 ```
 
 `substitutions/run.sh` times the nested-let pipelines and a temp-generated
