@@ -323,7 +323,10 @@ naturalLiteral = (zeroPrefixed <|> nonZeroDecimal) <?> "literal"
     hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
     nonZeroDecimal = do
         _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
-        Text.Megaparsec.Char.Lexer.decimal
+        digits <- Dhall.Parser.Combinators.takeWhile1 digit
+        return (Data.Text.foldl' snoc 0 digits)
+
+    snoc n c = n * 10 + fromIntegral (Char.digitToInt c)
 
 {-| Parse a 4-digit year
 
