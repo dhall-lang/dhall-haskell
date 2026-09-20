@@ -128,13 +128,13 @@ instance Megaparsec.TraversableStream TokenStream where
             (t:_) -> tokStart t
             []    -> pstateSourcePos
 
--- | Slice the original source covered by a non-empty token list.
+-- | Source text for a matched token list.
+--
+-- We concatenate lexeme texts rather than slicing the original input: a slice
+-- can retain the entire source buffer and makes @nf@ over large files costly.
 tokensText :: TokenStream -> [Tok] -> Text
 tokensText _ [] = ""
-tokensText (TokenStream src _) toks =
-    let t0 = head toks
-        t1 = last toks
-    in  Text.take (tokEndOff t1 - tokOff t0) (Text.drop (tokOff t0) src)
+tokensText _ toks = mconcat (map tokText toks)
 
 -- | Lex @Text@ into a token stream.  Positions use @file@ as the source name.
 lexText :: String -> Text -> Either LexError TokenStream
