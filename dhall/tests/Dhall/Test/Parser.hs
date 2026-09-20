@@ -122,11 +122,11 @@ errorLocationTests =
         , messageContains
             "lambda record pattern is not a label"
             "\\({ pressed_channel : Integer, played_channel : Integer }) -> 1"
-            "unexpected '{'"
+            "not a record pattern"
         , messageContains
             "lambda record pattern nested in record"
             "{ a = { b = { c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 } } }"
-            "unexpected '{'"
+            "not a record pattern"
         , messageContains
             "keyword let as nested record label"
             "{ a = { let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 } }"
@@ -134,11 +134,11 @@ errorLocationTests =
         , messageContains
             "lambda record pattern inside let in record"
             "{ a = { x = let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 } }"
-            "unexpected '{'"
+            "not a record pattern"
         , messageContains
             "lambda record pattern inside let"
             "{ x = let b = ({ c = let mkIntervals = \\({ pressed_channel : Integer, played_channel : Integer  }) -> 1 in 2 }) in 0 }"
-            "unexpected '{'"
+            "not a record pattern"
         , messageContains
             "empty list in record without annotation"
             "{ a = \"\", b = [] }"
@@ -222,12 +222,46 @@ errorLocationTests =
             "leading zero in list"
             "[07]"
             ["unexpected '['"]
+        , failsAtInnerMistake
+            "#1592 application of malformed number"
+            "a (3f)"
+            ["unexpected '('"]
+        , messageContains
+            "#1592 inner error in parenthesized argument"
+            "a (3f)"
+            "unexpected 'f'"
+        , messageContains
+            "lambda missing binder name before type"
+            "\\(: Type) -> x"
+            "Missing binder variable name"
+        , messageContains
+            "lambda empty binder"
+            "\\() -> x"
+            "Missing binder variable name"
+        , messageContains
+            "forall record pattern is not a binder"
+            "forall ({ a : Type }) -> Type"
+            "not a record pattern"
+        , messageContains
+            "colon instead of equal in record literal"
+            "{ a = 1, b : 2 }"
+            "Record literals use '='"
+        , parsesSuccessfully
+            "record-typed binder"
+            "\\(x : { a : Type }) -> x"
+        , parsesSuccessfully
+            "empty record type"
+            "{ }"
         ]
 
 quotedKeywordLabelParses :: TestTree
 quotedKeywordLabelParses =
-    Tasty.HUnit.testCase "#2403 quoted assert is a valid label" $ do
-        case Parser.exprFromText "quoted assert" "{ `assert` = 1 }" of
+    parsesSuccessfully "#2403 quoted assert is a valid label" "{ `assert` = 1 }"
+
+parsesSuccessfully :: String -> Text -> TestTree
+parsesSuccessfully name input =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
             Left err ->
                 Tasty.HUnit.assertFailure (show err)
             Right _ ->

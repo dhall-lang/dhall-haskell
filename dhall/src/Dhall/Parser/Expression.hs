@@ -363,18 +363,31 @@ parsers embedded = Parsers{..}
                 ]
             ) <?> "expression"
       where
-        alternative0 = do
-            cs <- _lambda
-            whitespace
-            _openParens
+        typedBinder = do
             src0 <- src whitespace
-            a <- label
+            atRecord <- (True <$ Text.Megaparsec.lookAhead _openBrace) <|> pure False
+            Control.Monad.when atRecord $
+                fail "Binders require a variable name before the type, not a record pattern"
+            atColon <- (True <$ Text.Megaparsec.lookAhead _colon) <|> pure False
+            Control.Monad.when atColon $
+                fail "Missing binder variable name"
+            atClose <- (True <$ Text.Megaparsec.lookAhead _closeParens) <|> pure False
+            Control.Monad.when atClose $
+                fail "Missing binder variable name"
+            a <- label <?> "binder variable name"
             src1 <- src whitespace
-            _colon
+            _colon <?> "':' in binder"
             src2 <- src (requireWhsp1 ":")
             b <- expression
             whitespace
             _closeParens
+            return (src0, a, src1, src2, b)
+
+        alternative0 = do
+            cs <- _lambda
+            whitespace
+            _openParens
+            (src0, a, src1, src2, b) <- typedBinder
             whitespace
             cs' <- _arrow
             whitespace
@@ -420,14 +433,7 @@ parsers embedded = Parsers{..}
 
         alternative3 = do
             cs <- try (_forall <* whitespace <* _openParens)
-            whitespace
-            a <- label
-            whitespace
-            _colon
-            requireWhsp1 ":"
-            b <- expression
-            whitespace
-            _closeParens
+            (_, a, _, _, b) <- typedBinder
             whitespace
             cs' <- _arrow
             whitespace
@@ -1046,7 +1052,7 @@ parsers embedded = Parsers{..}
         whitespace
         return (RecordLit mempty)
 
-    emptyRecordType = return (Record mempty)
+    emptyRecordType = Text.Megaparsec.lookAhead _closeBrace *> return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
@@ -1112,7 +1118,7 @@ parsers embedded = Parsers{..}
 
                             lastSrc2 <- src whitespace
 
-                            value <- expression
+                            value <- expression <?> "record field value"
 
                             let cons (s0, key, s1) (key', values) =
                                     (key, RecordField (Just s0) (RecordLit [ (key', values) ]) (Just s1) Nothing)
@@ -1126,6 +1132,10 @@ parsers embedded = Parsers{..}
                             case keys of
                                 (s0, x, s1) :| [] -> return (x, RecordField (Just s0) (Var (V x 0)) (Just s1) Nothing)
                                 _       -> empty
+
+                    atColon <- (True <$ Text.Megaparsec.lookAhead _colon) <|> pure False
+                    Control.Monad.when atColon $
+                        fail "Record literals use '=' for field values, not ':'; ':' starts a record type"
 
                     (normalRecordEntry <|> punnedEntry) <* whitespace
 
