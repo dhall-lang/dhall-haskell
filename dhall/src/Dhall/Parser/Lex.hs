@@ -135,11 +135,12 @@ lexText file text =
         ust <- alexGetUserState
         alexSetUserState ust { usFile = file }
         go
-    go = do
+    go = collect []
+    collect acc = do
         tok <- alexMonadScan
         case tokKind tok of
-            TkEOF -> return []
-            _     -> (tok :) <$> go
+            TkEOF -> return (reverse acc)
+            _     -> collect (tok : acc)
 
     assignOffsets !_ [] = []
     assignOffsets !o (t:ts) =
