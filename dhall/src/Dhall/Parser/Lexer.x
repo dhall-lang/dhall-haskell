@@ -35,7 +35,7 @@ import qualified Dhall.Parser.Token      as Token
 import qualified Text.Megaparsec
 }
 
-%wrapper "monadUserState"
+%wrapper "monadUserState-strict-text"
 %encoding "utf8"
 
 $digit    = [0-9]
@@ -45,9 +45,8 @@ $ident0   = [A-Za-z_]
 $ident1   = [A-Za-z0-9_\x2D\x2F]
 $dqplain  = [^\x22\x24\x5C]
 $sqplain  = [^\x27\x24]
-
 @ident    = $ident0 $ident1*
-@natural  = "0b" $bindig+ | "0x" $hexdig+ | [1-9] $digit* | 0
+@natural  = [1-9] $digit* | 0
 @integer  = [\+\-] @natural
 @exp      = [eE] [\+\-]? $digit+
 @double   = [\+\-]? $digit+ ("." $digit+ @exp? | @exp)
@@ -58,118 +57,122 @@ $sqplain  = [^\x27\x24]
 
 tokens :-
 
-<0>  $white+                          { trivia }
-<0>  \r\n                             { trivia }
-<0>  "--" [^\n]* \n                   { trivia }
-<0>  "--" [^\n]* \r\n                 { trivia }
-<0>  "--" [^\n]*                      { trivia }
-<0>  "{-"                             { beginComment }
+<0>  $white+                             { trivia }
+<0>  \r\n                               { trivia }
+<0>  "--" [^\n]* \n                     { trivia }
+<0>  "--" [^\n]* \r\n                   { trivia }
+<0>  "--" [^\n]*                        { trivia }
+<0>  "{-"                               { beginComment }
 
-<0>  "#!" [^\n]* \n                   { shebang }
-<0>  "#!" [^\n]* \r\n                 { shebang }
+<0>  "#!" [^\n]* \n                     { shebang }
+<0>  "#!" [^\n]* \r\n                   { shebang }
 
-<0>  "if"                             { keyword TkIf }
-<0>  "then"                           { keyword TkThen }
-<0>  "else"                           { keyword TkElse }
-<0>  "let"                            { keyword TkLet }
-<0>  "in"                             { keyword TkIn }
-<0>  "as"                             { keyword TkAs }
-<0>  "using"                          { keyword TkUsing }
-<0>  "merge"                          { keyword TkMerge }
-<0>  "toMap"                          { keyword TkToMap }
-<0>  "showConstructor"                { keyword TkShowConstructor }
-<0>  "assert"                         { keyword TkAssert }
-<0>  "with"                           { keyword TkWith }
-<0>  "Some"                           { keyword TkSome }
-<0>  "missing"                        { keyword TkMissing }
-<0>  "forall"                         { keyword (TkForall ASCII) }
-<0>  ∀                                { keyword (TkForall Unicode) }
-<0>  "Infinity"                       { emitKind (TkInfinity False) }
-<0>  "+Infinity"                      { emitKind (TkInfinity False) }
-<0>  "-Infinity"                      { emitKind (TkInfinity True) }
-<0>  "NaN"                            { emitKind TkNaN }
+<0>  "if"                               { keyword TkIf }
+<0>  "then"                             { keyword TkThen }
+<0>  "else"                             { keyword TkElse }
+<0>  "let"                              { keyword TkLet }
+<0>  "in"                               { keyword TkIn }
+<0>  "as"                               { keyword TkAs }
+<0>  "using"                            { keyword TkUsing }
+<0>  "merge"                            { keyword TkMerge }
+<0>  "toMap"                            { keyword TkToMap }
+<0>  "showConstructor"                  { keyword TkShowConstructor }
+<0>  "assert"                           { keyword TkAssert }
+<0>  "with"                             { keyword TkWith }
+<0>  "Some"                             { keyword TkSome }
+<0>  "missing"                          { keyword TkMissing }
+<0>  "forall"                           { keyword (TkForall ASCII) }
+<0>  ∀                                  { keyword (TkForall Unicode) }
+<0>  "Infinity"                         { emitKind (TkInfinity False) }
+<0>  "+Infinity"                        { emitKind (TkInfinity False) }
+<0>  "-Infinity"                        { emitKind (TkInfinity True) }
+<0>  "NaN"                              { emitKind TkNaN }
 
-<0>  "||"                             { emitKind TkOr }
-<0>  "&&"                             { emitKind TkAnd }
-<0>  "++"                             { emitKind TkTextAppend }
-<0>  "//"                             { slashSlashTok }
-<0>  "/"                              { slashTok }
-<0>  "==="                            { emitKind (TkEquiv ASCII) }
-<0>  "=="                             { emitKind TkEQ }
-<0>  "!="                             { emitKind TkNE }
-<0>  "->"                             { emitKind (TkArrow ASCII) }
-<0>  "::"                             { emitKind TkDoubleColon }
-<0>  ∧                                { emitKind (TkCombine Unicode) }
-<0>  ⩓                                { emitKind (TkCombineTypes Unicode) }
-<0>  ⫽                                { emitKind (TkPrefer Unicode) }
-<0>  ≡                                { emitKind (TkEquiv Unicode) }
-<0>  →                                { emitKind (TkArrow Unicode) }
-<0>  λ                                { emitKind (TkLambda Unicode) }
-<0>  \\                               { emitKind (TkLambda ASCII) }
+<0>  "||"                               { emitKind TkOr }
+<0>  "&&"                               { emitKind TkAnd }
+<0>  "++"                               { emitKind TkTextAppend }
+<0>  "//"                               { slashSlashTok }
+<0>  "/"                                { slashTok }
+<0>  "==="                              { emitKind (TkEquiv ASCII) }
+<0>  "=="                               { emitKind TkEQ }
+<0>  "!="                               { emitKind TkNE }
+<0>  "->"                               { emitKind (TkArrow ASCII) }
+<0>  "::"                               { emitKind TkDoubleColon }
+<0>  ∧                                  { emitKind (TkCombine Unicode) }
+<0>  ⩓                                  { emitKind (TkCombineTypes Unicode) }
+<0>  ⫽                                  { emitKind (TkPrefer Unicode) }
+<0>  ≡                                  { emitKind (TkEquiv Unicode) }
+<0>  →                                  { emitKind (TkArrow Unicode) }
+<0>  λ                                  { emitKind (TkLambda Unicode) }
+<0>  \\                                 { emitKind (TkLambda ASCII) }
 
-<0>  "+"                              { emitKind TkPlus }
-<0>  "*"                              { emitKind TkTimes }
-<0>  "#"                              { emitKind TkListAppend }
-<0>  "?"                              { emitKind TkImportAlt }
-<0>  "."                              { emitKind TkDot }
-<0>  "="                              { emitKind TkEqual }
-<0>  ":"                              { emitKind TkColon }
-<0>  "@"                              { emitKind TkAt }
-<0>  "{"                              { openBrace }
-<0>  "}"                              { closeBrace }
-<0>  "["                              { emitKind TkBrackL }
-<0>  "]"                              { emitKind TkBrackR }
-<0>  "<"                              { emitKind TkAngleL }
-<0>  ">"                              { emitKind TkAngleR }
-<0>  "("                              { emitKind TkParenL }
-<0>  ")"                              { emitKind TkParenR }
-<0>  "|"                              { emitKind TkBar }
-<0>  ","                              { emitKind TkComma }
+<0>  "+"                                { emitKind TkPlus }
+<0>  "*"                                { emitKind TkTimes }
+<0>  "#"                                { emitKind TkListAppend }
+<0>  "?"                                { emitKind TkImportAlt }
+<0>  "."                                { emitKind TkDot }
+<0>  "="                                { emitKind TkEqual }
+<0>  ":"                                { emitKind TkColon }
+<0>  "@"                                { emitKind TkAt }
+<0>  "{"                                { openBrace }
+<0>  "}"                                { closeBrace }
+<0>  "["                                { emitKind TkBrackL }
+<0>  "]"                                { emitKind TkBrackR }
+<0>  "<"                                { emitKind TkAngleL }
+<0>  ">"                                { emitKind TkAngleR }
+<0>  "("                                { emitKind TkParenL }
+<0>  ")"                                { emitKind TkParenR }
+<0>  "|"                                { emitKind TkBar }
+<0>  ","                                { emitKind TkComma }
 
-<0>  ` [^`]* `                        { quotedLabel }
-<0>  \"                               { beginDq }
-<0>  "''" \r\n                        { beginSq }
-<0>  "''" \n                          { beginSq }
+<0>  ` [^`]* `                          { quotedLabel }
+<0>  \"                                 { beginDq }
+<0>  "''" \r\n                          { beginSq }
+<0>  "''" \n                            { beginSq }
 
-<0>  "env:"                           { extendEnv }
-<0>  "http://"                        { extendHttp }
-<0>  "https://"                       { extendHttp }
-<0>  "sha256:"                        { extendHash }
-<0>  "../"                            { extendPath }
-<0>  "./"                             { extendPath }
-<0>  "~/"                             { extendPath }
+<0>  "env:"                             { extendEnv }
+<0>  "http://"                          { extendHttp }
+<0>  "https://"                         { extendHttp }
+<0>  "sha256:"                          { extendHash }
+<0>  "../"                              { extendPath }
+<0>  "./"                               { extendPath }
+<0>  "~/"                               { extendPath }
 
-<0>  @date T @time (@tzh | Z | z)?    { temporalTok }
-<0>  @date t @time (@tzh | Z | z)?    { temporalTok }
-<0>  @time @tzh                       { temporalTok }
-<0>  @date                            { temporalTok }
-<0>  @time                            { temporalTok }
-<0>  @time (Z | z)                     { temporalTok }
-<0>  @tzh                             { temporalTok }
+<0>  @date T @time (@tzh | Z | z)?      { temporalTok }
+<0>  @date t @time (@tzh | Z | z)?      { temporalTok }
+<0>  @time @tzh                         { temporalTok }
+<0>  @date                              { temporalTok }
+<0>  @time                              { temporalTok }
+<0>  @time (Z | z)                       { temporalTok }
+<0>  @tzh                               { temporalTok }
 
-<0>  @bytes                           { bytesTok }
-<0>  @double                          { doubleTok }
-<0>  @integer                         { integerTok }
-<0>  @natural                         { naturalTok }
-<0>  @ident                           { identTok }
+<0>  @bytes                             { bytesTok }
+<0>  @double                            { doubleTok }
+<0>  [\+\-] "0x" $hexdig                 { signedHexNaturalTok }
+<0>  [\+\-] "0b" $bindig                 { signedBinNaturalTok }
+<0>  @integer                           { integerTok }
+<0>  "0x" $hexdig                       { hexNaturalTok }
+<0>  "0b" $bindig                       { binNaturalTok }
+<0>  @natural                           { naturalTok }
+<0>  @ident                             { identTok }
 
-<strDq> \"                            { endDq }
-<strDq> "${"                          { interpOpen }
-<strDq> \\                            { dqEscape }
-<strDq> $dqplain+                     { strChunk }
-<strDq> \$                            { strChunk }
-<strDq> \n                            { strChunk }
-<strDq> \r                            { strChunk }
+<strDq> \"                              { endDq }
+<strDq> "${"                            { interpOpen }
+<strDq> \\                              { dqEscape }
+<strDq> $dqplain                         { strChunk }
+<strDq> \$                              { strChunk }
+<strDq> \n                              { strChunk }
+<strDq> \r                              { strChunk }
 
-<strSq> "'''"                         { strChunk }
-<strSq> "''${"                        { strChunk }
-<strSq> "${"                          { interpOpen }
-<strSq> "''"                          { endSq }
-<strSq> $sqplain+                     { strChunk }
-<strSq> \$                            { strChunk }
-<strSq> .                             { strChunk }
-<strSq> \n                            { strChunk }
-<strSq> \r                            { strChunk }
+<strSq> "'''"                           { strChunk }
+<strSq> "''${"                          { strChunk }
+<strSq> "${"                            { interpOpen }
+<strSq> "''"                            { endSq }
+<strSq> $sqplain                         { strChunk }
+<strSq> \$                              { strChunk }
+<strSq> .                               { strChunk }
+<strSq> \n                              { strChunk }
+<strSq> \r                              { strChunk }
 
 {
 data AlexUserState = AlexUserState
@@ -195,6 +198,9 @@ alexEOF = do
         _ | sc == strSq   -> alexError "unterminated single-quoted string"
         _                 -> mkTokM pos pos "" TkEOF
 
+alexAddr :: AlexPosn -> Int
+alexAddr (AlexPn a _ _) = a
+
 posnToSourcePos :: String -> AlexPosn -> SourcePos
 posnToSourcePos file (AlexPn _ line col) =
     SourcePos file (mkPos line) (mkPos col)
@@ -205,21 +211,29 @@ movePos (AlexPn a l c) '\t' =
     AlexPn (a + 1) l (c + 8 - ((c - 1) `mod` 8))
 movePos (AlexPn a l c) _    = AlexPn (a + 1) l (c + 1)
 
-advancePos :: AlexPosn -> String -> AlexPosn
-advancePos p xs = foldl' movePos p xs
+advancePosText :: AlexPosn -> Text -> AlexPosn
+advancePosText p t = Text.foldl' movePos p t
 
-mkTokM :: AlexPosn -> AlexPosn -> String -> TokKind -> Alex Tok
-mkTokM start end txt kind = mkTokText start end (Text.pack txt) kind
+matched :: AlexInput -> Int -> (AlexPosn, Text)
+matched (pos, _, _, str) len = (pos, Text.take len str)
+
+mkTokM :: AlexPosn -> AlexPosn -> Text -> TokKind -> Alex Tok
+mkTokM start end txt kind = mkTokText start end txt kind
 
 mkTokText :: AlexPosn -> AlexPosn -> Text -> TokKind -> Alex Tok
 mkTokText start end txt kind = do
     file <- usFile <$> alexGetUserState
-    return (Tok 0 (posnToSourcePos file start) (posnToSourcePos file end) txt kind)
+    return
+        ( Tok
+            { tokOff    = alexAddr start
+            , tokEndOff = alexAddr end
+            , tokStart  = posnToSourcePos file start
+            , tokEnd    = posnToSourcePos file end
+            , tokText   = txt
+            , tokKind   = kind
+            }
+        )
 
-matched :: AlexInput -> Int -> (AlexPosn, String)
-matched (pos, _, _, str) len = (pos, take len str)
-
--- | End position is whatever Alex already computed; do not re-walk the lexeme.
 emitKind :: TokKind -> AlexInput -> Int -> Alex Tok
 emitKind kind inp len = do
     after <- alexGetInput
@@ -231,34 +245,45 @@ keyword :: TokKind -> AlexInput -> Int -> Alex Tok
 keyword = emitKind
 
 trivia :: AlexInput -> Int -> Alex Tok
-trivia inp len = emitKind (TkTrivia (Text.pack (snd (matched inp len)))) inp len
+trivia inp len = emitKind TkTrivia inp len
+
+extendRun :: AlexInput -> Int -> (Char -> Bool) -> TokKind -> Alex Tok
+extendRun inp len isPlain kind = do
+    after <- alexGetInput
+    let (start, prefix) = matched inp len
+        (_, _, _, rest) = after
+        (extra, leftover) =
+            if Text.all isPlain prefix
+                then Text.span isPlain rest
+                else ("", rest)
+        full = prefix <> extra
+        end  = advancePosText start full
+    alexSetInput (end, '\n', [], leftover)
+    mkTokM start end full kind
 
 shebang :: AlexInput -> Int -> Alex Tok
 shebang inp len = do
-    let (pos@(AlexPn _ _ col), txt) = matched inp len
+    let (pos@(AlexPn _ _ col), _) = matched inp len
     if col == 1
-        then emitKind (TkShebang (Text.pack txt)) inp len
+        then emitKind TkShebang inp len
         else alexError "unexpected shebang"
 
 quotedLabel :: AlexInput -> Int -> Alex Tok
-quotedLabel inp len = do
-    let txt = snd (matched inp len)
-        inner = drop 1 (take (length txt - 1) txt)
-    emitKind (TkQuotedLabel (Text.pack inner)) inp len
+quotedLabel inp len = emitKind TkQuotedLabel inp len
 
 identTok :: AlexInput -> Int -> Alex Tok
 identTok inp len = do
     let txt = snd (matched inp len)
     emitKind (classifyIdent txt) inp len
 
-classifyIdent :: String -> TokKind
-classifyIdent s
-    | isBuiltin s = TkBuiltin (Text.pack s)
-    | otherwise   = TkIdent (Text.pack s)
+classifyIdent :: Text -> TokKind
+classifyIdent txt
+    | isBuiltin txt = TkBuiltin
+    | otherwise     = TkIdent
 
-isBuiltin :: String -> Bool
-isBuiltin s =
-    s `elem`
+isBuiltin :: Text -> Bool
+isBuiltin txt =
+    txt `elem`
         [ "Natural/fold","Natural/build","Natural/isZero","Natural/even"
         , "Natural/odd","Natural/toInteger","Natural/show","Natural/subtract"
         , "Integer","Integer/clamp","Integer/negate","Integer/show","Integer/toDouble"
@@ -274,58 +299,120 @@ naturalTok inp len = do
     after <- alexGetInput
     let (pos, txt) = matched inp len
         (end, _, _, _) = after
-    case parseNatural txt of
-        Nothing -> alexError ("invalid natural: " ++ txt)
+    case parseNaturalText txt of
+        Nothing -> alexError ("invalid natural: " ++ Text.unpack txt)
         Just n  -> mkTokM pos end txt (TkNatural n)
+
+hexNaturalTok :: AlexInput -> Int -> Alex Tok
+hexNaturalTok inp len = prefixedNatural inp len isHexDigit
+
+binNaturalTok :: AlexInput -> Int -> Alex Tok
+binNaturalTok inp len = prefixedNatural inp len isBinDigit
+
+signedHexNaturalTok :: AlexInput -> Int -> Alex Tok
+signedHexNaturalTok inp len = signedPrefixedNatural inp len isHexDigit
+
+signedBinNaturalTok :: AlexInput -> Int -> Alex Tok
+signedBinNaturalTok inp len = signedPrefixedNatural inp len isBinDigit
+
+isBinDigit :: Char -> Bool
+isBinDigit c = c == '0' || c == '1'
+
+signedPrefixedNatural :: AlexInput -> Int -> (Char -> Bool) -> Alex Tok
+signedPrefixedNatural inp len isDigit = do
+    after <- alexGetInput
+    let (start, prefix) = matched inp len
+        (_, _, _, rest) = after
+        (more, leftover) = Text.span isDigit rest
+        full = prefix <> more
+        end  = advancePosText start full
+    alexSetInput (end, '\n', [], leftover)
+    let (sign, unsigned) = case Text.uncons full of
+            Just ('-', xs) -> (-1, xs)
+            Just ('+', xs) -> (1, xs)
+            _              -> (1, full)
+    case parseNaturalText unsigned of
+        Nothing -> alexError ("invalid integer: " ++ Text.unpack full)
+        Just n  -> mkTokM start end full (TkInteger (sign * fromIntegral n))
+
+prefixedNatural :: AlexInput -> Int -> (Char -> Bool) -> Alex Tok
+prefixedNatural inp len isDigit = do
+    after <- alexGetInput
+    let (start, prefix) = matched inp len
+        (_, _, _, rest) = after
+        (more, leftover) = Text.span isDigit rest
+        full = prefix <> more
+        end  = advancePosText start full
+    alexSetInput (end, '\n', [], leftover)
+    case parseNaturalText full of
+        Nothing -> alexError ("invalid natural: " ++ Text.unpack full)
+        Just n  -> mkTokM start end full (TkNatural n)
 
 integerTok :: AlexInput -> Int -> Alex Tok
 integerTok inp len = do
     after <- alexGetInput
     let (pos, txt) = matched inp len
         (end, _, _, _) = after
-        (sign, rest) = case txt of
-            '+':xs -> (1, xs)
-            '-':xs -> (-1, xs)
-            xs     -> (1, xs)
-    case parseNatural rest of
-        Nothing -> alexError ("invalid integer: " ++ txt)
+        (sign, rest) = case Text.uncons txt of
+            Just ('+', xs) -> (1, xs)
+            Just ('-', xs) -> (-1, xs)
+            _              -> (1, txt)
+    case parseNaturalText rest of
+        Nothing -> alexError ("invalid integer: " ++ Text.unpack txt)
         Just n  -> mkTokM pos end txt (TkInteger (sign * fromIntegral n))
 
 doubleTok :: AlexInput -> Int -> Alex Tok
 doubleTok inp len = do
     let txt = snd (matched inp len)
-    case reads txt of
+    case reads (Text.unpack txt) of
         [(d, "")] -> emitKind (TkDouble d) inp len
-        _         -> alexError ("invalid double: " ++ txt)
+        _         -> alexError ("invalid double: " ++ Text.unpack txt)
 
 bytesTok :: AlexInput -> Int -> Alex Tok
 bytesTok inp len = do
     let txt = snd (matched inp len)
-        hex = drop 3 (take (length txt - 1) txt)
-    case Base16.decode (Text.Encoding.encodeUtf8 (Text.pack hex)) of
+        hex = Text.take (max 0 (Text.length txt - 4)) (Text.drop 3 txt)
+    case Base16.decode (Text.Encoding.encodeUtf8 hex) of
         Left err -> alexError err
         Right bs -> emitKind (TkBytes bs) inp len
 
 temporalTok :: AlexInput -> Int -> Alex Tok
-temporalTok inp len =
-    emitKind (TkTemporal (Text.pack (snd (matched inp len)))) inp len
+temporalTok inp len = emitKind TkTemporal inp len
 
-parseNatural :: String -> Maybe Natural
-parseNatural ('0':'b':rest)
-    | not (null rest) =
-        Just (fromIntegral (foldl (\n c -> n * 2 + toInteger (digitToInt c)) 0 rest))
-parseNatural ('0':'x':rest)
-    | not (null rest) =
-        Just (fromIntegral (foldl (\n c -> n * 16 + toInteger (digitToInt c)) 0 rest))
-parseNatural "0" = Just 0
-parseNatural s@(d:rest)
-    | d >= '1' && d <= '9' =
-        Just (fromIntegral (foldl (\n c -> n * 10 + toInteger (digitToInt c)) (toInteger (digitToInt d)) rest))
-parseNatural _ = Nothing
+parseNaturalText :: Text -> Maybe Natural
+parseNaturalText t =
+    case Text.uncons t of
+        Just ('0', rest) ->
+            case Text.uncons rest of
+                Just ('b', digits) ->
+                    if Text.null digits
+                        then Nothing
+                        else Just (foldDigits 2 digits)
+                Just ('x', digits) ->
+                    if Text.null digits
+                        then Nothing
+                        else Just (foldDigits 16 digits)
+                _ ->
+                    if Text.null rest
+                        then Just 0
+                        else Nothing
+        Just (d, rest) ->
+            if d >= '1' && d <= '9'
+                then Just (foldDigits 10 (Text.cons d rest))
+                else Nothing
+        _ -> Nothing
 
-parseMatch :: Parser a -> String -> Either String Text
+foldDigits :: Int -> Text -> Natural
+foldDigits base digits =
+    fromIntegral
+        (Text.foldl'
+            (\n c -> n * toInteger base + toInteger (digitToInt c))
+            0
+            digits)
+
+parseMatch :: Parser a -> Text -> Either String Text
 parseMatch p str =
-    case Text.Megaparsec.parse (unParser (Text.Megaparsec.match p)) "" (Text.pack str) of
+    case Text.Megaparsec.parse (unParser (Text.Megaparsec.match p)) "" str of
         Left bundle -> Left (Text.Megaparsec.errorBundlePretty bundle)
         Right (consumed, _) -> Right consumed
 
@@ -334,32 +421,32 @@ skipExtra n
     | n <= 0 = return ()
     | otherwise = do
         inp <- alexGetInput
-        let (pos, _, _, str) = inp
-            (taken, rest) = splitAt n str
-            pos' = advancePos pos taken
-        alexSetInput (pos', '\n', [], rest)
+        let (pos, c, bs, str) = inp
+            (taken, rest) = Text.splitAt n str
+            pos' = advancePosText pos taken
+        alexSetInput (pos', c, bs, rest)
 
 emitLexeme :: Int -> AlexInput -> Int -> TokKind -> Alex Tok
 emitLexeme n inp len kind = do
     let (pos, _, _, str) = inp
-        txt = take n str
-        end = advancePos pos txt
+        txt = Text.take n str
+        end = advancePosText pos txt
     skipExtra (n - len)
     mkTokM pos end txt kind
 
 slashSlashTok :: AlexInput -> Int -> Alex Tok
 slashSlashTok inp len =
     let (_, _, _, str) = inp
-    in case str of
-        '/':'/':'\\':'\\':_ -> emitLexeme 4 inp len (TkCombineTypes ASCII)
-        _                   -> emitLexeme 2 inp len (TkPrefer ASCII)
+    in if Text.isPrefixOf "//\\\\" str
+        then emitLexeme 4 inp len (TkCombineTypes ASCII)
+        else emitLexeme 2 inp len (TkPrefer ASCII)
 
 slashTok :: AlexInput -> Int -> Alex Tok
 slashTok inp len =
     let (_, _, _, str) = inp
-    in case str of
-        '/':'\\':_ -> emitLexeme 2 inp len (TkCombine ASCII)
-        _          -> extendPath inp len
+    in if Text.isPrefixOf "/\\" str
+        then emitLexeme 2 inp len (TkCombine ASCII)
+        else extendPath inp len
 
 dqEscape :: AlexInput -> Int -> Alex Tok
 dqEscape inp _len = do
@@ -367,30 +454,38 @@ dqEscape inp _len = do
     let (pos, _, _, _) = inp
         (_, _, _, rest) = after
         finish n = do
-            let full = '\\' : take (n - 1) rest
-                end  = advancePos pos full
+            let full = Text.cons '\\' (Text.take (n - 1) rest)
+                end  = advancePosText pos full
             skipExtra (n - 1)
-            mkTokM pos end full (TkStringChunk (Text.pack full))
-    case rest of
-        '"':_  -> finish 2
-        '$':_  -> finish 2
-        '/':_  -> finish 2
-        '\\':_ -> finish 2
-        'b':_  -> finish 2
-        'f':_  -> finish 2
-        'n':_  -> finish 2
-        'r':_  -> finish 2
-        't':_  -> finish 2
-        'u':'{':xs ->
-            let (hex, afterHex) = span isHexDigit xs
-            in case afterHex of
-                '}':_ | not (null hex), Just n <- readHexInt hex, validCp True n ->
-                    finish (4 + length hex)
-                _ -> alexError "Invalid escape sequence"
-        'u':a:b:c:d:_
-            | all isHexDigit [a, b, c, d]
-            , Just n <- readHexInt [a, b, c, d]
-            , validCp False n -> finish 6
+            mkTokM pos end full TkStringChunk
+    case Text.uncons rest of
+        Just ('"', _)  -> finish 2
+        Just ('$', _)  -> finish 2
+        Just ('/', _)  -> finish 2
+        Just ('\\', _) -> finish 2
+        Just ('b', _)  -> finish 2
+        Just ('f', _)  -> finish 2
+        Just ('n', _)  -> finish 2
+        Just ('r', _)  -> finish 2
+        Just ('t', _)  -> finish 2
+        Just ('u', urest) ->
+            case Text.uncons urest of
+                Just ('{', hexrest) ->
+                    let (hex, afterHex) = Text.span isHexDigit hexrest
+                    in case Text.uncons afterHex of
+                        Just ('}', _)
+                            | not (Text.null hex)
+                            , Just n <- readHexInt (Text.unpack hex)
+                            , validCp True n ->
+                                finish (4 + Text.length hex)
+                        _ -> alexError "Invalid escape sequence"
+                _ ->
+                    case Text.unpack (Text.take 4 urest) of
+                        [a, b, c, d]
+                            | all isHexDigit [a, b, c, d]
+                            , Just n <- readHexInt [a, b, c, d]
+                            , validCp False n -> finish 6
+                        _ -> alexError "Invalid escape sequence"
         _ -> alexError "Invalid escape sequence"
 
 readHexInt :: String -> Maybe Int
@@ -410,16 +505,15 @@ validCp braced n
   where
     category = generalCategory (chr n)
 
-extendWith :: Parser a -> (Text -> TokKind) -> AlexInput -> Int -> Alex Tok
-extendWith p mkKind inp len = do
+extendWith :: Parser a -> TokKind -> AlexInput -> Int -> Alex Tok
+extendWith p kind inp len = do
     let (pos, _, _, str) = inp
     case parseMatch p str of
         Left err -> alexError err
         Right consumed -> do
             skipExtra (Text.length consumed - len)
-            let txt = Text.unpack consumed
-                end = advancePos pos txt
-            mkTokM pos end txt (mkKind consumed)
+            let end = advancePosText pos consumed
+            mkTokM pos end consumed kind
 
 extendPath :: AlexInput -> Int -> Alex Tok
 extendPath = extendWith Expression.localOnly TkPath
@@ -433,16 +527,18 @@ extendEnv = extendWith Expression.env TkEnv
 extendHash :: AlexInput -> Int -> Alex Tok
 extendHash = extendWith Expression.importHash_ TkHash
 
--- | Scan a nested block comment in a tight loop.  Alex start-codes would
--- otherwise produce one action per character (and a million-deep @Alex@ bind).
-takeBlockComment :: String -> Maybe Int
+takeBlockComment :: Text -> Maybe Int
 takeBlockComment = go 0 1
   where
-    go !n 0 _                   = Just n
-    go !_ !_ []                 = Nothing
-    go !n !d ('{':'-':rest)     = go (n + 2) (d + 1) rest
-    go !n !d ('-':'}':rest)     = go (n + 2) (d - 1) rest
-    go !n !d (_:rest)           = go (n + 1) d rest
+    go !n !d t
+        | d == 0      = Just n
+        | Text.null t = Nothing
+        | Text.isPrefixOf "{-" t =
+            go (n + 2) (d + 1) (Text.drop 2 t)
+        | Text.isPrefixOf "-}" t =
+            go (n + 2) (d - 1) (Text.drop 2 t)
+        | otherwise =
+            go (n + 1) d (Text.drop 1 t)
 
 beginComment :: AlexInput -> Int -> Alex Tok
 beginComment inp len = do
@@ -452,11 +548,12 @@ beginComment inp len = do
     case takeBlockComment rest of
         Nothing -> alexError "unterminated block comment"
         Just n  -> do
-            let (body, leftover) = splitAt n rest
-                full = open ++ body
-                end  = advancePos start full
+            let body = Text.take n rest
+                full = open <> body
+                end  = advancePosText start full
+                leftover = Text.drop n rest
             alexSetInput (end, '\n', [], leftover)
-            mkTokM start end full (TkTrivia (Text.pack full))
+            mkTokM start end full TkTrivia
 
 beginDq :: AlexInput -> Int -> Alex Tok
 beginDq inp len = do
@@ -484,22 +581,11 @@ isDqPlain c = c /= '"' && c /= '\x24' && c /= '\\'
 isSqPlain :: Char -> Bool
 isSqPlain c = c /= '\'' && c /= '\x24'
 
--- | Extend an Alex string run in Haskell so a million-character literal is one token.
 strChunk :: AlexInput -> Int -> Alex Tok
 strChunk inp len = do
     sc <- alexGetStartCode
-    after <- alexGetInput
-    let (start, prefix) = matched inp len
-        (_, _, _, rest) = after
-        plain = if sc == strSq then isSqPlain else isDqPlain
-        (extra, leftover) =
-            if all plain prefix
-                then span plain rest
-                else ([], rest)
-        full = prefix ++ extra
-        end  = advancePos start full
-    alexSetInput (end, '\n', [], leftover)
-    mkTokM start end full (TkStringChunk (Text.pack full))
+    let isPlain = if sc == strSq then isSqPlain else isDqPlain
+    extendRun inp len isPlain TkStringChunk
 
 interpOpen :: AlexInput -> Int -> Alex Tok
 interpOpen inp len = do

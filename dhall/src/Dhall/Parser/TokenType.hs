@@ -17,31 +17,32 @@ import Dhall.Syntax (CharacterSet(..))
 
 -- | A single lexeme with source span and exact source text.
 data Tok = Tok
-    { tokOff   :: !Int
-    , tokStart :: SourcePos
-    , tokEnd   :: SourcePos
-    , tokText  :: Text
-    , tokKind  :: TokKind
+    { tokOff    :: !Int
+    , tokEndOff :: !Int
+    , tokStart  :: SourcePos
+    , tokEnd    :: SourcePos
+    , tokText   :: Text
+    , tokKind   :: TokKind
     } deriving (Eq, Ord, Show)
 
 -- | Classification of a lexeme.
 data TokKind
-    = TkTrivia Text
-    | TkShebang Text
+    = TkTrivia
+    | TkShebang
     | TkIf | TkThen | TkElse | TkLet | TkIn | TkAs | TkUsing
     | TkMerge | TkToMap | TkShowConstructor | TkAssert | TkWith
     | TkSome | TkMissing
     | TkForall CharacterSet
-    | TkIdent Text
-    | TkQuotedLabel Text
-    | TkBuiltin Text
+    | TkIdent
+    | TkQuotedLabel
+    | TkBuiltin
     | TkNatural Natural
     | TkInteger Integer
     | TkDouble Double
     | TkInfinity Bool
     | TkNaN
     | TkBytes ByteString
-    | TkTemporal Text
+    | TkTemporal
     | TkLambda CharacterSet
     | TkArrow CharacterSet
     | TkEquiv CharacterSet
@@ -54,27 +55,27 @@ data TokKind
     | TkBraceL | TkBraceR | TkBrackL | TkBrackR | TkAngleL | TkAngleR
     | TkParenL | TkParenR | TkBar | TkComma
     | TkDQuote | TkSQuoteBegin | TkSQuoteEnd
-    | TkStringChunk Text
+    | TkStringChunk
     | TkInterpOpen
     | TkInterpClose
-    | TkPath Text
-    | TkEnv Text
-    | TkHttpRaw Text
-    | TkHash Text
+    | TkPath
+    | TkEnv
+    | TkHttpRaw
+    | TkHash
     | TkEOF
     deriving (Eq, Ord, Show)
 
 -- | Whitespace or comment tokens.
 isTrivia :: TokKind -> Bool
-isTrivia (TkTrivia _)  = True
-isTrivia (TkShebang _) = True
-isTrivia _             = False
+isTrivia TkTrivia  = True
+isTrivia TkShebang = True
+isTrivia _         = False
 
 -- | First token of an import-expression (application argument).
 startsImportExpression :: TokKind -> Bool
 startsImportExpression k = case k of
-    TkTrivia _          -> False
-    TkShebang _         -> False
+    TkTrivia            -> False
+    TkShebang           -> False
     TkIf                -> False
     TkThen              -> False
     TkElse              -> False
@@ -117,5 +118,4 @@ startsImportExpression k = case k of
     TkInterpClose       -> False
     TkSQuoteEnd         -> False
     TkEOF               -> False
-    -- merge / Some / toMap / showConstructor / missing / literals / ids / paths
     _                   -> True
