@@ -110,7 +110,7 @@ errorLocationTests =
         , failsAtInnerMistake
             "#2265 extra comma does not blame the outer field"
             "{ a = \"a\", b = { a = \"foo\",, } }"
-            ["unexpected 'b'"]
+            ["unexpected 'b'", "Missing ','"]
         , messageContains
             "#2402 assert field in record"
             "{ assert = 1 }"
@@ -136,6 +136,9 @@ errorLocationTests =
             "annotation missing space after ':'"
             "x:Natural"
             "Whitespace is required after :"
+        , noFakeEmptyLine
+            "#2211 eof after newline"
+            "\\(a : Type) -> \n"
         , failsAtInnerMistake
             "leading zero in list"
             "[07]"
@@ -150,6 +153,18 @@ quotedKeywordLabelParses =
                 Tasty.HUnit.assertFailure (show err)
             Right _ ->
                 return ()
+
+noFakeEmptyLine :: String -> Text -> TestTree
+noFakeEmptyLine name input =
+    Tasty.HUnit.testCase name $ do
+        case Parser.exprFromText name input of
+            Right _ ->
+                Tasty.HUnit.assertFailure "Unexpected successful parse"
+            Left err -> do
+                let msg = show err
+                Tasty.HUnit.assertBool
+                    ("Parse error should not invent an empty line:\n" <> msg)
+                    (not ("<empty line>" `List.isInfixOf` msg))
 
 failsAtInnerMistake :: String -> Text -> [String] -> TestTree
 failsAtInnerMistake name input bannedSubstrings =

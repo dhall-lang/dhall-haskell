@@ -30,9 +30,10 @@ import Dhall.Src           (Src (..))
 import Dhall.Syntax
 import Text.Megaparsec     (ParseErrorBundle (..), PosState (..))
 
-import qualified Data.Text       as Text
-import qualified Dhall.Core      as Core
+import qualified Data.Text             as Text
+import qualified Dhall.Core            as Core
 import qualified Text.Megaparsec
+import qualified Text.Megaparsec.Error as Megaparsec.Error
 
 import Dhall.Parser.Combinators
 import Dhall.Parser.Expression
@@ -75,6 +76,33 @@ censor parseError =
 instance Show ParseError where
     show (ParseError {..}) =
       "\n\ESC[1;31mError\ESC[0m: Invalid input\n\n" <> Text.Megaparsec.errorBundlePretty unwrap
+
+-- | If a parse error sits at EOF on a trailing blank line, point at the last
+-- real line instead of reporting a fake @<empty line>@ (#2211).
+nudgeEofEmptyLine
+    :: ParseErrorBundle Text Void
+    -> ParseErrorBundle Text Void
+nudgeEofEmptyLine bundle =
+    bundle { bundleErrors = fmap nudge (bundleErrors bundle) }
+  where
+    source = pstateInput (bundlePosState bundle)
+
+    nudge (Megaparsec.Error.TrivialError off u e) =
+        Megaparsec.Error.TrivialError (skipTrailingBlankLines source off) u e
+    nudge (Megaparsec.Error.FancyError off x) =
+        Megaparsec.Error.FancyError (skipTrailingBlankLines source off) x
+
+skipTrailingBlankLines :: Text -> Int -> Int
+skipTrailingBlankLines txt off
+    | restIsBlank && not (Text.null prefix) && isLineEnd (Text.last prefix) =
+        Text.length (Text.dropWhileEnd isLineEnd prefix)
+    | otherwise =
+        off
+  where
+    prefix = Text.take off txt
+    rest = Text.drop off txt
+    restIsBlank = Text.all isLineEnd rest
+    isLineEnd c = c == '\n' || c == '\r'
 
 instance Exception ParseError
 
@@ -121,7 +149,7 @@ exprAndHeaderFromText
     -> Text   -- ^ Input expression to parse
     -> Either ParseError (Header, Expr Src Import)
 exprAndHeaderFromText delta text = case result of
-    Left errInfo   -> Left (ParseError { unwrap = errInfo, input = text })
+    Left errInfo   -> Left (ParseError { unwrap = nudgeEofEmptyLine errInfo, input = text })
     Right (txt, r) -> Right (createHeader txt, r)
   where
     parser = do
