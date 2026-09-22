@@ -15,7 +15,8 @@ import Test.Tasty        (TestTree)
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.Text                        as Text
+import qualified Data.List                          as List
+import qualified Data.Text                          as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Import                     as Import
@@ -80,9 +81,41 @@ getTests = do
             Tasty.testGroup "import tests"
                 [ successTests
                 , failureTests
+                , missingEnvironmentVariablesTest
                 ]
 
     return testTree
+
+missingEnvironmentVariablesTest :: TestTree
+missingEnvironmentVariablesTest =
+    Tasty.HUnit.testCase "accumulate missing environment variables in record literals" $ do
+        let src =
+                "{ env1 = env:ENV1010A as Text, env2 = env:ENV1010B as Text }"
+
+        expr <- Core.throws (Parser.exprFromText mempty src)
+
+        let status = importStatus "."
+
+        let run =
+                State.evalStateT (importLoadWith expr) status
+
+        outcome <-
+            Exception.try @SomeException run
+
+        case outcome of
+            Right _ ->
+                fail "Expected import to fail with missing environment variables"
+
+            Left ex -> do
+                let message = show ex
+
+                Tasty.HUnit.assertBool
+                    ("Expected ENV1010A in error message, got: " <> message)
+                    ("ENV1010A" `List.isInfixOf` message)
+
+                Tasty.HUnit.assertBool
+                    ("Expected ENV1010B in error message, got: " <> message)
+                    ("ENV1010B" `List.isInfixOf` message)
 
 successTest :: Text -> TestTree
 successTest prefix = do

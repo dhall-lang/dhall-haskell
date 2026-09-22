@@ -156,6 +156,7 @@ module Dhall.Import (
     , PrettyHttpException(..)
     , MissingFile(..)
     , MissingEnvironmentVariable(..)
+    , MissingEnvironmentVariables(..)
     , MissingImports(..)
     , HashMismatch(..)
     ) where
@@ -165,10 +166,11 @@ import Control.Exception
     ( Exception
     , IOException
     , SomeException
+    , fromException
     , toException
     )
 import Control.Monad              (foldM)
-import Control.Monad.Catch        (MonadCatch (catch), handle, throwM)
+import Control.Monad.Catch        (MonadCatch (catch), handle, throwM, try)
 import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
@@ -191,6 +193,7 @@ import Dhall.Syntax
     , ImportMode (..)
     , ImportType (..)
     , URL (..)
+    , RecordField
     , bindingExprs
     , functionBindingExprs
     , recordFieldExprs
@@ -211,6 +214,8 @@ import Dhall.Import.Headers
     )
 import Dhall.Import.Types
 
+import qualified Dhall.Map as DhallMap
+
 import Dhall.Parser
     ( ParseError (..)
     , Parser (..)
@@ -229,6 +234,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.Functor.Const                          as FunctorConst
 import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Maybe                                  as Maybe
+import qualified Data.Set                                    as Set
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding                          as Encoding
 import qualified Data.Text.IO
@@ -352,6 +358,22 @@ instance Show MissingEnvironmentVariable where
         <>  "\n"
         <>  "↳ " <> Text.unpack name
 
+-- | One or more missing @env:@ imports discovered in the same expression
+newtype MissingEnvironmentVariables = MissingEnvironmentVariables [Text]
+    deriving (Typeable)
+
+instance Exception MissingEnvironmentVariables
+
+instance Show MissingEnvironmentVariables where
+    show (MissingEnvironmentVariables [n]) =
+        show (MissingEnvironmentVariable n)
+    show (MissingEnvironmentVariables names) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Missing environment variables"
+        <>  concatMap envLine names
+      where
+        envLine n = "\n\n↳ " <> Text.unpack n
+
 -- | List of Exceptions we encounter while resolving Import Alternatives
 newtype MissingImports = MissingImports [SomeException]
 
@@ -370,6 +392,64 @@ instance Show MissingImports where
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
+
+missingEnvironmentVariableName :: SomeException -> Maybe Text
+missingEnvironmentVariableName e =
+    case fromException @MissingEnvironmentVariable e of
+        Just MissingEnvironmentVariable{ name = n } ->
+            Just n
+        Nothing ->
+            case fromException @(Imported MissingEnvironmentVariable) e of
+                Just (Imported _ MissingEnvironmentVariable{ name = n }) ->
+                    Just n
+                Nothing ->
+                    case fromException @MissingImports e of
+                        Just (MissingImports [inner]) ->
+                            missingEnvironmentVariableName inner
+                        _ ->
+                            case fromException @(SourcedException MissingImports) e of
+                                Just (SourcedException _ (MissingImports [inner])) ->
+                                    missingEnvironmentVariableName inner
+                                _ ->
+                                    Nothing
+
+loadMapAccumMissingEnv
+    :: ( RecordField Src Import -> StateT Status IO (RecordField Src Void)
+       )
+    -> DhallMap.Map Text (RecordField Src Import)
+    -> StateT Status IO (DhallMap.Map Text (RecordField Src Void))
+loadMapAccumMissingEnv loadField m = do
+    (results, missing) <- foldM step ([], []) (DhallMap.toList m)
+    case missing of
+        [] ->
+            return (DhallMap.fromList results)
+        names -> do
+            Status { _stack } <- State.get
+
+            throwMissingImport
+                ( Imported _stack
+                    (MissingEnvironmentVariables (nubOrdText names))
+                )
+  where
+    nubOrdText :: Ord t => [t] -> [t]
+    nubOrdText = go Set.empty
+      where
+        go _      []     = []
+        go set (t : ts)
+            | Set.member t set =     go                set  ts
+            | otherwise        = t : go (Set.insert t set) ts
+
+    step (oks, miss) (k, v) = do
+        er <- try (loadField v)
+        case er of
+            Right fv ->
+                return ((k, fv) : oks, miss)
+            Left ex ->
+                case missingEnvironmentVariableName ex of
+                    Just n ->
+                        return (oks, n : miss)
+                    Nothing ->
+                        throwM (ex :: SomeException)
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -1671,8 +1751,8 @@ In any expression `p ? q` the opportunistic caching rule says:
 
       (Note <$> pure a <*> loadWith b) `catch` handler
   Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
-  Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
-  RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
+  Record m             -> Record <$> loadMapAccumMissingEnv (recordFieldExprs loadWith) m
+  RecordLit m          -> RecordLit <$> loadMapAccumMissingEnv (recordFieldExprs loadWith) m
   Lam cs a b           -> Lam cs <$> functionBindingExprs loadWith a <*> loadWith b
   Field a b            -> Field <$> loadWith a <*> pure b
   expression           -> Syntax.unsafeSubExpressions loadWith expression
