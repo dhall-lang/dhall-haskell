@@ -52,6 +52,9 @@ large5Directory = "benchmark/evaluation/large5"
 large6Directory :: FilePath
 large6Directory = "benchmark/evaluation/large6"
 
+diamondImportDirectory :: FilePath
+diamondImportDirectory = "benchmark/evaluation/diamond_import"
+
 preludeImportDirectory :: FilePath
 preludeImportDirectory = "benchmark/evaluation/prelude_import"
 
@@ -93,6 +96,12 @@ large4Labels = phaseLabels "large4"
 
 large5CodeLabels :: [String]
 large5CodeLabels = phaseLabels "large5"
+
+diamondImportLabels :: [String]
+diamondImportLabels =
+    [ "diamond_import"
+    , "diamond_import." <> endToEndColdBenchName
+    ]
 
 preludeImportCodeLabels :: [String]
 preludeImportCodeLabels = coldResolveLabels "prelude_import"
@@ -381,6 +390,19 @@ benchmarks mPattern = do
     large6Variants <- loadLarge6PhaseVariants mPattern
     large6ColdResolveVariants <- loadLarge6ColdResolveVariants mPattern
 
+    let wantDiamondImport = any (couldMatch mPattern) diamondImportLabels
+    diamondImport <-
+        if wantDiamondImport
+            then
+                Just
+                    <$> loadColdResolveBench
+                        "diamond_import"
+                        diamondImportDirectory
+                        "main.dhall"
+            else do
+                say "Skipping diamond_import (does not match pattern)"
+                pure Nothing
+
     let wantPreludeImportCode = any (couldMatch mPattern) preludeImportCodeLabels
     preludeImportCode <-
         if wantPreludeImportCode
@@ -442,4 +464,5 @@ benchmarks mPattern = do
         , map pipelineBenchGroup large6Variants
         , map coldResolveBenchGroup large6ColdResolveVariants
         , [ coldResolveBenchGroup fixture | Just fixture <- [preludeImportCode] ]
+        , [ endToEndColdBenchGroup fixture | Just fixture <- [diamondImport] ]
         ]
