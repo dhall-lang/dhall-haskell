@@ -694,12 +694,14 @@ eval !env t0 =
             case (eval env t, eval env u) of
                 (VBoolLit True, u')       -> u'
                 (t', VBoolLit True)       -> t'
+                (VBoolLit b, VBoolLit c)  -> VBoolLit (b == c)
                 (t', u') | conv env t' u' -> VBoolLit True
                 (t', u')                  -> VBoolEQ t' u'
         BoolNE t u ->
             case (eval env t, eval env u) of
                 (VBoolLit False, u')      -> u'
                 (t', VBoolLit False)      -> t'
+                (VBoolLit b, VBoolLit c)  -> VBoolLit (b /= c)
                 (t', u') | conv env t' u' -> VBoolLit False
                 (t', u')                  -> VBoolNE t' u'
         BoolIf b t f ->
