@@ -25,6 +25,7 @@
 * [`dhall to-directory-tree`: Add `binary-file` support](https://github.com/dhall-lang/dhall-haskell/pull/2641)
 * [Support GHC 9.12.1](https://github.com/dhall-lang/dhall-haskell/pull/2649)
 * [`dhall to-directory-tree`: create parents of files when using fixpoint representation](https://github.com/dhall-lang/dhall-haskell/pull/2653)
+* [Fix `dhall --explain` for type errors in imported files](https://github.com/dhall-lang/dhall-haskell/issues/1657)
 
 1.42.2
 

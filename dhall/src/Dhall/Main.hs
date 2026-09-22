@@ -7,6 +7,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Dhall.Main
     ( -- * Options
@@ -22,7 +23,7 @@ module Dhall.Main
     ) where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception   (Handler (..), SomeException)
+import Control.Exception   (Handler (..), SomeException, fromException, toException)
 import Control.Monad       (when)
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
@@ -34,11 +35,12 @@ import Dhall.Freeze        (Intent (..), Scope (..))
 import Dhall.Import
     ( Depends (..)
     , Imported (..)
+    , MissingImports (..)
     , SemanticCacheMode (..)
     , _semanticCacheMode
     )
+import Dhall.Parser        (Src, SourcedException (..))
 import Dhall.Package       (PackagingMode (..), writePackage)
-import Dhall.Parser        (Src)
 import Dhall.Pretty
     ( Ann
     , CharacterSet (..)
@@ -117,6 +119,26 @@ import qualified System.FilePath
 import qualified System.IO
 import qualified Text.Dot
 import qualified Text.Pretty.Simple
+
+-- | When @--explain@ is enabled, rewrite nested import failures so embedded
+-- type errors use 'DetailedTypeError'.
+explainNestedImportErrors :: SomeException -> SomeException
+explainNestedImportErrors e =
+    case fromException @MissingImports e of
+        Just (MissingImports es) ->
+            toException (MissingImports (map explainNestedImportErrors es))
+        Nothing ->
+            case fromException @(Imported (TypeError Src Void)) e of
+                Just (Imported ps err) ->
+                    toException (Imported ps (DetailedTypeError err))
+                Nothing ->
+                    case fromException @(SourcedException MissingImports) e of
+                        Just (SourcedException src (MissingImports es)) ->
+                            toException
+                                ( SourcedException src
+                                    (MissingImports (map explainNestedImportErrors es))
+                                )
+                        _ -> e
 
 -- | Top-level program options
 data Options = Options
@@ -651,6 +673,8 @@ command (Options {..}) = do
             Control.Exception.catches io
                 [ Handler handleTypeError
                 , Handler handleImported
+                , Handler handleSourcedMissingImports
+                , Handler handleMissingImports
                 , Handler handleExitCode
                 , Handler handleAll
                 ]
@@ -683,6 +707,28 @@ command (Options {..}) = do
                     else do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
+
+            handleMissingImports e@(MissingImports _) =
+                Control.Exception.handle handleAll $ do
+                    System.IO.hPutStrLn System.IO.stderr ""
+                    if explain
+                        then
+                            Control.Exception.throwIO
+                                (explainNestedImportErrors (toException e))
+                        else do
+                            Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                            Control.Exception.throwIO e
+
+            handleSourcedMissingImports (SourcedException src e@(MissingImports _)) =
+                Control.Exception.handle handleAll $ do
+                    System.IO.hPutStrLn System.IO.stderr ""
+                    if explain
+                        then
+                            Control.Exception.throwIO
+                                (explainNestedImportErrors (toException (SourcedException src e)))
+                        else do
+                            Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                            Control.Exception.throwIO (SourcedException src e)
 
             handleExitCode e =
                 Control.Exception.throwIO (e :: ExitCode)
