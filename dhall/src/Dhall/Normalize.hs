@@ -402,6 +402,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             where
               decide (BoolLit True )  r              = r
               decide  l              (BoolLit True ) = l
+              decide (BoolLit b)     (BoolLit c)     = BoolLit (b == c)
               decide  l               r
                   | Eval.judgmentallyEqual l r = BoolLit True
                   | otherwise                  = BoolEQ l r
@@ -409,6 +410,7 @@ normalizeWithM ctx e0 = loop (Syntax.denote e0)
             where
               decide (BoolLit False)  r              = r
               decide  l              (BoolLit False) = l
+              decide (BoolLit b)     (BoolLit c)     = BoolLit (b /= c)
               decide  l               r
                   | Eval.judgmentallyEqual l r = BoolLit False
                   | otherwise                  = BoolNE l r
@@ -823,11 +825,13 @@ isNormalized e0 = loop (Syntax.denote e0)
         where
           decide (BoolLit True)  _             = False
           decide  _             (BoolLit True) = False
+          decide (BoolLit _)    (BoolLit _)    = False
           decide  l              r             = not (Eval.judgmentallyEqual l r)
       BoolNE x y -> loop x && loop y && decide x y
         where
           decide (BoolLit False)  _               = False
           decide  _              (BoolLit False ) = False
+          decide (BoolLit _)     (BoolLit _)      = False
           decide  l               r               = not (Eval.judgmentallyEqual l r)
       BoolIf x y z ->
           loop x && loop y && loop z && decide x y z
