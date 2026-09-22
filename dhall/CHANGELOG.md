@@ -1,5 +1,7 @@
 1.42.3
 
+* Performance: reduce `==` / `!=` on boolean literals without calling
+  `judgmentallyEqual` when both sides are literals ([#1218](https://github.com/dhall-lang/dhall-haskell/issues/1218))
 * BREAKING CHANGE: `TimeLiteral` now stores hour, minute, and second as
   `Word8`, the fractional digits as `Integer`, and the digit count as `Int`,
   instead of `TimeOfDay` plus a `Word` precision. Dhall `Time` literals keep
