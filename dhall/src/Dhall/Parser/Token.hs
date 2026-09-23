@@ -32,6 +32,7 @@ module Dhall.Parser.Token (
     doubleLiteral,
     doubleInfinity,
     naturalLiteral,
+    nonZeroDecimalNaturalLiteral,
     integerLiteral,
     dateFullYear,
     dateMonth,
@@ -308,7 +309,7 @@ integerLiteral = (do
     This corresponds to the @natural-literal@ rule from the official grammar
 -}
 naturalLiteral :: Parser Natural
-naturalLiteral = (zeroPrefixed <|> nonZeroDecimal) <?> "literal"
+naturalLiteral = (zeroPrefixed <|> decimalNatural) <?> "literal"
   where
     zeroPrefixed = do
         _ <- char '0'
@@ -321,11 +322,17 @@ naturalLiteral = (zeroPrefixed <|> nonZeroDecimal) <?> "literal"
             else fail "Natural literals cannot have leading zeros"
     binary = char 'b' >> Text.Megaparsec.Char.Lexer.binary
     hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
-    nonZeroDecimal = do
-        _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
-        digits <- Dhall.Parser.Combinators.takeWhile1 digit
-        return (Data.Text.foldl' snoc 0 digits)
 
+nonZeroDecimalNaturalLiteral :: Parser Natural
+nonZeroDecimalNaturalLiteral =
+    decimalNatural <* Text.Parser.Combinators.notFollowedBy (Text.Parser.Char.oneOf ".eE")
+
+decimalNatural :: Parser Natural
+decimalNatural = do
+    _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
+    digits <- Dhall.Parser.Combinators.takeWhile1 digit
+    return (Data.Text.foldl' snoc 0 digits)
+  where
     snoc n c = n * 10 + fromIntegral (Char.digitToInt c)
 
 {-| Parse a 4-digit year

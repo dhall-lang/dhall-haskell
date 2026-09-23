@@ -704,6 +704,7 @@ parsers embedded = Parsers{..}
                 ( choice
                     [ bytesLiteral
                     , temporalLiteral
+                    , decimalNatural
                     , alternative00
                     , alternative01
                     , alternative02
@@ -718,6 +719,9 @@ parsers embedded = Parsers{..}
                 )
             <|> alternative38
           where
+            decimalNatural =
+                fmap NaturalLit (try nonZeroDecimalNaturalLiteral)
+
             alternative00 = do
                 n <- getOffset
                 a <- try doubleLiteral
