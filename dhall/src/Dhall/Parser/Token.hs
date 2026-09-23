@@ -331,9 +331,17 @@ decimalNatural :: Parser Natural
 decimalNatural = do
     _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
     digits <- Dhall.Parser.Combinators.takeWhile1 digit
-    return (Data.Text.foldl' snoc 0 digits)
+    -- Defer conversion so large literals remain cheap until the Natural is forced.
+    return (naturalFromDecimalDigits digits)
+
+naturalFromDecimalDigits :: Text -> Natural
+naturalFromDecimalDigits digits =
+    case Text.Megaparsec.parseMaybe parser digits of
+        Just natural -> natural
+        Nothing      -> error "Invalid decimal digits"
   where
-    snoc n c = n * 10 + fromIntegral (Char.digitToInt c)
+    parser =
+        unParser (Text.Megaparsec.Char.Lexer.decimal :: Parser Natural)
 
 {-| Parse a 4-digit year
 
