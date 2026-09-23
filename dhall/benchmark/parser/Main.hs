@@ -49,6 +49,10 @@ main =
         , benchExprFromText "Large natural number literal (10M digits)" (Text.replicate 10000000 "1")
         , benchExprFromText "Large hex number literal (10M digits)" ("0x" <> Text.replicate 10000000 "1")
         , benchExprFromText "Large binary number literal (10M digits)" ("0b" <> Text.replicate 10000000 "1")
+        -- `nf` forces the parsed `Natural`; the benches above only force `Either`.
+        , benchNfExprFromText "Large natural number literal (100K digits, forced)" (Text.replicate 100000 "1")
+        , benchNfExprFromText "Large hex number literal (100K digits, forced)" ("0x" <> Text.replicate 100000 "1")
+        , benchNfExprFromText "Large binary number literal (100K digits, forced)" ("0b" <> Text.replicate 100000 "1")
         , benchExprFromText "Whitespace" (Text.replicate 1000000 " " <> "x")
         , benchExprFromText "Line comment" ("x -- " <> Text.replicate 1000000 " ")
         , benchExprFromText "Block comment" ("x {- " <> Text.replicate 1000000 " " <> "-}")
