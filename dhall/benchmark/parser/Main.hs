@@ -46,7 +46,7 @@ main =
         , benchExprFromText "Large number of function arguments" (Text.replicate 10000 "x ")
         , benchExprFromText "Long double-quoted strings" ("\"" <> Text.replicate 1000000 "x" <> "\"")
         , benchExprFromText "Long single-quoted strings" ("''" <> Text.replicate 1000000 "x" <> "''")
-        , benchExprFromText "Large natural number literal (1M digits)" (Text.replicate 1000000 "1")
+        , benchExprFromText "Large natural number literal (10M digits)" (Text.replicate 10000000 "1")
         , benchExprFromText "Large hex number literal (10M digits)" ("0x" <> Text.replicate 10000000 "1")
         , benchExprFromText "Large binary number literal (10M digits)" ("0b" <> Text.replicate 10000000 "1")
         , benchExprFromText "Whitespace" (Text.replicate 1000000 " " <> "x")
