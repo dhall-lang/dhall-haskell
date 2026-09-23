@@ -32,6 +32,21 @@ benchNfExprFromText :: String -> Text -> Benchmark
 benchNfExprFromText name expr =
     bench name $ nf (either throw id . Dhall.exprFromText "(input)") expr
 
+-- Parse a natural literal and `nf` the `Natural` itself, not the surrounding `Expr`.
+benchParsedNatural :: String -> Text -> Benchmark
+benchParsedNatural name expr =
+    bench name $ nf parsedNatural expr
+  where
+    parsedNatural text =
+        case Dhall.exprFromText "(input)" text of
+            Left err -> throw err
+            Right e  -> go e
+
+    go (Dhall.Note _ e)      = go e
+    go (Dhall.NaturalLit n)  = n
+    go other                 =
+        error ("expected a natural literal, got: " <> take 80 (show other))
+
 main :: IO ()
 main =
     defaultMain
@@ -42,6 +57,8 @@ main =
                 ]
         , env kubernetesExample $
             benchExprFromBytes "Kubernetes/Binary"
+        , benchExprFromText "Deeply nested parentheses" (Text.replicate 1000 "(" <> "x" <> Text.replicate 1000 ")")
+        , benchExprFromText "Deeply nested brackets" (Text.replicate 1000 "[" <> " 0 " <> Text.replicate 1000 "]")
         , benchExprFromText "Long variable names" (Text.replicate 1000000 "x")
         , benchExprFromText "Large number of function arguments" (Text.replicate 10000 "x ")
         , benchExprFromText "Long double-quoted strings" ("\"" <> Text.replicate 1000000 "x" <> "\"")
@@ -49,14 +66,13 @@ main =
         , benchExprFromText "Large natural number literal (10M digits)" (Text.replicate 10000000 "1")
         , benchExprFromText "Large hex number literal (10M digits)" ("0x" <> Text.replicate 10000000 "1")
         , benchExprFromText "Large binary number literal (10M digits)" ("0b" <> Text.replicate 10000000 "1")
-        -- `nf` forces the parsed `Natural`; the benches above only force `Either`.
-        , benchNfExprFromText "Large natural number literal (100K digits, forced)" (Text.replicate 100000 "1")
-        , benchNfExprFromText "Large hex number literal (100K digits, forced)" ("0x" <> Text.replicate 100000 "1")
-        , benchNfExprFromText "Large binary number literal (100K digits, forced)" ("0b" <> Text.replicate 100000 "1")
+        -- Force the `Natural` payload; the unforced benches above only `whnf` `Either`.
+        , benchParsedNatural "Large natural number literal (100K digits, forced)" (Text.replicate 100000 "1")
+        , benchParsedNatural "Large hex number literal (100K digits, forced)" ("0x" <> Text.replicate 100000 "1")
+        , benchParsedNatural "Large binary number literal (100K digits, forced)" ("0b" <> Text.replicate 100000 "1")
         , benchExprFromText "Whitespace" (Text.replicate 1000000 " " <> "x")
         , benchExprFromText "Line comment" ("x -- " <> Text.replicate 1000000 " ")
         , benchExprFromText "Block comment" ("x {- " <> Text.replicate 1000000 " " <> "-}")
-        , benchExprFromText "Deeply nested parentheses" "((((((((((((((((x))))))))))))))))"
         , env cpkgExample $
             benchNfExprFromText "CPkg/Text"
         ]

@@ -136,10 +136,10 @@ module Dhall.Parser.Token (
 import Dhall.Parser.Combinators
 
 import Control.Applicative     (Alternative (..), optional)
-import Data.Bits               ((.&.))
+import Data.Bits               (shiftL, (.&.))
 import Data.Functor            (void)
 import Data.Text               (Text)
-import Data.Word               (Word8)
+import Data.Word               (Word64, Word8)
 import Dhall.Syntax
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -151,7 +151,6 @@ import qualified Data.List.NonEmpty
 import qualified Data.Scientific            as Scientific
 import qualified Data.Text
 import qualified Text.Megaparsec
-import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -327,8 +326,15 @@ zeroPrefixedNaturalLiteral = do
         if Data.Text.null extra
             then pure 0
             else fail "Natural literals cannot have leading zeros"
-    binary = char 'b' >> Text.Megaparsec.Char.Lexer.binary
-    hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
+    binary = do
+        _ <- char 'b'
+        digits <- Dhall.Parser.Combinators.takeWhile1 isBinDigit
+        return (naturalFromBinaryDigits digits)
+    hexadecimal = do
+        _ <- char 'x'
+        digits <- Dhall.Parser.Combinators.takeWhile1 hexdig
+        return (naturalFromHexadecimalDigits digits)
+    isBinDigit c = c == '0' || c == '1'
 
 {-| Parse a non-zero decimal natural that is not the start of a double literal
 
@@ -346,7 +352,59 @@ nonZeroDecimalNaturalLiteral =
 decimalNatural :: Parser Natural
 decimalNatural = do
     _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
-    Text.Megaparsec.Char.Lexer.decimal
+    digits <- Dhall.Parser.Combinators.takeWhile1 digit
+    return (naturalFromDecimalDigits digits)
+
+-- | Convert a non-empty decimal digit run with divide-and-conquer.
+--
+-- A left fold is quadratic in bignum arithmetic; splitting and combining with
+-- @hi * 10^k + lo@ lets GMP multiply large halves.
+naturalFromDecimalDigits :: Text -> Natural
+naturalFromDecimalDigits = convert
+  where
+    convert chunk
+        | n <= 18 =
+            fromIntegral (Data.Text.foldl' snoc (0 :: Word64) chunk)
+        | otherwise =
+            let k = n `div` 2
+                (hi, lo) = Data.Text.splitAt (n - k) chunk
+            in convert hi * 10 ^ k + convert lo
+      where
+        n = Data.Text.length chunk
+
+    snoc w c = w * 10 + fromIntegral (Char.digitToInt c)
+
+-- | Convert a non-empty hexadecimal digit run by splitting and bit-shifting.
+naturalFromHexadecimalDigits :: Text -> Natural
+naturalFromHexadecimalDigits = convert
+  where
+    convert chunk
+        | n <= 16 =
+            fromIntegral (Data.Text.foldl' snoc (0 :: Word64) chunk)
+        | otherwise =
+            let k = n `div` 2
+                (hi, lo) = Data.Text.splitAt (n - k) chunk
+            in convert hi `shiftL` (4 * k) + convert lo
+      where
+        n = Data.Text.length chunk
+
+    snoc w c = w * 16 + fromIntegral (Char.digitToInt c)
+
+-- | Convert a non-empty binary digit run by splitting and bit-shifting.
+naturalFromBinaryDigits :: Text -> Natural
+naturalFromBinaryDigits = convert
+  where
+    convert chunk
+        | n <= 64 =
+            fromIntegral (Data.Text.foldl' snoc (0 :: Word64) chunk)
+        | otherwise =
+            let k = n `div` 2
+                (hi, lo) = Data.Text.splitAt (n - k) chunk
+            in convert hi `shiftL` k + convert lo
+      where
+        n = Data.Text.length chunk
+
+    snoc w c = w * 2 + fromIntegral (Char.digitToInt c)
 
 {-| Parse a 4-digit year
 
