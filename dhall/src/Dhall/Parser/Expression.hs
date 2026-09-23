@@ -719,6 +719,8 @@ parsers embedded = Parsers{..}
                 )
             <|> alternative38
           where
+            -- Tried before doubles so large naturals are not scanned as floats.
+            -- `1.0` still reaches alternative00; `0` / `0x` / `0b` reach alternative01.
             decimalNatural =
                 fmap NaturalLit (try nonZeroDecimalNaturalLiteral)
 
@@ -731,7 +733,7 @@ parsers embedded = Parsers{..}
                 return (DoubleLit (DhallDouble b))
 
             alternative01 = do
-                a <- naturalLiteral
+                a <- zeroPrefixedNaturalLiteral
                 return (NaturalLit a)
 
             alternative02 = do

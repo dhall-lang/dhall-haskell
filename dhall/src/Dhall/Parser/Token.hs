@@ -33,6 +33,7 @@ module Dhall.Parser.Token (
     doubleInfinity,
     naturalLiteral,
     nonZeroDecimalNaturalLiteral,
+    zeroPrefixedNaturalLiteral,
     integerLiteral,
     dateFullYear,
     dateMonth,
@@ -309,12 +310,18 @@ integerLiteral = (do
     This corresponds to the @natural-literal@ rule from the official grammar
 -}
 naturalLiteral :: Parser Natural
-naturalLiteral = (zeroPrefixed <|> decimalNatural) <?> "literal"
-  where
-    zeroPrefixed = do
-        _ <- char '0'
-        binary <|> hexadecimal <|> afterZero
+naturalLiteral = (zeroPrefixedNaturalLiteral <|> decimalNatural) <?> "literal"
 
+{-| Parse @0@, @0b…@, or @0x…@
+
+    Non-zero decimal naturals are parsed separately so they can be tried before
+    double literals without also accepting @1.0@ as @1@.
+-}
+zeroPrefixedNaturalLiteral :: Parser Natural
+zeroPrefixedNaturalLiteral = do
+    _ <- char '0'
+    binary <|> hexadecimal <|> afterZero
+  where
     afterZero = do
         extra <- Dhall.Parser.Combinators.takeWhile digit
         if Data.Text.null extra
@@ -323,9 +330,18 @@ naturalLiteral = (zeroPrefixed <|> decimalNatural) <?> "literal"
     binary = char 'b' >> Text.Megaparsec.Char.Lexer.binary
     hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
 
+{-| Parse a non-zero decimal natural that is not the start of a double literal
+
+    Rejects only a following fraction or exponent (@1.0@, @1e2@), so @123.foo@
+    still parses as a natural with field access.
+-}
 nonZeroDecimalNaturalLiteral :: Parser Natural
 nonZeroDecimalNaturalLiteral =
-    decimalNatural <* Text.Parser.Combinators.notFollowedBy (Text.Parser.Char.oneOf ".eE")
+    decimalNatural <* Text.Parser.Combinators.notFollowedBy doubleContinuation
+  where
+    doubleContinuation =
+            void (Text.Parser.Char.char '.' *> Text.Parser.Char.digit)
+        <|> void (Text.Parser.Char.oneOf "eE" *> optional signPrefix *> Text.Parser.Char.digit)
 
 decimalNatural :: Parser Natural
 decimalNatural = do
