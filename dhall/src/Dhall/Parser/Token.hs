@@ -347,7 +347,11 @@ nonZeroDecimalNaturalLiteral =
   where
     doubleContinuation =
             void (Text.Parser.Char.char '.' *> Text.Parser.Char.digit)
-        <|> void (Text.Parser.Char.oneOf "eE" *> optional signPrefix *> Text.Parser.Char.digit)
+        <|> void
+            ( Text.Parser.Char.oneOf "eE"
+                *> optional (signPrefix :: Parser (Integer -> Integer))
+                *> Text.Parser.Char.digit
+            )
 
 decimalNatural :: Parser Natural
 decimalNatural = do
