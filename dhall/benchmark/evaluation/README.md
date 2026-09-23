@@ -104,7 +104,7 @@ prep had warmed semisemantic; those groups were moved to Mode B.
 
 ### Mode D — `end_to_end_cold` / `cold`
 
-Used by: `substitutions.composer_proxy.*`, `substitutions.composer_proxy.many_imports.*.cold`, `diamond_import`
+Used by: `substitutions.composer_proxy.*`, `substitutions.composer_proxy.many_imports.*.cold`, `diamond_import`, `diamond_import_transitive`
 
 | Step | What happens |
 |------|----------------|
@@ -156,6 +156,7 @@ read `evaluation` (or cold `dhall hash`).
 | `large5/` | A | Smaller tree |
 | `large6.slow_*` | `large6/` | A, B, or C | Isolated ~0.5 s artificial burdens |
 | `diamond_import` | `diamond_import/` | D | One unhashed shared import at several import sites. |
+| `diamond_import_transitive` | `diamond_import_transitive/` | D | Same shared unhashed import, but reached through different files (similar to importing a prelude) instead of direct references in one file |
 | `prelude_import.*` | `prelude_import/` | B | Full Prelude package, Code vs Source |
 | `substitutions.*` | `substitutions/` | B | Nested-let identity-path probe (100 closed keys) |
 | `substitutions.many_files.*` | generated at prep | B | 200 imports × 200 colliding Haskell-API keys (as-code regression) |
@@ -204,4 +205,5 @@ why Mode A `resolve` can be much faster than a true cold CLI run (e.g. large3
 - `large6/README.md` — slow-child matrix and burden placement
 - `prelude_import/README.md` — Prelude cold import
 - `diamond_import/README.md` — unhashed shared imports
+- `diamond_import_transitive/README.md` — unhashed shared imports reached transitively
 - [`.github/workflows/README.md`](../../../.github/workflows/README.md) — CI job, `gh-pages` charts, on-demand runs
