@@ -16,7 +16,7 @@ module Dhall.Parser.Lexer
     ) where
 
 import Data.Bits       ((.&.))
-import Data.Char       (GeneralCategory (..), chr, digitToInt, generalCategory, isHexDigit)
+import Data.Char       (GeneralCategory (..), chr, generalCategory, isHexDigit)
 import Data.List       (foldl')
 import Data.Text       (Text)
 import Numeric         (readHex)
@@ -154,7 +154,7 @@ tokens :-
 <0>  "0x" $hexdig                       { hexNaturalTok }
 <0>  "0b" $bindig                       { binNaturalTok }
 <0>  0 [0-9] $digit*                    { leadingZeroTok }
-<0>  @natural                           { naturalTok }
+<0>  [0-9]                              { decimalNaturalTok }
 <0>  @ident                             { identTok }
 
 <strDq> \"                              { endDq }
@@ -321,32 +321,51 @@ isBuiltin txt =
 leadingZeroTok :: AlexInput -> Int -> Alex Tok
 leadingZeroTok _ _ = alexError "Natural literals cannot have leading zeros"
 
-naturalTok :: AlexInput -> Int -> Alex Tok
-naturalTok inp len = do
+isDecimalDigit :: Char -> Bool
+isDecimalDigit c = c >= '0' && c <= '9'
+
+-- Match one digit in the DFA, then take the rest of the run with Text.span.
+-- A following fraction or exponent is a longer @double match, so this stays a natural.
+decimalNaturalTok :: AlexInput -> Int -> Alex Tok
+decimalNaturalTok inp len = do
     after <- alexGetInput
-    let (pos, txt) = matched inp len
-        (end, _, _, _) = after
-    case parseNaturalText txt of
-        Nothing -> alexError ("invalid natural: " ++ Text.unpack txt)
-        Just n  -> mkTokM pos end txt (TkNatural n)
+    let (start, _) = matched inp len
+        (_, _, _, rest) = after
+        (more, leftover) = Text.span isDecimalDigit rest
+        n                = len + Text.length more
+        (_, _, _, str)   = inp
+        full             = Text.take n str
+        end              = advancePosAscii start n
+    alexSetInput (end, '\n', [], leftover)
+    case Text.uncons full of
+        Just ('0', extra)
+            | not (Text.null extra) ->
+                alexError "Natural literals cannot have leading zeros"
+        _ ->
+            mkTokM start end full (TkNatural (Token.naturalFromDecimalDigits full))
 
 hexNaturalTok :: AlexInput -> Int -> Alex Tok
-hexNaturalTok inp len = prefixedNatural inp len isHexDigit
+hexNaturalTok inp len =
+    prefixedNatural inp len isHexDigit Token.naturalFromHexadecimalDigits
 
 binNaturalTok :: AlexInput -> Int -> Alex Tok
-binNaturalTok inp len = prefixedNatural inp len isBinDigit
+binNaturalTok inp len =
+    prefixedNatural inp len isBinDigit Token.naturalFromBinaryDigits
 
 signedHexNaturalTok :: AlexInput -> Int -> Alex Tok
-signedHexNaturalTok inp len = signedPrefixedNatural inp len isHexDigit
+signedHexNaturalTok inp len =
+    signedPrefixedNatural inp len isHexDigit Token.naturalFromHexadecimalDigits
 
 signedBinNaturalTok :: AlexInput -> Int -> Alex Tok
-signedBinNaturalTok inp len = signedPrefixedNatural inp len isBinDigit
+signedBinNaturalTok inp len =
+    signedPrefixedNatural inp len isBinDigit Token.naturalFromBinaryDigits
 
 isBinDigit :: Char -> Bool
 isBinDigit c = c == '0' || c == '1'
 
-signedPrefixedNatural :: AlexInput -> Int -> (Char -> Bool) -> Alex Tok
-signedPrefixedNatural inp len isDigit = do
+signedPrefixedNatural
+    :: AlexInput -> Int -> (Char -> Bool) -> (Text -> Natural) -> Alex Tok
+signedPrefixedNatural inp len isDigit convert = do
     after <- alexGetInput
     let (start, _) = matched inp len
         (_, _, _, rest) = after
@@ -360,12 +379,14 @@ signedPrefixedNatural inp len isDigit = do
             Just ('-', xs) -> (-1, xs)
             Just ('+', xs) -> (1, xs)
             _              -> (1, full)
-    case parseNaturalText unsigned of
-        Nothing -> alexError ("invalid integer: " ++ Text.unpack full)
-        Just n  -> mkTokM start end full (TkInteger (sign * fromIntegral n))
+        digits = Text.drop 2 unsigned
+    if Text.null digits
+        then alexError ("invalid integer: " ++ Text.unpack full)
+        else mkTokM start end full (TkInteger (sign * fromIntegral (convert digits)))
 
-prefixedNatural :: AlexInput -> Int -> (Char -> Bool) -> Alex Tok
-prefixedNatural inp len isDigit = do
+prefixedNatural
+    :: AlexInput -> Int -> (Char -> Bool) -> (Text -> Natural) -> Alex Tok
+prefixedNatural inp len isDigit convert = do
     after <- alexGetInput
     let (start, _) = matched inp len
         (_, _, _, rest) = after
@@ -374,10 +395,11 @@ prefixedNatural inp len isDigit = do
         (_, _, _, str)   = inp
         full             = Text.take n str
         end              = advancePosAscii start n
+        digits           = Text.drop 2 full
     alexSetInput (end, '\n', [], leftover)
-    case parseNaturalText full of
-        Nothing -> alexError ("invalid natural: " ++ Text.unpack full)
-        Just n  -> mkTokM start end full (TkNatural n)
+    if Text.null digits
+        then alexError ("invalid natural: " ++ Text.unpack full)
+        else mkTokM start end full (TkNatural (convert digits))
 
 integerTok :: AlexInput -> Int -> Alex Tok
 integerTok inp len = do
@@ -388,9 +410,9 @@ integerTok inp len = do
             Just ('+', xs) -> (1, xs)
             Just ('-', xs) -> (-1, xs)
             _              -> (1, txt)
-    case parseNaturalText rest of
-        Nothing -> alexError ("invalid integer: " ++ Text.unpack txt)
-        Just n  -> mkTokM pos end txt (TkInteger (sign * fromIntegral n))
+    if Text.null rest
+        then alexError ("invalid integer: " ++ Text.unpack txt)
+        else mkTokM pos end txt (TkInteger (sign * fromIntegral (Token.naturalFromDecimalDigits rest)))
 
 doubleTok :: AlexInput -> Int -> Alex Tok
 doubleTok inp len = do
@@ -409,37 +431,6 @@ bytesTok inp len = do
 
 temporalTok :: AlexInput -> Int -> Alex Tok
 temporalTok inp len = emitKind TkTemporal inp len
-
-parseNaturalText :: Text -> Maybe Natural
-parseNaturalText t =
-    case Text.uncons t of
-        Just ('0', rest) ->
-            case Text.uncons rest of
-                Just ('b', digits) ->
-                    if Text.null digits
-                        then Nothing
-                        else Just (foldDigits 2 digits)
-                Just ('x', digits) ->
-                    if Text.null digits
-                        then Nothing
-                        else Just (foldDigits 16 digits)
-                _ ->
-                    if Text.null rest
-                        then Just 0
-                        else Nothing
-        Just (d, rest) ->
-            if d >= '1' && d <= '9'
-                then Just (foldDigits 10 (Text.cons d rest))
-                else Nothing
-        _ -> Nothing
-
-foldDigits :: Int -> Text -> Natural
-foldDigits base digits =
-    fromIntegral
-        (Text.foldl'
-            (\n c -> n * toInteger base + toInteger (digitToInt c))
-            0
-            digits)
 
 parseMatch :: Parser a -> Text -> Either String Text
 parseMatch p str =
