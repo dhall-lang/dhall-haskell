@@ -1,5 +1,8 @@
 1.42.3
 
+* [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
+  * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
+  * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.
 * Add tests for `dhall repl` commands, `:paste`, quit, and the history file
 * Performance: reduce `==` / `!=` on boolean literals without calling
   `judgmentallyEqual` when both sides are literals ([#1218](https://github.com/dhall-lang/dhall-haskell/issues/1218))
