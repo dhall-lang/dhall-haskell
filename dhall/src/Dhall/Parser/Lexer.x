@@ -147,14 +147,11 @@ tokens :-
 <0>  @tzh                               { temporalTok }
 
 <0>  @bytes                             { bytesTok }
-<0>  @double                            { doubleTok }
 <0>  [\+\-] "0x" $hexdig                 { signedHexNaturalTok }
 <0>  [\+\-] "0b" $bindig                 { signedBinNaturalTok }
-<0>  @integer                           { integerTok }
 <0>  "0x" $hexdig                       { hexNaturalTok }
 <0>  "0b" $bindig                       { binNaturalTok }
-<0>  0 [0-9] $digit*                    { leadingZeroTok }
-<0>  [0-9]                              { decimalNaturalTok }
+<0>  [\+\-]? [0-9]                      { numberTok }
 <0>  @ident                             { identTok }
 
 <strDq> \"                              { endDq }
@@ -318,31 +315,79 @@ isBuiltin txt =
         , "TimeZone","List","Type","Kind","Sort"
         ]
 
-leadingZeroTok :: AlexInput -> Int -> Alex Tok
-leadingZeroTok _ _ = alexError "Natural literals cannot have leading zeros"
-
 isDecimalDigit :: Char -> Bool
 isDecimalDigit c = c >= '0' && c <= '9'
 
--- Match one digit in the DFA, then take the rest of the run with Text.span.
--- A following fraction or exponent is a longer @double match, so this stays a natural.
-decimalNaturalTok :: AlexInput -> Int -> Alex Tok
-decimalNaturalTok inp len = do
-    after <- alexGetInput
-    let (start, _) = matched inp len
-        (_, _, _, rest) = after
-        (more, leftover) = Text.span isDecimalDigit rest
-        n                = len + Text.length more
-        (_, _, _, str)   = inp
-        full             = Text.take n str
-        end              = advancePosAscii start n
-    alexSetInput (end, '\n', [], leftover)
-    case Text.uncons full of
+-- The DFA matches only an optional sign and one digit, so it does not walk a
+-- long digit run looking for '.' or 'e'. The rest is classified here.
+numberTok :: AlexInput -> Int -> Alex Tok
+numberTok inp _len = do
+    let (start, _, _, str) = inp
+    case classifyNumber str of
+        Left msg -> alexError msg
+        Right (n, kind) -> do
+            let full     = Text.take n str
+                end      = advancePosAscii start n
+                leftover = Text.drop n str
+            alexSetInput (end, '\n', [], leftover)
+            mkTokM start end full kind
+
+classifyNumber :: Text -> Either String (Int, TokKind)
+classifyNumber str
+    | Text.null digits = Left "invalid number"
+    | suffix > 0 =
+        let n    = signLen + Text.length digits + suffix
+            full = Text.take n str
+        in case reads (Text.unpack full) of
+            [(d, "")] -> Right (n, TkDouble d)
+            _         -> Left ("invalid double: " ++ Text.unpack full)
+    | otherwise = case Text.uncons digits of
         Just ('0', extra)
-            | not (Text.null extra) ->
-                alexError "Natural literals cannot have leading zeros"
+            | not signed && not (Text.null extra) ->
+                Left "Natural literals cannot have leading zeros"
+            | signed ->
+                let sign = if Text.head str == '-' then (-1) else 1
+                in Right (signLen + 1, TkInteger (sign * 0))
+            | otherwise ->
+                Right (1, TkNatural 0)
         _ ->
-            mkTokM start end full (TkNatural (Token.naturalFromDecimalDigits full))
+            let n = signLen + Text.length digits
+            in if signed
+                then
+                    let sign = if Text.head str == '-' then (-1) else 1
+                        mag  = Token.naturalFromDecimalDigits digits
+                    in Right (n, TkInteger (sign * fromIntegral mag))
+                else Right (n, TkNatural (Token.naturalFromDecimalDigits digits))
+  where
+    (signed, afterSign) = case Text.uncons str of
+        Just ('+', rest) -> (True, rest)
+        Just ('-', rest) -> (True, rest)
+        _                -> (False, str)
+    (digits, afterDigits) = Text.span isDecimalDigit afterSign
+    signLen               = if signed then 1 else 0
+    suffix                = doubleSuffixLen afterDigits
+
+doubleSuffixLen :: Text -> Int
+doubleSuffixLen t =
+    case Text.uncons t of
+        Just ('.', rest) ->
+            let (frac, afterFrac) = Text.span isDecimalDigit rest
+            in if Text.null frac
+                then 0
+                else 1 + Text.length frac + exponentLen afterFrac
+        _ -> exponentLen t
+
+exponentLen :: Text -> Int
+exponentLen t =
+    case Text.uncons t of
+        Just (e, rest) | e == 'e' || e == 'E' ->
+            let (signLen, afterSign) = case Text.uncons rest of
+                    Just ('+', r) -> (1, r)
+                    Just ('-', r) -> (1, r)
+                    _             -> (0, rest)
+                (digs, _) = Text.span isDecimalDigit afterSign
+            in if Text.null digs then 0 else 1 + signLen + Text.length digs
+        _ -> 0
 
 hexNaturalTok :: AlexInput -> Int -> Alex Tok
 hexNaturalTok inp len =
@@ -400,26 +445,6 @@ prefixedNatural inp len isDigit convert = do
     if Text.null digits
         then alexError ("invalid natural: " ++ Text.unpack full)
         else mkTokM start end full (TkNatural (convert digits))
-
-integerTok :: AlexInput -> Int -> Alex Tok
-integerTok inp len = do
-    after <- alexGetInput
-    let (pos, txt) = matched inp len
-        (end, _, _, _) = after
-        (sign, rest) = case Text.uncons txt of
-            Just ('+', xs) -> (1, xs)
-            Just ('-', xs) -> (-1, xs)
-            _              -> (1, txt)
-    if Text.null rest
-        then alexError ("invalid integer: " ++ Text.unpack txt)
-        else mkTokM pos end txt (TkInteger (sign * fromIntegral (Token.naturalFromDecimalDigits rest)))
-
-doubleTok :: AlexInput -> Int -> Alex Tok
-doubleTok inp len = do
-    let txt = snd (matched inp len)
-    case reads (Text.unpack txt) of
-        [(d, "")] -> emitKind (TkDouble d) inp len
-        _         -> alexError ("invalid double: " ++ Text.unpack txt)
 
 bytesTok :: AlexInput -> Int -> Alex Tok
 bytesTok inp len = do
