@@ -18,6 +18,7 @@ import qualified Dhall.Test.Package
 import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
+import qualified Dhall.Test.Repl
 import qualified Dhall.Test.Schemas
 import qualified Dhall.Test.SemanticHash
 import qualified Dhall.Test.SemisemanticCache
@@ -83,6 +84,7 @@ getAllTests = do
                 , schemaTests
                 , Dhall.Test.DirectoryTree.tests
                 , Dhall.Test.Regression.tests
+                , Dhall.Test.Repl.tests
                 , Dhall.Test.Substitution.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
