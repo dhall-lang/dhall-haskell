@@ -20,7 +20,7 @@ import qualified Dhall.Nix
 import qualified Dhall.Parser
 import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
-import qualified Nix.Pretty
+import Nix.Pretty ()
 import qualified Options.Generic
 import qualified Paths_dhall_nix
 import qualified System.Exit
@@ -56,7 +56,7 @@ main = handle (Dhall.detailed (do
     nix <- case Dhall.Nix.dhallToNix expr' of
         Left err  -> Control.Exception.throwIO err
         Right nix -> return nix
-    print (Nix.Pretty.prettyNix nix) ))
+    print (Dhall.Nix.prettyNix nix) ))
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler
