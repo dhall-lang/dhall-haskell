@@ -130,11 +130,12 @@ anyLabelOrSomeOrKeywordHint = do
 startsRecordFieldLabel :: TokKind -> Bool
 startsRecordFieldLabel k =
     case k of
-        TkIdent         -> True
-        TkQuotedLabel   -> True
-        TkSome          -> True
+        TkIdent           -> True
+        TkQuotedLabel     -> True
+        TkBuiltin         -> True
+        TkSome            -> True
         TkShowConstructor -> True
-        _               -> keywordAsLabelName k /= Nothing
+        _                 -> keywordAsLabelName k /= Nothing
 
 peekRecordFieldStart :: TParser ()
 peekRecordFieldStart =
