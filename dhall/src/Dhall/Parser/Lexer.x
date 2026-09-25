@@ -390,35 +390,50 @@ exponentLen t =
         _ -> 0
 
 hexNaturalTok :: AlexInput -> Int -> Alex Tok
-hexNaturalTok inp len =
-    prefixedNatural inp len isHexDigit Token.naturalFromHexadecimalDigits
+hexNaturalTok inp len = do
+    after <- alexGetInput
+    let (_, _, _, rest) = after
+        (more, leftover) = Text.span isAsciiHexDigit rest
+    prefixedNatural inp len more leftover Token.naturalFromHexadecimalDigits
 
 binNaturalTok :: AlexInput -> Int -> Alex Tok
-binNaturalTok inp len =
-    prefixedNatural inp len isBinDigit Token.naturalFromBinaryDigits
+binNaturalTok inp len = do
+    after <- alexGetInput
+    let (_, _, _, rest) = after
+        (more, leftover) = Text.span isBinDigit rest
+    prefixedNatural inp len more leftover Token.naturalFromBinaryDigits
 
 signedHexNaturalTok :: AlexInput -> Int -> Alex Tok
-signedHexNaturalTok inp len =
-    signedPrefixedNatural inp len isHexDigit Token.naturalFromHexadecimalDigits
+signedHexNaturalTok inp len = do
+    after <- alexGetInput
+    let (_, _, _, rest) = after
+        (more, leftover) = Text.span isAsciiHexDigit rest
+    signedPrefixedNatural inp len more leftover Token.naturalFromHexadecimalDigits
 
 signedBinNaturalTok :: AlexInput -> Int -> Alex Tok
-signedBinNaturalTok inp len =
-    signedPrefixedNatural inp len isBinDigit Token.naturalFromBinaryDigits
+signedBinNaturalTok inp len = do
+    after <- alexGetInput
+    let (_, _, _, rest) = after
+        (more, leftover) = Text.span isBinDigit rest
+    signedPrefixedNatural inp len more leftover Token.naturalFromBinaryDigits
 
+{-# INLINE isAsciiHexDigit #-}
+isAsciiHexDigit :: Char -> Bool
+isAsciiHexDigit c =
+    (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+
+{-# INLINE isBinDigit #-}
 isBinDigit :: Char -> Bool
 isBinDigit c = c == '0' || c == '1'
 
 signedPrefixedNatural
-    :: AlexInput -> Int -> (Char -> Bool) -> (Text -> Natural) -> Alex Tok
-signedPrefixedNatural inp len isDigit convert = do
-    after <- alexGetInput
+    :: AlexInput -> Int -> Text -> Text -> (Text -> Natural) -> Alex Tok
+signedPrefixedNatural inp len more leftover convert = do
     let (start, _) = matched inp len
-        (_, _, _, rest) = after
-        (more, leftover) = Text.span isDigit rest
-        n                = len + Text.length more
-        (_, _, _, str)   = inp
-        full             = Text.take n str
-        end              = advancePosAscii start n
+        n          = len + Text.length more
+        (_, _, _, str) = inp
+        full       = Text.take n str
+        end        = advancePosAscii start n
     alexSetInput (end, '\n', [], leftover)
     let (sign, unsigned) = case Text.uncons full of
             Just ('-', xs) -> (-1, xs)
@@ -430,17 +445,14 @@ signedPrefixedNatural inp len isDigit convert = do
         else mkTokM start end full (TkInteger (sign * fromIntegral (convert digits)))
 
 prefixedNatural
-    :: AlexInput -> Int -> (Char -> Bool) -> (Text -> Natural) -> Alex Tok
-prefixedNatural inp len isDigit convert = do
-    after <- alexGetInput
+    :: AlexInput -> Int -> Text -> Text -> (Text -> Natural) -> Alex Tok
+prefixedNatural inp len more leftover convert = do
     let (start, _) = matched inp len
-        (_, _, _, rest) = after
-        (more, leftover) = Text.span isDigit rest
-        n                = len + Text.length more
-        (_, _, _, str)   = inp
-        full             = Text.take n str
-        end              = advancePosAscii start n
-        digits           = Text.drop 2 full
+        n          = len + Text.length more
+        (_, _, _, str) = inp
+        full       = Text.take n str
+        end        = advancePosAscii start n
+        digits     = Text.drop 2 full
     alexSetInput (end, '\n', [], leftover)
     if Text.null digits
         then alexError ("invalid natural: " ++ Text.unpack full)
