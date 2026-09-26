@@ -541,39 +541,66 @@ parsers embedded = Parsers{..}
     makeOperatorExpression firstSubExpression operatorParser subExpression = do
             a <- firstSubExpression
 
-            bs <- Text.Megaparsec.many $ do
-                (Src _ _ textOp, op0) <- srcAnd (try (whitespace *> operatorParser))
+            -- After a subexpression the next token is often a delimiter
+            -- (`,`, `}`, `)`, `:`, ...).  Skip the operator `many` loop in
+            -- that case instead of trying every precedence layer.
+            mc <- Text.Megaparsec.lookAhead $ optional $ try $ do
+                whitespace
+                Text.Megaparsec.anySingle
 
-                r0 <- subExpression
+            case mc of
+                Just c | isOperatorStart c -> parseOperators a
+                _                          -> return a
+          where
+            parseOperators a = do
+                bs <- Text.Megaparsec.many $ do
+                    (Src _ _ textOp, op0) <- srcAnd (try (whitespace *> operatorParser))
 
-                let l@(Note (Src startL _ textL) _) `op` r@(Note (Src _ endR textR) _) =
-                        Note (Src startL endR (textL <> textOp <> textR)) (l `op0` r)
-                    -- We shouldn't hit this branch if things are working, but
-                    -- that is not enforced in the types
-                    l `op` r =
-                        l `op0` r
+                    r0 <- subExpression
 
-                return (`op` r0)
+                    let l@(Note (Src startL _ textL) _) `op` r@(Note (Src _ endR textR) _) =
+                            Note (Src startL endR (textL <> textOp <> textR)) (l `op0` r)
+                        -- We shouldn't hit this branch if things are working, but
+                        -- that is not enforced in the types
+                        l `op` r =
+                            l `op0` r
 
-            return (foldl' (\x f -> f x) a bs)
+                    return (`op` r0)
+
+                return (foldl' (\x f -> f x) a bs)
+
+            isOperatorStart c =
+                    c == '=' || c == '≡'
+                ||  c == '?'
+                ||  c == '|'
+                ||  c == '+'
+                ||  c == '#'
+                ||  c == '&'
+                ||  c == '/' || c == '∧' || c == '⫽' || c == '⩓'
+                ||  c == '*'
+                ||  c == '!'
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ Equivalent . Specify        <$> _equivalent   <* whitespace
-        , ImportAlt                   <$ _importAlt     <* nonemptyWhitespace
-        , BoolOr                      <$ _or            <* whitespace
-        , NaturalPlus                 <$ _plus          <* nonemptyWhitespace
-        , TextAppend                  <$ _textAppend    <* whitespace
-        , ListAppend                  <$ _listAppend    <* whitespace
-        , BoolAnd                     <$ _and           <* whitespace
-        , (\cs -> Combine (Specify cs) Nothing)         <$> _combine <* whitespace
-        , (\cs -> Prefer (Specify cs) PreferFromSource) <$> _prefer  <* whitespace
-        , CombineTypes . Specify      <$> _combineTypes <* whitespace
-        , NaturalTimes                <$ _times         <* whitespace
+        [ Equivalent . Specify        <$> startsWith (\c -> c == '=' || c == '≡') _equivalent   <* whitespace
+        , ImportAlt                   <$ startsWith (== '?') _importAlt     <* nonemptyWhitespace
+        , BoolOr                      <$ startsWith (== '|') _or            <* whitespace
+        , NaturalPlus                 <$ startsWith (== '+') _plus          <* nonemptyWhitespace
+        , TextAppend                  <$ startsWith (== '+') _textAppend    <* whitespace
+        , ListAppend                  <$ startsWith (== '#') _listAppend    <* whitespace
+        , BoolAnd                     <$ startsWith (== '&') _and           <* whitespace
+        , (\cs -> Combine (Specify cs) Nothing)         <$> startsWith (\c -> c == '/' || c == '∧') _combine <* whitespace
+        , (\cs -> Prefer (Specify cs) PreferFromSource) <$> startsWith (\c -> c == '/' || c == '⫽') _prefer  <* whitespace
+        , CombineTypes . Specify      <$> startsWith (\c -> c == '/' || c == '⩓') _combineTypes <* whitespace
+        , NaturalTimes                <$ startsWith (== '*') _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
-        , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace
-        , BoolNE                      <$ _notEqual      <* whitespace
+        , BoolEQ                      <$ startsWith (== '=') (try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '='))) <* whitespace
+        , BoolNE                      <$ startsWith (== '!') _notEqual      <* whitespace
         ]
+      where
+        startsWith predicate parser = do
+            c <- Text.Megaparsec.lookAhead Text.Megaparsec.anySingle
+            if predicate c then parser else empty
 
     applicationExpression = snd <$> applicationExpressionWithInfo
 
