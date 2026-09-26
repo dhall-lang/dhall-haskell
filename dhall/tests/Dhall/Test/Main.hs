@@ -101,6 +101,15 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
+    -- A repl test re-executes this program to own the standard handles.
+    -- Return before the import test server starts.
+    isReplWorker <- Dhall.Test.Repl.runAsReplWorker
+    if isReplWorker
+        then return ()
+        else runTests
+
+runTests :: IO ()
+runTests = do
     pwd <- System.Directory.getCurrentDirectory
 
     System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")

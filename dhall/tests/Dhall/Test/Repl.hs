@@ -1,12 +1,15 @@
 -- | Tests for @dhall repl@.
 --
--- These drive 'Dhall.Repl.repl' with a closed stdin pipe, which is the same
--- non-terminal mode Haskeline uses for a redirected standard input. The
--- process standard handles are redirected for the duration of each test, so
--- the suite must run single-threaded (see @TASTY_NUM_THREADS@ in
--- "Main").
+-- Each test runs this executable again as a child process with piped standard
+-- handles. That is the non-terminal mode Haskeline uses for redirected input.
+-- The child is used instead of 'hDuplicateTo' because, on Windows, GHC cannot
+-- retarget the process standard handles onto an anonymous pipe ("handles are
+-- incompatible").
 
-module Dhall.Test.Repl (tests) where
+module Dhall.Test.Repl
+    ( tests
+    , runAsReplWorker
+    ) where
 
 import Control.Concurrent
     ( forkFinally
@@ -16,14 +19,13 @@ import Control.Concurrent
     )
 import Control.Exception
     ( SomeException
-    , bracket
     , displayException
     , evaluate
-    , try
     )
 import Data.List (findIndex, isInfixOf, isPrefixOf, tails)
 import Dhall.Pretty (CharacterSet (..))
-import GHC.IO.Handle (hDuplicate, hDuplicateTo)
+import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
+import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.IO
     ( Handle
@@ -32,10 +34,20 @@ import System.IO
     , hPutStr
     , hSetBuffering
     , hSetEncoding
+    , hSetNewlineMode
+    , noNewlineTranslation
     , stderr
     , stdin
     , stdout
     , utf8
+    )
+import System.Process
+    ( CreateProcess (..)
+    , StdStream (..)
+    , createProcess
+    , proc
+    , terminateProcess
+    , waitForProcess
     )
 import System.Timeout (timeout)
 import Test.Tasty (TestTree, testGroup)
@@ -45,7 +57,6 @@ import qualified Dhall.Repl
 import qualified System.Directory as Directory
 import qualified System.IO as IO
 import qualified System.IO.Temp as Temp
-import qualified System.Process as Process
 
 -- | Plain output of one REPL session, plus any files it wrote in its working
 -- directory (including @.history@).
@@ -163,65 +174,116 @@ sessionCaseWith name characterSet explain input assert =
         session <- runRepl characterSet explain input
         assert session
 
+-- | When this process was spawned by 'runRepl', run one REPL session and
+-- return 'True'. Otherwise return 'False' so the test suite starts as usual.
+runAsReplWorker :: IO Bool
+runAsReplWorker = do
+    mode <- lookupEnv "DHALL_REPL_TEST"
+    case mode of
+        Just "1" -> do
+            requestedCharset <- lookupEnv "DHALL_REPL_TEST_CHARSET"
+            explainName <- lookupEnv "DHALL_REPL_TEST_EXPLAIN"
+            charset <- case requestedCharset of
+                Just "Unicode" -> pure Unicode
+                Just "ASCII" -> pure ASCII
+                other -> fail ("bad DHALL_REPL_TEST_CHARSET: " <> show other)
+            explain <- case explainName of
+                Just "1" -> pure True
+                Just "0" -> pure False
+                other -> fail ("bad DHALL_REPL_TEST_EXPLAIN: " <> show other)
+            mapM_ prepareHandle [stdin, stdout, stderr]
+            Dhall.Repl.repl charset explain
+            pure True
+        _ ->
+            pure False
+  where
+    prepareHandle handle = do
+        hSetEncoding handle utf8
+        hSetNewlineMode handle noNewlineTranslation
+        hSetBuffering handle IO.LineBuffering
+
 runRepl :: CharacterSet -> Bool -> String -> IO Session
 runRepl characterSet explain input =
-    Temp.withSystemTempDirectory "dhall-repl-test" $ \dir ->
-        Directory.withCurrentDirectory dir $ do
-            (inRead, inWrite) <- Process.createPipe
-            (outRead, outWrite) <- Process.createPipe
-            mapM_ (`hSetEncoding` utf8) [inRead, inWrite, outRead, outWrite]
-            hPutStr inWrite input
-            hClose inWrite
+    Temp.withSystemTempDirectory "dhall-repl-test" $ \dir -> do
+        self <- getExecutablePath
+        env0 <- getEnvironment
+        let env =
+                [ ("DHALL_REPL_TEST", "1")
+                , ("DHALL_REPL_TEST_CHARSET", charsetName characterSet)
+                , ("DHALL_REPL_TEST_EXPLAIN", if explain then "1" else "0")
+                ]
+                ++ filter (not . isReplTestVar . fst) env0
+        pipes <-
+            createProcess
+                (proc self [])
+                    { std_in = CreatePipe
+                    , std_out = CreatePipe
+                    , std_err = CreatePipe
+                    , cwd = Just dir
+                    , env = Just env
+                    }
+        (inWrite, outRead, errRead, processHandle) <- case pipes of
+            (Just inH, Just outH, Just errH, processH) ->
+                pure (inH, outH, errH, processH)
+            _ ->
+                fail "createProcess did not return standard-handle pipes"
+        mapM_ prepareParentHandle [inWrite, outRead, errRead]
+        outputVar <- newEmptyMVar
+        errorVar <- newEmptyMVar
+        _ <- forkFinally (forceContents outRead) (putText outputVar)
+        _ <- forkFinally (forceContents errRead) (putText errorVar)
+        hPutStr inWrite input
+        hClose inWrite
+        finished <- timeout (20 * 1000000) (waitForProcess processHandle)
+        code <- case finished of
+            Nothing -> do
+                terminateProcess processHandle
+                _ <- waitForProcess processHandle
+                pure Nothing
+            Just exitCode ->
+                pure (Just exitCode)
+        stdoutText <- takeMVar outputVar
+        stderrText <- takeMVar errorVar
+        let output = filter (/= '\r') (stripAnsi (stdoutText ++ stderrText))
+        case code of
+            Nothing ->
+                fail ("dhall repl timed out\n" <> output)
+            Just ExitSuccess -> do
+                names <- Directory.listDirectory dir
+                files <- mapM (readSessionFile dir) names
+                pure Session
+                    { sessionOutput = output
+                    , sessionFiles = files
+                    }
+            Just exitCode ->
+                fail
+                    ( "dhall repl exited with "
+                        <> show exitCode
+                        <> "\n"
+                        <> output
+                    )
+  where
+    prepareParentHandle handle = do
+        hSetEncoding handle utf8
+        hSetNewlineMode handle noNewlineTranslation
 
-            outputVar <- newEmptyMVar
-            _ <- forkFinally (forceContents outRead) $ \result ->
-                putMVar outputVar $ case result of
-                    Right text -> text
-                    Left exc ->
-                        "failed to read repl output: " <> displayException exc
+    putText var result =
+        putMVar var $ case result of
+            Right text -> text
+            Left exc ->
+                "failed to read repl output: " <> displayException (exc :: SomeException)
 
-            bracket
-                (do
-                    oldIn <- hDuplicate stdin
-                    oldOut <- hDuplicate stdout
-                    oldErr <- hDuplicate stderr
-                    pure (oldIn, oldOut, oldErr))
-                (\(oldIn, oldOut, oldErr) -> do
-                    hDuplicateTo oldIn stdin
-                    hDuplicateTo oldOut stdout
-                    hDuplicateTo oldErr stderr
-                    hClose oldIn
-                    hClose oldOut
-                    hClose oldErr)
-                $ \_ -> do
-                    hDuplicateTo inRead stdin
-                    hClose inRead
-                    hDuplicateTo outWrite stdout
-                    hDuplicateTo outWrite stderr
-                    hClose outWrite
-                    hSetBuffering stdin IO.LineBuffering
-                    hSetBuffering stdout IO.LineBuffering
-                    hSetBuffering stderr IO.LineBuffering
-                    hSetEncoding stdin utf8
-                    hSetEncoding stdout utf8
-                    hSetEncoding stderr utf8
-                    outcome <- try
-                        (timeout (20 * 1000000) (Dhall.Repl.repl characterSet explain))
-                        :: IO (Either SomeException (Maybe ()))
-                    case outcome of
-                        Right (Just ()) -> pure ()
-                        Right Nothing ->
-                            fail "dhall repl timed out"
-                        Left exc ->
-                            fail ("dhall repl threw " <> displayException exc)
+charsetName :: CharacterSet -> String
+charsetName Unicode = "Unicode"
+charsetName ASCII = "ASCII"
 
-            output <- takeMVar outputVar
-            names <- Directory.listDirectory dir
-            files <- mapM (readSessionFile dir) names
-            pure Session
-                { sessionOutput = stripAnsi output
-                , sessionFiles = files
-                }
+isReplTestVar :: String -> Bool
+isReplTestVar name =
+    name
+        `elem` [ "DHALL_REPL_TEST"
+               , "DHALL_REPL_TEST_CHARSET"
+               , "DHALL_REPL_TEST_EXPLAIN"
+               ]
 
 readSessionFile :: FilePath -> FilePath -> IO (FilePath, String)
 readSessionFile dir name = do
