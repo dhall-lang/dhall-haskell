@@ -33,6 +33,7 @@ Library
         hnix                      >= 0.16     && < 0.18,
         microlens                 >= 0.4      && < 0.6 ,
         neat-interpolation                       < 0.6 ,
+        prettyprinter             >= 1.7.0    && < 1.8 ,
         text                      >= 0.8.0.0  && < 2.2
     Exposed-Modules:
         Dhall.Nix

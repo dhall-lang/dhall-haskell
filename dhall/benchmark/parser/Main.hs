@@ -72,11 +72,18 @@ main =
         , benchExprFromText "Whitespace" (Text.replicate 1000000 " " <> "x")
         , benchExprFromText "Line comment" ("x -- " <> Text.replicate 1000000 " ")
         , benchExprFromText "Block comment" ("x {- " <> Text.replicate 1000000 " " <> "-}")
-        , env cpkgExample $
-            benchNfExprFromText "CPkg/Text"
+        , env cpkgExample $ \cpkg ->
+            bgroup "CPkg"
+                [ bench "parse" $ whnf parsePhase cpkg
+                , benchNfExprFromText "Text" cpkg
+                ]
         ]
     where
         cpkgExample = Data.Text.IO.readFile "benchmark/parser/examples/cpkg.dhall"
+        parsePhase text =
+            case Dhall.exprFromText "(input)" text of
+                Left err -> throw err
+                Right expr -> expr
         issue108Text = Data.Text.IO.readFile "benchmark/parser/examples/issue108.dhall"
         issue108Bytes = Data.ByteString.Lazy.readFile "benchmark/parser/examples/issue108.dhallb"
         issues = (,) <$> issue108Text <*> issue108Bytes

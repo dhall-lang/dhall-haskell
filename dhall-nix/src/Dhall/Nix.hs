@@ -80,6 +80,13 @@
 > u:
 >   u { Left = b: 0; Right = n: n; }
 
+    Nix binds field selection more tightly than function application, so a field
+    projection of a call is parenthesized:
+
+> $ dhall-to-nix <<< "λ(fn : Text → { a : Text }) → (fn \"hi\").a"
+> fn:
+>   (fn "hi").a
+
     Also, all Dhall expressions are normalized before translation to Nix:
 
 > $ dhall-to-nix <<< "True == False"
@@ -109,13 +116,14 @@
 module Dhall.Nix (
     -- * Dhall to Nix
       dhallToNix
+    , prettyNix
 
     -- * Exceptions
     , CompileError(..)
     ) where
 
 import Control.Exception (Exception)
-import Data.Fix (Fix (..))
+import Data.Fix (Fix (..), foldFix)
 import Data.Foldable (toList)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
@@ -124,6 +132,7 @@ import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import Lens.Micro (toListOf, rewriteOf, traverseOf)
+import Prettyprinter (Doc)
 import Numeric (showHex)
 import Data.Char (ord, isDigit, isAsciiLower, isAsciiUpper)
 
@@ -177,6 +186,7 @@ import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
 import qualified NeatInterpolation
 import qualified Nix
+import qualified Nix.Pretty
 
 {-| This is the exception type for all possible errors that might arise when
     translating the Dhall syntax tree to the Nix syntax tree
@@ -834,6 +844,50 @@ dhallToNix e = do
     loop (ImportAlt a _) = loop a
     loop (Note _ b) = loop b
     loop (Embed x) = absurd x
+
+{-| Pretty-print a Nix expression produced by `dhallToNix`.
+
+    Nix binds attribute selection more tightly than function application, so
+    @f x.a@ means @f (x.a)@.  @hnix@'s printer treats those two operators as
+    the same left-associative precedence, and therefore emits @f x.a@ for a
+    selection whose base is an application.  That is the wrong Nix program.
+
+    This printer keeps @hnix@'s layout for every other construct, and inserts
+    parentheses around an application used as a selection base:
+
+>>> import qualified Dhall.Core
+>>> import qualified Dhall.Import
+>>> import qualified Dhall.Parser
+>>> expr <- Dhall.Import.assertNoImports =<< Dhall.Core.throws (Dhall.Parser.exprFromText "(test)" "\\(fn : Text -> Text -> { a : Text }) -> let out = fn \"a word\" \"another word\" in out.a")
+>>> fmap prettyNix (dhallToNix expr)
+Right fn:
+  (fn "a word" "another word").a
+-}
+prettyNix :: NExpr -> Doc ann
+prettyNix = Nix.Pretty.prettyNix . parenthesizeSelectApps
+  where
+    -- Selection of an application is printed by turning the application into
+    -- an atomic symbol whose text already contains parentheses.  A symbol is
+    -- a simple expression, so the printer will not wrap it again, and the
+    -- surrounding selection keeps selection precedence for its own context.
+    parenthesizeSelectApps :: NExpr -> NExpr
+    parenthesizeSelectApps = foldFix rewrite
+      where
+        rewrite (Nix.NSelect alt base path)
+            | isApplication base =
+                Fix (Nix.NSelect alt (parenthesize base) path)
+        rewrite expr =
+            Fix expr
+
+        isApplication (Fix (Nix.NApp _ _)) = True
+        isApplication _                     = False
+
+        parenthesize expr =
+            Nix.mkSym
+                ( "("
+                <> Text.pack (show (Nix.Pretty.prettyNix expr))
+                <> ")"
+                )
 
 -- | Strip source notes and type ascriptions so that `Merge` can match on the
 -- underlying constructor.
