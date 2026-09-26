@@ -15,6 +15,8 @@ module Dhall.Parser.Lex
     , lexText
     , parseTokens
     , tokensText
+    , spanText
+    , currentOff
     , whitespace
     , nonemptyWhitespace
     , satisfyKind
@@ -45,6 +47,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Proxy         as Proxy
 import qualified Data.Set           as Set
 import qualified Data.Text          as Text
+import qualified Data.Text.Internal as TI
 import qualified Text.Megaparsec    as Megaparsec
 
 -- | Token stream produced by 'lexText', retaining the original source.
@@ -128,13 +131,36 @@ instance Megaparsec.TraversableStream TokenStream where
             (t:_) -> tokStart t
             []    -> pstateSourcePos
 
--- | Source text for a matched token list.
---
--- We concatenate lexeme texts rather than slicing the original input: a slice
--- can retain the entire source buffer and makes @nf@ over large files costly.
+-- | Byte offset of the next token in the shared source array, or the end of
+-- the buffer at EOF.
+currentOff :: TokenStream -> Int
+currentOff (TokenStream source []) = byteEnd source
+currentOff (TokenStream _ (t:_)) = byteStart (tokText t)
+
+-- | Slice of the original source from byte offset @start@ (inclusive) to
+-- @end@ (exclusive). Shares the input array. Offsets are UTF-8 bytes from
+-- 'tokText', not character 'tokOff', so the slice is O(1).
+spanText :: Text -> Int -> Int -> Text
+spanText source start end
+    | end > start =
+        let TI.Text arr _ _ = source
+        in  TI.Text arr start (end - start)
+    | otherwise   = ""
+
+byteStart :: Text -> Int
+byteStart (TI.Text _ off _) = off
+
+byteEnd :: Text -> Int
+byteEnd (TI.Text _ off len) = off + len
+
+-- | Source text for a matched token list, sliced from the original buffer.
 tokensText :: TokenStream -> [Tok] -> Text
 tokensText _ [] = ""
-tokensText _ toks = mconcat (map tokText toks)
+tokensText (TokenStream source _) (t:ts) =
+    spanText source (byteStart (tokText t)) (byteEnd (tokText (lastTok ts t)))
+  where
+    lastTok []       x = x
+    lastTok (y : ys) _ = lastTok ys y
 
 -- | Lex @Text@ into a token stream.  Positions use @file@ as the source name.
 lexText :: String -> Text -> Either LexError TokenStream
@@ -160,7 +186,8 @@ parseTokens
     -> String
     -> TokenStream
     -> Either (ParseErrorBundle TokenStream Void) a
-parseTokens p file stream = Megaparsec.parse p file stream
+parseTokens p file stream =
+    Megaparsec.parse p file stream
 
 triviaTok :: TParser Tok
 triviaTok = Megaparsec.satisfy (\t -> isTrivia (tokKind t)) Megaparsec.<?> "whitespace"
@@ -188,32 +215,29 @@ peekKind = Megaparsec.lookAhead $ do
     whitespace
     tokKind <$> Megaparsec.anySingle
 
--- | Source span of a token parser (slice of the original input).
-src :: TParser a -> TParser Src
-src parser = do
+-- | Run a parser and return its source span as a slice of the original buffer.
+withSpan :: TParser a -> TParser (Src, a)
+withSpan parser = do
     stream <- Megaparsec.getInput
     before <- Megaparsec.getSourcePos
-    (toks, _) <- Megaparsec.match parser
+    let start = currentOff stream
+    x <- parser
     after <- Megaparsec.getSourcePos
-    return (Src before after (tokensText stream toks))
+    end <- currentOff <$> Megaparsec.getInput
+    return (Src before after (spanText (tsSource stream) start end), x)
+
+-- | Source span of a token parser (slice of the original input).
+src :: TParser a -> TParser Src
+src parser = fst <$> withSpan parser
 
 -- | Like 'src', also returning the value.
 srcAnd :: TParser a -> TParser (Src, a)
-srcAnd parser = do
-    stream <- Megaparsec.getInput
-    before <- Megaparsec.getSourcePos
-    (toks, x) <- Megaparsec.match parser
-    after <- Megaparsec.getSourcePos
-    return (Src before after (tokensText stream toks), x)
+srcAnd = withSpan
 
 -- | Wrap an expression in 'Note'.
 noted :: TParser (Expr Src a) -> TParser (Expr Src a)
 noted parser = do
-    stream <- Megaparsec.getInput
-    before <- Megaparsec.getSourcePos
-    (toks, e) <- Megaparsec.match parser
-    after <- Megaparsec.getSourcePos
-    let src0 = Src before after (tokensText stream toks)
+    (src0, e) <- withSpan parser
     case e of
         Note src1 _ | laxSrcEq src0 src1 -> return e
         _                                -> return (Note src0 e)

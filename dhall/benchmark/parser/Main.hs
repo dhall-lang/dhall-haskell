@@ -74,12 +74,17 @@ main =
         , benchExprFromText "Block comment" ("x {- " <> Text.replicate 1000000 " " <> "-}")
         , env cpkgExample $ \cpkg ->
             bgroup "CPkg"
-                [ bench "parse" $ whnf parsePhase cpkg
+                [ bench "lex" $ whnf lexPhase cpkg
+                , bench "parse" $ whnf parsePhase cpkg
                 , benchNfExprFromText "Text" cpkg
                 ]
         ]
     where
         cpkgExample = Data.Text.IO.readFile "benchmark/parser/examples/cpkg.dhall"
+        lexPhase text =
+            case Dhall.lexTokenCount "(input)" text of
+                Left _ -> error "lex failed"
+                Right n -> n
         parsePhase text =
             case Dhall.exprFromText "(input)" text of
                 Left err -> throw err

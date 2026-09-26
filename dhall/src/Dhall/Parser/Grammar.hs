@@ -445,12 +445,16 @@ parsers embedded = Parsers{..}
         nil = (firstApplicationExpression, applicationExpression)
 
     makeOperatorExpression firstSubExpression operatorParser subExpression = do
+            stream <- Megaparsec.getInput
+            let srcBuf = tsSource stream
+            let startOff = currentOff stream
             a <- firstSubExpression
             bs <- Megaparsec.many $ do
-                (Src _ _ textOp, op0) <- srcAnd (try (whitespace *> operatorParser))
+                op0 <- try (whitespace *> operatorParser)
                 r0 <- subExpression
-                let l@(Note (Src startL _ textL) _) `op` r@(Note (Src _ endR textR) _) =
-                        Note (Src startL endR (textL <> textOp <> textR)) (l `op0` r)
+                endOff <- currentOff <$> Megaparsec.getInput
+                let l@(Note (Src startL _ _) _) `op` r@(Note (Src _ endR _) _) =
+                        Note (Src startL endR (spanText srcBuf startOff endOff)) (l `op0` r)
                     l `op` r = l `op0` r
                 return (`op` r0)
             return (foldl' (\x f -> f x) a bs)
@@ -513,17 +517,19 @@ parsers embedded = Parsers{..}
                         Nothing      -> parser
                         Just message -> parser <?> message
 
+            stream <- Megaparsec.getInput
+            let srcBuf = tsSource stream
+            let startOff = currentOff stream
+
             a <- adapt (noted importExpression_)
 
             bs <- Megaparsec.many $ do
-                stream <- Megaparsec.getInput
-                (sepToks, _) <- Megaparsec.match $
-                    try (nonemptyWhitespace <* Megaparsec.lookAhead (satisfyKind startsImportExpression))
-                let sep = tokensText stream sepToks
+                try (nonemptyWhitespace <* Megaparsec.lookAhead (satisfyKind startsImportExpression))
                 b <- importExpression_
-                return (sep, b)
+                endOff <- currentOff <$> Megaparsec.getInput
+                return (endOff, b)
 
-            let c = foldl' app (f a) bs
+            let c = foldl' (app srcBuf startOff) (f a) bs
 
             let info =
                     case (maybeMessage, bs) of
@@ -533,12 +539,12 @@ parsers embedded = Parsers{..}
 
             return (info, c)
           where
-            app a (sep, b)
-                | Note (Src left _ bytesL) _ <- a
-                , Note (Src _ right bytesR) _ <- b
-                = Note (Src left right (bytesL <> sep <> bytesR)) (App a b)
-            app a (_, b) =
-                App a b
+            app srcBuf startOff lhs (endOff, b)
+                | Note (Src left _ _) _ <- lhs
+                , Note (Src _ right _) _ <- b
+                = Note (Src left right (spanText srcBuf startOff endOff)) (App lhs b)
+            app _ _ lhs (_, b) =
+                App lhs b
 
     importExpression_ = noted (choice [ alternative0, alternative1 ])
           where
