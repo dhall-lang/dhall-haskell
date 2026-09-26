@@ -449,15 +449,42 @@ parsers embedded = Parsers{..}
             let srcBuf = tsSource stream
             let startOff = currentOff stream
             a <- firstSubExpression
-            bs <- Megaparsec.many $ do
-                op0 <- try (whitespace *> operatorParser)
-                r0 <- subExpression
-                endOff <- currentOff <$> Megaparsec.getInput
-                let l@(Note (Src startL _ _) _) `op` r@(Note (Src _ endR _) _) =
-                        Note (Src startL endR (spanText srcBuf startOff endOff)) (l `op0` r)
-                    l `op` r = l `op0` r
-                return (`op` r0)
-            return (foldl' (\x f -> f x) a bs)
+            -- After a subexpression the next token is often a delimiter.
+            -- `try` is required so trailing trivia plus EOF is an empty
+            -- failure that `optional` can turn into Nothing.
+            mk <- Megaparsec.lookAhead $ optional $ try $ do
+                whitespace
+                tokKind <$> Megaparsec.anySingle
+            case mk of
+                Just k | isOperatorKind k -> parseOperators srcBuf startOff a
+                _                         -> return a
+          where
+            parseOperators srcBuf startOff a = do
+                bs <- Megaparsec.many $ do
+                    op0 <- try (whitespace *> operatorParser)
+                    r0 <- subExpression
+                    endOff <- currentOff <$> Megaparsec.getInput
+                    let l@(Note (Src startL _ _) _) `op` r@(Note (Src _ endR _) _) =
+                            Note (Src startL endR (spanText srcBuf startOff endOff)) (l `op0` r)
+                        l `op` r = l `op0` r
+                    return (`op` r0)
+                return (foldl' (\x f -> f x) a bs)
+
+            isOperatorKind k = case k of
+                TkEquiv _        -> True
+                TkImportAlt      -> True
+                TkOr             -> True
+                TkPlus           -> True
+                TkTextAppend     -> True
+                TkListAppend     -> True
+                TkAnd            -> True
+                TkCombine _      -> True
+                TkPrefer _       -> True
+                TkCombineTypes _ -> True
+                TkTimes          -> True
+                TkEQ             -> True
+                TkNE             -> True
+                _                -> False
 
     operatorParsers :: [TParser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
@@ -593,7 +620,32 @@ parsers embedded = Parsers{..}
 
     primitiveExpression =
             noted
-                ( choice
+                ( do
+                    mk <- Megaparsec.lookAhead (optional (tokKind <$> Megaparsec.anySingle))
+                    case mk of
+                        Just (TkBytes _)     -> bytesLiteral
+                        Just TkTemporal      -> temporalLiteral
+                        Just (TkDouble _)    -> alternative00
+                        Just (TkNatural _)   -> alternative01
+                        Just (TkInteger _)   -> alternative02
+                        Just TkDQuote        -> textLiteral
+                        Just TkSQuoteBegin   -> textLiteral
+                        Just TkBraceL        -> alternative04
+                        Just TkAngleL        -> unionType
+                        Just TkBrackL        -> listLiteral
+                        Just TkIdent         -> alternative37
+                        Just TkQuotedLabel   -> alternative37
+                        Just TkShowConstructor -> alternative37
+                        Just (TkInfinity _)  -> alternative09
+                        Just TkBuiltin       -> builtin
+                        Just TkNaN           -> builtin
+                        Just TkParenL        -> empty
+                        _                    -> originalChoice
+                )
+            <|> alternative38
+          where
+            originalChoice =
+                choice
                     [ bytesLiteral
                     , temporalLiteral
                     , alternative00
@@ -607,9 +659,7 @@ parsers embedded = Parsers{..}
                     , alternative09
                     , builtin
                     ]
-                )
-            <|> alternative38
-          where
+
             alternative00 = do
                 t <- satisfyKind $ \k -> case k of TkDouble _ -> True; _ -> False
                 case tokKind t of
