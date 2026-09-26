@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- | Tests for @dhall repl@.
 --
 -- Each test runs this executable again as a child process with piped standard
@@ -5,6 +7,12 @@
 -- The child is used instead of 'hDuplicateTo' because, on Windows, GHC cannot
 -- retarget the process standard handles onto an anonymous pipe ("handles are
 -- incompatible").
+--
+-- On Windows, Haskeline encodes that redirected prompt with the console code
+-- page (@GetConsoleCP@), and characters outside the page become @?@. The child
+-- switches the console to the UTF-8 code page for the session so @⊢@ is
+-- preserved. An interactive console is unaffected: Haskeline writes that with
+-- @WriteConsoleW@.
 
 module Dhall.Test.Repl
     ( tests
@@ -19,6 +27,9 @@ import Control.Concurrent
     )
 import Control.Exception
     ( SomeException
+#ifdef mingw32_HOST_OS
+    , bracket
+#endif
     , displayException
     , evaluate
     )
@@ -57,6 +68,14 @@ import qualified Dhall.Repl
 import qualified System.Directory as Directory
 import qualified System.IO as IO
 import qualified System.IO.Temp as Temp
+#ifdef mingw32_HOST_OS
+import System.Win32.Console
+    ( getConsoleCP
+    , getConsoleOutputCP
+    , setConsoleCP
+    , setConsoleOutputCP
+    )
+#endif
 
 -- | Plain output of one REPL session, plus any files it wrote in its working
 -- directory (including @.history@).
@@ -192,7 +211,7 @@ runAsReplWorker = do
                 Just "0" -> pure False
                 other -> fail ("bad DHALL_REPL_TEST_EXPLAIN: " <> show other)
             mapM_ prepareHandle [stdin, stdout, stderr]
-            Dhall.Repl.repl charset explain
+            withUtf8ConsoleCodePage (Dhall.Repl.repl charset explain)
             pure True
         _ ->
             pure False
@@ -201,6 +220,29 @@ runAsReplWorker = do
         hSetEncoding handle utf8
         hSetNewlineMode handle noNewlineTranslation
         hSetBuffering handle IO.LineBuffering
+
+-- | Code page 65001 is UTF-8. Haskeline's Windows pipe backend calls
+-- @GetConsoleCP@ and encodes the prompt with @WideCharToMultiByte@, which
+-- substitutes @?@ for characters the page cannot represent.
+#ifdef mingw32_HOST_OS
+withUtf8ConsoleCodePage :: IO a -> IO a
+withUtf8ConsoleCodePage action =
+    bracket saveAndSet restore (const action)
+  where
+    utf8CodePage = 65001
+    saveAndSet = do
+        oldInput <- getConsoleCP
+        oldOutput <- getConsoleOutputCP
+        setConsoleCP utf8CodePage
+        setConsoleOutputCP utf8CodePage
+        pure (oldInput, oldOutput)
+    restore (oldInput, oldOutput) = do
+        setConsoleCP oldInput
+        setConsoleOutputCP oldOutput
+#else
+withUtf8ConsoleCodePage :: IO a -> IO a
+withUtf8ConsoleCodePage = id
+#endif
 
 runRepl :: CharacterSet -> Bool -> String -> IO Session
 runRepl characterSet explain input =

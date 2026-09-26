@@ -480,6 +480,9 @@ Test-Suite tasty
         tasty-silver                             < 3.4 ,
         temporary                 >= 1.2.1    && < 1.4 ,
         turtle                    >= 1.6      && < 1.7 ,
+    if os(windows)
+      Build-Depends:
+        Win32                     >= 2.6      && < 2.16
     if impl(ghc >= 9.6)
            build-depends: crypton-connection
     else
