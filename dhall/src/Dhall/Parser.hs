@@ -19,6 +19,9 @@ module Dhall.Parser (
     , SourcedException(..)
     , ParseError(..)
     , Parser(..)
+
+    -- * Benchmark phases
+    , lexTokenCount
     ) where
 
 import Control.Exception   (Exception)
@@ -37,6 +40,7 @@ import Dhall.Parser.Combinators
 import Dhall.Parser.Expression
 import Dhall.Parser.Grammar     (parseFile)
 import Dhall.Parser.Lex         (convertBundle, lexErrorBundle, lexText, parseTokens)
+import qualified Dhall.Parser.Lex as Lex
 
 -- | Parser for a top-level Dhall expression
 expr :: Parser (Expr Src Import)
@@ -119,6 +123,15 @@ exprFromText
   -> Text   -- ^ Input expression to parse
   -> Either ParseError (Expr Src Import)
 exprFromText delta text = fmap snd (exprAndHeaderFromText delta text)
+
+-- | Lex an expression and force the token list. Used to time lexing alone.
+lexTokenCount
+    :: String
+    -> Text
+    -> Either Lex.LexError Int
+lexTokenCount delta text = do
+    stream <- lexText delta text
+    return (length (Lex.tsTokens stream))
 
 -- | A header corresponds to the leading comment at the top of a Dhall file.
 --
