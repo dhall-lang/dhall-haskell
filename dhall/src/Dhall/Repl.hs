@@ -65,6 +65,7 @@ import qualified Dhall.Parser                        as Dhall
 import qualified Dhall.Parser.Expression             as Parser.Expression
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Repl.Line                     as Repline
 import qualified Dhall.Syntax                        as Syntax
 import qualified Dhall.TypeCheck                     as Dhall
 import qualified Dhall.Version                       as Meta
@@ -72,7 +73,6 @@ import qualified Prettyprinter                       as Pretty
 import qualified Prettyprinter.Render.Terminal       as Pretty (renderIO)
 import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.Completion as Haskeline
-import qualified System.Console.Repline              as Repline
 import qualified System.IO
 import qualified Text.Megaparsec                     as Megaparsec
 
