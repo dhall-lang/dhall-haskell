@@ -701,7 +701,35 @@ parsers embedded = Parsers{..}
 
     primitiveExpression =
             noted
-                ( choice
+                ( do
+                    mc <- Text.Megaparsec.lookAhead (optional Text.Megaparsec.anySingle)
+                    case mc of
+                        Just '"'  -> textLiteral
+                        Just '\'' -> textLiteral
+                        Just '{'  -> alternative04
+                        Just '<'  -> unionType
+                        Just '['  -> listLiteral
+                        Just '`'  -> alternative37
+                        Just '('  -> empty
+                        Just '+'  -> signedNumeric
+                        Just '-'  -> signedNumeric <|> alternative09
+                        Just '0'  -> zeroNumeric
+                        Just c | '1' <= c && c <= '9' ->
+                            unsignedNumeric
+                        Just c | identifierStart c ->
+                            alternative37 <|> alternative09 <|> builtin
+                        _ ->
+                            originalChoice
+                )
+            <|> alternative38
+          where
+            identifierStart c =
+                    ('\x41' <= c && c <= '\x5A')
+                ||  ('\x61' <= c && c <= '\x7A')
+                ||  c == '_'
+
+            originalChoice =
+                choice
                     [ bytesLiteral
                     , temporalLiteral
                     , decimalNatural
@@ -716,9 +744,32 @@ parsers embedded = Parsers{..}
                     , alternative09
                     , builtin
                     ]
-                )
-            <|> alternative38
-          where
+
+            -- Digit-led literals, excluding `0x"` bytes and signed integers.
+            unsignedNumeric =
+                choice
+                    [ temporalLiteral
+                    , decimalNatural
+                    , alternative00
+                    ]
+
+            -- `0`, `0x`/`0b` naturals, `0x"` bytes, dates, and `0.5`-style doubles.
+            zeroNumeric =
+                choice
+                    [ bytesLiteral
+                    , temporalLiteral
+                    , alternative00
+                    , alternative01
+                    ]
+
+            -- Leading `+`/`-`: doubles, integers, and numeric temporal offsets.
+            signedNumeric =
+                choice
+                    [ temporalLiteral
+                    , alternative00
+                    , alternative02
+                    ]
+
             -- Tried before doubles so large naturals are not scanned as floats.
             -- `1.0` still reaches alternative00; `0` / `0x` / `0b` reach alternative01.
             decimalNatural =
