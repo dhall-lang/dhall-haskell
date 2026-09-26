@@ -1,5 +1,6 @@
 1.42.3
 
+* Add tests for `dhall repl` commands, `:paste`, quit, and the history file
 * Performance: reduce `==` / `!=` on boolean literals without calling
   `judgmentallyEqual` when both sides are literals ([#1218](https://github.com/dhall-lang/dhall-haskell/issues/1218))
 * BREAKING CHANGE: `TimeLiteral` now stores hour, minute, and second as

@@ -448,6 +448,7 @@ Test-Suite tasty
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
         Dhall.Test.Regression.TextReplaceNoop
+        Dhall.Test.Repl
         Dhall.Test.Schemas
         Dhall.Test.SemanticHash
         Dhall.Test.SemisemanticCache
@@ -467,6 +468,7 @@ Test-Suite tasty
         http-client                                    ,
         http-client-tls                                ,
         tls                                            ,
+        process                   >= 1.6      && < 1.7 ,
         QuickCheck >=2.14 && <2.20,
         quickcheck-instances      >= 0.3.12   && < 0.5 ,
         special-values                           < 0.2 ,
@@ -478,6 +480,9 @@ Test-Suite tasty
         tasty-silver                             < 3.4 ,
         temporary                 >= 1.2.1    && < 1.4 ,
         turtle                    >= 1.6      && < 1.7 ,
+    if os(windows)
+      Build-Depends:
+        Win32                     >= 2.6      && < 2.16
     if impl(ghc >= 9.6)
            build-depends: crypton-connection
     else
