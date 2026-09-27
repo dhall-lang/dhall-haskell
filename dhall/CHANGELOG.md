@@ -1,4 +1,4 @@
-1.42.3
+1.42.4
 
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
@@ -23,6 +23,9 @@
   substitution hashes are computed once per import run.
 * Fast-path `shiftSubstitutions` when a binder cannot capture a substitution,
   and cache the resolved substitution map once per import run on `Status`.
+
+1.42.3
+
 * [Fix the typechecking rule for `Optional` + `with`](https://github.com/dhall-lang/dhall-haskell/pull/2650)
 * [Add `*WithIndex` instances for `Map`](https://github.com/dhall-lang/dhall-haskell/pull/2633)
 * [`dhall package`: Add support for automatic sub-packags](https://github.com/dhall-lang/dhall-haskell/pull/2639)
