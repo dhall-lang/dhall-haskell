@@ -526,13 +526,20 @@ identifier = do
 
 whitespaceChunk :: Parser ()
 whitespaceChunk =
-    choice
-        [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
-        , void (Text.Parser.Char.text "\r\n" <?> "newline")
-        , void lineComment
-        , void blockComment
-        ] <?> "whitespace"
+    (do
+        c <- Text.Megaparsec.lookAhead Text.Megaparsec.anySingle
+        case c of
+            ' '  -> spaces
+            '\t' -> spaces
+            '\n' -> spaces
+            '\r' -> void (Text.Parser.Char.text "\r\n" <?> "newline")
+            '-'  -> void lineComment
+            '{'  -> void blockComment
+            _    -> empty
+    ) <?> "whitespace"
   where
+    spaces = void (Dhall.Parser.Combinators.takeWhile1 predicate)
+
     predicate c = c == ' ' || c == '\t' || c == '\n'
 
 -- | Parse a hexademical number and convert to the corresponding `Int`
