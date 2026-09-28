@@ -49,6 +49,7 @@ import Dhall.Scope
     , ScopeKind (..)
     , makeSrcForLabel
     , scopeFragments
+    , unionConstructorSpans
     )
 import Dhall.Parser (Src (..))
 import Language.LSP.Protocol.Lens hiding (length)
@@ -238,6 +239,8 @@ data ImportedField = Landed Src | Deeper Import [Text]
 locateField :: Expr Src Import -> [Text] -> Maybe ImportedField
 locateField expr path = go [] expr path
   where
+    go _ (Core.Note src (Core.Union _)) [label] =
+        Landed <$> lookup label (unionConstructorSpans src)
     go ctx (Core.Note _ inner) remaining =
         go ctx inner remaining
     go ctx (Core.Let Binding { Core.bindingSrc0 = before, Core.variable = name, Core.bindingSrc1 = after, Core.value = value } body) remaining =
