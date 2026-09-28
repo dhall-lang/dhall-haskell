@@ -144,6 +144,9 @@ module Dhall.Import (
     , merkleHashCache
     , normalizer
     , startingContext
+    , ResolvedImportSource(..)
+    , importSources
+    , decodeSemanticCache
     , reportWarning
     , chainImport
     , dependencyToFile
@@ -383,6 +386,33 @@ stripAnsi :: String -> String
 stripAnsi [] = []
 stripAnsi ('\ESC' : rest) = stripAnsi (drop 1 (dropWhile (/= 'm') rest))
 stripAnsi (c : rest) = c : stripAnsi rest
+
+recordFetched :: Text -> Text -> StateT Status IO ()
+recordFetched location text = do
+    Status { _stack } <- State.get
+    let here = NonEmpty.head _stack
+        source = ResolvedImportSource (Just text) location
+    zoom importSources (State.modify (Dhall.Map.insert here source))
+
+-- | Decode a semantic-cache entry by its integrity hash.
+--
+--   The result is the alpha-beta-normal form stored in the cache.  'Nothing'
+--   means the entry is absent or cannot be decoded.  This does not fetch.
+decodeSemanticCache
+    :: Dhall.Crypto.SHA256Digest -> IO (Maybe (Expr Void Void))
+decodeSemanticCache hash = do
+    mbytes <-
+        State.evalStateT
+            (fetchFromSemanticCache (\_ -> pure ()) hash)
+            CacheWarned
+    return $ case mbytes of
+        Nothing ->
+            Nothing
+        Just bytes ->
+            case Dhall.Binary.decodeExpression
+                    (Data.ByteString.Lazy.fromStrict bytes) of
+                Left _ -> Nothing
+                Right expr -> Just expr
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -1134,19 +1164,26 @@ fetchFresh (Local prefix file) = do
     path <- liftIO $ localToPathWith _getHomeDirectory prefix file
     exists <- liftIO $ Directory.doesFileExist path
     if exists
-        then liftIO $ Data.Text.IO.readFile path
+        then do
+            text <- liftIO $ Data.Text.IO.readFile path
+            recordFetched (Text.pack path) text
+            return text
         else throwMissingImport (Imported _stack (MissingFile path))
 
 fetchFresh (Remote url) = do
     Status { _remote } <- State.get
-    _remote url
+    text <- _remote url
+    recordFetched (Core.pretty (url { headers = Nothing })) text
+    return text
 
 fetchFresh (Env env) = do
     Status { _stack } <- State.get
     x <- liftIO $ System.Environment.lookupEnv (Text.unpack env)
     case x of
-        Just string ->
-            return (Text.pack string)
+        Just string -> do
+            let text = Text.pack string
+            recordFetched ("env:" <> env) text
+            return text
         Nothing ->
                 throwMissingImport (Imported _stack (MissingEnvironmentVariable env))
 
