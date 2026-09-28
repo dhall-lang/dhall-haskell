@@ -1,23 +1,26 @@
 module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
 
-import Dhall.Context   (Context, empty, insert)
 import Dhall.Core
     ( Binding (..)
+    , Const (..)
     , Expr (..)
     , FunctionBinding (..)
-    , Var (..)
-    , normalize
-    , shift
     , subExpressions
-    , subst
     )
 import Dhall.Parser    (Src (..))
-import Dhall.TypeCheck (TypeError (..), typeWithA)
+import Dhall.TypeCheck
+    ( TypeError (..)
+    , TypingContext
+    , emptyTypingContext
+    , extendBinder
+    , extendLet
+    , typeWithContext
+    )
 
 import Control.Applicative ((<|>))
 import Control.Lens        (toListOf)
 import Data.Bifunctor      (first)
-import Data.Void           (Void, absurd)
+import Data.Void           (Void)
 
 import Dhall.LSP.Backend.Dhall       (WellTyped, fromWellTyped)
 import Dhall.LSP.Backend.Diagnostics (Position, Range (..), rangeFromDhall)
@@ -38,15 +41,14 @@ typeAt pos expr = do
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
-  (mSrc, typ) <- first show $ typeAt' pos empty expr'
-  case mSrc of
-    Just src -> return (Just src, normalize typ)
-    Nothing -> return (srcAt pos expr', normalize typ)
+  first show $ typeAt' pos emptyTypingContext expr'
 
-typeAt' :: Position -> Context (Expr Src Void) -> Expr Src Void -> Either (TypeError Src Void) (Maybe Src, Expr Src Void)
+-- The walk extends a 'TypingContext' as it enters a binder.  It does not
+-- substitute or normalize the bound values.
+typeAt' :: Position -> TypingContext Src -> Expr Src Void -> Either (TypeError Src Void) (Maybe Src, Expr Src Void)
 -- the user hovered over the bound name in a let expression
 typeAt' pos ctx (Note src (Let (Binding { value = a }) _)) | pos `inside` getLetIdentifier src = do
-  typ <- typeWithA absurd ctx a
+  typ <- typeWithContext ctx a
   return (Just $ getLetIdentifier src, typ)
 
 -- "..." in a lambda expression
@@ -60,21 +62,24 @@ typeAt' pos _ctx (Note src (Pi _ _ _A _)) | Just src' <- getForallIdentifier src
                                         , pos `inside` src' =
   return (Just src', _A)
 
-typeAt' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) | pos `inside` src = do
-  _ <- typeWithA absurd ctx a
-  let a' = shift 1 (V x 0) (normalize a)
-  typeAt' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
-
-typeAt' pos ctx (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A} b@(Note src _))
+typeAt' pos ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
+  | coversAnn pos ann = typeAt' pos ctx (annotationExpr ann)
+  | covers pos a = typeAt' pos ctx a
   | pos `inside` src = do
-      let _A' = Dhall.Core.normalize _A
-          ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
+      ctx' <- extendLet x a ctx
+      typeAt' pos ctx' e
+
+typeAt' pos ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A} b))
+  | covers pos _A = typeAt' pos ctx _A
+  | pos `inside` src = do
+      ctx' <- extendBinder x _A ctx
       typeAt' pos ctx' b
 
-typeAt' pos ctx (Pi _ x _A  _B@(Note src _)) | pos `inside` src = do
-  let _A' = Dhall.Core.normalize _A
-      ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-  typeAt' pos ctx' _B
+typeAt' pos ctx (Note src (Pi _ x _A _B))
+  | covers pos _A = typeAt' pos ctx _A
+  | pos `inside` src = do
+      ctx' <- extendBinder x _A ctx
+      typeAt' pos ctx' _B
 
 -- peel off a single Note constructor
 typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
@@ -83,9 +88,9 @@ typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
 typeAt' pos ctx expr = do
   let subExprs = toListOf subExpressions expr
   case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
-    [] -> do typ <- typeWithA absurd ctx expr  -- return type of whole subexpression
+    [] -> do typ <- typeWithContext ctx expr
              return (Nothing, typ)
-    ((src, e):_) -> typeAt' pos ctx (Note src e)  -- continue with leaf-expression
+    ((src, e):_) -> typeAt' pos ctx (Note src e)
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
@@ -118,36 +123,39 @@ annotateLet pos expr = do
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for annotateLet'."
-  annotateLet' pos empty expr'
+  annotateLet' pos emptyTypingContext expr'
 
 
-annotateLet' :: Position -> Context (Expr Src Void) -> Expr Src Void
+annotateLet' :: Position -> TypingContext Src -> Expr Src Void
              -> Either String (Src, Expr Src Void)
 -- the input only contains singleton lets
 annotateLet' pos ctx (Note src e@(Let (Binding { value = a }) _))
   | not $ any (pos `inside`) [ src' | Note src' _ <- toListOf subExpressions e ]
-  = do _A <- first show $ typeWithA absurd ctx a
+  = do _A <- first show $ typeWithContext ctx a
        srcAnnot <- case getLetAnnot src of
                      Just x -> return x
                      Nothing -> Left "The impossible happened: failed\
                                      \ to re-parse a Let expression."
-       return (srcAnnot, normalize _A)
+       return (srcAnnot, _A)
 
--- binders, see typeAt'
-annotateLet' pos ctx (Let (Binding { variable = x, value = a }) e@(Note src _)) | pos `inside` src = do
-  _ <- first show $ typeWithA absurd ctx a
-  let a' = shift 1 (V x 0) (normalize a)
-  annotateLet' pos ctx (shift (-1) (V x 0) (subst (V x 0) a' e))
+annotateLet' pos ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
+  | coversAnn pos ann = annotateLet' pos ctx (annotationExpr ann)
+  | covers pos a = annotateLet' pos ctx a
+  | pos `inside` src = do
+      ctx' <- first show $ extendLet x a ctx
+      annotateLet' pos ctx' e
 
-annotateLet' pos ctx (Lam _ FunctionBinding{ functionBindingVariable = x, functionBindingAnnotation = _A } b@(Note src _)) | pos `inside` src = do
-  let _A' = Dhall.Core.normalize _A
-      ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-  annotateLet' pos ctx' b
+annotateLet' pos ctx (Note src (Lam _ FunctionBinding{ functionBindingVariable = x, functionBindingAnnotation = _A } b))
+  | covers pos _A = annotateLet' pos ctx _A
+  | pos `inside` src = do
+      ctx' <- first show $ extendBinder x _A ctx
+      annotateLet' pos ctx' b
 
-annotateLet' pos ctx (Pi _ x _A _B@(Note src _)) | pos `inside` src = do
-  let _A' = Dhall.Core.normalize _A
-      ctx' = fmap (shift 1 (V x 0)) (insert x _A' ctx)
-  annotateLet' pos ctx' _B
+annotateLet' pos ctx (Note src (Pi _ x _A _B))
+  | covers pos _A = annotateLet' pos ctx _A
+  | pos `inside` src = do
+      ctx' <- first show $ extendBinder x _A ctx
+      annotateLet' pos ctx' _B
 
 -- we need to unfold Notes to make progress
 annotateLet' pos ctx (Note _ expr) =
@@ -173,3 +181,15 @@ splitMultiLetSrc expr = subExpressions splitMultiLetSrc expr
 inside :: Position -> Src -> Bool
 inside pos src = left <= pos && pos < right
   where Range left right = rangeFromDhall src
+
+covers :: Position -> Expr Src a -> Bool
+covers pos (Note src _) = pos `inside` src
+covers _ _ = False
+
+coversAnn :: Position -> Maybe (Maybe Src, Expr Src a) -> Bool
+coversAnn pos (Just (_, expr)) = covers pos expr
+coversAnn _ Nothing = False
+
+annotationExpr :: Maybe (Maybe Src, Expr Src Void) -> Expr Src Void
+annotationExpr (Just (_, expr)) = expr
+annotationExpr Nothing = Const Type

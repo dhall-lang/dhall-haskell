@@ -3,6 +3,7 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-| This is the entry point for the LSP server. -}
 module Dhall.LSP.Server (
@@ -44,9 +45,12 @@ import System.IO                     (stdin, stdout)
 
 import qualified Colog.Core                       as Colog
 import qualified Control.Concurrent.MVar          as MVar
+import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.Except       as Except
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
+import qualified Data.IORef                       as IORef
+import qualified Data.Map.Strict                  as Map
 import qualified Data.Text                        as Text
 import qualified Language.LSP.Logging             as LSP
 import qualified Language.LSP.Server              as LSP
@@ -63,7 +67,10 @@ runWith settings = withLogger $ \ioLogger -> do
 
   let lspLogger = clientLogger <> Colog.hoistLogAction liftIO ioLogger
 
-  state <- MVar.newMVar initialState
+  documents <- IORef.newIORef Map.empty
+  lspEnv <- IORef.newIORef Nothing
+  negative <- IORef.newIORef Map.empty
+  state <- MVar.newMVar (initialState documents lspEnv negative)
 
   let defaultConfig = def
 
@@ -98,7 +105,10 @@ runWith settings = withLogger $ \ioLogger -> do
               [ "dhall.server.lint",
                 "dhall.server.annotateLet",
                 "dhall.server.freezeImport",
-                "dhall.server.freezeAllImports"
+                "dhall.server.freezeAllImports",
+                "dhall.server.explain",
+                "dhall.server.normalize",
+                "dhall.server.showOriginalSource"
               ]
         }
 
@@ -113,7 +123,7 @@ runWith settings = withLogger $ \ioLogger -> do
           , completionHandler settings
           , initializedHandler
           , workspaceChangeConfigurationHandler
-          , textDocumentChangeHandler
+          , textDocumentChangeHandler settings
           , cancelationHandler
           , documentDidCloseHandler
           ]
@@ -121,9 +131,13 @@ runWith settings = withLogger $ \ioLogger -> do
   let interpretHandler environment = Iso{..}
         where
           forward :: HandlerM a -> IO a
-          forward handler =
-            MVar.modifyMVar state \oldState -> do
-              LSP.runLspT environment do
+          forward handler = do
+            IORef.writeIORef lspEnv (Just environment)
+            -- Take a snapshot and release the lock before the handler runs,
+            -- so one request does not block the others. The document store
+            -- is an IORef shared by every snapshot.
+            oldState <- MVar.readMVar state
+            outcome <- Exception.try $ LSP.runLspT environment do
                 (e, newState) <- State.runStateT (Except.runExceptT handler) oldState
                 result <- case e of
                   Left (Log, _message) -> do
@@ -148,6 +162,12 @@ runWith settings = withLogger $ \ioLogger -> do
                       return a
 
                 return (newState, result)
+            case outcome of
+              Left (err :: Exception.SomeException) ->
+                Exception.throwIO err
+              Right (newState, result) -> do
+                MVar.modifyMVar_ state (\_ -> return newState)
+                return result
 
           backward = liftIO
 

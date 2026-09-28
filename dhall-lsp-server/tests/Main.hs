@@ -1,20 +1,27 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ExplicitNamespaces    #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 import Control.Monad.IO.Class      (liftIO)
 import Data.Maybe                  (fromJust)
+import Data.Row                    ((.==))
+import Data.Time.Clock             (diffUTCTime, getCurrentTime)
 import Language.LSP.Protocol.Types
     ( ClientCapabilities
     , CompletionItem (..)
     , Diagnostic (..)
     , DiagnosticSeverity (..)
+    , DiagnosticTag (..)
     , Hover (..)
     , MarkupContent (..)
     , Position (..)
     , Range (..)
+    , TextDocumentContentChangeEvent (..)
+    , type (|?) (..)
     , toEither
     )
 import Test.Tasty
@@ -86,7 +93,7 @@ lintingSpec fixtureDir =
                 , _codeDescription = Nothing
                 , _source = Just "Dhall.Lint"
                 , _message = "Unused let binding 'bob'"
-                , _tags = Nothing
+                , _tags = Just [DiagnosticTag_Unnecessary]
                 , _relatedInformation = Nothing
                 , _data_ = Nothing
                 }
@@ -100,7 +107,7 @@ lintingSpec fixtureDir =
                 , _codeDescription = Nothing
                 , _source = Just "Dhall.Lint"
                 , _message = "Unused let binding 'carl'"
-                , _tags = Nothing
+                , _tags = Just [DiagnosticTag_Unnecessary]
                 , _relatedInformation = Nothing
                 , _data_ = Nothing
                 }
@@ -218,6 +225,23 @@ diagnosticsSpec fixtureDir = do
       [diag] <- waitForDiagnosticsSource "Dhall.Parser"
       liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
 
+-- | Open a file, replace it, and wait until the new diagnostics arrive.
+--   The bound is a tripwire for a stuck analysis, not a performance target.
+editReplaySpec :: FilePath -> Spec
+editReplaySpec dir =
+  describe "edit replay" $
+    it "publishes diagnostics after a change" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "UnboundVar.dhall" "dhall"
+        _ <- waitForDiagnostics
+        started <- liftIO getCurrentTime
+        let replacement =
+                TextDocumentContentChangeEvent (InR (#text .== "1\n"))
+        changeDoc docId [replacement]
+        _ <- waitForDiagnostics
+        finished <- liftIO getCurrentTime
+        liftIO $ diffUTCTime finished started `shouldSatisfy` (< 30)
+
 main :: IO ()
 main = do
   GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
@@ -225,11 +249,13 @@ main = do
   linting <- testSpec "Linting" (lintingSpec (baseDir "linting"))
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))
   hovering <- testSpec "Hovering" (hoveringSpec (baseDir "hovering"))
+  replay <- testSpec "Edit replay" (editReplaySpec (baseDir "diagnostics"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
           linting,
           completion,
-          hovering
+          hovering,
+          replay
         ]
     )
