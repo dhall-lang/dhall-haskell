@@ -30,6 +30,7 @@ import qualified Dhall.Test.TH
 import qualified Dhall.Test.Tags
 import qualified Dhall.Test.Tutorial
 import qualified Dhall.Test.TypeInference
+import qualified Dhall.Test.TypingContext
 import qualified Dhall.Test.Server
 import qualified GHC.IO.Encoding
 import qualified System.Directory
@@ -87,6 +88,7 @@ getAllTests = do
                 , Dhall.Test.Regression.tests
                 , Dhall.Test.Repl.tests
                 , Dhall.Test.Substitution.tests
+                , Dhall.Test.TypingContext.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
                 , Dhall.Test.Dhall.tests

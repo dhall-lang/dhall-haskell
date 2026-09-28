@@ -1,7 +1,7 @@
 1.42.4
 
 * `Dhall.Scope` resolves `let`, lambda, `forall` and record-field names,
-  including `x@n`. `dhall-docs` uses it for jump-to-definition.
+  including `x@n`. `dhall-docs` uses it for jump-to-definition for those items.
 * `dhall --max-output-size BYTES` truncates a rendered normal form and
   requires a byte count. Quoting spends that budget on the text each syntax
   node prints, instead of treating one byte as one node, and stops once the

@@ -14,6 +14,13 @@ module Dhall.TypeCheck (
       typeWith
     , typeOf
     , typeWithA
+    , TypingContext
+    , emptyTypingContext
+    , extendLet
+    , extendBinder
+    , extendOpaque
+    , typeWithContext
+    , normalizeWithContext
     , checkContext
     , messageExpressions
 
@@ -142,6 +149,86 @@ typeWithA tpa context expression =
     fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
   where
     ctx = contextToCtx context
+
+-- | A typing environment that stores each binding's type and, when the
+--   binding is a @let@, its value.
+--
+--   Later expressions can be type-checked against this environment without
+--   wrapping the bindings in @let@s again.  Building the environment with
+--   'extendLet' and then calling 'typeWithContext' agrees with 'typeWith' on
+--   the same bindings wrapped by 'Dhall.Core.wrapInLets'.
+data TypingContext s = TypingContext (Ctx X)
+
+-- | The empty environment.
+emptyTypingContext :: TypingContext s
+emptyTypingContext = TypingContext (Ctx Empty TypesEmpty)
+
+-- | Type-check @value@ and bind @name@ to that value and its inferred type.
+extendLet
+    :: Text
+    -> Expr s X
+    -> TypingContext s
+    -> Either (TypeError s X) (TypingContext s)
+extendLet name value (TypingContext ctx) = do
+    typeVal <- infer absurd ctx value
+    let valueVal = Eval.eval (values ctx) (Dhall.Core.denote value)
+    return (TypingContext (addTypeValue name typeVal valueVal ctx))
+
+-- | Bind @name@ as a neutral variable of type @typeExpr@.
+--
+--   @typeExpr@ must itself be a type (its type is a universe), as for a
+--   lambda binder.  The variable has no value, so uses of @name@ stay neutral.
+extendBinder
+    :: Text
+    -> Expr s X
+    -> TypingContext s
+    -> Either (TypeError s X) (TypingContext s)
+extendBinder name typeExpr (TypingContext ctx) = do
+    kind <- infer absurd ctx typeExpr
+    case kind of
+        VConst _ -> return ()
+        _        -> Left (TypeError (ctxToContext ctx) typeExpr (InvalidInputType typeExpr))
+    let typeVal = Eval.eval (values ctx) (Dhall.Core.denote typeExpr)
+    return (TypingContext (addType name typeVal ctx))
+
+-- | Bind @name@ to a value and type that have already been type-checked.
+--
+--   The value is stored lazily: it is not forced until a later check needs it.
+--   @typeExpr@ and @valueExpr@ are import-free and carry no source spans.
+extendOpaque
+    :: Text
+    -> Expr Void X
+    -> Expr Void X
+    -> TypingContext s
+    -> TypingContext s
+extendOpaque name typeExpr valueExpr (TypingContext ctx) =
+    TypingContext (addTypeValue name typeVal valueVal ctx)
+  where
+    typeVal = Eval.eval (values ctx) typeExpr
+    valueVal = Eval.eval (values ctx) valueExpr
+
+-- | Type-check an expression in a 'TypingContext'.
+--
+--   The result uses the same quoting as 'typeWith': free variables that come
+--   from the context are left as references, and the type is not fully
+--   normalized.
+typeWithContext
+    :: TypingContext s
+    -> Expr s X
+    -> Either (TypeError s X) (Expr s X)
+typeWithContext (TypingContext ctx) expression =
+    fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer absurd ctx expression)
+
+-- | Normalize an expression using values already stored in the context.
+--
+--   Bindings are not substituted back into the expression first, so earlier
+--   @let@s are not normalized again.
+normalizeWithContext :: TypingContext s -> Expr t X -> Expr u X
+normalizeWithContext (TypingContext ctx) expression =
+    Dhall.Core.renote
+        (Eval.quote (Eval.envNames env) (Eval.eval env (Dhall.Core.denote expression)))
+  where
+    env = values ctx
 
 contextToCtx :: Eq a => Context (Expr s a) -> Ctx a
 contextToCtx context = loop (Dhall.Context.toList context)

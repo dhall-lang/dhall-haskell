@@ -464,6 +464,7 @@ Test-Suite tasty
         Dhall.Test.Substitution
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference
+        Dhall.Test.TypingContext
         Dhall.Test.Util
     if !flag(cross)
         Other-Modules:
