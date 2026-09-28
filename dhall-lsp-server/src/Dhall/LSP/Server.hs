@@ -16,6 +16,7 @@ import Control.Monad.IO.Class        (liftIO)
 import Data.Aeson                    (fromJSON)
 import Data.Default
 import Dhall                         (EvaluateSettings, defaultEvaluateSettings)
+import Dhall.LSP.Features            (featureHandlers)
 import Dhall.LSP.Handlers
     ( cancelationHandler
     , completionHandler
@@ -126,6 +127,7 @@ runWith settings = withLogger $ \ioLogger -> do
           , textDocumentChangeHandler settings
           , cancelationHandler
           , documentDidCloseHandler
+          , featureHandlers settings
           ]
 
   let interpretHandler environment = Iso{..}

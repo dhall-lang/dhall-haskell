@@ -33,6 +33,7 @@ library
       Dhall.LSP.Backend.ToJSON
       Dhall.LSP.Backend.Typing
       Dhall.LSP.Handlers
+      Dhall.LSP.Features
       Dhall.LSP.Server
       Dhall.LSP.State
   other-modules:

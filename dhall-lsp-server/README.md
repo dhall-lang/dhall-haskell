@@ -3,7 +3,7 @@
 The Dhall language integration consists of the following parts:
 - The VSCode/ium plugin "Dhall Language Support" *([vscode-language-dhall](https://github.com/dhall-lang/vscode-language-dhall))* adds syntax highlighting for Dhall files.
 - The VSCode/ium plugin "Dhall LSP Server" *([vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server))* implements the LSP client &ndash; yes, there is a naming issue here &ndash; that communicates with the backend via the [LSP protocol](https://microsoft.github.io/language-server-protocol/specification) to provide advanced language features like error diagnostics or type information, etc.
-- [*dhall-lsp-server*](https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server), which is part of the [*dhall-haskell*](https://github.com/dhall-lang/dhall-haskell) project, implements the actual LSP server (i.e. the backend). Any editor that speaks LSP can use it. The VS Code extension in [vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server) is one client; Neovim, Emacs, Helix, Zed and Sublime are others. Point the client at the `dhall-lsp-server` executable.
+- [*dhall-lsp-server*](https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server), which is part of the [*dhall-haskell*](https://github.com/dhall-lang/dhall-haskell) project, implements the actual LSP server (i.e. the backend). Any editor that speaks LSP can use it. The VS Code extension in [vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server) is one client; Neovim, Emacs, Helix, Zed and Sublime are others. Point the client at the `dhall-lsp-server` executable. Inlay hints, semantic tokens and folding appear only when that client requests them.
 
 # Installation
 
@@ -42,10 +42,19 @@ For detailed instructions as well as instructions using cabal or nix, see [`dhal
 
 # Usage / Features
 
-The server speaks standard LSP, so Neovim, Emacs, Helix, Zed and Sublime can use it as well as VS Code.
+The server speaks standard LSP, so Neovim, Emacs, Helix, Zed and Sublime can use it as well as VS Code. A client only shows a feature when it requests that method. Inlay hints, semantic tokens and folding ranges need a client that asks for them (the VS Code extension does after `vscode-languageclient` 8). Definition, references, rename, symbols and code actions work with older clients.
 
 - **Diagnostics&nbsp;**
 The file is parsed and typechecked when you open it, when you save it, and shortly after you stop typing. Every failed import is reported, including failures inside an imported file. You can hover over the offending code to see the error message; to see a detailed explanation in the case of type errors, click the *Explain* link in the hover box. Unused `let` bindings are marked unnecessary.
+
+- **Go to definition, references, highlight and rename&nbsp;**
+Names bound by `let`, lambda, `forall` and record fields resolve in the file, including `x@n`. Rename edits each of those sites.
+
+- **Symbols, folding and semantic tokens&nbsp;**
+Document symbols list the bindings. Folding ranges cover `let` and lambda expressions. Semantic tokens mark name declarations and uses. If the buffer has a syntax error, navigation keeps using the last successful parse.
+
+- **Inlay hints and code actions&nbsp;**
+Unannotated `let` bindings can show an inlay. A "Normalize selection" code action is offered; the edit is refused when the normal form is larger than `maxOutputSize` (default 128KiB) or the evaluation limit is hit. The existing `dhall.server.lint`, `dhall.server.annotateLet`, `dhall.server.freezeImport` and `dhall.server.freezeAllImports` commands stay.
 
 - **Imports&nbsp;**
 Hashed imports can be shown from the semantic cache (alpha-beta-normal CBOR). "Show original source" is the command `dhall.server.showOriginalSource` and fetches only when you run it. Other editors open an on-disk mirror under `$XDG_CACHE_HOME/dhall-lsp/sources`. VS Code can instead mount a `dhall-import:` filesystem once that extension is installed.
