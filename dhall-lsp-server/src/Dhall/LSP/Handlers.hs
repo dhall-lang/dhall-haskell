@@ -39,6 +39,7 @@ import Dhall.LSP.Backend.Dhall
     , invalidate
     , load
     , loadCollected
+    , indexImportBodies
     , parse
     , parseWithHeader
     , typecheck
@@ -477,9 +478,13 @@ diagnoseDocument settings _uri txt = do
           return ([], [err])
       Right parsed -> do
           negative <- use negativeImports
-          (cache', resolved, collected, _) <-
+          (cache', resolved, collected, sources) <-
               liftIO $ loadCollected settings fileIdentifier parsed cache negative
           assign importCache cache'
+          bodiesRef <- use importBodies
+          liftIO $
+              IORef.modifyIORef' bodiesRef
+                  (Map.union (indexImportBodies sources))
           let importDiags = map (collectedDiagnostic _uri) collected
           docs <- use documents
           previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs

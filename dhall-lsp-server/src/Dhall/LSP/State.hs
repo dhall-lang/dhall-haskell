@@ -81,6 +81,8 @@ data ServerState = ServerState
   -- ^ Captured so background analysis can publish diagnostics.
   , _negativeImports :: IORef (Map Text (UTCTime, SomeException))
   -- ^ Remote imports that failed recently.  Retried after 30 seconds.
+  , _importBodies :: IORef (Map Text Text)
+  -- ^ Source text fetched while typechecking imports.
   }
 
 -- | The last analysis of one open document.
@@ -106,8 +108,9 @@ initialState
     :: IORef (Map J.Uri DocSnap)
     -> IORef (Maybe (LanguageContextEnv ServerConfig))
     -> IORef (Map Text (UTCTime, SomeException))
+    -> IORef (Map Text Text)
     -> ServerState
-initialState _documents _lspEnv _negativeImports = ServerState {..}
+initialState _documents _lspEnv _negativeImports _importBodies = ServerState {..}
   where
     _importCache = emptyCache
     _errors = empty

@@ -16,7 +16,10 @@ import Language.LSP.Protocol.Types
     , DiagnosticSeverity (..)
     , DiagnosticTag (..)
     , Hover (..)
+    , getUri
     , MarkupContent (..)
+    , Definition (..)
+    , Location (..)
     , Position (..)
     , Range (..)
     , TextDocumentContentChangeEvent (..)
@@ -297,12 +300,30 @@ main = do
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))
   hovering <- testSpec "Hovering" (hoveringSpec (baseDir "hovering"))
   replay <- testSpec "Edit replay" (editReplaySpec (baseDir "diagnostics"))
+  definition <- testSpec "Definition" (definitionSpec (baseDir "definition"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
           linting,
           completion,
           hovering,
-          replay
+          replay,
+          definition
         ]
     )
+
+-- | `Lib.customFunction` opens the fetched import at the `let` that binds it.
+definitionSpec :: FilePath -> Spec
+definitionSpec dir =
+  describe "Dhall.Definition" $
+    it "opens a field defined in an import" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "use.dhall" "dhall"
+        _ <- waitForDiagnostics
+        defs <- getDefinitions docId (Position 2 8)
+        liftIO $ case defs of
+          InL (Definition (InL (Location uri (Range (Position line _) _)))) -> do
+            T.unpack (getUri uri) `shouldContain` "dhall-lsp/sources"
+            line `shouldBe` 0
+          _ ->
+            expectationFailure "expected a location in the imported source"

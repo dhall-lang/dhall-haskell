@@ -13,9 +13,12 @@
 
 module Dhall.LSP.Features (featureHandlers) where
 
+import Control.Applicative ((<|>))
 import Control.Lens (assign, toListOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (readIORef)
+import Data.Maybe (listToMaybe)
+import Data.Void (Void)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import System.Directory
@@ -24,26 +27,48 @@ import System.Directory
     , getXdgDirectory
     , listDirectory
     )
-import System.FilePath ((</>))
+import System.FilePath (normalise, takeDirectory, takeFileName, (</>))
 import Dhall (EvaluateSettings)
-import Dhall.Core (Binding (..), Expr, Import)
+import Dhall.Core
+    ( Binding (..)
+    , Expr
+    , FieldSelection (..)
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    , RecordField (..)
+    , URL (..)
+    , Var (..)
+    , Directory (..)
+    )
 import Dhall.Scope
     ( NameDecl (..)
     , ScopeFragment (..)
     , ScopeKind (..)
+    , makeSrcForLabel
     , scopeFragments
     )
-import Dhall.Parser (Src)
-import Language.LSP.Protocol.Lens
+import Dhall.Parser (Src (..))
+import Language.LSP.Protocol.Lens hiding (length)
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types hiding (Range (..))
 import Language.LSP.Server (Handlers)
 
-import Dhall.LSP.Backend.Dhall (emptyCache, parse)
+import Dhall.LSP.Backend.Dhall
+    ( FileIdentifier
+    , emptyCache
+    , importTextKey
+    , parse
+    )
 import Dhall.LSP.Backend.Diagnostics (Range (..), rangeFromDhall)
 import Dhall.LSP.Backend.Formatting (formatExpr)
+import qualified Dhall.Bounded as Bounded
+import qualified Dhall.Pretty as Pretty
 import Dhall.LSP.Handlers
-    ( handleErrorWithDefault
+    ( fileIdentifierFromUri
+    , handleErrorWithDefault
     , liftLSP
     , rangeToJSON
     , readUri
@@ -54,7 +79,11 @@ import Dhall.LSP.State
 import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
+import qualified Text.Megaparsec.Pos as Pos
+import qualified Data.Text.IO as Text.IO
 import qualified Dhall.Core as Core
+import qualified Dhall.Import as Import
+import qualified Dhall.Map as DMap
 import qualified Language.LSP.Protocol.Types as J
 import qualified Language.LSP.Server as LSP
 
@@ -141,11 +170,259 @@ definitionHandler =
             let docUri = request ^. params . textDocument . uri
                 pos = posOf (request ^. params . position)
             txt <- sourceForNav docUri =<< readUri docUri
-            case declAt (sites txt) pos of
+            imported <- case parse txt of
+                Right expr ->
+                    case importJump expr pos of
+                        Nothing ->
+                            return Nothing
+                        Just (imp, path) ->
+                            openImported docUri imp path
+                Left _ ->
+                    return Nothing
+            case imported of
+                Just loc ->
+                    respond (Right (InL (J.Definition (InL loc))))
                 Nothing ->
-                    respond (Right (InR (InR J.Null)))
-                Just decl ->
-                    respond (Right (InL (J.Definition (InL (locationOf docUri (declSrc decl))))))
+                    case declAt (sites txt) pos of
+                        Nothing ->
+                            respond (Right (InR (InR J.Null)))
+                        Just decl ->
+                            respond (Right (InL (J.Definition (InL (locationOf docUri (declSrc decl))))))
+
+-- | A field projection whose root is an import, and the labels from that
+--   import out to the field under the cursor.
+importJump :: Expr Src Import -> (Int, Int) -> Maybe (Import, [Text])
+importJump root pos = go [] root
+  where
+    go ctx (Core.Note _ expr) =
+        go ctx expr
+    go ctx (Core.Let Binding { Core.variable = name, Core.annotation = ann, Core.value = value } body) =
+        let inAnn = case ann of
+                Just (_, typ) -> go ctx typ
+                Nothing -> Nothing
+        in inAnn <|> go ctx value <|> go ((name, value) : ctx) body
+    go ctx (Core.Field base (FieldSelection (Just Src { srcEnd = start }) label (Just Src { srcStart = end }))) =
+        let labelSrc = makeSrcForLabel start end label
+        in if srcContains labelSrc pos
+            then do
+                (imp, path) <- resolve ctx base
+                return (imp, path ++ [label])
+            else go ctx base
+    go ctx expr =
+        foldr (\child acc -> go ctx child <|> acc) Nothing (toListOf Core.subExpressions expr)
+
+    resolve ctx (Core.Note _ expr) =
+        resolve ctx expr
+    resolve _ (Core.Embed imp) =
+        Just (imp, [])
+    resolve ctx (Core.Annot expr _) =
+        resolve ctx expr
+    resolve ctx (Core.Field expr (FieldSelection _ label _)) = do
+        (imp, path) <- resolve ctx expr
+        return (imp, path ++ [label])
+    resolve ctx (Core.Var (V name index)) =
+        resolve ctx =<< lookupBind name index ctx
+    resolve _ _ =
+        Nothing
+
+    lookupBind name index ctx =
+        case [value | (bound, value) <- ctx, bound == name] of
+            values | index < length values ->
+                Just (values !! index)
+            _ ->
+                Nothing
+
+-- | Where a field path is bound inside an imported file.
+data ImportedField = Landed Src | Deeper Import [Text]
+
+locateField :: Expr Src Import -> [Text] -> Maybe ImportedField
+locateField expr path = go [] expr path
+  where
+    go ctx (Core.Note _ inner) remaining =
+        go ctx inner remaining
+    go ctx (Core.Let Binding { Core.bindingSrc0 = before, Core.variable = name, Core.bindingSrc1 = after, Core.value = value } body) remaining =
+        go ((name, (value, binderSrc before after name)) : ctx) body remaining
+    go ctx (Core.Annot inner _) remaining =
+        go ctx inner remaining
+    go ctx (Core.RecordLit fields) (label : rest) =
+        case DMap.lookup label fields of
+            Just RecordField { recordFieldSrc0 = Just Src { srcEnd = start }, recordFieldValue = value, recordFieldSrc1 = Just Src { srcStart = end } } ->
+                let keySrc = makeSrcForLabel start end label
+                    landed = case follow ctx value of
+                        Just found ->
+                            found
+                        Nothing ->
+                            Landed keySrc
+                in if null rest
+                    then Just landed
+                    else case denote value of
+                        Core.Embed imp ->
+                            Just (Deeper imp rest)
+                        _ ->
+                            go ctx value rest <|> Just (Landed keySrc)
+            _ ->
+                Nothing
+    go ctx (Core.Var (V name index)) remaining =
+        case lookupBind name index ctx of
+            Just (value, decl)
+                | null remaining ->
+                    Just (Landed decl)
+                | otherwise ->
+                    go ctx value remaining
+            Nothing ->
+                Nothing
+    go _ _ _ =
+        Nothing
+
+    follow ctx value =
+        case denote value of
+            Core.Var (V name index) ->
+                Landed . snd <$> lookupBind name index ctx
+            _ ->
+                Nothing
+
+    lookupBind name index ctx =
+        case [found | (bound, found) <- ctx, bound == name] of
+            values | index < length values ->
+                Just (values !! index)
+            _ ->
+                Nothing
+
+    binderSrc (Just Src { srcEnd = start }) (Just Src { srcStart = end }) name =
+        makeSrcForLabel start end name
+    binderSrc _ _ name =
+        Src (Pos.initialPos "<binder>") (Pos.initialPos "<binder>") name
+
+    denote (Core.Note _ inner) = denote inner
+    denote other = other
+
+openImported :: J.Uri -> Import -> [Text] -> HandlerM (Maybe J.Location)
+openImported docUri imp path = do
+    parent <- fileIdentifierFromUri docUri
+    bodiesRef <- use importBodies
+    bodies <- liftIO (readIORef bodiesRef)
+    let parentPath = case uriToFilePath docUri of
+            Just file ->
+                takeDirectory file
+            Nothing ->
+                "."
+    openFrom parentPath parent imp path bodies
+
+openFrom
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> [Text]
+    -> Map.Map Text Text
+    -> HandlerM (Maybe J.Location)
+openFrom parentPath parent imp path bodies =
+    let found =
+            listToMaybe
+                [ text
+                | key <- importKeys parentPath parent imp
+                , Just text <- [Map.lookup key bodies]
+                ]
+    in case found of
+        Nothing ->
+            case imp of
+                Import (ImportHashed (Just hash) _) _ -> do
+                    decoded <- liftIO (Import.decodeSemanticCache hash)
+                    case decoded of
+                        Nothing ->
+                            return Nothing
+                        Just expr ->
+                            showImported parentPath parent imp (renderDecoded expr) path bodies
+                _ ->
+                    return Nothing
+        Just text ->
+            showImported parentPath parent imp text path bodies
+
+showImported
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> Text
+    -> [Text]
+    -> Map.Map Text Text
+    -> HandlerM (Maybe J.Location)
+showImported parentPath parent imp text path bodies =
+    case parse text of
+        Left _ ->
+            return Nothing
+        Right expr ->
+            case locateField expr path of
+                Just (Landed src) ->
+                    Just <$> publishImport (importTextKey parent imp) text src
+                Just (Deeper nested rest) -> do
+                    nestedLoc <- openFrom parentPath parent nested rest bodies
+                    case nestedLoc of
+                        Just loc ->
+                            return (Just loc)
+                        Nothing ->
+                            Just <$> publishImport (importTextKey parent imp) text (startSrc expr)
+                Nothing ->
+                    return Nothing
+
+-- | Keys that may name this import in 'importBodies'.
+importKeys :: FilePath -> FileIdentifier -> Import -> [Text]
+importKeys parentPath parent imp =
+    importTextKey parent imp
+        : Core.pretty imp
+        : localKey parentPath imp
+
+localKey :: FilePath -> Import -> [Text]
+localKey parentPath (Import (ImportHashed _ (Local prefix file)) _) =
+    [ Text.pack (normalise (prefixPath prefix </> renderFile file))
+    , Text.pack (takeFileName (renderFile file))
+    ]
+  where
+    prefixPath Absolute =
+        "/"
+    prefixPath Home =
+        parentPath
+    prefixPath Here =
+        parentPath
+    prefixPath Parent =
+        parentPath </> ".."
+localKey _ (Import (ImportHashed _ (Remote url)) _) =
+    [Core.pretty (url { headers = Nothing })]
+localKey _ (Import (ImportHashed _ (Env name)) _) =
+    ["env:" <> name]
+localKey _ _ =
+    []
+
+renderFile :: File -> FilePath
+renderFile (File (Directory components) file) =
+    foldl (</>) "" (map Text.unpack (reverse (file : components)))
+
+startSrc :: Expr Src Import -> Src
+startSrc (Core.Note src _) =
+    src
+startSrc _ =
+    Src (Pos.initialPos "<import>") (Pos.initialPos "<import>") ""
+
+publishImport :: Text -> Text -> Src -> HandlerM J.Location
+publishImport key text src = do
+    dir <- liftIO (getXdgDirectory XdgCache ("dhall-lsp" </> "sources"))
+    liftIO (createDirectoryIfMissing True dir)
+    let path = dir </> fileName key
+    liftIO (Text.IO.writeFile path text)
+    return (locationOf (filePathToUri path) src)
+
+renderDecoded :: Core.Expr Void Void -> Text
+renderDecoded expr =
+    let noted = Core.renote expr :: Expr Src Void
+        doc = Pretty.prettyCharacterSet Pretty.Unicode noted
+    in case Bounded.prettyBounded defaultOutputBytes doc of
+        Bounded.Complete rendered ->
+            rendered
+        Bounded.Truncated rendered ->
+            rendered
+
+fileName :: Text -> FilePath
+fileName key =
+    show (foldl (\n c -> n * 33 + fromEnum c) (5381 :: Int) (Text.unpack key))
+        ++ ".dhall"
 
 referencesHandler :: Handlers HandlerM
 referencesHandler =
