@@ -35,7 +35,6 @@ import Data.List
 import Data.Maybe                          (mapMaybe)
 import Data.Text                           (Text)
 import Data.Void                           (Void)
-import Dhall.Context                       (Context)
 import Dhall.Import                        (hashExpressionToCode)
 import Dhall.Parser                        (Parser (..))
 import Dhall.Pretty                        (CharacterSet (..))
@@ -56,7 +55,6 @@ import qualified Dhall.Core
 import qualified Dhall.Core                          as Dhall
     ( Expr
     , Var (V)
-    , normalize
     )
 import qualified Dhall.Core                          as Expr (Expr (..))
 import qualified Dhall.Import                        as Dhall
@@ -114,6 +112,7 @@ repl characterSet explain =
 
 data Env = Env
   { envBindings      :: Dhall.Context.Context Binding
+  , envContext       :: Dhall.TypingContext Src
   , envIt            :: Maybe Binding
   , explain          :: Bool
   , characterSet     :: CharacterSet
@@ -125,6 +124,7 @@ emptyEnv :: Env
 emptyEnv =
   Env
     { envBindings = Dhall.Context.empty
+    , envContext = Dhall.emptyTypingContext
     , envIt = Nothing
     , explain = False
     , characterSet = Unicode
@@ -136,16 +136,6 @@ data Binding = Binding
   { bindingExpr :: Dhall.Expr Dhall.Src Void
   , bindingType :: Dhall.Expr Dhall.Src Void
   }
-
-
-envToContext :: Env -> Dhall.Context.Context Binding
-envToContext Env{ envBindings, envIt } =
-  case envIt of
-    Nothing ->
-      envBindings
-
-    Just it ->
-      Dhall.Context.insert "it" it envBindings
 
 
 parseAndLoad
@@ -175,7 +165,15 @@ eval src = do
   expr <-
     normalize loaded
 
-  modify ( \e -> e { envIt = Just ( Binding expr exprType ) } )
+  modify ( \e ->
+    e { envIt = Just ( Binding expr exprType )
+      , envContext =
+          Dhall.extendOpaque
+            "it"
+            (Dhall.Core.denote exprType)
+            (Dhall.Core.denote expr)
+            (envContext e)
+      } )
 
   output expr
 
@@ -192,27 +190,13 @@ typeOf src = do
   output exprType
 
 
-applyContext
-    :: Context Binding
-    -> Dhall.Expr Dhall.Src Void
-    -> Dhall.Expr Dhall.Src Void
-applyContext context expression =
-    Dhall.Core.wrapInLets bindings expression
-  where
-    definitions = reverse $ Dhall.Context.toList context
-
-    convertBinding (variable, Binding expr _) =
-        Dhall.Core.Binding Nothing variable Nothing Nothing Nothing expr
-
-    bindings = fmap convertBinding definitions
-
 normalize
   :: MonadState Env m
   => Dhall.Expr Dhall.Src Void -> m ( Dhall.Expr t Void )
 normalize e = do
   env <- get
 
-  return (Dhall.normalize (applyContext (envToContext env) e))
+  return (Dhall.normalizeWithContext (envContext env) e)
 
 
 typeCheck
@@ -223,7 +207,7 @@ typeCheck expression = do
 
   let wrap = if explain env then Dhall.detailed else id
 
-  case Dhall.typeOf (applyContext (envToContext env) expression) of
+  case Dhall.typeWithContext (envContext env) expression of
     Left  e -> liftIO ( wrap (throwIO e) )
     Right a -> return a
 
@@ -276,6 +260,12 @@ addBinding string = do
                 variable
                 Binding{ bindingType, bindingExpr }
                 ( envBindings e )
+          , envContext =
+              Dhall.extendOpaque
+                variable
+                (Dhall.Core.denote bindingType)
+                (Dhall.Core.denote bindingExpr)
+                (envContext e)
           }
     )
 
@@ -284,7 +274,12 @@ addBinding string = do
 clearBindings :: (MonadFail m, MonadState Env m) => String -> m ()
 clearBindings _ = modify adapt
   where
-    adapt (Env {..}) = Env { envBindings = Dhall.Context.empty, ..}
+    adapt (Env {..}) =
+      Env
+        { envBindings = Dhall.Context.empty
+        , envContext = Dhall.emptyTypingContext
+        , ..
+        }
 
 hashBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => String -> m ()
 hashBinding src = do

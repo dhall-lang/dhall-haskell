@@ -13,6 +13,9 @@
   its argument. Any combination of the three flags is allowed, and omitting
   one leaves that limit off. Hitting the allocation or time limit yields no
   partial normal form. Import resolution is not part of the time limit.
+* The REPL keeps previous `:let` bindings in a `TypingContext` and type-checks
+  them only once with their values kept. Each new REPL command
+  type-checks and normalizes only the new expression rather than all previous `:let`s.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
   * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.
