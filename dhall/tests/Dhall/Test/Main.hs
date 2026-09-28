@@ -18,6 +18,7 @@ import qualified Dhall.Test.Package
 import qualified Dhall.Test.Parser
 import qualified Dhall.Test.QuickCheck
 import qualified Dhall.Test.Regression
+import qualified Dhall.Test.Repl
 import qualified Dhall.Test.Schemas
 import qualified Dhall.Test.SemanticHash
 import qualified Dhall.Test.SemisemanticCache
@@ -83,6 +84,7 @@ getAllTests = do
                 , schemaTests
                 , Dhall.Test.DirectoryTree.tests
                 , Dhall.Test.Regression.tests
+                , Dhall.Test.Repl.tests
                 , Dhall.Test.Substitution.tests
                 , Dhall.Test.Tutorial.tests
                 , Dhall.Test.QuickCheck.tests
@@ -99,6 +101,15 @@ main :: IO ()
 main = do
     GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
 
+    -- A repl test re-executes this program to own the standard handles.
+    -- Return before the import test server starts.
+    isReplWorker <- Dhall.Test.Repl.runAsReplWorker
+    if isReplWorker
+        then return ()
+        else runTests
+
+runTests :: IO ()
+runTests = do
     pwd <- System.Directory.getCurrentDirectory
 
     System.Environment.setEnv "XDG_CACHE_HOME" (pwd </> ".cache")
