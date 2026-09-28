@@ -46,6 +46,7 @@ module Dhall.Eval (
   , alphaNormalize
   , eval
   , quote
+  , quoteBounded
   , envNames
   , countNames
   , conv
@@ -97,6 +98,7 @@ import qualified Data.Time     as Time
 import qualified Dhall.Map     as Map
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Text.Printf   as Printf
 
 -- | Evaluation environment. The 'Val' in 'Extend' is intentionally lazy:
@@ -1600,6 +1602,294 @@ quote !env !t0 =
     quoteRecordField :: Val a -> RecordField Void a
     quoteRecordField = Syntax.makeRecordField . quote env
     {-# INLINE quoteRecordField #-}
+
+-- | Quote a value, stopping after @budget@ nodes.
+--
+--   Returns the expression and whether it was cut short.  A cut-off expression
+--   ends in @\"…\"@ and does not force the parts that were not quoted: lambda
+--   bodies, the tail of a list, and the payload of @Some@.  Strict fields are
+--   already evaluated; this only limits how much of them is turned into syntax.
+--
+--   A budget of 0 yields the truncation marker.
+quoteBounded
+    :: forall a. Eq a => Int -> Names -> Val a -> (Expr Void a, Bool)
+quoteBounded budget env0 val0 =
+    State.evalState (go env0 val0) budget
+  where
+    marker :: Expr Void a
+    marker = TextLit (Chunks [] "…")
+
+    spend :: State.State Int (Maybe (Expr Void a))
+    spend = do
+        left <- State.get
+        if left <= 0
+            then return Nothing
+            else do
+                State.put (left - 1)
+                return (Just marker)
+
+    go :: Names -> Val a -> State.State Int (Expr Void a, Bool)
+    go env val = do
+        paid <- spend
+        case paid of
+            Nothing -> return (marker, True)
+            Just _ -> do
+                (expr, truncated) <- step env val
+                return (expr, truncated)
+
+    child :: Names -> Val a -> State.State Int (Expr Void a, Bool)
+    child = go
+
+    both
+        :: Names
+        -> Val a
+        -> Val a
+        -> (Expr Void a -> Expr Void a -> Expr Void a)
+        -> State.State Int (Expr Void a, Bool)
+    both env t u k = do
+        (t', cutT) <- child env t
+        (u', cutU) <- child env u
+        return (k t' u', cutT || cutU)
+
+    one :: Names -> Val a -> (Expr Void a -> Expr Void a) -> State.State Int (Expr Void a, Bool)
+    one env t k = do
+        (t', cut) <- child env t
+        return (k t', cut)
+
+    qAppE :: Names -> Expr Void a -> Val a -> State.State Int (Expr Void a, Bool)
+    qAppE _ t VPrimVar = return (t, False)
+    qAppE env t u = do
+        (u', cut) <- child env u
+        return (App t u', cut)
+
+    apps :: Names -> Expr Void a -> [Val a] -> State.State Int (Expr Void a, Bool)
+    apps _ t [] = return (t, False)
+    apps env t (u : us) = do
+        (t', cut) <- qAppE env t u
+        if cut
+            then return (t', True)
+            else do
+                (t'', cut') <- apps env t' us
+                return (t'', cut')
+
+    quoteSeq :: Names -> Seq (Val a) -> State.State Int (Seq (Expr Void a), Bool)
+    quoteSeq env ts = case Sequence.viewl ts of
+        EmptyL -> return (Sequence.empty, False)
+        x :< xs -> do
+            left <- State.get
+            if left <= 0
+                then return (Sequence.singleton marker, True)
+                else do
+                    (x', cut) <- child env x
+                    if cut
+                        then return (Sequence.singleton x', True)
+                        else do
+                            (xs', cut') <- quoteSeq env xs
+                            return (x' Sequence.<| xs', cut')
+
+    freshName :: Names -> Text -> (Text, Val a)
+    freshName env x = (x, VVar x (countNames x env))
+
+    step :: Names -> Val a -> State.State Int (Expr Void a, Bool)
+    step env val = case val of
+        VConst k -> return (Const k, False)
+        VVar x i -> return (Var (V x (countNames x env - i - 1)), False)
+        VPrimVar -> return (marker, True)
+        VApp t u -> do
+            (t', cut) <- child env t
+            if cut then return (t', True) else qAppE env t' u
+        VLam a closure@(Closure x _ _) -> do
+            (a', cut) <- child env a
+            if cut
+                then return (Lam mempty (Syntax.makeFunctionBinding x a') marker, True)
+                else do
+                    let v = snd (freshName env x)
+                    (b', cut') <- child (Bind env x) (instantiate closure v)
+                    return (Lam mempty (Syntax.makeFunctionBinding x a') b', cut')
+        VHLam i t -> case i of
+            Typed x a -> do
+                (a', cut) <- child env a
+                if cut
+                    then return (Lam mempty (Syntax.makeFunctionBinding x a') marker, True)
+                    else do
+                        let v = snd (freshName env x)
+                        (b', cut') <- child (Bind env x) (t v)
+                        return (Lam mempty (Syntax.makeFunctionBinding x a') b', cut')
+            Prim -> child env (t VPrimVar)
+            NaturalSubtractZero ->
+                return (App NaturalSubtract (NaturalLit 0), False)
+            TextReplaceEmpty ->
+                return (App TextReplace (TextLit (Chunks [] "")), False)
+            TextReplaceEmptyArgument replacement ->
+                qAppE env (App TextReplace (TextLit (Chunks [] ""))) replacement
+        VPi a closure@(Closure x _ _) -> do
+            (a', cut) <- child env a
+            if cut
+                then return (Pi mempty x a' marker, True)
+                else do
+                    let v = snd (freshName env x)
+                    (b', cut') <- child (Bind env x) (instantiate closure v)
+                    return (Pi mempty x a' b', cut')
+        VHPi x a b -> do
+            (a', cut) <- child env a
+            if cut
+                then return (Pi mempty x a' marker, True)
+                else do
+                    let v = snd (freshName env x)
+                    (b', cut') <- child (Bind env x) (b v)
+                    return (Pi mempty x a' b', cut')
+        VBool -> return (Bool, False)
+        VBoolLit b -> return (BoolLit b, False)
+        VBoolAnd t u -> both env t u BoolAnd
+        VBoolOr t u -> both env t u BoolOr
+        VBoolEQ t u -> both env t u BoolEQ
+        VBoolNE t u -> both env t u BoolNE
+        VBoolIf t u v -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            (v', c3) <- child env v
+            return (BoolIf t' u' v', c1 || c2 || c3)
+        VBytes -> return (Bytes, False)
+        VBytesLit b -> return (BytesLit b, False)
+        VNatural -> return (Natural, False)
+        VNaturalLit n -> return (NaturalLit n, False)
+        VNaturalFold a t u v -> apps env NaturalFold [a, t, u, v]
+        VNaturalBuild t -> apps env NaturalBuild [t]
+        VNaturalIsZero t -> apps env NaturalIsZero [t]
+        VNaturalEven t -> apps env NaturalEven [t]
+        VNaturalOdd t -> apps env NaturalOdd [t]
+        VNaturalToInteger t -> apps env NaturalToInteger [t]
+        VNaturalShow t -> apps env NaturalShow [t]
+        VNaturalSubtract x y -> apps env NaturalSubtract [x, y]
+        VNaturalPlus t u -> both env t u NaturalPlus
+        VNaturalTimes t u -> both env t u NaturalTimes
+        VInteger -> return (Integer, False)
+        VIntegerLit n -> return (IntegerLit n, False)
+        VIntegerClamp t -> apps env IntegerClamp [t]
+        VIntegerNegate t -> apps env IntegerNegate [t]
+        VIntegerShow t -> apps env IntegerShow [t]
+        VIntegerToDouble t -> apps env IntegerToDouble [t]
+        VDouble -> return (Double, False)
+        VDoubleLit n -> return (DoubleLit n, False)
+        VDoubleShow t -> apps env DoubleShow [t]
+        VText -> return (Text, False)
+        VTextLit (VChunks xys z) -> do
+            pieces <- mapM (\(txt, bit) -> fmap (\(e, c) -> ((txt, e), c)) (child env bit)) xys
+            let cut = any snd pieces
+            return (TextLit (Chunks (map (\((txt, e), _) -> (txt, e)) pieces) z), cut)
+        VTextAppend t u -> both env t u TextAppend
+        VTextShow t -> apps env TextShow [t]
+        VTextReplace a b c -> apps env TextReplace [a, b, c]
+        VDate -> return (Date, False)
+        VDateLiteral d -> return (DateLiteral d, False)
+        VDateShow t -> apps env DateShow [t]
+        VTime -> return (Time, False)
+        VTimeLiteral hh mm ss frac p -> return (TimeLiteral hh mm ss frac p, False)
+        VTimeShow t -> apps env TimeShow [t]
+        VTimeZone -> return (TimeZone, False)
+        VTimeZoneLiteral z -> return (TimeZoneLiteral z, False)
+        VTimeZoneShow t -> apps env TimeZoneShow [t]
+        VList t -> apps env List [t]
+        VListLit ma ts -> do
+            (ma', cutA) <- case ma of
+                Nothing -> return (Nothing, False)
+                Just a -> do
+                    (a', c) <- child env a
+                    return (Just a', c)
+            (ts', cutS) <- quoteSeq env ts
+            return (ListLit ma' ts', cutA || cutS)
+        VListAppend t u -> both env t u ListAppend
+        VListBuild a t -> apps env ListBuild [a, t]
+        VListFold a l t u v -> apps env ListFold [a, l, t, u, v]
+        VListLength a t -> apps env ListLength [a, t]
+        VListHead a t -> apps env ListHead [a, t]
+        VListLast a t -> apps env ListLast [a, t]
+        VListIndexed a t -> apps env ListIndexed [a, t]
+        VListReverse a t -> apps env ListReverse [a, t]
+        VOptional a -> apps env Optional [a]
+        VSome t -> one env t Some
+        VNone t -> apps env None [t]
+        VRecord m -> do
+            (m', cut) <- quoteMap env m
+            return (Record m', cut)
+        VRecordLit m -> do
+            (m', cut) <- quoteMap env m
+            return (RecordLit m', cut)
+        VUnion m -> do
+            (m', cut) <- quoteMaybeMap env m
+            return (Union m', cut)
+        VCombine mk t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (Combine mempty mk t' u', c1 || c2)
+        VCombineTypes t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (CombineTypes mempty t' u', c1 || c2)
+        VPrefer t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (Prefer mempty PreferFromSource t' u', c1 || c2)
+        VMerge t u ma -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            (ma', c3) <- case ma of
+                Nothing -> return (Nothing, False)
+                Just a -> do
+                    (a', c) <- child env a
+                    return (Just a', c)
+            return (Merge t' u' ma', c1 || c2 || c3)
+        VToMap t ma -> do
+            (t', c1) <- child env t
+            (ma', c2) <- case ma of
+                Nothing -> return (Nothing, False)
+                Just a -> do
+                    (a', c) <- child env a
+                    return (Just a', c)
+            return (ToMap t' ma', c1 || c2)
+        VShowConstructor t -> one env t ShowConstructor
+        VField t k -> one env t (\e -> Field e (Syntax.makeFieldSelection k))
+        VInject m k Nothing -> do
+            (m', cut) <- quoteMaybeMap env m
+            return (Field (Union m') (Syntax.makeFieldSelection k), cut)
+        VInject m k (Just t) -> do
+            (m', cut) <- quoteMaybeMap env m
+            if cut
+                then return (Field (Union m') (Syntax.makeFieldSelection k), True)
+                else qAppE env (Field (Union m') (Syntax.makeFieldSelection k)) t
+        VProject t p -> do
+            (t', c1) <- child env t
+            case p of
+                Left s -> return (Project t' (Left (Dhall.Set.toList s)), c1)
+                Right u -> do
+                    (u', c2) <- child env u
+                    return (Project t' (Right u'), c1 || c2)
+        VAssert t -> one env t Assert
+        VEquivalent t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (Equivalent mempty t' u', c1 || c2)
+        VWith e ks v -> do
+            (e', c1) <- child env e
+            (v', c2) <- child env v
+            return (With e' ks v', c1 || c2)
+        VEmbed a -> return (Embed a, False)
+
+    quoteMap env m = do
+        let pairs = Map.toList m
+        quoted <- mapM (\(k, v) -> fmap (\(e, c) -> ((k, Syntax.makeRecordField e), c)) (child env v)) pairs
+        return (Map.fromList (map fst quoted), any snd quoted)
+
+    quoteMaybeMap env m = do
+        let pairs = Map.toList m
+        quoted <- mapM
+            (\(k, mv) -> case mv of
+                Nothing -> return ((k, Nothing), False)
+                Just v -> do
+                    (e, c) <- child env v
+                    return ((k, Just e), c))
+            pairs
+        return (Map.fromList (map fst quoted), any snd quoted)
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
