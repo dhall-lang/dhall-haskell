@@ -144,9 +144,6 @@ module Dhall.Import (
     , merkleHashCache
     , normalizer
     , startingContext
-    , ResolvedImportSource(..)
-    , importSources
-    , decodeSemanticCache
     , reportWarning
     , chainImport
     , dependencyToFile
@@ -161,7 +158,16 @@ module Dhall.Import (
     , MissingEnvironmentVariable(..)
     , MissingImports(..)
     , HashMismatch(..)
+    , ImportErrorMode(..)
+    , KnownImportType(..)
+    , CollectedImportError(..)
+    , ResolvedImportSource(..)
+    , importErrorMode
+    , collectedImportErrors
+    , importSources
     , plainShowImportError
+    , loadCollecting
+    , decodeSemanticCache
     ) where
 
 import Control.Applicative        (Alternative (..))
@@ -171,7 +177,7 @@ import Control.Exception
     , SomeException
     , toException
     )
-import Control.Monad              (foldM)
+import Control.Monad              (foldM, when)
 import Control.Monad.Catch        (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
@@ -375,6 +381,15 @@ instance Show MissingImports where
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
 
+-- | A nested file contained import errors already recorded on 'Status'.
+--
+--   The enclosing import is not type-checked or cached.  The caller replaces
+--   it with a placeholder and does not record a second message.
+data EnclosingImportFailed = EnclosingImportFailed
+    deriving (Show, Typeable)
+
+instance Exception EnclosingImportFailed
+
 -- | Render an import error without ANSI colour codes.
 --
 --   The 'Show' instances used by the CLI embed colour.  This is the same
@@ -393,6 +408,47 @@ recordFetched location text = do
     let here = NonEmpty.head _stack
         source = ResolvedImportSource (Just text) location
     zoom importSources (State.modify (Dhall.Map.insert here source))
+
+substitutePlaceholder
+    :: Src
+    -> Expr Src Import
+    -> [SomeException]
+    -> StateT Status IO (Expr Src Void)
+substitutePlaceholder src inner es = do
+    Status { _stack } <- State.get
+    let imp = case Core.shallowDenote inner of
+            Embed i -> Just i
+            _       -> Nothing
+        known = case imp of
+            Just Import{ importMode = RawText }   -> Just KnownText
+            Just Import{ importMode = RawBytes }  -> Just KnownBytes
+            Just Import{ importMode = Location }  -> Just KnownLocation
+            _                                     -> Nothing
+    name <- nextPlaceholderName
+    State.modify' $ \s ->
+        s { _collectedImportErrors =
+                CollectedImportError
+                    { collectedSrc = src
+                    , collectedImport = imp
+                    , collectedStack = _stack
+                    , collectedErrors = es
+                    , collectedKnownType = known
+                    , collectedName = name
+                    }
+                    : _collectedImportErrors s
+          }
+    return (Var (Syntax.V name 0))
+
+nextPlaceholder :: StateT Status IO (Expr Src Void)
+nextPlaceholder = do
+    name <- nextPlaceholderName
+    return (Var (Syntax.V name 0))
+
+nextPlaceholderName :: StateT Status IO Text
+nextPlaceholderName = do
+    Status { _placeholderCount } <- State.get
+    State.modify' $ \s -> s { _placeholderCount = _placeholderCount + 1 }
+    return (Text.pack ("missing`" ++ show _placeholderCount))
 
 -- | Decode a semantic-cache entry by its integrity hash.
 --
@@ -413,6 +469,26 @@ decodeSemanticCache hash = do
                     (Data.ByteString.Lazy.fromStrict bytes) of
                 Left _ -> Nothing
                 Right expr -> Just expr
+
+-- | Resolve imports relative to a directory, collecting every import error.
+--
+--   'loadRelativeTo' stays fail-fast.  This is what the @dhall@ executable
+--   uses.  A non-empty error list means the expression contains placeholders
+--   and must not be treated as a successful result.
+loadCollecting
+    :: FilePath
+    -> SemanticCacheMode
+    -> Expr Src Import
+    -> IO (Expr Src Void, [CollectedImportError])
+loadCollecting rootDirectory semanticCacheMode expression = do
+    (expr, status) <-
+        State.runStateT
+            (loadWith expression)
+            (emptyStatus rootDirectory)
+                { _semanticCacheMode = semanticCacheMode
+                , _importErrorMode = CollectErrors
+                }
+    return (expr, reverse (_collectedImportErrors status))
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.
@@ -786,7 +862,18 @@ loadImportWithSemisemanticCache
             throwMissingImport (Imported _stack (ParseError errInfo text))
         Right expr    -> return expr
 
+    Status { _collectedImportErrors = errorsBefore } <- State.get
     resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
+    Status { _importErrorMode, _insideImportAlt, _collectedImportErrors = errorsAfter } <-
+        State.get
+    -- A nested file that recorded import errors is not type-checked or cached.
+    -- Those errors are already in the list, so this does not add another one.
+    when
+        ( _importErrorMode == CollectErrors
+            && not _insideImportAlt
+            && length errorsAfter /= length errorsBefore
+        )
+        (throwM EnclosingImportFailed)
     Status {..} <- State.get
 
     -- Cache key: this file's syntax, hashes of its imports, and hashes of the
@@ -1649,7 +1736,17 @@ In any expression `p ? q` the opportunistic caching rule says:
 - Look for a hash value specified in `p`; if it is found and matches the actual hash, cache the result `p` under that hash.
 - The absent import `p` might itself have alternatives which are all absent; descend recursively into those and find the first hash specified, if any. This is done by `findImportHash` below.
  -}
-  ImportAlt a b -> loadWith a `catch` handler₀
+  ImportAlt a b -> do
+    Status { _insideImportAlt = wasInside } <- State.get
+    State.modify' (\s -> s { _insideImportAlt = True })
+    let restore =
+            State.modify' (\s -> s { _insideImportAlt = wasInside })
+    result <-
+        (loadWith a `catch` handler₀) `catch` \(e :: SomeException) -> do
+            restore
+            throwM e
+    restore
+    return result
     where
       is :: forall e . Exception e => SomeException -> Bool
       is exception = Maybe.isJust (Exception.fromException @e exception)
@@ -1717,9 +1814,26 @@ In any expression `p ? q` the opportunistic caching rule says:
               text₂ = text₀ <> " ? " <> text₁
 
   Note a b             -> do
-      let handler e = throwM (SourcedException a (e :: MissingImports))
+      let finish (MissingImports es) = do
+              Status { _importErrorMode, _insideImportAlt } <- State.get
+              if _importErrorMode == CollectErrors && not _insideImportAlt
+                  then substitutePlaceholder a b es
+                  else throwM (SourcedException a (MissingImports es))
 
-      (Note <$> pure a <*> loadWith b) `catch` handler
+      (Note <$> pure a <*> loadWith b)
+          `catch` \(e :: MissingImports) -> finish e
+          `catch` \(sourced@(SourcedException _ MissingImports{}) :: SourcedException MissingImports) -> do
+              Status { _importErrorMode, _insideImportAlt } <- State.get
+              if _importErrorMode == CollectErrors && not _insideImportAlt
+                  then case sourced of
+                      SourcedException _ (MissingImports es) ->
+                          substitutePlaceholder a b es
+                  else throwM sourced
+          `catch` \EnclosingImportFailed -> do
+              Status { _importErrorMode, _insideImportAlt } <- State.get
+              if _importErrorMode == CollectErrors && not _insideImportAlt
+                  then nextPlaceholder
+                  else throwM EnclosingImportFailed
   Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
   Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
   RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
