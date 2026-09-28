@@ -120,6 +120,10 @@ data Status = Status
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
 
+    , _importTypes :: Map Chained (Expr Src Void)
+    -- ^ Type of each cached import, recorded when that import is type-checked
+    --   so a parent can reuse it instead of inferring the child again.
+
     , _merkleHashCache :: Map Chained SHA256Digest
     -- ^ Per-run map from import to the hash used as that import's contribution
     --   to a parent's disk-cache key. Code imports without an integrity hash
@@ -250,6 +254,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _cache = Map.empty
 
+    _importTypes = Map.empty
+
     _merkleHashCache = Map.empty
 
     _merkleContextFingerprint = Nothing
@@ -293,6 +299,10 @@ graph = lens _graph (\s x -> s { _graph = x })
 -- | Lens from a `Status` to its `_cache` field
 cache :: Lens' Status (Map Chained ImportSemantics)
 cache = lens _cache (\s x -> s { _cache = x })
+
+-- | Lens from a `Status` to its `_importTypes` field
+importTypes :: Lens' Status (Map Chained (Expr Src Void))
+importTypes = lens _importTypes (\s x -> s { _importTypes = x })
 
 -- | Lens from a `Status` to its `_merkleHashCache` field
 merkleHashCache :: Lens' Status (Map Chained SHA256Digest)
