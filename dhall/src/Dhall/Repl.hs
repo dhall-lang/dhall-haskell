@@ -35,7 +35,6 @@ import Data.List
 import Data.Maybe                          (mapMaybe)
 import Data.Text                           (Text)
 import Data.Void                           (Void)
-import Dhall.Context                       (Context)
 import Dhall.Import                        (hashExpressionToCode)
 import Dhall.Parser                        (Parser (..))
 import Dhall.Pretty                        (CharacterSet (..))
@@ -56,7 +55,6 @@ import qualified Dhall.Core
 import qualified Dhall.Core                          as Dhall
     ( Expr
     , Var (V)
-    , normalize
     )
 import qualified Dhall.Core                          as Expr (Expr (..))
 import qualified Dhall.Import                        as Dhall
@@ -114,6 +112,7 @@ repl characterSet explain =
 
 data Env = Env
   { envBindings      :: Dhall.Context.Context Binding
+  , envContext       :: Dhall.TypingContext Src
   , envIt            :: Maybe Binding
   , explain          :: Bool
   , characterSet     :: CharacterSet
@@ -125,6 +124,7 @@ emptyEnv :: Env
 emptyEnv =
   Env
     { envBindings = Dhall.Context.empty
+    , envContext = Dhall.emptyTypingContext
     , envIt = Nothing
     , explain = False
     , characterSet = Unicode
@@ -136,16 +136,6 @@ data Binding = Binding
   { bindingExpr :: Dhall.Expr Dhall.Src Void
   , bindingType :: Dhall.Expr Dhall.Src Void
   }
-
-
-envToContext :: Env -> Dhall.Context.Context Binding
-envToContext Env{ envBindings, envIt } =
-  case envIt of
-    Nothing ->
-      envBindings
-
-    Just it ->
-      Dhall.Context.insert "it" it envBindings
 
 
 parseAndLoad
@@ -172,10 +162,17 @@ eval src = do
   exprType <-
     typeCheck loaded
 
-  expr <-
-    normalize loaded
+  env <- get
 
-  modify ( \e -> e { envIt = Just ( Binding expr exprType ) } )
+  -- Quote only when `output` prints the value. The context keeps the value
+  -- that quote reuses, so a later command does not normalize `it` again.
+  let (ctx', expr) =
+          Dhall.bindAlreadyChecked "it" exprType loaded (envContext env)
+
+  modify ( \e ->
+    e { envIt = Just ( Binding expr exprType )
+      , envContext = ctx'
+      } )
 
   output expr
 
@@ -192,27 +189,13 @@ typeOf src = do
   output exprType
 
 
-applyContext
-    :: Context Binding
-    -> Dhall.Expr Dhall.Src Void
-    -> Dhall.Expr Dhall.Src Void
-applyContext context expression =
-    Dhall.Core.wrapInLets bindings expression
-  where
-    definitions = reverse $ Dhall.Context.toList context
-
-    convertBinding (variable, Binding expr _) =
-        Dhall.Core.Binding Nothing variable Nothing Nothing Nothing expr
-
-    bindings = fmap convertBinding definitions
-
 normalize
   :: MonadState Env m
   => Dhall.Expr Dhall.Src Void -> m ( Dhall.Expr t Void )
 normalize e = do
   env <- get
 
-  return (Dhall.normalize (applyContext (envToContext env) e))
+  return (Dhall.normalizeWithContext (envContext env) e)
 
 
 typeCheck
@@ -223,7 +206,7 @@ typeCheck expression = do
 
   let wrap = if explain env then Dhall.detailed else id
 
-  case Dhall.typeOf (applyContext (envToContext env) expression) of
+  case Dhall.typeWithContext (envContext env) expression of
     Left  e -> liftIO ( wrap (throwIO e) )
     Right a -> return a
 
@@ -267,15 +250,17 @@ addBinding string = do
 
           return (resolved, bindingType)
 
-  bindingExpr <- normalize resolved
-
   modify
     ( \e ->
+        let (ctx', bindingExpr) =
+                Dhall.bindAlreadyChecked variable bindingType resolved (envContext e)
+        in
         e { envBindings =
               Dhall.Context.insert
                 variable
                 Binding{ bindingType, bindingExpr }
                 ( envBindings e )
+          , envContext = ctx'
           }
     )
 
@@ -284,7 +269,12 @@ addBinding string = do
 clearBindings :: (MonadFail m, MonadState Env m) => String -> m ()
 clearBindings _ = modify adapt
   where
-    adapt (Env {..}) = Env { envBindings = Dhall.Context.empty, ..}
+    adapt (Env {..}) =
+      Env
+        { envBindings = Dhall.Context.empty
+        , envContext = Dhall.emptyTypingContext
+        , ..
+        }
 
 hashBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => String -> m ()
 hashBinding src = do
