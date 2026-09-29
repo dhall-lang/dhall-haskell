@@ -1603,39 +1603,53 @@ quote !env !t0 =
     quoteRecordField = Syntax.makeRecordField . quote env
     {-# INLINE quoteRecordField #-}
 
--- | Quote a value, stopping after @budget@ nodes.
+-- | Quote a value, stopping after about @budget@ bytes of rendered text.
+--
+--   This is a different function from 'quote'.  @--max-output-size@ passes its
+--   byte count here.  The count is not a syntax-node count: each node spends
+--   a few bytes of syntax plus the length of any name or literal it prints.
+--   A long text literal therefore spends many bytes in one node, and quoting
+--   stops once the estimate reaches @budget@.  'Dhall.Bounded.prettyBounded'
+--   still cuts the real rendering at that same count, because layout
+--   (indentation and line breaks) is not known yet.
 --
 --   Returns the expression and whether it was cut short.  A cut-off expression
 --   ends in @\"…\"@ and does not force the parts that were not quoted: lambda
---   bodies, the tail of a list, and the payload of @Some@.  Strict fields are
---   already evaluated; this only limits how much of them is turned into syntax.
+--   bodies, the tail of a list, later record fields, and the payload of
+--   @Some@.  Strict fields are already evaluated; this only limits how much
+--   of them is turned into syntax.
 --
---   A budget of 0 yields the truncation marker.
+--   A budget that cannot pay for one node yields the truncation marker.
 quoteBounded
     :: forall a. Eq a => Int -> Names -> Val a -> (Expr Void a, Bool)
 quoteBounded budget env0 val0 =
     State.evalState (go env0 val0) budget
   where
+    -- Punctuation, spaces, and a typical bit of indentation.  Payload length
+    -- is charged separately, so this is not a guess at the size of a literal.
+    syntacticBytes :: Int
+    syntacticBytes = 4
+
     marker :: Expr Void a
     marker = TextLit (Chunks [] "…")
 
-    spend :: State.State Int (Maybe (Expr Void a))
-    spend = do
+    -- | Pay @cost@ bytes.  'False' means this node does not fit and must not
+    --   be forced.
+    charge :: Int -> State.State Int Bool
+    charge cost = do
         left <- State.get
-        if left <= 0
-            then return Nothing
+        if left <= 0 || cost > left
+            then return False
             else do
-                State.put (left - 1)
-                return (Just marker)
+                State.put (left - cost)
+                return True
 
     go :: Names -> Val a -> State.State Int (Expr Void a, Bool)
     go env val = do
-        paid <- spend
-        case paid of
-            Nothing -> return (marker, True)
-            Just _ -> do
-                (expr, truncated) <- step env val
-                return (expr, truncated)
+        paid <- charge syntacticBytes
+        if not paid
+            then return (marker, True)
+            else step env val
 
     child :: Names -> Val a -> State.State Int (Expr Void a, Bool)
     child = go
@@ -1648,8 +1662,11 @@ quoteBounded budget env0 val0 =
         -> State.State Int (Expr Void a, Bool)
     both env t u k = do
         (t', cutT) <- child env t
-        (u', cutU) <- child env u
-        return (k t' u', cutT || cutU)
+        if cutT
+            then return (k t' marker, True)
+            else do
+                (u', cutU) <- child env u
+                return (k t' u', cutU)
 
     one :: Names -> Val a -> (Expr Void a -> Expr Void a) -> State.State Int (Expr Void a, Bool)
     one env t k = do
@@ -1693,7 +1710,11 @@ quoteBounded budget env0 val0 =
     step :: Names -> Val a -> State.State Int (Expr Void a, Bool)
     step env val = case val of
         VConst k -> return (Const k, False)
-        VVar x i -> return (Var (V x (countNames x env - i - 1)), False)
+        VVar x i -> do
+            paid <- charge (Text.length x)
+            if paid
+                then return (Var (V x (countNames x env - i - 1)), False)
+                else return (marker, True)
         VPrimVar -> return (marker, True)
         VApp t u -> do
             (t', cut) <- child env t
@@ -1752,7 +1773,11 @@ quoteBounded budget env0 val0 =
         VBytes -> return (Bytes, False)
         VBytesLit b -> return (BytesLit b, False)
         VNatural -> return (Natural, False)
-        VNaturalLit n -> return (NaturalLit n, False)
+        VNaturalLit n -> do
+            paid <- charge (decimalDigits (fromIntegral n :: Integer))
+            if paid
+                then return (NaturalLit n, False)
+                else return (marker, True)
         VNaturalFold a t u v -> apps env NaturalFold [a, t, u, v]
         VNaturalBuild t -> apps env NaturalBuild [t]
         VNaturalIsZero t -> apps env NaturalIsZero [t]
@@ -1764,7 +1789,11 @@ quoteBounded budget env0 val0 =
         VNaturalPlus t u -> both env t u NaturalPlus
         VNaturalTimes t u -> both env t u NaturalTimes
         VInteger -> return (Integer, False)
-        VIntegerLit n -> return (IntegerLit n, False)
+        VIntegerLit n -> do
+            paid <- charge (decimalDigits n)
+            if paid
+                then return (IntegerLit n, False)
+                else return (marker, True)
         VIntegerClamp t -> apps env IntegerClamp [t]
         VIntegerNegate t -> apps env IntegerNegate [t]
         VIntegerShow t -> apps env IntegerShow [t]
@@ -1774,9 +1803,14 @@ quoteBounded budget env0 val0 =
         VDoubleShow t -> apps env DoubleShow [t]
         VText -> return (Text, False)
         VTextLit (VChunks xys z) -> do
-            pieces <- mapM (\(txt, bit) -> fmap (\(e, c) -> ((txt, e), c)) (child env bit)) xys
-            let cut = any snd pieces
-            return (TextLit (Chunks (map (\((txt, e), _) -> (txt, e)) pieces) z), cut)
+            let payload =
+                    2 + Text.length z + sum [ Text.length txt | (txt, _) <- xys ]
+            paid <- charge payload
+            if not paid
+                then return (marker, True)
+                else do
+                    (pieces, cut) <- quoteChunks env xys
+                    return (TextLit (Chunks pieces z), cut)
         VTextAppend t u -> both env t u TextAppend
         VTextShow t -> apps env TextShow [t]
         VTextReplace a b c -> apps env TextReplace [a, b, c]
@@ -1875,21 +1909,53 @@ quoteBounded budget env0 val0 =
             return (With e' ks v', c1 || c2)
         VEmbed a -> return (Embed a, False)
 
-    quoteMap env m = do
-        let pairs = Map.toList m
-        quoted <- mapM (\(k, v) -> fmap (\(e, c) -> ((k, Syntax.makeRecordField e), c)) (child env v)) pairs
-        return (Map.fromList (map fst quoted), any snd quoted)
+    quoteChunks _ [] = return ([], False)
+    quoteChunks env ((txt, bit) : rest) = do
+        (e, cut) <- child env bit
+        if cut
+            then return ([(txt, e)], True)
+            else do
+                (rest', cut') <- quoteChunks env rest
+                return ((txt, e) : rest', cut')
 
-    quoteMaybeMap env m = do
-        let pairs = Map.toList m
-        quoted <- mapM
-            (\(k, mv) -> case mv of
-                Nothing -> return ((k, Nothing), False)
-                Just v -> do
-                    (e, c) <- child env v
-                    return ((k, Just e), c))
-            pairs
-        return (Map.fromList (map fst quoted), any snd quoted)
+    -- A record field prints at least the label and a separator.
+    fieldCost k = Text.length k + 4
+
+    quoteMap env m = goPairs [] (Map.toList m)
+      where
+        goPairs acc [] = return (Map.fromList (reverse acc), False)
+        goPairs acc ((k, v) : rest) = do
+            paid <- charge (fieldCost k)
+            if not paid
+                then return (Map.fromList (reverse acc), True)
+                else do
+                    (e, cut) <- child env v
+                    let acc' = (k, Syntax.makeRecordField e) : acc
+                    if cut
+                        then return (Map.fromList (reverse acc'), True)
+                        else goPairs acc' rest
+
+    quoteMaybeMap env m = goPairs [] (Map.toList m)
+      where
+        goPairs acc [] = return (Map.fromList (reverse acc), False)
+        goPairs acc ((k, mv) : rest) = do
+            paid <- charge (fieldCost k)
+            if not paid
+                then return (Map.fromList (reverse acc), True)
+                else case mv of
+                    Nothing -> goPairs ((k, Nothing) : acc) rest
+                    Just v -> do
+                        (e, cut) <- child env v
+                        let acc' = (k, Just e) : acc
+                        if cut
+                            then return (Map.fromList (reverse acc'), True)
+                            else goPairs acc' rest
+
+decimalDigits :: Integer -> Int
+decimalDigits n
+    | n < 0 = 1 + decimalDigits (-n)
+    | n < 10 = 1
+    | otherwise = 1 + decimalDigits (n `div` 10)
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.
