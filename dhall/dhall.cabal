@@ -428,7 +428,10 @@ Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends: dhall
-    GHC-Options: -rtsopts
+    -- The evaluation-time limit is a watcher thread.  The non-threaded RTS
+    -- does not run that watcher while type-checking, normalization, or
+    -- pretty-printing keeps the capability busy.
+    GHC-Options: -rtsopts -threaded
     Default-Language: Haskell2010
 
 Test-Suite tasty
@@ -437,6 +440,7 @@ Test-Suite tasty
     Hs-Source-Dirs: tests
     Main-Is: Dhall/Test/Main.hs
     Other-Modules:
+        Dhall.Test.Bounded
         Dhall.Test.CacheFill
         Dhall.Test.DelayedNormalization
         Dhall.Test.Dhall
@@ -519,7 +523,7 @@ Benchmark dhall-parser
     Default-Language: Haskell2010
     Other-Extensions:
         TypeApplications
-    Ghc-Options: -rtsopts
+    GHC-Options: -rtsopts -threaded
 
 Benchmark deep-nested-large-record
     Import: common
@@ -530,6 +534,7 @@ Benchmark deep-nested-large-record
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
     Default-Language: Haskell2010
+    GHC-Options: -rtsopts -threaded
 
 Benchmark evaluation
     Import: common
@@ -547,3 +552,4 @@ Benchmark evaluation
         temporary                 >= 1.2.1    && < 1.4 ,
         time                                          ,
     Default-Language: Haskell2010
+    GHC-Options: -rtsopts -threaded

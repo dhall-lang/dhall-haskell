@@ -26,6 +26,7 @@ import Control.Applicative (optional, (<|>))
 import Control.Exception   (Handler (..), SomeException, fromException, toException)
 import Control.Monad       (when)
 import Data.Foldable       (for_)
+import Data.Int            (Int64)
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
 import Data.Maybe          (fromMaybe)
 import Data.Monoid         (Endo (..))
@@ -33,11 +34,12 @@ import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Bounded
     ( Bound (..)
-    , BoundLimits (..)
-    , defaultBoundLimits
-    , defaultOutputBytes
-    , normalizeBounded
+    , WorkLimit (..)
+    , normalizeCapped
+    , normalizeLimited
     , prettyBounded
+    , runLimited
+    , withAllocationLimit
     )
 import Dhall.Freeze        (Intent (..), Scope (..))
 import Dhall.Import
@@ -156,6 +158,8 @@ data Options = Options
     , chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
     , maxOutputSize      :: Maybe Int
+    , maxAllocation      :: Maybe Int64
+    , maxEvaluationTime  :: Maybe Int
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -240,6 +244,8 @@ parseOptions =
     <*> parseCharacterSet
     <*> parseCensor
     <*> parseMaxOutputSize
+    <*> parseMaxAllocation
+    <*> parseMaxEvaluationTime
   where
     switch name description =
         Options.Applicative.switch
@@ -247,22 +253,37 @@ parseOptions =
             <>  Options.Applicative.help description
             )
 
-    parseMaxOutputSize =
-            ( Just <$> Options.Applicative.option
+    parseByteLimit :: Read a => String -> String -> Parser (Maybe a)
+    parseByteLimit name description =
+        optional
+            ( Options.Applicative.option
                 Options.Applicative.auto
-                (   Options.Applicative.long "max-output-size"
+                (   Options.Applicative.long name
                 <>  Options.Applicative.metavar "BYTES"
-                <>  Options.Applicative.help
-                        "Cap a rendered normal form at this many bytes"
+                <>  Options.Applicative.help description
                 )
             )
-        <|> Options.Applicative.flag
-                Nothing
-                (Just defaultOutputBytes)
-                (   Options.Applicative.long "max-output-size"
+
+    parseMaxOutputSize =
+        parseByteLimit
+            "max-output-size"
+            "Truncate a rendered normal form after this many bytes"
+
+    parseMaxAllocation =
+        parseByteLimit
+            "max-allocation"
+            "Stop evaluation after it allocates this many bytes"
+
+    parseMaxEvaluationTime =
+        optional
+            ( Options.Applicative.option
+                Options.Applicative.auto
+                (   Options.Applicative.long "max-evaluation-time"
+                <>  Options.Applicative.metavar "SECONDS"
                 <>  Options.Applicative.help
-                        "Cap a rendered normal form at 128KiB"
+                        "Stop type-checking, normalization, and rendering after this many seconds"
                 )
+            )
 
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where
@@ -673,6 +694,16 @@ noHeaders
 noHeaders i =
     i
 
+-- | Convert a second count from the CLI into microseconds for 'threadDelay'.
+secondsToMicros :: Int -> Int
+secondsToMicros seconds
+    | seconds <= 0 = 0
+    | otherwise =
+        let micros = toInteger seconds * 1000000
+        in if micros > toInteger (maxBound :: Int)
+            then maxBound
+            else fromInteger micros
+
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
@@ -801,54 +832,95 @@ command (Options {..}) = do
             resolvedExpression <-
                 Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            let reportAllocation = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-allocation"
+                    Exit.exitFailure
 
-            normalizedExpression <- case maxOutputSize of
-                Nothing ->
-                    return (Dhall.Core.normalize resolvedExpression)
-                Just nbytes -> do
-                    let limits = defaultBoundLimits { boundOutputBytes = nbytes }
-                    outcome <- normalizeBounded limits resolvedExpression
+                reportTime = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-evaluation-time"
+                    Exit.exitFailure
+
+                -- Type-checking, alpha-normalization, and rendering sit outside
+                -- 'normalizeLimited'.  A time limit has to cover them: on a
+                -- large normal form they are the slow part, and normalization
+                -- itself can finish inside the budget.
+                produce inferredType evaluated quoteCut = do
+                    normalizedExpression <-
+                        case maxOutputSize of
+                            Nothing ->
+                                return evaluated
+                            Just nbytes -> do
+                                let doc =
+                                        Dhall.Pretty.prettyCharacterSet
+                                            characterSet
+                                            evaluated
+                                case prettyBounded nbytes doc of
+                                    Truncated text -> do
+                                        Data.Text.IO.hPutStrLn System.IO.stdout text
+                                        System.IO.hPutStrLn System.IO.stderr
+                                            "Error: normal form exceeded --max-output-size"
+                                        Exit.exitFailure
+                                    Complete text
+                                        | quoteCut -> do
+                                            Data.Text.IO.hPutStrLn System.IO.stdout text
+                                            System.IO.hPutStrLn System.IO.stderr
+                                                "Error: normal form exceeded --max-output-size"
+                                            Exit.exitFailure
+                                        | otherwise ->
+                                            return evaluated
+
+                    let alphaNormalizedExpression =
+                            if alpha
+                            then Dhall.Core.alphaNormalize normalizedExpression
+                            else normalizedExpression
+
+                    let annotatedExpression =
+                            if annotate
+                            then Annot alphaNormalizedExpression inferredType
+                            else alphaNormalizedExpression
+
+                    case output of
+                        StandardOutput ->
+                            render System.IO.stdout characterSet annotatedExpression
+                        OutputFile file_ ->
+                            writeDocToFile
+                                file_
+                                (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
+
+            case maxEvaluationTime of
+                Nothing -> do
+                    inferredType <-
+                        Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+                    outcome <- case (maxAllocation, maxOutputSize) of
+                        (Nothing, Nothing) ->
+                            return (Right (Dhall.Core.normalize resolvedExpression, False))
+                        _ ->
+                            normalizeLimited
+                                maxAllocation
+                                Nothing
+                                maxOutputSize
+                                resolvedExpression
                     case outcome of
-                        Complete expr ->
-                            return expr
-                        Truncated expr -> do
-                            let doc =
-                                    Dhall.Pretty.prettyCharacterSet
-                                        characterSet
-                                        expr
-                            case prettyBounded nbytes doc of
-                                Complete text ->
-                                    Data.Text.IO.hPutStrLn System.IO.stdout text
-                                Truncated text ->
-                                    Data.Text.IO.hPutStrLn System.IO.stdout text
-                                LimitExceeded ->
-                                    return ()
-                            System.IO.hPutStrLn System.IO.stderr
-                                "Error: normal form exceeded --max-output-size"
-                            exitFailure
-                        LimitExceeded -> do
-                            System.IO.hPutStrLn System.IO.stderr
-                                "Error: evaluation exceeded --max-output-size"
-                            exitFailure
-
-            let alphaNormalizedExpression =
-                    if alpha
-                    then Dhall.Core.alphaNormalize normalizedExpression
-                    else normalizedExpression
-
-            let annotatedExpression =
-                    if annotate
-                        then Annot alphaNormalizedExpression inferredType
-                        else alphaNormalizedExpression
-
-            case output of
-                StandardOutput -> render System.IO.stdout characterSet annotatedExpression
-
-                OutputFile file_ ->
-                    writeDocToFile
-                        file_
-                        (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right (evaluated, quoteCut) ->
+                            produce inferredType evaluated quoteCut
+                Just seconds -> do
+                    outcome <-
+                        runLimited Nothing (Just (secondsToMicros seconds)) $ do
+                            inferredType <-
+                                Dhall.Core.throws
+                                    (Dhall.TypeCheck.typeOf resolvedExpression)
+                            (evaluated, quoteCut) <-
+                                withAllocationLimit maxAllocation
+                                    (normalizeCapped maxOutputSize resolvedExpression)
+                            produce inferredType evaluated quoteCut
+                    case outcome of
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right () -> return ()
 
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
