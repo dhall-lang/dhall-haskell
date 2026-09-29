@@ -124,6 +124,7 @@ import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Prettyprinter                      as Pretty
+import qualified Prettyprinter.Render.String        as Pretty.String
 import qualified Prettyprinter.Render.Terminal      as Pretty
 import qualified Prettyprinter.Render.Text          as Pretty.Text
 import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
@@ -722,13 +723,22 @@ command (Options {..}) = do
     let dieOnImportErrors errs = case errs of
             [] -> return ()
             _ -> do
-                for_ errs $ \CollectedImportError { collectedErrors } ->
+                for_ errs $ \CollectedImportError { collectedErrors, collectedSrc } -> do
                     for_ collectedErrors $ \e -> do
                         let shown =
                                 if explain
                                     then explainNestedImportErrors e
                                     else e
                         System.IO.hPutStrLn System.IO.stderr (show shown)
+                    -- Same span 'SourcedException' prints.  Collecting the
+                    -- inner errors dropped it, so the parent file and the
+                    -- import text would otherwise be missing.
+                    System.IO.hPutStrLn System.IO.stderr ""
+                    System.IO.hPutStrLn
+                        System.IO.stderr
+                        ( Pretty.String.renderString
+                            (Dhall.Pretty.layout (Pretty.pretty collectedSrc))
+                        )
                 when (not explain) $
                     System.IO.hPutStrLn
                         System.IO.stderr

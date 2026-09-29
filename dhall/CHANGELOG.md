@@ -20,7 +20,8 @@
   fetched. `decodeSemanticCache` reads a semantic-cache entry by hash
   without downloading the original source.
 * The `dhall` executable now reports every failed import and exits
-  unsuccessfully, without printing a result. `load` and `loadWith` still
+  unsuccessfully, without printing a result. Each report includes the
+  source span of that import in the parent file. `load` and `loadWith` still
   stop at the first error unless the caller sets `CollectErrors` on
   `Status`.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
