@@ -6,6 +6,7 @@
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuasiQuotes           #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 
@@ -72,7 +73,6 @@ module Main where
 
 import Control.Applicative              (empty, optional, (<|>))
 import Control.Monad.IO.Class           (MonadIO (..))
-import Control.Monad.Morph              (hoist)
 import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson                       (FromJSON)
@@ -84,8 +84,8 @@ import Dhall.Crypto                     (SHA256Digest (..))
 import Dhall.Import                     (Status (..), stack)
 import Dhall.Parser                     (Src)
 import GHC.Generics                     (Generic)
-import Lens.Micro                       (rewriteOf)
-import Lens.Micro.Mtl                   (zoom)
+import Lens.Micro                       (Lens', rewriteOf, set)
+import Lens.Micro.Extras                (view)
 import Network.URI                      (URI (..), URIAuth (..))
 import Nix.Expr.Shorthands              ((@.), (@@))
 import Nix.Expr.Types                   (NExpr)
@@ -315,6 +315,12 @@ toListWith _  Nothing  = [ ]
 nub :: Ord a => [a] -> [a]
 nub = Foldl.fold Foldl.nub
 
+-- Run a StateT action on one field of the surrounding state.
+zoom :: Monad m => Lens' s a -> State.StateT a m r -> State.StateT s m r
+zoom l action = State.StateT $ \s -> do
+    (r, a) <- State.runStateT action (view l s)
+    return (r, set l a s)
+
 {-| The Nixpkgs support for Dhall essentially replaces all remote imports with
     cache hits, but doing so implies that all remote imports must be protected
     by an integrity check.
@@ -347,7 +353,7 @@ findExternalDependencies expression = do
 
     parent :| _ <- zoom stack State.get
 
-    child <- hoist liftIO (Dhall.Import.chainImport parent import_)
+    child <- State.mapStateT liftIO (Dhall.Import.chainImport parent import_)
 
     let Import{ importHashed, importMode } = Dhall.Import.chainedImport child
 
