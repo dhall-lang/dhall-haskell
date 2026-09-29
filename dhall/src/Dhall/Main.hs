@@ -31,6 +31,14 @@ import Data.Maybe          (fromMaybe)
 import Data.Monoid         (Endo (..))
 import Data.Text           (Text)
 import Data.Void           (Void)
+import Dhall.Bounded
+    ( Bound (..)
+    , BoundLimits (..)
+    , defaultBoundLimits
+    , defaultOutputBytes
+    , normalizeBounded
+    , prettyBounded
+    )
 import Dhall.Freeze        (Intent (..), Scope (..))
 import Dhall.Import
     ( Depends (..)
@@ -147,6 +155,7 @@ data Options = Options
     , plain              :: Bool
     , chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
+    , maxOutputSize      :: Maybe Int
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -230,12 +239,30 @@ parseOptions =
     <*> switch "plain" "Disable syntax highlighting"
     <*> parseCharacterSet
     <*> parseCensor
+    <*> parseMaxOutputSize
   where
     switch name description =
         Options.Applicative.switch
             (   Options.Applicative.long name
             <>  Options.Applicative.help description
             )
+
+    parseMaxOutputSize =
+            ( Just <$> Options.Applicative.option
+                Options.Applicative.auto
+                (   Options.Applicative.long "max-output-size"
+                <>  Options.Applicative.metavar "BYTES"
+                <>  Options.Applicative.help
+                        "Cap a rendered normal form at this many bytes"
+                )
+            )
+        <|> Options.Applicative.flag
+                Nothing
+                (Just defaultOutputBytes)
+                (   Options.Applicative.long "max-output-size"
+                <>  Options.Applicative.help
+                        "Cap a rendered normal form at 128KiB"
+                )
 
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where
@@ -776,7 +803,34 @@ command (Options {..}) = do
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            normalizedExpression <- case maxOutputSize of
+                Nothing ->
+                    return (Dhall.Core.normalize resolvedExpression)
+                Just nbytes -> do
+                    let limits = defaultBoundLimits { boundOutputBytes = nbytes }
+                    outcome <- normalizeBounded limits resolvedExpression
+                    case outcome of
+                        Complete expr ->
+                            return expr
+                        Truncated expr -> do
+                            let doc =
+                                    Dhall.Pretty.prettyCharacterSet
+                                        characterSet
+                                        expr
+                            case prettyBounded nbytes doc of
+                                Complete text ->
+                                    Data.Text.IO.hPutStrLn System.IO.stdout text
+                                Truncated text ->
+                                    Data.Text.IO.hPutStrLn System.IO.stdout text
+                                LimitExceeded ->
+                                    return ()
+                            System.IO.hPutStrLn System.IO.stderr
+                                "Error: normal form exceeded --max-output-size"
+                            exitFailure
+                        LimitExceeded -> do
+                            System.IO.hPutStrLn System.IO.stderr
+                                "Error: evaluation exceeded --max-output-size"
+                            exitFailure
 
             let alphaNormalizedExpression =
                     if alpha
