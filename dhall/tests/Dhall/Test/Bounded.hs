@@ -98,7 +98,7 @@ allocationLimitStopsNormalization = testCase "allocation cap applies with or wit
 timeLimitInterruptsPureWork :: TestTree
 timeLimitInterruptsPureWork = testCase "time limit interrupts pure work" $ do
     start <- getMonotonicTime
-    result <- Bounded.runLimited Nothing (Just 100000) (evaluate (burn 40000000))
+    result <- Bounded.runLimited Nothing (Just 100000) (evaluate (burn 80000000))
     elapsed <- fmap (subtract start) getMonotonicTime
     case result of
         Left Bounded.TimeExceeded ->
