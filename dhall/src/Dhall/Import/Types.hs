@@ -179,6 +179,18 @@ data Status = Status
 
     , _getHomeDirectory :: IO FilePath
     -- ^ Action to get the home directory for resolving @~@ imports (special case for Windows tests)
+
+    , _importSources :: Map Chained ResolvedImportSource
+    -- ^ Text and location captured when an import was actually fetched.
+    }
+
+-- | Source text fetched for an import, and where it was fetched from.
+--
+--   'resolvedSourceText' is 'Nothing' for a semantic-cache hit: the original
+--   source was not downloaded.  Decode the cache entry separately.
+data ResolvedImportSource = ResolvedImportSource
+    { resolvedSourceText :: Maybe Text
+    , resolvedLocation :: Text
     }
 
 -- | Initial `Status`, parameterised over the HTTP 'Manager',
@@ -220,6 +232,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _reportWarning = Dhall.Util.printWarning
 
     _getHomeDirectory = Directory.getHomeDirectory
+
+    _importSources = Map.empty
 
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
@@ -281,6 +295,10 @@ cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
 -- | Lens from a `Status` to its `_reportWarning` field
 reportWarning :: Lens' Status (Text -> IO ())
 reportWarning = lens _reportWarning (\s x -> s { _reportWarning = x })
+
+-- | Lens from a `Status` to its `_importSources` field
+importSources :: Lens' Status (Map Chained ResolvedImportSource)
+importSources = lens _importSources (\s x -> s { _importSources = x })
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic
