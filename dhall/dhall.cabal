@@ -340,6 +340,7 @@ Library
     Exposed-Modules:
         Dhall
         Dhall.Binary
+        Dhall.Bounded
         Dhall.Context
         Dhall.Core
         Dhall.Crypto
