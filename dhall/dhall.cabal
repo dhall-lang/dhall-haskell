@@ -522,7 +522,7 @@ Benchmark dhall-parser
     Default-Language: Haskell2010
     Other-Extensions:
         TypeApplications
-    Ghc-Options: -rtsopts
+    GHC-Options: -rtsopts -threaded
 
 Benchmark deep-nested-large-record
     Import: common
@@ -533,6 +533,7 @@ Benchmark deep-nested-large-record
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
     Default-Language: Haskell2010
+    GHC-Options: -rtsopts -threaded
 
 Benchmark evaluation
     Import: common
@@ -550,3 +551,4 @@ Benchmark evaluation
         temporary                 >= 1.2.1    && < 1.4 ,
         time                                          ,
     Default-Language: Haskell2010
+    GHC-Options: -rtsopts -threaded
