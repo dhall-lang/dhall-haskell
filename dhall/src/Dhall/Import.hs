@@ -135,6 +135,7 @@ module Dhall.Import (
     , fetchRemote
     , stack
     , cache
+    , importTypes
     , Depends(..)
     , graph
     , remote
@@ -227,6 +228,7 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
+import Lens.Micro (toListOf)
 import Lens.Micro.Mtl (zoom)
 
 import qualified Codec.CBOR.Write                            as Write
@@ -821,6 +823,98 @@ applyStatusSubstitutions expression = do
 
     return (Dhall.Substitution.substituteMany resolved expression)
 
+-- | Type-check a parsed import by binding each child import to the value and
+--   type already stored for it.  Returns 'Nothing' when a child has not been
+--   loaded yet (for example the unused side of @?@), so the caller can fall
+--   back to type-checking the fully inlined expression.
+--
+--   Haskell-API substitutions are applied to this file before the check.
+--   Those names live in 'Status', not in the starting context, so a parent
+--   such as @./child.dhall : UserType@ would otherwise report @UserType@
+--   unbound.  Child bodies are already variables here and are not walked.
+typecheckWithAlreadyCheckedImports
+    :: Dhall.Context.Context (Expr Src Void)
+    -> Expr Src Import
+    -> StateT Status IO (Maybe (Either (TypeError Src Void) (Expr Src Void)))
+typecheckWithAlreadyCheckedImports starting parsed = do
+    Status { _stack } <- State.get
+    let parent = NonEmpty.head _stack
+    available <- childrenCached parent parsed
+    if not available
+        then return Nothing
+        else case startingTypingContext starting of
+            Left err ->
+                return (Just (Left err))
+            Right base -> do
+                (expr, (ctx, _)) <-
+                    State.runStateT (bindImports parent parsed) (base, 0 :: Int)
+                substituted <- applyStatusSubstitutions expr
+                return (Just (Dhall.TypeCheck.typeWithContext ctx substituted))
+
+startingTypingContext
+    :: Dhall.Context.Context (Expr Src Void)
+    -> Either (TypeError Src Void) (Dhall.TypeCheck.TypingContext Src)
+startingTypingContext context =
+    foldM
+        (\ctx (name, typ) -> Dhall.TypeCheck.extendBinder name typ ctx)
+        Dhall.TypeCheck.emptyTypingContext
+        (reverse (Dhall.Context.toList context))
+
+childrenCached :: Chained -> Expr Src Import -> StateT Status IO Bool
+childrenCached parent expr = do
+    Status { _cache } <- State.get
+    let embeds = importsOf expr
+    chained <- mapM (chainImport parent) embeds
+    return (all (`Dhall.Map.member` _cache) chained)
+
+importsOf :: Expr Src Import -> [Import]
+importsOf (Embed imp) = [imp]
+importsOf (Note _ e) = importsOf e
+importsOf e = concatMap importsOf (toListOf Syntax.subExpressions e)
+
+bindImports
+    :: Chained
+    -> Expr Src Import
+    -> StateT (Dhall.TypeCheck.TypingContext Src, Int) (StateT Status IO) (Expr Src Void)
+bindImports parent =
+    Syntax.subExpressionsWith onImport (bindImports parent)
+  where
+    onImport imp = do
+        (ctx, n) <- State.get
+        child <- State.lift (chainImport parent imp)
+        Status { _cache } <- State.lift State.get
+        case Dhall.Map.lookup child _cache of
+            Nothing ->
+                State.lift (liftIO (Exception.throwIO (MissingImports [])))
+            Just sem -> do
+                typ <- State.lift (cachedImportType child sem)
+                let name = Text.pack ("i`" ++ show n)
+                    ctx' =
+                        Dhall.TypeCheck.extendAlreadyChecked
+                            name
+                            (Core.denote typ)
+                            (importSemantics sem)
+                            ctx
+                State.put (ctx', n + 1)
+                return (Var (Syntax.V name 0))
+
+cachedImportType
+    :: Chained
+    -> ImportSemantics
+    -> StateT Status IO (Expr Src Void)
+cachedImportType chained ImportSemantics { importSemantics = sem } = do
+    Status { _importTypes } <- State.get
+    case Dhall.Map.lookup chained _importTypes of
+        Just typ ->
+            return typ
+        Nothing ->
+            case Dhall.TypeCheck.typeOf (Core.renote sem) of
+                Left err ->
+                    liftIO (Exception.throwIO err)
+                Right typ -> do
+                    zoom importTypes (State.modify (Dhall.Map.insert chained typ))
+                    return typ
+
 -- Check the "semi-semantic" disk cache, otherwise typecheck from scratch.
 --
 -- For Code imports without an integrity hash, the cache key is a hash of this
@@ -928,9 +1022,19 @@ loadImportWithSemisemanticCache
                         )
 
                 _ -> do
-                    case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+                    checked <- typecheckWithAlreadyCheckedImports _startingContext parsedImport
+                    typ <- case checked of
+                        Just result -> return result
+                        Nothing ->
+                            return (Dhall.TypeCheck.typeWith _startingContext substitutedExpr)
+                    case typ of
                         Left  err -> throwMissingImport (Imported _stack err)
-                        Right _   -> return ()
+                        Right inferred -> do
+                            Status { _stack = stackHere } <- State.get
+                            zoom importTypes
+                                (State.modify'
+                                    (Dhall.Map.insert (NonEmpty.head stackHere) inferred))
+                            return ()
 
                     zoom cacheWarning
                         (writeToSemisemanticCache

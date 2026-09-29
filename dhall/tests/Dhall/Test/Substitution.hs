@@ -7,14 +7,18 @@ import Control.Exception (throwIO)
 import Data.Void         (Void)
 import Dhall.Core        (Binding (..), Expr (..), Var (..))
 import Dhall.Src         (Src)
+import Numeric.Natural   (Natural)
+import System.FilePath   ((</>))
 
 import qualified Data.Either.Validation
 import qualified Data.Text                  as Text
+import qualified Data.Text.IO               as Text.IO
 import qualified Dhall
 import qualified Dhall.Core                 as Core
 import qualified Dhall.Map
 import qualified Dhall.Substitution
 import qualified Lens.Micro                 as Lens
+import qualified System.IO.Temp             as Temp
 import qualified Test.Tasty                 as Tasty
 import qualified Test.Tasty.HUnit           as Tasty.HUnit
 
@@ -63,6 +67,7 @@ tests =
         , letAnnotationIsSubstituted
         , unusedSubstitutionsUnderManyLetsAreCheapToShift
         , importedExpressionIsSubstituted
+        , substitutionAnnotatesImportedChild
         ]
 
 noSubstitutionsIsIdentity :: Tasty.TestTree
@@ -253,3 +258,25 @@ importedExpressionIsSubstituted =
     Tasty.HUnit.testCase "Substitutions apply inside imported files" $ do
         res <- substituteResult "tests/tutorial/substitution2.dhall"
         res @?= Failure 1
+
+-- | The parent annotates the child with a substitution variable, as in
+-- @./child.dhall : UserType@.  That name has to be substituted before the
+-- parent is type-checked against the already-checked child.
+substitutionAnnotatesImportedChild :: Tasty.TestTree
+substitutionAnnotatesImportedChild =
+    Tasty.HUnit.testCase "A substitution variable annotating an import is in scope" $ do
+        Temp.withSystemTempDirectory "dhall-already-checked-subst" $ \dir -> do
+            Text.IO.writeFile (dir </> "child.dhall") "{ x = 1 }\n"
+            Text.IO.writeFile (dir </> "parent.dhall") "(./child.dhall : UserType).x\n"
+            let userType =
+                    Core.Record
+                        (Dhall.Map.fromList
+                            [ ("x", Core.makeRecordField Core.Natural) ]
+                        )
+                settings =
+                    Lens.set
+                        Dhall.substitutions
+                        (Dhall.Map.fromList [ ("UserType", userType) ])
+                        Dhall.defaultEvaluateSettings
+            n <- Dhall.inputFileWithSettings settings Dhall.natural (dir </> "parent.dhall")
+            n @?= (1 :: Natural)

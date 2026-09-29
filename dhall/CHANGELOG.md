@@ -24,6 +24,10 @@
   source span of that import in the parent file. `load` and `loadWith` still
   stop at the first error unless the caller sets `CollectErrors` on
   `Status`.
+* An imported file is type-checked with each child import bound to the
+  value and type already checked for that child, instead of inferring the
+  inlined child again. `load` still returns the fully inlined expression,
+  and still stops at the first error unless `CollectErrors` is set.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
   * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.
