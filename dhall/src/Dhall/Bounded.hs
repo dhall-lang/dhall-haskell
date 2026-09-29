@@ -10,7 +10,13 @@
     indentation, so the render step is what enforces the exact cap.
 
     @--max-allocation@ and @--max-evaluation-time@ are separate.  They abort
-    normalization with no partial normal form.
+    the work with no partial normal form.
+
+    The time limit is a watcher thread.  It can interrupt pure type-checking,
+    normalization, and pretty-printing only when the program is linked against
+    the threaded runtime.  The @dhall@ executable is.  On the non-threaded
+    runtime the watcher stays asleep for as long as that work keeps the
+    capability busy, so the limit does not fire.
 -}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -18,8 +24,11 @@
 module Dhall.Bounded
     ( Bound(..)
     , WorkLimit(..)
+    , normalizeCapped
     , normalizeLimited
     , prettyBounded
+    , runLimited
+    , withAllocationLimit
     ) where
 
 import Control.Concurrent (forkIO, killThread, threadDelay)
@@ -28,6 +37,7 @@ import Control.DeepSeq (NFData, force)
 import Control.Exception
     ( AsyncException (ThreadKilled)
     , SomeException
+    , bracket_
     , evaluate
     , fromException
     , mask
@@ -40,7 +50,11 @@ import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Core (Expr)
 import Dhall.Pretty.Internal (layout)
-import GHC.Conc (enableAllocationLimit, setAllocationCounter)
+import GHC.Conc
+    ( disableAllocationLimit
+    , enableAllocationLimit
+    , setAllocationCounter
+    )
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Prettyprinter (Doc)
 
@@ -61,16 +75,57 @@ data WorkLimit
     | TimeExceeded
     deriving (Eq, Show)
 
+-- | Normalize @expression@ on the current thread.
+--
+--   When output bytes are given, quoting stops once its estimate of rendered
+--   text reaches that size; the 'Bool' is 'True' when quoting was cut short.
+--   Without output bytes given, the result is an ordinary normal form and the
+--   'Bool' is 'False'.  This does not apply an allocation or time limit.
+normalizeCapped
+    :: forall a s t. (Eq a, NFData a)
+    => Maybe Int
+    -> Expr s a
+    -> IO (Expr t a, Bool)
+normalizeCapped outputBytes expression =
+    case outputBytes of
+        Nothing -> do
+            let normalForm :: Expr Void a
+                normalForm = Core.normalize expression
+            forced <- evaluate (force normalForm)
+            return (Core.renote forced, False)
+        Just nbytes -> do
+            let denoted = Core.denote expression
+                value = Eval.eval Eval.Empty denoted
+                (quoted, cut) =
+                    Eval.quoteBounded nbytes Eval.EmptyNames value
+            forced <- evaluate (force quoted)
+            return (Core.renote forced, cut)
+
+-- | Enable the allocation limit for one action on the current thread.
+--
+--   'Nothing' leaves the limit unset.  A non-positive budget is already
+--   exceeded.  The limit is cleared again when the action ends, including
+--   when it is interrupted.
+withAllocationLimit :: Maybe Int64 -> IO a -> IO a
+withAllocationLimit Nothing action = action
+withAllocationLimit (Just bytes) action
+    | bytes <= 0 = throwIO AllocationLimitExceeded
+    | otherwise = bracket_ arm disarm action
+  where
+    arm = do
+        setAllocationCounter bytes
+        enableAllocationLimit
+    disarm = disableAllocationLimit
+
 -- | Normalize @expression@.
 --
 --   'Nothing' for a limit means that limit is not applied, so any combination
 --   of the three is allowed.  A non-positive allocation or timeout is already
---   exceeded.  When output bytes are given, quoting stops once its estimate
---   of rendered text reaches that size; the 'Bool' is 'True' when quoting
---   was cut short.  Without output bytes, the result is an ordinary normal
---   form and the 'Bool' is 'False'.
+--   exceeded.  The allocation limit applies only while normalizing.  The time
+--   limit applies only to this call; the CLI also wraps type-checking and
+--   rendering in 'runLimited' so @--max-evaluation-time@ covers them too.
 normalizeLimited
-    :: forall a s t. (Eq a, NFData a)
+    :: (Eq a, NFData a)
     => Maybe Int64
     -> Maybe Int
     -> Maybe Int
@@ -80,20 +135,8 @@ normalizeLimited allocationBytes timeoutMicros outputBytes expression
     | exceeds allocationBytes = return (Left AllocationExceeded)
     | exceeds timeoutMicros = return (Left TimeExceeded)
     | otherwise =
-        runLimited allocationBytes timeoutMicros $
-            case outputBytes of
-                Nothing -> do
-                    let normalForm :: Expr Void a
-                        normalForm = Core.normalize expression
-                    forced <- evaluate (force normalForm)
-                    return (Core.renote forced, False)
-                Just nbytes -> do
-                    let denoted = Core.denote expression
-                        value = Eval.eval Eval.Empty denoted
-                        (quoted, cut) =
-                            Eval.quoteBounded nbytes Eval.EmptyNames value
-                    forced <- evaluate (force quoted)
-                    return (Core.renote forced, cut)
+        runLimited allocationBytes timeoutMicros
+            (normalizeCapped outputBytes expression)
   where
     exceeds Nothing = False
     exceeds (Just n) = n <= 0

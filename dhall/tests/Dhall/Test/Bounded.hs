@@ -2,9 +2,11 @@
 
 module Dhall.Test.Bounded (tests) where
 
+import Control.Exception (evaluate)
 import Data.Foldable (for_)
 import Data.Void (Void)
 import Dhall.Bounded (Bound (..))
+import GHC.Clock (getMonotonicTime)
 import Dhall.Main (Options (..), parserInfoOptions)
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure, renderFailure)
 import Test.Tasty (TestTree)
@@ -24,6 +26,7 @@ tests =
         , truncatedRenderingEndsWithEllipsis
         , allocationLimitStopsNormalization
         , outputBudgetStopsQuoting
+        , timeLimitInterruptsPureWork
         ]
 
 limitsAreIndependentFlags :: TestTree
@@ -91,6 +94,29 @@ allocationLimitStopsNormalization = testCase "allocation cap applies with or wit
   where
     source =
         "Natural/fold 4000 (List Natural) (\\(x : Natural) -> \\(xs : List Natural) -> [x] # xs) ([] : List Natural)"
+
+timeLimitInterruptsPureWork :: TestTree
+timeLimitInterruptsPureWork = testCase "time limit interrupts pure work" $ do
+    start <- getMonotonicTime
+    result <- Bounded.runLimited Nothing (Just 100000) (evaluate (burn 40000000))
+    elapsed <- fmap (subtract start) getMonotonicTime
+    case result of
+        Left Bounded.TimeExceeded ->
+            assertBool
+                ("time limit returned too late: " <> show elapsed)
+                (elapsed < 2)
+        Left other ->
+            assertFailure (show other <> " after " <> show elapsed)
+        Right _ ->
+            assertFailure ("pure work finished inside the time limit after " <> show elapsed)
+  where
+    -- 'show' allocates, so the loop hits the heap checks where the watcher
+    -- can interrupt it.  A tight unboxed loop would not.
+    burn :: Int -> Int
+    burn n = go n 0
+      where
+        go 0 acc = acc
+        go i acc = go (i - 1) (acc + length (show i))
 
 outputBudgetStopsQuoting :: TestTree
 outputBudgetStopsQuoting = testCase "output bytes stop quoting a large record early" $ do

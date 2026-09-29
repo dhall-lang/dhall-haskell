@@ -427,7 +427,10 @@ Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends: dhall
-    GHC-Options: -rtsopts
+    -- The evaluation-time limit is a watcher thread.  The non-threaded RTS
+    -- does not run that watcher while type-checking, normalization, or
+    -- pretty-printing keeps the capability busy.
+    GHC-Options: -rtsopts -threaded
     Default-Language: Haskell2010
 
 Test-Suite tasty

@@ -35,8 +35,11 @@ import Data.Void           (Void)
 import Dhall.Bounded
     ( Bound (..)
     , WorkLimit (..)
+    , normalizeCapped
     , normalizeLimited
     , prettyBounded
+    , runLimited
+    , withAllocationLimit
     )
 import Dhall.Freeze        (Intent (..), Scope (..))
 import Dhall.Import
@@ -278,7 +281,7 @@ parseOptions =
                 (   Options.Applicative.long "max-evaluation-time"
                 <>  Options.Applicative.metavar "SECONDS"
                 <>  Options.Applicative.help
-                        "Stop evaluation after this many seconds"
+                        "Stop type-checking, normalization, and rendering after this many seconds"
                 )
             )
 
@@ -829,29 +832,22 @@ command (Options {..}) = do
             resolvedExpression <-
                 Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            let reportAllocation = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-allocation"
+                    Exit.exitFailure
 
-            normalizedExpression <- do
-                let limits =
-                        ( maxAllocation
-                        , fmap secondsToMicros maxEvaluationTime
-                        , maxOutputSize
-                        )
-                outcome <- case limits of
-                    (Nothing, Nothing, Nothing) ->
-                        return (Right (Dhall.Core.normalize resolvedExpression, False))
-                    (allocation, timeout, outputBytes) ->
-                        normalizeLimited allocation timeout outputBytes resolvedExpression
-                case outcome of
-                    Left AllocationExceeded -> do
-                        System.IO.hPutStrLn System.IO.stderr
-                            "Error: evaluation exceeded --max-allocation"
-                        Exit.exitFailure
-                    Left TimeExceeded -> do
-                        System.IO.hPutStrLn System.IO.stderr
-                            "Error: evaluation exceeded --max-evaluation-time"
-                        Exit.exitFailure
-                    Right (evaluated, quoteCut) ->
+                reportTime = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-evaluation-time"
+                    Exit.exitFailure
+
+                -- Type-checking, alpha-normalization, and rendering sit outside
+                -- 'normalizeLimited'.  A time limit has to cover them: on a
+                -- large normal form they are the slow part, and normalization
+                -- itself can finish inside the budget.
+                produce inferredType evaluated quoteCut = do
+                    normalizedExpression <-
                         case maxOutputSize of
                             Nothing ->
                                 return evaluated
@@ -875,23 +871,56 @@ command (Options {..}) = do
                                         | otherwise ->
                                             return evaluated
 
-            let alphaNormalizedExpression =
-                    if alpha
-                    then Dhall.Core.alphaNormalize normalizedExpression
-                    else normalizedExpression
+                    let alphaNormalizedExpression =
+                            if alpha
+                            then Dhall.Core.alphaNormalize normalizedExpression
+                            else normalizedExpression
 
-            let annotatedExpression =
-                    if annotate
-                        then Annot alphaNormalizedExpression inferredType
-                        else alphaNormalizedExpression
+                    let annotatedExpression =
+                            if annotate
+                            then Annot alphaNormalizedExpression inferredType
+                            else alphaNormalizedExpression
 
-            case output of
-                StandardOutput -> render System.IO.stdout characterSet annotatedExpression
+                    case output of
+                        StandardOutput ->
+                            render System.IO.stdout characterSet annotatedExpression
+                        OutputFile file_ ->
+                            writeDocToFile
+                                file_
+                                (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
 
-                OutputFile file_ ->
-                    writeDocToFile
-                        file_
-                        (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
+            case maxEvaluationTime of
+                Nothing -> do
+                    inferredType <-
+                        Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+                    outcome <- case (maxAllocation, maxOutputSize) of
+                        (Nothing, Nothing) ->
+                            return (Right (Dhall.Core.normalize resolvedExpression, False))
+                        _ ->
+                            normalizeLimited
+                                maxAllocation
+                                Nothing
+                                maxOutputSize
+                                resolvedExpression
+                    case outcome of
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right (evaluated, quoteCut) ->
+                            produce inferredType evaluated quoteCut
+                Just seconds -> do
+                    outcome <-
+                        runLimited Nothing (Just (secondsToMicros seconds)) $ do
+                            inferredType <-
+                                Dhall.Core.throws
+                                    (Dhall.TypeCheck.typeOf resolvedExpression)
+                            (evaluated, quoteCut) <-
+                                withAllocationLimit maxAllocation
+                                    (normalizeCapped maxOutputSize resolvedExpression)
+                            produce inferredType evaluated quoteCut
+                    case outcome of
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right () -> return ()
 
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
