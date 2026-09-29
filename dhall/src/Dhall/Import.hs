@@ -827,6 +827,11 @@ applyStatusSubstitutions expression = do
 --   type already stored for it.  Returns 'Nothing' when a child has not been
 --   loaded yet (for example the unused side of @?@), so the caller can fall
 --   back to type-checking the fully inlined expression.
+--
+--   Haskell-API substitutions are applied to this file before the check.
+--   Those names live in 'Status', not in the starting context, so a parent
+--   such as @./child.dhall : UserType@ would otherwise report @UserType@
+--   unbound.  Child bodies are already variables here and are not walked.
 typecheckWithAlreadyCheckedImports
     :: Dhall.Context.Context (Expr Src Void)
     -> Expr Src Import
@@ -843,7 +848,8 @@ typecheckWithAlreadyCheckedImports starting parsed = do
             Right base -> do
                 (expr, (ctx, _)) <-
                     State.runStateT (bindImports parent parsed) (base, 0 :: Int)
-                return (Just (Dhall.TypeCheck.typeWithContext ctx expr))
+                substituted <- applyStatusSubstitutions expr
+                return (Just (Dhall.TypeCheck.typeWithContext ctx substituted))
 
 startingTypingContext
     :: Dhall.Context.Context (Expr Src Void)
