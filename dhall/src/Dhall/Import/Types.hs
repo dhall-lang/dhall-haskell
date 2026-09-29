@@ -6,7 +6,7 @@
 
 module Dhall.Import.Types where
 
-import Control.Exception                (Exception)
+import Control.Exception                (Exception, SomeException)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
@@ -180,8 +180,47 @@ data Status = Status
     , _getHomeDirectory :: IO FilePath
     -- ^ Action to get the home directory for resolving @~@ imports (special case for Windows tests)
 
+    , _importErrorMode :: ImportErrorMode
+    -- ^ 'FailFast' (the default used by 'Dhall.Import.load') throws on the
+    --   first import error.  'CollectErrors' records every failure and
+    --   continues.  @?@ alternatives stay fail-fast either way.
+
+    , _insideImportAlt :: Bool
+    -- ^ 'True' while resolving either side of @?@.  Failures there must
+    --   throw so the other side can run.
+
+    , _collectedImportErrors :: [CollectedImportError]
+    -- ^ Import failures recorded in 'CollectErrors' mode, innermost first.
+
+    , _placeholderCount :: !Int
+    -- ^ Counter for placeholder variables substituted for failed imports.
+
     , _importSources :: Map Chained ResolvedImportSource
     -- ^ Text and location captured when an import was actually fetched.
+    }
+
+-- | How 'Dhall.Import.loadWith' treats a failed import.
+data ImportErrorMode
+    = FailFast
+    -- ^ Throw on the first failure.  This is what 'Dhall.Import.load' uses.
+    | CollectErrors
+    -- ^ Record the failure and keep resolving later imports.
+    deriving (Eq, Show)
+
+-- | A type that is known even when the import failed to resolve.
+data KnownImportType = KnownText | KnownBytes | KnownLocation
+    deriving (Eq, Show)
+
+-- | One import that failed while resolving in 'CollectErrors' mode.
+data CollectedImportError = CollectedImportError
+    { collectedSrc :: Src
+    , collectedImport :: Maybe Import
+    , collectedStack :: NonEmpty Chained
+    , collectedErrors :: [SomeException]
+    , collectedKnownType :: Maybe KnownImportType
+    , collectedName :: Text
+    -- ^ Placeholder variable substituted for this failure.  The name contains
+    --   a backtick, so it cannot clash with a real label.
     }
 
 -- | Source text fetched for an import, and where it was fetched from.
@@ -232,6 +271,14 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _reportWarning = Dhall.Util.printWarning
 
     _getHomeDirectory = Directory.getHomeDirectory
+
+    _importErrorMode = FailFast
+
+    _insideImportAlt = False
+
+    _collectedImportErrors = []
+
+    _placeholderCount = 0
 
     _importSources = Map.empty
 
@@ -295,6 +342,15 @@ cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
 -- | Lens from a `Status` to its `_reportWarning` field
 reportWarning :: Lens' Status (Text -> IO ())
 reportWarning = lens _reportWarning (\s x -> s { _reportWarning = x })
+
+-- | Lens from a `Status` to its `_importErrorMode` field
+importErrorMode :: Lens' Status ImportErrorMode
+importErrorMode = lens _importErrorMode (\s x -> s { _importErrorMode = x })
+
+-- | Lens from a `Status` to its `_collectedImportErrors` field
+collectedImportErrors :: Lens' Status [CollectedImportError]
+collectedImportErrors =
+    lens _collectedImportErrors (\s x -> s { _collectedImportErrors = x })
 
 -- | Lens from a `Status` to its `_importSources` field
 importSources :: Lens' Status (Map Chained ResolvedImportSource)

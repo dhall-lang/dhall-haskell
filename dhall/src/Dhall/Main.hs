@@ -48,6 +48,10 @@ import Dhall.Import
     , MissingImports (..)
     , SemanticCacheMode (..)
     , _semanticCacheMode
+    , _importErrorMode
+    , _collectedImportErrors
+    , CollectedImportError (..)
+    , ImportErrorMode (..)
     )
 import Dhall.Parser        (Src, SourcedException (..))
 import Dhall.Package       (PackagingMode (..), writePackage)
@@ -120,6 +124,7 @@ import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Prettyprinter                      as Pretty
+import qualified Prettyprinter.Render.String        as Pretty.String
 import qualified Prettyprinter.Render.Terminal      as Pretty
 import qualified Prettyprinter.Render.Text          as Pretty.Text
 import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
@@ -715,6 +720,37 @@ command (Options {..}) = do
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
 
+    let dieOnImportErrors errs = case errs of
+            [] -> return ()
+            _ -> do
+                for_ errs $ \CollectedImportError { collectedErrors, collectedSrc } -> do
+                    for_ collectedErrors $ \e -> do
+                        let shown =
+                                if explain
+                                    then explainNestedImportErrors e
+                                    else e
+                        System.IO.hPutStrLn System.IO.stderr (show shown)
+                    -- Same span 'SourcedException' prints.  Collecting the
+                    -- inner errors dropped it, so the parent file and the
+                    -- import text would otherwise be missing.
+                    System.IO.hPutStrLn System.IO.stderr ""
+                    System.IO.hPutStrLn
+                        System.IO.stderr
+                        ( Pretty.String.renderString
+                            (Dhall.Pretty.layout (Pretty.pretty collectedSrc))
+                        )
+                when (not explain) $
+                    System.IO.hPutStrLn
+                        System.IO.stderr
+                        "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                exitFailure
+
+    let resolve file cacheMode expression = do
+            (resolved, errs) <-
+                Dhall.Import.loadCollecting (rootDirectory file) cacheMode expression
+            dieOnImportErrors errs
+            return resolved
+
     let getExpression = Dhall.Util.getExpression censor
 
     -- The characterSet detection used here only works on the source
@@ -830,7 +866,7 @@ command (Options {..}) = do
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+                resolve file semanticCacheMode expression
 
             let reportAllocation = do
                     System.IO.hPutStrLn System.IO.stderr
@@ -925,8 +961,10 @@ command (Options {..}) = do
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            (Dhall.Import.Types.Status { _graph, _stack, _collectedImportErrors }) <-
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors }
+
+            dieOnImportErrors (reverse _collectedImportErrors)
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map parent _graph ++ map child _graph
@@ -961,8 +999,10 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            (Dhall.Import.Types.Status { _cache, _collectedImportErrors }) <-
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors }
+
+            dieOnImportErrors (reverse _collectedImportErrors)
 
             mapM_ print
                  .   fmap ( Pretty.pretty
@@ -979,7 +1019,7 @@ command (Options {..}) = do
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+                resolve file semanticCacheMode expression
 
             render System.IO.stdout characterSet resolvedExpression
 
@@ -1006,7 +1046,7 @@ command (Options {..}) = do
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+                resolve file semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -1052,7 +1092,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                resolve file UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
@@ -1186,7 +1226,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                resolve file UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
 
@@ -1220,7 +1260,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+                resolve file UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 

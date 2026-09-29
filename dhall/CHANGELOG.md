@@ -19,6 +19,11 @@
 * `Status` records the text and location of each import that was actually
   fetched. `decodeSemanticCache` reads a semantic-cache entry by hash
   without downloading the original source.
+* The `dhall` executable now reports every failed import and exits
+  unsuccessfully, without printing a result. Each report includes the
+  source span of that import in the parent file. `load` and `loadWith` still
+  stop at the first error unless the caller sets `CollectErrors` on
+  `Status`.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
   * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.

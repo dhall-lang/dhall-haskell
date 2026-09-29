@@ -84,6 +84,7 @@ getTests = do
                 [ successTests
                 , failureTests
                 , plainImportErrorTests
+                , collectImportErrorTests
                 ]
 
     return testTree
@@ -334,3 +335,80 @@ assertPlainImportError name exception fragments =
 
 hasAnsi :: String -> Bool
 hasAnsi text = "\ESC[" `List.isInfixOf` text
+
+-- | 'loadRelativeTo' throws on the first missing import.  'loadCollecting'
+--   records every one.
+collectImportErrorTests :: TestTree
+collectImportErrorTests =
+    Tasty.testGroup "collected import errors"
+        [ Tasty.HUnit.testCase "load stops at the first missing import" $
+            withTwoMissingImports $ \dir -> do
+                expr <- parseParent dir
+                result <-
+                    Exception.try @SomeException
+                        (Import.loadRelativeTo dir Import.IgnoreSemanticCache expr)
+                case result of
+                    Right _ ->
+                        Tasty.HUnit.assertFailure "load succeeded"
+                    Left err -> do
+                        let paths = missingFilePaths err
+                        assertPathMentioned "missing-a.dhall" paths
+                        assertPathAbsent "missing-b.dhall" paths
+        , Tasty.HUnit.testCase "CollectErrors returns every missing import" $
+            withTwoMissingImports $ \dir -> do
+                expr <- parseParent dir
+                (_resolved, errs) <-
+                    Import.loadCollecting dir Import.IgnoreSemanticCache expr
+                let paths =
+                        concatMap
+                            (concatMap missingFilePaths . Import.collectedErrors)
+                            errs
+                Tasty.HUnit.assertEqual "number of failures" 2 (length errs)
+                assertPathMentioned "missing-a.dhall" paths
+                assertPathMentioned "missing-b.dhall" paths
+        ]
+
+withTwoMissingImports :: (FilePath -> IO a) -> IO a
+withTwoMissingImports action =
+    Temp.withSystemTempDirectory "dhall-collect-imports" $ \dir -> do
+        Text.IO.writeFile
+            (dir </> "parent.dhall")
+            "[ ./missing-a.dhall, ./missing-b.dhall ]\n"
+        action dir
+
+parseParent :: FilePath -> IO (Core.Expr Parser.Src Core.Import)
+parseParent dir = do
+    text <- Text.IO.readFile (dir </> "parent.dhall")
+    Core.throws (Parser.exprFromText mempty text)
+
+missingFilePaths :: SomeException -> [FilePath]
+missingFilePaths exception =
+    case Exception.fromException @(Parser.SourcedException Import.MissingImports) exception of
+        Just (Parser.SourcedException _ (Import.MissingImports es)) ->
+            concatMap missingFilePaths es
+        Nothing ->
+            case Exception.fromException @Import.MissingImports exception of
+                Just (Import.MissingImports es) ->
+                    concatMap missingFilePaths es
+                Nothing ->
+                    case Exception.fromException @(Import.Imported Import.MissingFile) exception of
+                        Just (Import.Imported _ (Import.MissingFile path)) ->
+                            [path]
+                        Nothing ->
+                            case Exception.fromException @Import.MissingFile exception of
+                                Just (Import.MissingFile path) ->
+                                    [path]
+                                Nothing ->
+                                    []
+
+assertPathMentioned :: String -> [FilePath] -> IO ()
+assertPathMentioned fragment paths =
+    Tasty.HUnit.assertBool
+        (fragment ++ " missing from " ++ show paths)
+        (any (List.isInfixOf fragment) paths)
+
+assertPathAbsent :: String -> [FilePath] -> IO ()
+assertPathAbsent fragment paths =
+    Tasty.HUnit.assertBool
+        (fragment ++ " unexpectedly in " ++ show paths)
+        (all (not . List.isInfixOf fragment) paths)
