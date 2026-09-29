@@ -157,7 +157,7 @@ typeWithA tpa context expression =
 --   wrapping the bindings in @let@s again.  Building the environment with
 --   'extendLet' and then calling 'typeWithContext' agrees with 'typeWith' on
 --   the same bindings wrapped by 'Dhall.Core.wrapInLets'.
-data TypingContext s = TypingContext (Ctx X)
+newtype TypingContext s = TypingContext (Ctx X)
 
 -- | The empty environment.
 emptyTypingContext :: TypingContext s
