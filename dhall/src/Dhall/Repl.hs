@@ -162,17 +162,16 @@ eval src = do
   exprType <-
     typeCheck loaded
 
-  expr <-
-    normalize loaded
+  env <- get
+
+  -- Quote only when `output` prints the value. The context keeps the value
+  -- that quote reuses, so a later command does not normalize `it` again.
+  let (ctx', expr) =
+          Dhall.bindAlreadyChecked "it" exprType loaded (envContext env)
 
   modify ( \e ->
     e { envIt = Just ( Binding expr exprType )
-      , envContext =
-          Dhall.extendOpaque
-            "it"
-            (Dhall.Core.denote exprType)
-            (Dhall.Core.denote expr)
-            (envContext e)
+      , envContext = ctx'
       } )
 
   output expr
@@ -251,21 +250,17 @@ addBinding string = do
 
           return (resolved, bindingType)
 
-  bindingExpr <- normalize resolved
-
   modify
     ( \e ->
+        let (ctx', bindingExpr) =
+                Dhall.bindAlreadyChecked variable bindingType resolved (envContext e)
+        in
         e { envBindings =
               Dhall.Context.insert
                 variable
                 Binding{ bindingType, bindingExpr }
                 ( envBindings e )
-          , envContext =
-              Dhall.extendOpaque
-                variable
-                (Dhall.Core.denote bindingType)
-                (Dhall.Core.denote bindingExpr)
-                (envContext e)
+          , envContext = ctx'
           }
     )
 

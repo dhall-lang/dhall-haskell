@@ -18,7 +18,9 @@ import Dhall.TypeCheck
     , emptyTypingContext
     , extendBinder
     , extendLet
-    , extendOpaque
+    , bindAlreadyChecked
+    , extendAlreadyChecked
+    , normalizeWithContext
     , typeWith
     , typeWithContext
     )
@@ -34,7 +36,8 @@ tests =
         [ Tasty.HUnit.testCase "extendLet agrees with wrapInLets" letAgreement
         , Tasty.HUnit.testCase "shadowed lets agree with wrapInLets" shadowAgreement
         , Tasty.HUnit.testCase "extendBinder agrees with typeWith" binderAgreement
-        , Tasty.HUnit.testCase "extendOpaque agrees with extendLet" opaqueAgreement
+        , Tasty.HUnit.testCase "extendAlreadyChecked agrees with extendLet" alreadyCheckedAgreement
+        , Tasty.HUnit.testCase "bindAlreadyChecked agrees with normalizeWithContext" alreadyCheckedQuote
         , Tasty.HUnit.testCase "extendLet rejects an ill-typed value" illTypedLet
         ]
 
@@ -66,14 +69,25 @@ binderAgreement = do
             (typeWith (Dhall.Context.insert "a" (Const Type) Dhall.Context.empty) body)
     assertTypes fromContext fromTypeWith
 
-opaqueAgreement :: Tasty.HUnit.Assertion
-opaqueAgreement = do
+alreadyCheckedAgreement :: Tasty.HUnit.Assertion
+alreadyCheckedAgreement = do
     let typ = must (typeWith Dhall.Context.empty one)
-        ctx = extendOpaque "x" (Core.denote typ) (Core.denote one) emptyTypingContext
-    fromOpaque <- mustIO (typeWithContext ctx (var "x" 0))
+        ctx = extendAlreadyChecked "x" (Core.denote typ) (Core.denote one) emptyTypingContext
+    fromChecked <- mustIO (typeWithContext ctx (var "x" 0))
     fromLet <-
         mustIO (extendLet "x" one emptyTypingContext >>= flip typeWithContext (var "x" 0))
-    assertTypes fromOpaque fromLet
+    assertTypes fromChecked fromLet
+
+alreadyCheckedQuote :: Tasty.HUnit.Assertion
+alreadyCheckedQuote = do
+    let typ = must (typeWith Dhall.Context.empty one)
+        (ctx, quoted) = bindAlreadyChecked "x" typ (NaturalPlus one one) emptyTypingContext
+        expected = normalizeWithContext emptyTypingContext (NaturalPlus one one)
+    fromChecked <- mustIO (typeWithContext ctx (var "x" 0))
+    fromLet <-
+        mustIO (extendLet "x" (NaturalPlus one one) emptyTypingContext >>= flip typeWithContext (var "x" 0))
+    assertTypes fromChecked fromLet
+    assertTypes quoted expected
 
 illTypedLet :: Tasty.HUnit.Assertion
 illTypedLet =

@@ -18,7 +18,8 @@ module Dhall.TypeCheck (
     , emptyTypingContext
     , extendLet
     , extendBinder
-    , extendOpaque
+    , extendAlreadyChecked
+    , bindAlreadyChecked
     , typeWithContext
     , normalizeWithContext
     , checkContext
@@ -195,17 +196,46 @@ extendBinder name typeExpr (TypingContext ctx) = do
 --
 --   The value is stored lazily: it is not forced until a later check needs it.
 --   @typeExpr@ and @valueExpr@ are import-free and carry no source spans.
-extendOpaque
+extendAlreadyChecked
     :: Text
     -> Expr Void X
     -> Expr Void X
     -> TypingContext s
     -> TypingContext s
-extendOpaque name typeExpr valueExpr (TypingContext ctx) =
+extendAlreadyChecked name typeExpr valueExpr (TypingContext ctx) =
     TypingContext (addTypeValue name typeVal valueVal ctx)
   where
     typeVal = Eval.eval (values ctx) typeExpr
     valueVal = Eval.eval (values ctx) valueExpr
+
+-- | Bind @name@ to a type and value that have already been type-checked, and
+--   return the value's normal form.
+--
+--   @typeExpr@ and @valueExpr@ are import-free.  Their source spans are
+--   removed when the value is first forced.  The context holds that value
+--   directly.  The returned expression quotes the same value, so it is not
+--   built until something prints or saves the normal form, and quoting it
+--   does not evaluate the expression again.
+bindAlreadyChecked
+    :: Text
+    -> Expr s X
+    -> Expr t X
+    -> TypingContext r
+    -> (TypingContext r, Expr u X)
+bindAlreadyChecked name typeExpr valueExpr (TypingContext ctx) = (context, normalForm)
+  where
+    env = values ctx
+
+    typeVal = Eval.eval env (Dhall.Core.denote typeExpr)
+
+    -- Shared with 'normalForm'. Forcing the quoted form reuses this value
+    -- instead of evaluating @valueExpr@ a second time.
+    valueVal = Eval.eval env (Dhall.Core.denote valueExpr)
+
+    context = TypingContext (addTypeValue name typeVal valueVal ctx)
+
+    normalForm =
+        Dhall.Core.renote (Eval.quote (Eval.envNames env) valueVal)
 
 -- | Type-check an expression in a 'TypingContext'.
 --
