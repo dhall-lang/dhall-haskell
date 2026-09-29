@@ -4,10 +4,11 @@
     caller that is about to show a normal form: the CLI @--max-output-size@
     flag, and the language server whenever it displays one.
 
-    The output budget is a number of bytes of rendered text (default 128KiB).
-    Quoting stops after that many syntax nodes so a huge value is not fully
-    converted to syntax.  Evaluation itself is unchanged; the work bound is a
-    per-thread allocation limit plus a timeout, run on a dedicated thread.
+    The output budget is a number of bytes of rendered text, always supplied by
+    the caller.  There is no default size.  Quoting stops after that many
+    syntax nodes so a huge value is not fully converted to syntax.  Evaluation
+    itself is unchanged; the work bound is a per-thread allocation limit plus
+    a timeout, run on a dedicated thread.
 -}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -16,8 +17,7 @@
 module Dhall.Bounded
     ( Bound(..)
     , BoundLimits(..)
-    , defaultOutputBytes
-    , defaultBoundLimits
+    , boundLimits
     , normalizeBounded
     , prettyBounded
     ) where
@@ -65,14 +65,12 @@ data BoundLimits = BoundLimits
     , boundTimeoutMicros :: !Int
     }
 
--- | 128KiB.  Used when a cap is requested without an explicit size.
-defaultOutputBytes :: Int
-defaultOutputBytes = 128 * 1024
-
--- | Output cap of 'defaultOutputBytes', 256MiB of allocation, 30 seconds.
-defaultBoundLimits :: BoundLimits
-defaultBoundLimits = BoundLimits
-    { boundOutputBytes = defaultOutputBytes
+-- | Limits for an explicit output cap: 256MiB of allocation and 30 seconds.
+--
+--   'boundOutputBytes' is the size the caller asked for.  There is no default.
+boundLimits :: Int -> BoundLimits
+boundLimits outputBytes = BoundLimits
+    { boundOutputBytes = outputBytes
     , boundAllocationBytes = 256 * 1024 * 1024
     , boundTimeoutMicros = 30 * 1000 * 1000
     }
@@ -125,13 +123,17 @@ takeStream budget stream = go budget stream []
   where
     go _ Pretty.SFail acc = (Text.concat (reverse acc), True)
     go _ Pretty.SEmpty acc = (Text.concat (reverse acc), False)
+    go 0 (Pretty.SAnnPush _ rest) acc = go 0 rest acc
+    go 0 (Pretty.SAnnPop rest) acc = go 0 rest acc
     go 0 _ acc = (Text.concat (reverse ("…" : acc)), True)
     go n (Pretty.SChar c rest) acc =
         go (n - 1) rest (Text.singleton c : acc)
     go n (Pretty.SText len txt rest) acc
-        | len < n = go (n - len) rest (txt : acc)
+        | len <= n = go (n - len) rest (txt : acc)
         | otherwise =
-            ( Text.concat (reverse (Text.take n txt : "…" : acc))
+            -- @acc@ is stored in reverse.  The fitting prefix comes first in
+            -- the rendered text; @…@ is the last thing emitted.
+            ( Text.concat (reverse ("…" : Text.take n txt : acc))
             , True
             )
     go n (Pretty.SLine indent rest) acc =

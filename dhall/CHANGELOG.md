@@ -1,8 +1,9 @@
 1.42.4
 
-* `normalizeBounded` and `prettyBounded` stop at a fixed rendered size
-  (default 128KiB). `dhall --max-output-size[=BYTES]` applies that cap;
-  without the flag, evaluation is unbounded.
+* `normalizeBounded` and `prettyBounded` stop at a caller-supplied rendered
+  size. `dhall --max-output-size BYTES` applies that cap and requires a byte
+  count; there is no default. Without the flag, evaluation is unbounded. A
+  truncated rendering ends with `…`.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
   * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.

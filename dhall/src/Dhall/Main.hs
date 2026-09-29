@@ -33,9 +33,7 @@ import Data.Text           (Text)
 import Data.Void           (Void)
 import Dhall.Bounded
     ( Bound (..)
-    , BoundLimits (..)
-    , defaultBoundLimits
-    , defaultOutputBytes
+    , boundLimits
     , normalizeBounded
     , prettyBounded
     )
@@ -248,7 +246,8 @@ parseOptions =
             )
 
     parseMaxOutputSize =
-            ( Just <$> Options.Applicative.option
+        optional
+            ( Options.Applicative.option
                 Options.Applicative.auto
                 (   Options.Applicative.long "max-output-size"
                 <>  Options.Applicative.metavar "BYTES"
@@ -256,13 +255,6 @@ parseOptions =
                         "Cap a rendered normal form at this many bytes"
                 )
             )
-        <|> Options.Applicative.flag
-                Nothing
-                (Just defaultOutputBytes)
-                (   Options.Applicative.long "max-output-size"
-                <>  Options.Applicative.help
-                        "Cap a rendered normal form at 128KiB"
-                )
 
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where
@@ -807,7 +799,7 @@ command (Options {..}) = do
                 Nothing ->
                     return (Dhall.Core.normalize resolvedExpression)
                 Just nbytes -> do
-                    let limits = defaultBoundLimits { boundOutputBytes = nbytes }
+                    let limits = boundLimits nbytes
                     outcome <- normalizeBounded limits resolvedExpression
                     case outcome of
                         Complete expr ->

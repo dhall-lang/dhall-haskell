@@ -436,6 +436,7 @@ Test-Suite tasty
     Hs-Source-Dirs: tests
     Main-Is: Dhall/Test/Main.hs
     Other-Modules:
+        Dhall.Test.Bounded
         Dhall.Test.CacheFill
         Dhall.Test.DelayedNormalization
         Dhall.Test.Dhall
