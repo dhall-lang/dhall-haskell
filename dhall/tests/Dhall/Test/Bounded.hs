@@ -3,6 +3,7 @@
 module Dhall.Test.Bounded (tests) where
 
 import Data.Foldable (for_)
+import Data.Void (Void)
 import Dhall.Bounded (Bound (..))
 import Dhall.Main (Options (..), parserInfoOptions)
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure, renderFailure)
@@ -19,30 +20,48 @@ import qualified Test.Tasty
 tests :: TestTree
 tests =
     Test.Tasty.testGroup "bounded output"
-        [ maxOutputSizeRequiresAnArgument
+        [ limitsAreIndependentFlags
         , truncatedRenderingEndsWithEllipsis
+        , allocationLimitStopsNormalization
+        , outputBudgetStopsQuoting
         ]
 
-maxOutputSizeRequiresAnArgument :: TestTree
-maxOutputSizeRequiresAnArgument = testCase "requires BYTES and has no default" $ do
+limitsAreIndependentFlags :: TestTree
+limitsAreIndependentFlags = testCase "output, allocation, and time are separate flags" $ do
     case execParserPure defaultPrefs parserInfoOptions [] of
-        Success opts -> maxOutputSize opts @?= Nothing
+        Success opts -> do
+            maxOutputSize opts @?= Nothing
+            maxAllocation opts @?= Nothing
+            maxEvaluationTime opts @?= Nothing
         other -> assertFailure ("expected success, got " <> showResult other)
 
     case execParserPure defaultPrefs parserInfoOptions ["--max-output-size=1100"] of
-        Success opts -> maxOutputSize opts @?= Just 1100
+        Success opts -> do
+            maxOutputSize opts @?= Just 1100
+            maxAllocation opts @?= Nothing
+            maxEvaluationTime opts @?= Nothing
         other -> assertFailure ("expected success, got " <> showResult other)
 
-    case execParserPure defaultPrefs parserInfoOptions ["--max-output-size"] of
-        Failure _ -> return ()
-        other -> assertFailure ("bare flag should fail, got " <> showResult other)
+    case execParserPure defaultPrefs parserInfoOptions
+            ["--max-output-size=1100", "--max-allocation=1048576", "--max-evaluation-time=30"] of
+        Success opts -> do
+            maxOutputSize opts @?= Just 1100
+            maxAllocation opts @?= Just 1048576
+            maxEvaluationTime opts @?= Just 30
+        other -> assertFailure ("expected success, got " <> showResult other)
+
+    for_ ["--max-output-size", "--max-allocation", "--max-evaluation-time"] $ \flag ->
+        case execParserPure defaultPrefs parserInfoOptions [flag] of
+            Failure _ -> return ()
+            other -> assertFailure (flag <> " without a value should fail, got " <> showResult other)
 
     case execParserPure defaultPrefs parserInfoOptions ["--help"] of
         Failure failure -> do
             let (msg, _) = renderFailure failure "dhall"
-            assertBool "usage should name the argument" ("--max-output-size BYTES" `isInfix` msg)
-            assertBool "usage should not offer a bare flag" (not ("[--max-output-size BYTES | --max-output-size]" `isInfix` msg))
-            assertBool "help should not mention a 128KiB default" (not ("128KiB" `isInfix` msg))
+            assertBool "usage should name the output argument" ("--max-output-size BYTES" `isInfix` msg)
+            assertBool "usage should name the allocation argument" ("--max-allocation BYTES" `isInfix` msg)
+            assertBool "usage should name the time argument" ("--max-evaluation-time SECONDS" `isInfix` msg)
+            assertBool "usage should not offer a bare output flag" (not ("[--max-output-size BYTES | --max-output-size]" `isInfix` msg))
         other ->
             assertFailure ("expected help failure, got " <> showResult other)
   where
@@ -51,6 +70,51 @@ maxOutputSizeRequiresAnArgument = testCase "requires BYTES and has no default" $
     showResult Success{} = "Success"
     showResult Failure{} = "Failure"
     showResult CompletionInvoked{} = "CompletionInvoked"
+
+allocationLimitStopsNormalization :: TestTree
+allocationLimitStopsNormalization = testCase "allocation cap applies with or without an output budget" $ do
+    expr <- case Parser.exprFromText mempty source of
+        Left err -> assertFailure (show err)
+        Right parsed -> return (Core.denote parsed :: Core.Expr Void Core.Import)
+    over <- Bounded.normalizeLimited (Just 1) Nothing Nothing expr
+        :: IO (Either Bounded.WorkLimit (Core.Expr Void Core.Import, Bool))
+    case over of
+        Left Bounded.AllocationExceeded -> return ()
+        Left other -> assertFailure (show other)
+        Right _ -> assertFailure "normalization finished within the allocation cap"
+    combined <- Bounded.normalizeLimited (Just 1) Nothing (Just 1000000) expr
+        :: IO (Either Bounded.WorkLimit (Core.Expr Void Core.Import, Bool))
+    case combined of
+        Left Bounded.AllocationExceeded -> return ()
+        Left other -> assertFailure (show other)
+        Right _ -> assertFailure "output budget disabled the allocation cap"
+  where
+    source =
+        "Natural/fold 4000 (List Natural) (\\(x : Natural) -> \\(xs : List Natural) -> [x] # xs) ([] : List Natural)"
+
+outputBudgetStopsQuoting :: TestTree
+outputBudgetStopsQuoting = testCase "output bytes stop quoting a large record early" $ do
+    let fields =
+            Text.intercalate ", "
+                [ "f" <> Text.pack (show i) <> " = " <> Text.pack (show i) | i <- [1 .. 80 :: Int] ]
+        source = "{ " <> fields <> " }"
+    expr <- case Parser.exprFromText mempty source of
+        Left err -> assertFailure (show err)
+        Right parsed -> return (Core.denote parsed :: Core.Expr Void Core.Import)
+    quoted <- Bounded.normalizeLimited Nothing Nothing (Just 80) expr
+        :: IO (Either Bounded.WorkLimit (Core.Expr Parser.Src Core.Import, Bool))
+    case quoted of
+        Left reason -> assertFailure (show reason)
+        Right (_, False) -> assertFailure "expected quoting to stop"
+        Right (partial, True) -> do
+            let doc = Pretty.prettyCharacterSet Pretty.ASCII partial
+            case Bounded.prettyBounded (maxBound :: Int) doc of
+                Complete text ->
+                    assertBool
+                        ("quoted form is still too large: " <> show (Text.length text))
+                        (Text.length text < 400)
+                Truncated text ->
+                    assertFailure ("prettyBounded unexpectedly truncated " <> Text.unpack text)
 
 truncatedRenderingEndsWithEllipsis :: TestTree
 truncatedRenderingEndsWithEllipsis = testCase "truncation ends with an ellipsis" $ do
@@ -61,7 +125,6 @@ truncatedRenderingEndsWithEllipsis = testCase "truncation ends with an ellipsis"
         full = case Bounded.prettyBounded (maxBound :: Int) doc of
             Complete text -> text
             Truncated text -> text
-            LimitExceeded -> "limit"
     assertBool "fixture is long enough to truncate" (Text.length full > 40)
     for_ [1, 5, 8, 17, 40 :: Int] $ \budget ->
         case Bounded.prettyBounded budget doc of

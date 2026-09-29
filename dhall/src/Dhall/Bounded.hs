@@ -1,29 +1,30 @@
-{-| Normalization and pretty-printing that stop at a fixed output size.
+{-| Pretty-printing and normalization with independent limits.
 
-    Ordinary 'Dhall.Core.normalize' is unchanged.  These helpers are for a
-    caller that is about to show a normal form: the CLI @--max-output-size@
-    flag, and the language server whenever it displays one.
+    The three limits combine freely; each one that is omitted is not applied.
 
-    The output budget is a number of bytes of rendered text, always supplied by
-    the caller.  There is no default size.  Quoting stops after that many
-    syntax nodes so a huge value is not fully converted to syntax.  Evaluation
-    itself is unchanged; the work bound is a per-thread allocation limit plus
-    a timeout, run on a dedicated thread.
+    @--max-output-size@ does two things.  Quoting spends that many bytes,
+    charging each syntax node for the text it will print (a little syntax,
+    plus the length of names and literals), and stops once the estimate is
+    used up.  Rendering then keeps at most that many bytes of the real
+    layout and ends a truncated form with @…@.  Quoting does not measure
+    indentation, so the render step is what enforces the exact cap.
+
+    @--max-allocation@ and @--max-evaluation-time@ are separate.  They abort
+    normalization with no partial normal form.
 -}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Dhall.Bounded
     ( Bound(..)
-    , BoundLimits(..)
-    , boundLimits
-    , normalizeBounded
+    , WorkLimit(..)
+    , normalizeLimited
     , prettyBounded
     ) where
 
 import Control.Concurrent (forkIO, killThread, threadDelay)
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, tryPutMVar)
+import Control.DeepSeq (NFData, force)
 import Control.Exception
     ( AsyncException (ThreadKilled)
     , SomeException
@@ -33,79 +34,69 @@ import Control.Exception
     , throwIO
     , try
     )
-import Data.Int (Int64)
-import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Control.Monad (void)
+import Data.Int (Int64)
 import Data.Text (Text)
+import Data.Void (Void)
 import Dhall.Core (Expr)
 import Dhall.Pretty.Internal (layout)
 import GHC.Conc (enableAllocationLimit, setAllocationCounter)
-import Prettyprinter (Doc, Pretty)
+import GHC.IO.Exception (AllocationLimitExceeded (..))
+import Prettyprinter (Doc)
 
 import qualified Data.Text as Text
 import qualified Dhall.Core as Core
 import qualified Dhall.Eval as Eval
 import qualified Prettyprinter as Pretty
 
--- | Whether a bounded computation produced a whole result.
+-- | Whether a rendered document fit in the output budget.
 data Bound a
     = Complete a
     | Truncated a
-    | LimitExceeded
     deriving (Eq, Show)
 
--- | Limits for one bounded normalization.
---
---   'boundOutputBytes' is the size the user asked for.  The allocation limit
---   and the timeout stop evaluation that would otherwise build a value far
---   larger than that.
-data BoundLimits = BoundLimits
-    { boundOutputBytes :: !Int
-    , boundAllocationBytes :: !Int64
-    , boundTimeoutMicros :: !Int
-    }
+-- | Which work limit stopped normalization.  There is no partial normal form.
+data WorkLimit
+    = AllocationExceeded
+    | TimeExceeded
+    deriving (Eq, Show)
 
--- | Limits for an explicit output cap: 256MiB of allocation and 30 seconds.
+-- | Normalize @expression@.
 --
---   'boundOutputBytes' is the size the caller asked for.  There is no default.
-boundLimits :: Int -> BoundLimits
-boundLimits outputBytes = BoundLimits
-    { boundOutputBytes = outputBytes
-    , boundAllocationBytes = 256 * 1024 * 1024
-    , boundTimeoutMicros = 30 * 1000 * 1000
-    }
-
--- | Normalize @expression@, stopping when the output budget or the work
---   bound is exhausted.
---
---   'Complete' is a full normal form.  'Truncated' is a partial normal form
---   ending in @…@, or a full form whose rendering does not fit.  'LimitExceeded'
---   means evaluation hit the allocation limit or the timeout; there is no
---   partial value in that case.
-normalizeBounded
-    :: (Eq a, Pretty a)
-    => BoundLimits
+--   'Nothing' for a limit means that limit is not applied, so any combination
+--   of the three is allowed.  A non-positive allocation or timeout is already
+--   exceeded.  When output bytes are given, quoting stops once its estimate
+--   of rendered text reaches that size; the 'Bool' is 'True' when quoting
+--   was cut short.  Without output bytes, the result is an ordinary normal
+--   form and the 'Bool' is 'False'.
+normalizeLimited
+    :: forall a s t. (Eq a, NFData a)
+    => Maybe Int64
+    -> Maybe Int
+    -> Maybe Int
     -> Expr s a
-    -> IO (Bound (Expr t a))
-normalizeBounded limits expression = do
-    outcome <- runLimited (boundAllocationBytes limits) (boundTimeoutMicros limits) $ do
-        let denoted = Core.denote expression
-            value = Eval.eval Eval.Empty denoted
-            (quoted, cut) =
-                Eval.quoteBounded
-                    (boundOutputBytes limits)
-                    Eval.EmptyNames
-                    value
-            result = Core.renote quoted
-        evaluate (result, cut)
-    case outcome of
-        Nothing -> return LimitExceeded
-        Just (result, True) -> return (Truncated result)
-        Just (result, False) ->
-            case prettyBounded (boundOutputBytes limits) (Pretty.pretty result) of
-                Complete _ -> return (Complete result)
-                Truncated _ -> return (Truncated result)
-                LimitExceeded -> return LimitExceeded
+    -> IO (Either WorkLimit (Expr t a, Bool))
+normalizeLimited allocationBytes timeoutMicros outputBytes expression
+    | exceeds allocationBytes = return (Left AllocationExceeded)
+    | exceeds timeoutMicros = return (Left TimeExceeded)
+    | otherwise =
+        runLimited allocationBytes timeoutMicros $
+            case outputBytes of
+                Nothing -> do
+                    let normalForm :: Expr Void a
+                        normalForm = Core.normalize expression
+                    forced <- evaluate (force normalForm)
+                    return (Core.renote forced, False)
+                Just nbytes -> do
+                    let denoted = Core.denote expression
+                        value = Eval.eval Eval.Empty denoted
+                        (quoted, cut) =
+                            Eval.quoteBounded nbytes Eval.EmptyNames value
+                    forced <- evaluate (force quoted)
+                    return (Core.renote forced, cut)
+  where
+    exceeds Nothing = False
+    exceeds (Just n) = n <= 0
 
 -- | Render a document, stopping after @maxBytes@ characters.
 --
@@ -145,34 +136,41 @@ takeStream budget stream = go budget stream []
     go n (Pretty.SAnnPush _ rest) acc = go n rest acc
     go n (Pretty.SAnnPop rest) acc = go n rest acc
 
--- | 'Nothing' means the allocation limit or the timeout fired.
-runLimited :: Int64 -> Int -> IO a -> IO (Maybe a)
+-- | 'Left' means the allocation limit or the timeout fired.
+--
+--   'Nothing' for a limit means that limit is not applied.
+runLimited :: Maybe Int64 -> Maybe Int -> IO a -> IO (Either WorkLimit a)
 runLimited allocation timeoutMicros action = mask $ \restore -> do
     box <- newEmptyMVar
     worker <- forkIO $ restore $ do
-        setAllocationCounter allocation
-        enableAllocationLimit
+        case allocation of
+            Nothing -> return ()
+            Just bytes -> do
+                setAllocationCounter bytes
+                enableAllocationLimit
         outcome <- try action
         void $ tryPutMVar box $ case outcome of
             Right value ->
                 Got value
             Left (err :: SomeException)
                 | Just AllocationLimitExceeded <- fromException err ->
-                    Limited
+                    Stop AllocationExceeded
                 | Just ThreadKilled <- fromException err ->
-                    Limited
+                    Stop TimeExceeded
                 | otherwise ->
                     Crash err
-    watcher <- forkIO $ restore $ do
-        threadDelay timeoutMicros
-        void $ tryPutMVar box Limited
-        killThread worker
+    watcher <- case timeoutMicros of
+        Nothing -> return Nothing
+        Just micros -> fmap Just $ forkIO $ restore $ do
+            threadDelay micros
+            void $ tryPutMVar box (Stop TimeExceeded)
+            killThread worker
     result <- takeMVar box
     killThread worker
-    killThread watcher
+    mapM_ killThread watcher
     case result of
-        Got value -> return (Just value)
-        Limited -> return Nothing
+        Got value -> return (Right value)
+        Stop reason -> return (Left reason)
         Crash err -> throwIO err
 
-data Box a = Got a | Limited | Crash SomeException
+data Box a = Got a | Stop WorkLimit | Crash SomeException

@@ -1,9 +1,15 @@
 1.42.4
 
-* `normalizeBounded` and `prettyBounded` stop at a caller-supplied rendered
-  size. `dhall --max-output-size BYTES` applies that cap and requires a byte
-  count; there is no default. Without the flag, evaluation is unbounded. A
-  truncated rendering ends with `…`.
+* `dhall --max-output-size BYTES` truncates a rendered normal form and
+  requires a byte count. Quoting spends that budget on the text each syntax
+  node prints, instead of treating one byte as one node, and stops once the
+  estimate is used up. The rendered text is then cut at the same byte count
+  and ends with `…`.
+* `dhall --max-allocation BYTES` stops evaluation after it allocates that
+  many bytes. `dhall --max-evaluation-time SECONDS` stops evaluation after
+  that many seconds. Each flag requires its argument. Any combination of the
+  three flags is allowed, and omitting one leaves that limit off. Hitting the
+  allocation or time limit yields no partial normal form.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
   * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.
