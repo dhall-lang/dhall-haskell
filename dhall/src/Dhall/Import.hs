@@ -111,6 +111,7 @@ module Dhall.Import (
     , loadWith
     , loadWithShared
     , normalizeLoaded
+    , normalizeLoadedCapped
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -2109,6 +2110,22 @@ rebuildShared template sharedChildren =
 normalizeLoaded :: Status -> Expr s Void -> Expr t Void
 normalizeLoaded status expression =
     Dhall.TypeCheck.normalizeWithContext (loadedTypingContext status) expression
+
+-- | 'normalizeLoaded', or the same evaluation with quoting stopped after
+--   @budget@ bytes.  'Nothing' quotes the whole normal form and the 'Bool' is
+--   'False'.
+normalizeLoadedCapped
+    :: Maybe Int
+    -> Status
+    -> Expr s Void
+    -> (Expr t Void, Bool)
+normalizeLoadedCapped Nothing status expression =
+    (normalizeLoaded status expression, False)
+normalizeLoadedCapped (Just nbytes) status expression =
+    Dhall.TypeCheck.normalizeWithContextBounded
+        nbytes
+        (loadedTypingContext status)
+        expression
 
 loadedTypingContext :: Status -> Dhall.TypeCheck.TypingContext Src
 loadedTypingContext status@Status { _startingContext } =
