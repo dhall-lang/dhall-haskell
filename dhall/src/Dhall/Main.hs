@@ -25,6 +25,7 @@ module Dhall.Main
 import Control.Applicative (optional, (<|>))
 import Control.Exception   (Handler (..), SomeException, fromException, toException)
 import Control.Monad       (when)
+import Data.Char           (isPrint)
 import Data.Foldable       (for_)
 import Data.Int            (Int64)
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
@@ -67,9 +68,9 @@ import Dhall.Version       (dhallVersionString)
 import Lens.Micro          (set)
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
+import GHC.Show            (showLitChar)
 import System.Exit         (ExitCode, exitFailure)
 import System.IO           (Handle)
-import Text.Dot            ((.->.))
 
 import Dhall.Core
     ( Expr (Annot)
@@ -132,7 +133,6 @@ import qualified System.Console.ANSI
 import qualified System.Exit                        as Exit
 import qualified System.FilePath
 import qualified System.IO
-import qualified Text.Dot
 import qualified Text.Pretty.Simple
 
 -- | When @--explain@ is enabled, rewrite nested import failures so embedded
@@ -968,10 +968,10 @@ command (Options {..}) = do
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map parent _graph ++ map child _graph
-                importIds = Data.Map.fromList (zip imports [Text.Dot.userNodeId i | i <- [0..]])
+                importIds = Data.Map.fromList (zip imports [0 ..])
 
             let dotNode (i, nodeId) =
-                    Text.Dot.userNode
+                    dotNodeLine
                         nodeId
                         [ ("label", Data.Text.unpack $ pretty (convert i))
                         , ("shape", "box")
@@ -982,14 +982,15 @@ command (Options {..}) = do
 
             let dotEdge (Depends parent child) =
                     case (Data.Map.lookup parent importIds, Data.Map.lookup child importIds) of
-                        (Just from, Just to) -> from .->. to
-                        _                    -> pure ()
+                        (Just from, Just to) -> [dotEdgeLine from to]
+                        _                    -> []
 
-            let dot = do Text.Dot.attribute ("rankdir", "LR")
-                         mapM_ dotNode (Data.Map.assocs importIds)
-                         mapM_ dotEdge _graph
+            let statements =
+                    "rankdir=\"LR\";"
+                        :  map dotNode (Data.Map.assocs importIds)
+                        ++ concatMap dotEdge _graph
 
-            putStr . ("strict " <>) . Text.Dot.showDot $ dot
+            putStr ("strict " <> showDotGraph statements)
 
         Resolve { resolveMode = Just ListImmediateDependencies, ..} -> do
             expression <- getExpression file
@@ -1300,3 +1301,38 @@ main = do
     options <- Options.Applicative.execParser parserInfoOptions
 
     Dhall.Main.command options
+
+-- Render a Graphviz digraph in the form dotgen's showDot produced:
+--
+-- > digraph G {
+-- > rankdir="LR";
+-- > u0[label="...",shape="box",style="rounded"];
+-- > u0 -> u1;
+-- >
+-- > }
+--
+-- Node ids are the non-negative ids userNodeId printed (u0, u1, ...).
+-- The caller prefixes "strict ".
+showDotGraph :: [String] -> String
+showDotGraph statements = "digraph G {\n" ++ unlines statements ++ "\n}\n"
+
+dotNodeLine :: Int -> [(String, String)] -> String
+dotNodeLine nodeId attrs = "u" ++ show nodeId ++ dotAttrs attrs ++ ";"
+
+dotEdgeLine :: Int -> Int -> String
+dotEdgeLine from to = "u" ++ show from ++ " -> " ++ "u" ++ show to ++ ";"
+
+dotAttrs :: [(String, String)] -> String
+dotAttrs [] = ""
+dotAttrs (attr : rest) =
+    "[" ++ dotAttr attr ++ concatMap (\next -> ',' : dotAttr next) rest ++ "]"
+
+dotAttr :: (String, String) -> String
+dotAttr (name, value) = name ++ "=\"" ++ foldr showsDotChar "" value ++ "\""
+
+showsDotChar :: Char -> ShowS
+showsDotChar '"' = ("\\\"" ++)
+showsDotChar '\\' = ("\\\\" ++)
+showsDotChar c
+    | isPrint c = showChar c
+    | otherwise = showLitChar c

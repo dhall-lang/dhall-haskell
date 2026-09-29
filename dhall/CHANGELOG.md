@@ -1,5 +1,7 @@
 1.42.4
 
+* Drop the direct `mmorph`, `dotgen`, and `microlens-mtl` dependencies.
+  `dhall --dot` still prints the same Graphviz graph.
 * `Dhall.Scope` resolves `let`, lambda, `forall` and record-field names,
   including `x@n`. `dhall-docs` uses it for jump-to-definition for those items.
 * `dhall --max-output-size BYTES` truncates a rendered normal form and

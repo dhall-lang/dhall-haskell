@@ -181,7 +181,6 @@ import Control.Exception
 import Control.Monad              (foldM, when)
 import Control.Monad.Catch        (MonadCatch (catch), handle, throwM)
 import Control.Monad.IO.Class     (MonadIO (..))
-import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
 import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
@@ -228,8 +227,8 @@ import Dhall.Parser
     , SourcedException (..)
     , Src (..)
     )
-import Lens.Micro (toListOf)
-import Lens.Micro.Mtl (zoom)
+import Lens.Micro        (Lens', set, toListOf)
+import Lens.Micro.Extras (view)
 
 import qualified Codec.CBOR.Write                            as Write
 import qualified Codec.Serialise
@@ -2025,6 +2024,15 @@ assertNoImports expression =
     Core.throws (traverse (\_ -> Left ImportResolutionDisabled) expression)
 {-# INLINABLE assertNoImports #-}
 
+-- Run a StateT action on one field of the surrounding state.
+--
+-- Every Status lens is a single field, so reading that field, running the
+-- inner action, and writing the field back matches microlens-mtl's zoom.
+zoom :: Monad m => Lens' s a -> State.StateT a m r -> State.StateT s m r
+zoom l action = State.StateT $ \s -> do
+    (r, a) <- State.runStateT action (view l s)
+    return (r, set l a s)
+
 {-| This function is used by the @--transitive@ option of the
     @dhall {freeze,format,lint}@ subcommands to determine which dependencies
     to descend into
@@ -2048,7 +2056,7 @@ dependencyToFile :: Status -> Import -> IO (Maybe FilePath)
 dependencyToFile status import_ = flip State.evalStateT status $ do
     parent :| _ <- zoom stack State.get
 
-    child <- fmap chainedImport (hoist liftIO (chainImport parent import_))
+    child <- fmap chainedImport (chainImport parent import_)
 
     let ignore = return Nothing
 
