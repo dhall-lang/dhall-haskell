@@ -109,6 +109,8 @@ module Dhall.Import (
     , loadRelativeTo
     , loadWithStatus
     , loadWith
+    , loadWithShared
+    , normalizeLoaded
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -184,6 +186,8 @@ import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
+import Data.IORef                 (modifyIORef', newIORef, readIORef)
+import Data.List                  (foldl')
 import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
 import Data.Maybe                 (fromMaybe, isJust, isNothing)
 import Data.Text                  (Text)
@@ -202,9 +206,6 @@ import Dhall.Syntax
     , ImportMode (..)
     , ImportType (..)
     , URL (..)
-    , bindingExprs
-    , functionBindingExprs
-    , recordFieldExprs
     )
 
 import System.FilePath ((</>))
@@ -240,7 +241,9 @@ import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Functor.Const                          as FunctorConst
 import qualified Data.List.NonEmpty                          as NonEmpty
+import qualified Data.Map.Strict                             as StrictMap
 import qualified Data.Maybe                                  as Maybe
+import qualified Data.Set                                    as Set
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding                          as Encoding
 import qualified Data.Text.IO
@@ -653,14 +656,61 @@ chainImport (Chained parent) child =
 --   cache already.
 loadImport :: Chained -> StateT Status IO ImportSemantics
 loadImport import_ = do
-    Status {..} <- State.get
+    Status { _cache } <- State.get
 
     case Dhall.Map.lookup import_ _cache of
-        Just importSemantics -> return importSemantics
+        Just sem -> do
+            _ <- ensureImportName import_
+            return sem
         Nothing -> do
-            importSemantics <- loadImportWithSemanticCache import_
-            zoom cache (State.modify (Dhall.Map.insert import_ importSemantics))
-            return importSemantics
+            sem <- loadImportWithSemanticCache import_
+            zoom cache (State.modify (Dhall.Map.insert import_ sem))
+            _ <- ensureImportName import_
+            rememberImportBody import_ (importSemantics sem)
+            return sem
+
+-- | The name used for this import in the shared evaluation context.
+--   Allocated once, and chosen so it is not already in the starting context.
+ensureImportName :: Chained -> StateT Status IO Text
+ensureImportName chained = do
+    Status { _importNames } <- State.get
+    case Dhall.Map.lookup chained _importNames of
+        Just name ->
+            return name
+        Nothing -> do
+            name <- freshImportName
+            zoom importNames (State.modify' (Dhall.Map.insert chained name))
+            return name
+
+freshImportName :: StateT Status IO Text
+freshImportName = do
+    Status { _importNameCount, _startingContext, _importNames } <- State.get
+    let taken =
+            Set.fromList (map fst (Dhall.Context.toList _startingContext))
+                `Set.union` Set.fromList (Dhall.Map.elems _importNames)
+        pick n
+            | candidate `Set.member` taken = pick (n + 1)
+            | otherwise = (n, candidate)
+          where
+            candidate = Text.pack ("i`" ++ show n)
+        (chosen, name) = pick _importNameCount
+    State.modify' (\s -> s { _importNameCount = chosen + 1 })
+    return name
+
+-- | Record the shared body unless a previous path already chose one.
+rememberImportBody :: Chained -> Expr Void Void -> StateT Status IO ()
+rememberImportBody chained body = do
+    Status { _importBodies } <- State.get
+    case Dhall.Map.lookup chained _importBodies of
+        Just _ ->
+            return ()
+        Nothing ->
+            zoom importBodies (State.modify' (Dhall.Map.insert chained body))
+
+-- | Replace the shared body.  Hashed imports do this with the normal form.
+replaceImportBody :: Chained -> Expr Void Void -> StateT Status IO ()
+replaceImportBody chained body =
+    zoom importBodies (State.modify' (Dhall.Map.insert chained body))
 
 -- | Force an import result to a normal form when a later path requires one
 --   (for example, semantic integrity checks for Code imports).
@@ -755,6 +805,10 @@ loadImportWithSemanticCache
                     Status{ _stack } <- State.get
 
                     throwMissingImport (Imported _stack HashMismatch{..})
+
+            -- The inlined result is the normal form.  Bind that, rather than
+            -- the unnormalized twin recorded while resolving the file.
+            replaceImportBody import_ importSemantics
 
             return
                 ( ImportSemantics
@@ -957,7 +1011,7 @@ loadImportWithSemisemanticCache
         Right expr    -> return expr
 
     Status { _collectedImportErrors = errorsBefore } <- State.get
-    resolvedExpr <- loadWith parsedImport  -- we load imports recursively here
+    (resolvedExpr, twinExpr) <- loadWithShared parsedImport
     Status { _importErrorMode, _insideImportAlt, _collectedImportErrors = errorsAfter } <-
         State.get
     -- A nested file that recorded import errors is not type-checked or cached.
@@ -1000,6 +1054,8 @@ loadImportWithSemisemanticCache
 
         Just SemisemanticWellTyped -> do
             substitutedExpr <- applyStatusSubstitutions resolvedExpr
+            substitutedTwin <- applyStatusSubstitutions twinExpr
+            rememberImportBody import_ (Core.denote substitutedTwin)
 
             return
                 ( ImportSemantics
@@ -1011,6 +1067,8 @@ loadImportWithSemisemanticCache
         -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
         _ -> do
             substitutedExpr <- applyStatusSubstitutions resolvedExpr
+            substitutedTwin <- applyStatusSubstitutions twinExpr
+            rememberImportBody import_ (Core.denote substitutedTwin)
 
             case Core.shallowDenote parsedImport of
                 Embed _ ->
@@ -1780,7 +1838,17 @@ remoteStatusWithManager newManager url =
     hashes, evaluation) should normalize the result themselves.
 -}
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
-loadWith expr₀ = case expr₀ of
+loadWith = fmap fst . loadWithShared
+
+-- | Resolve imports, returning the inlined expression and a twin.
+--
+--   In the twin, each successfully loaded import is a variable.  The variable's
+--   name is stable for that import, so every use site shares one binding.
+--   'normalizeLoaded' evaluates the twin.  'loadWith' keeps only the inlined
+--   expression, which is what 'load' and @dhall resolve@ return.
+loadWithShared
+    :: Expr Src Import -> StateT Status IO (Expr Src Void, Expr Src Void)
+loadWithShared expr₀ = case expr₀ of
   Embed import₀ -> do
     Status {..} <- State.get
 
@@ -1812,8 +1880,9 @@ loadWith expr₀ = case expr₀ of
     zoom stack (State.put stackWithChild)
     ImportSemantics { importSemantics } <- loadImport child
     zoom stack (State.put _stack)
+    name <- ensureImportName child
 
-    return (Core.renote importSemantics)
+    return (Core.renote importSemantics, Var (Syntax.V name 0))
 
 {-
 The code below (findImportHash) implements "opportunistic caching".
@@ -1846,7 +1915,7 @@ In any expression `p ? q` the opportunistic caching rule says:
     let restore =
             State.modify' (\s -> s { _insideImportAlt = wasInside })
     result <-
-        (loadWith a `catch` handler₀) `catch` \(e :: SomeException) -> do
+        (loadWithShared a `catch` handler₀) `catch` \(e :: SomeException) -> do
             restore
             throwM e
     restore
@@ -1865,7 +1934,7 @@ In any expression `p ? q` the opportunistic caching rule says:
           | any isNotResolutionError es₀ =
               throwM exception₀
           | otherwise = do
-              result <- loadWith b `catch` handler₁
+              (inlined, shared) <- loadWithShared b `catch` handler₁
 
               -- If the left side was a frozen import
               -- and the right side succeeded
@@ -1874,13 +1943,13 @@ In any expression `p ? q` the opportunistic caching rule says:
                 Just hash -> do
                     Status { _reportWarning, _normalizer } <- State.get
 
-                    -- Delayed unhashed Code inlining can leave `result`
+                    -- Delayed unhashed Code inlining can leave `inlined`
                     -- unnormalized. The semantic cache product is still the
                     -- encoded alpha-beta-normal form.
                     normalized <-
                         liftIO
                             ( Exception.evaluate
-                                (Core.normalizeWith _normalizer (Core.denote result))
+                                (Core.normalizeWith _normalizer (Core.denote inlined))
                             )
 
                     let bytes = encodeExpression (Core.alphaNormalize normalized)
@@ -1895,11 +1964,12 @@ In any expression `p ? q` the opportunistic caching rule says:
                             -- A matching fill is the same product a semantic
                             -- cache hit would return: the alpha-beta-normal
                             -- form, not the delayed TypecheckedOnly fallback.
-                            return (Core.renote normalized)
+                            let normalForm = Core.renote normalized
+                            return (normalForm, normalForm)
                         else
-                            return result
+                            return (inlined, shared)
                 Nothing ->
-                    return result
+                    return (inlined, shared)
         where
           findImportHash expr = case Core.shallowDenote expr of
             Embed (Import (ImportHashed (Just hash) _) _) -> Just hash
@@ -1918,32 +1988,199 @@ In any expression `p ? q` the opportunistic caching rule says:
               text₂ = text₀ <> " ? " <> text₁
 
   Note a b             -> do
+      let both placeholder = return (placeholder, placeholder)
       let finish (MissingImports es) = do
               Status { _importErrorMode, _insideImportAlt } <- State.get
               if _importErrorMode == CollectErrors && not _insideImportAlt
-                  then substitutePlaceholder a b es
+                  then substitutePlaceholder a b es >>= both
                   else throwM (SourcedException a (MissingImports es))
 
-      (Note <$> pure a <*> loadWith b)
+      (do
+          (inlined, shared) <- loadWithShared b
+          return (Note a inlined, Note a shared))
           `catch` \(e :: MissingImports) -> finish e
           `catch` \(sourced@(SourcedException _ MissingImports{}) :: SourcedException MissingImports) -> do
               Status { _importErrorMode, _insideImportAlt } <- State.get
               if _importErrorMode == CollectErrors && not _insideImportAlt
                   then case sourced of
                       SourcedException _ (MissingImports es) ->
-                          substitutePlaceholder a b es
+                          substitutePlaceholder a b es >>= both
                   else throwM sourced
           `catch` \EnclosingImportFailed -> do
               Status { _importErrorMode, _insideImportAlt } <- State.get
               if _importErrorMode == CollectErrors && not _insideImportAlt
-                  then nextPlaceholder
+                  then nextPlaceholder >>= both
                   else throwM EnclosingImportFailed
-  Let a b              -> Let <$> bindingExprs loadWith a <*> loadWith b
-  Record m             -> Record <$> traverse (recordFieldExprs loadWith) m
-  RecordLit m          -> RecordLit <$> traverse (recordFieldExprs loadWith) m
-  Lam cs a b           -> Lam cs <$> functionBindingExprs loadWith a <*> loadWith b
-  Field a b            -> Field <$> loadWith a <*> pure b
-  expression           -> Syntax.unsafeSubExpressions loadWith expression
+  Let binding body     -> do
+      (bindingInlined, bindingShared) <- pairBinding binding
+      (bodyInlined, bodyShared) <- loadWithShared body
+      return
+          ( Let bindingInlined bodyInlined
+          , Let bindingShared bodyShared
+          )
+  Record fields        -> do
+      pairs <- traverse pairRecordField fields
+      return (Record (fmap fst pairs), Record (fmap snd pairs))
+  RecordLit fields     -> do
+      pairs <- traverse pairRecordField fields
+      return (RecordLit (fmap fst pairs), RecordLit (fmap snd pairs))
+  Lam cs binding body  -> do
+      (bindingInlined, bindingShared) <- pairFunctionBinding binding
+      (bodyInlined, bodyShared) <- loadWithShared body
+      return
+          ( Lam cs bindingInlined bodyInlined
+          , Lam cs bindingShared bodyShared
+          )
+  Field record selector -> do
+      (recordInlined, recordShared) <- loadWithShared record
+      return (Field recordInlined selector, Field recordShared selector)
+  expression           -> do
+      sharedChildren <- liftIO (newIORef [])
+      inlined <- Syntax.unsafeSubExpressions
+          (\child -> do
+              (childInlined, childShared) <- loadWithShared child
+              liftIO (modifyIORef' sharedChildren (childShared :))
+              return childInlined)
+          expression
+      children <- fmap reverse (liftIO (readIORef sharedChildren))
+      return (inlined, rebuildShared expression children)
+
+pairBinding
+    :: Syntax.Binding Src Import
+    -> StateT Status IO (Syntax.Binding Src Void, Syntax.Binding Src Void)
+pairBinding (Syntax.Binding src0 name src1 annotation src2 bound) = do
+    annotationPair <- traverse pairAnnotation annotation
+    (boundInlined, boundShared) <- loadWithShared bound
+    return
+        ( Syntax.Binding src0 name src1 (fmap fst annotationPair) src2 boundInlined
+        , Syntax.Binding src0 name src1 (fmap snd annotationPair) src2 boundShared
+        )
+  where
+    pairAnnotation (src, expr) = do
+        (inlined, shared) <- loadWithShared expr
+        return ((src, inlined), (src, shared))
+
+pairRecordField
+    :: Syntax.RecordField Src Import
+    -> StateT Status IO (Syntax.RecordField Src Void, Syntax.RecordField Src Void)
+pairRecordField (Syntax.RecordField src0 expr src1 src2) = do
+    (inlined, shared) <- loadWithShared expr
+    return
+        ( Syntax.RecordField src0 inlined src1 src2
+        , Syntax.RecordField src0 shared src1 src2
+        )
+
+pairFunctionBinding
+    :: Syntax.FunctionBinding Src Import
+    -> StateT Status IO
+        (Syntax.FunctionBinding Src Void, Syntax.FunctionBinding Src Void)
+pairFunctionBinding (Syntax.FunctionBinding src0 name src1 src2 annotation) = do
+    (inlined, shared) <- loadWithShared annotation
+    return
+        ( Syntax.FunctionBinding src0 name src1 src2 inlined
+        , Syntax.FunctionBinding src0 name src1 src2 shared
+        )
+
+-- | Rebuild @template@, replacing each immediate child with the next shared
+--   expression.  The children were produced by the same 'unsafeSubExpressions'
+--   visit order.
+rebuildShared :: Expr Src Import -> [Expr Src Void] -> Expr Src Void
+rebuildShared template sharedChildren =
+    State.evalState
+        (Syntax.unsafeSubExpressions (\_ -> nextShared) template)
+        sharedChildren
+  where
+    nextShared = do
+        children <- State.get
+        case children of
+            child : rest -> do
+                State.put rest
+                return child
+            [] ->
+                error "rebuildShared: shared expression shape does not match"
+
+-- | Evaluate a twin from 'loadWithShared'.
+--
+--   Each cached import is bound once, with children before parents, and the
+--   value is not forced until the result quotes it.  This does not consult
+--   'Status''s custom normalizer: callers that set one should normalize the
+--   inlined expression instead.  An ill-kinded starting context is ignored;
+--   type-checking reports that error.
+normalizeLoaded :: Status -> Expr s Void -> Expr t Void
+normalizeLoaded status expression =
+    Dhall.TypeCheck.normalizeWithContext (loadedTypingContext status) expression
+
+loadedTypingContext :: Status -> Dhall.TypeCheck.TypingContext Src
+loadedTypingContext status@Status { _startingContext } =
+    foldl' bind base (importOrder status)
+  where
+    base = case startingTypingContext _startingContext of
+        Right ctx -> ctx
+        Left _ -> Dhall.TypeCheck.emptyTypingContext
+
+    placeholder = Core.Const Core.Sort
+
+    bind ctx chained =
+        case
+            ( Dhall.Map.lookup chained (_importNames status)
+            , Dhall.Map.lookup chained (_importBodies status)
+            )
+        of
+            (Just name, Just body) ->
+                Dhall.TypeCheck.extendAlreadyChecked name placeholder body ctx
+            _ ->
+                ctx
+
+-- | Children before the imports that use them.  A cycle, which import
+--   resolution has already rejected, is appended at the end.
+importOrder :: Status -> [Chained]
+importOrder Status { _graph, _importBodies } = emitted ++ leftovers
+  where
+    nodes = Dhall.Map.keys _importBodies
+
+    nodeSet = Set.fromList nodes
+
+    childrenOf = foldl' addEdge StrictMap.empty _graph
+
+    addEdge acc (Depends parent child)
+        | Set.member parent nodeSet && Set.member child nodeSet && parent /= child =
+            StrictMap.insertWith Set.union parent (Set.singleton child) acc
+        | otherwise =
+            acc
+
+    indegree node =
+        Set.size (StrictMap.findWithDefault Set.empty node childrenOf)
+
+    counts0 = StrictMap.fromList [ (node, indegree node) | node <- nodes ]
+
+    ready0 = [ node | node <- nodes, indegree node == 0 ]
+
+    parentsOf child =
+        Set.toList
+            ( Set.fromList
+                [ parent
+                | Depends parent other <- _graph
+                , other == child
+                , Set.member parent nodeSet
+                ]
+            )
+
+    go [] acc _counts = reverse acc
+    go (node : ready) acc counts =
+        let step (queue, remaining) parent =
+                let degree = StrictMap.findWithDefault 0 parent remaining - 1
+                    remaining' = StrictMap.insert parent degree remaining
+                    queue' =
+                        if degree == 0 then queue ++ [parent] else queue
+                in (queue', remaining')
+            (ready', counts') = foldl' step (ready, counts) (parentsOf node)
+        in go ready' (node : acc) counts'
+
+    emitted = go ready0 [] counts0
+
+    emittedSet = Set.fromList emitted
+
+    leftovers = [ node | node <- nodes, not (Set.member node emittedSet) ]
 
 -- | Resolve all imports within an expression
 --

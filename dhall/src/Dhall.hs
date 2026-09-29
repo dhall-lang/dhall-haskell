@@ -52,6 +52,7 @@ module Dhall
     , parseWithSettings
     , resolveWithSettings
     , resolveAndStatusWithSettings
+    , resolveSharedWithSettings
     , emptyStatusWithSettings
     , typecheckWithSettings
     , checkWithSettings
@@ -280,6 +281,19 @@ resolveAndStatusWithSettings
     -> Expr Src Import
     -> IO (Expr Src Void, Status)
 resolveAndStatusWithSettings settings expression = do
+    (resolved, _, status) <- resolveSharedWithSettings settings expression
+    pure (resolved, status)
+
+-- | As 'resolveAndStatusWithSettings', plus the twin expression that
+--   'Dhall.Import.normalizeLoaded' evaluates.
+--
+--   The first expression is the fully inlined tree.  The second refers to each
+--   import by a variable bound once in the returned 'Status'.
+resolveSharedWithSettings
+    :: InputSettings
+    -> Expr Src Import
+    -> IO (Expr Src Void, Expr Src Void, Status)
+resolveSharedWithSettings settings expression = do
     let InputSettings{..} = settings
 
     let status = emptyStatusWithSettings _evaluateSettings _rootDirectory
@@ -289,9 +303,25 @@ resolveAndStatusWithSettings settings expression = do
                 expression
                 (fmap (fmap absurd) (view substitutions settings))
 
-    (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression') status
+    ((resolved, shared), status') <-
+        State.runStateT (Dhall.Import.loadWithShared expression') status
 
-    pure (resolved, status')
+    pure (resolved, shared, status')
+
+-- | Normalize after resolution.  A custom normalizer sees the inlined tree.
+--   Otherwise each import is evaluated once through the shared twin.
+normalizeResolved
+    :: InputSettings
+    -> Status
+    -> Expr Src Void
+    -> Expr Src Void
+    -> Expr t Void
+normalizeResolved settings status shared resolved =
+    case view normalizer settings of
+        Nothing ->
+            Dhall.Import.normalizeLoaded status shared
+        Just _ ->
+            Core.normalizeWith (view normalizer settings) resolved
 
 -- | As 'emptyStatus' but applying 'EvaluateSettings'.
 emptyStatusWithSettings :: EvaluateSettings -> FilePath -> Status
@@ -353,11 +383,11 @@ inputWithSettings
 inputWithSettings settings decoder@Decoder{..} text = do
     parsed <- parseWithSettings settings text
 
-    resolved <- resolveWithSettings settings parsed
+    (resolved, shared, status) <- resolveSharedWithSettings settings parsed
 
     expectWithSettings settings decoder resolved
 
-    let normalized = normalizeWithSettings settings resolved
+    let normalized = normalizeResolved settings status shared resolved
 
     case extract normalized of
         Success x -> return x
@@ -430,11 +460,11 @@ inputExprWithSettings
 inputExprWithSettings settings text = do
     parsed <- parseWithSettings settings text
 
-    resolved <- resolveWithSettings settings parsed
+    (resolved, shared, status) <- resolveSharedWithSettings settings parsed
 
     _ <- typecheckWithSettings settings resolved
 
-    pure (Core.normalizeWith (view normalizer settings) resolved)
+    pure (normalizeResolved settings status shared resolved)
 
 {-| Interpret a Dhall Expression
 
@@ -447,11 +477,11 @@ interpretExpr = interpretExprWithSettings defaultInputSettings
 interpretExprWithSettings
     :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
 interpretExprWithSettings settings parsed = do
-    resolved <- resolveWithSettings settings parsed
+    (resolved, shared, status) <- resolveSharedWithSettings settings parsed
 
     typecheckWithSettings settings resolved
 
-    pure (Core.normalizeWith (view normalizer settings) resolved)
+    pure (normalizeResolved settings status shared resolved)
 
 {- | Decode a Dhall expression
 
@@ -463,11 +493,11 @@ fromExpr = fromExprWithSettings defaultInputSettings
 -- | Like `fromExpr`, but customizable using `InputSettings`
 fromExprWithSettings :: InputSettings -> Decoder a -> Expr Src Import -> IO a
 fromExprWithSettings settings decoder@Decoder{..} expression = do
-    resolved <- resolveWithSettings settings expression
+    (resolved, shared, status) <- resolveSharedWithSettings settings expression
 
     expectWithSettings settings decoder resolved
 
-    let normalized = Core.normalizeWith (view normalizer settings) resolved
+    let normalized = normalizeResolved settings status shared resolved
 
     case extract normalized of
         Success x -> return x

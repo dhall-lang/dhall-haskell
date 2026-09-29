@@ -124,6 +124,18 @@ data Status = Status
     -- ^ Type of each cached import, recorded when that import is type-checked
     --   so a parent can reuse it instead of inferring the child again.
 
+    , _importNames :: Map Chained Text
+    -- ^ Stable name of each cached import in the shared evaluation context.
+    --   The name contains a backtick, so a binder in a parsed file cannot
+    --   capture it.
+
+    , _importBodies :: Map Chained (Expr Void Void)
+    -- ^ Body of each cached import with child imports replaced by their
+    --   stable names.  An already-closed import stores that closed expression.
+
+    , _importNameCount :: !Int
+    -- ^ Next numeric suffix for a generated import name.
+
     , _merkleHashCache :: Map Chained SHA256Digest
     -- ^ Per-run map from import to the hash used as that import's contribution
     --   to a parent's disk-cache key. Code imports without an integrity hash
@@ -256,6 +268,12 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _importTypes = Map.empty
 
+    _importNames = Map.empty
+
+    _importBodies = Map.empty
+
+    _importNameCount = 0
+
     _merkleHashCache = Map.empty
 
     _merkleContextFingerprint = Nothing
@@ -303,6 +321,14 @@ cache = lens _cache (\s x -> s { _cache = x })
 -- | Lens from a `Status` to its `_importTypes` field
 importTypes :: Lens' Status (Map Chained (Expr Src Void))
 importTypes = lens _importTypes (\s x -> s { _importTypes = x })
+
+-- | Lens from a `Status` to its `_importNames` field
+importNames :: Lens' Status (Map Chained Text)
+importNames = lens _importNames (\s x -> s { _importNames = x })
+
+-- | Lens from a `Status` to its `_importBodies` field
+importBodies :: Lens' Status (Map Chained (Expr Void Void))
+importBodies = lens _importBodies (\s x -> s { _importBodies = x })
 
 -- | Lens from a `Status` to its `_merkleHashCache` field
 merkleHashCache :: Lens' Status (Map Chained SHA256Digest)

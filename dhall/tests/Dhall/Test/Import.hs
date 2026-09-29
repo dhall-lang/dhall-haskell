@@ -85,6 +85,7 @@ getTests = do
                 , failureTests
                 , plainImportErrorTests
                 , collectImportErrorTests
+                , sharedImportEvaluationTests
                 ]
 
     return testTree
@@ -265,6 +266,51 @@ importLoadWith = Test.Util.loadWith
 importStatus :: FilePath -> Import.Status
 importStatus = Import.emptyStatus
 #endif
+
+-- | A fold imported through two files is evaluated once, and the normal form
+--   matches normalizing the fully inlined tree.  @site1@ projects away the
+--   expensive field.
+sharedImportEvaluationTests :: TestTree
+sharedImportEvaluationTests =
+    Tasty.HUnit.testCase "shared import evaluation matches inlined normalization" $
+        Temp.withSystemTempDirectory "dhall-shared-import" $ \dir -> do
+            let write name text = Text.IO.writeFile (dir </> name) text
+            write "prelude.dhall" $ Text.unlines
+                [ "let increment = \\(x : Natural) -> x + 1"
+                , "let factor = 4"
+                , "let expensive = Natural/fold factor Natural increment 0"
+                , "let cheap = 1"
+                , "in { increment, expensive, cheap }"
+                ]
+            write "site1.dhall"
+                "let Prelude = ./prelude.dhall in Prelude.increment Prelude.cheap\n"
+            write "site2.dhall"
+                "let Prelude = ./prelude.dhall in Prelude.expensive\n"
+            write "main.dhall"
+                "{ used = ./site2.dhall, ignored = ./site1.dhall }\n"
+
+            (site1Shared, site1Inlined) <- normalizePair dir "site1.dhall"
+            site1Shared Tasty.HUnit.@?= site1Inlined
+            site1Shared Tasty.HUnit.@?= Core.NaturalLit 2
+
+            (mainShared, mainInlined) <- normalizePair dir "main.dhall"
+            mainShared Tasty.HUnit.@?= mainInlined
+
+normalizePair
+    :: FilePath
+    -> FilePath
+    -> IO (Core.Expr Void Void, Core.Expr Void Void)
+normalizePair dir file = do
+    text <- Text.IO.readFile (dir </> file)
+    parsed <- Core.throws (Parser.exprFromText file text)
+    let status =
+            (Import.emptyStatus dir)
+                { Import._semanticCacheMode = Import.IgnoreSemanticCache }
+    ((inlined, twin), status') <-
+        State.runStateT (Import.loadWithShared parsed) status
+    let sharedNF = Core.denote (Import.normalizeLoaded status' twin)
+        inlinedNF = Core.denote (Core.normalize inlined)
+    return (sharedNF, inlinedNF)
 
 -- | 'Show' for import errors embeds ANSI colour.  'Import.plainShowImportError'
 --   is that same text with the colour codes removed.
