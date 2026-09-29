@@ -158,6 +158,7 @@ module Dhall.Import (
     , MissingEnvironmentVariable(..)
     , MissingImports(..)
     , HashMismatch(..)
+    , plainShowImportError
     ) where
 
 import Control.Applicative        (Alternative (..))
@@ -370,6 +371,18 @@ instance Show MissingImports where
 
 throwMissingImport :: (MonadCatch m, Exception e) => e -> m a
 throwMissingImport e = throwM (MissingImports [toException e])
+
+-- | Render an import error without ANSI colour codes.
+--
+--   The 'Show' instances used by the CLI embed colour.  This is the same
+--   text with those codes removed, for diagnostics and other plain output.
+plainShowImportError :: SomeException -> String
+plainShowImportError e = stripAnsi (show e)
+
+stripAnsi :: String -> String
+stripAnsi [] = []
+stripAnsi ('\ESC' : rest) = stripAnsi (drop 1 (dropWhile (/= 'm') rest))
+stripAnsi (c : rest) = c : stripAnsi rest
 
 -- | Exception thrown when a HTTP url is imported but dhall was built without
 -- the @with-http@ Cabal flag.

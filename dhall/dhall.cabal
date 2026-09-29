@@ -341,6 +341,7 @@ Library
         Dhall
         Dhall.Binary
         Dhall.Scope
+        Dhall.Bounded
         Dhall.Context
         Dhall.Core
         Dhall.Crypto

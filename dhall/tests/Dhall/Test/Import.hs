@@ -4,7 +4,7 @@
 
 module Dhall.Test.Import where
 
-import Control.Exception (SomeException)
+import Control.Exception (Exception, SomeException)
 import Data.Text         (Text)
 import Data.Void         (Void)
 #if __GLASGOW_HASKELL__ >= 906
@@ -15,9 +15,12 @@ import Test.Tasty        (TestTree)
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.ByteString.Char8            as ByteString.Char8
+import qualified Data.List                        as List
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core                       as Core
+import qualified Dhall.Crypto
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
@@ -80,6 +83,7 @@ getTests = do
             Tasty.testGroup "import tests"
                 [ successTests
                 , failureTests
+                , plainImportErrorTests
                 ]
 
     return testTree
@@ -260,3 +264,73 @@ importLoadWith = Test.Util.loadWith
 importStatus :: FilePath -> Import.Status
 importStatus = Import.emptyStatus
 #endif
+
+-- | 'Show' for import errors embeds ANSI colour.  'Import.plainShowImportError'
+--   is that same text with the colour codes removed.
+plainImportErrorTests :: TestTree
+plainImportErrorTests =
+    Tasty.testGroup "plain import errors"
+        [ assertPlainImportError
+            "missing file"
+            (Import.MissingImports
+                [Exception.toException (Import.MissingFile "missing.dhall")]
+            )
+            ["Missing file", "missing.dhall"]
+        , assertPlainImportError
+            "missing environment variable"
+            (Import.MissingEnvironmentVariable "DHALL_MISSING")
+            ["Missing environment variable", "DHALL_MISSING"]
+        , assertPlainImportError
+            "no valid imports"
+            (Import.MissingImports [])
+            ["No valid imports"]
+        , assertPlainImportError
+            "several failed imports"
+            (Import.MissingImports
+                [ Exception.toException (Import.MissingFile "a.dhall")
+                , Exception.toException
+                    (Import.MissingEnvironmentVariable "NOT_SET")
+                ]
+            )
+            [ "Failed to resolve imports"
+            , "Missing file"
+            , "a.dhall"
+            , "Missing environment variable"
+            , "NOT_SET"
+            ]
+        , assertPlainImportError
+            "hash mismatch"
+            (Import.HashMismatch
+                { Import.expectedHash =
+                    Dhall.Crypto.sha256Hash (ByteString.Char8.pack "expected")
+                , Import.actualHash =
+                    Dhall.Crypto.sha256Hash (ByteString.Char8.pack "actual")
+                }
+            )
+            ["Import integrity check failed", "Expected hash:", "Actual hash:"]
+        ]
+
+assertPlainImportError :: Exception e => String -> e -> [String] -> TestTree
+assertPlainImportError name exception fragments =
+    Tasty.HUnit.testCase name $ do
+        let coloured = show exception
+        Tasty.HUnit.assertBool
+            ("Show output should contain ANSI colour codes:\n" ++ coloured)
+            (hasAnsi coloured)
+        let plain = Import.plainShowImportError (Exception.toException exception)
+        Tasty.HUnit.assertBool
+            ("plainShowImportError should not contain ANSI colour codes:\n" ++ plain)
+            (not (hasAnsi plain))
+        mapM_
+            (\fragment -> do
+                Tasty.HUnit.assertBool
+                    ("Show output should contain " ++ show fragment)
+                    (fragment `List.isInfixOf` coloured)
+                Tasty.HUnit.assertBool
+                    ("plain output should contain " ++ show fragment)
+                    (fragment `List.isInfixOf` plain)
+            )
+            fragments
+
+hasAnsi :: String -> Bool
+hasAnsi text = "\ESC[" `List.isInfixOf` text
