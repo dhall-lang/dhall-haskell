@@ -31,6 +31,7 @@ import Dhall.LSP.Backend.Completion
     , completeLocalImport
     , completeProjections
     , completionQueryAt
+    , completionsFromNormal
     )
 import Dhall.LSP.Backend.Dhall
     ( FileIdentifier
@@ -52,6 +53,7 @@ import Dhall.LSP.Backend.Diagnostics
     , Range (..)
     , diagnose
     , embedsWithRanges
+    , positionToOffset
     , explain
     , rangeFromDhall
     )
@@ -64,7 +66,7 @@ import Dhall.LSP.Backend.Freezing
     )
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
-import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
+import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, normalizedAt, typeAt)
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
@@ -850,6 +852,47 @@ executeFreezeImport settings request = do
 
   return ()
 
+-- | Complete a record or union that is not a plain dotted name, such as
+--   `(f x).` or `{ a = 1 }.`.  The dot and any partial label are removed so
+--   the file can typecheck, and the expression before the dot is normalized
+--   in its typing context.
+completeBeforeDot
+    :: EvaluateSettings
+    -> Uri
+    -> Text
+    -> (Int, Int)
+    -> HandlerM [Completion]
+completeBeforeDot settings uri_ txt (line_, col_) = do
+    let off = positionToOffset txt (line_, col_)
+        before = Text.take off txt
+        after = Text.drop off txt
+        (lead, typed) = Text.breakOnEnd "." before
+        baseCol = col_ - fromIntegral (Text.length typed) - 1
+    if Text.null lead || Text.any (== '\n') typed || baseCol < 0
+        then return []
+        else do
+            let baseText = Text.dropEnd (Text.length typed + 1) before <> after
+            fileIdentifier <- fileIdentifierFromUri uri_
+            cache <- use importCache
+            case parse baseText of
+                Left _ ->
+                    return []
+                Right parsed -> do
+                    loaded <- liftIO $ load settings fileIdentifier parsed cache
+                    case loaded of
+                        Left _ ->
+                            return []
+                        Right (cache', expr) -> do
+                            assign importCache cache'
+                            case typecheck settings expr of
+                                Left _ ->
+                                    return []
+                                Right (wt, _) ->
+                                    return $
+                                        maybe []
+                                            (uncurry completionsFromNormal)
+                                            (normalizedAt (line_, baseCol) wt)
+
 completionHandler :: EvaluateSettings -> Handlers HandlerM
 completionHandler settings =
   LSP.requestHandler SMethod_TextDocumentCompletion \request respond -> handleErrorWithDefault respond (InR (InL (CompletionList False Nothing []))) do
@@ -888,16 +931,16 @@ completionHandler settings =
 
             let completionContext = buildCompletionContext bindersExpr'
 
-            targetExpr <- case parse (Text.dropEnd 1 target_) of
-              Right e -> return e
-              Left _ -> throwE (Log, "Could not complete projection; prefix did not parse.")
-
-            loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
-            case loaded' of
-              Right (cache'', targetExpr') -> do
-                assign importCache cache''
-                return (completeProjections completionContext targetExpr')
-              Left _ -> return []
+            case parse (Text.dropEnd 1 target_) of
+              Left _ ->
+                  return []
+              Right targetExpr -> do
+                loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
+                case loaded' of
+                  Right (cache'', targetExpr') -> do
+                    assign importCache cache''
+                    return (completeProjections completionContext targetExpr')
+                  Left _ -> return []
 
           -- complete identifiers in scope
           | otherwise = do
@@ -923,7 +966,12 @@ completionHandler settings =
                 , completeText item `notElem` banned
                 ]
 
-    completions <- computeCompletions
+    dotted <- computeCompletions
+    typed <-
+        if null dotted
+            then completeBeforeDot settings uri_ txt (line_, col_)
+            else return []
+    let completions = dotted ++ typed
 
     let toCompletionItem (Completion {..}) = CompletionItem {..}
          where

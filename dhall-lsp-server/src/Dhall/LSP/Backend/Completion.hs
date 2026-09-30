@@ -181,22 +181,30 @@ completeProjections (CompletionContext context values) expr =
       Left _ -> []
       Right _A ->
         let expr'' = normalize expr'
-        in completeUnion expr'' expr'' ++ completeRecord (normalize _A)
+        in completionsFromNormal expr'' (normalize _A)
 
- where
-  -- complete a union constructor by inspecting the union value
-  completeUnion _A (Union m) =
+-- | Constructors of a normalized union value, and fields of a normalized record type.
+completionsFromNormal :: Expr Src Void -> Expr Src Void -> [Completion]
+completionsFromNormal value ty =
+    completeUnion ty value ++ completeRecord ty
+
+-- complete a union constructor by inspecting the union value
+completeUnion :: Expr Src Void -> Expr Src Void -> [Completion]
+completeUnion _A (Union m) =
     let constructor (k, Nothing) =
             Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just _A)
         constructor (k, Just v) =
             Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just (Pi mempty k v _A))
      in map constructor (Dhall.Map.toList m)
-  completeUnion _ _ = []
+completeUnion _ _ =
+    []
 
-
-  -- complete a record projection by inspecting the record type
-  completeRecord (Record m) = map toCompletion (Dhall.Map.toList $ recordFieldValue <$> m)
-    where
-      toCompletion (name, typ) =
-          Completion (Dhall.Pretty.escapeLabel AnyLabel name) (Just typ)
-  completeRecord _ = []
+-- complete a record projection by inspecting the record type
+completeRecord :: Expr Src Void -> [Completion]
+completeRecord (Record m) =
+    map toCompletion (Dhall.Map.toList (recordFieldValue <$> m))
+  where
+    toCompletion (name_, typ) =
+        Completion (Dhall.Pretty.escapeLabel AnyLabel name_) (Just typ)
+completeRecord _ =
+    []

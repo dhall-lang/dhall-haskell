@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Typing (annotateLet, exprAt, srcAt, typeAt) where
+module Dhall.LSP.Backend.Typing (annotateLet, exprAt, normalizedAt, srcAt, typeAt) where
 
 import Dhall.Core
     ( Binding (..)
@@ -14,6 +14,7 @@ import Dhall.TypeCheck
     , emptyTypingContext
     , extendBinder
     , extendLet
+    , normalizeWithContext
     , typeWithContext
     )
 
@@ -167,6 +168,44 @@ annotateLet' pos ctx expr = do
   case [ Note src e | (Note src e) <- subExprs, pos `inside` src ] of
     [e] -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
+
+-- | Normalized value and type of the smallest expression at this position.
+--
+--   Used when completing `(f x).` or `{ a = 1 }.`: the cursor sits on the
+--   expression before the dot, inside a file that typechecks once that dot
+--   is removed.
+normalizedAt :: Position -> WellTyped -> Maybe (Expr Src Void, Expr Src Void)
+normalizedAt pos expr = do
+    expr' <- splitMultiLetSrc (fromWellTyped expr)
+    either (const Nothing) Just (normalizedAt' pos emptyTypingContext expr')
+
+normalizedAt' :: Position -> TypingContext Src -> Expr Src Void -> Either (TypeError Src Void) (Expr Src Void, Expr Src Void)
+normalizedAt' pos ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
+    | coversAnn pos ann = normalizedAt' pos ctx (annotationExpr ann)
+    | covers pos a = normalizedAt' pos ctx a
+    | pos `inside` src = do
+        ctx' <- extendLet x a ctx
+        normalizedAt' pos ctx' e
+normalizedAt' pos ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A } b))
+    | covers pos _A = normalizedAt' pos ctx _A
+    | pos `inside` src = do
+        ctx' <- extendBinder x _A ctx
+        normalizedAt' pos ctx' b
+normalizedAt' pos ctx (Note src (Pi _ x _A _B))
+    | covers pos _A = normalizedAt' pos ctx _A
+    | pos `inside` src = do
+        ctx' <- extendBinder x _A ctx
+        normalizedAt' pos ctx' _B
+normalizedAt' pos ctx (Note _ expr) =
+    normalizedAt' pos ctx expr
+normalizedAt' pos ctx expr = do
+    let subExprs = toListOf subExpressions expr
+    case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
+        [] -> do
+            typ <- typeWithContext ctx expr
+            return (normalizeWithContext ctx expr, normalizeWithContext ctx typ)
+        ((src, e) : _) ->
+            normalizedAt' pos ctx (Note src e)
 
 -- Make sure all lets in a multilet are annotated with their source information.
 --

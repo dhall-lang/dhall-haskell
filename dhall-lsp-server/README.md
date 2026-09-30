@@ -78,6 +78,7 @@ As you type you will be offered completions for:
   - identifiers in scope (as well as built-ins)
   - record projections from 'easy-to-parse' records (of the form `ident1.ident2`[`.ident3...`])
   - union constructors from 'easy-to-parse' unions
+  - fields and constructors after an expression, such as `(f x).` or `{ a = 1 }.`, when the file typechecks once the dot is removed
 
   This is the only feature that works even when the file does not parse (or typecheck).
 

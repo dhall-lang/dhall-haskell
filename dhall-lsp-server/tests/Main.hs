@@ -231,6 +231,20 @@ codeCompletionSpec fixtureDir =
           _label secondItem `shouldBe` "`B C`"
           _detail firstItem `shouldBe` Just "\8704(A : Text) \8594 < A : Text | `B C` >"
           _detail secondItem `shouldBe` Just "< A : Text | `B C` >"
+    it "suggests a field of an applied function" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "RecordApp.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 32})
+        liftIO $ do
+          let labels = map _label cs
+          labels `shouldContain` ["a"]
+    it "suggests constructors of a union expression" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "UnionExpr.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 10})
+        liftIO $ do
+          let labels = map _label cs
+          labels `shouldContain` ["A", "B"]
 
 diagnosticsSpec :: FilePath -> Spec
 diagnosticsSpec fixtureDir = do
