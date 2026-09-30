@@ -352,27 +352,29 @@ chainText chained = pretty (Import.chainedImport chained)
 
 -- | Type-check top-level lets one at a time.
 --
---   A prefix of bindings whose denoted values match the previous analysis
---   reuses that typing context.  Each binding that fails contributes its own
---   error.  Placeholders with a known type are bound first.  If any failure
---   has no known type, type-checking is skipped: those dependents are not
---   reported.
+--   A prefix of bindings whose names and denoted values match the previous
+--   analysis reuses that typing context.  Each binding that fails contributes
+--   its own error.  Placeholders with a known type are bound first.  If any
+--   failure has no known type, type-checking is skipped: those dependents are
+--   not reported.
 typecheckCollected
     :: [Import.CollectedImportError]
     -> Expr Src Void
+    -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
-    -> ([DhallError], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
-typecheckCollected collected expr prevValues prevCtxs
+    -> ([DhallError], [Text], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
+typecheckCollected collected expr prevNames prevValues prevCtxs
     | any (\e -> isNothing (Import.collectedKnownType e)) collected =
-        ([], [], [])
+        ([], [], [], [])
     | otherwise =
         case foldM step TypeCheck.emptyTypingContext collected of
             Left err ->
-                ([ErrorTypecheck err], [], [])
+                ([ErrorTypecheck err], [], [], [])
             Right ctx ->
-                let (errs, values, ctxs) = checkLets prevValues prevCtxs ctx expr
-                in (map ErrorTypecheck errs, values, ctxs)
+                let (errs, names, values, ctxs) =
+                        checkLets prevNames prevValues prevCtxs ctx expr
+                in (map ErrorTypecheck errs, names, values, ctxs)
   where
     step ctx err =
         case Import.collectedKnownType err of
@@ -396,54 +398,63 @@ typecheckCollected collected expr prevValues prevCtxs
                 ])
 
 checkLets
-    :: [Core.Expr Void Void]
+    :: [Text]
+    -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
     -> TypeCheck.TypingContext Src
     -> Expr Src Void
-    -> ([TypeCheck.TypeError Src Void], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
-checkLets prevValues prevCtxs ctx0 expr =
+    -> ( [TypeCheck.TypeError Src Void]
+       , [Text]
+       , [Core.Expr Void Void]
+       , [TypeCheck.TypingContext Src]
+       )
+checkLets prevNames prevValues prevCtxs ctx0 expr =
     let (binds, rest) = topLets expr
-        step (i, ctx, vals, ctxs, errs, failed) (name, ann, value)
-            | i < length prevValues
+        step (i, accCtx, accNames, accVals, accCtxs, accErrs, accFailed) (name, ann, value)
+            | i < length prevNames
+            , i < length prevValues
             , i < length prevCtxs
+            , name == prevNames !! i
             , (Core.denote value :: Core.Expr Void Void) == prevValues !! i =
                 ( i + 1
                 , prevCtxs !! i
-                , prevValues !! i : vals
-                , prevCtxs !! i : ctxs
-                , errs
-                , failed
+                , name : accNames
+                , prevValues !! i : accVals
+                , prevCtxs !! i : accCtxs
+                , accErrs
+                , accFailed
                 )
             | otherwise =
-                case TypeCheck.extendLet name value ctx of
+                case TypeCheck.extendLet name value accCtx of
                     Right ctx' ->
                         ( i + 1
                         , ctx'
-                        , (Core.denote value :: Core.Expr Void Void) : vals
-                        , ctx' : ctxs
-                        , errs
-                        , failed
+                        , name : accNames
+                        , (Core.denote value :: Core.Expr Void Void) : accVals
+                        , ctx' : accCtxs
+                        , accErrs
+                        , accFailed
                         )
                     Left err ->
                         -- Keep the name in scope when its annotation is a
                         -- type, so uses are not reported as unbound.
                         let ctx' = case ann of
                                 Just (_, typ) ->
-                                    case TypeCheck.extendBinder name typ ctx of
+                                    case TypeCheck.extendBinder name typ accCtx of
                                         Right ctx'' -> ctx''
-                                        Left _ -> ctx
+                                        Left _ -> accCtx
                                 Nothing ->
-                                    ctx
-                        in (i + 1, ctx', vals, ctxs, err : errs, True)
-        (_, ctx, vals, ctxs, errs, failed) =
-            foldl step (0, ctx0, [], [], [], False) binds
+                                    accCtx
+                        in (i + 1, ctx', accNames, accVals, accCtxs, err : accErrs, True)
+        (_, ctx, names, vals, ctxs, errs, failed) =
+            foldl step (0, ctx0, [], [], [], [], False) binds
         errs' =
             if failed
                 then errs
                 else case TypeCheck.typeWithContext ctx rest of
                     Left err -> err : errs
                     Right _ -> errs
-    in (reverse errs', reverse vals, reverse ctxs)
+    in (reverse errs', reverse names, reverse vals, reverse ctxs)
 
 topLets
     :: Expr Src Void
@@ -472,10 +483,11 @@ diagnoseDocument settings _uri txt = do
           let importDiags = map (collectedDiagnostic _uri) collected
           docs <- use documents
           previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
-          let prevValues = maybe [] snapPrefixValues previousSnap
+          let prevNames = maybe [] snapPrefixNames previousSnap
+              prevValues = maybe [] snapPrefixValues previousSnap
               prevCtxs = maybe [] snapPrefixContexts previousSnap
-              (typeErrs, prefixValues, prefixCtxs) =
-                  typecheckCollected collected resolved prevValues prevCtxs
+              (typeErrs, prefixNames, prefixValues, prefixCtxs) =
+                  typecheckCollected collected resolved prevNames prevValues prevCtxs
           liftIO $ IORef.modifyIORef' docs $ \m ->
               let previous = Map.lookup _uri m
                   snap = DocSnap
@@ -483,6 +495,7 @@ diagnoseDocument settings _uri txt = do
                       , snapGeneration = maybe 0 snapGeneration previous
                       , snapText = txt
                       , snapLastGood = Just txt
+                      , snapPrefixNames = prefixNames
                       , snapPrefixValues = prefixValues
                       , snapPrefixContexts = prefixCtxs
                       }
@@ -909,7 +922,12 @@ executeNormalize request respond = do
     let selected = textInRange txt range_
     expr <- case parse selected of
         Right e -> return e
-        Left _ -> throwE (Warning, "The selection did not parse, so it was not normalized.")
+        Left err ->
+            throwE
+                ( Warning
+                , "The selection was not normalized due to parsing error:\n"
+                    <> parseErrorText err
+                )
     ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig
     let bytes = fromMaybe maxOutputSize givenBytes
         -- Same safety limits the editor used before the output cap became
@@ -1007,12 +1025,31 @@ executeShowOriginal settings request respond = do
     return ()
 
 textInRange :: Text -> LSP.Types.Range -> Text
-textInRange txt (LSP.Types.Range (Position startLine startCol) (Position endLine endCol)) =
-    Text.unlines (take lineCount (drop (fromIntegral startLine) rows))
-  where
-    rows = Text.lines txt
-    lineCount = fromIntegral (endLine - startLine) + 1
-    _ = (startCol, endCol)
+textInRange txt (LSP.Types.Range (Position startLine startCol) (Position endLine endCol))
+    | startLine > endLine = ""
+    | otherwise =
+        case drop (fromIntegral startLine) (Text.lines txt) of
+            [] ->
+                ""
+            row : rest
+                | startLine == endLine ->
+                    clip row startCol endCol
+                | otherwise ->
+                    let middle = fromIntegral (endLine - startLine) - 1
+                        lastRow = case drop middle rest of
+                            next : _ -> clip next 0 endCol
+                            [] -> ""
+                    in Text.intercalate "\n"
+                        (Text.drop (fromIntegral startCol) row : take middle rest ++ [lastRow])
+
+clip :: Text -> LSP.Types.UInt -> LSP.Types.UInt -> Text
+clip rowText from to =
+    Text.take (max 0 (fromIntegral to - fromIntegral from))
+        (Text.drop (fromIntegral from) rowText)
+
+parseErrorText :: DhallError -> Text
+parseErrorText err =
+    Text.intercalate "\n" [ message | Diagnosis { diagnosis = message } <- diagnose err ]
 
 didOpenTextDocumentNotificationHandler :: EvaluateSettings -> Handlers HandlerM
 didOpenTextDocumentNotificationHandler settings =
@@ -1055,6 +1092,7 @@ textDocumentChangeHandler settings =
                             , snapGeneration = generation
                             , snapText = txt
                             , snapLastGood = snapLastGood =<< previous
+                            , snapPrefixNames = maybe [] snapPrefixNames previous
                             , snapPrefixValues = maybe [] snapPrefixValues previous
                             , snapPrefixContexts = maybe [] snapPrefixContexts previous
                             }
