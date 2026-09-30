@@ -13,8 +13,9 @@
 
 module Dhall.LSP.Features (featureHandlers) where
 
-import Control.Lens (assign, toListOf, (^.))
+import Control.Lens (assign, toListOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
+import Data.IORef (readIORef)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import System.Directory
@@ -90,6 +91,24 @@ sites txt =
         Right expr -> scopeFragments expr
         Left _ -> []
 
+-- | Text whose names match the request.
+--
+--   A syntax error has no names.  Use the last buffer that parsed.  Positions
+--   from that text still match the editor where the edit did not shift them.
+--   Rename keeps using the current buffer, because its edits have to land on
+--   the text the editor has now.
+sourceForNav :: J.Uri -> Text -> HandlerM Text
+sourceForNav uri_ current =
+    case parse current of
+        Right _ ->
+            return current
+        Left _ -> do
+            docsRef <- use documents
+            snaps <- liftIO (readIORef docsRef)
+            return $ case Map.lookup uri_ snaps >>= snapLastGood of
+                Just good -> good
+                Nothing -> current
+
 declAt :: [ScopeFragment a] -> (Int, Int) -> Maybe NameDecl
 declAt fragments pos = foldr pick Nothing fragments
   where
@@ -121,7 +140,7 @@ definitionHandler =
         handleErrorWithDefault respond (InR (InR J.Null)) do
             let docUri = request ^. params . textDocument . uri
                 pos = posOf (request ^. params . position)
-            txt <- readUri docUri
+            txt <- sourceForNav docUri =<< readUri docUri
             case declAt (sites txt) pos of
                 Nothing ->
                     respond (Right (InR (InR J.Null)))
@@ -134,7 +153,7 @@ referencesHandler =
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
                 pos = posOf (request ^. params . position)
-            txt <- readUri docUri
+            txt <- sourceForNav docUri =<< readUri docUri
             let found = sites txt
             case declAt found pos of
                 Nothing ->
@@ -153,7 +172,7 @@ highlightHandler =
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
                 pos = posOf (request ^. params . position)
-            txt <- readUri docUri
+            txt <- sourceForNav docUri =<< readUri docUri
             let found = sites txt
             case declAt found pos of
                 Nothing ->
@@ -200,7 +219,7 @@ symbolsHandler =
     LSP.requestHandler SMethod_TextDocumentDocumentSymbol \request respond ->
         handleErrorWithDefault respond (InR (InR J.Null)) do
             let docUri = request ^. params . textDocument . uri
-            txt <- readUri docUri
+            txt <- sourceForNav docUri =<< readUri docUri
             let infos =
                     [ J.SymbolInformation
                         { _name = boundName
@@ -219,7 +238,7 @@ foldingHandler =
     LSP.requestHandler SMethod_TextDocumentFoldingRange \request respond ->
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
-            txt <- readUri docUri
+            txt <- sourceForNav docUri =<< readUri docUri
             case parse txt of
                 Left _ ->
                     respond (Right (InR J.Null))
@@ -254,7 +273,7 @@ semanticTokensHandler =
     LSP.requestHandler SMethod_TextDocumentSemanticTokensFull \request respond ->
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
-            txt <- readUri docUri
+            txt <- sourceForNav docUri =<< readUri docUri
             let encoded = encodeNameTokens (sites txt)
                 tokens = J.SemanticTokens { _resultId = Nothing, _data_ = encoded }
             respond (Right (InL tokens))
