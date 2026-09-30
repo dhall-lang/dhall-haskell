@@ -39,16 +39,21 @@
 </div>
 <h3>Examples</h3>
 <div class="source-code code-examples">
-<pre>my-even 1 ≡ &lt; even | odd &gt;.odd<br>
+<pre>my-even 1 ≡ &lt; even | <span id="var1-22" class="name-decl" data-name="var1-22">odd</span> &gt;.<a href="#var1-22" class="name-use" data-name="var1-22">odd</a>
+<br>
 </pre>
-<pre>my-even 2 ≡ &lt; even | odd &gt;.even<br>
+<pre>my-even 2 ≡ &lt; <span id="var1-15" class="name-decl" data-name="var1-15">even</span> | odd &gt;.<a href="#var1-15" class="name-use" data-name="var1-15">even</a>
+<br>
 </pre>
 </div>
 <h3>Source</h3>
 <div class="source-code">
 <pre>{-<br>Check if a natural is even or not returning an union data-type<br>-}<br>let <span id="var4-5" class="name-decl" data-name="var4-5">my-even</span>
-<br>    : Natural → &lt; even | odd &gt;<br>    = λ(<span id="var6-9" class="name-decl" data-name="var6-9">n</span> : Natural) →<br>        if Natural/even <a href="#var6-9" class="name-use" data-name="var6-9">n</a> then &lt; even | odd&gt;.even else &lt; even | odd &gt;.odd<br>
-<br>let example0 = assert : <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a> 1 === &lt;even | odd&gt;.odd<br>let example0 = assert : <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a> 2 === &lt;even | odd&gt;.even<br>
+<br>    : Natural → &lt; even | odd &gt;<br>    = λ(<span id="var6-9" class="name-decl" data-name="var6-9">n</span> : Natural) →<br>        if Natural/even <a href="#var6-9" class="name-use" data-name="var6-9">n</a> then &lt; <span id="var7-34" class="name-decl" data-name="var7-34">even</span> | odd&gt;.<a href="#var7-34" class="name-use" data-name="var7-34">even</a> else &lt; even | <span id="var7-65" class="name-decl" data-name="var7-65">odd</span> &gt;.<a href="#var7-65" class="name-use" data-name="var7-65">odd</a>
+<br>
+<br>let example0 = assert : <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a> 1 === &lt;even | <span id="var9-47" class="name-decl" data-name="var9-47">odd</span>&gt;.<a href="#var9-47" class="name-use" data-name="var9-47">odd</a>
+<br>let example0 = assert : <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a> 2 === &lt;<span id="var10-40" class="name-decl" data-name="var10-40">even</span> | odd&gt;.<a href="#var10-40" class="name-use" data-name="var10-40">even</a>
+<br>
 <br>in <a href="#var4-5" class="name-use" data-name="var4-5">my-even</a>
 <br>
 </pre>
