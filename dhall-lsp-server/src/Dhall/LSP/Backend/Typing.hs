@@ -278,7 +278,6 @@ letTypes' ctx (Note _ expr) =
     letTypes' ctx expr
 letTypes' ctx expr =
     fmap concat (mapM (letTypes' ctx) (toListOf subExpressions expr))
-coversAnn _ Nothing = False
 
 annotationExpr :: Maybe (Maybe Src, Expr Src Void) -> Expr Src Void
 annotationExpr (Just (_, expr)) = expr
