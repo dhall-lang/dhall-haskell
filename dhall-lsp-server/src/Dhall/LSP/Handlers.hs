@@ -922,7 +922,12 @@ executeNormalize request respond = do
     let selected = textInRange txt range_
     expr <- case parse selected of
         Right e -> return e
-        Left _ -> throwE (Warning, "The selection did not parse, so it was not normalized.")
+        Left err ->
+            throwE
+                ( Warning
+                , "The selection did not parse, so it was not normalized.\n"
+                    <> parseErrorText err
+                )
     ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig
     let bytes = fromMaybe maxOutputSize givenBytes
         -- Same safety limits the editor used before the output cap became
@@ -1020,12 +1025,31 @@ executeShowOriginal settings request respond = do
     return ()
 
 textInRange :: Text -> LSP.Types.Range -> Text
-textInRange txt (LSP.Types.Range (Position startLine startCol) (Position endLine endCol)) =
-    Text.unlines (take lineCount (drop (fromIntegral startLine) rows))
-  where
-    rows = Text.lines txt
-    lineCount = fromIntegral (endLine - startLine) + 1
-    _ = (startCol, endCol)
+textInRange txt (LSP.Types.Range (Position startLine startCol) (Position endLine endCol))
+    | startLine > endLine = ""
+    | otherwise =
+        case drop (fromIntegral startLine) (Text.lines txt) of
+            [] ->
+                ""
+            row : rest
+                | startLine == endLine ->
+                    clip row startCol endCol
+                | otherwise ->
+                    let middle = fromIntegral (endLine - startLine) - 1
+                        lastRow = case drop middle rest of
+                            next : _ -> clip next 0 endCol
+                            [] -> ""
+                    in Text.intercalate "\n"
+                        (Text.drop (fromIntegral startCol) row : take middle rest ++ [lastRow])
+
+clip :: Text -> LSP.Types.UInt -> LSP.Types.UInt -> Text
+clip line from to =
+    Text.take (max 0 (fromIntegral to - fromIntegral from))
+        (Text.drop (fromIntegral from) line)
+
+parseErrorText :: DhallError -> Text
+parseErrorText err =
+    Text.intercalate "\n" [ message | Diagnosis { diagnosis = message } <- diagnose err ]
 
 didOpenTextDocumentNotificationHandler :: EvaluateSettings -> Handlers HandlerM
 didOpenTextDocumentNotificationHandler settings =
