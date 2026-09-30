@@ -68,10 +68,10 @@ runWith settings = withLogger $ \ioLogger -> do
 
   let lspLogger = clientLogger <> Colog.hoistLogAction liftIO ioLogger
 
-  documents <- IORef.newIORef Map.empty
-  lspEnv <- IORef.newIORef Nothing
+  documentStore <- IORef.newIORef Map.empty
+  envRef <- IORef.newIORef Nothing
   negative <- IORef.newIORef Map.empty
-  state <- MVar.newMVar (initialState documents lspEnv negative)
+  state <- MVar.newMVar (initialState documentStore envRef negative)
 
   let defaultConfig = def
 
@@ -134,7 +134,7 @@ runWith settings = withLogger $ \ioLogger -> do
         where
           forward :: HandlerM a -> IO a
           forward handler = do
-            IORef.writeIORef lspEnv (Just environment)
+            IORef.writeIORef envRef (Just environment)
             -- Take a snapshot and release the lock before the handler runs,
             -- so one request does not block the others. The document store
             -- is an IORef shared by every snapshot.

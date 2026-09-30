@@ -403,38 +403,38 @@ checkLets
     -> ([TypeCheck.TypeError Src Void], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
 checkLets prevValues prevCtxs ctx0 expr =
     let (binds, rest) = topLets expr
-        step (i, ctx, vals, ctxs, errs, failed) (name, ann, value)
+        step (i, accCtx, accVals, accCtxs, accErrs, accFailed) (name, ann, value)
             | i < length prevValues
             , i < length prevCtxs
             , (Core.denote value :: Core.Expr Void Void) == prevValues !! i =
                 ( i + 1
                 , prevCtxs !! i
-                , prevValues !! i : vals
-                , prevCtxs !! i : ctxs
-                , errs
-                , failed
+                , prevValues !! i : accVals
+                , prevCtxs !! i : accCtxs
+                , accErrs
+                , accFailed
                 )
             | otherwise =
-                case TypeCheck.extendLet name value ctx of
+                case TypeCheck.extendLet name value accCtx of
                     Right ctx' ->
                         ( i + 1
                         , ctx'
-                        , (Core.denote value :: Core.Expr Void Void) : vals
-                        , ctx' : ctxs
-                        , errs
-                        , failed
+                        , (Core.denote value :: Core.Expr Void Void) : accVals
+                        , ctx' : accCtxs
+                        , accErrs
+                        , accFailed
                         )
                     Left err ->
                         -- Keep the name in scope when its annotation is a
                         -- type, so uses are not reported as unbound.
                         let ctx' = case ann of
                                 Just (_, typ) ->
-                                    case TypeCheck.extendBinder name typ ctx of
+                                    case TypeCheck.extendBinder name typ accCtx of
                                         Right ctx'' -> ctx''
-                                        Left _ -> ctx
+                                        Left _ -> accCtx
                                 Nothing ->
-                                    ctx
-                        in (i + 1, ctx', vals, ctxs, err : errs, True)
+                                    accCtx
+                        in (i + 1, ctx', accVals, accCtxs, err : accErrs, True)
         (_, ctx, vals, ctxs, errs, failed) =
             foldl step (0, ctx0, [], [], [], False) binds
         errs' =

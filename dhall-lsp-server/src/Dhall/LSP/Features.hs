@@ -58,7 +58,7 @@ import qualified Language.LSP.Protocol.Types as J
 import qualified Language.LSP.Server as LSP
 
 featureHandlers :: EvaluateSettings -> Handlers HandlerM
-featureHandlers settings = mconcat
+featureHandlers evalSettings = mconcat
     [ definitionHandler
     , referencesHandler
     , highlightHandler
@@ -66,8 +66,8 @@ featureHandlers settings = mconcat
     , symbolsHandler
     , foldingHandler
     , semanticTokensHandler
-    , inlayHandler settings
-    , codeActionHandler settings
+    , inlayHandler evalSettings
+    , codeActionHandler evalSettings
     , watchedFilesHandler
     , importSourceHandler
     ]
@@ -77,9 +77,9 @@ posOf J.Position { _line, _character } =
     (fromIntegral _line, fromIntegral _character)
 
 srcContains :: Src -> (Int, Int) -> Bool
-srcContains src (line, col) =
+srcContains src (row, col) =
     let Range left right = rangeFromDhall src
-    in left <= (line, col) && (line, col) <= right
+    in left <= (row, col) && (row, col) <= right
 
 srcToRange :: Src -> J.Range
 srcToRange = rangeToJSON . rangeFromDhall
@@ -102,8 +102,8 @@ declAt fragments pos = foldr pick Nothing fragments
     pick _ acc = acc
 
 sameDecl :: NameDecl -> ScopeFragment a -> Bool
-sameDecl target (ScopeFragment _ (NameUse decl)) = decl == target
-sameDecl target (ScopeFragment _ (NameDeclaration decl)) = decl == target
+sameDecl wanted (ScopeFragment _ (NameUse decl)) = decl == wanted
+sameDecl wanted (ScopeFragment _ (NameDeclaration decl)) = decl == wanted
 sameDecl _ _ = False
 
 declSrc :: NameDecl -> Src
@@ -140,12 +140,12 @@ referencesHandler =
                 Nothing ->
                     respond (Right (InR J.Null))
                 Just decl ->
-                    let ranges =
+                    let locations =
                             [ locationOf docUri src
-                            | ScopeFragment src kind <- found
-                            , sameDecl decl (ScopeFragment src kind)
+                            | ScopeFragment src scopeKind <- found
+                            , sameDecl decl (ScopeFragment src scopeKind)
                             ]
-                    in respond (Right (InL ranges))
+                    in respond (Right (InL locations))
 
 highlightHandler :: Handlers HandlerM
 highlightHandler =
@@ -164,8 +164,8 @@ highlightHandler =
                                 { _range = srcToRange src
                                 , _kind = Just J.DocumentHighlightKind_Read
                                 }
-                            | ScopeFragment src kind <- found
-                            , sameDecl decl (ScopeFragment src kind)
+                            | ScopeFragment src scopeKind <- found
+                            , sameDecl decl (ScopeFragment src scopeKind)
                             ]
                     in respond (Right (InL highlights))
 
@@ -182,15 +182,15 @@ renameHandler =
                 Nothing ->
                     respond (Right (InR J.Null))
                 Just decl -> do
-                    let edits =
+                    let textEdits =
                             [ J.TextEdit
                                 { _range = srcToRange src
                                 , _newText = replacement
                                 }
-                            | ScopeFragment src kind <- found
-                            , sameDecl decl (ScopeFragment src kind)
+                            | ScopeFragment src scopeKind <- found
+                            , sameDecl decl (ScopeFragment src scopeKind)
                             ]
-                        _changes = Just (Map.singleton docUri edits)
+                        _changes = Just (Map.singleton docUri textEdits)
                         _documentChanges = Nothing
                         _changeAnnotations = Nothing
                     respond (Right (InL J.WorkspaceEdit {..}))
@@ -203,14 +203,14 @@ symbolsHandler =
             txt <- readUri docUri
             let infos =
                     [ J.SymbolInformation
-                        { _name = name
+                        { _name = boundName
                         , _kind = J.SymbolKind_Variable
                         , _tags = Nothing
                         , _deprecated = Nothing
                         , _location = locationOf docUri src
                         , _containerName = Nothing
                         }
-                    | ScopeFragment _ (NameDeclaration (NameDecl src name _)) <- sites txt
+                    | ScopeFragment _ (NameDeclaration (NameDecl src boundName _)) <- sites txt
                     ]
             respond (Right (InL infos))
 
@@ -239,11 +239,11 @@ foldRanges expr = go expr
         concatMap go (toListOf Core.subExpressions e)
 
     rangeOf src =
-        let J.Range (J.Position startLine _) (J.Position endLine _) = srcToRange src
+        let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
         in J.FoldingRange
-            { _startLine = startLine
+            { _startLine = firstLine
             , _startCharacter = Nothing
-            , _endLine = endLine
+            , _endLine = lastLine
             , _endCharacter = Nothing
             , _kind = Just J.FoldingRangeKind_Region
             , _collapsedText = Nothing
@@ -263,19 +263,18 @@ encodeNameTokens :: [ScopeFragment a] -> [J.UInt]
 encodeNameTokens = snd . foldl step ((0, 0), [])
   where
     step ((prevLine, prevCol), acc) (ScopeFragment src _) =
-        let J.Range (J.Position line col) (J.Position _ endCol) = srcToRange src
-            deltaLine = line - prevLine
-            deltaCol = if deltaLine == 0 then col - prevCol else col
-            len = if endCol >= col then endCol - col else 1
+        let J.Range (J.Position tokenLine tokenCol) (J.Position _ endCol) = srcToRange src
+            lineDelta = tokenLine - prevLine
+            deltaCol = if lineDelta == 0 then tokenCol - prevCol else tokenCol
+            len = if endCol >= tokenCol then endCol - tokenCol else 1
             piece =
-                [ fromIntegral deltaLine
+                [ fromIntegral lineDelta
                 , fromIntegral deltaCol
                 , fromIntegral len
                 , 0
                 , 0
                 ]
-        in ((line, col), acc ++ piece)
-    step acc _ = acc
+        in ((tokenLine, tokenCol), acc ++ piece)
 
 inlayHandler :: EvaluateSettings -> Handlers HandlerM
 inlayHandler _settings =
@@ -302,12 +301,12 @@ inlayHints = go
     hint Core.Binding { Core.annotation = Just _ } = []
     hint Core.Binding
         { Core.bindingSrc1 = Just src
-        , Core.variable = name
+        , Core.variable = varName
         } =
-        let J.Range _ (J.Position line col) = srcToRange src
+        let J.Range _ (J.Position hintLine col) = srcToRange src
         in  [ J.InlayHint
-                { _position = J.Position line col
-                , _label = InL (": " <> name)
+                { _position = J.Position hintLine col
+                , _label = InL (": " <> varName)
                 , _kind = Just J.InlayHintKind_Type
                 , _textEdits = Nothing
                 , _tooltip = Nothing
@@ -319,7 +318,7 @@ inlayHints = go
     hint _ = []
 
 codeActionHandler :: EvaluateSettings -> Handlers HandlerM
-codeActionHandler settings =
+codeActionHandler evalSettings =
     LSP.requestHandler SMethod_TextDocumentCodeAction \request respond ->
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
@@ -376,7 +375,7 @@ codeActionHandler settings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-                alpha = case parse selectedText of
+                alphaActions = case parse selectedText of
                     Left _ -> []
                     Right expr ->
                         let _newText' = formatExpr
@@ -398,8 +397,8 @@ codeActionHandler settings =
                                 , _data_ = Nothing
                                 }
                         in [InR action]
-            let _ = settings
-            respond (Right (InL (InR normalize : InR explain : InR extract : alpha)))
+            let _ = evalSettings
+            respond (Right (InL (InR normalize : InR explain : InR extract : alphaActions)))
 
 watchedFilesHandler :: Handlers HandlerM
 watchedFilesHandler =
@@ -421,17 +420,17 @@ importSourceHandler =
             entries <- liftIO (listDirectory dir)
             let wanted = requestedPath payload
                 safe = case wanted of
-                    Just name
-                        | '/' `notElem` name
-                        , name /= ".."
-                        , not (null name) ->
-                            Just name
+                    Just entryName
+                        | '/' `notElem` entryName
+                        , entryName /= ".."
+                        , not (null entryName) ->
+                            Just entryName
                     _ -> Nothing
             body <- case safe of
                 Nothing ->
                     return ("" :: Text)
-                Just name ->
-                    liftIO (Text.pack <$> readFile (dir </> name))
+                Just entryName ->
+                    liftIO (Text.pack <$> readFile (dir </> entryName))
             respond
                 (Right
                     (Aeson.object
@@ -442,5 +441,5 @@ importSourceHandler =
                     ))
 
 requestedPath :: Aeson.Value -> Maybe String
-requestedPath (Aeson.String text) = Just (Text.unpack text)
+requestedPath (Aeson.String pathText) = Just (Text.unpack pathText)
 requestedPath _ = Nothing
