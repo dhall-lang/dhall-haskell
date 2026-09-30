@@ -31,7 +31,8 @@
 * `input`, `inputExpr`, `interpretExpr`, and `fromExpr` evaluate each
   imported file once, even when several files import it. The default
   `dhall` command does the same, including when a limit flag is set.
-  `load` and `dhall resolve` still return the fully inlined expression.
+  `load` and `dhall resolve` still return the fully inlined expression,
+  and do not build the second tree used for that shared evaluation.
   A custom normalizer still evaluates that inlined expression.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.

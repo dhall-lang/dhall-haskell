@@ -129,9 +129,10 @@ data Status = Status
     --   The name contains a backtick, so a binder in a parsed file cannot
     --   capture it.
 
-    , _importBodies :: Map Chained (Expr Void Void)
+    , _importBodies :: Map Chained (Expr Src Void)
     -- ^ Body of each cached import with child imports replaced by their
-    --   stable names.  An already-closed import stores that closed expression.
+    --   stable names.  Source spans are stripped when evaluation forces the
+    --   body.  An already-closed import stores that closed expression.
 
     , _importNameCount :: !Int
     -- ^ Next numeric suffix for a generated import name.
@@ -213,6 +214,10 @@ data Status = Status
 
     , _importSources :: Map Chained ResolvedImportSource
     -- ^ Text and location captured when an import was actually fetched.
+
+    , _sharedEvaluation :: Bool
+    -- ^ 'True' when the caller will evaluate through 'normalizeLoaded'.
+    --   'loadWith' leaves this 'False' and does not build a second syntax tree.
     }
 
 -- | How 'Dhall.Import.loadWith' treats a failed import.
@@ -306,6 +311,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _importSources = Map.empty
 
+    _sharedEvaluation = False
+
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
 stack = lens _stack (\s x -> s { _stack = x })
@@ -327,7 +334,7 @@ importNames :: Lens' Status (Map Chained Text)
 importNames = lens _importNames (\s x -> s { _importNames = x })
 
 -- | Lens from a `Status` to its `_importBodies` field
-importBodies :: Lens' Status (Map Chained (Expr Void Void))
+importBodies :: Lens' Status (Map Chained (Expr Src Void))
 importBodies = lens _importBodies (\s x -> s { _importBodies = x })
 
 -- | Lens from a `Status` to its `_merkleHashCache` field
