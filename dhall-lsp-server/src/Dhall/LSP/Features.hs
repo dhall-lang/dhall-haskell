@@ -827,8 +827,8 @@ inlineLet :: Text -> J.Range -> Maybe (Either Text Text)
 inlineLet txt selected = do
     expr <- either (const Nothing) Just (parse txt)
     (letSrc, binding, body) <- findLetBinder (selectionStart selected) expr
-    let name_ = variable binding
-        value = value binding
+    let name_ = Core.variable binding
+        value = Core.value binding
         nameSrc = bindingSrc1 binding
     nameSrc <- nameSrc
     if containsAssert value
@@ -875,7 +875,7 @@ findLetBinder pos (Core.Note src (Core.Let binding body))
     , srcContains nameSrc pos =
         Just (src, binding, body)
     | otherwise =
-        findLetBinder pos (value binding) <|> findLetBinder pos body
+        findLetBinder pos (Core.value binding) <|> findLetBinder pos body
 findLetBinder pos (Core.Note _ expr) =
     findLetBinder pos expr
 findLetBinder pos expr =
@@ -929,7 +929,7 @@ freeNames = go Map.empty
     goAnn _ Nothing = Set.empty
     goAnn counts (Just (_, expr)) = go counts expr
 
-enclosed :: (Int, Int) -> Expr s a -> Set.Set Text
+enclosed :: (Int, Int) -> Expr Src a -> Set.Set Text
 enclosed pos (Core.Note _ (Core.Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = ann } body))
     | exprContains pos body =
         Set.insert x (enclosed pos body) <> enclosed pos ann
@@ -950,7 +950,7 @@ enclosed pos (Core.Note _ expr) =
 enclosed pos expr =
     foldMap (enclosed pos) (toListOf Core.subExpressions expr)
 
-enclosedAnn :: (Int, Int) -> Maybe (Maybe Src, Expr s a) -> Set.Set Text
+enclosedAnn :: (Int, Int) -> Maybe (Maybe Src, Expr Src a) -> Set.Set Text
 enclosedAnn _ Nothing = Set.empty
 enclosedAnn pos (Just (_, expr)) = enclosed pos expr
 
