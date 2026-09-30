@@ -22,6 +22,7 @@ import Dhall.TypeCheck
     ( DetailedTypeError (..)
     , ErrorMessages (..)
     , TypeError (..)
+    , TypeMessage (..)
     )
 
 import Dhall.LSP.Backend.Dhall
@@ -34,6 +35,8 @@ import Data.Text                  (Text)
 
 import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Text                 as Text
+import Prettyprinter                   (pretty)
+import qualified Dhall.Bounded             as Bounded
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck           as TypeCheck
 import qualified Prettyprinter.Render.Text as Pretty.Text
@@ -74,7 +77,10 @@ diagnose (ErrorTypecheck (TypeError _ expr message)) = [Diagnosis { .. }]
 
     range = fmap rangeFromDhall (note expr)
 
-    diagnosis = "Error: " <> Pretty.Text.renderStrict (Dhall.Pretty.layout short)
+    diagnosis =
+        "Error: "
+            <> Pretty.Text.renderStrict (Dhall.Pretty.layout short)
+            <> assertionSides message
 
     ErrorMessages{..} = TypeCheck.prettyTypeMessage message
 
@@ -103,16 +109,49 @@ diagnose (ErrorParse e) =
       Text.pack (NonEmpty.toList text)
     parseErrorText _ = ""
 
+-- | The two sides of a failed assertion, each cut at 2KiB.
+--
+--   The short type error is only a diff.  These are the expressions that
+--   differed.  A cut side tells the user to run Explain error.
+assertionSides :: TypeMessage s a -> Text
+assertionSides (TypeCheck.AssertionFailed left right) =
+    let (leftText, leftCut) = clipSide left
+        (rightText, rightCut) = clipSide right
+        note =
+            if leftCut || rightCut
+                then "\n\nRun Explain error to see the rest."
+                else ""
+    in "\n\n" <> leftText <> "\n\n" <> rightText <> note
+assertionSides _ =
+    ""
+
+clipSide expr =
+    case Bounded.prettyBounded sideBytes (Dhall.Pretty.prettyCharacterSet Dhall.Pretty.Unicode expr) of
+        Bounded.Complete text ->
+            (text, False)
+        Bounded.Truncated text ->
+            (text, True)
+  where
+    sideBytes = 2 * 1024
+
 -- | Give a detailed explanation for the given error; if no detailed explanation
 --   is available return @Nothing@ instead.
-explain :: DhallError -> Maybe Diagnosis
-explain (ErrorTypecheck e@(TypeError _ expr _)) = Just
+--
+--   The text is capped at the given number of characters, which is what
+--   `window/showDocument` puts in a `dhall-explain:` URI.
+explain :: Int -> DhallError -> Maybe Diagnosis
+explain limit (ErrorTypecheck e@(TypeError _ expr _)) = Just
   (Diagnosis { .. })
   where
     doctor = "Dhall.TypeCheck"
     range = fmap rangeFromDhall (note expr)
-    diagnosis = tshow (DetailedTypeError e)
-explain _ = Nothing  -- only type errors have detailed explanations so far
+    diagnosis =
+        case Bounded.prettyBounded limit (pretty (DetailedTypeError e)) of
+            Bounded.Complete text ->
+                text
+            Bounded.Truncated text ->
+                text
+explain _ _ = Nothing  -- only type errors have detailed explanations so far
 
 
 -- Given an annotated AST return the note at the top-most node.

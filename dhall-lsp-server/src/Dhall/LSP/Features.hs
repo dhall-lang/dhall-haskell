@@ -747,7 +747,7 @@ codeActionHandler _evalSettings =
                     , _data_ = Nothing
                     }
             errorMap <- use errors
-            let explainOffered = case Map.lookup docUri errorMap >>= explain of
+            let explainOffered = case Map.lookup docUri errorMap >>= explain maxOutputSize of
                     Just (Diagnosis _ (Just errRange) _) ->
                         rangesMeet selected errRange
                     _ ->

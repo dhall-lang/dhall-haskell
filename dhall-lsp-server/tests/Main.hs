@@ -251,6 +251,21 @@ diagnosticsSpec fixtureDir = do
         liftIO $ do
           _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Expression doesn't match annotation"
+    it "shows both sides of a failed assertion" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Assert.dhall" "dhall"
+        [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        hover <- getHover docId (Position 0 10)
+        liftIO $ do
+          let message = T.unpack (_message diag)
+          message `shouldContain` "[ 1, 2 ]"
+          message `shouldContain` "[ 1, 1 ]"
+          case toEither (_contents (fromJust hover)) of
+            Left content -> do
+              T.unpack (_value content) `shouldContain` "Explain error"
+              T.unpack (_value content) `shouldNotContain` "dhall-explain:"
+            Right _ ->
+              expectationFailure "expected hover text"
   describe "Dhall.Import" $ do
     it "reports invalid imports"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
