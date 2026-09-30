@@ -16,7 +16,9 @@ module Dhall.LSP.Features (featureHandlers) where
 import Control.Applicative ((<|>))
 import Control.Lens (assign, toListOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
+import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
+import Data.List (foldl')
 import Data.Maybe (listToMaybe, maybeToList)
 import Data.Void (Void)
 import Data.Proxy (Proxy (..))
@@ -62,8 +64,12 @@ import Dhall.LSP.Backend.Dhall
     , emptyCache
     , identifierChained
     , importTextKey
+    , load
     , parse
+    , typecheck
+    , WellTyped
     )
+import Dhall.LSP.Backend.Typing (letTypes)
 import Dhall.LSP.Backend.Diagnostics
     ( Diagnosis (Diagnosis)
     , Range (..)
@@ -85,6 +91,7 @@ import Dhall.LSP.State
 
 import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Text.Megaparsec.Pos as Pos
 import qualified Data.Text.IO as Text.IO
@@ -163,9 +170,6 @@ sameDecl _ _ = False
 
 declSrc :: NameDecl -> Src
 declSrc (NameDecl src _ _) = src
-
-boundValue :: Binding s a -> Expr s a
-boundValue Binding { value = bound } = bound
 
 locationOf :: J.Uri -> Src -> J.Location
 locationOf docUri src = J.Location { _uri = docUri, _range = srcToRange src }
@@ -595,16 +599,29 @@ foldingHandler =
                     respond (Right (InL (foldRanges expr)))
 
 foldRanges :: Expr Src a -> [J.FoldingRange]
-foldRanges expr = go expr
+foldRanges expr = dedupe (go expr)
   where
-    go (Core.Note src (Core.Let binding body)) =
-        rangeOf src : go (boundValue binding) ++ go body
-    go (Core.Note src (Core.Lam _ _ body)) =
-        rangeOf src : go body
-    go (Core.Note _ e) =
-        go e
+    go (Core.Note src e) =
+        [rangeOf src | spansLines src, foldable e]
+            ++ concatMap go (toListOf Core.subExpressions e)
     go e =
         concatMap go (toListOf Core.subExpressions e)
+
+    spansLines src =
+        let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
+        in firstLine /= lastLine
+
+    foldable (Core.Let _ _) = True
+    foldable (Core.Lam _ _ _) = True
+    foldable (Core.Pi _ _ _ _) = True
+    foldable (Core.Record _) = True
+    foldable (Core.RecordLit _) = True
+    foldable (Core.Union _) = True
+    foldable (Core.BoolIf _ _ _) = True
+    foldable (Core.Merge _ _ _) = True
+    foldable (Core.TextLit _) = True
+    foldable (Core.ListLit _ xs) = not (null (toList xs))
+    foldable _ = False
 
     rangeOf src =
         let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
@@ -616,6 +633,13 @@ foldRanges expr = go expr
             , _kind = Just J.FoldingRangeKind_Region
             , _collapsedText = Nothing
             }
+
+    dedupe = snd . foldl' keep (Set.empty, [])
+    keep (seen, acc) range
+        | Set.member (range ^. startLine) seen =
+            (seen, acc)
+        | otherwise =
+            (Set.insert (range ^. startLine) seen, acc ++ [range])
 
 semanticTokensHandler :: Handlers HandlerM
 semanticTokensHandler =
@@ -645,45 +669,72 @@ encodeNameTokens = snd . foldl step ((0, 0), [])
         in ((tokenLine, tokenCol), acc ++ piece)
 
 inlayHandler :: EvaluateSettings -> Handlers HandlerM
-inlayHandler _settings =
+inlayHandler settings =
     LSP.requestHandler SMethod_TextDocumentInlayHint \request respond ->
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
+                wanted = request ^. params . range
             txt <- readUri docUri
+            fileIdentifier <- fileIdentifierFromUri docUri
+            cache <- use importCache
             case parse txt of
                 Left _ ->
                     respond (Right (InR J.Null))
-                Right expr ->
-                    respond (Right (InL (inlayHints expr)))
+                Right parsed -> do
+                    loaded <- liftIO $ load settings fileIdentifier parsed cache
+                    case loaded of
+                        Left _ ->
+                            respond (Right (InR J.Null))
+                        Right (cache', expr) -> do
+                            assign importCache cache'
+                            case typecheck settings expr of
+                                Left _ ->
+                                    respond (Right (InR J.Null))
+                                Right (wt, _) -> do
+                                    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
+                                    let hints =
+                                            filter (hintIn wanted) (inlayHints maxOutputSize wt)
+                                    respond (Right (InL hints))
 
-inlayHints :: Expr Src a -> [J.InlayHint]
-inlayHints = go
+hintIn :: J.Range -> J.InlayHint -> Bool
+hintIn (J.Range start end) hint =
+    let pos = hint ^. position
+    in start <= pos && pos <= end
+
+inlayHints :: Int -> WellTyped -> [J.InlayHint]
+inlayHints limit wt =
+    [ hint limit src ty | (src, ty) <- letTypes wt ]
   where
-    go (Core.Note _ (Core.Let binding body)) =
-        hint binding ++ go (boundValue binding) ++ go body
-    go (Core.Note _ e) =
-        go e
-    go e =
-        concatMap go (toListOf Core.subExpressions e)
-
-    hint Core.Binding { Core.annotation = Just _ } = []
-    hint Core.Binding
-        { Core.bindingSrc1 = Just src
-        , Core.variable = varName
-        } =
-        let J.Range _ (J.Position hintLine col) = srcToRange src
-        in  [ J.InlayHint
-                { _position = J.Position hintLine col
-                , _label = InL (": " <> varName)
-                , _kind = Just J.InlayHintKind_Type
-                , _textEdits = Nothing
-                , _tooltip = Nothing
-                , _paddingLeft = Just True
-                , _paddingRight = Nothing
-                , _data_ = Nothing
-                }
-            ]
-    hint _ = []
+    hint limit_ src ty =
+        let J.Range _ endPos = srcToRange src
+            doc = Pretty.prettyCharacterSet Pretty.Unicode ty
+            rendered = case Bounded.prettyBounded limit_ doc of
+                Bounded.Complete text -> text
+                Bounded.Truncated text -> text
+            short =
+                if Text.length rendered <= 60
+                    then rendered
+                    else Text.take 59 rendered <> "…"
+            edits = case Bounded.prettyBounded limit_ doc of
+                Bounded.Complete text ->
+                    Just
+                        [ J.TextEdit
+                            { _range = J.Range endPos endPos
+                            , _newText = " : " <> text
+                            }
+                        ]
+                Bounded.Truncated _ ->
+                    Nothing
+        in J.InlayHint
+            { _position = endPos
+            , _label = InL (": " <> short)
+            , _kind = Just J.InlayHintKind_Type
+            , _textEdits = edits
+            , _tooltip = Just (InL rendered)
+            , _paddingLeft = Just True
+            , _paddingRight = Nothing
+            , _data_ = Nothing
+            }
 
 codeActionHandler :: EvaluateSettings -> Handlers HandlerM
 codeActionHandler _evalSettings =

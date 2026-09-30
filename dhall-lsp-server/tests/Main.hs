@@ -16,7 +16,12 @@ import Language.LSP.Protocol.Types
     , Diagnostic (..)
     , DiagnosticSeverity (..)
     , DiagnosticTag (..)
+    , FoldingRange (..)
+    , FoldingRangeParams (..)
     , Hover (..)
+    , InlayHint (..)
+    , InlayHintParams (..)
+    , TextEdit (..)
     , getUri
     , MarkupContent (..)
     , Definition (..)
@@ -37,6 +42,7 @@ import Language.LSP.Protocol.Types
 #else
 import Data.Row ((.==))
 #endif
+import Language.LSP.Protocol.Lens (result)
 import Test.Tasty
 import Test.Tasty.Hspec
 
@@ -305,6 +311,44 @@ diagnosticsSpec fixtureDir = do
       [diag] <- waitForDiagnosticsSource "Dhall.Parser"
       liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
 
+foldingSpec :: FilePath -> Spec
+foldingSpec fixtureDir =
+  describe "folding" $
+    it "folds a record, a list, an if and a merge" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Regions.dhall" "dhall"
+        rsp <- request LSP.SMethod_TextDocumentFoldingRange FoldingRangeParams
+            { _workDoneToken = Nothing
+            , _partialResultToken = Nothing
+            , _textDocument = docId
+            }
+        let ranges = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
+        liftIO $
+            map (\r -> (_startLine r, _endLine r)) ranges
+                `shouldContain` [(1, 3), (5, 7), (9, 11), (13, 17)]
+
+inlaySpec :: FilePath -> Spec
+inlaySpec fixtureDir =
+  describe "inlay" $
+    it "shows the type of an unannotated let" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Let.dhall" "dhall"
+        rsp <- request LSP.SMethod_TextDocumentInlayHint InlayHintParams
+            { _workDoneToken = Nothing
+            , _textDocument = docId
+            , _range = Range (Position 0 0) (Position 1 0)
+            }
+        let hints = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
+        liftIO $ do
+            let hint = head hints
+                edits = maybe [] id (_textEdits hint)
+            _label hint `shouldBe` InL ": Natural"
+            map _newText edits `shouldContain` [" : Natural"]
+
 -- | Open a file, replace it, and wait until the new diagnostics arrive.
 --   The bound is a tripwire for a stuck analysis, not a performance target.
 editReplaySpec :: FilePath -> Spec
@@ -336,6 +380,8 @@ main = do
   hovering <- testSpec "Hovering" (hoveringSpec (baseDir "hovering"))
   replay <- testSpec "Edit replay" (editReplaySpec (baseDir "diagnostics"))
   definition <- testSpec "Definition" (definitionSpec (baseDir "definition"))
+  folding <- testSpec "Folding" (foldingSpec (baseDir "folding"))
+  inlay <- testSpec "Inlay" (inlaySpec (baseDir "inlay"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -343,7 +389,9 @@ main = do
           completion,
           hovering,
           replay,
-          definition
+          definition,
+          folding,
+          inlay
         ]
     )
 
