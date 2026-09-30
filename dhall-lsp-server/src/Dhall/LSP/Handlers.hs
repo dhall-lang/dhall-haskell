@@ -238,26 +238,19 @@ hoverHandler settings =
                     isHovered _ =
                         False
 
-                let hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = do
+                let hoverFromDiagnosis (Diagnosis doctor_ (Just (Range left right)) diagnosis) = do
                         let _range = Just (rangeToJSON (Range left right))
-                            encodedDiag = URI.encode (Text.unpack diagnosis)
-
-                            _kind = MarkupKind_Markdown
-
-                            _value =
-                                    "[Explain error](dhall-explain:?"
-                                <>  Text.pack encodedDiag
-                                <>  " )"
-
-                            _contents = InL MarkupContent{..}
+                            suffix =
+                                if doctor_ == "Dhall.TypeCheck"
+                                    then "\n\nExplain error"
+                                    else ""
+                            _contents = InL (mkPlainText (diagnosis <> suffix))
                         Just Hover{ _contents, _range }
                     hoverFromDiagnosis _ =
                         Nothing
 
                 let mHover = do
-                        explanation <- explain err
-
-                        guard (isHovered explanation)
+                        explanation <- listToMaybe (filter isHovered (diagnose err))
 
                         hoverFromDiagnosis explanation
 
@@ -932,16 +925,13 @@ executeExplain
     -> HandlerM ()
 executeExplain request respond = do
     uri_ <- getCommandArguments request
+    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
     errorMap <- use errors
-    explanation <- case Map.lookup uri_ errorMap >>= explain of
+    explanation <- case Map.lookup uri_ errorMap >>= explain maxOutputSize of
         Just diagnosis_ -> return diagnosis_
         Nothing -> throwE (Info, "There is no type error to explain in this file.")
-    dir <- liftIO (getXdgDirectory XdgCache "dhall-lsp")
-    liftIO (createDirectoryIfMissing True dir)
-    let path = dir </> "explain.txt"
-        body = diagnosis explanation
-    liftIO (writeFile path (Text.unpack body))
-    let _uri = filePathToUri path
+    let body = diagnosis explanation
+        _uri = Uri ("dhall-explain:?" <> Text.pack (URI.encode (Text.unpack body)))
         _external = Just False
         _takeFocus = Just True
         _selection = Nothing
