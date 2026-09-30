@@ -84,9 +84,9 @@ data ServerState = ServerState
   -- ^ Remote imports that failed recently.  Retried after 30 seconds.
   , _importBodies :: IORef (Map Text Text)
   -- ^ Source text fetched while typechecking imports.
-  , _importChains :: IORef (Map Text Import.Chained)
+  , _importChains :: IORef (Map Text Chained)
   -- ^ Chained import for each key in 'importBodies'.
-  , _mirrorOrigins :: IORef (Map FilePath Import.Chained)
+  , _mirrorOrigins :: IORef (Map FilePath Chained)
   -- ^ Cache file or 'dhall-import:' name of a mirror, and the import it came from.
   }
 
