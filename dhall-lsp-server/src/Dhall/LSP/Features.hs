@@ -14,12 +14,14 @@
 module Dhall.LSP.Features (featureHandlers) where
 
 import Control.Applicative ((<|>))
+import Control.Monad (guard)
 import Control.Lens (assign, toListOf, universeOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
-import Data.List (foldl')
+import Data.List (foldl', sortOn)
 import Data.Maybe (listToMaybe, maybeToList)
+import Data.Row (Label (..), (.==))
 import Data.Void (Void)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
@@ -36,6 +38,7 @@ import Dhall.Core
     ( Binding (..)
     , Expr
     , FieldSelection (..)
+    , freeIn
     , File (..)
     , FilePrefix (..)
     , Import (..)
@@ -736,6 +739,84 @@ inlayHints limit wt =
             , _data_ = Nothing
             }
 
+-- | Reorder and drop unused import bindings in the top-level @let@ chain.
+--
+--   'Nothing' means there is nothing to do, or an import binding does not
+--   occupy whole lines.  'Left' is a refusal the editor can show.
+organizeImports :: Text -> Maybe (Either Text Text)
+organizeImports txt = do
+    expr <- either (const Nothing) Just (parse txt)
+    let blocks = topLetBlocks expr
+    guard (any blockImport blocks)
+    let names = map blockName blocks
+    if length names /= length (Set.fromList names)
+        then return (Left "A top-level name is bound twice.")
+        else if any indexed (universeOf Core.subExpressions expr)
+            then return (Left "This file uses a variable of the form name@n.")
+            else if not (all wholeLines blocks)
+                then Nothing
+                else do
+                    let ls = Text.lines txt
+                        start = blockStart (head blocks)
+                        end = blockEnd (last blocks)
+                        prefix = take start ls
+                        suffix = drop end ls
+                        imports =
+                            sortOn blockName
+                                [ block | block <- blocks, blockImport block, blockUsed block ]
+                        others = [ block | block <- blocks, not (blockImport block) ]
+                        chunk block =
+                            take (blockEnd block - blockStart block) (drop (blockStart block) ls)
+                        rebuilt =
+                            Text.unlines
+                                (prefix ++ concatMap chunk (imports ++ others) ++ suffix)
+                    guard (rebuilt /= txt)
+                    return (Right rebuilt)
+  where
+    indexed (Core.Var (V _ n)) = n > 0
+    indexed _ = False
+
+    wholeLines block = not (blockImport block) || (blockCol block == 0 && blockNextCol block == 0)
+
+data LetBlock = LetBlock
+    { blockName :: Text
+    , blockImport :: Bool
+    , blockUsed :: Bool
+    , blockStart :: Int
+    , blockEnd :: Int
+    , blockCol :: Int
+    , blockNextCol :: Int
+    }
+
+topLetBlocks :: Expr Src Import -> [LetBlock]
+topLetBlocks (Core.Note src (Core.Let binding body)) =
+    let Range (startLine, startCol) _ = rangeFromDhall src
+        (endLine, endCol) = case body of
+            Core.Note bodySrc _ ->
+                let Range left _ = rangeFromDhall bodySrc in left
+            _ ->
+                (startLine, startCol)
+        name_ = Core.variable binding
+    in LetBlock
+        { blockName = name_
+        , blockImport = importExpr (Core.value binding)
+        , blockUsed = freeIn (V name_ 0) body
+        , blockStart = startLine
+        , blockEnd = endLine
+        , blockCol = startCol
+        , blockNextCol = endCol
+        }
+        : topLetBlocks body
+topLetBlocks (Core.Note _ expr) =
+    topLetBlocks expr
+topLetBlocks _ =
+    []
+
+importExpr :: Expr Src Import -> Bool
+importExpr (Core.Note _ expr) = importExpr expr
+importExpr (Core.Embed _) = True
+importExpr _ = False
+
 codeActionHandler :: EvaluateSettings -> Handlers HandlerM
 codeActionHandler _evalSettings =
     LSP.requestHandler SMethod_TextDocumentCodeAction \request respond ->
@@ -853,6 +934,26 @@ codeActionHandler _evalSettings =
                         }
                     , _data_ = Nothing
                     }
+                onLets = case parse txt of
+                    Right expr ->
+                        case topLetBlocks expr of
+                            [] ->
+                                False
+                            blocks ->
+                                rangesMeet
+                                    selected
+                                    (Range (blockStart (head blocks), 0) (blockEnd (last blocks), 0))
+                    Left _ ->
+                        False
+                organizeAction
+                    | not onLets = []
+                    | otherwise = case organizeImports txt of
+                        Just (Left reason_) ->
+                            [disabledOrganize reason_]
+                        Just (Right newText) ->
+                            [readyOrganize docUri txt newText]
+                        Nothing ->
+                            []
                 offered =
                     [InR normalize | selectionParses]
                         ++ [InR extract | selectionParses]
@@ -862,7 +963,40 @@ codeActionHandler _evalSettings =
                            | onImport
                            , action <- [freezeAction, unfreezeAction, unfreezeAllAction]
                            ]
+                        ++ map InR organizeAction
             respond (Right (InL offered))
+
+disabledOrganize :: Text -> J.CodeAction
+disabledOrganize reason_ = J.CodeAction
+    { _title = "Organize imports"
+    , _kind = Just J.CodeActionKind_SourceOrganizeImports
+    , _diagnostics = Nothing
+    , _isPreferred = Nothing
+    , _disabled = Just (Label @"reason" .== reason_)
+    , _edit = Nothing
+    , _command = Nothing
+    , _data_ = Nothing
+    }
+
+readyOrganize :: J.Uri -> Text -> Text -> J.CodeAction
+readyOrganize docUri txt newText =
+    let lineCount = fromIntegral (length (Text.lines txt))
+        _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
+        _newText = newText
+    in J.CodeAction
+        { _title = "Organize imports"
+        , _kind = Just J.CodeActionKind_SourceOrganizeImports
+        , _diagnostics = Nothing
+        , _isPreferred = Nothing
+        , _disabled = Nothing
+        , _edit = Just J.WorkspaceEdit
+            { _changes = Just (Map.singleton docUri [J.TextEdit { _range, _newText }])
+            , _documentChanges = Nothing
+            , _changeAnnotations = Nothing
+            }
+        , _command = Nothing
+        , _data_ = Nothing
+        }
 
 importCommand :: Text -> Text -> J.TextDocumentPositionParams -> J.CodeAction
 importCommand title_ command_ pos = J.CodeAction

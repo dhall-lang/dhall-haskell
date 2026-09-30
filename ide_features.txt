@@ -24,7 +24,7 @@ Marks describe the dhall-lsp-server on lsp-import-definition.
 - [not done] Show warning if the size of the normal form is much larger than the size of the source code for that expression
 - [partial] Beta-normalize a selection ("Normalize selection"), with a size limit. Alpha-normalize was removed. Eta-reduce is not implemented
 - [done] Freeze, refreeze, and unfreeze imports. A missing import keeps its hash
-- [not done] Organize imports (remove unused imports, move imports to top of file, sort imports)
+- [done] Organize imports: drop unused import bindings, move the rest to the top, sort by name. Refused when a top-level name is repeated, when the file uses name@n, or when an import binding does not occupy whole lines
 - [done] Remove unused `let` definitions via lint. A binding that is an assertion, or that contains one, is kept. Unused bindings are also marked in diagnostics
 - [done] Rename variables within their definition's scope, including variables with de Bruijn indices
 - [not done] Autocomplete available symbols that can be imported from already imported files or from the standard prelude

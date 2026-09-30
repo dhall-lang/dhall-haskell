@@ -8,10 +8,11 @@
 
 import Control.Monad.IO.Class      (liftIO)
 import Data.Int                    (Int32)
-import Data.Maybe                  (fromJust)
+import Data.Maybe                  (fromJust, isJust)
 import Data.Time.Clock             (diffUTCTime, getCurrentTime)
 import Language.LSP.Protocol.Types
     ( ClientCapabilities
+    , CodeAction (..)
     , Command (..)
     , CompletionItem (..)
     , Diagnostic (..)
@@ -35,6 +36,7 @@ import Language.LSP.Protocol.Types
     , TextDocumentPositionParams (..)
     , DidOpenTextDocumentParams (..)
     , Uri (..)
+    , WorkspaceEdit (..)
     , type (|?) (..)
     , toEither
     )
@@ -60,6 +62,7 @@ import Test.Hspec
 #endif
 
 import qualified Data.Aeson         as Aeson
+import qualified Data.Map.Strict    as Map
 import System.Environment          (setEnv)
 import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
@@ -387,6 +390,7 @@ main = do
   folding <- testSpec "Folding" (foldingSpec (baseDir "folding"))
   inlay <- testSpec "Inlay" (inlaySpec (baseDir "inlay"))
   unfreeze <- testSpec "Unfreeze" (unfreezeSpec (baseDir "unfreeze"))
+  organize <- testSpec "Organize" (organizeSpec (baseDir "organize"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -397,7 +401,8 @@ main = do
           definition,
           folding,
           inlay,
-          unfreeze
+          unfreeze,
+          organize
         ]
     )
 
@@ -441,6 +446,35 @@ unfreezeSpec fixtureDir = describe "unfreeze" $ do
       executeCommand command_
       after <- documentContents docId
       liftIO $ after `shouldBe` original
+
+organizeSpec :: FilePath -> Spec
+organizeSpec fixtureDir = describe "organize imports" $ do
+  it "sorts import bindings by name" $
+    expectOrganize fixtureDir "Reorder.dhall"
+      "let a = ./a.dhall\nlet b = ./b.dhall\nin { a, b }\n"
+  it "drops an unused import binding" $
+    expectOrganize fixtureDir "Unused.dhall"
+      "let a = ./a.dhall\nin a\n"
+  it "refuses a repeated top-level name" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Duplicate.dhall" "dhall"
+      actions <- getCodeActions docId (Range (Position 0 0) (Position 3 0))
+      liftIO $ do
+        let found = [ action | InR action <- actions, _title action == "Organize imports" ]
+        length found `shouldBe` 1
+        _disabled (head found) `shouldSatisfy` isJust
+        _edit (head found) `shouldBe` Nothing
+
+expectOrganize :: FilePath -> FilePath -> T.Text -> IO ()
+expectOrganize fixtureDir file expected =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    actions <- getCodeActions docId (Range (Position 0 0) (Position 5 0))
+    liftIO $ do
+      let found = [ action | InR action <- actions, _title action == "Organize imports" ]
+          action = head found
+          edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
+      map _newText edits `shouldBe` [expected]
 
 -- | Record fields of an imported value, and import failures met on the way.
 definitionSpec :: FilePath -> Spec

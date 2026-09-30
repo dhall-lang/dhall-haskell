@@ -93,6 +93,9 @@ This can be overriden by using the Dhall LSP settings. For example in VS Code's 
 - **Annotate lets&nbsp;**
 Right-click the bound identifier in a `let` binding and select "Annotate Let binding with its type" to do exactly that.
 
+- **Organize imports&nbsp;**
+On the top-level `let` block, "Organize imports" drops an unused binding whose value is an import, moves the remaining import bindings to the top, and sorts them by name. The edit is made of whole lines, so a comment on those lines stays. The action is not offered when an import binding shares a line with other code, when a top-level name is bound twice, or when the file uses `name@n`.
+
 - **Freeze imports&nbsp;**
 Right-click an import statement and select "Freeze (refreeze) import" to add (or update) a semantic hash annotation to the import. You can also select "Freeze (refreeze) all imports" from the *Command Palette* to freeze all imports at once. With the cursor on an import, Quick Fix also offers "Freeze import", "Unfreeze import" and "Unfreeze all imports". Unfreeze deletes the hash. A `missing` import is left unchanged, because without its hash it always fails.
 
