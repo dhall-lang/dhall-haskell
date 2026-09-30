@@ -21,6 +21,9 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Crypto
+import qualified Dhall.Map                        as Map
+import qualified Dhall
+import qualified Lens.Micro                       as Lens
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
@@ -85,6 +88,8 @@ getTests = do
                 , failureTests
                 , plainImportErrorTests
                 , collectImportErrorTests
+                , sharedImportEvaluationTests
+                , customNormalizerEvaluatesInlinedTree
                 ]
 
     return testTree
@@ -265,6 +270,79 @@ importLoadWith = Test.Util.loadWith
 importStatus :: FilePath -> Import.Status
 importStatus = Import.emptyStatus
 #endif
+
+-- | A fold imported through two files is evaluated once, and the normal form
+--   matches normalizing the fully inlined tree.  @site1@ projects away the
+--   expensive field.
+sharedImportEvaluationTests :: TestTree
+sharedImportEvaluationTests =
+    Tasty.HUnit.testCase "shared import evaluation matches inlined normalization" $
+        Temp.withSystemTempDirectory "dhall-shared-import" $ \dir -> do
+            let write name text = Text.IO.writeFile (dir </> name) text
+            write "prelude.dhall" $ Text.unlines
+                [ "let increment = \\(x : Natural) -> x + 1"
+                , "let factor = 4"
+                , "let expensive = Natural/fold factor Natural increment 0"
+                , "let cheap = 1"
+                , "in { increment, expensive, cheap }"
+                ]
+            write "site1.dhall"
+                "let Prelude = ./prelude.dhall in Prelude.increment Prelude.cheap\n"
+            write "site2.dhall"
+                "let Prelude = ./prelude.dhall in Prelude.expensive\n"
+            write "main.dhall"
+                "{ used = ./site2.dhall, ignored = ./site1.dhall }\n"
+
+            (site1Shared, site1Inlined) <- normalizePair dir "site1.dhall"
+            site1Shared Tasty.HUnit.@?= site1Inlined
+            site1Shared Tasty.HUnit.@?= Core.NaturalLit 2
+
+            (mainShared, mainInlined) <- normalizePair dir "main.dhall"
+            mainShared Tasty.HUnit.@?= mainInlined
+
+-- | A custom normalizer is applied to the fully inlined tree.  Shared
+--   evaluation does not consult it, so this result is the rewritten natural
+--   at every use site.
+customNormalizerEvaluatesInlinedTree :: TestTree
+customNormalizerEvaluatesInlinedTree =
+    Tasty.HUnit.testCase "custom normalizer evaluates the inlined tree" $
+        Temp.withSystemTempDirectory "dhall-custom-normalizer" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            let normalizer (Core.NaturalLit 0) = Just (Core.NaturalLit 7)
+                normalizer _ = Nothing
+                settings =
+                    Lens.set
+                        Dhall.normalizer
+                        (Just (Core.ReifiedNormalizer (pure . normalizer)))
+                        (Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings)
+            result <-
+                Dhall.inputExprWithSettings
+                    settings
+                    "{ a = ./shared.dhall, b = ./shared.dhall }\n"
+            let expected =
+                    Core.RecordLit
+                        ( Map.fromList
+                            [ ("a", Core.makeRecordField (Core.NaturalLit 7))
+                            , ("b", Core.makeRecordField (Core.NaturalLit 7))
+                            ]
+                        )
+            Core.denote result Tasty.HUnit.@?= (expected :: Core.Expr Void Void)
+
+normalizePair
+    :: FilePath
+    -> FilePath
+    -> IO (Core.Expr Void Void, Core.Expr Void Void)
+normalizePair dir file = do
+    text <- Text.IO.readFile (dir </> file)
+    parsed <- Core.throws (Parser.exprFromText file text)
+    let status =
+            (Import.emptyStatus dir)
+                { Import._semanticCacheMode = Import.IgnoreSemanticCache }
+    ((inlined, twin), status') <-
+        State.runStateT (Import.loadWithShared parsed) status
+    let sharedNF = Core.denote (Import.normalizeLoaded status' twin)
+        inlinedNF = Core.denote (Core.normalize inlined)
+    return (sharedNF, inlinedNF)
 
 -- | 'Show' for import errors embeds ANSI colour.  'Import.plainShowImportError'
 --   is that same text with the colour codes removed.

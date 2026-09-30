@@ -23,6 +23,7 @@ module Dhall.Main
     ) where
 
 import Control.Applicative (optional, (<|>))
+import Control.DeepSeq     (force)
 import Control.Exception   (Handler (..), SomeException, fromException, toException)
 import Control.Monad       (when)
 import Data.Foldable       (for_)
@@ -35,8 +36,6 @@ import Data.Void           (Void)
 import Dhall.Bounded
     ( Bound (..)
     , WorkLimit (..)
-    , normalizeCapped
-    , normalizeLimited
     , prettyBounded
     , runLimited
     , withAllocationLimit
@@ -746,10 +745,15 @@ command (Options {..}) = do
                 exitFailure
 
     let resolve file cacheMode expression = do
-            (resolved, errs) <-
-                Dhall.Import.loadCollecting (rootDirectory file) cacheMode expression
-            dieOnImportErrors errs
-            return resolved
+            ((resolved, shared), status) <-
+                State.runStateT
+                    (Dhall.Import.loadWithShared expression)
+                    (toStatus file)
+                        { _semanticCacheMode = cacheMode
+                        , _importErrorMode = CollectErrors
+                        }
+            dieOnImportErrors (reverse (_collectedImportErrors status))
+            return (resolved, shared, status)
 
     let getExpression = Dhall.Util.getExpression censor
 
@@ -865,7 +869,7 @@ command (Options {..}) = do
 
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
-            resolvedExpression <-
+            (resolvedExpression, sharedExpression, status) <-
                 resolve file semanticCacheMode expression
 
             let reportAllocation = do
@@ -925,19 +929,31 @@ command (Options {..}) = do
                                 file_
                                 (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
 
+            let evalShared = do
+                    let (normalForm, quoteCut) =
+                            Dhall.Import.normalizeLoadedCapped
+                                maxOutputSize
+                                status
+                                sharedExpression
+                    forced <- Control.Exception.evaluate (force normalForm)
+                    return (forced, quoteCut)
+
             case maxEvaluationTime of
                 Nothing -> do
                     inferredType <-
                         Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
                     outcome <- case (maxAllocation, maxOutputSize) of
                         (Nothing, Nothing) ->
-                            return (Right (Dhall.Core.normalize resolvedExpression, False))
+                            return
+                                ( Right
+                                    ( Dhall.Import.normalizeLoaded
+                                        status
+                                        sharedExpression
+                                    , False
+                                    )
+                                )
                         _ ->
-                            normalizeLimited
-                                maxAllocation
-                                Nothing
-                                maxOutputSize
-                                resolvedExpression
+                            runLimited maxAllocation Nothing evalShared
                     case outcome of
                         Left AllocationExceeded -> reportAllocation
                         Left TimeExceeded -> reportTime
@@ -950,8 +966,7 @@ command (Options {..}) = do
                                 Dhall.Core.throws
                                     (Dhall.TypeCheck.typeOf resolvedExpression)
                             (evaluated, quoteCut) <-
-                                withAllocationLimit maxAllocation
-                                    (normalizeCapped maxOutputSize resolvedExpression)
+                                withAllocationLimit maxAllocation evalShared
                             produce inferredType evaluated quoteCut
                     case outcome of
                         Left AllocationExceeded -> reportAllocation
@@ -1018,7 +1033,7 @@ command (Options {..}) = do
             -- import-free typechecked tree, which may still contain lets.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
-            resolvedExpression <-
+            (resolvedExpression, _, _) <-
                 resolve file semanticCacheMode expression
 
             render System.IO.stdout characterSet resolvedExpression
@@ -1045,7 +1060,7 @@ command (Options {..}) = do
             -- normalized import.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
-            resolvedExpression <-
+            (resolvedExpression, _, _) <-
                 resolve file semanticCacheMode expression
 
             inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
@@ -1091,7 +1106,7 @@ command (Options {..}) = do
         Hash {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
+            (resolvedExpression, _, _) <-
                 resolve file UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
@@ -1225,7 +1240,7 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
+            (resolvedExpression, _, _) <-
                 resolve file UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
@@ -1259,7 +1274,7 @@ command (Options {..}) = do
         DirectoryTree {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
+            (resolvedExpression, _, _) <-
                 resolve file UseSemanticCache expression
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)

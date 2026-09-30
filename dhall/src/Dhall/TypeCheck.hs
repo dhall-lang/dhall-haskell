@@ -22,6 +22,7 @@ module Dhall.TypeCheck (
     , bindAlreadyChecked
     , typeWithContext
     , normalizeWithContext
+    , normalizeWithContextBounded
     , checkContext
     , messageExpressions
 
@@ -259,6 +260,25 @@ normalizeWithContext (TypingContext ctx) expression =
         (Eval.quote (Eval.envNames env) (Eval.eval env (Dhall.Core.denote expression)))
   where
     env = values ctx
+
+-- | Like 'normalizeWithContext', but stop quoting once the estimated rendered
+--   size reaches @budget@ bytes.  The 'Bool' is 'True' when quoting was cut
+--   short.  Parts that were not quoted are not forced.
+normalizeWithContextBounded
+    :: Int
+    -> TypingContext s
+    -> Expr t X
+    -> (Expr u X, Bool)
+normalizeWithContextBounded budget (TypingContext ctx) expression =
+    (Dhall.Core.renote quoted, cut)
+  where
+    env = values ctx
+
+    (quoted, cut) =
+        Eval.quoteBounded
+            budget
+            (Eval.envNames env)
+            (Eval.eval env (Dhall.Core.denote expression))
 
 contextToCtx :: Eq a => Context (Expr s a) -> Ctx a
 contextToCtx context = loop (Dhall.Context.toList context)
