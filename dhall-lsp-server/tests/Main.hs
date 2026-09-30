@@ -1,22 +1,35 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ExplicitNamespaces    #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 import Control.Monad.IO.Class      (liftIO)
 import Data.Maybe                  (fromJust)
+import Data.Time.Clock             (diffUTCTime, getCurrentTime)
 import Language.LSP.Protocol.Types
     ( ClientCapabilities
     , CompletionItem (..)
     , Diagnostic (..)
     , DiagnosticSeverity (..)
+    , DiagnosticTag (..)
     , Hover (..)
     , MarkupContent (..)
     , Position (..)
     , Range (..)
+    , TextDocumentContentChangeEvent (..)
+    , type (|?) (..)
     , toEither
     )
+#if MIN_VERSION_lsp_types(2,2,0)
+import Language.LSP.Protocol.Types
+    ( TextDocumentContentChangeWholeDocument (..)
+    )
+#else
+import Data.Row ((.==))
+#endif
 import Test.Tasty
 import Test.Tasty.Hspec
 
@@ -46,24 +59,60 @@ fullLatestClientCaps = Language.LSP.Protocol.Capabilities.fullCaps
 
 hoveringSpec :: FilePath -> Spec
 hoveringSpec dir =
-  describe "Dhall.Hover"
-    $ it "reports types on hover"
-    $ runSession "dhall-lsp-server" fullLatestClientCaps dir
-    $ do
-      docId <- openDoc "Types.dhall" "dhall"
-      let typePos = Position 0 5
-          functionPos = Position 2 7
-          extractContents = toEither . _contents . fromJust
-          getValue = T.unpack . _value
-      typeHover <- getHover docId typePos
-      funcHover <- getHover docId functionPos
-      liftIO $ do
-        case (extractContents typeHover, extractContents funcHover) of
-          (Left typeContent, Left functionContent) -> do
-            getValue typeContent `shouldBe` "Type"
-            getValue functionContent `shouldBe` "\8704(_isAdmin : Bool) \8594 { home : Text, name : Text }"
-          _ -> error "test failed"
-        pure ()
+  describe "Dhall.Hover" $ do
+    it "reports types on hover"
+      $ runSession "dhall-lsp-server" fullLatestClientCaps dir
+      $ do
+        docId <- openDoc "Types.dhall" "dhall"
+        let typePos = Position 0 5
+            functionPos = Position 2 7
+            extractContents = toEither . _contents . fromJust
+            getValue = T.unpack . _value
+        typeHover <- getHover docId typePos
+        funcHover <- getHover docId functionPos
+        liftIO $ do
+          case (extractContents typeHover, extractContents funcHover) of
+            (Left typeContent, Left functionContent) -> do
+              getValue typeContent `shouldBe` "Type"
+              getValue functionContent `shouldBe` "\8704(_isAdmin : Bool) \8594 { home : Text, name : Text }"
+            _ -> error "test failed"
+          pure ()
+    -- The imported file is itself a let block.  After resolution that block
+    -- keeps the source span of the import path, which is not a let.  Hover in
+    -- the importing file used to fail for the whole file.
+    it "reports a type beside an imported let block"
+      $ runSession "dhall-lsp-server" fullLatestClientCaps dir
+      $ do
+        docId <- openDoc "ImportLet.dhall" "dhall"
+        let limitPos = Position 4 5
+            importedPos = Position 2 6
+        limitHover <- getHover docId limitPos
+        importedHover <- getHover docId importedPos
+        liftIO $ do
+          hoverText limitHover `shouldBe` "Natural"
+          hoverText importedHover `shouldBe` "Natural"
+    -- defaultOutputBytes is 16KiB.  LargeType.dhall's type prints at about 63KB.
+    it "truncates a type longer than the output cap"
+      $ runSession "dhall-lsp-server" fullLatestClientCaps dir
+      $ do
+        docId <- openDoc "LargeType.dhall" "dhall"
+        hover <- getHover docId (Position 49 6)
+        liftIO $ do
+          let text = hoverContents hover
+          T.isPrefixOf "{ l :" text `shouldBe` True
+          T.isSuffixOf "…" text `shouldBe` True
+          (T.length text <= 16 * 1024 + 1) `shouldBe` True
+          (T.length text >= 16 * 1024 - 64) `shouldBe` True
+
+hoverContents :: Maybe Hover -> T.Text
+hoverContents Nothing = error "no hover"
+hoverContents (Just hover) =
+  case toEither (_contents hover) of
+    Left content -> _value content
+    Right _ -> error "hover was not plain text"
+
+hoverText :: Maybe Hover -> String
+hoverText = T.unpack . hoverContents
 
 lintingSpec :: FilePath -> Spec
 lintingSpec fixtureDir =
@@ -86,7 +135,7 @@ lintingSpec fixtureDir =
                 , _codeDescription = Nothing
                 , _source = Just "Dhall.Lint"
                 , _message = "Unused let binding 'bob'"
-                , _tags = Nothing
+                , _tags = Just [DiagnosticTag_Unnecessary]
                 , _relatedInformation = Nothing
                 , _data_ = Nothing
                 }
@@ -100,7 +149,7 @@ lintingSpec fixtureDir =
                 , _codeDescription = Nothing
                 , _source = Just "Dhall.Lint"
                 , _message = "Unused let binding 'carl'"
-                , _tags = Nothing
+                , _tags = Just [DiagnosticTag_Unnecessary]
                 , _relatedInformation = Nothing
                 , _data_ = Nothing
                 }
@@ -218,6 +267,28 @@ diagnosticsSpec fixtureDir = do
       [diag] <- waitForDiagnosticsSource "Dhall.Parser"
       liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
 
+-- | Open a file, replace it, and wait until the new diagnostics arrive.
+--   The bound is a tripwire for a stuck analysis, not a performance target.
+editReplaySpec :: FilePath -> Spec
+editReplaySpec dir =
+  describe "edit replay" $
+    it "publishes diagnostics after a change" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "UnboundVar.dhall" "dhall"
+        _ <- waitForDiagnostics
+        started <- liftIO getCurrentTime
+        let replacement =
+#if MIN_VERSION_lsp_types(2,2,0)
+                TextDocumentContentChangeEvent
+                    (InR (TextDocumentContentChangeWholeDocument "1\n"))
+#else
+                TextDocumentContentChangeEvent (InR (#text .== "1\n"))
+#endif
+        changeDoc docId [replacement]
+        _ <- waitForDiagnostics
+        finished <- liftIO getCurrentTime
+        liftIO $ diffUTCTime finished started `shouldSatisfy` (< 30)
+
 main :: IO ()
 main = do
   GHC.IO.Encoding.setLocaleEncoding GHC.IO.Encoding.utf8
@@ -225,11 +296,13 @@ main = do
   linting <- testSpec "Linting" (lintingSpec (baseDir "linting"))
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))
   hovering <- testSpec "Hovering" (hoveringSpec (baseDir "hovering"))
+  replay <- testSpec "Edit replay" (editReplaySpec (baseDir "diagnostics"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
           linting,
           completion,
-          hovering
+          hovering,
+          replay
         ]
     )

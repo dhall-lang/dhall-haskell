@@ -3,7 +3,7 @@
 The Dhall language integration consists of the following parts:
 - The VSCode/ium plugin "Dhall Language Support" *([vscode-language-dhall](https://github.com/dhall-lang/vscode-language-dhall))* adds syntax highlighting for Dhall files.
 - The VSCode/ium plugin "Dhall LSP Server" *([vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server))* implements the LSP client &ndash; yes, there is a naming issue here &ndash; that communicates with the backend via the [LSP protocol](https://microsoft.github.io/language-server-protocol/specification) to provide advanced language features like error diagnostics or type information, etc.
-- [*dhall-lsp-server*](https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server), which is part of the [*dhall-haskell*](https://github.com/dhall-lang/dhall-haskell) project, implements the actual LSP server (i.e. the backend) that implements those language features in an editor agnostic way, though at the moment only a VSCode/ium frontend exists.
+- [*dhall-lsp-server*](https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server), which is part of the [*dhall-haskell*](https://github.com/dhall-lang/dhall-haskell) project, implements the actual LSP server (i.e. the backend). Any editor that speaks LSP can use it. The VS Code extension in [vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server) is one client; Neovim, Emacs, Helix, Zed and Sublime are others. Point the client at the `dhall-lsp-server` executable.
 
 # Installation
 
@@ -42,8 +42,16 @@ For detailed instructions as well as instructions using cabal or nix, see [`dhal
 
 # Usage / Features
 
+The server speaks standard LSP, so Neovim, Emacs, Helix, Zed and Sublime can use it as well as VS Code.
+
 - **Diagnostics&nbsp;**
-Every time you save a Dhall file it is parsed and typechecked, and any errors are marked. You can hover over the offending code to see the error message; to see a detailed explanation in the case of type errors, click the *Explain* link in the hover box.
+The file is parsed and typechecked when you open it, when you save it, and shortly after you stop typing. Every failed import is reported, including failures inside an imported file. You can hover over the offending code to see the error message; to see a detailed explanation in the case of type errors, click the *Explain* link in the hover box. Unused `let` bindings are marked unnecessary.
+
+- **Imports&nbsp;**
+Hashed imports can be shown from the semantic cache (alpha-beta-normal CBOR). "Show original source" is the command `dhall.server.showOriginalSource` and fetches only when you run it. Other editors open an on-disk mirror under `$XDG_CACHE_HOME/dhall-lsp/sources`. VS Code can instead mount a `dhall-import:` filesystem once that extension is installed.
+
+- **Output size&nbsp;**
+`vscode-dhall-lsp-server.maxOutputSize` is the maximum rendered size of a normal form the server will show, in bytes. The default is 16384 (16KiB). It does not change ordinary evaluation outside the server.
 
 - **Clickable imports&nbsp;**
 As long as the file parses successfully, all (local file and remote) imports will be underlined and clickable.

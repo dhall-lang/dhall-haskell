@@ -14,6 +14,7 @@ module Dhall.LSP.Backend.Dhall (
   parse,
   parseWithHeader,
   load,
+  loadCollected,
   typecheck,
   normalize
  ) where
@@ -21,12 +22,15 @@ module Dhall.LSP.Backend.Dhall (
 import Dhall.Core   (Expr)
 import Dhall.Parser (Src)
 
-import Control.Exception                (SomeException, catch)
+import Control.Exception                (SomeException, catch, throwIO, try)
 import Control.Lens                     (set, view)
-import Control.Monad.Trans.State.Strict (runStateT)
+import Control.Monad.IO.Class           (liftIO)
+import Control.Monad.Trans.State.Strict (StateT, get, put, runStateT)
 import Data.Bifunctor                   (first)
+import Data.IORef                       (IORef, modifyIORef', readIORef)
 import Data.List.NonEmpty               (NonEmpty ((:|)))
 import Data.Text                        (Text)
+import Data.Time.Clock                  (UTCTime, diffUTCTime, getCurrentTime)
 import Data.Void                        (Void)
 import Dhall                            (EvaluateSettings)
 import Network.URI                      (URI)
@@ -37,6 +41,7 @@ import System.FilePath
     )
 
 import qualified Data.Graph                  as Graph
+import Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict             as Map
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as Text
@@ -165,6 +170,68 @@ load settings (FileIdentifier chained) expr (Cache graph cache) = do
       return . Right $ (Cache graph' cache', expr'))
     `catch` (\e -> return . Left $ ErrorImportSourced e)
     `catch` (\e -> return . Left $ ErrorInternal e)
+
+-- | Resolve imports, keeping every failure.
+--
+--   Unlike 'load', this does not stop at the first missing import.  The
+--   expression may contain placeholder variables named @missing`n@ for those
+--   failures.  A non-empty error list means the expression is not a successful
+--   load.
+loadCollected
+    :: EvaluateSettings
+    -> FileIdentifier
+    -> Expr Src Dhall.Import
+    -> Cache
+    -> IORef (Map Text (UTCTime, SomeException))
+    -> IO (Cache, Expr Src Void, [Import.CollectedImportError], Map Import.Chained Import.ResolvedImportSource)
+loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negative = do
+  let emptyStatus =
+             set Import.substitutions   (view Dhall.substitutions settings)
+          .  set Import.normalizer      (view Dhall.normalizer settings)
+          .  set Import.startingContext (view Dhall.startingContext settings)
+          $ Import.emptyStatusWithManager (view Dhall.newManager settings) ""
+
+  let status =
+               set Import.remote (rememberFailure negative (view Import.remote emptyStatus)) .
+               set Import.cache cache .
+               set Import.graph graph .
+               set Import.stack (chained :| []) .
+               set Import.importErrorMode Import.CollectErrors
+                 $ emptyStatus
+  (expr', status') <- runStateT (Import.loadWith expr) status
+  let cache' = view Import.cache status'
+      graph' = view Import.graph status'
+      errs = reverse (view Import.collectedImportErrors status')
+      sources =
+            Map.fromList (Dhall.Map.toList (view Import.importSources status'))
+  return (Cache graph' cache', expr', errs, sources)
+
+-- | Skip a remote that failed in the last 30 seconds.
+rememberFailure
+    :: IORef (Map Text (UTCTime, SomeException))
+    -> (Dhall.URL -> StateT Import.Status IO Text)
+    -> Dhall.URL
+    -> StateT Import.Status IO Text
+rememberFailure ref remote url = do
+    let key = Text.pack (show url)
+    now <- liftIO getCurrentTime
+    table <- liftIO (readIORef ref)
+    case Map.lookup key table of
+        Just (failedAt, ex)
+            | diffUTCTime now failedAt < 30 ->
+                liftIO (throwIO ex)
+        _ -> do
+            st <- get
+            outcome <- liftIO
+                (try (runStateT (remote url) st)
+                    :: IO (Either SomeException (Text, Import.Status)))
+            case outcome of
+                Left ex -> do
+                    liftIO (modifyIORef' ref (Map.insert key (now, ex)))
+                    liftIO (throwIO ex)
+                Right (txt, st') -> do
+                    put st'
+                    return txt
 
 -- | Typecheck a fully resolved expression. Returns a certification that the
 --   input was well-typed along with its (well-typed) type.
