@@ -663,6 +663,10 @@ executeCommandHandler settings =
                 executeFreezeImport settings request
             | command_ == "dhall.server.freezeAllImports" ->
                 executeFreezeAllImports settings request
+            | command_ == "dhall.server.unfreezeImport" ->
+                executeUnfreezeImport request
+            | command_ == "dhall.server.unfreezeAllImports" ->
+                executeUnfreezeAllImports request
             | command_ == "dhall.server.explain" ->
                 executeExplain request respond
             | command_ == "dhall.server.normalize" ->
@@ -850,6 +854,80 @@ executeFreezeImport settings request = do
 
   _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
 
+  return ()
+
+-- | Delete one import hash.  A @missing@ import is left alone: without the
+--   hash it does not resolve.
+executeUnfreezeImport
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    -> HandlerM ()
+executeUnfreezeImport request = do
+  args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
+  let uri_  = args ^. textDocument . uri
+  let line_ = fromIntegral (args ^. position . line)
+  let col_  = fromIntegral (args ^. position . character)
+
+  txt <- readUri uri_
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not unfreeze import; did not parse.")
+
+  (src, import_)
+    <- case exprAt (line_, col_) expr of
+      Just (Note src (Embed i)) -> return (src, i)
+      _ -> throwE (Warning, "You weren't pointing at an import!")
+
+  case import_ of
+    Import (ImportHashed _ Missing) _ ->
+      throwE (Warning, "A missing import is left unchanged, because without its hash it always fails.")
+    _ -> return ()
+
+  Range (x1, y1) (x2, y2) <- case getImportHashPosition src of
+      Just range_ -> return range_
+      Nothing -> throwE (Error, "Failed to re-parse import!")
+
+  let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
+      _newText = ""
+      _edit = WorkspaceEdit
+          { _changes = Just (Map.singleton uri_ [TextEdit{..}])
+          , _documentChanges = Nothing
+          , _changeAnnotations = Nothing
+          }
+      _label = Nothing
+
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
+  return ()
+
+executeUnfreezeAllImports
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    -> HandlerM ()
+executeUnfreezeAllImports request = do
+  uri_ <- getCommandArguments request
+  txt <- readUri uri_
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not unfreeze imports; did not parse.")
+
+  let edits_ =
+        [ TextEdit
+            { _range = LSP.Types.Range
+                (Position (fromIntegral x1) (fromIntegral y1))
+                (Position (fromIntegral x2) (fromIntegral y2))
+            , _newText = ""
+            }
+        | (import_, Range (x1, y1) (x2, y2)) <- getAllImportsWithHashPositions expr
+        , case import_ of
+            Import (ImportHashed _ Missing) _ -> False
+            _ -> True
+        ]
+      _edit = WorkspaceEdit
+          { _changes = Just (Map.singleton uri_ edits_)
+          , _documentChanges = Nothing
+          , _changeAnnotations = Nothing
+          }
+      _label = Nothing
+
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
   return ()
 
 -- | Complete a record or union that is not a plain dotted name, such as

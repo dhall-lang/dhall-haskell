@@ -14,7 +14,7 @@
 module Dhall.LSP.Features (featureHandlers) where
 
 import Control.Applicative ((<|>))
-import Control.Lens (assign, toListOf, use, (^.))
+import Control.Lens (assign, toListOf, universeOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
@@ -829,12 +829,68 @@ codeActionHandler _evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
+                onImport = importUnderCursor txt selected
+                J.Range startPos _ = selected
+                importPos = J.TextDocumentPositionParams
+                    { _textDocument = J.TextDocumentIdentifier docUri
+                    , _position = startPos
+                    }
+                freezeAction =
+                    importCommand "Freeze import" "dhall.server.freezeImport" importPos
+                unfreezeAction =
+                    importCommand "Unfreeze import" "dhall.server.unfreezeImport" importPos
+                unfreezeAllAction = J.CodeAction
+                    { _title = "Unfreeze all imports"
+                    , _kind = Just J.CodeActionKind_RefactorRewrite
+                    , _diagnostics = Nothing
+                    , _isPreferred = Nothing
+                    , _disabled = Nothing
+                    , _edit = Nothing
+                    , _command = Just J.Command
+                        { _title = "Unfreeze all imports"
+                        , _command = "dhall.server.unfreezeAllImports"
+                        , _arguments = Just [Aeson.toJSON docUri]
+                        }
+                    , _data_ = Nothing
+                    }
                 offered =
                     [InR normalize | selectionParses]
                         ++ [InR extract | selectionParses]
                         ++ [InR explainAction | explainOffered]
                         ++ [InR (removeAction deleteRange) | deleteRange <- maybeToList removeOffered]
+                        ++ [ InR action
+                           | onImport
+                           , action <- [freezeAction, unfreezeAction, unfreezeAllAction]
+                           ]
             respond (Right (InL offered))
+
+importCommand :: Text -> Text -> J.TextDocumentPositionParams -> J.CodeAction
+importCommand title_ command_ pos = J.CodeAction
+    { _title = title_
+    , _kind = Just J.CodeActionKind_RefactorRewrite
+    , _diagnostics = Nothing
+    , _isPreferred = Nothing
+    , _disabled = Nothing
+    , _edit = Nothing
+    , _command = Just J.Command
+        { _title = title_
+        , _command = command_
+        , _arguments = Just [Aeson.toJSON pos]
+        }
+    , _data_ = Nothing
+    }
+
+importUnderCursor :: Text -> J.Range -> Bool
+importUnderCursor txt selected =
+    case parse txt of
+        Left _ ->
+            False
+        Right expr ->
+            not $ null
+                [ ()
+                | Core.Note src (Core.Embed _) <- universeOf Core.subExpressions expr
+                , rangesMeet selected (rangeFromDhall src)
+                ]
 
 rangesMeet :: J.Range -> Range -> Bool
 rangesMeet (J.Range startPos endPos) (Range left right) =

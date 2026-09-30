@@ -12,6 +12,7 @@ import Data.Maybe                  (fromJust)
 import Data.Time.Clock             (diffUTCTime, getCurrentTime)
 import Language.LSP.Protocol.Types
     ( ClientCapabilities
+    , Command (..)
     , CompletionItem (..)
     , Diagnostic (..)
     , DiagnosticSeverity (..)
@@ -29,7 +30,9 @@ import Language.LSP.Protocol.Types
     , Position (..)
     , Range (..)
     , TextDocumentContentChangeEvent (..)
+    , TextDocumentIdentifier (..)
     , TextDocumentItem (..)
+    , TextDocumentPositionParams (..)
     , DidOpenTextDocumentParams (..)
     , Uri (..)
     , type (|?) (..)
@@ -56,6 +59,7 @@ import Language.LSP.Test
 import Test.Hspec
 #endif
 
+import qualified Data.Aeson         as Aeson
 import System.Environment          (setEnv)
 import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
@@ -382,6 +386,7 @@ main = do
   definition <- testSpec "Definition" (definitionSpec (baseDir "definition"))
   folding <- testSpec "Folding" (foldingSpec (baseDir "folding"))
   inlay <- testSpec "Inlay" (inlaySpec (baseDir "inlay"))
+  unfreeze <- testSpec "Unfreeze" (unfreezeSpec (baseDir "unfreeze"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -391,9 +396,51 @@ main = do
           replay,
           definition,
           folding,
-          inlay
+          inlay,
+          unfreeze
         ]
     )
+
+unfreezeSpec :: FilePath -> Spec
+unfreezeSpec fixtureDir = describe "unfreeze" $ do
+  it "puts back the text freeze changed" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Plain.dhall" "dhall"
+      original <- documentContents docId
+      let params = TextDocumentPositionParams
+            { _textDocument = docId
+            , _position = Position 0 0
+            }
+          freeze = Command
+            { _title = "Freeze import"
+            , _command = "dhall.server.freezeImport"
+            , _arguments = Just [Aeson.toJSON params]
+            }
+          thaw = Command
+            { _title = "Unfreeze import"
+            , _command = "dhall.server.unfreezeImport"
+            , _arguments = Just [Aeson.toJSON params]
+            }
+      executeCommand freeze
+      frozen <- documentContents docId
+      executeCommand thaw
+      thawed <- documentContents docId
+      liftIO $ do
+        frozen `shouldNotBe` original
+        thawed `shouldBe` original
+  it "leaves a missing import hashed" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Missing.dhall" "dhall"
+      original <- documentContents docId
+      let TextDocumentIdentifier uri_ = docId
+          command_ = Command
+            { _title = "Unfreeze all imports"
+            , _command = "dhall.server.unfreezeAllImports"
+            , _arguments = Just [Aeson.toJSON uri_]
+            }
+      executeCommand command_
+      after <- documentContents docId
+      liftIO $ after `shouldBe` original
 
 -- | Record fields of an imported value, and import failures met on the way.
 definitionSpec :: FilePath -> Spec
