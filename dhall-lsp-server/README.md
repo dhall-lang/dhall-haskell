@@ -54,7 +54,7 @@ Names bound by `let`, lambda, `forall` and record fields resolve in the file, in
 Document symbols list the bindings. Folding ranges cover `let` and lambda expressions. Semantic tokens mark name declarations and uses. If the buffer has a syntax error, navigation keeps using the last successful parse.
 
 - **Inlay hints and code actions&nbsp;**
-Unannotated `let` bindings can show an inlay. A "Normalize selection" code action is offered; the edit is refused when the normal form is larger than `maxOutputSize` (default 128KiB) or the evaluation limit is hit. The existing `dhall.server.lint`, `dhall.server.annotateLet`, `dhall.server.freezeImport` and `dhall.server.freezeAllImports` commands stay.
+Unannotated `let` bindings can show an inlay. A "Normalize selection" code action is offered; the edit is refused when the normal form is larger than `maxOutputSize` (default 16KiB) or the evaluation limit is hit. The existing `dhall.server.lint`, `dhall.server.annotateLet`, `dhall.server.freezeImport` and `dhall.server.freezeAllImports` commands stay.
 
 - **Imports&nbsp;**
 Hashed imports can be shown from the semantic cache (alpha-beta-normal CBOR). "Show original source" is the command `dhall.server.showOriginalSource` and fetches only when you run it. Other editors open an on-disk mirror under `$XDG_CACHE_HOME/dhall-lsp/sources`. VS Code can instead mount a `dhall-import:` filesystem once that extension is installed.
