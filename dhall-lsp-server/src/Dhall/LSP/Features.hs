@@ -65,7 +65,7 @@ import Dhall.LSP.Backend.Dhall
     , parse
     )
 import Dhall.LSP.Backend.Diagnostics
-    ( Diagnosis (..)
+    ( Diagnosis (Diagnosis)
     , Range (..)
     , explain
     , rangeFromDhall

@@ -35,7 +35,7 @@ import Data.Text                  (Text)
 
 import qualified Data.List.NonEmpty        as NonEmpty
 import qualified Data.Text                 as Text
-import Prettyprinter                   (pretty)
+import Prettyprinter                   (Pretty, pretty)
 import qualified Dhall.Bounded             as Bounded
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck           as TypeCheck
@@ -113,18 +113,19 @@ diagnose (ErrorParse e) =
 --
 --   The short type error is only a diff.  These are the expressions that
 --   differed.  A cut side tells the user to run Explain error.
-assertionSides :: TypeMessage s a -> Text
+assertionSides :: Pretty a => TypeMessage Src a -> Text
 assertionSides (TypeCheck.AssertionFailed left right) =
     let (leftText, leftCut) = clipSide left
         (rightText, rightCut) = clipSide right
-        note =
+        clipped =
             if leftCut || rightCut
                 then "\n\nRun Explain error to see the rest."
                 else ""
-    in "\n\n" <> leftText <> "\n\n" <> rightText <> note
+    in "\n\n" <> leftText <> "\n\n" <> rightText <> clipped
 assertionSides _ =
     ""
 
+clipSide :: Pretty a => Expr Src a -> (Text, Bool)
 clipSide expr =
     case Bounded.prettyBounded sideBytes (Dhall.Pretty.prettyCharacterSet Dhall.Pretty.Unicode expr) of
         Bounded.Complete text ->
