@@ -168,11 +168,21 @@ annotateLet' pos ctx expr = do
     [e] -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
 
--- Make sure all lets in a multilet are annotated with their source information
+-- Make sure all lets in a multilet are annotated with their source information.
+--
+-- A resolved import is still wrapped in the source span of the import path.
+-- That span is not a @let@ block, so 'getLetInner' cannot split it.  One such
+-- node used to make this return 'Nothing' for the whole file.  Leave that
+-- node in place and keep walking, so a binding in the importing file can
+-- still be found.
 splitMultiLetSrc :: Expr Src a -> Maybe (Expr Src a)
-splitMultiLetSrc (Note src (Let b (Let b' e))) = do
-  src' <- getLetInner src
-  splitMultiLetSrc (Note src (Let b (Note src' (Let b' e))))
+splitMultiLetSrc (Note src (Let b (Let b' e))) =
+  case getLetInner src of
+    Just src' ->
+      splitMultiLetSrc (Note src (Let b (Note src' (Let b' e))))
+    Nothing -> do
+      inner <- subExpressions splitMultiLetSrc (Let b (Let b' e))
+      return (Note src inner)
 splitMultiLetSrc expr = subExpressions splitMultiLetSrc expr
 
 -- Check if range lies completely inside a given subexpression.
