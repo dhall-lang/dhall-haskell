@@ -352,27 +352,29 @@ chainText chained = pretty (Import.chainedImport chained)
 
 -- | Type-check top-level lets one at a time.
 --
---   A prefix of bindings whose denoted values match the previous analysis
---   reuses that typing context.  Each binding that fails contributes its own
---   error.  Placeholders with a known type are bound first.  If any failure
---   has no known type, type-checking is skipped: those dependents are not
---   reported.
+--   A prefix of bindings whose names and denoted values match the previous
+--   analysis reuses that typing context.  Each binding that fails contributes
+--   its own error.  Placeholders with a known type are bound first.  If any
+--   failure has no known type, type-checking is skipped: those dependents are
+--   not reported.
 typecheckCollected
     :: [Import.CollectedImportError]
     -> Expr Src Void
+    -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
-    -> ([DhallError], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
-typecheckCollected collected expr prevValues prevCtxs
+    -> ([DhallError], [Text], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
+typecheckCollected collected expr prevNames prevValues prevCtxs
     | any (\e -> isNothing (Import.collectedKnownType e)) collected =
-        ([], [], [])
+        ([], [], [], [])
     | otherwise =
         case foldM step TypeCheck.emptyTypingContext collected of
             Left err ->
-                ([ErrorTypecheck err], [], [])
+                ([ErrorTypecheck err], [], [], [])
             Right ctx ->
-                let (errs, values, ctxs) = checkLets prevValues prevCtxs ctx expr
-                in (map ErrorTypecheck errs, values, ctxs)
+                let (errs, names, values, ctxs) =
+                        checkLets prevNames prevValues prevCtxs ctx expr
+                in (map ErrorTypecheck errs, names, values, ctxs)
   where
     step ctx err =
         case Import.collectedKnownType err of
@@ -396,19 +398,27 @@ typecheckCollected collected expr prevValues prevCtxs
                 ])
 
 checkLets
-    :: [Core.Expr Void Void]
+    :: [Text]
+    -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
     -> TypeCheck.TypingContext Src
     -> Expr Src Void
-    -> ([TypeCheck.TypeError Src Void], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
-checkLets prevValues prevCtxs ctx0 expr =
+    -> ( [TypeCheck.TypeError Src Void]
+       , [Text]
+       , [Core.Expr Void Void]
+       , [TypeCheck.TypingContext Src]
+       )
+checkLets prevNames prevValues prevCtxs ctx0 expr =
     let (binds, rest) = topLets expr
-        step (i, accCtx, accVals, accCtxs, accErrs, accFailed) (name, ann, value)
-            | i < length prevValues
+        step (i, accCtx, accNames, accVals, accCtxs, accErrs, accFailed) (name, ann, value)
+            | i < length prevNames
+            , i < length prevValues
             , i < length prevCtxs
+            , name == prevNames !! i
             , (Core.denote value :: Core.Expr Void Void) == prevValues !! i =
                 ( i + 1
                 , prevCtxs !! i
+                , name : accNames
                 , prevValues !! i : accVals
                 , prevCtxs !! i : accCtxs
                 , accErrs
@@ -419,6 +429,7 @@ checkLets prevValues prevCtxs ctx0 expr =
                     Right ctx' ->
                         ( i + 1
                         , ctx'
+                        , name : accNames
                         , (Core.denote value :: Core.Expr Void Void) : accVals
                         , ctx' : accCtxs
                         , accErrs
@@ -434,16 +445,16 @@ checkLets prevValues prevCtxs ctx0 expr =
                                         Left _ -> accCtx
                                 Nothing ->
                                     accCtx
-                        in (i + 1, ctx', accVals, accCtxs, err : accErrs, True)
-        (_, ctx, vals, ctxs, errs, failed) =
-            foldl step (0, ctx0, [], [], [], False) binds
+                        in (i + 1, ctx', accNames, accVals, accCtxs, err : accErrs, True)
+        (_, ctx, names, vals, ctxs, errs, failed) =
+            foldl step (0, ctx0, [], [], [], [], False) binds
         errs' =
             if failed
                 then errs
                 else case TypeCheck.typeWithContext ctx rest of
                     Left err -> err : errs
                     Right _ -> errs
-    in (reverse errs', reverse vals, reverse ctxs)
+    in (reverse errs', reverse names, reverse vals, reverse ctxs)
 
 topLets
     :: Expr Src Void
@@ -472,10 +483,11 @@ diagnoseDocument settings _uri txt = do
           let importDiags = map (collectedDiagnostic _uri) collected
           docs <- use documents
           previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
-          let prevValues = maybe [] snapPrefixValues previousSnap
+          let prevNames = maybe [] snapPrefixNames previousSnap
+              prevValues = maybe [] snapPrefixValues previousSnap
               prevCtxs = maybe [] snapPrefixContexts previousSnap
-              (typeErrs, prefixValues, prefixCtxs) =
-                  typecheckCollected collected resolved prevValues prevCtxs
+              (typeErrs, prefixNames, prefixValues, prefixCtxs) =
+                  typecheckCollected collected resolved prevNames prevValues prevCtxs
           liftIO $ IORef.modifyIORef' docs $ \m ->
               let previous = Map.lookup _uri m
                   snap = DocSnap
@@ -483,6 +495,7 @@ diagnoseDocument settings _uri txt = do
                       , snapGeneration = maybe 0 snapGeneration previous
                       , snapText = txt
                       , snapLastGood = Just txt
+                      , snapPrefixNames = prefixNames
                       , snapPrefixValues = prefixValues
                       , snapPrefixContexts = prefixCtxs
                       }
@@ -1055,6 +1068,7 @@ textDocumentChangeHandler settings =
                             , snapGeneration = generation
                             , snapText = txt
                             , snapLastGood = snapLastGood =<< previous
+                            , snapPrefixNames = maybe [] snapPrefixNames previous
                             , snapPrefixValues = maybe [] snapPrefixValues previous
                             , snapPrefixContexts = maybe [] snapPrefixContexts previous
                             }

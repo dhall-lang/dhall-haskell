@@ -89,9 +89,13 @@ data DocSnap = DocSnap
   , snapGeneration :: !Int
   , snapText :: Text
   , snapLastGood :: Maybe Text
-  -- ^ Denoted values of the top-level lets that were type-checked, and the
-  --   context after each of them.  An edit that leaves a prefix unchanged
-  --   resumes from that context.
+  -- ^ Text of the last analysis that parsed.  Navigation uses it when the
+  --   buffer has a syntax error.
+  --
+  --   Binder names, denoted values, and the context after each top-level let.
+  --   A later edit reuses a prefix only while both the name and the value
+  --   still match.
+  , snapPrefixNames :: [Text]
   , snapPrefixValues :: [Expr Void Void]
   , snapPrefixContexts :: [TypingContext Src]
   }
