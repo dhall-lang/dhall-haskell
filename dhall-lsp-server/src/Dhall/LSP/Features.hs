@@ -16,7 +16,7 @@ module Dhall.LSP.Features (featureHandlers) where
 import Control.Applicative ((<|>))
 import Control.Lens (assign, toListOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
-import Data.IORef (readIORef)
+import Data.IORef (modifyIORef', readIORef)
 import Data.Maybe (listToMaybe)
 import Data.Void (Void)
 import Data.Proxy (Proxy (..))
@@ -29,6 +29,7 @@ import System.Directory
     )
 import System.FilePath (normalise, takeDirectory, takeFileName, (</>))
 import Dhall (EvaluateSettings)
+import Dhall.Import (localToPath)
 import Dhall.Core
     ( Binding (..)
     , Expr
@@ -354,14 +355,14 @@ showImported parentPath parent imp text path bodies =
         Right expr ->
             case locateField expr path of
                 Just (Landed src) ->
-                    Just <$> publishImport (importTextKey parent imp) text src
+                    Just <$> openLocated parentPath parent imp text src
                 Just (Deeper nested rest) -> do
                     nestedLoc <- openFrom parentPath parent nested rest bodies
                     case nestedLoc of
                         Just loc ->
                             return (Just loc)
                         Nothing ->
-                            Just <$> publishImport (importTextKey parent imp) text (startSrc expr)
+                            Just <$> openLocated parentPath parent imp text (startSrc expr)
                 Nothing ->
                     return Nothing
 
@@ -403,13 +404,56 @@ startSrc (Core.Note src _) =
 startSrc _ =
     Src (Pos.initialPos "<import>") (Pos.initialPos "<import>") ""
 
-publishImport :: Text -> Text -> Src -> HandlerM J.Location
-publishImport key text src = do
+-- | A local import opens the file itself.  Anything else opens a read-only
+--   'dhall-import:' view of the fetched text.  The cache file stays, because
+--   the editor reads it through 'dhall/importSource'.
+openLocated
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> Text
+    -> Src
+    -> HandlerM J.Location
+openLocated parentPath parent imp text src = do
+    mLocal <- liftIO (localImportFile parentPath imp)
+    case mLocal of
+        Just path ->
+            return (locationOf (filePathToUri path) src)
+        Nothing ->
+            publishImport parentPath parent imp text src
+
+localImportFile :: FilePath -> Import -> IO (Maybe FilePath)
+localImportFile base (Import (ImportHashed _ (Local prefix file)) _) = do
+    rel <- localToPath prefix file
+    return (Just (normalise (base </> rel)))
+localImportFile _ _ =
+    return Nothing
+
+publishImport
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> Text
+    -> Src
+    -> HandlerM J.Location
+publishImport parentPath parent imp text src = do
+    let key = importTextKey parent imp
     dir <- liftIO (getXdgDirectory XdgCache ("dhall-lsp" </> "sources"))
     liftIO (createDirectoryIfMissing True dir)
-    let path = dir </> fileName key
-    liftIO (Text.IO.writeFile path text)
-    return (locationOf (filePathToUri path) src)
+    let mirrorName = fileName key
+        mirrorPath = dir </> mirrorName
+    liftIO (Text.IO.writeFile mirrorPath text)
+    chainsRef <- use importChains
+    originsRef <- use mirrorOrigins
+    chains <- liftIO (readIORef chainsRef)
+    case listToMaybe [chained | candidate <- importKeys parentPath parent imp, Just chained <- [Map.lookup candidate chains]] of
+        Just chained ->
+            liftIO $
+                modifyIORef' originsRef $
+                    Map.insert mirrorName chained . Map.insert mirrorPath chained
+        Nothing ->
+            return ()
+    return (locationOf (J.Uri ("dhall-import:///" <> Text.pack mirrorName)) src)
 
 renderDecoded :: Core.Expr Void Void -> Text
 renderDecoded expr =

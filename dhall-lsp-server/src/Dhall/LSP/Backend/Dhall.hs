@@ -18,7 +18,9 @@ module Dhall.LSP.Backend.Dhall (
   typecheck,
   normalize,
   importTextKey,
-  indexImportBodies
+  indexImportBodies,
+  indexImportChains,
+  fileIdentifierFromChained
  ) where
 
 import Dhall.Core   (Expr, Import)
@@ -60,6 +62,10 @@ import qualified Network.URI                 as URI
 
 -- | A @FileIdentifier@ represents either a local file or a remote url.
 newtype FileIdentifier = FileIdentifier Import.Chained
+
+-- | A fetched import, already chained by the loader.
+fileIdentifierFromChained :: Import.Chained -> FileIdentifier
+fileIdentifierFromChained = FileIdentifier
 
 -- | Construct a FileIdentifier from a local file path.
 fileIdentifierFromFilePath :: FilePath -> FileIdentifier
@@ -241,6 +247,30 @@ indexImportBodies sources =
                 , Text.pack (takeFileName (Text.unpack location))
                 ]
         in (prettyKey, body) : [(key, body) | key <- locationKey]
+
+-- | Same keys as 'indexImportBodies', pointing at the chained import.
+--
+--   Go-to-definition records one of these so a later 'dhall-import:' buffer
+--   resolves its own imports from that origin.
+indexImportChains
+    :: Map Import.Chained Import.ResolvedImportSource
+    -> Map Text Import.Chained
+indexImportChains sources =
+    Map.unions
+        [ Map.fromList [(key, chained) | key <- keys]
+        | (chained, source) <- Map.toList sources
+        , let keys = chainKeys chained source
+        ]
+  where
+    chainKeys chained source =
+        let prettyKey = Dhall.pretty (Import.chainedImport chained)
+            location = Import.resolvedLocation source
+            locationKey =
+                [ location
+                , Text.pack (normalise (Text.unpack location))
+                , Text.pack (takeFileName (Text.unpack location))
+                ]
+        in prettyKey : locationKey
 
 -- | Skip a remote that failed in the last 30 seconds.
 rememberFailure

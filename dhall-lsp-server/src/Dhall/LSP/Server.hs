@@ -72,7 +72,9 @@ runWith settings = withLogger $ \ioLogger -> do
   envRef <- IORef.newIORef Nothing
   negative <- IORef.newIORef Map.empty
   bodies <- IORef.newIORef Map.empty
-  state <- MVar.newMVar (initialState documentStore envRef negative bodies)
+  chains <- IORef.newIORef Map.empty
+  origins <- IORef.newIORef Map.empty
+  state <- MVar.newMVar (initialState documentStore envRef negative bodies chains origins)
 
   let defaultConfig = def
 

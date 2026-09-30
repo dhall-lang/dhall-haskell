@@ -22,6 +22,7 @@ import Data.Text                        (Text)
 import Data.Time.Clock                  (UTCTime)
 import Data.Void                        (Void)
 import Dhall.Core                       (Expr)
+import Dhall.Import                    (Chained)
 import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
 import Dhall.Parser                     (Src)
 import Dhall.Pretty                     (ChooseCharacterSet(..))
@@ -83,6 +84,10 @@ data ServerState = ServerState
   -- ^ Remote imports that failed recently.  Retried after 30 seconds.
   , _importBodies :: IORef (Map Text Text)
   -- ^ Source text fetched while typechecking imports.
+  , _importChains :: IORef (Map Text Import.Chained)
+  -- ^ Chained import for each key in 'importBodies'.
+  , _mirrorOrigins :: IORef (Map FilePath Import.Chained)
+  -- ^ Cache file or 'dhall-import:' name of a mirror, and the import it came from.
   }
 
 -- | The last analysis of one open document.
@@ -109,8 +114,10 @@ initialState
     -> IORef (Maybe (LanguageContextEnv ServerConfig))
     -> IORef (Map Text (UTCTime, SomeException))
     -> IORef (Map Text Text)
+    -> IORef (Map Text Chained)
+    -> IORef (Map FilePath Chained)
     -> ServerState
-initialState _documents _lspEnv _negativeImports _importBodies = ServerState {..}
+initialState _documents _lspEnv _negativeImports _importBodies _importChains _mirrorOrigins = ServerState {..}
   where
     _importCache = emptyCache
     _errors = empty
