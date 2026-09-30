@@ -64,7 +64,6 @@ import Dhall.LSP.Backend.Dhall
     , parse
     )
 import Dhall.LSP.Backend.Diagnostics (Range (..), rangeFromDhall)
-import Dhall.LSP.Backend.Formatting (formatExpr)
 import qualified Dhall.Bounded as Bounded
 import qualified Dhall.Pretty as Pretty
 import Dhall.LSP.Handlers
@@ -617,13 +616,13 @@ inlayHints = go
     hint _ = []
 
 codeActionHandler :: EvaluateSettings -> Handlers HandlerM
-codeActionHandler evalSettings =
+codeActionHandler _evalSettings =
     LSP.requestHandler SMethod_TextDocumentCodeAction \request respond ->
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
                 selected = request ^. params . range
             txt <- readUri docUri
-            ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig
+            ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
             let normalize = J.CodeAction
                     { _title = "Normalize selection"
                     , _kind = Just J.CodeActionKind_RefactorRewrite
@@ -674,30 +673,7 @@ codeActionHandler evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-                alphaActions = case parse selectedText of
-                    Left _ -> []
-                    Right expr ->
-                        let _newText' = formatExpr
-                                chosenCharacterSet
-                                (Core.alphaNormalize expr)
-                            action = J.CodeAction
-                                { _title = "Alpha-normalize selection"
-                                , _kind = Just J.CodeActionKind_RefactorRewrite
-                                , _diagnostics = Nothing
-                                , _isPreferred = Nothing
-                                , _disabled = Nothing
-                                , _edit = Just J.WorkspaceEdit
-                                    { _changes = Just
-                                        (Map.singleton docUri [J.TextEdit { _range, _newText = _newText' }])
-                                    , _documentChanges = Nothing
-                                    , _changeAnnotations = Nothing
-                                    }
-                                , _command = Nothing
-                                , _data_ = Nothing
-                                }
-                        in [InR action]
-            let _ = evalSettings
-            respond (Right (InL (InR normalize : InR explain : InR extract : alphaActions)))
+            respond (Right (InL [InR normalize, InR explain, InR extract]))
 
 watchedFilesHandler :: Handlers HandlerM
 watchedFilesHandler =
