@@ -67,7 +67,7 @@ import Control.Applicative    (Alternative, empty)
 import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void, absurd)
-import Dhall.Import           (Imported (..), Status)
+import Dhall.Import           (ImportRef, Imported (..), Status)
 import Dhall.Parser           (Src (..))
 import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
@@ -288,11 +288,11 @@ resolveAndStatusWithSettings settings expression = do
 --   'Dhall.Import.normalizeLoaded' evaluates.
 --
 --   The first expression is the fully inlined tree.  The second refers to each
---   import by a variable bound once in the returned 'Status'.
+--   import by an 'ImportRef', and every use of an import is the same reference.
 resolveSharedWithSettings
     :: InputSettings
     -> Expr Src Import
-    -> IO (Expr Src Void, Expr Src Void, Status)
+    -> IO (Expr Src Void, Expr Src ImportRef, Status)
 resolveSharedWithSettings settings expression = do
     let InputSettings{..} = settings
 
@@ -313,7 +313,7 @@ resolveSharedWithSettings settings expression = do
 normalizeResolved
     :: InputSettings
     -> Status
-    -> Expr Src Void
+    -> Expr Src ImportRef
     -> Expr Src Void
     -> Expr t Void
 normalizeResolved settings status shared resolved =

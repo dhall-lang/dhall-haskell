@@ -19,7 +19,6 @@ module Dhall.TypeCheck (
     , extendLet
     , extendBinder
     , extendAlreadyChecked
-    , extendAlreadyCheckedDenoted
     , bindAlreadyChecked
     , typeWithContext
     , normalizeWithContext
@@ -209,20 +208,6 @@ extendAlreadyChecked name typeExpr valueExpr (TypingContext ctx) =
   where
     typeVal = Eval.eval (values ctx) typeExpr
     valueVal = Eval.eval (values ctx) valueExpr
-
--- | Like 'extendAlreadyChecked', but strips source spans when the value is
---   first forced.  Storing the span-annotated expression does not walk it.
-extendAlreadyCheckedDenoted
-    :: Text
-    -> Expr Void X
-    -> Expr Src X
-    -> TypingContext s
-    -> TypingContext s
-extendAlreadyCheckedDenoted name typeExpr valueExpr (TypingContext ctx) =
-    TypingContext (addTypeValue name typeVal valueVal ctx)
-  where
-    typeVal = Eval.eval (values ctx) typeExpr
-    valueVal = Eval.eval (values ctx) (Dhall.Core.denote valueExpr)
 
 -- | Bind @name@ to a type and value that have already been type-checked, and
 --   return the value's normal form.

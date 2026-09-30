@@ -124,6 +124,7 @@ module Dhall.Import (
     , defaultNewManager
     , CacheWarning(..)
     , Status(..)
+    , ImportRef (..)
     , SemanticCacheMode(..)
     , Chained
     , chainedImport
@@ -188,7 +189,6 @@ import Control.Monad.Morph        (hoist)
 import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
 import Data.IORef                 (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.List                  (foldl')
 import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
 import Data.Maybe                 (fromMaybe, isJust, isNothing)
 import Data.Text                  (Text)
@@ -209,6 +209,7 @@ import Dhall.Syntax
     , URL (..)
     )
 
+import Unsafe.Coerce (unsafeCoerce)
 import System.FilePath ((</>))
 import System.IO (stderr)
 import Text.Megaparsec (SourcePos (SourcePos), mkPos)
@@ -241,10 +242,9 @@ import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
 import qualified Data.Functor.Const                          as FunctorConst
+import qualified Data.IntMap.Lazy                            as LazyIntMap
 import qualified Data.List.NonEmpty                          as NonEmpty
-import qualified Data.Map.Strict                             as StrictMap
 import qualified Data.Maybe                                  as Maybe
-import qualified Data.Set                                    as Set
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding                          as Encoding
 import qualified Data.Text.IO
@@ -252,6 +252,7 @@ import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
+import qualified Dhall.Eval                                  as Eval
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
@@ -662,68 +663,64 @@ loadImport import_ = do
     case Dhall.Map.lookup import_ _cache of
         Just sem -> do
             when _sharedEvaluation $ do
-                _ <- ensureImportName import_
+                _ <- ensureImportRef import_
                 return ()
             return sem
         Nothing -> do
             sem <- loadImportWithSemanticCache import_
             zoom cache (State.modify (Dhall.Map.insert import_ sem))
             when _sharedEvaluation $ do
-                _ <- ensureImportName import_
-                rememberImportBody import_ (Core.renote (importSemantics sem))
+                ref <- ensureImportRef import_
+                rememberImportBody ref (retwin (Core.renote (importSemantics sem)))
             return sem
 
--- | The name used for this import in the shared evaluation context.
---   Allocated once, and chosen so it is not already in the starting context.
-ensureImportName :: Chained -> StateT Status IO Text
-ensureImportName chained = do
-    Status { _importNames } <- State.get
-    case Dhall.Map.lookup chained _importNames of
-        Just name ->
-            return name
+-- | The reference used for this import in the shared evaluation environment.
+--   Allocated once per import.
+ensureImportRef :: Chained -> StateT Status IO ImportRef
+ensureImportRef chained = do
+    Status { _importRefs, _importRefCount } <- State.get
+    case Dhall.Map.lookup chained _importRefs of
+        Just ref ->
+            return ref
         Nothing -> do
-            name <- freshImportName
-            zoom importNames (State.modify' (Dhall.Map.insert chained name))
-            return name
-
-freshImportName :: StateT Status IO Text
-freshImportName = do
-    Status { _importNameCount, _startingContext, _importNames } <- State.get
-    let taken =
-            Set.fromList (map fst (Dhall.Context.toList _startingContext))
-                `Set.union` Set.fromList (Dhall.Map.elems _importNames)
-        pick n
-            | candidate `Set.member` taken = pick (n + 1)
-            | otherwise = (n, candidate)
-          where
-            candidate = Text.pack ("i`" ++ show n)
-        (chosen, name) = pick _importNameCount
-    State.modify' (\s -> s { _importNameCount = chosen + 1 })
-    return name
+            let ref = ImportRef _importRefCount
+            State.modify' (\s -> s
+                { _importRefCount = _importRefCount + 1
+                , _importRefs = Dhall.Map.insert chained ref _importRefs
+                })
+            return ref
 
 -- | Record the shared body unless a previous path already chose one.
-rememberImportBody :: Chained -> Expr Src Void -> StateT Status IO ()
-rememberImportBody chained body = do
+rememberImportBody :: ImportRef -> Expr Src ImportRef -> StateT Status IO ()
+rememberImportBody ref body = do
     Status { _importBodies } <- State.get
-    case Dhall.Map.lookup chained _importBodies of
+    case Dhall.Map.lookup ref _importBodies of
         Just _ ->
             return ()
         Nothing ->
-            zoom importBodies (State.modify' (Dhall.Map.insert chained body))
+            zoom importBodies (State.modify' (Dhall.Map.insert ref body))
 
 -- | Record the twin, after substitutions, when this load will be evaluated
 --   through 'normalizeLoaded'.  A plain 'loadWith' skips this.
-rememberSharedTwin :: Chained -> Expr Src Void -> StateT Status IO ()
+rememberSharedTwin :: Chained -> Expr Src ImportRef -> StateT Status IO ()
 rememberSharedTwin chained twinExpr = do
     Status { _sharedEvaluation } <- State.get
     when _sharedEvaluation $ do
+        ref <- ensureImportRef chained
         substitutedTwin <- applyStatusSubstitutions twinExpr
-        rememberImportBody chained substitutedTwin
+        rememberImportBody ref substitutedTwin
 
 -- | Replace the shared body.  Hashed imports do this with the normal form.
-replaceImportBody :: Chained -> Expr Src Void -> StateT Status IO ()
-replaceImportBody chained body =
-    zoom importBodies (State.modify' (Dhall.Map.insert chained body))
+replaceImportBody :: ImportRef -> Expr Src ImportRef -> StateT Status IO ()
+replaceImportBody ref body =
+    zoom importBodies (State.modify' (Dhall.Map.insert ref body))
+
+-- | Reuse an import-free expression as a twin.
+--
+--   Valid only when the expression contains no 'Embed': the import parameter
+--   is then phantom, so this is the same pointer with a different type.
+retwin :: Expr s Void -> Expr s ImportRef
+retwin = unsafeCoerce
 
 -- | Force an import result to a normal form when a later path requires one
 --   (for example, semantic integrity checks for Code imports).
@@ -822,8 +819,9 @@ loadImportWithSemanticCache
             -- The inlined result is the normal form.  Bind that, rather than
             -- the unnormalized twin recorded while resolving the file.
             Status { _sharedEvaluation } <- State.get
-            when _sharedEvaluation $
-                replaceImportBody import_ (Core.renote importSemantics)
+            when _sharedEvaluation $ do
+                ref <- ensureImportRef import_
+                replaceImportBody ref (retwin (Core.renote importSemantics))
 
             return
                 ( ImportSemantics
@@ -874,7 +872,7 @@ writeToSemanticCache report hash bytes = do
 --   file). The raw map is fixed for the run, so we cache
 --   'Dhall.Substitution.ResolvedSubstitutions' on 'Status'.
 applyStatusSubstitutions
-    :: Expr Src Void -> StateT Status IO (Expr Src Void)
+    :: Expr Src a -> StateT Status IO (Expr Src a)
 applyStatusSubstitutions expression = do
     Status { _substitutions, _resolvedSubstitutions } <- State.get
 
@@ -890,7 +888,13 @@ applyStatusSubstitutions expression = do
 
             return cached
 
-    return (Dhall.Substitution.substituteMany resolved expression)
+    -- Substitution values are import-free.  'substituteMany' does not inspect
+    -- an 'Embed' payload, so a twin can be coerced for the walk and back.
+    let substituted =
+            Dhall.Substitution.substituteMany
+                resolved
+                (unsafeCoerce expression :: Expr Src Void)
+    return (unsafeCoerce substituted)
 
 -- | Type-check a parsed import by binding each child import to the value and
 --   type already stored for it.  Returns 'Nothing' when a child has not been
@@ -1859,13 +1863,13 @@ loadWith expression = do
 
 -- | Resolve imports, returning the inlined expression and a twin.
 --
---   In the twin, each successfully loaded import is a variable.  The variable's
---   name is stable for that import, so every use site shares one binding.
---   'normalizeLoaded' evaluates the twin.  'loadWith' keeps only the inlined
---   expression, which is what 'load' and @dhall resolve@ return, and does not
---   build the twin.
+--   In the twin, each successfully loaded import is @'Embed' ('ImportRef' n)@.
+--   The reference is stable for that import, so every use site shares one
+--   thunk.  'normalizeLoaded' evaluates the twin.  'loadWith' keeps only the
+--   inlined expression, which is what 'load' and @dhall resolve@ return, and
+--   does not build the twin.
 loadWithShared
-    :: Expr Src Import -> StateT Status IO (Expr Src Void, Expr Src Void)
+    :: Expr Src Import -> StateT Status IO (Expr Src Void, Expr Src ImportRef)
 loadWithShared expression = do
     State.modify' (\s -> s { _sharedEvaluation = True })
     fmap (\(inlined, shared, _) -> (inlined, shared)) (resolveImports expression)
@@ -1876,7 +1880,7 @@ loadWithShared expression = do
 --   different tree from the inlined expression.
 resolveImports
     :: Expr Src Import
-    -> StateT Status IO (Expr Src Void, Expr Src Void, Bool)
+    -> StateT Status IO (Expr Src Void, Expr Src ImportRef, Bool)
 resolveImports expr₀ = case expr₀ of
   Embed import₀ -> do
     Status {..} <- State.get
@@ -1900,10 +1904,9 @@ resolveImports expr₀ = case expr₀ of
         then throwMissingImport (Imported _stack (Cycle import₀))
         else return ()
 
-    when _sharedEvaluation $
-        zoom graph . State.modify' $
-            -- Add the edge `parent -> child` to the import graph (strict to prevent space leaks)
-            \edges -> Depends parent child : edges
+    zoom graph . State.modify' $
+        -- Add the edge `parent -> child` to the import graph (strict to prevent space leaks)
+        \edges -> Depends parent child : edges
 
     let stackWithChild = NonEmpty.cons child _stack
 
@@ -1913,9 +1916,9 @@ resolveImports expr₀ = case expr₀ of
     let inlined = Core.renote importSemantics
     if _sharedEvaluation
         then do
-            name <- ensureImportName child
-            return (inlined, Var (Syntax.V name 0), True)
-        else return (inlined, inlined, False)
+            ImportRef n <- ensureImportRef child
+            return (inlined, Embed (ImportRef n), True)
+        else return (inlined, retwin inlined, False)
 
 {-
 The code below (findImportHash) implements "opportunistic caching".
@@ -1998,7 +2001,7 @@ In any expression `p ? q` the opportunistic caching rule says:
                             -- cache hit would return: the alpha-beta-normal
                             -- form, not the delayed TypecheckedOnly fallback.
                             let normalForm = Core.renote normalized
-                            return (normalForm, normalForm, False)
+                            return (normalForm, retwin normalForm, False)
                         else
                             return (inlined, shared, copied)
                 Nothing ->
@@ -2021,7 +2024,7 @@ In any expression `p ? q` the opportunistic caching rule says:
               text₂ = text₀ <> " ? " <> text₁
 
   Note a b             -> do
-      let both placeholder = return (placeholder, placeholder, False)
+      let both placeholder = return (placeholder, retwin placeholder, False)
       let finish (MissingImports es) = do
               Status { _importErrorMode, _insideImportAlt } <- State.get
               if _importErrorMode == CollectErrors && not _insideImportAlt
@@ -2034,7 +2037,7 @@ In any expression `p ? q` the opportunistic caching rule says:
           return $
               if copied
                   then (noted, Note a shared, True)
-                  else (noted, noted, False))
+                  else (noted, retwin noted, False))
           `catch` \(e :: MissingImports) -> finish e
           `catch` \(sourced@(SourcedException _ MissingImports{}) :: SourcedException MissingImports) -> do
               Status { _importErrorMode, _insideImportAlt } <- State.get
@@ -2055,7 +2058,7 @@ In any expression `p ? q` the opportunistic caching rule says:
       return $
           if bindingCopied || bodyCopied
               then (inlined, Let bindingShared bodyShared, True)
-              else (inlined, inlined, False)
+              else (inlined, retwin inlined, False)
   Record fields        ->
       resolveRecord Record fields
   RecordLit fields     ->
@@ -2067,14 +2070,14 @@ In any expression `p ? q` the opportunistic caching rule says:
       return $
           if bindingCopied || bodyCopied
               then (inlined, Lam cs bindingShared bodyShared, True)
-              else (inlined, inlined, False)
+              else (inlined, retwin inlined, False)
   Field record selector -> do
       (recordInlined, recordShared, copied) <- resolveImports record
       let inlined = Field recordInlined selector
       return $
           if copied
               then (inlined, Field recordShared selector, True)
-              else (inlined, inlined, False)
+              else (inlined, retwin inlined, False)
   expression           -> do
       Status { _sharedEvaluation } <- State.get
       if not _sharedEvaluation
@@ -2082,7 +2085,7 @@ In any expression `p ? q` the opportunistic caching rule says:
               inlined <- Syntax.unsafeSubExpressions
                   (fmap (\(child, _, _) -> child) . resolveImports)
                   expression
-              return (inlined, inlined, False)
+              return (inlined, retwin inlined, False)
           else do
               copiedRef <- liftIO (newIORef False)
               sharedChildren <- liftIO (newIORef [])
@@ -2096,7 +2099,7 @@ In any expression `p ? q` the opportunistic caching rule says:
                   expression
               copied <- liftIO (readIORef copiedRef)
               if not copied
-                  then return (inlined, inlined, False)
+                  then return (inlined, retwin inlined, False)
                   else do
                       children <- fmap reverse (liftIO (readIORef sharedChildren))
                       return (inlined, rebuildShared expression children, True)
@@ -2104,9 +2107,9 @@ In any expression `p ? q` the opportunistic caching rule says:
 -- | Resolve every field once.  The twin record is a new node only when a
 --   field's twin differs from its inlined expression.
 resolveRecord
-    :: (Dhall.Map.Map Text (Syntax.RecordField Src Void) -> Expr Src Void)
+    :: (forall a. Dhall.Map.Map Text (Syntax.RecordField Src a) -> Expr Src a)
     -> Dhall.Map.Map Text (Syntax.RecordField Src Import)
-    -> StateT Status IO (Expr Src Void, Expr Src Void, Bool)
+    -> StateT Status IO (Expr Src Void, Expr Src ImportRef, Bool)
 resolveRecord make fields = do
     pairs <- traverse pairRecordField fields
     let inlined = make (fmap (\(field, _, _) -> field) pairs)
@@ -2114,11 +2117,11 @@ resolveRecord make fields = do
     return $
         if copied
             then (inlined, make (fmap (\(_, field, _) -> field) pairs), True)
-            else (inlined, inlined, False)
+            else (inlined, retwin inlined, False)
 
 pairBinding
     :: Syntax.Binding Src Import
-    -> StateT Status IO (Syntax.Binding Src Void, Syntax.Binding Src Void, Bool)
+    -> StateT Status IO (Syntax.Binding Src Void, Syntax.Binding Src ImportRef, Bool)
 pairBinding (Syntax.Binding src0 name src1 annotation src2 bound) = do
     annotationPair <- traverse pairAnnotation annotation
     (boundInlined, boundShared, boundCopied) <- resolveImports bound
@@ -2139,21 +2142,24 @@ pairBinding (Syntax.Binding src0 name src1 annotation src2 bound) = do
                     boundShared
                 , True
                 )
-            else (inlined, inlined, False)
+            else (inlined, retwinBinding inlined, False)
   where
+    retwinBinding :: Syntax.Binding Src Void -> Syntax.Binding Src ImportRef
+    retwinBinding = unsafeCoerce
+
     pairAnnotation (src, expr) = do
         (inlined, shared, copied) <- resolveImports expr
         let noted = (src, inlined)
         return $
             if copied
                 then (noted, (src, shared), True)
-                else (noted, noted, False)
+                else (noted, (src, retwin inlined), False)
 
 pairRecordField
     :: Syntax.RecordField Src Import
     -> StateT Status IO
         ( Syntax.RecordField Src Void
-        , Syntax.RecordField Src Void
+        , Syntax.RecordField Src ImportRef
         , Bool
         )
 pairRecordField (Syntax.RecordField src0 expr src1 src2) = do
@@ -2162,13 +2168,16 @@ pairRecordField (Syntax.RecordField src0 expr src1 src2) = do
     return $
         if copied
             then (field, Syntax.RecordField src0 shared src1 src2, True)
-            else (field, field, False)
+            else (field, retwinField field, False)
+  where
+    retwinField :: Syntax.RecordField Src Void -> Syntax.RecordField Src ImportRef
+    retwinField = unsafeCoerce
 
 pairFunctionBinding
     :: Syntax.FunctionBinding Src Import
     -> StateT Status IO
         ( Syntax.FunctionBinding Src Void
-        , Syntax.FunctionBinding Src Void
+        , Syntax.FunctionBinding Src ImportRef
         , Bool
         )
 pairFunctionBinding (Syntax.FunctionBinding src0 name src1 src2 annotation) = do
@@ -2177,12 +2186,16 @@ pairFunctionBinding (Syntax.FunctionBinding src0 name src1 src2 annotation) = do
     return $
         if copied
             then (binding, Syntax.FunctionBinding src0 name src1 src2 shared, True)
-            else (binding, binding, False)
+            else (binding, retwinFunctionBinding binding, False)
+  where
+    retwinFunctionBinding
+        :: Syntax.FunctionBinding Src Void -> Syntax.FunctionBinding Src ImportRef
+    retwinFunctionBinding = unsafeCoerce
 
 -- | Rebuild @template@, replacing each immediate child with the next shared
 --   expression.  The children were produced by the same 'unsafeSubExpressions'
 --   visit order.
-rebuildShared :: Expr Src Import -> [Expr Src Void] -> Expr Src Void
+rebuildShared :: Expr Src Import -> [Expr Src ImportRef] -> Expr Src ImportRef
 rebuildShared template sharedChildren =
     State.evalState
         (Syntax.unsafeSubExpressions (\_ -> nextShared) template)
@@ -2199,14 +2212,14 @@ rebuildShared template sharedChildren =
 
 -- | Evaluate a twin from 'loadWithShared'.
 --
---   Each cached import is bound once, with children before parents, and the
---   value is not forced until the result quotes it.  This does not consult
---   'Status''s custom normalizer: callers that set one should normalize the
---   inlined expression instead.  An ill-kinded starting context is ignored;
---   type-checking reports that error.
-normalizeLoaded :: Status -> Expr s Void -> Expr t Void
+--   Each cached import is one thunk.  Forcing the result forces an import
+--   only when the result uses it, and a later use shares that thunk.  This
+--   does not consult 'Status''s custom normalizer: callers that set one
+--   should normalize the inlined expression instead.  An ill-kinded starting
+--   context is ignored; type-checking reports that error.
+normalizeLoaded :: Status -> Expr s ImportRef -> Expr t Void
 normalizeLoaded status expression =
-    Dhall.TypeCheck.normalizeWithContext (loadedTypingContext status) expression
+    Core.renote (dropImportRefs (quoteShared status expression))
 
 -- | 'normalizeLoaded', or the same evaluation with quoting stopped after
 --   @budget@ bytes.  'Nothing' quotes the whole normal form and the 'Bool' is
@@ -2214,87 +2227,66 @@ normalizeLoaded status expression =
 normalizeLoadedCapped
     :: Maybe Int
     -> Status
-    -> Expr s Void
+    -> Expr s ImportRef
     -> (Expr t Void, Bool)
 normalizeLoadedCapped Nothing status expression =
     (normalizeLoaded status expression, False)
 normalizeLoadedCapped (Just nbytes) status expression =
-    Dhall.TypeCheck.normalizeWithContextBounded
-        nbytes
-        (loadedTypingContext status)
-        expression
-
-loadedTypingContext :: Status -> Dhall.TypeCheck.TypingContext Src
-loadedTypingContext status@Status { _startingContext } =
-    foldl' bind base (importOrder status)
+    (Core.renote (dropImportRefs quoted), cut)
   where
-    base = case startingTypingContext _startingContext of
-        Right ctx -> ctx
-        Left _ -> Dhall.TypeCheck.emptyTypingContext
+    env = sharedEnvironment status
+    (quoted, cut) =
+        Eval.quoteBounded
+            nbytes
+            (Eval.envNames env)
+            (Eval.eval env (Core.denote expression))
 
-    placeholder = Core.Const Core.Sort
-
-    bind ctx chained =
-        case
-            ( Dhall.Map.lookup chained (_importNames status)
-            , Dhall.Map.lookup chained (_importBodies status)
-            )
-        of
-            (Just name, Just body) ->
-                Dhall.TypeCheck.extendAlreadyCheckedDenoted name placeholder body ctx
-            _ ->
-                ctx
-
--- | Children before the imports that use them.  A cycle, which import
---   resolution has already rejected, is appended at the end.
-importOrder :: Status -> [Chained]
-importOrder Status { _graph, _importBodies } = emitted ++ leftovers
+quoteShared :: Status -> Expr s ImportRef -> Expr Void ImportRef
+quoteShared status expression =
+    Eval.quote
+        (Eval.envNames env)
+        (Eval.eval env (Core.denote expression))
   where
-    nodes = Dhall.Map.keys _importBodies
+    env = sharedEnvironment status
 
-    nodeSet = Set.fromList nodes
+-- | Every 'ImportRef' resolves, so quoting leaves no 'Embed' to coerce away.
+dropImportRefs :: Expr s ImportRef -> Expr s Void
+dropImportRefs = unsafeCoerce
 
-    childrenOf = foldl' addEdge StrictMap.empty _graph
+-- | Starting-context binders above the shared import thunks.
+--
+--   The thunks form a lazy knot: an import is evaluated the first time its
+--   reference is forced, and an unused import is not evaluated.  A starting
+--   context that fails to kind-check contributes no binders.
+sharedEnvironment :: Status -> Eval.Environment ImportRef
+sharedEnvironment Status { _startingContext, _importBodies } = env
+  where
+    env = case startingTypingContext _startingContext of
+        Left _ ->
+            Eval.Imports resolve
+        Right _ ->
+            foldl
+                (\base (name, _) -> Eval.Skip base name)
+                (Eval.Imports resolve)
+                (reverse (Dhall.Context.toList _startingContext))
 
-    addEdge acc (Depends parent child)
-        | Set.member parent nodeSet && Set.member child nodeSet && parent /= child =
-            StrictMap.insertWith Set.union parent (Set.singleton child) acc
-        | otherwise =
-            acc
+    bodies =
+        LazyIntMap.fromList
+            [ (n, body)
+            | (ImportRef n, body) <- Dhall.Map.toList _importBodies
+            ]
 
-    indegree node =
-        Set.size (StrictMap.findWithDefault Set.empty node childrenOf)
+    values =
+        LazyIntMap.map
+            (\body -> Eval.eval env (Core.denote body))
+            bodies
 
-    counts0 = StrictMap.fromList [ (node, indegree node) | node <- nodes ]
-
-    ready0 = [ node | node <- nodes, indegree node == 0 ]
-
-    parentsOf child =
-        Set.toList
-            ( Set.fromList
-                [ parent
-                | Depends parent other <- _graph
-                , other == child
-                , Set.member parent nodeSet
-                ]
-            )
-
-    go [] acc _counts = reverse acc
-    go (node : ready) acc counts =
-        let step (queue, remaining) parent =
-                let degree = StrictMap.findWithDefault 0 parent remaining - 1
-                    remaining' = StrictMap.insert parent degree remaining
-                    queue' =
-                        if degree == 0 then queue ++ [parent] else queue
-                in (queue', remaining')
-            (ready', counts') = foldl' step (ready, counts) (parentsOf node)
-        in go ready' (node : acc) counts'
-
-    emitted = go ready0 [] counts0
-
-    emittedSet = Set.fromList emitted
-
-    leftovers = [ node | node <- nodes, not (Set.member node emittedSet) ]
+    resolve (ImportRef n) =
+        case LazyIntMap.lookup n values of
+            Just value ->
+                value
+            Nothing ->
+                error "sharedEnvironment: shared import has no body"
 
 -- | Resolve all imports within an expression
 --

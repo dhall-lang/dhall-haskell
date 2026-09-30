@@ -103,13 +103,31 @@ import qualified Text.Printf   as Printf
 
 -- | Evaluation environment. The 'Val' in 'Extend' is intentionally lazy:
 -- unused @let@-bound values (and unused lambda arguments, once instantiated)
--- are not forced. The environment spine ('Empty'/'Skip'/'Extend') is strict.
+-- are not forced. The environment spine is strict. 'Imports' sits at the
+-- bottom and resolves an 'Embed' to one shared thunk; looking a reference up
+-- does not force the other imports.
 data Environment a
     = Empty
+    | Imports !(a -> Val a)
     | Skip   !(Environment a) {-# UNPACK #-} !Text
     | Extend !(Environment a) {-# UNPACK #-} !Text (Val a)
 
-deriving instance (Show a, Show (Val a -> Val a)) => Show (Environment a)
+instance (Show a, Show (Val a -> Val a)) => Show (Environment a) where
+    showsPrec _ Empty = showString "Empty"
+    showsPrec d (Imports _) =
+        showParen (d > 10) (showString "Imports _")
+    showsPrec d (Skip env x) =
+        showParen (d > 10)
+            (showString "Skip " . showsPrec 11 env . showChar ' ' . showsPrec 11 x)
+    showsPrec d (Extend env x v) =
+        showParen (d > 10)
+            ( showString "Extend "
+                . showsPrec 11 env
+                . showChar ' '
+                . showsPrec 11 x
+                . showChar ' '
+                . showsPrec 11 v
+            )
 
 errorMsg :: String
 errorMsg = unlines
@@ -308,6 +326,7 @@ countEnvironment :: Text -> Environment a -> Int
 countEnvironment x = go (0 :: Int)
   where
     go !acc Empty             = acc
+    go  acc (Imports _      ) = acc
     go  acc (Skip env x'    ) = go (if x == x' then acc + 1 else acc) env
     go  acc (Extend env x' _) = go (if x == x' then acc + 1 else acc) env
 
@@ -342,6 +361,8 @@ vVar env0 (V x i0) = go env0 i0
             if i == 0 then VVar x (countEnvironment x env) else go env (i - 1)
         | otherwise =
             go env i
+    go (Imports _) i =
+        VVar x (negate i - 1)
     go Empty i =
         VVar x (negate i - 1)
 
@@ -1107,7 +1128,7 @@ eval !env t0 =
         ImportAlt t _ ->
             eval env t
         Embed a ->
-            VEmbed a
+            embedded env a
   where
     evalChunks :: Chunks Void a -> VChunks a
     evalChunks (Chunks xys z) = foldr' cons nil xys
@@ -1387,8 +1408,17 @@ data Names
 
 envNames :: Environment a -> Names
 envNames Empty = EmptyNames
+envNames (Imports _) = EmptyNames
 envNames (Skip   env x  ) = Bind (envNames env) x
 envNames (Extend env x _) = Bind (envNames env) x
+
+-- | Resolve an 'Embed' by walking to 'Imports'.  'Empty' leaves it embedded,
+--   which is what 'normalize' does for an import-free expression.
+embedded :: Environment a -> a -> Val a
+embedded (Imports resolve) a = resolve a
+embedded (Skip env _) a = embedded env a
+embedded (Extend env _ _) a = embedded env a
+embedded Empty a = VEmbed a
 
 countNames :: Text -> Names -> Int
 countNames x = go 0

@@ -21,6 +21,9 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core                       as Core
 import qualified Dhall.Crypto
+import qualified Dhall.Map                        as Map
+import qualified Dhall
+import qualified Lens.Micro                       as Lens
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
@@ -86,6 +89,7 @@ getTests = do
                 , plainImportErrorTests
                 , collectImportErrorTests
                 , sharedImportEvaluationTests
+                , customNormalizerEvaluatesInlinedTree
                 ]
 
     return testTree
@@ -295,6 +299,34 @@ sharedImportEvaluationTests =
 
             (mainShared, mainInlined) <- normalizePair dir "main.dhall"
             mainShared Tasty.HUnit.@?= mainInlined
+
+-- | A custom normalizer is applied to the fully inlined tree.  Shared
+--   evaluation does not consult it, so this result is the rewritten natural
+--   at every use site.
+customNormalizerEvaluatesInlinedTree :: TestTree
+customNormalizerEvaluatesInlinedTree =
+    Tasty.HUnit.testCase "custom normalizer evaluates the inlined tree" $
+        Temp.withSystemTempDirectory "dhall-custom-normalizer" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            let normalizer (Core.NaturalLit 0) = Just (Core.NaturalLit 7)
+                normalizer _ = Nothing
+                settings =
+                    Lens.set
+                        Dhall.normalizer
+                        (Just (Core.ReifiedNormalizer (pure . normalizer)))
+                        (Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings)
+            result <-
+                Dhall.inputExprWithSettings
+                    settings
+                    "{ a = ./shared.dhall, b = ./shared.dhall }\n"
+            let expected =
+                    Core.RecordLit
+                        ( Map.fromList
+                            [ ("a", Core.makeRecordField (Core.NaturalLit 7))
+                            , ("b", Core.makeRecordField (Core.NaturalLit 7))
+                            ]
+                        )
+            Core.denote result Tasty.HUnit.@?= (expected :: Core.Expr Void Void)
 
 normalizePair
     :: FilePath
