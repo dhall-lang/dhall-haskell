@@ -20,7 +20,8 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
 import Data.List (foldl', sortOn)
-import Data.Maybe (listToMaybe, maybeToList)
+import Data.Maybe (listToMaybe, mapMaybe, maybeToList)
+import Data.Ord (Down (..))
 import Data.Row (Label (..), (.==))
 import Data.Void (Void)
 import Data.Proxy (Proxy (..))
@@ -38,6 +39,7 @@ import Dhall.Core
     ( Binding (..)
     , Expr
     , FieldSelection (..)
+    , FunctionBinding (..)
     , freeIn
     , File (..)
     , FilePrefix (..)
@@ -77,6 +79,7 @@ import Dhall.LSP.Backend.Diagnostics
     ( Diagnosis (Diagnosis)
     , Range (..)
     , explain
+    , positionToOffset
     , rangeFromDhall
     )
 import Dhall.LSP.Backend.Linting (unusedBindingEdits)
@@ -817,6 +820,175 @@ importExpr (Core.Note _ expr) = importExpr expr
 importExpr (Core.Embed _) = True
 importExpr _ = False
 
+-- | Inline the @let@ binder under the selection.
+--
+--   'Nothing' means the selection is not a @let@ binder.  'Left' is a refusal.
+inlineLet :: Text -> J.Range -> Maybe (Either Text Text)
+inlineLet txt selected = do
+    expr <- either (const Nothing) Just (parse txt)
+    (letSrc, binding, body) <- findLetBinder (selectionStart selected) expr
+    let name_ = variable binding
+        value = value binding
+        nameSrc = bindingSrc1 binding
+    nameSrc <- nameSrc
+    if containsAssert value
+        then return (Left "The binding contains an assert.")
+        else do
+            let fragments = scopeFragments expr
+                uses =
+                    [ src
+                    | ScopeFragment src (NameUse (NameDecl declSrc usedName _)) <- fragments
+                    , declSrc == nameSrc
+                    , usedName == name_
+                    ]
+                indexed =
+                    any (indexedUse name_ body) fragments
+            if indexed
+                then return (Left "The body uses a variable of the form name@n.")
+                else if any (captures value body) uses
+                    then return (Left "Inlining would capture a variable.")
+                    else do
+                        bodySrc <- case body of
+                            Core.Note src _ -> Just src
+                            _ -> Nothing
+                        let Range prefixStart _ = rangeFromDhall letSrc
+                            Range prefixEnd _ = rangeFromDhall bodySrc
+                            valueText = case value of
+                                Core.Note (Src _ _ slice) _ -> slice
+                                _ -> Core.pretty value
+                            wrapped = parenthesize valueText
+                            edits =
+                                (Range prefixStart prefixEnd, "")
+                                    : [ (rangeFromDhall src, wrapped) | src <- uses ]
+                        return (Right (applyTextEdits txt edits))
+
+selectionStart :: J.Range -> (Int, Int)
+selectionStart (J.Range (J.Position line col) _) =
+    (fromIntegral line, fromIntegral col)
+
+findLetBinder
+    :: (Int, Int)
+    -> Expr Src Import
+    -> Maybe (Src, Binding Src Import, Expr Src Import)
+findLetBinder pos (Core.Note src (Core.Let binding body))
+    | Just nameSrc <- bindingSrc1 binding
+    , srcContains nameSrc pos =
+        Just (src, binding, body)
+    | otherwise =
+        findLetBinder pos (value binding) <|> findLetBinder pos body
+findLetBinder pos (Core.Note _ expr) =
+    findLetBinder pos expr
+findLetBinder pos expr =
+    listToMaybe
+        (mapMaybe (findLetBinder pos) (toListOf Core.subExpressions expr))
+
+containsAssert :: Expr s a -> Bool
+containsAssert (Core.Assert _) = True
+containsAssert (Core.Note _ expr) = containsAssert expr
+containsAssert expr = any containsAssert (toListOf Core.subExpressions expr)
+
+indexedUse :: Text -> Expr Src Import -> ScopeFragment Import -> Bool
+indexedUse name_ body (ScopeFragment src _) =
+    case body of
+        Core.Note bodySrc _ ->
+            rangeContains bodySrc src
+                && case Text.stripPrefix (name_ <> "@") (srcSlice src) of
+                    Just rest ->
+                        case reads (Text.unpack rest) of
+                            [(n, "")] -> n > (0 :: Int)
+                            _ -> False
+                    Nothing ->
+                        False
+        _ ->
+            False
+
+captures :: Expr Src Import -> Expr Src Import -> Src -> Bool
+captures value body useSrc =
+    let Range left _ = rangeFromDhall useSrc
+    in not (Set.null (Set.intersection (freeNames value) (enclosed left body)))
+
+freeNames :: Expr s a -> Set.Set Text
+freeNames = go Map.empty
+  where
+    go counts (Core.Note _ expr) =
+        go counts expr
+    go counts (Core.Var (V name_ index))
+        | index >= Map.findWithDefault 0 name_ counts =
+            Set.singleton name_
+        | otherwise =
+            Set.empty
+    go counts (Core.Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = ann } body) =
+        go counts ann <> go (Map.insertWith (+) x 1 counts) body
+    go counts (Core.Pi _ x ann body) =
+        go counts ann <> go (Map.insertWith (+) x 1 counts) body
+    go counts (Core.Let Binding { variable = x, annotation = ann, value = bound } body) =
+        goAnn counts ann <> go counts bound <> go (Map.insertWith (+) x 1 counts) body
+    go counts expr =
+        foldMap (go counts) (toListOf Core.subExpressions expr)
+
+    goAnn _ Nothing = Set.empty
+    goAnn counts (Just (_, expr)) = go counts expr
+
+enclosed :: (Int, Int) -> Expr s a -> Set.Set Text
+enclosed pos (Core.Note _ (Core.Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = ann } body))
+    | exprContains pos body =
+        Set.insert x (enclosed pos body) <> enclosed pos ann
+    | otherwise =
+        enclosed pos ann
+enclosed pos (Core.Note _ (Core.Pi _ x ann body))
+    | exprContains pos body =
+        Set.insert x (enclosed pos body)
+    | otherwise =
+        enclosed pos ann
+enclosed pos (Core.Note _ (Core.Let Binding { variable = x, annotation = ann, value = bound } body))
+    | exprContains pos body =
+        Set.insert x (enclosed pos body)
+    | otherwise =
+        enclosedAnn pos ann <> enclosed pos bound
+enclosed pos (Core.Note _ expr) =
+    enclosed pos expr
+enclosed pos expr =
+    foldMap (enclosed pos) (toListOf Core.subExpressions expr)
+
+enclosedAnn :: (Int, Int) -> Maybe (Maybe Src, Expr s a) -> Set.Set Text
+enclosedAnn _ Nothing = Set.empty
+enclosedAnn pos (Just (_, expr)) = enclosed pos expr
+
+exprContains :: (Int, Int) -> Expr Src a -> Bool
+exprContains pos (Core.Note src _) = srcContains src pos
+exprContains _ _ = False
+
+rangeContains :: Src -> Src -> Bool
+rangeContains outer inner =
+    let Range left right = rangeFromDhall outer
+        Range start end = rangeFromDhall inner
+    in left <= start && end <= right
+
+srcSlice :: Src -> Text
+srcSlice (Src _ _ slice) = slice
+
+parenthesize :: Text -> Text
+parenthesize valueText
+    | Text.null valueText = valueText
+    | Text.head valueText `elem` ['(', '{', '[', '<', '"'] = valueText
+    | Text.any (\c -> c == ' ' || c == '\n') valueText = "(" <> valueText <> ")"
+    | otherwise = valueText
+
+applyTextEdits :: Text -> [(Range, Text)] -> Text
+applyTextEdits txt edits =
+    foldl' apply txt (sortOn (Down . startOffset) located)
+  where
+    located =
+        [ (start, end, new)
+        | (range_, new) <- edits
+        , let Range left right = range_
+        , let start = positionToOffset txt left
+        , let end = positionToOffset txt right
+        ]
+    startOffset (start, _, _) = start
+    apply acc (start, end, new) =
+        Text.take start acc <> new <> Text.drop end acc
+
 codeActionHandler :: EvaluateSettings -> Handlers HandlerM
 codeActionHandler _evalSettings =
     LSP.requestHandler SMethod_TextDocumentCodeAction \request respond ->
@@ -954,6 +1126,13 @@ codeActionHandler _evalSettings =
                             [readyOrganize docUri txt newText]
                         Nothing ->
                             []
+                inlineAction = case inlineLet txt selected of
+                    Just (Left reason_) ->
+                        [disabledInline reason_]
+                    Just (Right newText) ->
+                        [readyInline docUri txt newText]
+                    Nothing ->
+                        []
                 offered =
                     [InR normalize | selectionParses]
                         ++ [InR extract | selectionParses]
@@ -964,7 +1143,40 @@ codeActionHandler _evalSettings =
                            , action <- [freezeAction, unfreezeAction, unfreezeAllAction]
                            ]
                         ++ map InR organizeAction
+                        ++ map InR inlineAction
             respond (Right (InL offered))
+
+disabledInline :: Text -> J.CodeAction
+disabledInline reason_ = J.CodeAction
+    { _title = "Inline let: " <> reason_
+    , _kind = Just J.CodeActionKind_RefactorInline
+    , _diagnostics = Nothing
+    , _isPreferred = Nothing
+    , _disabled = Just (Label @"reason" .== reason_)
+    , _edit = Nothing
+    , _command = Nothing
+    , _data_ = Nothing
+    }
+
+readyInline :: J.Uri -> Text -> Text -> J.CodeAction
+readyInline docUri txt newText =
+    let lineCount = fromIntegral (length (Text.lines txt))
+        _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
+        _newText = newText
+    in J.CodeAction
+        { _title = "Inline let"
+        , _kind = Just J.CodeActionKind_RefactorInline
+        , _diagnostics = Nothing
+        , _isPreferred = Nothing
+        , _disabled = Nothing
+        , _edit = Just J.WorkspaceEdit
+            { _changes = Just (Map.singleton docUri [J.TextEdit { _range, _newText }])
+            , _documentChanges = Nothing
+            , _changeAnnotations = Nothing
+            }
+        , _command = Nothing
+        , _data_ = Nothing
+        }
 
 disabledOrganize :: Text -> J.CodeAction
 disabledOrganize reason_ = J.CodeAction

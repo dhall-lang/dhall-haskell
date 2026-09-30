@@ -1,6 +1,6 @@
 Features that are good to have in IDE support for Dhall.
 
-Marks describe the dhall-lsp-server on lsp-import-definition.
+Marks describe the dhall-lsp-server on lsp-inline-let.
 [done] is implemented. [partial] is only partly there. [not done] is absent.
 
 - [done] Display typechecking and syntax errors
@@ -32,6 +32,6 @@ Marks describe the dhall-lsp-server on lsp-import-definition.
 - [done] Autoformat the Dhall code when it parses, including when it does not typecheck. Formatting is refused when parsing fails
 - [done] Refactor a selected subexpression into a local variable ("Extract let")
 - [done] Insert a type annotation into `let`, by inferring the type
-- [not done] Inline a local variable into places where it is used, eliminating the local variable
+- [done] Inline a local variable. Refused when that would capture a name, when the body uses name@n, or when the value contains assert
 - [not done] Simplify arithmetic with Bool, Natural, Integer as its own edit. Normalize selection reduces arithmetic as part of a full normal form
 - [not done] Import from JSON / YAML, optionally with schemas

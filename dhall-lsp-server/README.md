@@ -93,6 +93,9 @@ This can be overriden by using the Dhall LSP settings. For example in VS Code's 
 - **Annotate lets&nbsp;**
 Right-click the bound identifier in a `let` binding and select "Annotate Let binding with its type" to do exactly that.
 
+- **Inline let&nbsp;**
+On a `let` binder, "Inline let" replaces each use with the bound value, adding parentheses when the value contains a space, and deletes the binding. It is refused when a binder between the `let` and a use would capture a name from the value, when the body uses `name@n`, or when the value contains `assert`.
+
 - **Organize imports&nbsp;**
 On the top-level `let` block, "Organize imports" drops an unused binding whose value is an import, moves the remaining import bindings to the top, and sorts them by name. The edit is made of whole lines, so a comment on those lines stays. The action is not offered when an import binding shares a line with other code, when a top-level name is bound twice, or when the file uses `name@n`.
 

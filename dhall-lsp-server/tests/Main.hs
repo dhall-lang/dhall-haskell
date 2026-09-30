@@ -391,6 +391,7 @@ main = do
   inlay <- testSpec "Inlay" (inlaySpec (baseDir "inlay"))
   unfreeze <- testSpec "Unfreeze" (unfreezeSpec (baseDir "unfreeze"))
   organize <- testSpec "Organize" (organizeSpec (baseDir "organize"))
+  inline <- testSpec "Inline" (inlineSpec (baseDir "inline"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -402,7 +403,8 @@ main = do
           folding,
           inlay,
           unfreeze,
-          organize
+          organize,
+          inline
         ]
     )
 
@@ -475,6 +477,44 @@ expectOrganize fixtureDir file expected =
           action = head found
           edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
       map _newText edits `shouldBe` [expected]
+
+inlineSpec :: FilePath -> Spec
+inlineSpec fixtureDir = describe "inline let" $ do
+  it "inlines a binding" $
+    expectTitle fixtureDir "Simple.dhall" (Position 0 4) "Inline let" "1\n"
+  it "inlines a use nested in another let" $
+    expectTitle fixtureDir "Nested.dhall" (Position 0 4) "Inline let" "let y = 1 in y\n"
+  it "refuses when a binder would capture a name" $
+    expectDisabled fixtureDir "Capture.dhall" (Position 1 4)
+      "Inline let: Inlining would capture a variable."
+  it "refuses a use of name@n" $
+    expectDisabled fixtureDir "Indexed.dhall" (Position 1 4)
+      "Inline let: The body uses a variable of the form name@n."
+  it "refuses a binding that contains assert" $
+    expectDisabled fixtureDir "Assert.dhall" (Position 0 4)
+      "Inline let: The binding contains an assert."
+
+expectTitle :: FilePath -> FilePath -> Position -> T.Text -> T.Text -> IO ()
+expectTitle fixtureDir file pos title_ expected =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    actions <- getCodeActions docId (Range pos pos)
+    liftIO $ do
+      let found = [ action | InR action <- actions, _title action == title_ ]
+          action = head found
+          edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
+      map _newText edits `shouldBe` [expected]
+
+expectDisabled :: FilePath -> FilePath -> Position -> T.Text -> IO ()
+expectDisabled fixtureDir file pos title_ =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    actions <- getCodeActions docId (Range pos pos)
+    liftIO $ do
+      let found = [ action | InR action <- actions, _title action == title_ ]
+      length found `shouldBe` 1
+      _disabled (head found) `shouldSatisfy` isJust
+      _edit (head found) `shouldBe` Nothing
 
 -- | Record fields of an imported value, and import failures met on the way.
 definitionSpec :: FilePath -> Spec
