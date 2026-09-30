@@ -201,7 +201,7 @@ renameHandler =
                 Nothing ->
                     respond (Right (InR J.Null))
                 Just decl -> do
-                    let textEdits =
+                    let renameEdits =
                             [ J.TextEdit
                                 { _range = srcToRange src
                                 , _newText = replacement
@@ -209,7 +209,7 @@ renameHandler =
                             | ScopeFragment src scopeKind <- found
                             , sameDecl decl (ScopeFragment src scopeKind)
                             ]
-                        _changes = Just (Map.singleton docUri textEdits)
+                        _changes = Just (Map.singleton docUri renameEdits)
                         _documentChanges = Nothing
                         _changeAnnotations = Nothing
                     respond (Right (InL J.WorkspaceEdit {..}))

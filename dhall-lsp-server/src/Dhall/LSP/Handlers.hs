@@ -925,7 +925,7 @@ executeNormalize request respond = do
         Left err ->
             throwE
                 ( Warning
-                , "The selection did not parse, so it was not normalized.\n"
+                , "The selection was not normalized due to parsing error:\n"
                     <> parseErrorText err
                 )
     ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig
@@ -1043,9 +1043,9 @@ textInRange txt (LSP.Types.Range (Position startLine startCol) (Position endLine
                         (Text.drop (fromIntegral startCol) row : take middle rest ++ [lastRow])
 
 clip :: Text -> LSP.Types.UInt -> LSP.Types.UInt -> Text
-clip line from to =
+clip rowText from to =
     Text.take (max 0 (fromIntegral to - fromIntegral from))
-        (Text.drop (fromIntegral from) line)
+        (Text.drop (fromIntegral from) rowText)
 
 parseErrorText :: DhallError -> Text
 parseErrorText err =
