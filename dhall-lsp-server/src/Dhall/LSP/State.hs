@@ -21,7 +21,6 @@ import Data.Map.Strict                  (Map, empty)
 import Data.Text                        (Text)
 import Data.Time.Clock                  (UTCTime)
 import Data.Void                        (Void)
-import Dhall.Bounded                    (defaultOutputBytes)
 import Dhall.Core                       (Expr)
 import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
 import Dhall.Parser                     (Src)
@@ -45,6 +44,11 @@ data Severity = Error
               -- ^ Information displayed to the user.
               | Log
               -- ^ Log message, not displayed by default.
+
+-- | How much of a normal form the server will render, in bytes.
+--   16KiB fills a screen and leaves the rest unrendered.
+defaultOutputBytes :: Int
+defaultOutputBytes = 16 * 1024
 
 data ServerConfig = ServerConfig
   { chosenCharacterSet :: ChooseCharacterSet

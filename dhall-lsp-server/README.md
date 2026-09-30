@@ -51,7 +51,7 @@ The file is parsed and typechecked when you open it, when you save it, and short
 Hashed imports can be shown from the semantic cache (alpha-beta-normal CBOR). "Show original source" is the command `dhall.server.showOriginalSource` and fetches only when you run it. Other editors open an on-disk mirror under `$XDG_CACHE_HOME/dhall-lsp/sources`. VS Code can instead mount a `dhall-import:` filesystem once that extension is installed.
 
 - **Output size&nbsp;**
-`vscode-dhall-lsp-server.maxOutputSize` is the maximum rendered size of a normal form the server will show, in bytes. The default is 131072 (128KiB). It does not change ordinary evaluation outside the server.
+`vscode-dhall-lsp-server.maxOutputSize` is the maximum rendered size of a normal form the server will show, in bytes. The default is 16384 (16KiB). It does not change ordinary evaluation outside the server.
 
 - **Clickable imports&nbsp;**
 As long as the file parses successfully, all (local file and remote) imports will be underlined and clickable.

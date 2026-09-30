@@ -73,8 +73,9 @@ import Control.Monad                 (foldM, void, when)
 import Control.Monad.Trans.Except    (catchE, throwE)
 import Control.Monad.Trans.State.Strict (get)
 import Data.IORef                    (IORef)
+import Data.Int                      (Int64)
 import Data.List.NonEmpty            (NonEmpty (..))
-import Data.Maybe                    (isNothing, listToMaybe)
+import Data.Maybe                    (fromMaybe, isNothing, listToMaybe)
 import Data.Aeson                    (FromJSON (..), Value (..))
 import Data.Maybe                    (maybeToList)
 import Data.Text                     (Text, isPrefixOf)
@@ -210,7 +211,6 @@ hoverHandler settings =
                                         (Pretty.prettyCharacterSet Pretty.Unicode typ) of
                                     Bounded.Complete text -> text
                                     Bounded.Truncated text -> text
-                                    Bounded.LimitExceeded -> "…"
                         let _contents = InL (mkPlainText rendered)
                         respond (Right (InL Hover{ _contents, _range }))
             Just err -> do
@@ -893,11 +893,16 @@ executeNormalize
     -> (Either a (Value |? Null) -> HandlerM b)
     -> HandlerM ()
 executeNormalize request respond = do
-    (uri_, range_, bytes) <- case request ^. params . arguments of
+    (uri_, range_, givenBytes) <- case request ^. params . arguments of
+        Just [u, r] ->
+            case (Aeson.fromJSON u, Aeson.fromJSON r) of
+                (Aeson.Success uri_, Aeson.Success range_) ->
+                    return (uri_, range_, Nothing)
+                _ -> throwE (Error, "Could not parse normalize arguments.")
         Just [u, r, n] ->
             case (Aeson.fromJSON u, Aeson.fromJSON r, Aeson.fromJSON n) of
                 (Aeson.Success uri_, Aeson.Success range_, Aeson.Success bytes) ->
-                    return (uri_, range_, bytes)
+                    return (uri_, range_, Just bytes)
                 _ -> throwE (Error, "Could not parse normalize arguments.")
         _ -> throwE (Error, "Normalize selection is missing arguments.")
     txt <- readUri uri_
@@ -905,15 +910,24 @@ executeNormalize request respond = do
     expr <- case parse selected of
         Right e -> return e
         Left _ -> throwE (Warning, "The selection did not parse, so it was not normalized.")
-    let limits = Bounded.defaultBoundLimits { Bounded.boundOutputBytes = bytes }
-    outcome <- liftIO (Bounded.normalizeBounded limits expr)
+    ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig
+    let bytes = fromMaybe maxOutputSize givenBytes
+        -- Same safety limits the editor used before the output cap became
+        -- optional: 256MiB of allocation and 30 seconds.
+        allocationBytes = 256 * 1024 * 1024 :: Int64
+        timeoutMicros = 30 * 1000 * 1000
+    outcome <- liftIO $
+        Bounded.normalizeLimited
+            (Just allocationBytes)
+            (Just timeoutMicros)
+            (Just bytes)
+            expr
     case outcome of
-        Bounded.Truncated _ ->
-            throwE (Warning, "Normal form exceeded maxOutputSize; the edit was refused.")
-        Bounded.LimitExceeded ->
+        Left _ ->
             throwE (Warning, "Evaluation limit exceeded; the edit was refused.")
-        Bounded.Complete nf -> do
-            ServerConfig { chosenCharacterSet } <- liftLSP LSP.getConfig
+        Right (_, True) ->
+            throwE (Warning, "Normal form exceeded maxOutputSize; the edit was refused.")
+        Right (nf, False) -> do
             let _newText = formatExpr chosenCharacterSet nf
                 _range = range_
                 _edit = WorkspaceEdit
@@ -950,16 +964,16 @@ executeShowOriginal settings request respond = do
         imp@(Import (ImportHashed (Just hash) _) _) : _ -> return (imp, hash)
         _ -> throwE (Info, "This file has no hashed import.")
     decoded <- liftIO (Import.decodeSemanticCache hash)
+    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
     let decodedText = case decoded of
             Nothing ->
                 "-- semantic cache has no entry for this hash\n"
             Just expr ->
                 case Bounded.prettyBounded
-                        Bounded.defaultOutputBytes
+                        maxOutputSize
                         (Pretty.prettyCharacterSet Pretty.Unicode (Core.renote expr :: Expr Src Void)) of
                     Bounded.Complete text -> text
                     Bounded.Truncated text -> text
-                    Bounded.LimitExceeded -> "-- decoded import exceeded the output limit\n"
     negative <- use negativeImports
     cache <- use importCache
     fileIdentifier <- fileIdentifierFromUri uri_
