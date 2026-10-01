@@ -61,6 +61,7 @@ import Language.LSP.Server (Handlers)
 import Dhall.LSP.Backend.Dhall
     ( FileIdentifier
     , emptyCache
+    , identifierChained
     , importTextKey
     , parse
     )
@@ -280,6 +281,12 @@ locateField expr path = go [] expr path
                     go ctx letValue remaining
             Nothing ->
                 Nothing
+    -- The fetched text is itself an import, such as an environment variable
+    -- whose value is `./lib.dhall`.  Follow that import; if its source was
+    -- not fetched, the caller opens this text instead.
+    go _ (Core.Embed imp) remaining
+        | not (null remaining) =
+            Just (Deeper imp remaining)
     go _ _ _ =
         Nothing
 
@@ -452,7 +459,23 @@ publishImport parentPath parentId imp bodyText src = do
     chainsRef <- use importChains
     originsRef <- use mirrorOrigins
     chains <- liftIO (readIORef chainsRef)
-    case listToMaybe [chained | candidate <- importKeys parentPath parentId imp, Just chained <- [Map.lookup candidate chains]] of
+    let lookedUp =
+            listToMaybe
+                [ chained
+                | candidate <- importKeys parentPath parentId imp
+                , Just chained <- [Map.lookup candidate chains]
+                ]
+        -- `env:` and `missing` do not keep the directory of the file that
+        -- imported them, so a relative path in the mirror would resolve from
+        -- the server's working directory.  Keep that file as the origin.
+        origin = case imp of
+            Import (ImportHashed _ (Env _)) _ ->
+                Just (identifierChained parentId)
+            Import (ImportHashed _ Missing) _ ->
+                Just (identifierChained parentId)
+            _ ->
+                lookedUp
+    case origin of
         Just chained ->
             liftIO $
                 modifyIORef' originsRef $
