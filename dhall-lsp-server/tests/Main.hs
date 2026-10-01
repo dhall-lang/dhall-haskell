@@ -6,17 +6,27 @@
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
+import Control.Applicative.Combinators (skipManyTill)
+import Control.Lens                ((^.))
 import Control.Monad.IO.Class      (liftIO)
 import Data.Int                    (Int32)
-import Data.Maybe                  (fromJust)
+import Data.Maybe                  (fromJust, isJust)
 import Data.Time.Clock             (diffUTCTime, getCurrentTime)
 import Language.LSP.Protocol.Types
     ( ClientCapabilities
+    , CodeAction (..)
+    , Command (..)
     , CompletionItem (..)
     , Diagnostic (..)
+    , ExecuteCommandParams (..)
     , DiagnosticSeverity (..)
     , DiagnosticTag (..)
+    , FoldingRange (..)
+    , FoldingRangeParams (..)
     , Hover (..)
+    , InlayHint (..)
+    , InlayHintParams (..)
+    , TextEdit (..)
     , getUri
     , MarkupContent (..)
     , Definition (..)
@@ -24,9 +34,12 @@ import Language.LSP.Protocol.Types
     , Position (..)
     , Range (..)
     , TextDocumentContentChangeEvent (..)
+    , TextDocumentIdentifier (..)
     , TextDocumentItem (..)
+    , TextDocumentPositionParams (..)
     , DidOpenTextDocumentParams (..)
     , Uri (..)
+    , WorkspaceEdit (..)
     , type (|?) (..)
     , toEither
     )
@@ -37,6 +50,7 @@ import Language.LSP.Protocol.Types
 #else
 import Data.Row ((.==))
 #endif
+import Language.LSP.Protocol.Lens (result)
 import Test.Tasty
 import Test.Tasty.Hspec
 
@@ -50,11 +64,19 @@ import Language.LSP.Test
 import Test.Hspec
 #endif
 
+import qualified Data.Aeson         as Aeson
+import qualified Data.Map.Strict    as Map
 import System.Environment          (setEnv)
 import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
 import qualified Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Message as LSP
+
+itemLabel :: CompletionItem -> T.Text
+itemLabel (CompletionItem { _label = label }) = label
+
+actionTitle :: CodeAction -> T.Text
+actionTitle (CodeAction { _title = title_ }) = title_
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
@@ -189,7 +211,7 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 2, _character = 35})
         liftIO $ do
           let firstItem = head cs
-          _label firstItem `shouldBe` "Config"
+          itemLabel firstItem `shouldBe` "Config"
           _detail firstItem `shouldBe` Just "Type"
     it "suggests user defined functions"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -198,7 +220,7 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 6, _character = 7})
         liftIO $ do
           let firstItem = head cs
-          _label firstItem `shouldBe` "makeUser"
+          itemLabel firstItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
     it "suggests user defined bindings"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -207,7 +229,7 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 0, _character = 59})
         liftIO $ do
           let firstItem = head cs
-          _label firstItem `shouldBe` "bob"
+          itemLabel firstItem `shouldBe` "bob"
           _detail firstItem `shouldBe` Just "Text"
     it "suggests functions from imports"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -216,8 +238,8 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 0, _character = 33})
         liftIO $ do
           let [ firstItem, secondItem ] = cs
-          _label firstItem `shouldBe` "`make user`"
-          _label secondItem `shouldBe` "makeUser"
+          itemLabel firstItem `shouldBe` "`make user`"
+          itemLabel secondItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
           _detail secondItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
     it "suggests union alternatives"
@@ -227,10 +249,24 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 2, _character = 10})
         liftIO $ do
           let [ firstItem, secondItem ] = cs
-          _label firstItem `shouldBe` "A"
-          _label secondItem `shouldBe` "`B C`"
+          itemLabel firstItem `shouldBe` "A"
+          itemLabel secondItem `shouldBe` "`B C`"
           _detail firstItem `shouldBe` Just "\8704(A : Text) \8594 < A : Text | `B C` >"
           _detail secondItem `shouldBe` Just "< A : Text | `B C` >"
+    it "suggests a field of an applied function" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "RecordApp.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 32})
+        liftIO $ do
+          let labels = map itemLabel cs
+          labels `shouldContain` ["a"]
+    it "suggests constructors of a union expression" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "UnionExpr.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 10})
+        liftIO $ do
+          let labels = map itemLabel cs
+          labels `shouldContain` ["A", "B"]
 
 diagnosticsSpec :: FilePath -> Spec
 diagnosticsSpec fixtureDir = do
@@ -251,6 +287,21 @@ diagnosticsSpec fixtureDir = do
         liftIO $ do
           _severity diag `shouldBe` Just DiagnosticSeverity_Error
           T.unpack (_message diag) `shouldContain` "Expression doesn't match annotation"
+    it "shows both sides of a failed assertion" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Assert.dhall" "dhall"
+        [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        hover <- getHover docId (Position 0 10)
+        liftIO $ do
+          let diagText = T.unpack (_message diag)
+          diagText `shouldContain` "[ 1, 2 ]"
+          diagText `shouldContain` "[ 1, 1 ]"
+          case toEither (_contents (fromJust hover)) of
+            Left content -> do
+              T.unpack (_value content) `shouldContain` "Explain error"
+              T.unpack (_value content) `shouldNotContain` "dhall-explain:"
+            Right _ ->
+              expectationFailure "expected hover text"
   describe "Dhall.Import" $ do
     it "reports invalid imports"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -275,6 +326,46 @@ diagnosticsSpec fixtureDir = do
       _ <- openDoc "InvalidSyntax.dhall" "dhall"
       [diag] <- waitForDiagnosticsSource "Dhall.Parser"
       liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
+
+foldingSpec :: FilePath -> Spec
+foldingSpec fixtureDir =
+  describe "folding" $
+    it "folds a record, a list, an if and a merge" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Regions.dhall" "dhall"
+        rsp <- request LSP.SMethod_TextDocumentFoldingRange FoldingRangeParams
+            { _workDoneToken = Nothing
+            , _partialResultToken = Nothing
+            , _textDocument = docId
+            }
+        let ranges = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
+        liftIO $
+            map (\r -> (_startLine r, _endLine r)) ranges
+                `shouldContain` [(1, 3), (5, 7), (9, 11), (13, 17)]
+
+inlaySpec :: FilePath -> Spec
+inlaySpec fixtureDir =
+  describe "inlay" $
+    it "shows the type of an unannotated let" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Let.dhall" "dhall"
+        rsp <- request LSP.SMethod_TextDocumentInlayHint InlayHintParams
+            { _workDoneToken = Nothing
+            , _textDocument = docId
+            , _range = Range (Position 0 0) (Position 1 0)
+            }
+        let hints = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
+        liftIO $ do
+            let hint = head hints
+                edits = maybe [] id (_textEdits hint)
+                label = case hint of
+                    InlayHint { _label = found } -> found
+            label `shouldBe` InL ": Natural"
+            map _newText edits `shouldContain` [" : Natural"]
 
 -- | Open a file, replace it, and wait until the new diagnostics arrive.
 --   The bound is a tripwire for a stuck analysis, not a performance target.
@@ -307,6 +398,11 @@ main = do
   hovering <- testSpec "Hovering" (hoveringSpec (baseDir "hovering"))
   replay <- testSpec "Edit replay" (editReplaySpec (baseDir "diagnostics"))
   definition <- testSpec "Definition" (definitionSpec (baseDir "definition"))
+  folding <- testSpec "Folding" (foldingSpec (baseDir "folding"))
+  inlay <- testSpec "Inlay" (inlaySpec (baseDir "inlay"))
+  unfreeze <- testSpec "Unfreeze" (unfreezeSpec (baseDir "unfreeze"))
+  organize <- testSpec "Organize" (organizeSpec (baseDir "organize"))
+  inline <- testSpec "Inline" (inlineSpec (baseDir "inline"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -314,9 +410,132 @@ main = do
           completion,
           hovering,
           replay,
-          definition
+          definition,
+          folding,
+          inlay,
+          unfreeze,
+          organize,
+          inline
         ]
     )
+
+-- | Send a command and read the document once its workspace edit is applied.
+--
+--   'executeCommand' does not wait, and waiting for the command response
+--   deadlocks: the server is still inside the command when it asks the client
+--   to apply the edit.
+applyCommand :: TextDocumentIdentifier -> Command -> Session T.Text
+applyCommand docId (Command { _command = command_, _arguments = arguments_ }) = do
+    let args = Aeson.decode $ Aeson.encode $ fromJust arguments_
+    _ <- sendRequest LSP.SMethod_WorkspaceExecuteCommand (ExecuteCommandParams Nothing command_ args)
+    _ <- skipManyTill anyMessage (message LSP.SMethod_WorkspaceApplyEdit)
+    documentContents docId
+
+unfreezeSpec :: FilePath -> Spec
+unfreezeSpec fixtureDir = describe "unfreeze" $ do
+  it "puts back the text freeze changed" $
+    runSessionWithConfig (defaultConfig { messageTimeout = 15 }) "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Plain.dhall" "dhall"
+      original <- documentContents docId
+      let params = TextDocumentPositionParams
+            { _textDocument = docId
+            , _position = Position 0 0
+            }
+          freeze = Command
+            { _title = "Freeze import"
+            , _command = "dhall.server.freezeImport"
+            , _arguments = Just [Aeson.toJSON params]
+            }
+          thaw = Command
+            { _title = "Unfreeze import"
+            , _command = "dhall.server.unfreezeImport"
+            , _arguments = Just [Aeson.toJSON params]
+            }
+      frozen <- applyCommand docId freeze
+      thawed <- applyCommand docId thaw
+      liftIO $ do
+        frozen `shouldNotBe` original
+        thawed `shouldBe` original
+  it "leaves a missing import hashed" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Missing.dhall" "dhall"
+      original <- documentContents docId
+      let TextDocumentIdentifier uri_ = docId
+          command_ = Command
+            { _title = "Unfreeze all imports"
+            , _command = "dhall.server.unfreezeAllImports"
+            , _arguments = Just [Aeson.toJSON uri_]
+            }
+      executeCommand command_
+      thawedAll <- documentContents docId
+      liftIO $ thawedAll `shouldBe` original
+
+organizeSpec :: FilePath -> Spec
+organizeSpec fixtureDir = describe "organize imports" $ do
+  it "sorts import bindings by name" $
+    expectOrganize fixtureDir "Reorder.dhall"
+      "let a = ./a.dhall\nlet b = ./b.dhall\nin { a, b }\n"
+  it "drops an unused import binding" $
+    expectOrganize fixtureDir "Unused.dhall"
+      "let a = ./a.dhall\nin a\n"
+  it "refuses a repeated top-level name" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Duplicate.dhall" "dhall"
+      actions <- getCodeActions docId (Range (Position 0 0) (Position 3 0))
+      liftIO $ do
+        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
+        length found `shouldBe` 1
+        _disabled (head found) `shouldSatisfy` isJust
+        _edit (head found) `shouldBe` Nothing
+
+expectOrganize :: FilePath -> FilePath -> T.Text -> IO ()
+expectOrganize fixtureDir file expected =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    actions <- getCodeActions docId (Range (Position 0 0) (Position 5 0))
+    liftIO $ do
+      let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
+          action = head found
+          edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
+      map _newText edits `shouldBe` [expected]
+
+inlineSpec :: FilePath -> Spec
+inlineSpec fixtureDir = describe "inline let" $ do
+  it "inlines a binding" $
+    expectTitle fixtureDir "Simple.dhall" (Position 0 4) "Inline let" "1\n"
+  it "inlines a use nested in another let" $
+    expectTitle fixtureDir "Nested.dhall" (Position 0 4) "Inline let" "let y = 1 in y\n"
+  it "refuses when a binder would capture a name" $
+    expectDisabled fixtureDir "Capture.dhall" (Position 1 4)
+      "Inline let: Inlining would capture a variable."
+  it "refuses a use of name@n" $
+    expectDisabled fixtureDir "Indexed.dhall" (Position 1 4)
+      "Inline let: The body uses a variable of the form name@n."
+  it "refuses a binding that contains assert" $
+    expectDisabled fixtureDir "Assert.dhall" (Position 0 4)
+      "Inline let: The binding contains an assert."
+
+expectTitle :: FilePath -> FilePath -> Position -> T.Text -> T.Text -> IO ()
+expectTitle fixtureDir file pos title_ expected =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    actions <- getCodeActions docId (Range pos pos)
+    liftIO $ do
+      let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == title_ ]
+          action = head found
+          edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
+      map _newText edits `shouldBe` [expected]
+
+expectDisabled :: FilePath -> FilePath -> Position -> T.Text -> IO ()
+expectDisabled fixtureDir file pos title_ =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    actions <- getCodeActions docId (Range pos pos)
+    liftIO $ do
+      let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == title_ ]
+      length found `shouldBe` 1
+      _disabled (head found) `shouldSatisfy` isJust
+      _edit (head found) `shouldBe` Nothing
 
 -- | Record fields of an imported value, and import failures met on the way.
 definitionSpec :: FilePath -> Spec

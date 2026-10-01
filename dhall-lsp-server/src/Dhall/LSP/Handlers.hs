@@ -31,6 +31,7 @@ import Dhall.LSP.Backend.Completion
     , completeLocalImport
     , completeProjections
     , completionQueryAt
+    , completionsFromNormal
     )
 import Dhall.LSP.Backend.Dhall
     ( FileIdentifier
@@ -52,6 +53,7 @@ import Dhall.LSP.Backend.Diagnostics
     , Range (..)
     , diagnose
     , embedsWithRanges
+    , positionToOffset
     , explain
     , rangeFromDhall
     )
@@ -64,15 +66,15 @@ import Dhall.LSP.Backend.Freezing
     )
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
-import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
+import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, normalizedAt, typeAt)
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
-import Control.Lens                  (assign, modifying, toListOf, use, (^.))
+import Control.Lens                  (assign, modifying, over, toListOf, use, (^.))
 import Control.Monad                 (forM, forM_, guard)
 import Control.Monad.Trans           (lift, liftIO)
 import Control.Concurrent            (forkIO, threadDelay)
-import Control.Monad                 (foldM, void, when)
+import Control.Monad                 (void, when)
 import Control.Monad.Trans.Except    (catchE, throwE)
 import Control.Monad.Trans.State.Strict (get)
 import Data.IORef                    (IORef)
@@ -99,6 +101,7 @@ import Language.LSP.Protocol.Message
     )
 import Language.LSP.Protocol.Types   hiding (Range (..))
 import Language.LSP.Server           (Handlers, LspT)
+import Unsafe.Coerce                 (unsafeCoerce)
 import System.Directory              (XdgDirectory (..), createDirectoryIfMissing, getXdgDirectory)
 import System.FilePath               (takeDirectory, takeFileName, (<.>), (</>))
 import System.IO                     (hPutStrLn, stderr)
@@ -107,6 +110,7 @@ import Text.Megaparsec               (SourcePos (..), unPos)
 import qualified Control.Monad.Trans.Except       as Except
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
+import qualified Data.ByteString                  as ByteString
 import qualified Data.IORef                       as IORef
 import qualified Data.Map.Strict                  as Map
 import qualified Dhall.Bounded                   as Bounded
@@ -162,14 +166,24 @@ loadFile settings uri_ = do
     Right e -> return e
     _ -> throwE (Error, "Failed to parse Dhall file.")
 
-  loaded <- liftIO $ load settings fileIdentifier expr cache
-  (cache', expr') <- case loaded of
-    Right x -> return x
-    _ -> throwE (Error, "Failed to resolve imports.")
+  negative <- use negativeImports
+  (cache', expr', errs, _) <-
+    liftIO $ loadCollected settings fileIdentifier expr cache negative
   -- Update cache. Don't cache current expression because it might not have been
   -- written to disk yet (readUri reads from the VFS).
   assign importCache cache'
-  return expr'
+  if null errs
+    then return (unsafeCoerce expr')
+    else throwE (Error, "Failed to resolve imports." <> importFailureText errs)
+  where
+    importFailureText failed =
+        Text.pack
+            (concatMap
+                (\err ->
+                    concatMap
+                        (\ex -> "\n" <> Import.plainShowImportError ex)
+                        (Import.collectedErrors err))
+                failed)
 
 -- helper
 fileIdentifierFromUri :: Uri -> HandlerM FileIdentifier
@@ -238,26 +252,19 @@ hoverHandler settings =
                     isHovered _ =
                         False
 
-                let hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = do
+                let hoverFromDiagnosis (Diagnosis doctor_ (Just (Range left right)) diagnosis) = do
                         let _range = Just (rangeToJSON (Range left right))
-                            encodedDiag = URI.encode (Text.unpack diagnosis)
-
-                            _kind = MarkupKind_Markdown
-
-                            _value =
-                                    "[Explain error](dhall-explain:?"
-                                <>  Text.pack encodedDiag
-                                <>  " )"
-
-                            _contents = InL MarkupContent{..}
+                            suffix =
+                                if doctor_ == "Dhall.TypeCheck" || doctor_ == "Dhall.Parser"
+                                    then "\n\nExplain error"
+                                    else ""
+                            _contents = InL (mkPlainText (diagnosis <> suffix))
                         Just Hover{ _contents, _range }
                     hoverFromDiagnosis _ =
                         Nothing
 
                 let mHover = do
-                        explanation <- explain err
-
-                        guard (isHovered explanation)
+                        explanation <- listToMaybe (filter isHovered (diagnose err))
 
                         hoverFromDiagnosis explanation
 
@@ -396,7 +403,7 @@ chainText chained = pretty (Import.chainedImport chained)
 --   not reported.
 typecheckCollected
     :: [Import.CollectedImportError]
-    -> Expr Src Void
+    -> Expr Src Import.ImportHole
     -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
@@ -404,35 +411,60 @@ typecheckCollected
 typecheckCollected collected expr prevNames prevValues prevCtxs
     | any (\e -> isNothing (Import.collectedKnownType e)) collected =
         ([], [], [], [])
+    | any (not . (`Map.member` knownTypes)) (holesIn expr) =
+        ([], [], [], [])
     | otherwise =
-        case foldM step TypeCheck.emptyTypingContext collected of
-            Left err ->
-                ([ErrorTypecheck err], [], [], [])
-            Right ctx ->
-                let (errs, names, values, ctxs) =
-                        checkLets prevNames prevValues prevCtxs ctx expr
-                in (map ErrorTypecheck errs, names, values, ctxs)
+        let erased = unsafeCoerce (eraseHoles expr) :: Expr Src Void
+            (errs, names, values, ctxs) =
+                checkLets
+                    prevNames
+                    prevValues
+                    prevCtxs
+                    TypeCheck.emptyTypingContext
+                    erased
+        in (map ErrorTypecheck errs, names, values, ctxs)
   where
-    step ctx err =
-        case Import.collectedKnownType err of
-            Nothing ->
-                Right ctx
-            Just known ->
-                TypeCheck.extendBinder
-                    (Import.collectedName err)
-                    (knownImportType known)
-                    ctx
+    knownTypes =
+        Map.fromList
+            [ (Import.collectedHole err, known)
+            | err <- collected
+            , Just known <- [Import.collectedKnownType err]
+            ]
 
-    knownImportType Import.KnownText = Core.Text
-    knownImportType Import.KnownBytes = Core.Bytes
-    knownImportType Import.KnownLocation =
-        Core.Union
-            (Dhall.Map.fromList
-                [ ("Environment", Just Core.Text)
-                , ("Remote", Just Core.Text)
-                , ("Local", Just Core.Text)
-                , ("Missing", Nothing)
-                ])
+    holesIn (Core.Embed hole) =
+        [hole]
+    holesIn (Core.Note _ child) =
+        holesIn child
+    holesIn other =
+        concatMap holesIn (toListOf Core.subExpressions other)
+
+    eraseHoles (Core.Embed hole) =
+        case Map.lookup hole knownTypes of
+            Just known ->
+                knownValue known
+            Nothing ->
+                unsafeCoerce (Core.Const Core.Sort :: Expr Src Void)
+    eraseHoles (Core.Note src child) =
+        Core.Note src (eraseHoles child)
+    eraseHoles other =
+        over Core.subExpressions eraseHoles other
+
+    knownValue Import.KnownText =
+        unsafeCoerce (Core.TextLit (Core.Chunks [] "") :: Expr Src Void)
+    knownValue Import.KnownBytes =
+        unsafeCoerce (Core.BytesLit ByteString.empty :: Expr Src Void)
+    knownValue Import.KnownLocation =
+        unsafeCoerce
+            (Core.Field
+                (Core.Union
+                    (Dhall.Map.fromList
+                        [ ("Environment", Just Core.Text)
+                        , ("Remote", Just Core.Text)
+                        , ("Local", Just Core.Text)
+                        , ("Missing", Nothing)
+                        ]))
+                (Core.FieldSelection Nothing "Missing" Nothing)
+                :: Expr Src Void)
 
 checkLets
     :: [Text]
@@ -631,6 +663,12 @@ executeCommandHandler settings =
                 executeFreezeImport settings request
             | command_ == "dhall.server.freezeAllImports" ->
                 executeFreezeAllImports settings request
+            | command_ == "dhall.server.unfreezeImport" ->
+                executeUnfreezeImport request
+            | command_ == "dhall.server.unfreezeAllImports" ->
+                executeUnfreezeAllImports request
+            | command_ == "dhall.server.checkImportHash" ->
+                executeCheckImportHash settings request
             | command_ == "dhall.server.explain" ->
                 executeExplain request respond
             | command_ == "dhall.server.normalize" ->
@@ -820,6 +858,168 @@ executeFreezeImport settings request = do
 
   return ()
 
+-- | Normalize one hashed import and compare the result with its annotation.
+executeCheckImportHash
+    :: EvaluateSettings
+    -> TRequestMessage 'Method_WorkspaceExecuteCommand
+    -> HandlerM ()
+executeCheckImportHash settings request = do
+  args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
+  let uri_  = args ^. textDocument . uri
+  let line_ = fromIntegral (args ^. position . line)
+  let col_  = fromIntegral (args ^. position . character)
+
+  txt <- readUri uri_
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not check import hash; did not parse.")
+
+  import_
+    <- case exprAt (line_, col_) expr of
+      Just (Note _ (Embed i)) -> return i
+      _ -> throwE (Warning, "You weren't pointing at an import!")
+
+  digest <- case import_ of
+    Import (ImportHashed (Just digest) _) _ ->
+        return digest
+    _ ->
+        throwE (Info, "This import has no hash to check.")
+
+  fileIdentifier <- fileIdentifierFromUri uri_
+  cache <- use importCache
+  hashResult <-
+    liftIO $ computeSemanticHash settings fileIdentifier (Embed (stripHash import_)) cache
+  (cache', actual) <- case hashResult of
+    Right found -> return found
+    Left _ -> throwE (Error, "Could not check import hash; failed to evaluate import.")
+  assign importCache cache'
+
+  let expected = "sha256:" <> Text.pack (show digest)
+  if actual == expected
+    then throwE (Info, "Import hash matches.")
+    else throwE
+        ( Error
+        , "Import hash does not match.\nExpected "
+            <> expected
+            <> "\nActual "
+            <> actual
+        )
+
+-- | Delete one import hash.  A @missing@ import is left alone: without the
+--   hash it does not resolve.
+executeUnfreezeImport
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    -> HandlerM ()
+executeUnfreezeImport request = do
+  args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
+  let uri_  = args ^. textDocument . uri
+  let line_ = fromIntegral (args ^. position . line)
+  let col_  = fromIntegral (args ^. position . character)
+
+  txt <- readUri uri_
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not unfreeze import; did not parse.")
+
+  (src, import_)
+    <- case exprAt (line_, col_) expr of
+      Just (Note src (Embed i)) -> return (src, i)
+      _ -> throwE (Warning, "You weren't pointing at an import!")
+
+  case import_ of
+    Import (ImportHashed _ Missing) _ ->
+      throwE (Warning, "A missing import is left unchanged, because without its hash it always fails.")
+    _ -> return ()
+
+  Range (x1, y1) (x2, y2) <- case getImportHashPosition src of
+      Just range_ -> return range_
+      Nothing -> throwE (Error, "Failed to re-parse import!")
+
+  let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
+      _newText = ""
+      _edit = WorkspaceEdit
+          { _changes = Just (Map.singleton uri_ [TextEdit{..}])
+          , _documentChanges = Nothing
+          , _changeAnnotations = Nothing
+          }
+      _label = Nothing
+
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
+  return ()
+
+executeUnfreezeAllImports
+    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    -> HandlerM ()
+executeUnfreezeAllImports request = do
+  uri_ <- getCommandArguments request
+  txt <- readUri uri_
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not unfreeze imports; did not parse.")
+
+  let edits_ =
+        [ TextEdit
+            { _range = LSP.Types.Range
+                (Position (fromIntegral x1) (fromIntegral y1))
+                (Position (fromIntegral x2) (fromIntegral y2))
+            , _newText = ""
+            }
+        | (import_, Range (x1, y1) (x2, y2)) <- getAllImportsWithHashPositions expr
+        , case import_ of
+            Import (ImportHashed _ Missing) _ -> False
+            _ -> True
+        ]
+      _edit = WorkspaceEdit
+          { _changes = Just (Map.singleton uri_ edits_)
+          , _documentChanges = Nothing
+          , _changeAnnotations = Nothing
+          }
+      _label = Nothing
+
+  _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
+  return ()
+
+-- | Complete a record or union that is not a plain dotted name, such as
+--   `(f x).` or `{ a = 1 }.`.  The dot and any partial label are removed so
+--   the file can typecheck.  Completions come from the type at that
+--   position, not from normalizing the expression.
+completeBeforeDot
+    :: EvaluateSettings
+    -> Uri
+    -> Text
+    -> (Int, Int)
+    -> HandlerM [Completion]
+completeBeforeDot settings uri_ txt (line_, col_) = do
+    let off = positionToOffset txt (line_, col_)
+        before = Text.take off txt
+        after = Text.drop off txt
+        (lead, typed) = Text.breakOnEnd "." before
+        baseCol = col_ - fromIntegral (Text.length typed) - 1
+    if Text.null lead || Text.any (== '\n') typed || baseCol < 0
+        then return []
+        else do
+            let baseText = Text.dropEnd (Text.length typed + 1) before <> after
+            fileIdentifier <- fileIdentifierFromUri uri_
+            cache <- use importCache
+            case parse baseText of
+                Left _ ->
+                    return []
+                Right parsed -> do
+                    loaded <- liftIO $ load settings fileIdentifier parsed cache
+                    case loaded of
+                        Left _ ->
+                            return []
+                        Right (cache', expr) -> do
+                            assign importCache cache'
+                            case typecheck settings expr of
+                                Left _ ->
+                                    return []
+                                Right (wt, _) ->
+                                    return $
+                                        maybe []
+                                            (uncurry completionsFromNormal)
+                                            (normalizedAt (line_, baseCol) wt)
+
 completionHandler :: EvaluateSettings -> Handlers HandlerM
 completionHandler settings =
   LSP.requestHandler SMethod_TextDocumentCompletion \request respond -> handleErrorWithDefault respond (InR (InL (CompletionList False Nothing []))) do
@@ -858,16 +1058,16 @@ completionHandler settings =
 
             let completionContext = buildCompletionContext bindersExpr'
 
-            targetExpr <- case parse (Text.dropEnd 1 target_) of
-              Right e -> return e
-              Left _ -> throwE (Log, "Could not complete projection; prefix did not parse.")
-
-            loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
-            case loaded' of
-              Right (cache'', targetExpr') -> do
-                assign importCache cache''
-                return (completeProjections completionContext targetExpr')
-              Left _ -> return []
+            case parse (Text.dropEnd 1 target_) of
+              Left _ ->
+                  return []
+              Right targetExpr -> do
+                loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
+                case loaded' of
+                  Right (cache'', targetExpr') -> do
+                    assign importCache cache''
+                    return (completeProjections completionContext targetExpr')
+                  Left _ -> return []
 
           -- complete identifiers in scope
           | otherwise = do
@@ -893,7 +1093,12 @@ completionHandler settings =
                 , completeText item `notElem` banned
                 ]
 
-    completions <- computeCompletions
+    dotted <- computeCompletions
+    typed <-
+        if null dotted
+            then completeBeforeDot settings uri_ txt (line_, col_)
+            else return []
+    let completions = dotted ++ typed
 
     let toCompletionItem (Completion {..}) = CompletionItem {..}
          where
@@ -932,16 +1137,13 @@ executeExplain
     -> HandlerM ()
 executeExplain request respond = do
     uri_ <- getCommandArguments request
+    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
     errorMap <- use errors
-    explanation <- case Map.lookup uri_ errorMap >>= explain of
+    explanation <- case Map.lookup uri_ errorMap >>= explain maxOutputSize of
         Just diagnosis_ -> return diagnosis_
-        Nothing -> throwE (Info, "There is no type error to explain in this file.")
-    dir <- liftIO (getXdgDirectory XdgCache "dhall-lsp")
-    liftIO (createDirectoryIfMissing True dir)
-    let path = dir </> "explain.txt"
-        body = diagnosis explanation
-    liftIO (writeFile path (Text.unpack body))
-    let _uri = filePathToUri path
+        Nothing -> throwE (Info, "There is no error to explain in this file.")
+    let body = diagnosis explanation
+        _uri = Uri ("dhall-explain:?" <> Text.pack (URI.encode (Text.unpack body)))
         _external = Just False
         _takeFocus = Just True
         _selection = Nothing

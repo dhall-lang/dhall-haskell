@@ -110,6 +110,9 @@ runWith settings = withLogger $ \ioLogger -> do
                 "dhall.server.annotateLet",
                 "dhall.server.freezeImport",
                 "dhall.server.freezeAllImports",
+                "dhall.server.unfreezeImport",
+                "dhall.server.unfreezeAllImports",
+                "dhall.server.checkImportHash",
                 "dhall.server.explain",
                 "dhall.server.normalize",
                 "dhall.server.showOriginalSource"

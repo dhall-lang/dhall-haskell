@@ -22,6 +22,7 @@ import Dhall.Core
     , Var (..)
     , normalize
     , pretty
+    , shallowDenote
     , reservedIdentifiers
     , shift
     , subst
@@ -180,23 +181,43 @@ completeProjections (CompletionContext context values) expr =
   in case typeWithA absurd context expr' of
       Left _ -> []
       Right _A ->
-        let expr'' = normalize expr'
-        in completeUnion expr'' expr'' ++ completeRecord (normalize _A)
+        completionsFromNormal expr' (normalize _A)
 
- where
-  -- complete a union constructor by inspecting the union value
-  completeUnion _A (Union m) =
+-- | Fields of a record type, and constructors of a union type.
+--
+--   The expression itself is not normalized.  A union written before the
+--   dot is already a union, so its constructors come from that expression.
+--   A record projection comes from the type.
+completionsFromNormal :: Expr Src Void -> Expr Src Void -> [Completion]
+completionsFromNormal value ty =
+    let value' = shallowDenote value
+        ty' = shallowDenote ty
+    in completeRecord ty'
+        ++ case value' of
+            Union _ ->
+                -- A union written before the dot.  Constructors inhabit that
+                -- union, so the result type is the union itself.
+                completeUnion value' value'
+            _ ->
+                completeUnion ty' ty'
+
+-- complete a union constructor by inspecting the union value
+completeUnion :: Expr Src Void -> Expr Src Void -> [Completion]
+completeUnion _A (Union m) =
     let constructor (k, Nothing) =
             Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just _A)
         constructor (k, Just v) =
             Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just (Pi mempty k v _A))
      in map constructor (Dhall.Map.toList m)
-  completeUnion _ _ = []
+completeUnion _ _ =
+    []
 
-
-  -- complete a record projection by inspecting the record type
-  completeRecord (Record m) = map toCompletion (Dhall.Map.toList $ recordFieldValue <$> m)
-    where
-      toCompletion (name, typ) =
-          Completion (Dhall.Pretty.escapeLabel AnyLabel name) (Just typ)
-  completeRecord _ = []
+-- complete a record projection by inspecting the record type
+completeRecord :: Expr Src Void -> [Completion]
+completeRecord (Record m) =
+    map toCompletion (Dhall.Map.toList (recordFieldValue <$> m))
+  where
+    toCompletion (name_, typ) =
+        Completion (Dhall.Pretty.escapeLabel AnyLabel name_) (Just typ)
+completeRecord _ =
+    []
