@@ -33,6 +33,8 @@ import Language.LSP.Protocol.Types
     , Location (..)
     , Position (..)
     , Range (..)
+    , SetTraceParams (SetTraceParams)
+    , TraceValues (..)
     , TextDocumentContentChangeEvent (..)
     , TextDocumentIdentifier (..)
     , TextDocumentItem (..)
@@ -66,6 +68,9 @@ import Test.Hspec
 
 import qualified Data.Aeson         as Aeson
 import qualified Data.Map.Strict    as Map
+import Data.Default               (def)
+import Dhall.LSP.State            (ServerConfig (..))
+import Dhall.Pretty               (CharacterSet (..), ChooseCharacterSet (..))
 import System.Environment          (setEnv)
 import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
@@ -327,6 +332,51 @@ diagnosticsSpec fixtureDir = do
       [diag] <- waitForDiagnosticsSource "Dhall.Parser"
       liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
 
+stabilitySpec :: FilePath -> Spec
+stabilitySpec fixtureDir =
+  describe "Stability" $ do
+    it "survives a failing remote import" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "RemoteImport.dhall" "dhall"
+        [diag] <- waitForDiagnosticsSource "Dhall.Import"
+        liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
+        -- The server must still answer requests after the failure.
+        hover <- getHover docId (Position 0 0)
+        liftIO $ hover `shouldBe` Nothing
+    it "accepts a $/setTrace notification" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "UnboundVar.dhall" "dhall"
+        sendNotification LSP.SMethod_SetTrace (SetTraceParams TraceValues_Off)
+        [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
+
+configSpec :: Spec
+configSpec =
+  describe "ServerConfig" $ do
+    it "uses defaults for null" $
+      Aeson.fromJSON Aeson.Null `shouldBe` Aeson.Success (def :: ServerConfig)
+    it "uses defaults for an empty object" $
+      Aeson.fromJSON (Aeson.object []) `shouldBe` Aeson.Success (def :: ServerConfig)
+    it "uses defaults for a null section" $
+      Aeson.fromJSON (Aeson.object ["vscode-dhall-lsp-server" Aeson..= Aeson.Null])
+        `shouldBe` Aeson.Success (def :: ServerConfig)
+    it "reads the character set and output size" $ do
+      let parsed =
+            Aeson.fromJSON
+              (Aeson.object
+                [ "vscode-dhall-lsp-server" Aeson..= Aeson.object
+                    [ "character-set" Aeson..= ("ascii" :: T.Text)
+                    , "maxOutputSize" Aeson..= (42 :: Int)
+                    ]
+                ])
+      parsed `shouldBe`
+        Aeson.Success (ServerConfig (Specify ASCII) 42)
+    it "rejects a malformed section" $
+      case Aeson.fromJSON (Aeson.object ["vscode-dhall-lsp-server" Aeson..= (5 :: Int)]) of
+        Aeson.Error _ -> return ()
+        Aeson.Success c ->
+          expectationFailure ("expected a parse error, got " ++ show (c :: ServerConfig))
+
 foldingSpec :: FilePath -> Spec
 foldingSpec fixtureDir =
   describe "folding" $
@@ -403,6 +453,8 @@ main = do
   unfreeze <- testSpec "Unfreeze" (unfreezeSpec (baseDir "unfreeze"))
   organize <- testSpec "Organize" (organizeSpec (baseDir "organize"))
   inline <- testSpec "Inline" (inlineSpec (baseDir "inline"))
+  stability <- testSpec "Stability" (stabilitySpec (baseDir "diagnostics"))
+  config <- testSpec "Config" configSpec
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -415,7 +467,9 @@ main = do
           inlay,
           unfreeze,
           organize,
-          inline
+          inline,
+          stability,
+          config
         ]
     )
 

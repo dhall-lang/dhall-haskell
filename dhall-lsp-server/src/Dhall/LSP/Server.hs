@@ -28,6 +28,7 @@ import Dhall.LSP.Handlers
     , executeCommandHandler
     , hoverHandler
     , initializedHandler
+    , setTraceHandler
     , textDocumentChangeHandler
     , workspaceChangeConfigurationHandler
     )
@@ -83,13 +84,10 @@ runWith settings = withLogger $ \ioLogger -> do
 
   let onConfigChange _newConfig = return ()
 
-  let parseConfig _oldConfig json =
+  let parseConfig = parseServerConfig
 #else
-  let onConfigurationChange _oldConfig json =
+  let onConfigurationChange = parseServerConfig
 #endif
-        case fromJSON json of
-            Aeson.Success config -> Right config
-            Aeson.Error   string -> Left (Text.pack string)
 
   let doInitialize environment _request = do
           return (Right environment)
@@ -129,6 +127,7 @@ runWith settings = withLogger $ \ioLogger -> do
           , documentLinkHandler
           , completionHandler settings
           , initializedHandler
+          , setTraceHandler
           , workspaceChangeConfigurationHandler
           , textDocumentChangeHandler settings
           , cancelationHandler
@@ -184,6 +183,21 @@ runWith settings = withLogger $ \ioLogger -> do
   case exitCode of
       0 -> return ()
       n -> Exit.exitWith (ExitFailure n)
+
+-- | Parse the settings object sent by the client.  A JSON null means the
+--   client has no settings for this section (typical while the editor starts
+--   up); keep the old configuration in that case instead of failing.
+parseServerConfig :: ServerConfig -> Aeson.Value -> Either Text.Text ServerConfig
+parseServerConfig oldConfig Aeson.Null = Right oldConfig
+parseServerConfig _ json =
+    case fromJSON json of
+        Aeson.Success config -> Right config
+        Aeson.Error   string ->
+            Left
+                (  "expected a settings object with an optional \"vscode-dhall-lsp-server\" section, "
+                <> "for example {\"vscode-dhall-lsp-server\": {\"character-set\": \"ascii\"}}; "
+                <> Text.pack string
+                )
 
 -- | Retrieve the output logger.
 -- If no filename is provided then logger is disabled, if input is the string

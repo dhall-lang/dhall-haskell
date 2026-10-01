@@ -70,6 +70,7 @@ import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, normalizedAt, typeAt)
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
+import Control.Exception             (SomeAsyncException, SomeException, fromException)
 import Control.Lens                  (assign, modifying, over, toListOf, use, (^.))
 import Control.Monad                 (forM, forM_, guard)
 import Control.Monad.Trans           (lift, liftIO)
@@ -107,6 +108,8 @@ import System.FilePath               (takeDirectory, takeFileName, (<.>), (</>))
 import System.IO                     (hPutStrLn, stderr)
 import Text.Megaparsec               (SourcePos (..), unPos)
 
+import qualified Control.Exception                as Exception
+import qualified Control.Monad.Catch              as MC
 import qualified Control.Monad.Trans.Except       as Except
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
@@ -167,8 +170,12 @@ loadFile settings uri_ = do
     _ -> throwE (Error, "Failed to parse Dhall file.")
 
   negative <- use negativeImports
-  (cache', expr', errs, _) <-
-    liftIO $ loadCollected settings fileIdentifier expr cache negative
+  loaded <- liftIO $ loadCollected settings fileIdentifier expr cache negative
+  (cache', expr', errs) <- case loaded of
+    Left err ->
+      throwE (Error, Text.intercalate "\n" [ msg | Diagnosis _ _ msg <- diagnose err ])
+    Right (cache', expr', errs, _) ->
+      return (cache', expr', errs)
   -- Update cache. Don't cache current expression because it might not have been
   -- written to disk yet (readUri reads from the VFS).
   assign importCache cache'
@@ -546,45 +553,48 @@ diagnoseDocument settings _uri txt = do
           return ([], [err])
       Right parsed -> do
           negative <- use negativeImports
-          (cache', resolved, collected, sources) <-
-              liftIO $ loadCollected settings fileIdentifier parsed cache negative
-          assign importCache cache'
-          bodiesRef <- use importBodies
-          chainsRef <- use importChains
-          originsRef <- use mirrorOrigins
-          let chains = indexImportChains sources
-          liftIO $ do
-              IORef.modifyIORef' bodiesRef
-                  (Map.union (indexImportBodies sources))
-              IORef.modifyIORef' chainsRef (Map.union chains)
-              -- Absolute locations only.  A bare file name would collide, and the
-              -- dhall-import name is recorded when the view is published.
-              IORef.modifyIORef' originsRef $
-                  \old ->
-                    Map.union old $
-                      Map.mapKeys Text.unpack $
-                        Map.filterWithKey (\key _ -> '/' `elem` Text.unpack key) chains
-          let importDiags = map (collectedDiagnostic _uri) collected
-          docs <- use documents
-          previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
-          let prevNames = maybe [] snapPrefixNames previousSnap
-              prevValues = maybe [] snapPrefixValues previousSnap
-              prevCtxs = maybe [] snapPrefixContexts previousSnap
-              (typeErrs, prefixNames, prefixValues, prefixCtxs) =
-                  typecheckCollected collected resolved prevNames prevValues prevCtxs
-          liftIO $ IORef.modifyIORef' docs $ \m ->
-              let previous = Map.lookup _uri m
-                  snap = DocSnap
-                      { snapVersion = maybe 0 snapVersion previous
-                      , snapGeneration = maybe 0 snapGeneration previous
-                      , snapText = txt
-                      , snapLastGood = Just txt
-                      , snapPrefixNames = prefixNames
-                      , snapPrefixValues = prefixValues
-                      , snapPrefixContexts = prefixCtxs
-                      }
-              in Map.insert _uri snap m
-          return (importDiags, typeErrs)
+          loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
+          case loaded of
+            Left err ->
+              return ([], [err])
+            Right (cache', resolved, collected, sources) -> do
+              assign importCache cache'
+              bodiesRef <- use importBodies
+              chainsRef <- use importChains
+              originsRef <- use mirrorOrigins
+              let chains = indexImportChains sources
+              liftIO $ do
+                  IORef.modifyIORef' bodiesRef
+                      (Map.union (indexImportBodies sources))
+                  IORef.modifyIORef' chainsRef (Map.union chains)
+                  -- Absolute locations only.  A bare file name would collide, and the
+                  -- dhall-import name is recorded when the view is published.
+                  IORef.modifyIORef' originsRef $
+                      \old ->
+                        Map.union old $
+                          Map.mapKeys Text.unpack $
+                            Map.filterWithKey (\key _ -> '/' `elem` Text.unpack key) chains
+              let importDiags = map (collectedDiagnostic _uri) collected
+              docs <- use documents
+              previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
+              let prevNames = maybe [] snapPrefixNames previousSnap
+                  prevValues = maybe [] snapPrefixValues previousSnap
+                  prevCtxs = maybe [] snapPrefixContexts previousSnap
+                  (typeErrs, prefixNames, prefixValues, prefixCtxs) =
+                      typecheckCollected collected resolved prevNames prevValues prevCtxs
+              liftIO $ IORef.modifyIORef' docs $ \m ->
+                  let previous = Map.lookup _uri m
+                      snap = DocSnap
+                          { snapVersion = maybe 0 snapVersion previous
+                          , snapGeneration = maybe 0 snapGeneration previous
+                          , snapText = txt
+                          , snapLastGood = Just txt
+                          , snapPrefixNames = prefixNames
+                          , snapPrefixValues = prefixValues
+                          , snapPrefixContexts = prefixCtxs
+                          }
+                  in Map.insert _uri snap m
+              return (importDiags, typeErrs)
 
   let suggestions =
         case parse txt of
@@ -1254,15 +1264,18 @@ executeShowOriginal settings request respond = do
     fileIdentifier <- fileIdentifierFromUri uri_
     fetched <- liftIO $
         loadCollected settings fileIdentifier (Core.Embed imp) cache negative
-    let (_, _, failures, sources) = fetched
-        original = listToMaybe
-            [ text
-            | Import.ResolvedImportSource { Import.resolvedSourceText = Just text } <-
-                Map.elems sources
-            ]
-        body = case (failures, original) of
-            ([], Just text) -> text
+    let original = case fetched of
+            Right (_, _, [], sources) ->
+                listToMaybe
+                    [ text
+                    | Import.ResolvedImportSource { Import.resolvedSourceText = Just text } <-
+                        Map.elems sources
+                    ]
             _ ->
+                Nothing
+        body = case original of
+            Just text -> text
+            Nothing ->
                 "-- showing the decoded semantic-cache entry; the original source was not fetched or did not match the hash\n"
                     <> decodedText
     dir <- liftIO (getXdgDirectory XdgCache ("dhall-lsp" </> "sources"))
@@ -1326,6 +1339,12 @@ initializedHandler :: Handlers HandlerM
 initializedHandler =
     LSP.notificationHandler SMethod_Initialized \_ -> return ()
 
+-- | The client tells us its trace level here; there is nothing to adjust.
+--   This handler is a stub to prevent `lsp:no handler for:` messages.
+setTraceHandler :: Handlers HandlerM
+setTraceHandler =
+    LSP.notificationHandler SMethod_SetTrace \_ -> return ()
+
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 workspaceChangeConfigurationHandler :: Handlers HandlerM
 workspaceChangeConfigurationHandler =
@@ -1367,11 +1386,18 @@ textDocumentChangeHandler settings =
                         menv <- IORef.readIORef envRef
                         case menv of
                             Nothing -> return ()
-                            Just env ->
-                                void $ LSP.runLspT env $
+                            Just env -> do
+                                outcome <- Exception.try $ LSP.runLspT env $
                                     State.evalStateT
                                         (Except.runExceptT (diagnoseDocument settings _uri txt))
                                         snapshot
+                                case outcome of
+                                    Left ex ->
+                                        hPutStrLn stderr
+                                            ("Warning: background analysis failed: "
+                                                <> Import.plainShowImportError ex)
+                                    Right _ ->
+                                        return ()
 
 -- this handler is a stab to prevent `lsp:no handler for:` messages.
 cancelationHandler :: Handlers HandlerM
@@ -1397,8 +1423,22 @@ handleErrorWithDefault :: (Either a1 b -> HandlerM a2)
  -> b
  -> HandlerM a2
  -> HandlerM a2
-handleErrorWithDefault respond _default = flip catchE handler
+handleErrorWithDefault respond _default action =
+    MC.catch (catchE action handler) ioHandler
   where
+    -- An unexpected exception must not kill the server: log it and answer
+    -- the pending request with the default value.
+    ioHandler ex
+        | Just async <- fromException ex =
+            MC.throwM (async :: SomeAsyncException)
+        | otherwise = do
+            let _type_ = MessageType_Error
+                _message =
+                    "Internal error while processing the request: "
+                        <> Text.pack (Import.plainShowImportError ex)
+            liftLSP $ LSP.sendNotification SMethod_WindowLogMessage LogMessageParams{..}
+            respond (Right _default)
+
     handler (Log, _message)  = do
                     let _type_ = MessageType_Log
                     liftLSP $ LSP.sendNotification SMethod_WindowLogMessage LogMessageParams{..}

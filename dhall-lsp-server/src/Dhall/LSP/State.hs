@@ -9,9 +9,9 @@ import Control.Monad.Trans.Except       (ExceptT)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson
     ( FromJSON (..)
+    , Value (..)
     , withObject
     , (.!=)
-    , (.:)
     , (.:?)
     )
 import Data.Default                     (Default (def))
@@ -54,7 +54,7 @@ defaultOutputBytes = 16 * 1024
 data ServerConfig = ServerConfig
   { chosenCharacterSet :: ChooseCharacterSet
   , maxOutputSize :: Int
-  } deriving Show
+  } deriving (Eq, Show)
 
 instance Default ServerConfig where
   def = ServerConfig
@@ -63,13 +63,19 @@ instance Default ServerConfig where
     }
 
 -- We need to derive the FromJSON instance manually in order to provide defaults
--- for absent fields.
+-- for absent fields.  JSON null and a missing "vscode-dhall-lsp-server"
+-- section both mean "no settings": use the defaults.
 instance FromJSON ServerConfig where
-  parseJSON = withObject "settings" $ \v -> do
-    s <- v .: "vscode-dhall-lsp-server"
-    flip (withObject "vscode-dhall-lsp-server") s $ \o -> ServerConfig
-      <$> o .:? "character-set" .!= AutoInferCharSet
-      <*> o .:? "maxOutputSize" .!= defaultOutputBytes
+  parseJSON Null = pure def
+  parseJSON value = flip (withObject "settings") value $ \v -> do
+    mSection <- v .:? "vscode-dhall-lsp-server"
+    case mSection of
+      Nothing -> pure def
+      Just Null -> pure def
+      Just section ->
+        flip (withObject "vscode-dhall-lsp-server") section $ \o -> ServerConfig
+          <$> o .:? "character-set" .!= AutoInferCharSet
+          <*> o .:? "maxOutputSize" .!= defaultOutputBytes
 
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache
