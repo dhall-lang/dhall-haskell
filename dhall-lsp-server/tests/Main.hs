@@ -553,9 +553,9 @@ documentLinkSpec =
         Right _ ->
           expectationFailure "expected a parse error"
         Left err -> do
-          let message = Handlers.documentLinkParseError (Uri "file:///tmp/broken.dhall") err
-          T.unpack message `shouldContain` "file:///tmp/broken.dhall"
-          T.unpack message `shouldContain` "line 1, column 9"
+          let logged = Handlers.documentLinkParseError (Uri "file:///tmp/broken.dhall") err
+          T.unpack logged `shouldContain` "file:///tmp/broken.dhall"
+          T.unpack logged `shouldContain` "line 1, column 9"
 
 foldingSpec :: FilePath -> Spec
 foldingSpec fixtureDir =
@@ -723,6 +723,21 @@ unfreezeSpec fixtureDir = describe "unfreeze" $ do
             ]
       frozen <- applyCommand docId (head found)
       liftIO $ T.unpack frozen `shouldContain` "sha256:"
+  it "offers Check import hash when the selection starts before a hashed import" $
+    runSessionWithConfig (defaultConfig { messageTimeout = 15 }) "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Spaced.dhall" "dhall"
+      let aroundImport = Range (Position 0 7) (Position 0 20)
+      freezeActions <- getCodeActions docId aroundImport
+      let freezeCmd =
+            [ cmd
+            | InR codeAction@CodeAction { _command = Just cmd } <- freezeActions
+            , actionTitle codeAction == "Freeze import"
+            ]
+      _ <- applyCommand docId (head freezeCmd)
+      checkActions <- getCodeActions docId aroundImport
+      liftIO $ do
+        let titles = [ actionTitle codeAction | InR codeAction <- checkActions ]
+        titles `shouldContain` ["Check import hash"]
 
 annotateSpec :: FilePath -> Spec
 annotateSpec fixtureDir = describe "annotate let" $ do
