@@ -4,8 +4,8 @@
     the language server and the documentation generator share one walk.
 
     Resolution is de Bruijn-aware: @x\@n@ refers to the @n@th binding of @x@
-    out from the use.  Binders covered here are @let@, lambda, @forall@,
-    record fields and union constructors.
+    out from the use.  Binders covered here are @let@, lambda, @forall@ and
+    record fields.
 -}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -21,10 +21,8 @@ module Dhall.Scope
     , scopeFragments
     , bindingLabel
     , makeSrcForLabel
-    , unionConstructorSpans
     ) where
 
-import Control.Applicative ((<|>))
 import Control.Monad.Trans.Writer.Strict (Writer)
 import Data.Text (Text)
 import Dhall.Context (Context)
@@ -52,7 +50,6 @@ import qualified Text.Megaparsec.Pos as SourcePos
 -- | What a binder denotes, for field navigation.
 data JtdInfo
     = RecordFields (Set.Set NameDecl)
-    | UnionConstructors (Set.Set NameDecl)
     | NoInfo
     deriving (Eq, Ord, Show)
 
@@ -93,315 +90,6 @@ getSourceColumn = SourcePos.unPos . SourcePos.sourceColumn
 
 getSourceLine :: SourcePos -> Int
 getSourceLine = SourcePos.unPos . SourcePos.sourceLine
-
--- | Name spans of the alternatives in one union literal.
---
---   'Union' records only the names, not where they were written.  @src@ is
---   the literal, including the angle brackets.  The result is empty when
---   @src@ is not a union literal.
-unionConstructorSpans :: Src -> [(Text, Src)]
-unionConstructorSpans Src { srcStart, srcText } =
-    case open (Cur srcStart srcText Nothing) of
-        Just pairs ->
-            pairs
-        Nothing ->
-            []
-  where
-    open cur0 =
-        case consume "<" (skipSpace cur0) of
-            Nothing ->
-                Nothing
-            Just cur1 ->
-                Just (alternatives (skipBar (skipSpace cur1)) [])
-
-    alternatives cur acc =
-        let cur1 = skipSpace cur
-        in if ends cur1
-            then reverse acc
-            else case readLabel cur1 of
-                Nothing ->
-                    reverse acc
-                Just (name, nameSrc, cur2) ->
-                    let cur3 = skipPayload (skipSpace cur2)
-                        cur4 = skipSpace cur3
-                        acc' = (name, nameSrc) : acc
-                    in case consume "|" cur4 of
-                        Just cur5 ->
-                            alternatives cur5 acc'
-                        Nothing ->
-                            reverse acc'
-
-    ends cur =
-        Text.null (remaining cur) || Text.isPrefixOf ">" (remaining cur)
-
-    skipBar cur =
-        case consume "|" cur of
-            Just cur' ->
-                cur'
-            Nothing ->
-                cur
-
-    skipPayload cur =
-        case consume ":" (skipSpace cur) of
-            Nothing ->
-                cur
-            Just cur' ->
-                skipExpr stopsBeforeBarOrAngle (skipSpace cur')
-
-    readLabel cur =
-        case Text.uncons (remaining cur) of
-            Just ('`', _) ->
-                readQuoted cur
-            Just (c, _)
-                | headChar c ->
-                    readSimple cur
-            _ ->
-                Nothing
-
-    readQuoted cur =
-        case consume "`" cur of
-            Nothing ->
-                Nothing
-            Just cur1 ->
-                let (body, rest) = Text.span quotedChar (remaining cur1)
-                    raw = "`" <> body <> "`"
-                    curBody = Cur (advanceText (curPos cur1) body) rest (lastChar body <|> curPrev cur1)
-                in case consume "`" curBody of
-                    Nothing ->
-                        Nothing
-                    Just cur2 ->
-                        Just (body, spanOf cur raw, cur2)
-
-    readSimple cur =
-        let (body, rest) = Text.splitAt 1 (remaining cur)
-            (tail_, _) = Text.span tailChar rest
-            raw = body <> tail_
-        in Just (raw, spanOf cur raw, advanceOver cur raw)
-
-    spanOf cur raw =
-        Src (curPos cur) (advanceText (curPos cur) raw) raw
-
-    quotedChar c =
-           '\x20' <= c && c <= '\x5F'
-        || '\x61' <= c && c <= '\x7E'
-
-    headChar c =
-        ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A') || c == '_'
-
-    tailChar c =
-        headChar c || ('\x30' <= c && c <= '\x39') || c == '-' || c == '/'
-
--- | Skip a type or expression.  @stop@ says when to stop, without consuming
---   that character, once no brackets, braces, parentheses or lists are open.
---   The second argument is the character before the one under consideration.
-skipExpr :: (Char -> Maybe Char -> Bool) -> Cur -> Cur
-skipExpr stop = go 0 0 0 0
-  where
-    go ang br pa bk cur0 =
-        let cur = skipSpace cur0
-            prev = curPrev cur
-        in case Text.uncons (remaining cur) of
-            Nothing ->
-                cur
-            Just (c, _)
-                | ang == 0 && br == 0 && pa == 0 && bk == 0 && stop c prev ->
-                    cur
-                | Text.isPrefixOf "''" (remaining cur) && newlineAfterQuotes cur ->
-                    go ang br pa bk (skipSingleQuote cur)
-                | Text.isPrefixOf "0x\"" (remaining cur) ->
-                    go ang br pa bk (skipBytes cur)
-                | c == '"' ->
-                    go ang br pa bk (skipDoubleQuote (bump cur))
-                | c == '<' ->
-                    go (ang + 1) br pa bk (bump cur)
-                | c == '>' && prev == Just '-' ->
-                    go ang br pa bk (bump cur)
-                | c == '>' && ang > 0 ->
-                    go (ang - 1) br pa bk (bump cur)
-                | c == '{' ->
-                    go ang (br + 1) pa bk (bump cur)
-                | c == '}' && br > 0 ->
-                    go ang (br - 1) pa bk (bump cur)
-                | c == '(' ->
-                    go ang br (pa + 1) bk (bump cur)
-                | c == ')' && pa > 0 ->
-                    go ang br (pa - 1) bk (bump cur)
-                | c == '[' ->
-                    go ang br pa (bk + 1) (bump cur)
-                | c == ']' && bk > 0 ->
-                    go ang br pa (bk - 1) (bump cur)
-                | otherwise ->
-                    go ang br pa bk (bump cur)
-
-    newlineAfterQuotes cur =
-        case Text.stripPrefix "''" (remaining cur) of
-            Just rest ->
-                Text.isPrefixOf "\n" rest || Text.isPrefixOf "\r\n" rest
-            Nothing ->
-                False
-
-    skipBytes cur =
-        case Text.breakOn "\"" (Text.drop 3 (remaining cur)) of
-            (_, rest)
-                | Text.null rest ->
-                    advanceOver cur (remaining cur)
-                | otherwise ->
-                    let eaten = Text.take (Text.length (remaining cur) - Text.length rest + 1) (remaining cur)
-                    in advanceOver cur eaten
-
-    skipDoubleQuote cur =
-        case Text.uncons (remaining cur) of
-            Nothing ->
-                cur
-            Just ('\\', _) ->
-                skipDoubleQuote (skipEscape (bump cur))
-            Just ('$', rest)
-                | Text.isPrefixOf "{" rest ->
-                    let cur1 = skipExpr (\c _ -> c == '}') (advanceOver cur "${")
-                    in skipDoubleQuote (bump cur1)
-            Just ('"', _) ->
-                bump cur
-            Just _ ->
-                skipDoubleQuote (bump cur)
-
-    skipEscape cur =
-        case Text.uncons (remaining cur) of
-            Just ('u', rest)
-                | Text.isPrefixOf "{" rest ->
-                    case Text.breakOn "}" (Text.drop 1 rest) of
-                        (_, closing)
-                            | not (Text.null closing) ->
-                                advanceOver cur (Text.take (Text.length (remaining cur) - Text.length closing + 1) (remaining cur))
-                            | otherwise ->
-                                advanceOver cur (remaining cur)
-                | otherwise ->
-                    advanceOver cur (Text.take 5 (remaining cur))
-            Just _ ->
-                bump cur
-            Nothing ->
-                cur
-
-    skipSingleQuote cur0 =
-        let cur = dropPrefix "''" cur0
-            cur1 = dropNewline cur
-        in body cur1
-      where
-        body cur =
-            case () of
-                _
-                    | Text.isPrefixOf "'''" (remaining cur) ->
-                        body (dropPrefix "'''" cur)
-                    | Text.isPrefixOf "''${" (remaining cur) ->
-                        let cur1 = skipExpr (\c _ -> c == '}') (advanceOver cur "''${")
-                        in body (bump cur1)
-                    | Text.isPrefixOf "''" (remaining cur) ->
-                        dropPrefix "''" cur
-                    | otherwise ->
-                        case Text.uncons (remaining cur) of
-                            Nothing ->
-                                cur
-                            Just _ ->
-                                body (bump cur)
-
-        dropNewline cur
-            | Text.isPrefixOf "\r\n" (remaining cur) =
-                dropPrefix "\r\n" cur
-            | Text.isPrefixOf "\n" (remaining cur) =
-                dropPrefix "\n" cur
-            | otherwise =
-                cur
-
-data Cur = Cur
-    { curPos :: SourcePos
-    , remaining :: Text
-    , curPrev :: Maybe Char
-    }
-
-skipSpace :: Cur -> Cur
-skipSpace cur =
-    case Text.uncons (remaining cur) of
-        Just (c, _)
-            | c == ' ' || c == '\t' || c == '\n' ->
-                skipSpace (bump cur)
-        _
-            | Text.isPrefixOf "\r\n" (remaining cur) ->
-                skipSpace (dropPrefix "\r\n" cur)
-            | Text.isPrefixOf "--" (remaining cur) ->
-                skipSpace (dropLineComment cur)
-            | Text.isPrefixOf "{-" (remaining cur) ->
-                skipSpace (skipBlock (dropPrefix "{-" cur) 1)
-            | otherwise ->
-                cur
-
-dropLineComment :: Cur -> Cur
-dropLineComment cur =
-    let (comment, _) = Text.break (\c -> c == '\n' || c == '\r') (remaining cur)
-    in advanceOver cur comment
-
-skipBlock :: Cur -> Int -> Cur
-skipBlock cur 0 =
-    cur
-skipBlock cur depth
-    | Text.null (remaining cur) =
-        cur
-    | Text.isPrefixOf "-}" (remaining cur) =
-        skipBlock (dropPrefix "-}" cur) (depth - 1)
-    | Text.isPrefixOf "{-" (remaining cur) =
-        skipBlock (dropPrefix "{-" cur) (depth + 1)
-    | otherwise =
-        skipBlock (bump cur) depth
-
-consume :: Text -> Cur -> Maybe Cur
-consume token cur
-    | Text.isPrefixOf token (remaining cur) =
-        Just (advanceOver cur token)
-    | otherwise =
-        Nothing
-
-advanceOver :: Cur -> Text -> Cur
-advanceOver cur eaten =
-    Cur
-        (advanceText (curPos cur) eaten)
-        (Text.drop (Text.length eaten) (remaining cur))
-        (lastChar eaten <|> curPrev cur)
-
-lastChar :: Text -> Maybe Char
-lastChar text =
-    case Text.unsnoc text of
-        Nothing ->
-            Nothing
-        Just (_, c) ->
-            Just c
-
-dropPrefix :: Text -> Cur -> Cur
-dropPrefix token cur =
-    advanceOver cur token
-
-bump :: Cur -> Cur
-bump cur =
-    case Text.uncons (remaining cur) of
-        Nothing ->
-            cur
-        Just (c, _) ->
-            advanceOver cur (Text.singleton c)
-
-stopsBeforeBarOrAngle :: Char -> Maybe Char -> Bool
-stopsBeforeBarOrAngle c prev =
-    (c == '|' || c == '>') && prev /= Just '-'
-
-advanceText :: SourcePos -> Text -> SourcePos
-advanceText =
-    Text.foldl advance
-
-advance :: SourcePos -> Char -> SourcePos
-advance (SourcePos name line _) '\n' =
-    SourcePos name (SourcePos.mkPos (SourcePos.unPos line + 1)) (SourcePos.mkPos 1)
-advance (SourcePos name line col) '\t' =
-    let w = 8
-        c = SourcePos.unPos col - 1
-    in SourcePos name line (SourcePos.mkPos (c + w - (c `rem` w) + 1))
-advance (SourcePos name line col) _ =
-    SourcePos name line (SourcePos.mkPos (SourcePos.unPos col + 1))
 
 -- | Every declaration and use in @expr@, in source order.
 --
@@ -475,7 +163,9 @@ scopeFragments expr =
         Field e (FieldSelection (Just Src{srcEnd = posStart}) label (Just Src{srcStart = posEnd})) -> do
             fields <- do
                 dhallType <- infer context e
-                return (labelsOf dhallType)
+                case dhallType of
+                    NoInfo -> return mempty
+                    RecordFields s -> return (Set.toList s)
             let src = makeSrcForLabel posStart posEnd label
                 match (NameDecl _ l _) = l == label
             case filter match fields of
@@ -489,14 +179,6 @@ scopeFragments expr =
 
         Record (Map.toList -> pairs) ->
             handleRecordLike pairs
-
-        -- Constructor names are not stored on 'Union'.  A parsed literal is
-        -- wrapped in a 'Note', and that source is where the names are.
-        Note src (Union alternatives) ->
-            unionAlternatives (Just src) context alternatives
-
-        Union alternatives ->
-            unionAlternatives Nothing context alternatives
 
         Note _ e ->
             infer context e
@@ -524,30 +206,3 @@ scopeFragments expr =
                 Writer.tell [ScopeFragment nameSrc (NameDeclaration nameDecl)]
                 return [nameDecl]
             one _ = return []
-
-        labelsOf NoInfo =
-            []
-        labelsOf (RecordFields s) =
-            Set.toList s
-        labelsOf (UnionConstructors s) =
-            Set.toList s
-
-        unionAlternatives mSrc context alternatives = do
-            let located = maybe [] unionConstructorSpans mSrc
-            decls <- mapM (oneAlternative located) (Map.toList alternatives)
-            return (UnionConstructors (Set.fromList (concat decls)))
-          where
-            oneAlternative located (name, mType) = do
-                case mType of
-                    Nothing ->
-                        return ()
-                    Just ty -> do
-                        _ <- infer context ty
-                        return ()
-                case lookup name located of
-                    Nothing ->
-                        return []
-                    Just nameSrc -> do
-                        let nameDecl = NameDecl nameSrc name NoInfo
-                        Writer.tell [ScopeFragment nameSrc (NameDeclaration nameDecl)]
-                        return [nameDecl]

@@ -318,7 +318,7 @@ main = do
         ]
     )
 
--- | Record fields and union constructors, in this file and in an import.
+-- | Record fields of an imported value, and import failures met on the way.
 definitionSpec :: FilePath -> Spec
 definitionSpec dir =
   describe "Dhall.Definition" $ do
@@ -333,29 +333,6 @@ definitionSpec dir =
             line `shouldBe` 0
           _ ->
             expectationFailure "expected a location in the imported source"
-    it "opens a union constructor in this file" $
-      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
-        docId <- openDoc "union-local.dhall" "dhall"
-        docUri <- getDocUri "union-local.dhall"
-        _ <- waitForDiagnostics
-        defs <- getDefinitions docId (Position 5 6)
-        liftIO $ case defs of
-          InL (Definition (InL (Location uri (Range (Position line _) _)))) -> do
-            uri `shouldBe` docUri
-            line `shouldBe` 2
-          _ ->
-            expectationFailure "expected the constructor in this file"
-    it "opens a union constructor defined in an import" $
-      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
-        docId <- openDoc "union-use.dhall" "dhall"
-        _ <- waitForDiagnostics
-        defs <- getDefinitions docId (Position 2 10)
-        liftIO $ case defs of
-          InL (Definition (InL (Location uri (Range (Position line _) _)))) -> do
-            T.unpack (getUri uri) `shouldContain` "union-lib.dhall"
-            line `shouldBe` 2
-          _ ->
-            expectationFailure "expected the constructor in the imported source"
     it "opens a non-file import through dhall-import" $ do
       setEnv "DHALL_LSP_TEST_LIB" "{ customFunction = 1 }"
       runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
