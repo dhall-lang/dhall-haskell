@@ -728,16 +728,16 @@ codeActionHandler _evalSettings =
                         rangesMeet selected errRange
                     _ ->
                         False
-                actions =
+                offered =
                     InR normalize
                         : InR extract
                         : [InR explainAction | explainOffered]
-            respond (Right (InL actions))
+            respond (Right (InL offered))
 
 rangesMeet :: J.Range -> Range -> Bool
 rangesMeet (J.Range startPos endPos) (Range left right) =
-    let point (J.Position line col) =
-            (fromIntegral line, fromIntegral col)
+    let point (J.Position lineNo col) =
+            (fromIntegral lineNo, fromIntegral col)
     in point startPos <= right && left <= point endPos
 
 watchedFilesHandler :: Handlers HandlerM
