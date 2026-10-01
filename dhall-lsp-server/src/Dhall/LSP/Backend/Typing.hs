@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Typing (annotateLet, exprAt, letTypes, normalizedAt, srcAt, typeAt) where
+module Dhall.LSP.Backend.Typing (annotateLet, exprAt, letTypes, normalizedAt, scopedNormalize, srcAt, typeAt) where
 
 import Dhall.Core
     ( Binding (..)
@@ -15,13 +15,17 @@ import Dhall.TypeCheck
     , extendBinder
     , extendLet
     , normalizeWithContext
+    , normalizeWithContextBounded
     , typeWithContext
     )
 
 import Control.Applicative ((<|>))
 import Control.Lens        (toListOf)
 import Data.Bifunctor      (first)
+import Data.Text           (Text)
 import Data.Void           (Void)
+
+import qualified Data.Text as Text
 
 import Dhall.LSP.Backend.Dhall       (WellTyped, fromWellTyped)
 import Dhall.LSP.Backend.Diagnostics (Position, Range (..), rangeFromDhall)
@@ -207,6 +211,55 @@ normalizedAt' pos ctx expr = do
             return (expr, normalizeWithContext ctx typ)
         ((src, e) : _) ->
             normalizedAt' pos ctx (Note src e)
+
+-- | Normalize a selected expression with the values of the let bindings
+--   that enclose it: selecting @a + 1@ in @let a = 2 in a + 1@ gives @3@.
+--
+--   The selection is identified by the smallest subexpression containing
+--   @pos@ whose source text equals @selected@ up to surrounding whitespace.
+--   The 'Int' is the output byte budget for quoting; the returned 'Bool' is
+--   'True' when the normal form was cut short.  'Nothing' when the selection
+--   matches no subexpression or an enclosing binding does not typecheck.
+scopedNormalize
+    :: Int -> Position -> Text -> WellTyped -> Maybe (Expr Src Void, Bool)
+scopedNormalize budget pos selected expr = do
+    expr' <- splitMultiLetSrc (fromWellTyped expr)
+    (ctx, found) <- scopedAt pos selected emptyTypingContext expr'
+    return (normalizeWithContextBounded budget ctx found)
+
+scopedAt
+    :: Position
+    -> Text
+    -> TypingContext Src
+    -> Expr Src Void
+    -> Maybe (TypingContext Src, Expr Src Void)
+scopedAt pos selected ctx expr@(Note src _)
+    | Text.strip (srcText src) == Text.strip selected =
+        Just (ctx, expr)
+scopedAt pos selected ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
+    | coversAnn pos ann = scopedAt pos selected ctx (annotationExpr ann)
+    | covers pos a = scopedAt pos selected ctx a
+    | pos `inside` src = do
+        ctx' <- either (const Nothing) Just (extendLet x a ctx)
+        scopedAt pos selected ctx' e
+scopedAt pos selected ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A } b))
+    | covers pos _A = scopedAt pos selected ctx _A
+    | pos `inside` src = do
+        ctx' <- either (const Nothing) Just (extendBinder x _A ctx)
+        scopedAt pos selected ctx' b
+scopedAt pos selected ctx (Note src (Pi _ x _A _B))
+    | covers pos _A = scopedAt pos selected ctx _A
+    | pos `inside` src = do
+        ctx' <- either (const Nothing) Just (extendBinder x _A ctx)
+        scopedAt pos selected ctx' _B
+scopedAt pos selected ctx (Note _ expr) =
+    scopedAt pos selected ctx expr
+scopedAt pos selected ctx expr =
+    case [ Note src e | (Note src e) <- toListOf subExpressions expr, pos `inside` src ] of
+        (child : _) ->
+            scopedAt pos selected ctx child
+        [] ->
+            Nothing
 
 -- Make sure all lets in a multilet are annotated with their source information.
 --

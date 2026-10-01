@@ -73,6 +73,8 @@ import qualified Data.Map.Strict    as Map
 import Data.Default               (def)
 import Dhall.LSP.Backend.Diagnostics (stripTrailingComments)
 import Dhall.LSP.State            (ServerConfig (..))
+import qualified Dhall.LSP.Backend.Dhall as Backend
+import qualified Dhall.LSP.Handlers      as Handlers
 import Dhall.Pretty               (CharacterSet (..), ChooseCharacterSet (..))
 import System.Environment          (setEnv)
 import qualified Data.Text       as T
@@ -543,6 +545,18 @@ commentTrimSpec =
     it "keeps -- inside a multi-line string" $
       stripTrailingComments "'' a--b ''" `shouldBe` "'' a--b ''"
 
+documentLinkSpec :: Spec
+documentLinkSpec =
+  describe "document links" $
+    it "logs the URI and the parse error location" $
+      case Backend.parse "let x = \n" of
+        Right _ ->
+          expectationFailure "expected a parse error"
+        Left err -> do
+          let message = Handlers.documentLinkParseError (Uri "file:///tmp/broken.dhall") err
+          T.unpack message `shouldContain` "file:///tmp/broken.dhall"
+          T.unpack message `shouldContain` "line 1, column 9"
+
 foldingSpec :: FilePath -> Spec
 foldingSpec fixtureDir =
   describe "folding" $
@@ -619,9 +633,12 @@ main = do
   unfreeze <- testSpec "Unfreeze" (unfreezeSpec (baseDir "unfreeze"))
   organize <- testSpec "Organize" (organizeSpec (baseDir "organize"))
   inline <- testSpec "Inline" (inlineSpec (baseDir "inline"))
+  annotate <- testSpec "Annotate" (annotateSpec (baseDir "annotate"))
+  normalize <- testSpec "Normalize" (normalizeSpec (baseDir "normalize"))
   stability <- testSpec "Stability" (stabilitySpec (baseDir "diagnostics"))
   config <- testSpec "Config" configSpec
   commentTrim <- testSpec "Comment trimming" commentTrimSpec
+  documentLink <- testSpec "Document links" documentLinkSpec
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -635,9 +652,12 @@ main = do
           unfreeze,
           organize,
           inline,
+          annotate,
+          normalize,
           stability,
           config,
-          commentTrim
+          commentTrim,
+          documentLink
         ]
     )
 
@@ -691,6 +711,68 @@ unfreezeSpec fixtureDir = describe "unfreeze" $ do
       executeCommand command_
       thawedAll <- documentContents docId
       liftIO $ thawedAll `shouldBe` original
+  it "freezes an import when the selection starts before it" $
+    runSessionWithConfig (defaultConfig { messageTimeout = 15 }) "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Spaced.dhall" "dhall"
+      -- The selection starts on the whitespace before the import.
+      actions <- getCodeActions docId (Range (Position 0 7) (Position 0 20))
+      let found =
+            [ cmd
+            | InR codeAction@CodeAction { _command = Just cmd } <- actions
+            , actionTitle codeAction == "Freeze import"
+            ]
+      frozen <- applyCommand docId (head found)
+      liftIO $ T.unpack frozen `shouldContain` "sha256:"
+
+annotateSpec :: FilePath -> Spec
+annotateSpec fixtureDir = describe "annotate let" $ do
+  it "annotates an unannotated let" $
+    expectAnnotate fixtureDir "Unannotated.dhall" (Position 0 4)
+      "let a : Natural = 2 in a\n"
+  it "replaces an existing annotation" $
+    expectAnnotate fixtureDir "Annotated.dhall" (Position 0 4)
+      "let a : Natural = 2 in a\n"
+  it "annotates a later binding in a multi-let block" $
+    expectAnnotate fixtureDir "MultiLet.dhall" (Position 0 14)
+      "let a = 2 let b : Text = \"x\" in a\n"
+
+expectAnnotate :: FilePath -> FilePath -> Position -> T.Text -> IO ()
+expectAnnotate fixtureDir file pos expected =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    let params = TextDocumentPositionParams
+          { _textDocument = docId
+          , _position = pos
+          }
+        annotate = Command
+          { _title = "Annotate let binding with type"
+          , _command = "dhall.server.annotateLet"
+          , _arguments = Just [Aeson.toJSON params]
+          }
+    annotated <- applyCommand docId annotate
+    liftIO $ annotated `shouldBe` expected
+
+normalizeSpec :: FilePath -> Spec
+normalizeSpec fixtureDir = describe "normalize selection" $ do
+  it "normalizes with the enclosing let bindings" $
+    expectNormalize fixtureDir "Scoped.dhall" (Range (Position 0 13) (Position 0 18))
+      "let a = 2 in 3\n"
+  it "falls back to the plain selection when the document does not typecheck" $
+    expectNormalize fixtureDir "TypeError.dhall" (Range (Position 0 19) (Position 0 24))
+      "let x = \"s\" + 1 in 2\n"
+
+expectNormalize :: FilePath -> FilePath -> Range -> T.Text -> IO ()
+expectNormalize fixtureDir file selection expected =
+  runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    docId <- openDoc file "dhall"
+    let TextDocumentIdentifier uri_ = docId
+        normalize = Command
+          { _title = "Normalize selection"
+          , _command = "dhall.server.normalize"
+          , _arguments = Just [Aeson.toJSON uri_, Aeson.toJSON selection]
+          }
+    normalized <- applyCommand docId normalize
+    liftIO $ normalized `shouldBe` expected
 
 organizeSpec :: FilePath -> Spec
 organizeSpec fixtureDir = describe "organize imports" $ do
@@ -709,6 +791,15 @@ organizeSpec fixtureDir = describe "organize imports" $ do
         length found `shouldBe` 1
         _disabled (head found) `shouldSatisfy` isJust
         _edit (head found) `shouldBe` Nothing
+  it "is offered for a cursor outside the import block" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Reorder.dhall" "dhall"
+      -- The cursor is in the body, past the last import binding.
+      actions <- getCodeActions docId (Range (Position 2 3) (Position 2 3))
+      liftIO $ do
+        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
+        length found `shouldBe` 1
+        _disabled (head found) `shouldBe` Nothing
 
 expectOrganize :: FilePath -> FilePath -> T.Text -> IO ()
 expectOrganize fixtureDir file expected =
@@ -736,6 +827,16 @@ inlineSpec fixtureDir = describe "inline let" $ do
   it "refuses a binding that contains assert" $
     expectDisabled fixtureDir "Assert.dhall" (Position 0 4)
       "Inline let: The binding contains an assert."
+  it "is offered when the selection ends on the binder name" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Simple.dhall" "dhall"
+      -- The selection covers "let " and ends exactly where the name starts.
+      actions <- getCodeActions docId (Range (Position 0 0) (Position 0 4))
+      liftIO $ do
+        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Inline let" ]
+            edits = maybe [] concat (fmap Map.elems (_edit (head found) >>= _changes))
+        length found `shouldBe` 1
+        map _newText edits `shouldBe` ["1\n"]
 
 expectTitle :: FilePath -> FilePath -> Position -> T.Text -> T.Text -> IO ()
 expectTitle fixtureDir file pos title_ expected =

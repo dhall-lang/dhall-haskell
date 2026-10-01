@@ -10,7 +10,7 @@
 
 module Dhall.LSP.Handlers where
 
-import Data.Void    (Void)
+import Data.Void    (Void, absurd)
 import Dhall        (EvaluateSettings)
 import Dhall.Core
     ( Expr (Embed, Note)
@@ -66,11 +66,12 @@ import Dhall.LSP.Backend.Freezing
     )
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
-import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
+import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, scopedNormalize, typeAt)
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
-import Control.Exception             (SomeAsyncException, SomeException, fromException)
+import Control.DeepSeq               (force)
+import Control.Exception             (SomeAsyncException, SomeException, evaluate, fromException)
 import Control.Lens                  (assign, modifying, over, toListOf, use, (^.))
 import Control.Monad                 (forM, forM_, guard)
 import Control.Monad.Trans           (lift, liftIO)
@@ -386,8 +387,8 @@ documentLinkHandler =
         expr <- case parse txt of
             Right e ->
                 return e
-            Left _ ->
-                throwE (Log, "Could not process document links; did not parse.")
+            Left err ->
+                throwE (Log, documentLinkParseError uri_ err)
 
         let imports = embedsWithRanges expr :: [(Range, Import)]
 
@@ -433,6 +434,25 @@ documentLinkHandler =
         links <- liftIO $ mapM go (map (\(range_, imp) -> (range_, adjust imp)) imports)
         respond (Right (InL (concat links)))
 
+
+-- | Log line for a document whose links could not be extracted: names the
+--   document and where the parse failed.
+documentLinkParseError :: Uri -> DhallError -> Text
+documentLinkParseError uri_ err =
+    "Could not process document links for "
+        <> getUri uri_
+        <> "; did not parse"
+        <> location
+        <> ": "
+        <> message
+  where
+    firstDiagnosis = listToMaybe (diagnose err)
+    location = case firstDiagnosis of
+        Just (Diagnosis _ (Just (Range (line_, col) _)) _) ->
+            " at line " <> Text.pack (show (line_ + 1)) <> ", column " <> Text.pack (show (col + 1))
+        _ ->
+            ""
+    message = maybe "" (\(Diagnosis _ _ text_) -> text_) firstDiagnosis
 
 diagnosticsHandler :: EvaluateSettings -> Uri -> HandlerM ()
 diagnosticsHandler settings _uri = do
@@ -806,7 +826,7 @@ executeCommandHandler settings =
             | command_ == "dhall.server.explain" ->
                 executeExplain request respond
             | command_ == "dhall.server.normalize" ->
-                executeNormalize request respond
+                executeNormalize settings request respond
             | command_ == "dhall.server.showOriginalSource" ->
                 executeShowOriginal settings request respond
             | otherwise -> do
@@ -889,7 +909,11 @@ executeAnnotateLet settings request = do
   let _range = LSP.Types.Range (Position (fromIntegral (unPos x1 - 1)) (fromIntegral (unPos y1 - 1)))
                       (Position (fromIntegral (unPos x2 - 1)) (fromIntegral (unPos y2 - 1)))
 
-  let _newText= formatExpr chosenCharacterSet annotExpr
+  -- The annotation Src starts right before the colon (or, for an
+  -- unannotated let, is a zero-width span right before the @=@) and runs
+  -- through the whitespace before @=@.  Replacing it with colon, type, and
+  -- one trailing space keeps both sides spaced: @let a : Natural = 2@.
+  let _newText = ": " <> formatExpr chosenCharacterSet annotExpr <> " "
 
   let _edit = WorkspaceEdit
           { _changes = Just (Map.singleton uri_ [TextEdit{..}])
@@ -943,6 +967,14 @@ executeFreezeAllImports settings request = do
 
   return ()
 
+-- | The import whose span contains the cursor, or a warning for the user.
+--   Shared by the freeze, unfreeze, and check-hash commands.
+importAtCursor :: Expr Src Import -> (Int, Int) -> HandlerM (Src, Import)
+importAtCursor expr pos =
+    case exprAt pos expr of
+        Just (Note src (Embed i)) -> return (src, i)
+        _ -> throwE (Warning, "You weren't pointing at an import!")
+
 executeFreezeImport
     :: EvaluateSettings
     -> TRequestMessage 'Method_WorkspaceExecuteCommand
@@ -958,10 +990,7 @@ executeFreezeImport settings request = do
     Right e -> return e
     Left _ -> throwE (Warning, "Could not freeze import; did not parse.")
 
-  (src, import_)
-    <- case exprAt (line_, col_) expr of
-      Just (Note src (Embed i)) -> return (src, i)
-      _ -> throwE (Warning, "You weren't pointing at an import!")
+  (src, import_) <- importAtCursor expr (line_, col_)
 
   Range (x1, y1) (x2, y2) <- case getImportHashPosition src of
       Just range_ -> return range_
@@ -1008,10 +1037,7 @@ executeCheckImportHash settings request = do
     Right e -> return e
     Left _ -> throwE (Warning, "Could not check import hash; did not parse.")
 
-  import_
-    <- case exprAt (line_, col_) expr of
-      Just (Note _ (Embed i)) -> return i
-      _ -> throwE (Warning, "You weren't pointing at an import!")
+  (_, import_) <- importAtCursor expr (line_, col_)
 
   digest <- case import_ of
     Import (ImportHashed (Just digest) _) _ ->
@@ -1055,10 +1081,7 @@ executeUnfreezeImport request = do
     Right e -> return e
     Left _ -> throwE (Warning, "Could not unfreeze import; did not parse.")
 
-  (src, import_)
-    <- case exprAt (line_, col_) expr of
-      Just (Note src (Embed i)) -> return (src, i)
-      _ -> throwE (Warning, "You weren't pointing at an import!")
+  (src, import_) <- importAtCursor expr (line_, col_)
 
   case import_ of
     Import (ImportHashed _ Missing) _ ->
@@ -1335,10 +1358,11 @@ executeExplain request respond = do
     return ()
 
 executeNormalize
-    :: TRequestMessage 'Method_WorkspaceExecuteCommand
+    :: EvaluateSettings
+    -> TRequestMessage 'Method_WorkspaceExecuteCommand
     -> (Either a (Value |? Null) -> HandlerM b)
     -> HandlerM ()
-executeNormalize request respond = do
+executeNormalize settings request respond = do
     (uri_, range_, givenBytes) <- case request ^. params . arguments of
         Just [u, r] ->
             case (Aeson.fromJSON u, Aeson.fromJSON r) of
@@ -1370,12 +1394,34 @@ executeNormalize request respond = do
         -- optional: 256MiB of allocation and 30 seconds.
         allocationBytes = 256 * 1024 * 1024 :: Int64
         timeoutMicros = 30 * 1000 * 1000
-    outcome <- liftIO $
-        Bounded.normalizeLimited
-            (Just allocationBytes)
-            (Just timeoutMicros)
-            (Just bytes)
-            expr
+    -- Normalizing with the enclosing let bindings needs the whole document
+    -- to load and typecheck; otherwise fall back to the selection alone.
+    scoped <- catchE
+        (do  whole <- loadFile settings uri_
+             case typecheck settings whole of
+                 Left _ ->
+                     return Nothing
+                 Right (welltyped, _) -> do
+                     let LSP.Types.Range (Position line_ col) _ = range_
+                     return
+                         (scopedNormalize
+                             bytes
+                             (fromIntegral line_, fromIntegral col)
+                             selected
+                             welltyped))
+        (\_ -> return Nothing)
+    outcome <- liftIO $ case scoped of
+        Just (scopedNF, cut) ->
+            Bounded.runLimited
+                (Just allocationBytes)
+                (Just timeoutMicros)
+                (evaluate (force (fmap absurd scopedNF, cut)))
+        Nothing ->
+            Bounded.normalizeLimited
+                (Just allocationBytes)
+                (Just timeoutMicros)
+                (Just bytes)
+                expr
     case outcome of
         Left _ ->
             throwE (Warning, "Evaluation limit exceeded; the edit was refused.")

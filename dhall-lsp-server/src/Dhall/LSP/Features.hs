@@ -874,7 +874,7 @@ importExpr _ = False
 inlineLet :: Text -> J.Range -> Maybe (Either Text Text)
 inlineLet txt selected = do
     expr <- either (const Nothing) Just (parse txt)
-    (letSrc, binding, body) <- findLetBinder (selectionStart selected) expr
+    (letSrc, binding, body) <- findLetBinder selected expr
     let name_ = Core.variable binding
         letValue = Core.value binding
     binderSrc <- letName binding
@@ -909,10 +909,6 @@ inlineLet txt selected = do
                                     : [ (rangeFromDhall src, wrapped) | src <- uses ]
                         return (Right (applyTextEdits txt replacements))
 
-selectionStart :: J.Range -> (Int, Int)
-selectionStart (J.Range (J.Position lineNo col) _) =
-    (fromIntegral lineNo, fromIntegral col)
-
 -- | The binder name, between the whitespace after @let@ and the whitespace
 --   before @:@ or @=@.
 letName :: Binding Src Import -> Maybe Src
@@ -926,27 +922,30 @@ letName
 letName _ =
     Nothing
 
+-- | Find the let binder whose name span meets the selection.  Any overlap
+--   counts, so a cursor on either edge of the name or a selection touching
+--   the name qualifies.
 findLetBinder
-    :: (Int, Int)
+    :: J.Range
     -> Expr Src Import
     -> Maybe (Src, Binding Src Import, Expr Src Import)
-findLetBinder pos (Core.Note src (Core.Let binding body))
+findLetBinder selected (Core.Note src (Core.Let binding body))
     | Just nameSrc <- letName binding
-    , srcContains nameSrc pos =
+    , rangesMeet selected (rangeFromDhall nameSrc) =
         Just (src, binding, body)
     | otherwise =
-        findLetBinder pos (Core.value binding) <|> findLetBinder pos body
-findLetBinder pos (Core.Note _ expr) =
-    findLetBinder pos expr
-findLetBinder pos (Core.Let binding body)
+        findLetBinder selected (Core.value binding) <|> findLetBinder selected body
+findLetBinder selected (Core.Note _ expr) =
+    findLetBinder selected expr
+findLetBinder selected (Core.Let binding body)
     | Just nameSrc <- letName binding
-    , srcContains nameSrc pos =
+    , rangesMeet selected (rangeFromDhall nameSrc) =
         Just (fromMaybe nameSrc (Core.bindingSrc0 binding), binding, body)
     | otherwise =
-        findLetBinder pos (Core.value binding) <|> findLetBinder pos body
-findLetBinder pos expr =
+        findLetBinder selected (Core.value binding) <|> findLetBinder selected body
+findLetBinder selected expr =
     listToMaybe
-        (mapMaybe (findLetBinder pos) (toListOf Core.subExpressions expr))
+        (mapMaybe (findLetBinder selected) (toListOf Core.subExpressions expr))
 
 containsAssert :: Expr s a -> Bool
 containsAssert (Core.Assert _) = True
@@ -1176,12 +1175,24 @@ codeActionHandler _evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-                onImport = importUnderCursor txt selected
-                onHashedImport = hashedImportUnderCursor txt selected
+                -- The commands locate the import from the position they are
+                -- given, so pass the start of the overlapped import, not the
+                -- raw selection start: a selection beginning in whitespace
+                -- before the import must still work.
+                metImports = importsMeeting txt selected
+                onImport = not (null metImports)
+                onHashedImport = any (hashedImport . snd) metImports
                 J.Range startPos _ = selected
+                importPosition = case metImports of
+                    [] ->
+                        startPos
+                    _ ->
+                        case fst (last metImports) of
+                            Range (line_, col) _ ->
+                                J.Position (fromIntegral line_) (fromIntegral col)
                 importPos = J.TextDocumentPositionParams
                     { _textDocument = J.TextDocumentIdentifier docUri
-                    , _position = startPos
+                    , _position = importPosition
                     }
                 freezeAction =
                     importCommand "Freeze import" "dhall.server.freezeImport" importPos
@@ -1203,26 +1214,16 @@ codeActionHandler _evalSettings =
                         }
                     , _data_ = Nothing
                     }
-                onLets = case parse txt of
-                    Right expr ->
-                        case topLetBlocks expr of
-                            [] ->
-                                False
-                            blocks ->
-                                rangesMeet
-                                    selected
-                                    (Range (blockStart (head blocks), 0) (blockEnd (last blocks), 0))
-                    Left _ ->
-                        False
-                organizeAction
-                    | not onLets = []
-                    | otherwise = case organizeImports txt of
-                        Just (Left reason_) ->
-                            [disabledOrganize reason_]
-                        Just (Right replacement) ->
-                            [readyOrganize docUri txt replacement]
-                        Nothing ->
-                            []
+                -- Organize imports is offered for any cursor or selection in
+                -- a file with an eligible top-level import block; the
+                -- selection does not have to overlap the block.
+                organizeAction = case organizeImports txt of
+                    Just (Left reason_) ->
+                        [disabledOrganize reason_]
+                    Just (Right replacement) ->
+                        [readyOrganize docUri txt replacement]
+                    Nothing ->
+                        []
                 inlineAction = case inlineLet txt selected of
                     Just (Left reason_) ->
                         [disabledInline reason_]
@@ -1334,30 +1335,22 @@ importCommand title_ command_ pos = J.CodeAction
     , _data_ = Nothing
     }
 
-importUnderCursor :: Text -> J.Range -> Bool
-importUnderCursor txt selected =
+-- | Imports whose source span meets the selection, with their ranges.
+--   Nested imports come innermost last.
+importsMeeting :: Text -> J.Range -> [(Range, Import)]
+importsMeeting txt selected =
     case parse txt of
         Left _ ->
-            False
+            []
         Right expr ->
-            not $ null
-                [ ()
-                | Core.Note src (Core.Embed _) <- universeOf Core.subExpressions expr
-                , rangesMeet selected (rangeFromDhall src)
-                ]
+            [ (rangeFromDhall src, imp)
+            | Core.Note src (Core.Embed imp) <- universeOf Core.subExpressions expr
+            , rangesMeet selected (rangeFromDhall src)
+            ]
 
-hashedImportUnderCursor :: Text -> J.Range -> Bool
-hashedImportUnderCursor txt selected =
-    case parse txt of
-        Left _ ->
-            False
-        Right expr ->
-            not $ null
-                [ ()
-                | Core.Note src (Core.Embed (Import (ImportHashed (Just _) _) _)) <-
-                    universeOf Core.subExpressions expr
-                , rangesMeet selected (rangeFromDhall src)
-                ]
+hashedImport :: Import -> Bool
+hashedImport (Import (ImportHashed (Just _) _) _) = True
+hashedImport _ = False
 
 rangesMeet :: J.Range -> Range -> Bool
 rangesMeet (J.Range startPos endPos) (Range left right) =
