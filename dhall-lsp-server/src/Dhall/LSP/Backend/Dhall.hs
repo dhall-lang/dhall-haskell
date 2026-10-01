@@ -175,6 +175,7 @@ load settings (FileIdentifier chained) expr (Cache graph cache) = do
   let status = -- reuse cache and import graph
                set Import.cache cache .
                set Import.graph graph .
+               set Import.verifySemanticHash False .
                -- set "root import"
                set Import.stack (chained :| [])
                  $ emptyStatus
@@ -210,6 +211,7 @@ loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negativ
                set Import.cache cache .
                set Import.graph graph .
                set Import.stack (chained :| []) .
+               set Import.verifySemanticHash False .
                set Import.importErrorMode Import.CollectErrors
                  $ emptyStatus
   (expr', status') <- runStateT (Import.loadWithHoles expr) status

@@ -236,6 +236,11 @@ data Status = Status
     , _sharedEvaluation :: Bool
     -- ^ 'True' when the caller will evaluate through 'normalizeLoaded'.
     --   'loadWith' leaves this 'False' and does not build a second syntax tree.
+
+    , _verifySemanticHash :: Bool
+    -- ^ When 'True', a hashed import is normalized and rejected if its
+    --   semantic hash differs.  The language server leaves this 'False'
+    --   during ordinary loads and checks a hash only when asked.
     }
 
 -- | How 'Dhall.Import.loadWith' treats a failed import.
@@ -332,6 +337,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _sharedEvaluation = False
 
+    _verifySemanticHash = True
+
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
 stack = lens _stack (\s x -> s { _stack = x })
@@ -417,6 +424,10 @@ collectedImportErrors =
 -- | Lens from a `Status` to its `_importHoles` field
 importHoles :: Lens' Status (Map Chained ImportHole)
 importHoles = lens _importHoles (\s x -> s { _importHoles = x })
+
+-- | Lens from a `Status` to its `_verifySemanticHash` field
+verifySemanticHash :: Lens' Status Bool
+verifySemanticHash = lens _verifySemanticHash (\s x -> s { _verifySemanticHash = x })
 
 -- | Lens from a `Status` to its `_importSources` field
 importSources :: Lens' Status (Map Chained ResolvedImportSource)

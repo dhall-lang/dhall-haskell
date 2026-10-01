@@ -170,6 +170,7 @@ module Dhall.Import (
     , CollectedImportError(..)
     , ResolvedImportSource(..)
     , importErrorMode
+    , verifySemanticHash
     , collectedImportErrors
     , importSources
     , plainShowImportError
@@ -836,9 +837,16 @@ loadImportWithSemanticCache
                 Left hole ->
                     return (LoadHole hole)
                 Right sem0' -> do
-                    ImportSemantics{ importSemantics } <-
-                        ensureNormalized import_ sem0'
-                    finishHashed importSemantics
+                    Status { _verifySemanticHash } <- State.get
+                    -- A hashed import is type-checked either way.  Checking
+                    -- the hash also normalizes it, which the language server
+                    -- defers until the user asks.
+                    if _verifySemanticHash
+                        then do
+                            ImportSemantics{ importSemantics } <-
+                                ensureNormalized import_ sem0'
+                            finishHashed importSemantics
+                        else return (LoadOk sem0')
         finishHashed importSemantics = do
             Status{ _reportWarning } <- State.get
             let bytes = encodeExpression (Core.alphaNormalize importSemantics)

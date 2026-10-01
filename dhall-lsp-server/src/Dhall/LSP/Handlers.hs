@@ -667,6 +667,8 @@ executeCommandHandler settings =
                 executeUnfreezeImport request
             | command_ == "dhall.server.unfreezeAllImports" ->
                 executeUnfreezeAllImports request
+            | command_ == "dhall.server.checkImportHash" ->
+                executeCheckImportHash settings request
             | command_ == "dhall.server.explain" ->
                 executeExplain request respond
             | command_ == "dhall.server.normalize" ->
@@ -855,6 +857,53 @@ executeFreezeImport settings request = do
   _ <- liftLSP (LSP.sendRequest SMethod_WorkspaceApplyEdit ApplyWorkspaceEditParams{ _edit, _label } nullHandler)
 
   return ()
+
+-- | Normalize one hashed import and compare the result with its annotation.
+executeCheckImportHash
+    :: EvaluateSettings
+    -> TRequestMessage 'Method_WorkspaceExecuteCommand
+    -> HandlerM ()
+executeCheckImportHash settings request = do
+  args <- getCommandArguments request :: HandlerM TextDocumentPositionParams
+  let uri_  = args ^. textDocument . uri
+  let line_ = fromIntegral (args ^. position . line)
+  let col_  = fromIntegral (args ^. position . character)
+
+  txt <- readUri uri_
+  expr <- case parse txt of
+    Right e -> return e
+    Left _ -> throwE (Warning, "Could not check import hash; did not parse.")
+
+  import_
+    <- case exprAt (line_, col_) expr of
+      Just (Note _ (Embed i)) -> return i
+      _ -> throwE (Warning, "You weren't pointing at an import!")
+
+  digest <- case import_ of
+    Import (ImportHashed (Just digest) _) _ ->
+        return digest
+    _ ->
+        throwE (Info, "This import has no hash to check.")
+
+  fileIdentifier <- fileIdentifierFromUri uri_
+  cache <- use importCache
+  hashResult <-
+    liftIO $ computeSemanticHash settings fileIdentifier (Embed (stripHash import_)) cache
+  (cache', actual) <- case hashResult of
+    Right found -> return found
+    Left _ -> throwE (Error, "Could not check import hash; failed to evaluate import.")
+  assign importCache cache'
+
+  let expected = "sha256:" <> Text.pack (show digest)
+  if actual == expected
+    then throwE (Info, "Import hash matches.")
+    else throwE
+        ( Error
+        , "Import hash does not match.\nExpected "
+            <> expected
+            <> "\nActual "
+            <> actual
+        )
 
 -- | Delete one import hash.  A @missing@ import is left alone: without the
 --   hash it does not resolve.

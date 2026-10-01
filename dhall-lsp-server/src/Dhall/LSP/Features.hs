@@ -1083,6 +1083,7 @@ codeActionHandler _evalSettings =
                     , _data_ = Nothing
                     }
                 onImport = importUnderCursor txt selected
+                onHashedImport = hashedImportUnderCursor txt selected
                 J.Range startPos _ = selected
                 importPos = J.TextDocumentPositionParams
                     { _textDocument = J.TextDocumentIdentifier docUri
@@ -1092,6 +1093,8 @@ codeActionHandler _evalSettings =
                     importCommand "Freeze import" "dhall.server.freezeImport" importPos
                 unfreezeAction =
                     importCommand "Unfreeze import" "dhall.server.unfreezeImport" importPos
+                checkHashAction =
+                    importCommand "Check import hash" "dhall.server.checkImportHash" importPos
                 unfreezeAllAction = J.CodeAction
                     { _title = "Unfreeze all imports"
                     , _kind = Just J.CodeActionKind_RefactorRewrite
@@ -1142,6 +1145,7 @@ codeActionHandler _evalSettings =
                            | onImport
                            , action <- [freezeAction, unfreezeAction, unfreezeAllAction]
                            ]
+                        ++ [InR checkHashAction | onHashedImport]
                         ++ map InR organizeAction
                         ++ map InR inlineAction
             respond (Right (InL offered))
@@ -1235,6 +1239,19 @@ importUnderCursor txt selected =
             not $ null
                 [ ()
                 | Core.Note src (Core.Embed _) <- universeOf Core.subExpressions expr
+                , rangesMeet selected (rangeFromDhall src)
+                ]
+
+hashedImportUnderCursor :: Text -> J.Range -> Bool
+hashedImportUnderCursor txt selected =
+    case parse txt of
+        Left _ ->
+            False
+        Right expr ->
+            not $ null
+                [ ()
+                | Core.Note src (Core.Embed (Import (ImportHashed (Just _) _) _)) <-
+                    universeOf Core.subExpressions expr
                 , rangesMeet selected (rangeFromDhall src)
                 ]
 
