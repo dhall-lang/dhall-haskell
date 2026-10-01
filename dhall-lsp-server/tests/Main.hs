@@ -6,6 +6,7 @@
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
+import Control.Applicative.Combinators (skipManyTill)
 import Control.Lens                ((^.))
 import Control.Monad.IO.Class      (liftIO)
 import Data.Int                    (Int32)
@@ -17,6 +18,7 @@ import Language.LSP.Protocol.Types
     , Command (..)
     , CompletionItem (..)
     , Diagnostic (..)
+    , ExecuteCommandParams (..)
     , DiagnosticSeverity (..)
     , DiagnosticTag (..)
     , FoldingRange (..)
@@ -69,8 +71,6 @@ import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
 import qualified Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Message as LSP
-
-inlayLabel (InlayHint { _label = label }) = label
 
 itemLabel :: CompletionItem -> T.Text
 itemLabel (CompletionItem { _label = label }) = label
@@ -293,9 +293,9 @@ diagnosticsSpec fixtureDir = do
         [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
         hover <- getHover docId (Position 0 10)
         liftIO $ do
-          let message = T.unpack (_message diag)
-          message `shouldContain` "[ 1, 2 ]"
-          message `shouldContain` "[ 1, 1 ]"
+          let diagText = T.unpack (_message diag)
+          diagText `shouldContain` "[ 1, 2 ]"
+          diagText `shouldContain` "[ 1, 1 ]"
           case toEither (_contents (fromJust hover)) of
             Left content -> do
               T.unpack (_value content) `shouldContain` "Explain error"
@@ -362,7 +362,9 @@ inlaySpec fixtureDir =
         liftIO $ do
             let hint = head hints
                 edits = maybe [] id (_textEdits hint)
-            inlayLabel hint `shouldBe` InL ": Natural"
+                label = case hint of
+                    InlayHint { _label = found } -> found
+            label `shouldBe` InL ": Natural"
             map _newText edits `shouldContain` [" : Natural"]
 
 -- | Open a file, replace it, and wait until the new diagnostics arrive.
@@ -417,10 +419,22 @@ main = do
         ]
     )
 
+-- | Send a command and read the document once its workspace edit is applied.
+--
+--   'executeCommand' does not wait, and waiting for the command response
+--   deadlocks: the server is still inside the command when it asks the client
+--   to apply the edit.
+applyCommand :: TextDocumentIdentifier -> Command -> Session T.Text
+applyCommand docId (Command { _command = command_, _arguments = arguments_ }) = do
+    let args = Aeson.decode $ Aeson.encode $ fromJust arguments_
+    _ <- sendRequest LSP.SMethod_WorkspaceExecuteCommand (ExecuteCommandParams Nothing command_ args)
+    _ <- skipManyTill anyMessage (message LSP.SMethod_WorkspaceApplyEdit)
+    documentContents docId
+
 unfreezeSpec :: FilePath -> Spec
 unfreezeSpec fixtureDir = describe "unfreeze" $ do
   it "puts back the text freeze changed" $
-    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+    runSessionWithConfig (defaultConfig { messageTimeout = 15 }) "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
       docId <- openDoc "Plain.dhall" "dhall"
       original <- documentContents docId
       let params = TextDocumentPositionParams
@@ -437,10 +451,8 @@ unfreezeSpec fixtureDir = describe "unfreeze" $ do
             , _command = "dhall.server.unfreezeImport"
             , _arguments = Just [Aeson.toJSON params]
             }
-      executeCommand freeze
-      frozen <- documentContents docId
-      executeCommand thaw
-      thawed <- documentContents docId
+      frozen <- applyCommand docId freeze
+      thawed <- applyCommand docId thaw
       liftIO $ do
         frozen `shouldNotBe` original
         thawed `shouldBe` original
@@ -455,8 +467,8 @@ unfreezeSpec fixtureDir = describe "unfreeze" $ do
             , _arguments = Just [Aeson.toJSON uri_]
             }
       executeCommand command_
-      after <- documentContents docId
-      liftIO $ after `shouldBe` original
+      thawedAll <- documentContents docId
+      liftIO $ thawedAll `shouldBe` original
 
 organizeSpec :: FilePath -> Spec
 organizeSpec fixtureDir = describe "organize imports" $ do
@@ -471,7 +483,7 @@ organizeSpec fixtureDir = describe "organize imports" $ do
       docId <- openDoc "Duplicate.dhall" "dhall"
       actions <- getCodeActions docId (Range (Position 0 0) (Position 3 0))
       liftIO $ do
-        let found = [ action | InR action <- actions, actionTitle action == "Organize imports" ]
+        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
         length found `shouldBe` 1
         _disabled (head found) `shouldSatisfy` isJust
         _edit (head found) `shouldBe` Nothing
@@ -482,7 +494,7 @@ expectOrganize fixtureDir file expected =
     docId <- openDoc file "dhall"
     actions <- getCodeActions docId (Range (Position 0 0) (Position 5 0))
     liftIO $ do
-      let found = [ action | InR action <- actions, actionTitle action == "Organize imports" ]
+      let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
           action = head found
           edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
       map _newText edits `shouldBe` [expected]
@@ -509,7 +521,7 @@ expectTitle fixtureDir file pos title_ expected =
     docId <- openDoc file "dhall"
     actions <- getCodeActions docId (Range pos pos)
     liftIO $ do
-      let found = [ action | InR action <- actions, actionTitle action == title_ ]
+      let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == title_ ]
           action = head found
           edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
       map _newText edits `shouldBe` [expected]
@@ -520,7 +532,7 @@ expectDisabled fixtureDir file pos title_ =
     docId <- openDoc file "dhall"
     actions <- getCodeActions docId (Range pos pos)
     liftIO $ do
-      let found = [ action | InR action <- actions, actionTitle action == title_ ]
+      let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == title_ ]
       length found `shouldBe` 1
       _disabled (head found) `shouldSatisfy` isJust
       _edit (head found) `shouldBe` Nothing

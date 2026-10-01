@@ -20,7 +20,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
 import Data.List (foldl', sortOn)
-import Data.Maybe (listToMaybe, mapMaybe, maybeToList)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
 import Data.Ord (Down (..))
 import Data.Row (Label (..), (.==))
 import Data.Void (Void)
@@ -608,10 +608,24 @@ foldRanges :: Expr Src a -> [J.FoldingRange]
 foldRanges expr = dedupe (go expr)
   where
     go (Core.Note src e) =
-        [rangeOf src | spansLines src, foldable e]
-            ++ concatMap go (toListOf Core.subExpressions e)
+        [rangeOf src | spansLines src, foldable (Core.shallowDenote e), not (tighter e)]
+            ++ childNodes e
     go e =
-        concatMap go (toListOf Core.subExpressions e)
+        childNodes e
+
+    childNodes (Core.Note src e) =
+        go (Core.Note src e)
+    childNodes e =
+        concatMap childNodes (toListOf Core.subExpressions e)
+
+    -- A let value is often wrapped in a second note that runs up to the next
+    -- binding.  Fold the inner note, which is the expression itself.
+    tighter inner =
+        case inner of
+            Core.Note src' _ ->
+                spansLines src' && foldable (Core.shallowDenote inner)
+            _ ->
+                False
 
     spansLines src =
         let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
@@ -779,7 +793,14 @@ organizeImports txt = do
     indexed (Core.Var (V _ n)) = n > 0
     indexed _ = False
 
-    wholeLines block = not (blockImport block) || (blockCol block == 0 && blockNextCol block == 0)
+    -- An import binding occupies whole lines when `let` is at column 0 and
+    -- the following expression starts on a later line.  The body after `in`
+    -- is often indented, so its column is not 0.
+    wholeLines block =
+        not (blockImport block)
+            || ( blockCol block == 0
+                    && (blockNextCol block == 0 || blockStart block < blockEnd block)
+               )
 
 data LetBlock = LetBlock
     { blockName :: Text
@@ -792,28 +813,50 @@ data LetBlock = LetBlock
     }
 
 topLetBlocks :: Expr Src Import -> [LetBlock]
-topLetBlocks (Core.Note src (Core.Let binding body)) =
-    let Range (fromLine, startCol) _ = rangeFromDhall src
-        (toLine, endCol) = case body of
-            Core.Note bodySrc _ ->
-                let Range left _ = rangeFromDhall bodySrc in left
-            _ ->
-                (fromLine, startCol)
-        name_ = Core.variable binding
-    in LetBlock
-        { blockName = name_
-        , blockImport = importExpr (Core.value binding)
-        , blockUsed = freeIn (V name_ 0) body
-        , blockStart = fromLine
-        , blockEnd = toLine
-        , blockCol = startCol
-        , blockNextCol = endCol
-        }
-        : topLetBlocks body
-topLetBlocks (Core.Note _ expr) =
-    topLetBlocks expr
-topLetBlocks _ =
-    []
+topLetBlocks expr =
+    case collect expr of
+        ([], _) ->
+            []
+        (bindings, bodyPos) ->
+            let nextStarts = map (\(bindingStart, _, _) -> bindingStart) (tail bindings) ++ [bodyPos]
+            in zipWith block bindings nextStarts
+  where
+    -- The first @let@ is wrapped in a note that starts at @let@.  Later
+    -- bindings in the same chain are not, so their start is three characters
+    -- before the whitespace that follows @let@.
+    collect (Core.Note src (Core.Let binding body)) =
+        let (rest, endPos) = collect body
+            Range startPos _ = rangeFromDhall src
+        in ((startPos, binding, body) : rest, endPos)
+    collect (Core.Let binding body) =
+        let (rest, endPos) = collect body
+        in ( maybe rest (\bindingStart -> (bindingStart, binding, body) : rest) (keywordPos binding)
+           , endPos
+           )
+    collect (Core.Note src _) =
+        ([], rangeStart src)
+    collect _ =
+        ([], (0, 0))
+
+    keywordPos binding = do
+        Src { srcStart = keywordEnd } <- Core.bindingSrc0 binding
+        let Range (line_, col) _ = rangeFromDhall (Src keywordEnd keywordEnd "")
+        return (line_, max 0 (col - 3))
+
+    rangeStart src =
+        let Range startPos _ = rangeFromDhall src in startPos
+
+    block ((fromLine, startCol), binding, body) (toLine, endCol) =
+        let name_ = Core.variable binding
+        in LetBlock
+            { blockName = name_
+            , blockImport = importExpr (Core.value binding)
+            , blockUsed = freeIn (V name_ 0) body
+            , blockStart = fromLine
+            , blockEnd = toLine
+            , blockCol = startCol
+            , blockNextCol = endCol
+            }
 
 importExpr :: Expr Src Import -> Bool
 importExpr (Core.Note _ expr) = importExpr expr
@@ -829,8 +872,7 @@ inlineLet txt selected = do
     (letSrc, binding, body) <- findLetBinder (selectionStart selected) expr
     let name_ = Core.variable binding
         letValue = Core.value binding
-        maybeBinder = bindingSrc1 binding
-    binderSrc <- maybeBinder
+    binderSrc <- letName binding
     if containsAssert letValue
         then return (Left "The binding contains an assert.")
         else do
@@ -853,7 +895,7 @@ inlineLet txt selected = do
                             _ -> Nothing
                         let Range prefixStart _ = rangeFromDhall letSrc
                             Range prefixEnd _ = rangeFromDhall bodySrc
-                            valueText = case letValue of
+                            valueText = Text.strip $ case letValue of
                                 Core.Note (Src _ _ slice) _ -> slice
                                 _ -> Core.pretty letValue
                             wrapped = parenthesize valueText
@@ -866,18 +908,37 @@ selectionStart :: J.Range -> (Int, Int)
 selectionStart (J.Range (J.Position lineNo col) _) =
     (fromIntegral lineNo, fromIntegral col)
 
+-- | The binder name, between the whitespace after @let@ and the whitespace
+--   before @:@ or @=@.
+letName :: Binding Src Import -> Maybe Src
+letName
+    Binding
+        { bindingSrc0 = Just Src { srcEnd = nameStart }
+        , bindingSrc1 = Just Src { srcStart = nameEnd }
+        , variable = name_
+        } =
+        Just (makeSrcForLabel nameStart nameEnd name_)
+letName _ =
+    Nothing
+
 findLetBinder
     :: (Int, Int)
     -> Expr Src Import
     -> Maybe (Src, Binding Src Import, Expr Src Import)
 findLetBinder pos (Core.Note src (Core.Let binding body))
-    | Just nameSrc <- bindingSrc1 binding
+    | Just nameSrc <- letName binding
     , srcContains nameSrc pos =
         Just (src, binding, body)
     | otherwise =
         findLetBinder pos (Core.value binding) <|> findLetBinder pos body
 findLetBinder pos (Core.Note _ expr) =
     findLetBinder pos expr
+findLetBinder pos (Core.Let binding body)
+    | Just nameSrc <- letName binding
+    , srcContains nameSrc pos =
+        Just (fromMaybe nameSrc (Core.bindingSrc0 binding), binding, body)
+    | otherwise =
+        findLetBinder pos (Core.value binding) <|> findLetBinder pos body
 findLetBinder pos expr =
     listToMaybe
         (mapMaybe (findLetBinder pos) (toListOf Core.subExpressions expr))

@@ -192,14 +192,14 @@ completionsFromNormal :: Expr Src Void -> Expr Src Void -> [Completion]
 completionsFromNormal value ty =
     let value' = shallowDenote value
         ty' = shallowDenote ty
-        fromType = completeRecord ty' ++ completeUnion ty ty'
-        fromValue =
-            case ty' of
-                Union _ ->
-                    []
-                _ ->
-                    completeUnion ty value'
-    in fromType ++ fromValue
+    in completeRecord ty'
+        ++ case value' of
+            Union _ ->
+                -- A union written before the dot.  Constructors inhabit that
+                -- union, so the result type is the union itself.
+                completeUnion value' value'
+            _ ->
+                completeUnion ty' ty'
 
 -- complete a union constructor by inspecting the union value
 completeUnion :: Expr Src Void -> Expr Src Void -> [Completion]
