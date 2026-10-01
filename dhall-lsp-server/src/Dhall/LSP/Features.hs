@@ -202,17 +202,17 @@ importJump root pos = go [] root
   where
     go ctx (Core.Note _ expr) =
         go ctx expr
-    go ctx (Core.Let Binding { Core.variable = name, Core.annotation = ann, Core.value = value } body) =
+    go ctx (Core.Let Binding { Core.variable = boundName, Core.annotation = ann, Core.value = letValue } body) =
         let inAnn = case ann of
                 Just (_, typ) -> go ctx typ
                 Nothing -> Nothing
-        in inAnn <|> go ctx value <|> go ((name, value) : ctx) body
-    go ctx (Core.Field base (FieldSelection (Just Src { srcEnd = start }) label (Just Src { srcStart = end }))) =
-        let labelSrc = makeSrcForLabel start end label
+        in inAnn <|> go ctx letValue <|> go ((boundName, letValue) : ctx) body
+    go ctx (Core.Field base (FieldSelection (Just Src { srcEnd = labelStart }) fieldLabel (Just Src { srcStart = labelEnd }))) =
+        let labelSrc = makeSrcForLabel labelStart labelEnd fieldLabel
         in if srcContains labelSrc pos
             then do
                 (imp, path) <- resolve ctx base
-                return (imp, path ++ [label])
+                return (imp, path ++ [fieldLabel])
             else go ctx base
     go ctx expr =
         foldr (\child acc -> go ctx child <|> acc) Nothing (toListOf Core.subExpressions expr)
@@ -223,16 +223,16 @@ importJump root pos = go [] root
         Just (imp, [])
     resolve ctx (Core.Annot expr _) =
         resolve ctx expr
-    resolve ctx (Core.Field expr (FieldSelection _ label _)) = do
+    resolve ctx (Core.Field expr (FieldSelection _ fieldLabel _)) = do
         (imp, path) <- resolve ctx expr
-        return (imp, path ++ [label])
-    resolve ctx (Core.Var (V name index)) =
-        resolve ctx =<< lookupBind name index ctx
+        return (imp, path ++ [fieldLabel])
+    resolve ctx (Core.Var (V varName index)) =
+        resolve ctx =<< lookupBind varName index ctx
     resolve _ _ =
         Nothing
 
-    lookupBind name index ctx =
-        case [value | (bound, value) <- ctx, bound == name] of
+    lookupBind varName index ctx =
+        case [letValue | (bound, letValue) <- ctx, bound == varName] of
             values | index < length values ->
                 Just (values !! index)
             _ ->
@@ -244,69 +244,69 @@ data ImportedField = Landed Src | Deeper Import [Text]
 locateField :: Expr Src Import -> [Text] -> Maybe ImportedField
 locateField expr path = go [] expr path
   where
-    go _ (Core.Note src (Core.Union _)) [label] =
-        Landed <$> lookup label (unionConstructorSpans src)
+    go _ (Core.Note src (Core.Union _)) [fieldLabel] =
+        Landed <$> lookup fieldLabel (unionConstructorSpans src)
     go ctx (Core.Note _ inner) remaining =
         go ctx inner remaining
-    go ctx (Core.Let Binding { Core.bindingSrc0 = before, Core.variable = name, Core.bindingSrc1 = after, Core.value = value } body) remaining =
-        go ((name, (value, binderSrc before after name)) : ctx) body remaining
+    go ctx (Core.Let Binding { Core.bindingSrc0 = before, Core.variable = boundName, Core.bindingSrc1 = after, Core.value = letValue } body) remaining =
+        go ((boundName, (letValue, binderSrc before after boundName)) : ctx) body remaining
     go ctx (Core.Annot inner _) remaining =
         go ctx inner remaining
-    go ctx (Core.RecordLit fields) (label : rest) =
-        case DMap.lookup label fields of
-            Just RecordField { recordFieldSrc0 = Just Src { srcEnd = start }, recordFieldValue = value, recordFieldSrc1 = Just Src { srcStart = end } } ->
-                let keySrc = makeSrcForLabel start end label
-                    landed = case follow ctx value of
+    go ctx (Core.RecordLit fields) (fieldLabel : rest) =
+        case DMap.lookup fieldLabel fields of
+            Just RecordField { recordFieldSrc0 = Just Src { srcEnd = labelStart }, recordFieldValue = fieldValue, recordFieldSrc1 = Just Src { srcStart = labelEnd } } ->
+                let keySrc = makeSrcForLabel labelStart labelEnd fieldLabel
+                    landed = case follow ctx fieldValue of
                         Just found ->
                             found
                         Nothing ->
                             Landed keySrc
                 in if null rest
                     then Just landed
-                    else case denote value of
+                    else case denote fieldValue of
                         Core.Embed imp ->
                             Just (Deeper imp rest)
                         _ ->
-                            go ctx value rest <|> Just (Landed keySrc)
+                            go ctx fieldValue rest <|> Just (Landed keySrc)
             _ ->
                 Nothing
-    go ctx (Core.Var (V name index)) remaining =
-        case lookupBind name index ctx of
-            Just (value, decl)
+    go ctx (Core.Var (V varName index)) remaining =
+        case lookupBind varName index ctx of
+            Just (letValue, decl)
                 | null remaining ->
                     Just (Landed decl)
                 | otherwise ->
-                    go ctx value remaining
+                    go ctx letValue remaining
             Nothing ->
                 Nothing
     go _ _ _ =
         Nothing
 
-    follow ctx value =
-        case denote value of
-            Core.Var (V name index) ->
-                Landed . snd <$> lookupBind name index ctx
+    follow ctx followed =
+        case denote followed of
+            Core.Var (V varName index) ->
+                Landed . snd <$> lookupBind varName index ctx
             _ ->
                 Nothing
 
-    lookupBind name index ctx =
-        case [found | (bound, found) <- ctx, bound == name] of
+    lookupBind varName index ctx =
+        case [found | (bound, found) <- ctx, bound == varName] of
             values | index < length values ->
                 Just (values !! index)
             _ ->
                 Nothing
 
-    binderSrc (Just Src { srcEnd = start }) (Just Src { srcStart = end }) name =
-        makeSrcForLabel start end name
-    binderSrc _ _ name =
-        Src (Pos.initialPos "<binder>") (Pos.initialPos "<binder>") name
+    binderSrc (Just Src { srcEnd = labelStart }) (Just Src { srcStart = labelEnd }) boundName =
+        makeSrcForLabel labelStart labelEnd boundName
+    binderSrc _ _ boundName =
+        Src (Pos.initialPos "<binder>") (Pos.initialPos "<binder>") boundName
 
     denote (Core.Note _ inner) = denote inner
     denote other = other
 
 openImported :: J.Uri -> Import -> [Text] -> HandlerM (Maybe J.Location)
 openImported docUri imp path = do
-    parent <- fileIdentifierFromUri docUri
+    parentId <- fileIdentifierFromUri docUri
     bodiesRef <- use importBodies
     bodies <- liftIO (readIORef bodiesRef)
     let parentPath = case uriToFilePath docUri of
@@ -314,7 +314,7 @@ openImported docUri imp path = do
                 takeDirectory file
             Nothing ->
                 "."
-    openFrom parentPath parent imp path bodies
+    openFrom parentPath parentId imp path bodies
 
 openFrom
     :: FilePath
@@ -323,12 +323,12 @@ openFrom
     -> [Text]
     -> Map.Map Text Text
     -> HandlerM (Maybe J.Location)
-openFrom parentPath parent imp path bodies =
+openFrom parentPath parentId imp path bodies =
     let found =
             listToMaybe
-                [ text
-                | key <- importKeys parentPath parent imp
-                , Just text <- [Map.lookup key bodies]
+                [ bodyText
+                | key <- importKeys parentPath parentId imp
+                , Just bodyText <- [Map.lookup key bodies]
                 ]
     in case found of
         Nothing ->
@@ -339,11 +339,11 @@ openFrom parentPath parent imp path bodies =
                         Nothing ->
                             return Nothing
                         Just expr ->
-                            showImported parentPath parent imp (renderDecoded expr) path bodies
+                            showImported parentPath parentId imp (renderDecoded expr) path bodies
                 _ ->
                     return Nothing
-        Just text ->
-            showImported parentPath parent imp text path bodies
+        Just bodyText ->
+            showImported parentPath parentId imp bodyText path bodies
 
 showImported
     :: FilePath
@@ -353,28 +353,28 @@ showImported
     -> [Text]
     -> Map.Map Text Text
     -> HandlerM (Maybe J.Location)
-showImported parentPath parent imp text path bodies =
-    case parse text of
+showImported parentPath parentId imp bodyText path bodies =
+    case parse bodyText of
         Left _ ->
             return Nothing
         Right expr ->
             case locateField expr path of
                 Just (Landed src) ->
-                    Just <$> openLocated parentPath parent imp text src
+                    Just <$> openLocated parentPath parentId imp bodyText src
                 Just (Deeper nested rest) -> do
-                    nestedLoc <- openFrom parentPath parent nested rest bodies
+                    nestedLoc <- openFrom parentPath parentId nested rest bodies
                     case nestedLoc of
                         Just loc ->
                             return (Just loc)
                         Nothing ->
-                            Just <$> openLocated parentPath parent imp text (startSrc expr)
+                            Just <$> openLocated parentPath parentId imp bodyText (startSrc expr)
                 Nothing ->
                     return Nothing
 
 -- | Keys that may name this import in 'importBodies'.
 importKeys :: FilePath -> FileIdentifier -> Import -> [Text]
-importKeys parentPath parent imp =
-    importTextKey parent imp
+importKeys parentPath parentId imp =
+    importTextKey parentId imp
         : Core.pretty imp
         : localKey parentPath imp
 
@@ -394,8 +394,8 @@ localKey parentPath (Import (ImportHashed _ (Local prefix file)) _) =
         parentPath </> ".."
 localKey _ (Import (ImportHashed _ (Remote url)) _) =
     [Core.pretty (url { headers = Nothing })]
-localKey _ (Import (ImportHashed _ (Env name)) _) =
-    ["env:" <> name]
+localKey _ (Import (ImportHashed _ (Env envName)) _) =
+    ["env:" <> envName]
 localKey _ _ =
     []
 
@@ -419,13 +419,13 @@ openLocated
     -> Text
     -> Src
     -> HandlerM J.Location
-openLocated parentPath parent imp text src = do
+openLocated parentPath parentId imp bodyText src = do
     mLocal <- liftIO (localImportFile parentPath imp)
     case mLocal of
         Just path ->
             return (locationOf (filePathToUri path) src)
         Nothing ->
-            publishImport parentPath parent imp text src
+            publishImport parentPath parentId imp bodyText src
 
 localImportFile :: FilePath -> Import -> IO (Maybe FilePath)
 localImportFile base (Import (ImportHashed _ (Local prefix file)) _) = do
@@ -441,17 +441,17 @@ publishImport
     -> Text
     -> Src
     -> HandlerM J.Location
-publishImport parentPath parent imp text src = do
-    let key = importTextKey parent imp
+publishImport parentPath parentId imp bodyText src = do
+    let key = importTextKey parentId imp
     dir <- liftIO (getXdgDirectory XdgCache ("dhall-lsp" </> "sources"))
     liftIO (createDirectoryIfMissing True dir)
     let mirrorName = fileName key
         mirrorPath = dir </> mirrorName
-    liftIO (Text.IO.writeFile mirrorPath text)
+    liftIO (Text.IO.writeFile mirrorPath bodyText)
     chainsRef <- use importChains
     originsRef <- use mirrorOrigins
     chains <- liftIO (readIORef chainsRef)
-    case listToMaybe [chained | candidate <- importKeys parentPath parent imp, Just chained <- [Map.lookup candidate chains]] of
+    case listToMaybe [chained | candidate <- importKeys parentPath parentId imp, Just chained <- [Map.lookup candidate chains]] of
         Just chained ->
             liftIO $
                 modifyIORef' originsRef $
