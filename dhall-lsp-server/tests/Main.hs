@@ -36,7 +36,11 @@ import Language.LSP.Protocol.Types
     , Position (..)
     , Range (..)
     , SetTraceParams (SetTraceParams)
+#if MIN_VERSION_lsp_types(2,2,0)
+    , TraceValue (..)
+#else
     , TraceValues (..)
+#endif
     , TextDocumentContentChangeEvent (..)
     , TextDocumentIdentifier (..)
     , TextDocumentItem (..)
@@ -498,7 +502,12 @@ stabilitySpec fixtureDir =
     it "accepts a $/setTrace notification" $
       runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
         _ <- openDoc "UnboundVar.dhall" "dhall"
-        sendNotification LSP.SMethod_SetTrace (SetTraceParams TraceValues_Off)
+        sendNotification LSP.SMethod_SetTrace
+#if MIN_VERSION_lsp_types(2,2,0)
+            (SetTraceParams TraceValue_Off)
+#else
+            (SetTraceParams TraceValues_Off)
+#endif
         [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
         liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error
 
