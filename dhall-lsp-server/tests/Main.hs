@@ -367,6 +367,15 @@ definitionSpec dir =
             T.unpack (getUri uri) `shouldContain` "dhall-import:"
           _ ->
             expectationFailure "expected a dhall-import location"
+    it "reports a missing import when a later file inlines that placeholder" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        _ <- openDoc "placeholder-use.dhall" "dhall"
+        diags <- waitForDiagnostics
+        liftIO $
+          any
+            (\diag -> "no-such-placeholder-file" `T.isInfixOf` _message diag)
+            diags
+            `shouldBe` True
     it "analyses a mirror from the import it came from" $ do
       setEnv "DHALL_LSP_TEST_LIB" "./lib.dhall"
       runSession "dhall-lsp-server" fullLatestClientCaps dir $ do

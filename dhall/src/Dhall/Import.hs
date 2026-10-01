@@ -457,6 +457,18 @@ nextPlaceholderName = do
     State.modify' $ \s -> s { _placeholderCount = _placeholderCount + 1 }
     return (Text.pack ("missing`" ++ show _placeholderCount))
 
+-- | 'True' when the expression contains a placeholder from a failed import.
+--
+--   Those variables are not bound.  A file that inlines one, including from
+--   the in-memory cache, must not be type-checked.
+exprHasPlaceholder :: Expr s a -> Bool
+exprHasPlaceholder expr =
+    case Core.shallowDenote expr of
+        Var (Syntax.V name _) ->
+            Text.isPrefixOf "missing`" name
+        other ->
+            any exprHasPlaceholder (toListOf Syntax.subExpressions other)
+
 -- | Decode a semantic-cache entry by its integrity hash.
 --
 --   The result is the alpha-beta-normal form stored in the cache.  'Nothing'
@@ -982,8 +994,12 @@ cachedImportType chained ImportSemantics { importSemantics = sem } = do
             return typ
         Nothing ->
             case Dhall.TypeCheck.typeOf (Core.renote sem) of
-                Left err ->
-                    liftIO (Exception.throwIO err)
+                -- A placeholder is not a type error to print on stderr.  Wrap
+                -- it like every other import failure so the collector can
+                -- substitute a placeholder instead of killing the process.
+                Left err -> do
+                    Status { _stack } <- State.get
+                    throwMissingImport (Imported _stack err)
                 Right typ -> do
                     zoom importTypes (State.modify (Dhall.Map.insert chained typ))
                     return typ
@@ -1033,13 +1049,16 @@ loadImportWithSemisemanticCache
     (resolvedExpr, twinExpr, _) <- resolveImports parsedImport
     Status { _importErrorMode, _insideImportAlt, _collectedImportErrors = errorsAfter } <-
         State.get
-    -- A nested file that recorded import errors is not type-checked or cached.
-    -- Those errors are already in the list, so this import becomes a
-    -- placeholder instead of a second message.  Returning it here keeps the
-    -- sources recorded for this import.
+    -- A nested file that recorded import errors, or that inlined a placeholder
+    -- from an earlier import, is not type-checked or cached.  Those errors
+    -- are already in the list, so this import becomes a placeholder instead
+    -- of a second message.  Returning it here keeps the sources recorded for
+    -- this import.  The placeholder check matters when the failed import was
+    -- a cache hit: the error list does not grow, but the value is still unbound.
     if _importErrorMode == CollectErrors
         && not _insideImportAlt
-        && length errorsAfter /= length errorsBefore
+        && (length errorsAfter /= length errorsBefore
+            || exprHasPlaceholder resolvedExpr)
         then do
             placeholder <- nextPlaceholder
             return
