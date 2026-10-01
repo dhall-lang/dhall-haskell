@@ -962,12 +962,15 @@ executeNormalize request respond = do
         _ -> throwE (Error, "Normalize selection is missing arguments.")
     txt <- readUri uri_
     let selected = textInRange txt range_
+    if Text.null (Text.strip selected)
+        then throwE (Info, "The selection is empty, so there is nothing to normalize.")
+        else return ()
     expr <- case parse selected of
         Right e -> return e
         Left err ->
             throwE
                 ( Warning
-                , "The selection was not normalized due to parsing error:\n"
+                , "The selection was not normalized because it does not parse:\n"
                     <> parseErrorText err
                 )
     ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig
