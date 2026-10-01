@@ -20,7 +20,8 @@ module Dhall.LSP.Backend.Dhall (
   importTextKey,
   indexImportBodies,
   indexImportChains,
-  fileIdentifierFromChained
+  fileIdentifierFromChained,
+  identifierChained
  ) where
 
 import Dhall.Core   (Expr, Import)
@@ -66,6 +67,10 @@ newtype FileIdentifier = FileIdentifier Import.Chained
 -- | A fetched import, already chained by the loader.
 fileIdentifierFromChained :: Import.Chained -> FileIdentifier
 fileIdentifierFromChained = FileIdentifier
+
+-- | The chained import this identifier resolves from.
+identifierChained :: FileIdentifier -> Import.Chained
+identifierChained (FileIdentifier chained) = chained
 
 -- | Construct a FileIdentifier from a local file path.
 fileIdentifierFromFilePath :: FilePath -> FileIdentifier
