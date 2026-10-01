@@ -241,7 +241,7 @@ hoverHandler settings =
                 let hoverFromDiagnosis (Diagnosis doctor_ (Just (Range left right)) diagnosis) = do
                         let _range = Just (rangeToJSON (Range left right))
                             suffix =
-                                if doctor_ == "Dhall.TypeCheck"
+                                if doctor_ == "Dhall.TypeCheck" || doctor_ == "Dhall.Parser"
                                     then "\n\nExplain error"
                                     else ""
                             _contents = InL (mkPlainText (diagnosis <> suffix))
@@ -929,7 +929,7 @@ executeExplain request respond = do
     errorMap <- use errors
     explanation <- case Map.lookup uri_ errorMap >>= explain maxOutputSize of
         Just diagnosis_ -> return diagnosis_
-        Nothing -> throwE (Info, "There is no type error to explain in this file.")
+        Nothing -> throwE (Info, "There is no error to explain in this file.")
     let body = diagnosis explanation
         _uri = Uri ("dhall-explain:?" <> Text.pack (URI.encode (Text.unpack body)))
         _external = Just False
