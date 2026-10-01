@@ -152,7 +152,15 @@ explain limit (ErrorTypecheck e@(TypeError _ expr _)) = Just
                 text
             Bounded.Truncated text ->
                 text
-explain _ _ = Nothing  -- only type errors have detailed explanations so far
+explain limit (ErrorParse err) =
+    case diagnose (ErrorParse err) of
+        [] ->
+            Nothing
+        ds@(Diagnosis _ range_ _ : _) ->
+            Just (Diagnosis "Dhall.Parser" range_ (Text.take limit body))
+          where
+            body = Text.intercalate "\n\n" [ text | Diagnosis _ _ text <- ds ]
+explain _ _ = Nothing
 
 
 -- Given an annotated AST return the note at the top-most node.
