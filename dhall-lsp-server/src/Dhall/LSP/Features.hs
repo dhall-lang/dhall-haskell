@@ -4,12 +4,15 @@
     current buffer, so they work from the last successful parse when the
     buffer currently has a syntax error.
 -}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Dhall.LSP.Features (featureHandlers) where
 
@@ -22,7 +25,9 @@ import Data.IORef (modifyIORef', readIORef)
 import Data.List (foldl', sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
 import Data.Ord (Down (..))
-import Data.Row (Label (..), (.==))
+#if !MIN_VERSION_lsp_types(2,2,0)
+import Data.Row (Label (..), Rec, type (.==), (.==))
+#endif
 import Data.Void (Void)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
@@ -1211,13 +1216,23 @@ codeActionHandler _evalSettings =
                         ++ map InR inlineAction
             respond (Right (InL offered))
 
+-- | lsp-types 2.2 replaced the anonymous @"reason" row with this record.
+--   LTS 22 (GHC 9.6) is still on lsp-types 2.1, which keeps the row.
+#if MIN_VERSION_lsp_types(2,2,0)
+disabledReason :: Text -> J.CodeActionDisabled
+disabledReason = J.CodeActionDisabled
+#else
+disabledReason :: Text -> Rec ("reason" .== Text)
+disabledReason reason_ = Label @"reason" .== reason_
+#endif
+
 disabledInline :: Text -> J.CodeAction
 disabledInline reason_ = J.CodeAction
     { _title = "Inline let: " <> reason_
     , _kind = Just J.CodeActionKind_RefactorInline
     , _diagnostics = Nothing
     , _isPreferred = Nothing
-    , _disabled = Just (Label @"reason" .== reason_)
+    , _disabled = Just (disabledReason reason_)
     , _edit = Nothing
     , _command = Nothing
     , _data_ = Nothing
@@ -1249,7 +1264,7 @@ disabledOrganize reason_ = J.CodeAction
     , _kind = Just J.CodeActionKind_SourceOrganizeImports
     , _diagnostics = Nothing
     , _isPreferred = Nothing
-    , _disabled = Just (Label @"reason" .== reason_)
+    , _disabled = Just (disabledReason reason_)
     , _edit = Nothing
     , _command = Nothing
     , _data_ = Nothing
