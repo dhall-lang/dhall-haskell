@@ -497,7 +497,7 @@ stabilitySpec fixtureDir =
         liftIO $ hover `shouldBe` Nothing
     it "accepts a $/setTrace notification" $
       runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
-        docId <- openDoc "UnboundVar.dhall" "dhall"
+        _ <- openDoc "UnboundVar.dhall" "dhall"
         sendNotification LSP.SMethod_SetTrace (SetTraceParams TraceValues_Off)
         [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
         liftIO $ _severity diag `shouldBe` Just DiagnosticSeverity_Error

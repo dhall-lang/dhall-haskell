@@ -233,7 +233,7 @@ scopedAt
     -> TypingContext Src
     -> Expr Src Void
     -> Maybe (TypingContext Src, Expr Src Void)
-scopedAt pos selected ctx expr@(Note src _)
+scopedAt _ selected ctx expr@(Note src _)
     | Text.strip (srcText src) == Text.strip selected =
         Just (ctx, expr)
 scopedAt pos selected ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
