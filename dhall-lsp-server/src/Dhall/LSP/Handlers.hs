@@ -981,8 +981,8 @@ executeUnfreezeAllImports request = do
 
 -- | Complete a record or union that is not a plain dotted name, such as
 --   `(f x).` or `{ a = 1 }.`.  The dot and any partial label are removed so
---   the file can typecheck, and the expression before the dot is normalized
---   in its typing context.
+--   the file can typecheck.  Completions come from the type at that
+--   position, not from normalizing the expression.
 completeBeforeDot
     :: EvaluateSettings
     -> Uri

@@ -169,11 +169,12 @@ annotateLet' pos ctx expr = do
     [e] -> annotateLet' pos ctx e
     _ -> Left "You weren't pointing at a let binder!"
 
--- | Normalized value and type of the smallest expression at this position.
+-- | Expression and normalized type at this position.
 --
 --   Used when completing `(f x).` or `{ a = 1 }.`: the cursor sits on the
 --   expression before the dot, inside a file that typechecks once that dot
---   is removed.
+--   is removed.  The expression is not normalized.  The type is, so a record
+--   or union hidden by a type synonym still exposes its fields.
 normalizedAt :: Position -> WellTyped -> Maybe (Expr Src Void, Expr Src Void)
 normalizedAt pos expr = do
     expr' <- splitMultiLetSrc (fromWellTyped expr)
@@ -203,7 +204,7 @@ normalizedAt' pos ctx expr = do
     case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
         [] -> do
             typ <- typeWithContext ctx expr
-            return (normalizeWithContext ctx expr, normalizeWithContext ctx typ)
+            return (expr, normalizeWithContext ctx typ)
         ((src, e) : _) ->
             normalizedAt' pos ctx (Note src e)
 

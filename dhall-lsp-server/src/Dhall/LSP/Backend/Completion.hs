@@ -22,6 +22,7 @@ import Dhall.Core
     , Var (..)
     , normalize
     , pretty
+    , shallowDenote
     , reservedIdentifiers
     , shift
     , subst
@@ -180,13 +181,25 @@ completeProjections (CompletionContext context values) expr =
   in case typeWithA absurd context expr' of
       Left _ -> []
       Right _A ->
-        let expr'' = normalize expr'
-        in completionsFromNormal expr'' (normalize _A)
+        completionsFromNormal expr' (normalize _A)
 
--- | Constructors of a normalized union value, and fields of a normalized record type.
+-- | Fields of a record type, and constructors of a union type.
+--
+--   The expression itself is not normalized.  A union written before the
+--   dot is already a union, so its constructors come from that expression.
+--   A record projection comes from the type.
 completionsFromNormal :: Expr Src Void -> Expr Src Void -> [Completion]
 completionsFromNormal value ty =
-    completeUnion ty value ++ completeRecord ty
+    let value' = shallowDenote value
+        ty' = shallowDenote ty
+        fromType = completeRecord ty' ++ completeUnion ty ty'
+        fromValue =
+            case ty' of
+                Union _ ->
+                    []
+                _ ->
+                    completeUnion ty value'
+    in fromType ++ fromValue
 
 -- complete a union constructor by inspecting the union value
 completeUnion :: Expr Src Void -> Expr Src Void -> [Completion]
