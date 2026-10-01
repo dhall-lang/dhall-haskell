@@ -136,8 +136,8 @@ lintingSpec fixtureDir =
         liftIO $ diags `shouldBe`
             [ Diagnostic
                 { _range = Range
-                    {_start = Position { _line = 2, _character = 10 }
-                    , _end = Position { _line = 2, _character = 36 }
+                    {_start = Position { _line = 2, _character = 4 }
+                    , _end = Position { _line = 2, _character = 7 }
                     }
                 , _severity = Just DiagnosticSeverity_Hint
                 , _code = Nothing
@@ -150,8 +150,8 @@ lintingSpec fixtureDir =
                 }
             , Diagnostic
                 { _range = Range
-                    { _start = Position { _line = 4, _character = 11 }
-                    , _end = Position { _line = 4, _character = 38 }
+                    { _start = Position { _line = 4, _character = 4 }
+                    , _end = Position { _line = 4, _character = 8 }
                     }
                 , _severity = Just DiagnosticSeverity_Hint
                 , _code = Nothing
@@ -386,6 +386,7 @@ definitionSpec dir =
               , _version = 1 :: Int32
               , _text = "./lib.dhall\n"
               }
-        sendNotification LSP.SMethod_TextDocumentDidOpen DidOpenTextDocumentParams{..}
+        sendNotification LSP.SMethod_TextDocumentDidOpen
+            DidOpenTextDocumentParams { _textDocument = _textDocument }
         diags <- waitForDiagnostics
         liftIO $ diags `shouldBe` []

@@ -17,7 +17,7 @@ import Control.Applicative ((<|>))
 import Control.Lens (assign, toListOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (modifyIORef', readIORef)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (listToMaybe, maybeToList)
 import Data.Void (Void)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
@@ -64,7 +64,13 @@ import Dhall.LSP.Backend.Dhall
     , importTextKey
     , parse
     )
-import Dhall.LSP.Backend.Diagnostics (Range (..), rangeFromDhall)
+import Dhall.LSP.Backend.Diagnostics
+    ( Diagnosis (Diagnosis)
+    , Range (..)
+    , explain
+    , rangeFromDhall
+    )
+import Dhall.LSP.Backend.Linting (unusedBindingEdits)
 import qualified Dhall.Bounded as Bounded
 import qualified Dhall.Pretty as Pretty
 import Dhall.LSP.Handlers
@@ -686,7 +692,10 @@ codeActionHandler _evalSettings =
                     , _data_ = Nothing
                     }
             let selectedText = textInRange txt selected
-                explain = J.CodeAction
+                selectionParses = case parse selectedText of
+                    Right _ -> True
+                    Left _ -> False
+                explainAction = J.CodeAction
                     { _title = "Explain error"
                     , _kind = Just J.CodeActionKind_QuickFix
                     , _diagnostics = Nothing
@@ -717,7 +726,50 @@ codeActionHandler _evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-            respond (Right (InL [InR normalize, InR explain, InR extract]))
+            errorMap <- use errors
+            let explainOffered = case Map.lookup docUri errorMap >>= explain of
+                    Just (Diagnosis _ (Just errRange) _) ->
+                        rangesMeet selected errRange
+                    _ ->
+                        False
+                removeOffered = listToMaybe
+                    [ deleteRange
+                    | Right expr <- [parse txt]
+                    , (matchRange, deleteRange) <- unusedBindingEdits txt expr
+                    , rangesMeet selected matchRange
+                    ]
+                removeAction deleteRange = J.CodeAction
+                    { _title = "Remove unused let"
+                    , _kind = Just J.CodeActionKind_QuickFix
+                    , _diagnostics = Nothing
+                    , _isPreferred = Just True
+                    , _disabled = Nothing
+                    , _edit = Just J.WorkspaceEdit
+                        { _changes = Just
+                            (Map.singleton docUri
+                                [ J.TextEdit
+                                    { _range = rangeToJSON deleteRange
+                                    , _newText = ""
+                                    }
+                                ])
+                        , _documentChanges = Nothing
+                        , _changeAnnotations = Nothing
+                        }
+                    , _command = Nothing
+                    , _data_ = Nothing
+                    }
+                offered =
+                    [InR normalize | selectionParses]
+                        ++ [InR extract | selectionParses]
+                        ++ [InR explainAction | explainOffered]
+                        ++ [InR (removeAction deleteRange) | deleteRange <- maybeToList removeOffered]
+            respond (Right (InL offered))
+
+rangesMeet :: J.Range -> Range -> Bool
+rangesMeet (J.Range startPos endPos) (Range left right) =
+    let point (J.Position lineNo col) =
+            (fromIntegral lineNo, fromIntegral col)
+    in point startPos <= right && left <= point endPos
 
 watchedFilesHandler :: Handlers HandlerM
 watchedFilesHandler =
