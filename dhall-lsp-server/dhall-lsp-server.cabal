@@ -111,6 +111,7 @@ Test-Suite tests
         containers        >= 0.5.11.0 && < 0.9 ,
         lsp-types         >= 2.0.1    && < 2.5 ,
         hspec             >= 2.7      && < 2.12,
+        lens              >= 4.16.1   && < 5.4 ,
         lsp-test          >= 0.15.0.0 && < 0.19,
         tasty             >= 0.11.2   && < 1.6 ,
         row-types         >= 1.0      && < 1.2 ,

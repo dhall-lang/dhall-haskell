@@ -6,6 +6,7 @@
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
+import Control.Lens                ((^.))
 import Control.Monad.IO.Class      (liftIO)
 import Data.Int                    (Int32)
 import Data.Maybe                  (fromJust, isJust)
