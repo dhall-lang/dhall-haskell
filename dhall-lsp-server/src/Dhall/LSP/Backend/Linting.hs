@@ -4,6 +4,12 @@ module Dhall.LSP.Backend.Linting
   ( Suggestion(..)
   , suggest
   , unusedBindingEdits
+  , letChains
+  , deleteLetRange
+  , letKeyword
+  , exprStart
+  , exprEnd
+  , slice
   , Lint.lint
   )
 where
@@ -96,6 +102,44 @@ unusedBindingEdits txt expr =
     , edit <- blockEdits txt (Core.multiLet binding body)
     ]
 
+-- | Source let-blocks: the outermost @let@ of a multi-let is wrapped in a
+--   'Note', so inner bindings of the same block are not listed again.
+letChains :: Expr Src Import -> [([Binding Src Import], Expr Src Import)]
+letChains expr =
+    [ (NonEmpty.toList bindings, body)
+    | Note _ (Let binding body0) <- universeOf Core.subExpressions expr
+    , let MultiLet bindings body = Core.multiLet binding body0
+    ]
+
+-- | Delete the binding at @index@: through the next @let@, or through @in@
+--   when it is the only binding, or up to @in@ when later bindings remain.
+deleteLetRange
+    :: Text
+    -> [Binding Src Import]
+    -> Expr Src Import
+    -> Int
+    -> Maybe Range
+deleteLetRange txt listed body index = do
+    binding <- listed `atIndex` index
+    letStart <- letKeyword binding
+    valueEnd <- exprEnd (value binding)
+    deleteEnd <- case drop (index + 1) listed of
+        next : _ ->
+            letKeyword next
+        []
+            | index == 0 ->
+                exprStart body
+            | otherwise -> do
+                bodyStart <- exprStart body
+                inKeyword txt valueEnd bodyStart
+    return (Range letStart deleteEnd)
+
+atIndex :: [a] -> Int -> Maybe a
+atIndex xs i =
+    case drop i xs of
+        x : _ -> Just x
+        [] -> Nothing
+
 blockEdits :: Text -> MultiLet Src Import -> [(Range, Range)]
 blockEdits txt (MultiLet bindings body) =
     catMaybes (zipWith one [0 ..] listed)
@@ -107,17 +151,8 @@ blockEdits txt (MultiLet bindings body) =
         | otherwise = do
             letStart <- letKeyword binding
             valueEnd <- exprEnd (value binding)
-            let matchRange = Range letStart valueEnd
-            deleteEnd <- case drop (index + 1) listed of
-                next : _ ->
-                    letKeyword next
-                []
-                    | index == 0 ->
-                        exprStart body
-                    | otherwise -> do
-                        bodyStart <- exprStart body
-                        inKeyword txt valueEnd bodyStart
-            return (matchRange, Range letStart deleteEnd)
+            deleteRange <- deleteLetRange txt listed body index
+            return (Range letStart valueEnd, deleteRange)
 
     unusedHere index =
         case drop index listed of

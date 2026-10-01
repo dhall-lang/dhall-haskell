@@ -46,6 +46,7 @@ import Dhall.Core
     , FieldSelection (..)
     , FunctionBinding (..)
     , freeIn
+    , wrapInLets
     , File (..)
     , FilePrefix (..)
     , Import (..)
@@ -87,7 +88,15 @@ import Dhall.LSP.Backend.Diagnostics
     , positionToOffset
     , rangeFromDhall
     )
-import Dhall.LSP.Backend.Linting (unusedBindingEdits)
+import Dhall.LSP.Backend.Linting
+    ( deleteLetRange
+    , exprEnd
+    , exprStart
+    , letChains
+    , letKeyword
+    , unusedBindingEdits
+    )
+import qualified Dhall.LSP.Backend.Linting as Linting
 import qualified Dhall.Bounded as Bounded
 import qualified Dhall.Pretty as Pretty
 import Dhall.LSP.Handlers
@@ -808,108 +817,164 @@ inlayHints limit wt =
             , _data_ = Nothing
             }
 
--- | Reorder and drop unused import bindings in the top-level @let@ chain.
+-- | Hoist every bare-import @let@ (including nested scopes) to a top-level
+--   multi-let, sorted by name, and drop unused import lets.
 --
---   'Nothing' means there is nothing to do, or an import binding does not
---   occupy whole lines.  'Left' is a refusal the editor can show.
+--   A bare import is @let x = ./path@ or @let x = https://…@, not
+--   @let x = 1 + ./path@.  'Nothing' means there is no such binding.  'Left'
+--   is a refusal the editor can show.
 organizeImports :: Text -> Maybe (Either Text Text)
 organizeImports txt = do
     expr <- either (const Nothing) Just (parse txt)
-    let blocks = topLetBlocks expr
-    guard (any blockImport blocks)
-    let names = map blockName blocks
-    if length names /= length (Set.fromList names)
-        then return (Left "A top-level name is bound twice.")
-        else if any indexed (universeOf Core.subExpressions expr)
-            then return (Left "This file uses a variable of the form name@n.")
-                else if not (all wholeLines blocks)
-                then return (Left "An import binding shares a line with other code.")
-                else do
-                    let ls = Text.lines txt
-                        firstLine = blockStart (head blocks)
-                        lastLine = blockEnd (last blocks)
-                        prefix = take firstLine ls
-                        suffix = drop lastLine ls
-                        imports =
-                            sortOn blockName
-                                [ block | block <- blocks, blockImport block, blockUsed block ]
-                        others = [ block | block <- blocks, not (blockImport block) ]
-                        chunk block =
-                            take (blockEnd block - blockStart block) (drop (blockStart block) ls)
-                        rebuilt =
-                            Text.unlines
-                                (prefix ++ concatMap chunk (imports ++ others) ++ suffix)
-                    if rebuilt == txt
-                        then return (Left "Imports are already organized.")
-                        else return (Right rebuilt)
-  where
-    indexed (Core.Var (V _ n)) = n > 0
-    indexed _ = False
+    let importSites = importLetSites txt expr
+        expected =
+            length
+                [ binding
+                | (bindings, _) <- letChains expr
+                , binding <- bindings
+                , importExpr (Core.value binding)
+                ]
+    guard (not (null importSites))
+    let used = [ site | site <- importSites, importUsed site ]
+        unused = [ site | site <- importSites, not (importUsed site) ]
+        usedNames = map importName used
+    if length importSites /= expected
+        then return (Left "Could not locate an import binding in the source.")
+        else if length usedNames /= length (Set.fromList usedNames)
+            then return (Left "An import name is bound twice.")
+            else if importWouldBeCaptured expr used
+                then return (Left "Hoisting this import would be captured by another binder of the same name.")
+                else if alreadyOrganized expr used unused
+                    then return (Left "Imports are already organized.")
+                    else do
+                        let remaining =
+                                applyTextEdits txt (map (\r -> (r, "")) (importDeleteRanges txt expr))
+                            hoisted =
+                                Text.unlines
+                                    (map importText (sortOn importName used))
+                            rebuilt =
+                                if null used
+                                    then remaining
+                                    else hoisted <> "in\n" <> Text.stripStart remaining
+                        if rebuilt == txt
+                            then return (Left "Imports are already organized.")
+                            else return (Right rebuilt)
 
-    -- An import binding occupies whole lines when `let` is at column 0 and
-    -- the following expression starts on a later line.  The body after `in`
-    -- is often indented, so its column is not 0.
-    wholeLines block =
-        not (blockImport block)
-            || ( blockCol block == 0
-                    && (blockNextCol block == 0 || blockStart block < blockEnd block)
-               )
-
-data LetBlock = LetBlock
-    { blockName :: Text
-    , blockImport :: Bool
-    , blockUsed :: Bool
-    , blockStart :: Int
-    , blockEnd :: Int
-    , blockCol :: Int
-    , blockNextCol :: Int
+data ImportLet = ImportLet
+    { importName :: Text
+    , importUsed :: Bool
+    , importText :: Text
+    , importBinding :: Binding Src Import
     }
 
-topLetBlocks :: Expr Src Import -> [LetBlock]
-topLetBlocks expr =
-    case collect (fromMaybe expr (splitMultiLetSrc expr)) of
-        ([], _) ->
-            []
-        (bindings, bodyPos) ->
-            let nextStarts = map (\(bindingStart, _, _) -> bindingStart) (tail bindings) ++ [bodyPos]
-            in zipWith block bindings nextStarts
+importLetSites :: Text -> Expr Src Import -> [ImportLet]
+importLetSites txt expr =
+    [ ImportLet
+        { importName = Core.variable binding
+        , importUsed = freeIn (V (Core.variable binding) 0) rest
+        , importText = Text.strip (Linting.slice txt startPos endPos)
+        , importBinding = binding
+        }
+    | (bindings, body) <- letChains expr
+    , (index, binding) <- zip [0 ..] bindings
+    , importExpr (Core.value binding)
+    , Just startPos <- [letKeyword binding]
+    , Just endPos <- [exprEnd (Core.value binding)]
+    , let rest = wrapInLets (drop (index + 1) bindings) body
+    ]
+
+importDeleteRanges :: Text -> Expr Src Import -> [Range]
+importDeleteRanges txt expr =
+    concatMap chainDeletes (letChains expr)
   where
-    -- The first @let@ is wrapped in a note that starts at @let@.  Later
-    -- bindings in the same chain are not, so their start is three characters
-    -- before the whitespace that follows @let@.
-    collect (Core.Note src (Core.Let binding body)) =
-        let (rest, endPos) = collect body
-            Range startPos _ = rangeFromDhall src
-        in ((startPos, binding, body) : rest, endPos)
-    collect (Core.Let binding body) =
-        let (rest, endPos) = collect body
-        in ( maybe rest (\bindingStart -> (bindingStart, binding, body) : rest) (keywordPos binding)
-           , endPos
-           )
-    collect (Core.Note src _) =
-        ([], rangeStart src)
-    collect _ =
-        ([], (0, 0))
+    chainDeletes (bindings, body)
+        | not (null bindings) && all (importExpr . Core.value) bindings =
+            maybeToList $ do
+                startPos <- letKeyword (head bindings)
+                endPos <- exprStart body
+                return (Range startPos endPos)
+        | otherwise =
+            [ deleteRange
+            | (index, binding) <- zip [0 ..] bindings
+            , importExpr (Core.value binding)
+            , Just deleteRange <- [deleteLetRange txt bindings body index]
+            ]
 
-    keywordPos binding = do
-        Src { srcStart = keywordEnd } <- Core.bindingSrc0 binding
-        let Range (line_, col) _ = rangeFromDhall (Src keywordEnd keywordEnd "")
-        return (line_, max 0 (col - 3))
+alreadyOrganized :: Expr Src Import -> [ImportLet] -> [ImportLet] -> Bool
+alreadyOrganized expr used unused =
+    null unused
+        && map Core.variable lead == map importName (sortOn importName used)
+        && not (hasBareImportLet rest)
+  where
+    (lead, rest) = leadingImportLets expr
 
-    rangeStart src =
-        let Range startPos _ = rangeFromDhall src in startPos
+leadingImportLets :: Expr Src Import -> ([Binding Src Import], Expr Src Import)
+leadingImportLets expr =
+    case stripNotes expr of
+        Core.Let binding body ->
+            let Core.MultiLet bindings rest = Core.multiLet binding body
+                (lead, trailing) = span (importExpr . Core.value) (toList bindings)
+            in (lead, wrapInLets trailing rest)
+        _ ->
+            ([], expr)
+  where
+    stripNotes (Core.Note _ inner) = stripNotes inner
+    stripNotes inner = inner
 
-    block ((fromLine, startCol), binding, body) (toLine, endCol) =
-        let name_ = Core.variable binding
-        in LetBlock
-            { blockName = name_
-            , blockImport = importExpr (Core.value binding)
-            , blockUsed = freeIn (V name_ 0) body
-            , blockStart = fromLine
-            , blockEnd = toLine
-            , blockCol = startCol
-            , blockNextCol = endCol
-            }
+hasBareImportLet :: Expr Src Import -> Bool
+hasBareImportLet expr =
+    or
+        [ importExpr (Core.value binding)
+        | Core.Let binding _ <- universeOf Core.subExpressions expr
+        ]
+
+importWouldBeCaptured :: Expr Src Import -> [ImportLet] -> Bool
+importWouldBeCaptured expr used =
+    any captured used
+  where
+    fragments = scopeFragments expr
+    remaining = remainingBinders expr
+    captured site =
+        case letName (importBinding site) of
+            Nothing ->
+                False
+            Just nameSrc ->
+                let uses =
+                        [ src
+                        | ScopeFragment src (NameUse (NameDecl boundSrc usedName _)) <- fragments
+                        , boundSrc == nameSrc
+                        , usedName == importName site
+                        ]
+                    sameName (boundName, _) = boundName == importName site
+                in any (\binderSrc -> any (rangeContains binderSrc) uses)
+                    (map snd (filter sameName remaining))
+
+-- Binders that remain after import lets are removed, with a source span that
+-- covers their scope.  A remaining binder of the same name that encloses a
+-- use of a hoisted import would capture it.
+remainingBinders :: Expr Src Import -> [(Text, Src)]
+remainingBinders = go
+  where
+    go (Core.Note src (Core.Lam _ FunctionBinding { functionBindingVariable = n, functionBindingAnnotation = ann } body)) =
+        (n, src) : go ann ++ go body
+    go (Core.Note src (Core.Pi _ n ann body)) =
+        (n, src) : go ann ++ go body
+    go (Core.Note src (Core.Let binding rest)) =
+        let inner =
+                maybe [] (go . snd) (Core.annotation binding)
+                    ++ go (Core.value binding)
+                    ++ go rest
+        in if importExpr (Core.value binding)
+            then inner
+            else (Core.variable binding, src) : inner
+    go (Core.Let binding rest) =
+        maybe [] (go . snd) (Core.annotation binding)
+            ++ go (Core.value binding)
+            ++ go rest
+    go (Core.Note _ inner) =
+        go inner
+    go inner =
+        concatMap go (toListOf Core.subExpressions inner)
 
 importExpr :: Expr Src Import -> Bool
 importExpr (Core.Note _ expr) = importExpr expr
@@ -1264,8 +1329,8 @@ codeActionHandler _evalSettings =
                     , _data_ = Nothing
                     }
                 -- Organize imports is offered for any cursor or selection in
-                -- a file with an eligible top-level import block; the
-                -- selection does not have to overlap the block.
+                -- a file that has a bare-import let, including nested lets.
+                -- The selection does not have to overlap the binding.
                 organizeAction =
                     [ case outcome of
                         Left reason_ ->

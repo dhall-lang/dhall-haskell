@@ -875,14 +875,32 @@ organizeSpec :: FilePath -> Spec
 organizeSpec fixtureDir = describe "organize imports" $ do
   it "sorts import bindings by name" $
     expectOrganize fixtureDir "Reorder.dhall"
-      "let a = ./a.dhall\nlet b = ./b.dhall\nin { a, b }\n"
+      "let a = ./a.dhall\nlet b = ./b.dhall\nin\n{ a, b }\n"
   it "drops an unused import binding" $
     expectOrganize fixtureDir "Unused.dhall"
-      "let a = ./a.dhall\nin a\n"
-  it "refuses a repeated top-level name" $
+      "let a = ./a.dhall\nin\na\n"
+  it "hoists nested import lets past local lets" $
+    expectOrganize fixtureDir "Nested.dhall"
+      "let x = ./x.dhall\nlet y = ./y.dhall\nin\nlet a = 2\nin\nlet b = 3\nin { x, a, y, b }\n"
+  it "hoists imports interleaved with locals in one multi-let" $
+    expectOrganize fixtureDir "Interleaved.dhall"
+      "let x = ./x.dhall\nlet y = ./y.dhall\nin\nlet a = 2\nlet b = 3\nin { x, a, y, b }\n"
+  it "leaves a non-bare import in place" $
+    expectOrganize fixtureDir "NotBare.dhall"
+      "let y = ./b.dhall\nin\nlet x = 1 + ./a.dhall\nin { x, y }\n"
+  it "refuses a repeated import name" $
     runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
       docId <- openDoc "Duplicate.dhall" "dhall"
       actions <- getCodeActions docId (Range (Position 0 0) (Position 3 0))
+      liftIO $ do
+        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
+        found `shouldSatisfy` (not . null)
+        _disabled (head found) `shouldSatisfy` isJust
+        _edit (head found) `shouldBe` Nothing
+  it "refuses when a remaining binder would capture the import" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Shadow.dhall" "dhall"
+      actions <- getCodeActions docId (Range (Position 0 0) (Position 2 0))
       liftIO $ do
         let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
         found `shouldSatisfy` (not . null)
