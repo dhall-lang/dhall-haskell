@@ -45,6 +45,14 @@ import qualified System.Directory   as Directory
 newtype ImportRef = ImportRef Int
     deriving (Eq, Ord, Show)
 
+-- | A failed import in a collected expression.
+--
+--   The inlined tree holds @'Embed' ('ImportHole' n)@.  The source span, the
+--   import, and the errors live on 'CollectedImportError', not in a variable
+--   name.
+newtype ImportHole = ImportHole Int
+    deriving (Eq, Ord, Show)
+
 -- | A fully \"chained\" import, i.e. if it contains a relative path that path
 --   is relative to the current directory. If it is a remote import with headers
 --   those are well-typed (either of type `List { header : Text, value Text}` or
@@ -216,7 +224,11 @@ data Status = Status
     -- ^ Import failures recorded in 'CollectErrors' mode, innermost first.
 
     , _placeholderCount :: !Int
-    -- ^ Counter for placeholder variables substituted for failed imports.
+    -- ^ Next 'ImportHole' index.
+
+    , _importHoles :: Map Chained ImportHole
+    -- ^ Imports that failed and were replaced by a hole.  They are not values
+    --   in '_cache'.
 
     , _importSources :: Map Chained ResolvedImportSource
     -- ^ Text and location captured when an import was actually fetched.
@@ -245,9 +257,8 @@ data CollectedImportError = CollectedImportError
     , collectedStack :: NonEmpty Chained
     , collectedErrors :: [SomeException]
     , collectedKnownType :: Maybe KnownImportType
-    , collectedName :: Text
-    -- ^ Placeholder variable substituted for this failure.  The name contains
-    --   a backtick, so it cannot clash with a real label.
+    , collectedHole :: ImportHole
+    -- ^ Hole substituted for this failure.
     }
 
 -- | Source text fetched for an import, and where it was fetched from.
@@ -314,6 +325,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _collectedImportErrors = []
 
     _placeholderCount = 0
+
+    _importHoles = Map.empty
 
     _importSources = Map.empty
 
@@ -400,6 +413,10 @@ importErrorMode = lens _importErrorMode (\s x -> s { _importErrorMode = x })
 collectedImportErrors :: Lens' Status [CollectedImportError]
 collectedImportErrors =
     lens _collectedImportErrors (\s x -> s { _collectedImportErrors = x })
+
+-- | Lens from a `Status` to its `_importHoles` field
+importHoles :: Lens' Status (Map Chained ImportHole)
+importHoles = lens _importHoles (\s x -> s { _importHoles = x })
 
 -- | Lens from a `Status` to its `_importSources` field
 importSources :: Lens' Status (Map Chained ResolvedImportSource)

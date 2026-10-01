@@ -109,6 +109,7 @@ module Dhall.Import (
     , loadRelativeTo
     , loadWithStatus
     , loadWith
+    , loadWithHoles
     , loadWithShared
     , normalizeLoaded
     , normalizeLoadedCapped
@@ -125,6 +126,7 @@ module Dhall.Import (
     , CacheWarning(..)
     , Status(..)
     , ImportRef (..)
+    , ImportHole (..)
     , SemanticCacheMode(..)
     , Chained
     , chainedImport
@@ -420,7 +422,7 @@ substitutePlaceholder
     :: Src
     -> Expr Src Import
     -> [SomeException]
-    -> StateT Status IO (Expr Src Void)
+    -> StateT Status IO (Expr Src ImportHole)
 substitutePlaceholder src inner es = do
     Status { _stack } <- State.get
     let imp = case Core.shallowDenote inner of
@@ -431,7 +433,7 @@ substitutePlaceholder src inner es = do
             Just Import{ importMode = RawBytes }  -> Just KnownBytes
             Just Import{ importMode = Location }  -> Just KnownLocation
             _                                     -> Nothing
-    name <- nextPlaceholderName
+    hole <- nextPlaceholder
     State.modify' $ \s ->
         s { _collectedImportErrors =
                 CollectedImportError
@@ -440,34 +442,42 @@ substitutePlaceholder src inner es = do
                     , collectedStack = _stack
                     , collectedErrors = es
                     , collectedKnownType = known
-                    , collectedName = name
+                    , collectedHole = hole
                     }
                     : _collectedImportErrors s
           }
-    return (Var (Syntax.V name 0))
+    return (Embed hole)
 
-nextPlaceholder :: StateT Status IO (Expr Src Void)
+nextPlaceholder :: StateT Status IO ImportHole
 nextPlaceholder = do
-    name <- nextPlaceholderName
-    return (Var (Syntax.V name 0))
-
-nextPlaceholderName :: StateT Status IO Text
-nextPlaceholderName = do
     Status { _placeholderCount } <- State.get
     State.modify' $ \s -> s { _placeholderCount = _placeholderCount + 1 }
-    return (Text.pack ("missing`" ++ show _placeholderCount))
+    return (ImportHole _placeholderCount)
 
--- | 'True' when the expression contains a placeholder from a failed import.
+-- | 'True' when the expression contains a hole from a failed import.
 --
---   Those variables are not bound.  A file that inlines one, including from
---   the in-memory cache, must not be type-checked.
-exprHasPlaceholder :: Expr s a -> Bool
-exprHasPlaceholder expr =
+--   A file that inlines one, including from the in-memory cache, must not be
+--   type-checked.
+exprHasHole :: Expr s ImportHole -> Bool
+exprHasHole expr =
     case Core.shallowDenote expr of
-        Var (Syntax.V name _) ->
-            Text.isPrefixOf "missing`" name
+        Embed _ ->
+            True
         other ->
-            any exprHasPlaceholder (toListOf Syntax.subExpressions other)
+            any exprHasHole (toListOf Syntax.subExpressions other)
+
+-- | A loaded import is either a value or a hole standing in for a failure.
+data LoadResult = LoadOk ImportSemantics | LoadHole ImportHole
+
+-- | Successful imports are import-free, so the parameter is phantom.
+asInlined :: Expr s Void -> Expr s ImportHole
+asInlined = unsafeCoerce
+
+-- | Twin used where a hole makes the shared tree unreachable.
+--
+--   Evaluation runs only after every collected import error has been rejected.
+unusedTwin :: Expr s ImportRef
+unusedTwin = unsafeCoerce (Core.Const Core.Sort :: Expr s Void)
 
 -- | Decode a semantic-cache entry by its integrity hash.
 --
@@ -492,17 +502,17 @@ decodeSemanticCache hash = do
 -- | Resolve imports relative to a directory, collecting every import error.
 --
 --   'loadRelativeTo' stays fail-fast.  This is what the @dhall@ executable
---   uses.  A non-empty error list means the expression contains placeholders
+--   uses.  A non-empty error list means the expression contains 'ImportHole's
 --   and must not be treated as a successful result.
 loadCollecting
     :: FilePath
     -> SemanticCacheMode
     -> Expr Src Import
-    -> IO (Expr Src Void, [CollectedImportError])
+    -> IO (Expr Src ImportHole, [CollectedImportError])
 loadCollecting rootDirectory semanticCacheMode expression = do
     (expr, status) <-
         State.runStateT
-            (loadWith expression)
+            (loadWithHoles expression)
             (emptyStatus rootDirectory)
                 { _semanticCacheMode = semanticCacheMode
                 , _importErrorMode = CollectErrors
@@ -668,23 +678,32 @@ chainImport (Chained parent) child =
 --   @loadImport@ handles the \"hot\" cache in @Status@ and defers to
 --   @loadImportWithSemanticCache@ for imports that aren't in the @Status@
 --   cache already.
-loadImport :: Chained -> StateT Status IO ImportSemantics
+loadImport :: Chained -> StateT Status IO LoadResult
 loadImport import_ = do
-    Status { _cache, _sharedEvaluation } <- State.get
+    Status { _cache, _importHoles, _sharedEvaluation } <- State.get
 
-    case Dhall.Map.lookup import_ _cache of
-        Just sem -> do
-            when _sharedEvaluation $ do
-                _ <- ensureImportRef import_
-                return ()
-            return sem
-        Nothing -> do
-            sem <- loadImportWithSemanticCache import_
-            zoom cache (State.modify (Dhall.Map.insert import_ sem))
-            when _sharedEvaluation $ do
-                ref <- ensureImportRef import_
-                rememberImportBody ref (retwin (Core.renote (importSemantics sem)))
-            return sem
+    case Dhall.Map.lookup import_ _importHoles of
+        Just hole ->
+            return (LoadHole hole)
+        Nothing ->
+            case Dhall.Map.lookup import_ _cache of
+                Just sem -> do
+                    when _sharedEvaluation $ do
+                        _ <- ensureImportRef import_
+                        return ()
+                    return (LoadOk sem)
+                Nothing -> do
+                    loaded <- loadImportWithSemanticCache import_
+                    case loaded of
+                        LoadHole hole -> do
+                            zoom importHoles (State.modify (Dhall.Map.insert import_ hole))
+                            return loaded
+                        LoadOk sem -> do
+                            zoom cache (State.modify (Dhall.Map.insert import_ sem))
+                            when _sharedEvaluation $ do
+                                ref <- ensureImportRef import_
+                                rememberImportBody ref (retwin (Core.renote (importSemantics sem)))
+                            return loaded
 
 -- | The reference used for this import in the shared evaluation environment.
 --   Allocated once per import.
@@ -731,7 +750,7 @@ replaceImportBody ref body =
 --
 --   Valid only when the expression contains no 'Embed': the import parameter
 --   is then phantom, so this is the same pointer with a different type.
-retwin :: Expr s Void -> Expr s ImportRef
+retwin :: Expr s a -> Expr s ImportRef
 retwin = unsafeCoerce
 
 -- | Force an import result to a normal form when a later path requires one
@@ -759,7 +778,7 @@ ensureNormalized import_ ImportSemantics { importSemantics } = do
 -- | Load an import from the 'semantic cache'. Defers to
 --   @loadImportWithSemisemanticCache@ for imports that aren't frozen (and
 --   therefore not cached semantically), as well as those that aren't cached yet.
-loadImportWithSemanticCache :: Chained -> StateT Status IO ImportSemantics
+loadImportWithSemanticCache :: Chained -> StateT Status IO LoadResult
 loadImportWithSemanticCache
   import_@(Chained (Import (ImportHashed Nothing _) _)) =
     loadImportWithSemisemanticCache import_
@@ -791,7 +810,7 @@ loadImportWithSemanticCache
                         Right e   -> return e
 
                     return
-                        ( ImportSemantics
+                        ( LoadOk ImportSemantics
                             { importSemantics
                             , importNormalizationStatus = AlreadyNormalized
                             }
@@ -807,12 +826,21 @@ loadImportWithSemanticCache
         Nothing -> fetch
     where
         fetch = do
+            loaded0 <- loadImportWithSemisemanticCache import_
+            sem0 <- case loaded0 of
+                LoadHole hole ->
+                    return (Left hole)
+                LoadOk sem ->
+                    return (Right sem)
+            case sem0 of
+                Left hole ->
+                    return (LoadHole hole)
+                Right sem0' -> do
+                    ImportSemantics{ importSemantics } <-
+                        ensureNormalized import_ sem0'
+                    finishHashed importSemantics
+        finishHashed importSemantics = do
             Status{ _reportWarning } <- State.get
-
-            importSemantics0 <- loadImportWithSemisemanticCache import_
-            ImportSemantics{ importSemantics } <-
-                ensureNormalized import_ importSemantics0
-
             let bytes = encodeExpression (Core.alphaNormalize importSemantics)
 
             let actualHash = Dhall.Crypto.sha256Hash bytes
@@ -836,7 +864,7 @@ loadImportWithSemanticCache
                 replaceImportBody ref (retwin (Core.renote importSemantics))
 
             return
-                ( ImportSemantics
+                ( LoadOk ImportSemantics
                     { importSemantics
                     , importNormalizationStatus = AlreadyNormalized
                     }
@@ -1017,7 +1045,7 @@ cachedImportType chained ImportSemantics { importSemantics = sem } = do
 -- @dhall-haskell/@ directory, because the keys and stored values are not
 -- compatible with the previous cache format.
 loadImportWithSemisemanticCache
-  :: Chained -> StateT Status IO ImportSemantics
+  :: Chained -> StateT Status IO LoadResult
 loadImportWithSemisemanticCache
     import_@(Chained (Import (ImportHashed _ importType) Code)) = do
     text <- fetchFresh importType
@@ -1049,24 +1077,19 @@ loadImportWithSemisemanticCache
     (resolvedExpr, twinExpr, _) <- resolveImports parsedImport
     Status { _importErrorMode, _insideImportAlt, _collectedImportErrors = errorsAfter } <-
         State.get
-    -- A nested file that recorded import errors, or that inlined a placeholder
-    -- from an earlier import, is not type-checked or cached.  Those errors
-    -- are already in the list, so this import becomes a placeholder instead
-    -- of a second message.  Returning it here keeps the sources recorded for
-    -- this import.  The placeholder check matters when the failed import was
-    -- a cache hit: the error list does not grow, but the value is still unbound.
+    -- A nested file that recorded import errors, or that inlined a hole from
+    -- an earlier import, is not type-checked or cached.  Those errors are
+    -- already in the list, so this import becomes a hole instead of a second
+    -- message.  Returning it here keeps the sources recorded for this import.
+    -- The hole check matters when the failed import was a cache hit: the
+    -- error list does not grow, but the value is still a hole.
     if _importErrorMode == CollectErrors
         && not _insideImportAlt
         && (length errorsAfter /= length errorsBefore
-            || exprHasPlaceholder resolvedExpr)
+            || exprHasHole resolvedExpr)
         then do
-            placeholder <- nextPlaceholder
-            return
-                ( ImportSemantics
-                    { importSemantics = Core.denote placeholder
-                    , importNormalizationStatus = TypecheckedOnly
-                    }
-                )
+            hole <- nextPlaceholder
+            return (LoadHole hole)
         else do
             Status {..} <- State.get
 
@@ -1092,18 +1115,20 @@ loadImportWithSemisemanticCache
                     case Dhall.Binary.decodeExpression bytesLazy of
                         Left err  -> throwMissingImport (Imported _stack err)
                         Right sem -> return
-                            ( ImportSemantics
+                            ( LoadOk ImportSemantics
                                 { importSemantics = sem
                                 , importNormalizationStatus = AlreadyNormalized
                                 }
                             )
 
                 Just SemisemanticWellTyped -> do
-                    substitutedExpr <- applyStatusSubstitutions resolvedExpr
+                    substitutedExpr <-
+                        applyStatusSubstitutions
+                            (unsafeCoerce resolvedExpr :: Expr Src Void)
                     rememberSharedTwin import_ twinExpr
 
                     return
-                        ( ImportSemantics
+                        ( LoadOk ImportSemantics
                             { importSemantics = Core.denote substitutedExpr
                             , importNormalizationStatus = TypecheckedOnly
                             }
@@ -1111,13 +1136,15 @@ loadImportWithSemisemanticCache
 
                 -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
                 _ -> do
-                    substitutedExpr <- applyStatusSubstitutions resolvedExpr
+                    substitutedExpr <-
+                        applyStatusSubstitutions
+                            (unsafeCoerce resolvedExpr :: Expr Src Void)
                     rememberSharedTwin import_ twinExpr
 
                     case Core.shallowDenote parsedImport of
                         Embed _ ->
                             return
-                                ( ImportSemantics
+                                ( LoadOk ImportSemantics
                                     { importSemantics = Core.denote substitutedExpr
                                     , importNormalizationStatus = TypecheckedOnly
                                     }
@@ -1146,7 +1173,7 @@ loadImportWithSemisemanticCache
                                 )
 
                             return
-                                ( ImportSemantics
+                                ( LoadOk ImportSemantics
                                     { importSemantics = Core.denote substitutedExpr
                                     , importNormalizationStatus = TypecheckedOnly
                                     }
@@ -1167,7 +1194,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
     zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
 
     return
-        ( ImportSemantics
+        ( LoadOk ImportSemantics
             { importSemantics
             , importNormalizationStatus = AlreadyNormalized
             }
@@ -1183,7 +1210,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
     zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
 
     return
-        ( ImportSemantics
+        ( LoadOk ImportSemantics
             { importSemantics
             , importNormalizationStatus = AlreadyNormalized
             }
@@ -1217,7 +1244,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
     zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
 
     return
-        ( ImportSemantics
+        ( LoadOk ImportSemantics
             { importSemantics
             , importNormalizationStatus = AlreadyNormalized
             }
@@ -1885,6 +1912,18 @@ loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expression = do
     Status { _sharedEvaluation = saved } <- State.get
     State.modify' (\s -> s { _sharedEvaluation = False })
+    fmap (\(inlined, _, _) -> unsafeCoerce inlined) (resolveImports expression)
+        `finally` State.modify' (\s -> s { _sharedEvaluation = saved })
+
+-- | 'loadWith' for 'CollectErrors'.
+--
+--   Failed imports are @'Embed' ('ImportHole' n)@.  'loadWith' coerces that
+--   tree to @'Expr' 'Src' 'Void'@, which is only valid when the error list is
+--   empty.
+loadWithHoles :: Expr Src Import -> StateT Status IO (Expr Src ImportHole)
+loadWithHoles expression = do
+    Status { _sharedEvaluation = saved } <- State.get
+    State.modify' (\s -> s { _sharedEvaluation = False })
     fmap (\(inlined, _, _) -> inlined) (resolveImports expression)
         `finally` State.modify' (\s -> s { _sharedEvaluation = saved })
 
@@ -1899,7 +1938,7 @@ loadWithShared
     :: Expr Src Import -> StateT Status IO (Expr Src Void, Expr Src ImportRef)
 loadWithShared expression = do
     State.modify' (\s -> s { _sharedEvaluation = True })
-    fmap (\(inlined, shared, _) -> (inlined, shared)) (resolveImports expression)
+    fmap (\(inlined, shared, _) -> (unsafeCoerce inlined, shared)) (resolveImports expression)
 
 -- | 'loadWithShared' sets '_sharedEvaluation' and then calls this.  Nested
 --   loads, including the semisemantic walk of each imported file, keep the
@@ -1907,7 +1946,7 @@ loadWithShared expression = do
 --   different tree from the inlined expression.
 resolveImports
     :: Expr Src Import
-    -> StateT Status IO (Expr Src Void, Expr Src ImportRef, Bool)
+    -> StateT Status IO (Expr Src ImportHole, Expr Src ImportRef, Bool)
 resolveImports expr₀ = case expr₀ of
   Embed import₀ -> do
     Status {..} <- State.get
@@ -1938,14 +1977,18 @@ resolveImports expr₀ = case expr₀ of
     let stackWithChild = NonEmpty.cons child _stack
 
     zoom stack (State.put stackWithChild)
-    ImportSemantics { importSemantics } <- loadImport child
+    loaded <- loadImport child
     zoom stack (State.put _stack)
-    let inlined = Core.renote importSemantics
-    if _sharedEvaluation
-        then do
-            ImportRef n <- ensureImportRef child
-            return (inlined, Embed (ImportRef n), True)
-        else return (inlined, retwin inlined, False)
+    case loaded of
+        LoadHole hole ->
+            return (Embed hole, unusedTwin, True)
+        LoadOk ImportSemantics { importSemantics } -> do
+            let inlined = asInlined (Core.renote importSemantics)
+            if _sharedEvaluation
+                then do
+                    ImportRef n <- ensureImportRef child
+                    return (inlined, Embed (ImportRef n), True)
+                else return (inlined, retwin inlined, False)
 
 {-
 The code below (findImportHash) implements "opportunistic caching".
@@ -2003,7 +2046,10 @@ In any expression `p ? q` the opportunistic caching rule says:
               -- and the right side succeeded
               -- populate the semantic cache.
               case findImportHash a of
-                Just hash -> do
+                Just hash
+                    | exprHasHole inlined ->
+                        return (inlined, shared, copied)
+                    | otherwise -> do
                     Status { _reportWarning, _normalizer } <- State.get
 
                     -- Delayed unhashed Code inlining can leave `inlined`
@@ -2012,7 +2058,9 @@ In any expression `p ? q` the opportunistic caching rule says:
                     normalized <-
                         liftIO
                             ( Exception.evaluate
-                                (Core.normalizeWith _normalizer (Core.denote inlined))
+                                (Core.normalizeWith
+                                    _normalizer
+                                    (Core.denote (unsafeCoerce inlined :: Expr Src Void)))
                             )
 
                     let bytes = encodeExpression (Core.alphaNormalize normalized)
@@ -2027,7 +2075,7 @@ In any expression `p ? q` the opportunistic caching rule says:
                             -- A matching fill is the same product a semantic
                             -- cache hit would return: the alpha-beta-normal
                             -- form, not the delayed TypecheckedOnly fallback.
-                            let normalForm = Core.renote normalized
+                            let normalForm = asInlined (Core.renote normalized)
                             return (normalForm, retwin normalForm, False)
                         else
                             return (inlined, shared, copied)
@@ -2051,7 +2099,7 @@ In any expression `p ? q` the opportunistic caching rule says:
               text₂ = text₀ <> " ? " <> text₁
 
   Note a b             -> do
-      let both placeholder = return (placeholder, retwin placeholder, False)
+      let both holeExpr = return (holeExpr, unusedTwin, True)
       let finish (MissingImports es) = do
               Status { _importErrorMode, _insideImportAlt } <- State.get
               if _importErrorMode == CollectErrors && not _insideImportAlt
@@ -2076,7 +2124,7 @@ In any expression `p ? q` the opportunistic caching rule says:
           `catch` \EnclosingImportFailed -> do
               Status { _importErrorMode, _insideImportAlt } <- State.get
               if _importErrorMode == CollectErrors && not _insideImportAlt
-                  then nextPlaceholder >>= both
+                  then nextPlaceholder >>= both . Embed
                   else throwM EnclosingImportFailed
   Let binding body     -> do
       (bindingInlined, bindingShared, bindingCopied) <- pairBinding binding
@@ -2136,7 +2184,7 @@ In any expression `p ? q` the opportunistic caching rule says:
 resolveRecord
     :: (forall a. Dhall.Map.Map Text (Syntax.RecordField Src a) -> Expr Src a)
     -> Dhall.Map.Map Text (Syntax.RecordField Src Import)
-    -> StateT Status IO (Expr Src Void, Expr Src ImportRef, Bool)
+    -> StateT Status IO (Expr Src ImportHole, Expr Src ImportRef, Bool)
 resolveRecord make fields = do
     pairs <- traverse pairRecordField fields
     let inlined = make (fmap (\(field, _, _) -> field) pairs)
@@ -2148,7 +2196,7 @@ resolveRecord make fields = do
 
 pairBinding
     :: Syntax.Binding Src Import
-    -> StateT Status IO (Syntax.Binding Src Void, Syntax.Binding Src ImportRef, Bool)
+    -> StateT Status IO (Syntax.Binding Src ImportHole, Syntax.Binding Src ImportRef, Bool)
 pairBinding (Syntax.Binding src0 name src1 annotation src2 bound) = do
     annotationPair <- traverse pairAnnotation annotation
     (boundInlined, boundShared, boundCopied) <- resolveImports bound
@@ -2171,7 +2219,7 @@ pairBinding (Syntax.Binding src0 name src1 annotation src2 bound) = do
                 )
             else (inlined, retwinBinding inlined, False)
   where
-    retwinBinding :: Syntax.Binding Src Void -> Syntax.Binding Src ImportRef
+    retwinBinding :: Syntax.Binding Src ImportHole -> Syntax.Binding Src ImportRef
     retwinBinding = unsafeCoerce
 
     pairAnnotation (src, expr) = do
@@ -2185,7 +2233,7 @@ pairBinding (Syntax.Binding src0 name src1 annotation src2 bound) = do
 pairRecordField
     :: Syntax.RecordField Src Import
     -> StateT Status IO
-        ( Syntax.RecordField Src Void
+        ( Syntax.RecordField Src ImportHole
         , Syntax.RecordField Src ImportRef
         , Bool
         )
@@ -2197,13 +2245,13 @@ pairRecordField (Syntax.RecordField src0 expr src1 src2) = do
             then (field, Syntax.RecordField src0 shared src1 src2, True)
             else (field, retwinField field, False)
   where
-    retwinField :: Syntax.RecordField Src Void -> Syntax.RecordField Src ImportRef
+    retwinField :: Syntax.RecordField Src ImportHole -> Syntax.RecordField Src ImportRef
     retwinField = unsafeCoerce
 
 pairFunctionBinding
     :: Syntax.FunctionBinding Src Import
     -> StateT Status IO
-        ( Syntax.FunctionBinding Src Void
+        ( Syntax.FunctionBinding Src ImportHole
         , Syntax.FunctionBinding Src ImportRef
         , Bool
         )
@@ -2216,7 +2264,7 @@ pairFunctionBinding (Syntax.FunctionBinding src0 name src1 src2 annotation) = do
             else (binding, retwinFunctionBinding binding, False)
   where
     retwinFunctionBinding
-        :: Syntax.FunctionBinding Src Void -> Syntax.FunctionBinding Src ImportRef
+        :: Syntax.FunctionBinding Src ImportHole -> Syntax.FunctionBinding Src ImportRef
     retwinFunctionBinding = unsafeCoerce
 
 -- | Rebuild @template@, replacing each immediate child with the next shared

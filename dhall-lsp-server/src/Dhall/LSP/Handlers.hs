@@ -68,11 +68,11 @@ import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
-import Control.Lens                  (assign, modifying, toListOf, use, (^.))
+import Control.Lens                  (assign, modifying, over, toListOf, use, (^.))
 import Control.Monad                 (forM, forM_, guard)
 import Control.Monad.Trans           (lift, liftIO)
 import Control.Concurrent            (forkIO, threadDelay)
-import Control.Monad                 (foldM, void, when)
+import Control.Monad                 (void, when)
 import Control.Monad.Trans.Except    (catchE, throwE)
 import Control.Monad.Trans.State.Strict (get)
 import Data.IORef                    (IORef)
@@ -99,6 +99,7 @@ import Language.LSP.Protocol.Message
     )
 import Language.LSP.Protocol.Types   hiding (Range (..))
 import Language.LSP.Server           (Handlers, LspT)
+import Unsafe.Coerce                 (unsafeCoerce)
 import System.Directory              (XdgDirectory (..), createDirectoryIfMissing, getXdgDirectory)
 import System.FilePath               (takeDirectory, takeFileName, (<.>), (</>))
 import System.IO                     (hPutStrLn, stderr)
@@ -107,6 +108,7 @@ import Text.Megaparsec               (SourcePos (..), unPos)
 import qualified Control.Monad.Trans.Except       as Except
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
+import qualified Data.ByteString                  as ByteString
 import qualified Data.IORef                       as IORef
 import qualified Data.Map.Strict                  as Map
 import qualified Dhall.Bounded                   as Bounded
@@ -162,14 +164,24 @@ loadFile settings uri_ = do
     Right e -> return e
     _ -> throwE (Error, "Failed to parse Dhall file.")
 
-  loaded <- liftIO $ load settings fileIdentifier expr cache
-  (cache', expr') <- case loaded of
-    Right x -> return x
-    _ -> throwE (Error, "Failed to resolve imports.")
+  negative <- use negativeImports
+  (cache', expr', errs, _) <-
+    liftIO $ loadCollected settings fileIdentifier expr cache negative
   -- Update cache. Don't cache current expression because it might not have been
   -- written to disk yet (readUri reads from the VFS).
   assign importCache cache'
-  return expr'
+  if null errs
+    then return (unsafeCoerce expr')
+    else throwE (Error, "Failed to resolve imports." <> importFailureText errs)
+  where
+    importFailureText failed =
+        Text.pack
+            (concatMap
+                (\err ->
+                    concatMap
+                        (\ex -> "\n" <> Import.plainShowImportError ex)
+                        (Import.collectedErrors err))
+                failed)
 
 -- helper
 fileIdentifierFromUri :: Uri -> HandlerM FileIdentifier
@@ -389,7 +401,7 @@ chainText chained = pretty (Import.chainedImport chained)
 --   not reported.
 typecheckCollected
     :: [Import.CollectedImportError]
-    -> Expr Src Void
+    -> Expr Src Import.ImportHole
     -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
@@ -397,35 +409,60 @@ typecheckCollected
 typecheckCollected collected expr prevNames prevValues prevCtxs
     | any (\e -> isNothing (Import.collectedKnownType e)) collected =
         ([], [], [], [])
+    | any (not . (`Map.member` knownTypes)) (holesIn expr) =
+        ([], [], [], [])
     | otherwise =
-        case foldM step TypeCheck.emptyTypingContext collected of
-            Left err ->
-                ([ErrorTypecheck err], [], [], [])
-            Right ctx ->
-                let (errs, names, values, ctxs) =
-                        checkLets prevNames prevValues prevCtxs ctx expr
-                in (map ErrorTypecheck errs, names, values, ctxs)
+        let erased = unsafeCoerce (eraseHoles expr) :: Expr Src Void
+            (errs, names, values, ctxs) =
+                checkLets
+                    prevNames
+                    prevValues
+                    prevCtxs
+                    TypeCheck.emptyTypingContext
+                    erased
+        in (map ErrorTypecheck errs, names, values, ctxs)
   where
-    step ctx err =
-        case Import.collectedKnownType err of
-            Nothing ->
-                Right ctx
-            Just known ->
-                TypeCheck.extendBinder
-                    (Import.collectedName err)
-                    (knownImportType known)
-                    ctx
+    knownTypes =
+        Map.fromList
+            [ (Import.collectedHole err, known)
+            | err <- collected
+            , Just known <- [Import.collectedKnownType err]
+            ]
 
-    knownImportType Import.KnownText = Core.Text
-    knownImportType Import.KnownBytes = Core.Bytes
-    knownImportType Import.KnownLocation =
-        Core.Union
-            (Dhall.Map.fromList
-                [ ("Environment", Just Core.Text)
-                , ("Remote", Just Core.Text)
-                , ("Local", Just Core.Text)
-                , ("Missing", Nothing)
-                ])
+    holesIn (Core.Embed hole) =
+        [hole]
+    holesIn (Core.Note _ child) =
+        holesIn child
+    holesIn other =
+        concatMap holesIn (toListOf Core.subExpressions other)
+
+    eraseHoles (Core.Embed hole) =
+        case Map.lookup hole knownTypes of
+            Just known ->
+                knownValue known
+            Nothing ->
+                unsafeCoerce (Core.Const Core.Sort :: Expr Src Void)
+    eraseHoles (Core.Note src child) =
+        Core.Note src (eraseHoles child)
+    eraseHoles other =
+        over Core.subExpressions eraseHoles other
+
+    knownValue Import.KnownText =
+        unsafeCoerce (Core.TextLit (Core.Chunks [] "") :: Expr Src Void)
+    knownValue Import.KnownBytes =
+        unsafeCoerce (Core.BytesLit ByteString.empty :: Expr Src Void)
+    knownValue Import.KnownLocation =
+        unsafeCoerce
+            (Core.Field
+                (Core.Union
+                    (Dhall.Map.fromList
+                        [ ("Environment", Just Core.Text)
+                        , ("Remote", Just Core.Text)
+                        , ("Local", Just Core.Text)
+                        , ("Missing", Nothing)
+                        ]))
+                (Core.FieldSelection Nothing "Missing" Nothing)
+                :: Expr Src Void)
 
 checkLets
     :: [Text]

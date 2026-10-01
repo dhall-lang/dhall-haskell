@@ -188,7 +188,7 @@ load settings (FileIdentifier chained) expr (Cache graph cache) = do
 -- | Resolve imports, keeping every failure.
 --
 --   Unlike 'load', this does not stop at the first missing import.  The
---   expression may contain placeholder variables named @missing`n@ for those
+--   expression may contain @'Embed' ('Import.ImportHole' n)@ for those
 --   failures.  A non-empty error list means the expression is not a successful
 --   load.
 loadCollected
@@ -197,7 +197,7 @@ loadCollected
     -> Expr Src Dhall.Import
     -> Cache
     -> IORef (Map Text (UTCTime, SomeException))
-    -> IO (Cache, Expr Src Void, [Import.CollectedImportError], Map Import.Chained Import.ResolvedImportSource)
+    -> IO (Cache, Expr Src Import.ImportHole, [Import.CollectedImportError], Map Import.Chained Import.ResolvedImportSource)
 loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negative = do
   let emptyStatus =
              set Import.substitutions   (view Dhall.substitutions settings)
@@ -212,7 +212,7 @@ loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negativ
                set Import.stack (chained :| []) .
                set Import.importErrorMode Import.CollectErrors
                  $ emptyStatus
-  (expr', status') <- runStateT (Import.loadWith expr) status
+  (expr', status') <- runStateT (Import.loadWithHoles expr) status
   let cache' = view Import.cache status'
       graph' = view Import.graph status'
       errs = reverse (view Import.collectedImportErrors status')
