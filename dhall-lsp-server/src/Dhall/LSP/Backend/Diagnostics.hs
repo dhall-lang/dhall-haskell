@@ -14,6 +14,7 @@ module Dhall.LSP.Backend.Diagnostics
   , rangeFromDhall
   , stripTrailingComments
   , subtractPosition
+  , clipUserText
   )
 where
 
@@ -70,7 +71,7 @@ diagnose (ErrorImportSourced (SourcedException src e)) = [Diagnosis { .. }]
   where
     doctor = "Dhall.Import"
     range = Just (rangeFromDhall src)
-    diagnosis = tshow e
+    diagnosis = clipUserText (tshow e)
 
 diagnose (ErrorTypecheck (TypeError _ expr message)) = [Diagnosis { .. }]
   where
@@ -112,10 +113,19 @@ diagnose (ErrorParse e) =
 
 -- | The two sides of a failed assertion, each cut at 2KiB.
 --
---   The short type error is only a diff.  These are the expressions that
---   differed.  A cut side tells the user to run Explain error.
+--   For a value mismatch the short type error is only a diff.  For a
+--   type mismatch the short message names neither type.  A cut side
+--   tells the user to run Explain error.
 assertionSides :: Pretty a => TypeMessage Src a -> Text
 assertionSides (TypeCheck.AssertionFailed left right) =
+    clippedPair left right
+assertionSides (TypeCheck.EquivalenceTypeMismatch _ tyL _ tyR) =
+    clippedPair tyL tyR
+assertionSides _ =
+    ""
+
+clippedPair :: Pretty a => Expr Src a -> Expr Src a -> Text
+clippedPair left right =
     let (leftText, leftCut) = clipSide left
         (rightText, rightCut) = clipSide right
         clipped =
@@ -123,8 +133,6 @@ assertionSides (TypeCheck.AssertionFailed left right) =
                 then "\n\nRun Explain error to see the rest."
                 else ""
     in "\n\n" <> leftText <> "\n\n" <> rightText <> clipped
-assertionSides _ =
-    ""
 
 clipSide :: Pretty a => Expr Src a -> (Text, Bool)
 clipSide expr =
@@ -134,13 +142,12 @@ clipSide expr =
         Bounded.Truncated text ->
             (text, True)
   where
-    sideBytes = 2 * 1024
+    sideBytes = userTextLimit
 
 -- | Give a detailed explanation for the given error; if no detailed explanation
 --   is available return @Nothing@ instead.
 --
---   The text is capped at the given number of characters, which is what
---   `window/showDocument` puts in a `dhall-explain:` URI.
+--   The text is capped at the given number of characters.
 explain :: Int -> DhallError -> Maybe Diagnosis
 explain limit (ErrorTypecheck e@(TypeError _ expr _)) = Just
   (Diagnosis { .. })
@@ -309,3 +316,15 @@ embedsWithRanges =
   where go :: Expr Src a -> Writer [(Src, a)] ()
         go (Note src (Embed a)) = tell [(src, a)]
         go expr = mapM_ go (toListOf subExpressions expr)
+
+-- | Cap for diagnostic and hover text shown in the editor.
+userTextLimit :: Int
+userTextLimit = 2048
+
+-- | Keep at most 'userTextLimit' characters, with an ellipsis when cut.
+clipUserText :: Text -> Text
+clipUserText text
+    | Text.length text <= userTextLimit =
+        text
+    | otherwise =
+        Text.take userTextLimit text <> "…"

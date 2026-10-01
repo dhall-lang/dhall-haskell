@@ -22,9 +22,9 @@ import Control.Lens (assign, toListOf, universeOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
-import Data.List (foldl', sortOn)
+import Data.List (foldl', maximumBy, sortOn)
 import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe, maybeToList)
-import Data.Ord (Down (..))
+import Data.Ord (Down (..), comparing)
 #if !MIN_VERSION_lsp_types(2,2,0)
 import Data.Row (Label (..), Rec, type (.==), (.==))
 #endif
@@ -79,7 +79,7 @@ import Dhall.LSP.Backend.Dhall
     , typecheck
     , WellTyped
     )
-import Dhall.LSP.Backend.Typing (letTypes)
+import Dhall.LSP.Backend.Typing (letTypes, splitMultiLetSrc)
 import Dhall.LSP.Backend.Diagnostics
     ( Diagnosis (Diagnosis)
     , Range (..)
@@ -610,8 +610,20 @@ foldingHandler =
                     respond (Right (InL (foldRanges expr)))
 
 foldRanges :: Expr Src a -> [J.FoldingRange]
-foldRanges expr = dedupe (go expr)
+foldRanges expr = dedupe (go expr')
   where
+    expr' = fromMaybe expr (splitMultiLetSrc expr)
+
+    go (Core.Note src (Core.Let bind@Binding { annotation = ann, value = bound } rest)) =
+        maybeToList (letValueFold src bind)
+            ++ maybe [] (go . snd) ann
+            ++ go bound
+            ++ go rest
+    go (Core.Let bind@Binding { annotation = ann, value = bound } rest) =
+        maybeToList (letValueFoldFromBinding bind)
+            ++ maybe [] (go . snd) ann
+            ++ go bound
+            ++ go rest
     go (Core.Note src e) =
         [rangeOf src | spansLines src, foldable (Core.shallowDenote e), not (tighter e)]
             ++ childNodes e
@@ -636,7 +648,42 @@ foldRanges expr = dedupe (go expr)
         let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
         in firstLine /= lastLine
 
-    foldable (Core.Let _ _) = True
+    -- Fold `let a = <value>` without swallowing the next `let` or the `in`.
+    letValueFold letSrc Binding { annotation = ann, value = bound } =
+        foldFromTo (srcToRange letSrc) (mapMaybe noteSrc (maybeToList (fmap snd ann) ++ [bound]))
+
+    -- A later binding in a multi-let chain may have no `Note` around the
+    -- `let` itself.  Recover the keyword from the whitespace after `let`.
+    letValueFoldFromBinding Binding { bindingSrc0, annotation = ann, value = bound } = do
+        Src { srcStart = keywordEnd } <- bindingSrc0
+        let keywordRange = srcToRange (Src keywordEnd keywordEnd "")
+            J.Range (J.Position line_ col) _ = keywordRange
+            letStart = J.Range (J.Position line_ (max 0 (col - 3))) (J.Position line_ col)
+        foldFromTo letStart (mapMaybe noteSrc (maybeToList (fmap snd ann) ++ [bound]))
+
+    foldFromTo (J.Range (J.Position firstLine firstCol) _) srcs =
+        case srcs of
+            [] ->
+                Nothing
+            _ ->
+                let J.Range _ (J.Position lastLine lastCol) =
+                        maximumBy (comparing endPos) (map srcToRange srcs)
+                in if firstLine == lastLine
+                    then Nothing
+                    else Just J.FoldingRange
+                        { _startLine = firstLine
+                        , _startCharacter = Just firstCol
+                        , _endLine = lastLine
+                        , _endCharacter = Just lastCol
+                        , _kind = Just J.FoldingRangeKind_Region
+                        , _collapsedText = Just "..."
+                        }
+
+    endPos (J.Range _ pos) = pos
+
+    noteSrc (Core.Note src _) = Just src
+    noteSrc _ = Nothing
+
     foldable (Core.Lam _ _ _) = True
     foldable (Core.Pi _ _ _ _) = True
     foldable (Core.Record _) = True
@@ -649,12 +696,12 @@ foldRanges expr = dedupe (go expr)
     foldable _ = False
 
     rangeOf src =
-        let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
+        let J.Range (J.Position firstLine firstCol) (J.Position lastLine lastCol) = srcToRange src
         in J.FoldingRange
             { _startLine = firstLine
-            , _startCharacter = Nothing
+            , _startCharacter = Just firstCol
             , _endLine = lastLine
-            , _endCharacter = Nothing
+            , _endCharacter = Just lastCol
             , _kind = Just J.FoldingRangeKind_Region
             , _collapsedText = Nothing
             }
@@ -775,8 +822,8 @@ organizeImports txt = do
         then return (Left "A top-level name is bound twice.")
         else if any indexed (universeOf Core.subExpressions expr)
             then return (Left "This file uses a variable of the form name@n.")
-            else if not (all wholeLines blocks)
-                then Nothing
+                else if not (all wholeLines blocks)
+                then return (Left "An import binding shares a line with other code.")
                 else do
                     let ls = Text.lines txt
                         firstLine = blockStart (head blocks)
@@ -792,8 +839,9 @@ organizeImports txt = do
                         rebuilt =
                             Text.unlines
                                 (prefix ++ concatMap chunk (imports ++ others) ++ suffix)
-                    guard (rebuilt /= txt)
-                    return (Right rebuilt)
+                    if rebuilt == txt
+                        then return (Left "Imports are already organized.")
+                        else return (Right rebuilt)
   where
     indexed (Core.Var (V _ n)) = n > 0
     indexed _ = False
@@ -819,7 +867,7 @@ data LetBlock = LetBlock
 
 topLetBlocks :: Expr Src Import -> [LetBlock]
 topLetBlocks expr =
-    case collect expr of
+    case collect (fromMaybe expr (splitMultiLetSrc expr)) of
         ([], _) ->
             []
         (bindings, bodyPos) ->
@@ -1060,6 +1108,7 @@ codeActionHandler _evalSettings =
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
                 selected = request ^. params . range
+                onlyKinds = request ^. params . context . only
             txt <- readUri docUri
             ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
             errorsRef <- use errors
@@ -1217,20 +1266,24 @@ codeActionHandler _evalSettings =
                 -- Organize imports is offered for any cursor or selection in
                 -- a file with an eligible top-level import block; the
                 -- selection does not have to overlap the block.
-                organizeAction = case organizeImports txt of
-                    Just (Left reason_) ->
-                        [disabledOrganize reason_]
-                    Just (Right replacement) ->
-                        [readyOrganize docUri txt replacement]
-                    Nothing ->
-                        []
-                inlineAction = case inlineLet txt selected of
-                    Just (Left reason_) ->
-                        [disabledInline reason_]
-                    Just (Right replacement) ->
-                        [readyInline docUri txt replacement]
-                    Nothing ->
-                        []
+                organizeAction =
+                    [ case outcome of
+                        Left reason_ ->
+                            disabledOrganize kind_ reason_
+                        Right replacement ->
+                            readyOrganize kind_ docUri txt replacement
+                    | outcome <- maybeToList (organizeImports txt)
+                    , kind_ <- actionKinds onlyKinds J.CodeActionKind_SourceOrganizeImports
+                    ]
+                inlineAction =
+                    [ case outcome of
+                        Left reason_ ->
+                            disabledInline kind_ reason_
+                        Right replacement ->
+                            readyInline kind_ docUri txt replacement
+                    | outcome <- maybeToList (inlineLet txt selected)
+                    , kind_ <- actionKinds onlyKinds J.CodeActionKind_RefactorInline
+                    ]
                 offered =
                     [InR normalize | selectionParses]
                         ++ [InR extract | selectionParses]
@@ -1255,10 +1308,39 @@ disabledReason :: Text -> Rec ("reason" .== Text)
 disabledReason reason_ = Label @"reason" .== reason_
 #endif
 
-disabledInline :: Text -> J.CodeAction
-disabledInline reason_ = J.CodeAction
+-- | Lightbulb / Quick Fix asks for `quickfix` (or sends no filter).
+--   Source Action and Shift+Alt+O ask for `source.organizeImports`.
+--   Refactor > Inline asks for `refactor.inline`.  When the client does
+--   not filter, both the canonical kind and Quick Fix are returned so
+--   the action appears in either menu.
+actionKinds :: Maybe [J.CodeActionKind] -> J.CodeActionKind -> [J.CodeActionKind]
+actionKinds Nothing specific =
+    [specific, J.CodeActionKind_QuickFix]
+actionKinds (Just asked) specific =
+    [ k
+    | k <- [specific, J.CodeActionKind_QuickFix]
+    , any (`kindMatches` k) asked
+    ]
+
+kindMatches :: J.CodeActionKind -> J.CodeActionKind -> Bool
+kindMatches asked offered =
+    asked == offered || kindPrefix (kindText asked) (kindText offered)
+
+kindPrefix :: Text -> Text -> Bool
+kindPrefix asked offered =
+    asked == offered
+        || (asked <> ".") `Text.isPrefixOf` (offered <> ".")
+
+kindText :: J.CodeActionKind -> Text
+kindText k =
+    case Aeson.toJSON k of
+        Aeson.String t -> t
+        _ -> ""
+
+disabledInline :: J.CodeActionKind -> Text -> J.CodeAction
+disabledInline kind_ reason_ = J.CodeAction
     { _title = "Inline let: " <> reason_
-    , _kind = Just J.CodeActionKind_RefactorInline
+    , _kind = Just kind_
     , _diagnostics = Nothing
     , _isPreferred = Nothing
     , _disabled = Just (disabledReason reason_)
@@ -1267,14 +1349,14 @@ disabledInline reason_ = J.CodeAction
     , _data_ = Nothing
     }
 
-readyInline :: J.Uri -> Text -> Text -> J.CodeAction
-readyInline docUri txt replacement =
+readyInline :: J.CodeActionKind -> J.Uri -> Text -> Text -> J.CodeAction
+readyInline kind_ docUri txt replacement =
     let lineCount = fromIntegral (length (Text.lines txt))
         _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
         _newText = replacement
     in J.CodeAction
         { _title = "Inline let"
-        , _kind = Just J.CodeActionKind_RefactorInline
+        , _kind = Just kind_
         , _diagnostics = Nothing
         , _isPreferred = Nothing
         , _disabled = Nothing
@@ -1287,10 +1369,10 @@ readyInline docUri txt replacement =
         , _data_ = Nothing
         }
 
-disabledOrganize :: Text -> J.CodeAction
-disabledOrganize reason_ = J.CodeAction
+disabledOrganize :: J.CodeActionKind -> Text -> J.CodeAction
+disabledOrganize kind_ reason_ = J.CodeAction
     { _title = "Organize imports"
-    , _kind = Just J.CodeActionKind_SourceOrganizeImports
+    , _kind = Just kind_
     , _diagnostics = Nothing
     , _isPreferred = Nothing
     , _disabled = Just (disabledReason reason_)
@@ -1299,14 +1381,14 @@ disabledOrganize reason_ = J.CodeAction
     , _data_ = Nothing
     }
 
-readyOrganize :: J.Uri -> Text -> Text -> J.CodeAction
-readyOrganize docUri txt replacement =
+readyOrganize :: J.CodeActionKind -> J.Uri -> Text -> Text -> J.CodeAction
+readyOrganize kind_ docUri txt replacement =
     let lineCount = fromIntegral (length (Text.lines txt))
         _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
         _newText = replacement
     in J.CodeAction
         { _title = "Organize imports"
-        , _kind = Just J.CodeActionKind_SourceOrganizeImports
+        , _kind = Just kind_
         , _diagnostics = Nothing
         , _isPreferred = Nothing
         , _disabled = Nothing

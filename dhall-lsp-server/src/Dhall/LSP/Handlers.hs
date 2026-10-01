@@ -51,6 +51,7 @@ import Dhall.LSP.Backend.Dhall
 import Dhall.LSP.Backend.Diagnostics
     ( Diagnosis (..)
     , Range (..)
+    , clipUserText
     , diagnose
     , embedsWithRanges
     , positionToOffset
@@ -66,7 +67,7 @@ import Dhall.LSP.Backend.Freezing
     )
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
-import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, scopedNormalize, typeAt)
+import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, scopedNormalize, typeAtExpr)
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
@@ -128,7 +129,7 @@ import qualified Language.LSP.Protocol.Types as LSP.Types
 import qualified Language.LSP.Server         as LSP
 import qualified Language.LSP.VFS            as LSP
 import qualified Network.URI                 as URI
-import qualified Network.URI.Encode          as URI
+import qualified Network.URI.Encode          as URIEncode
 
 #if MIN_VERSION_lsp(2,4,0)
 import qualified Data.Text.Utf16.Rope.Mixed as Rope
@@ -192,6 +193,41 @@ loadFile settings uri_ = do
                         (\ex -> "\n" <> Import.plainShowImportError ex)
                         (Import.collectedErrors err))
                 failed)
+
+-- | Load the buffer for typing or scoped evaluation.  A missing import
+--   becomes a hole rather than aborting.
+loadForTyping :: EvaluateSettings -> Uri -> HandlerM (Maybe (Expr Src Void))
+loadForTyping settings uri_ = do
+    txt <- readUri uri_
+    case parse txt of
+        Right parsed ->
+            tryLoadForTyping settings uri_ parsed
+        Left _ -> do
+            docs <- use documents
+            snaps <- liftIO (IORef.readIORef docs)
+            case Map.lookup uri_ snaps >>= snapLastGood of
+                Just good ->
+                    case parse good of
+                        Right parsed ->
+                            tryLoadForTyping settings uri_ parsed
+                        Left _ ->
+                            return Nothing
+                Nothing ->
+                    return Nothing
+
+tryLoadForTyping
+    :: EvaluateSettings -> Uri -> Expr Src Import -> HandlerM (Maybe (Expr Src Void))
+tryLoadForTyping settings uri_ parsed = do
+    fileIdentifier <- fileIdentifierFromUri uri_
+    cache <- use importCache
+    negative <- use negativeImports
+    loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
+    case loaded of
+        Left _ ->
+            return Nothing
+        Right (cache', expr, collected, _) -> do
+            assign importCache cache'
+            return (Just (fillImportHoles collected expr))
 
 -- helper
 fileIdentifierFromUri :: Uri -> HandlerM FileIdentifier
@@ -257,6 +293,21 @@ sliceInRange source (Range left right) =
     from = positionToOffset source left
     to = positionToOffset source right
 
+-- | Type of the expression at `pos`, when that source slice is unchanged
+--   between `fromText` (the expression's origin) and `current`.
+hoverFromExpr
+    :: Int -> (Int, Int) -> Text -> Text -> Expr Src Void -> Maybe Hover
+hoverFromExpr maxOutputSize pos fromText current expr =
+    case typeAtExpr pos expr of
+        Right (Just src, typ)
+            | let range_ = rangeFromDhall src
+            , sliceInRange fromText range_ == sliceInRange current range_ ->
+                Just (typeToHover maxOutputSize (Just src) typ)
+        Right (Nothing, typ) ->
+            Just (typeToHover maxOutputSize Nothing typ)
+        _ ->
+            Nothing
+
 -- | Type hover over the last text that parsed, used while the current
 --   buffer has a syntax error.  Only answers when the hovered expression's
 --   source slice is unchanged in the current text, so the type still
@@ -266,40 +317,28 @@ lastGoodTypeHover
 lastGoodTypeHover settings uri_ pos current = do
     docs <- use documents
     snaps <- liftIO (IORef.readIORef docs)
+    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
     case Map.lookup uri_ snaps >>= snapLastGood of
-        Just good | good /= current -> do
-            fileIdentifier <- fileIdentifierFromUri uri_
-            cache <- use importCache
+        Just good | good /= current ->
             case parse good of
                 Left _ ->
                     return Nothing
                 Right parsed -> do
-                    negative <- use negativeImports
-                    loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
-                    case loaded of
-                        Left _ ->
-                            return Nothing
-                        Right (cache', expr, collected, _)
-                            | not (null collected) ->
-                                return Nothing
-                            | otherwise -> do
-                                assign importCache cache'
-                                case typecheck settings (unsafeCoerce expr) of
-                                    Left _ ->
-                                        return Nothing
-                                    Right (welltyped, _) ->
-                                        case typeAt pos welltyped of
-                                            Left _ ->
-                                                return Nothing
-                                            Right (Just src, typ)
-                                                | let range_ = rangeFromDhall src
-                                                , sliceInRange good range_ == sliceInRange current range_ -> do
-                                                    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-                                                    return (Just (typeToHover maxOutputSize (Just src) typ))
-                                            _ ->
-                                                return Nothing
+                    loaded <- tryLoadForTyping settings uri_ parsed
+                    return (loaded >>= hoverFromExpr maxOutputSize pos good current)
         _ ->
             return Nothing
+
+currentTypeHover
+    :: EvaluateSettings -> Uri -> (Int, Int) -> Text -> HandlerM (Maybe Hover)
+currentTypeHover settings uri_ pos current =
+    case parse current of
+        Left _ ->
+            return Nothing
+        Right parsed -> do
+            ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
+            loaded <- tryLoadForTyping settings uri_ parsed
+            return (loaded >>= hoverFromExpr maxOutputSize pos current current)
 
 hoverHandler :: EvaluateSettings -> Handlers HandlerM
 hoverHandler settings =
@@ -308,59 +347,14 @@ hoverHandler settings =
 
         let Position{ _line = fromIntegral -> _line, _character = fromIntegral -> _character } = request^.params.position
 
-        errorsRef <- use errors
-        errorMap <- liftIO (IORef.readIORef errorsRef)
-
-        case Map.lookup uri_ errorMap of
-            Nothing -> do
-                txt <- readUri uri_
-                case parse txt of
-                    Right _ -> do
-                        expr <- loadFile settings uri_
-                        (welltyped, _) <- case typecheck settings expr of
-                            Left  _  -> throwE (Info, "Can't infer type; code does not type-check.")
-                            Right wt -> return wt
-                        case typeAt (_line, _character) welltyped of
-                            Left err -> throwE (Error, Text.pack err)
-                            Right (mSrc, typ) -> do
-                                ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-                                respond (Right (InL (typeToHover maxOutputSize mSrc typ)))
-                    Left _ -> do
-                        -- The analysis has not seen this broken buffer yet;
-                        -- fall back to the last text that parsed.
-                        mHover <- lastGoodTypeHover settings uri_ (_line, _character) txt
-                        respond (Right (maybeToNull mHover))
-            Just docErrors -> do
-                let isHovered (Diagnosis _ (Just (Range left right)) _) =
-                        left <= (_line, _character) && (_line, _character) <= right
-                    isHovered _ =
-                        False
-
-                let hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = do
-                        let _range = Just (rangeToJSON (Range left right))
-                            _contents = InL (mkPlainText diagnosis)
-                        Just Hover{ _contents, _range }
-                    hoverFromDiagnosis _ =
-                        Nothing
-
-                let docDiagnoses =
-                        concatMap diagnose (errParse docErrors ++ errTypes docErrors)
-
-                let mHover = do
-                        explanation <- listToMaybe (filter isHovered docDiagnoses)
-
-                        hoverFromDiagnosis explanation
-
-                case mHover of
-                    Just _ ->
-                        respond (Right (maybeToNull mHover))
-                    Nothing
-                        | null (errParse docErrors) ->
-                            respond (Right (maybeToNull mHover))
-                        | otherwise -> do
-                            txt <- readUri uri_
-                            lastGood <- lastGoodTypeHover settings uri_ (_line, _character) txt
-                            respond (Right (maybeToNull lastGood))
+        txt <- readUri uri_
+        fromCurrent <- currentTypeHover settings uri_ (_line, _character) txt
+        mHover <- case fromCurrent of
+            Just hover ->
+                return (Just hover)
+            Nothing ->
+                lastGoodTypeHover settings uri_ (_line, _character) txt
+        respond (Right (maybeToNull mHover))
 
 documentLinkHandler :: Handlers HandlerM
 documentLinkHandler =
@@ -384,55 +378,62 @@ documentLinkHandler =
 
         txt <- readUri uri_
 
-        expr <- case parse txt of
-            Right e ->
-                return e
-            Left err ->
-                throwE (Log, documentLinkParseError uri_ err)
+        -- A syntax error has no AST.  Navigation already reuses the last
+        -- buffer that parsed; document links do the same.
+        source <- case parse txt of
+            Right _ ->
+                return txt
+            Left _ -> do
+                snaps <- liftIO . IORef.readIORef =<< use documents
+                return (fromMaybe txt (Map.lookup uri_ snaps >>= snapLastGood))
 
-        let imports = embedsWithRanges expr :: [(Range, Import)]
+        case parse source of
+            Left _ ->
+                respond (Right (InL []))
+            Right expr -> do
+                let imports = embedsWithRanges expr :: [(Range, Import)]
 
-        let basePath = takeDirectory path
+                let basePath = takeDirectory path
 
-        -- A mirror is the text of some other import.  Links chain onto that
-        -- import, so ./Bool/package.dhall inside the Prelude stays on the
-        -- Prelude's location.
-        let adjust imp = case mOrigin of
-                Just parent ->
-                    chainedImport parent <> imp
-                Nothing ->
-                    imp
+                -- A mirror is the text of some other import.  Links chain onto that
+                -- import, so ./Bool/package.dhall inside the Prelude stays on the
+                -- Prelude's location.
+                let adjust imp = case mOrigin of
+                        Just parent ->
+                            chainedImport parent <> imp
+                        Nothing ->
+                            imp
 
-        let go :: (Range, Import) -> IO [DocumentLink]
-            go (range_, Import (ImportHashed _ (Local prefix file)) _) = do
-              filePath <- localToPath prefix file
-              let filePath' = basePath </> filePath  -- absolute file path
-              let _range = rangeToJSON range_
+                let go :: (Range, Import) -> IO [DocumentLink]
+                    go (range_, Import (ImportHashed _ (Local prefix file)) _) = do
+                      filePath <- localToPath prefix file
+                      let filePath' = basePath </> filePath  -- absolute file path
+                      let _range = rangeToJSON range_
 #if MIN_VERSION_lsp(2,5,0)
-              let _target = Just (filePathToUri filePath')
+                      let _target = Just (filePathToUri filePath')
 #else
-              let _target = Just (getUri (filePathToUri filePath'))
+                      let _target = Just (getUri (filePathToUri filePath'))
 #endif
-              let _tooltip = Nothing
-              let _data_ = Nothing
-              return [DocumentLink {..}]
+                      let _tooltip = Nothing
+                      let _data_ = Nothing
+                      return [DocumentLink {..}]
 
-            go (range_, Import (ImportHashed _ (Remote url)) _) = do
-              let _range = rangeToJSON range_
-              let url' = url { headers = Nothing }
+                    go (range_, Import (ImportHashed _ (Remote url)) _) = do
+                      let _range = rangeToJSON range_
+                      let url' = url { headers = Nothing }
 #if MIN_VERSION_lsp(2,5,0)
-              let _target = Just (Uri (pretty url'))
+                      let _target = Just (Uri (pretty url'))
 #else
-              let _target = Just (pretty url')
+                      let _target = Just (pretty url')
 #endif
-              let _tooltip = Nothing
-              let _data_ = Nothing
-              return [DocumentLink {..}]
+                      let _tooltip = Nothing
+                      let _data_ = Nothing
+                      return [DocumentLink {..}]
 
-            go _ = return []
+                    go _ = return []
 
-        links <- liftIO $ mapM go (map (\(range_, imp) -> (range_, adjust imp)) imports)
-        respond (Right (InL (concat links)))
+                links <- liftIO $ mapM go (map (\(range_, imp) -> (range_, adjust imp)) imports)
+                respond (Right (InL (concat links)))
 
 
 -- | Log line for a document whose links could not be extracted: names the
@@ -474,10 +475,11 @@ collectedDiagnostic docUri err =
         _codeDescription = Nothing
         _tags = Nothing
         _message =
-            Text.pack
-                (concatMap
-                    Import.plainShowImportError
-                    (Import.collectedErrors err))
+            clipUserText
+                (Text.pack
+                    (concatMap
+                        Import.plainShowImportError
+                        (Import.collectedErrors err)))
         _relatedInformation = importRelated docUri err
         _data_ = Nothing
     in Diagnostic {..}
@@ -525,7 +527,7 @@ typecheckCollected collected expr prevNames prevValues prevCtxs
     | any (not . (`Map.member` knownTypes)) (holesIn expr) =
         ([], [], [], [])
     | otherwise =
-        let erased = unsafeCoerce (eraseHoles expr) :: Expr Src Void
+        let erased = fillImportHoles collected expr
             (errs, names, values, ctxs) =
                 checkLets
                     prevNames
@@ -535,6 +537,13 @@ typecheckCollected collected expr prevNames prevValues prevCtxs
                     erased
         in (map ErrorTypecheck errs, names, values, ctxs)
   where
+    holesIn (Core.Embed hole) =
+        [hole]
+    holesIn (Core.Note _ child) =
+        holesIn child
+    holesIn other =
+        concatMap holesIn (toListOf Core.subExpressions other)
+
     knownTypes =
         Map.fromList
             [ (Import.collectedHole err, known)
@@ -542,12 +551,22 @@ typecheckCollected collected expr prevNames prevValues prevCtxs
             , Just known <- [Import.collectedKnownType err]
             ]
 
-    holesIn (Core.Embed hole) =
-        [hole]
-    holesIn (Core.Note _ child) =
-        holesIn child
-    holesIn other =
-        concatMap holesIn (toListOf Core.subExpressions other)
+-- | Replace each import hole with a typed placeholder.  A hole whose
+--   type is unknown becomes 'Sort', which cannot be used as a value, so
+--   later typing skips that binding instead of inventing a type.
+fillImportHoles
+    :: [Import.CollectedImportError]
+    -> Expr Src Import.ImportHole
+    -> Expr Src Void
+fillImportHoles collected expr =
+    unsafeCoerce (eraseHoles expr)
+  where
+    knownTypes =
+        Map.fromList
+            [ (Import.collectedHole err, known)
+            | err <- collected
+            , Just known <- [Import.collectedKnownType err]
+            ]
 
     eraseHoles (Core.Embed hole) =
         case Map.lookup hole knownTypes of
@@ -1344,8 +1363,10 @@ executeExplain request respond = do
     explanation <- case chosen of
         Just diagnosis_ -> return diagnosis_
         Nothing -> throwE (Info, "There is no error to explain in this file.")
+    -- The VS Code client on the winitzki-vscode-dhall-lsp-server branch
+    -- serves `dhall-explain:?…` from memory via ExplainProvider.
     let body = diagnosis explanation
-        _uri = Uri ("dhall-explain:?" <> Text.pack (URI.encode (Text.unpack body)))
+        _uri = Uri ("dhall-explain:?" <> Text.pack (URIEncode.encode (Text.unpack body)))
         _external = Just False
         _takeFocus = Just True
         _selection = Nothing
@@ -1394,21 +1415,21 @@ executeNormalize settings request respond = do
         -- optional: 256MiB of allocation and 30 seconds.
         allocationBytes = 256 * 1024 * 1024 :: Int64
         timeoutMicros = 30 * 1000 * 1000
-    -- Normalizing with the enclosing let bindings needs the whole document
-    -- to load and typecheck; otherwise fall back to the selection alone.
+    -- Normalizing with the enclosing let bindings uses the current
+    -- buffer even when the file does not type-check as a whole.
     scoped <- catchE
-        (do  whole <- loadFile settings uri_
-             case typecheck settings whole of
-                 Left _ ->
+        (do  mExpr <- loadForTyping settings uri_
+             case mExpr of
+                 Nothing ->
                      return Nothing
-                 Right (welltyped, _) -> do
+                 Just typed -> do
                      let LSP.Types.Range (Position line_ col) _ = range_
                      return
                          (scopedNormalize
                              bytes
                              (fromIntegral line_, fromIntegral col)
                              selected
-                             welltyped))
+                             typed))
         (\_ -> return Nothing)
     outcome <- liftIO $ case scoped of
         Just (scopedNF, cut) ->

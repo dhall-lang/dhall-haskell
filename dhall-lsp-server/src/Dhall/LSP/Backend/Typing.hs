@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Typing (annotateLet, exprAt, letTypes, normalizedAt, scopedNormalize, srcAt, typeAt) where
+module Dhall.LSP.Backend.Typing (annotateLet, exprAt, letTypes, normalizedAt, scopedNormalize, splitMultiLetSrc, srcAt, typeAt, typeAtExpr) where
 
 import Dhall.Core
     ( Binding (..)
@@ -41,8 +41,14 @@ import Dhall.LSP.Backend.Parsing
 --   input expression is well-typed. Also returns the Src descriptor containing
 --   that subexpression if possible.
 typeAt :: Position -> WellTyped -> Either String (Maybe Src, Expr Src Void)
-typeAt pos expr = do
-  expr' <- case splitMultiLetSrc (fromWellTyped expr) of
+typeAt pos expr = typeAtExpr pos (fromWellTyped expr)
+
+-- | Like 'typeAt', but the file need not type-check as a whole.  A
+--   'let' whose value is ill-typed is skipped so later bindings can
+--   still answer.
+typeAtExpr :: Position -> Expr Src Void -> Either String (Maybe Src, Expr Src Void)
+typeAtExpr pos expr = do
+  expr' <- case splitMultiLetSrc expr of
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
@@ -71,7 +77,7 @@ typeAt' pos ctx (Note src (Let (Binding { variable = x, annotation = ann, value 
   | coversAnn pos ann = typeAt' pos ctx (annotationExpr ann)
   | covers pos a = typeAt' pos ctx a
   | pos `inside` src = do
-      ctx' <- extendLet x a ctx
+      let ctx' = extendLetLenient x a ann ctx
       typeAt' pos ctx' e
 
 typeAt' pos ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A} b))
@@ -221,9 +227,9 @@ normalizedAt' pos ctx expr = do
 --   'True' when the normal form was cut short.  'Nothing' when the selection
 --   matches no subexpression or an enclosing binding does not typecheck.
 scopedNormalize
-    :: Int -> Position -> Text -> WellTyped -> Maybe (Expr Src Void, Bool)
+    :: Int -> Position -> Text -> Expr Src Void -> Maybe (Expr Src Void, Bool)
 scopedNormalize budget pos selected expr = do
-    expr' <- splitMultiLetSrc (fromWellTyped expr)
+    expr' <- splitMultiLetSrc expr
     (ctx, found) <- scopedAt pos selected emptyTypingContext expr'
     return (normalizeWithContextBounded budget ctx found)
 
@@ -239,9 +245,8 @@ scopedAt _ selected ctx expr@(Note src _)
 scopedAt pos selected ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
     | coversAnn pos ann = scopedAt pos selected ctx (annotationExpr ann)
     | covers pos a = scopedAt pos selected ctx a
-    | pos `inside` src = do
-        ctx' <- either (const Nothing) Just (extendLet x a ctx)
-        scopedAt pos selected ctx' e
+    | pos `inside` src =
+        scopedAt pos selected (extendLetLenient x a ann ctx) e
 scopedAt pos selected ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A } b))
     | covers pos _A = scopedAt pos selected ctx _A
     | pos `inside` src = do
@@ -292,6 +297,25 @@ covers _ _ = False
 coversAnn :: Position -> Maybe (Maybe Src, Expr Src a) -> Bool
 coversAnn _ Nothing = False
 coversAnn pos (Just (_, expr)) = covers pos expr
+
+-- Bind a let even when the value is ill-typed: use the annotation if
+-- present, otherwise skip the binding so later names still resolve.
+extendLetLenient
+    :: Text
+    -> Expr Src Void
+    -> Maybe (Maybe Src, Expr Src Void)
+    -> TypingContext Src
+    -> TypingContext Src
+extendLetLenient x a ann ctx =
+    case extendLet x a ctx of
+        Right ctx' -> ctx'
+        Left _ ->
+            case ann of
+                Just (_, typ) ->
+                    case extendBinder x typ ctx of
+                        Right ctx' -> ctx'
+                        Left _ -> ctx
+                Nothing -> ctx
 
 -- | Binder span and type of each unannotated @let@.
 --

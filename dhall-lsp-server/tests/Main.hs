@@ -16,6 +16,7 @@ import Language.LSP.Protocol.Types
     ( ClientCapabilities
     , CodeAction (..)
     , CodeActionContext (..)
+    , CodeActionKind (..)
     , CodeActionParams (..)
     , Command (..)
     , CompletionItem (..)
@@ -23,6 +24,8 @@ import Language.LSP.Protocol.Types
     , ExecuteCommandParams (..)
     , DiagnosticSeverity (..)
     , DiagnosticTag (..)
+    , DocumentLink (..)
+    , DocumentLinkParams (..)
     , FoldingRange (..)
     , FoldingRangeParams (..)
     , Hover (..)
@@ -75,7 +78,7 @@ import Test.Hspec
 import qualified Data.Aeson         as Aeson
 import qualified Data.Map.Strict    as Map
 import Data.Default               (def)
-import Dhall.LSP.Backend.Diagnostics (stripTrailingComments)
+import Dhall.LSP.Backend.Diagnostics (clipUserText, stripTrailingComments)
 import Dhall.LSP.State            (ServerConfig (..))
 import qualified Dhall.LSP.Backend.Dhall as Backend
 import qualified Dhall.LSP.Handlers      as Handlers
@@ -171,6 +174,18 @@ hoveringSpec dir =
                     else waitForParser
         waitForParser
         hover <- getHover docId (Position 0 5)
+        liftIO $ hoverText hover `shouldBe` "Type"
+    it "reports types on hover while the document has a type error" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "DespiteError.dhall" "dhall"
+        _ <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        hover <- getHover docId (Position 0 5)
+        liftIO $ hoverText hover `shouldBe` "Type"
+    it "reports types on hover while an import is missing" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "DespiteImport.dhall" "dhall"
+        _ <- waitForDiagnosticsSource "Dhall.Import"
+        hover <- getHover docId (Position 2 5)
         liftIO $ hoverText hover `shouldBe` "Type"
 
 hoverContents :: Maybe Hover -> T.Text
@@ -350,18 +365,14 @@ diagnosticsSpec fixtureDir = do
       runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
         docId <- openDoc "Assert.dhall" "dhall"
         [diag@Diagnostic { _range = diagRange }] <- waitForDiagnosticsSource "Dhall.TypeCheck"
-        hover <- getHover docId (Position 0 10)
+        hover <- getHover docId (Position 0 18)
         actions <- getCodeActions docId diagRange
         liftIO $ do
           let diagText = T.unpack (_message diag)
           diagText `shouldContain` "[ 1, 2 ]"
           diagText `shouldContain` "[ 1, 1 ]"
-          case toEither (_contents (fromJust hover)) of
-            Left content -> do
-              T.unpack (_value content) `shouldContain` "[ 1, 2 ]"
-              T.unpack (_value content) `shouldNotContain` "Explain error"
-            Right _ ->
-              expectationFailure "expected hover text"
+          hoverText hover `shouldBe` "Natural"
+          hoverText hover `shouldNotContain` "Assertion failed"
           let found =
                 [ codeAction
                 | InR codeAction <- actions
@@ -373,6 +384,17 @@ diagnosticsSpec fixtureDir = do
               Aeson.fromJSON rangeArg `shouldBe` Aeson.Success diagRange
             _ ->
               expectationFailure "Explain error should carry the diagnostic range"
+    it "names both types of an equivalence mismatch" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "EquivTypes.dhall" "dhall"
+        [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        hover <- getHover docId (Position 0 17)
+        liftIO $ do
+          let diagText = T.unpack (_message diag)
+          diagText `shouldContain` "different types"
+          diagText `shouldContain` "Natural"
+          diagText `shouldContain` "Bool"
+          hoverText hover `shouldBe` "Natural"
     it "offers Explain error for the diagnostic under an empty cursor" $
       runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
         docId <- openDoc "Assert.dhall" "dhall"
@@ -554,6 +576,17 @@ commentTrimSpec =
     it "keeps -- inside a multi-line string" $
       stripTrailingComments "'' a--b ''" `shouldBe` "'' a--b ''"
 
+clipTextSpec :: Spec
+clipTextSpec =
+  describe "clipUserText" $ do
+    it "keeps a short message" $
+      clipUserText "ok" `shouldBe` "ok"
+    it "cuts a message at 2048 characters" $ do
+      let long = T.replicate 3000 "a"
+          clipped = clipUserText long
+      T.length clipped `shouldBe` 2049
+      T.last clipped `shouldBe` '…'
+
 documentLinkSpec :: Spec
 documentLinkSpec =
   describe "document links" $
@@ -568,7 +601,7 @@ documentLinkSpec =
 
 foldingSpec :: FilePath -> Spec
 foldingSpec fixtureDir =
-  describe "folding" $
+  describe "folding" $ do
     it "folds a record, a list, an if and a merge" $
       runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
         docId <- openDoc "Regions.dhall" "dhall"
@@ -580,9 +613,47 @@ foldingSpec fixtureDir =
         let ranges = case rsp ^. result of
                 Right (InL xs) -> xs
                 _ -> []
+        liftIO $ do
+            let pairs = map (\r -> (_startLine r, _endLine r)) ranges
+            pairs `shouldContain` [(0, 3)]
+            pairs `shouldContain` [(1, 3)]
+            pairs `shouldContain` [(5, 7)]
+            pairs `shouldContain` [(9, 11)]
+            pairs `shouldContain` [(13, 17)]
+    it "folds each let in a multi-let chain" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Consecutive.dhall" "dhall"
+        rsp <- request LSP.SMethod_TextDocumentFoldingRange FoldingRangeParams
+            { _workDoneToken = Nothing
+            , _partialResultToken = Nothing
+            , _textDocument = docId
+            }
+        let ranges = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
         liftIO $
             map (\r -> (_startLine r, _endLine r)) ranges
-                `shouldContain` [(1, 3), (5, 7), (9, 11), (13, 17)]
+                `shouldContain` [(0, 1), (2, 3)]
+    it "folds a record without a same-line field projection" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "RecordField.dhall" "dhall"
+        rsp <- request LSP.SMethod_TextDocumentFoldingRange FoldingRangeParams
+            { _workDoneToken = Nothing
+            , _partialResultToken = Nothing
+            , _textDocument = docId
+            }
+        let ranges = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
+            recordFold = [ r | r <- ranges, _startLine r == 0 ]
+        liftIO $ do
+            recordFold `shouldSatisfy` (not . null)
+            let r = head recordFold
+            _endLine r `shouldBe` 1
+            _endCharacter r `shouldSatisfy` isJust
+            -- `, b = 2 }.a` — the fold must stop at `}`, not at the end of `.a`.
+            let Just endCol = _endCharacter r
+            endCol `shouldSatisfy` (< 11)
 
 inlaySpec :: FilePath -> Spec
 inlaySpec fixtureDir =
@@ -647,6 +718,7 @@ main = do
   stability <- testSpec "Stability" (stabilitySpec (baseDir "diagnostics"))
   config <- testSpec "Config" configSpec
   commentTrim <- testSpec "Comment trimming" commentTrimSpec
+  clipText <- testSpec "Clip user text" clipTextSpec
   documentLink <- testSpec "Document links" documentLinkSpec
   defaultMain
     ( testGroup "Tests"
@@ -666,6 +738,7 @@ main = do
           stability,
           config,
           commentTrim,
+          clipText,
           documentLink
         ]
     )
@@ -812,7 +885,7 @@ organizeSpec fixtureDir = describe "organize imports" $ do
       actions <- getCodeActions docId (Range (Position 0 0) (Position 3 0))
       liftIO $ do
         let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
-        length found `shouldBe` 1
+        found `shouldSatisfy` (not . null)
         _disabled (head found) `shouldSatisfy` isJust
         _edit (head found) `shouldBe` Nothing
   it "is offered for a cursor outside the import block" $
@@ -821,9 +894,15 @@ organizeSpec fixtureDir = describe "organize imports" $ do
       -- The cursor is in the body, past the last import binding.
       actions <- getCodeActions docId (Range (Position 2 3) (Position 2 3))
       liftIO $ do
-        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
-        length found `shouldBe` 1
-        _disabled (head found) `shouldBe` Nothing
+          let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
+              kinds =
+                [ k
+                | CodeAction { _kind = Just k } <- found
+                ]
+          found `shouldSatisfy` (not . null)
+          kinds `shouldContain` [CodeActionKind_QuickFix]
+          kinds `shouldContain` [CodeActionKind_SourceOrganizeImports]
+          _disabled (head found) `shouldBe` Nothing
 
 expectOrganize :: FilePath -> FilePath -> T.Text -> IO ()
 expectOrganize fixtureDir file expected =
@@ -858,8 +937,14 @@ inlineSpec fixtureDir = describe "inline let" $ do
       actions <- getCodeActions docId (Range (Position 0 0) (Position 0 4))
       liftIO $ do
         let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Inline let" ]
+            kinds =
+              [ k
+              | CodeAction { _kind = Just k } <- found
+              ]
             edits = maybe [] concat (fmap Map.elems (_edit (head found) >>= _changes))
-        length found `shouldBe` 1
+        found `shouldSatisfy` (not . null)
+        kinds `shouldContain` [CodeActionKind_QuickFix]
+        kinds `shouldContain` [CodeActionKind_RefactorInline]
         map _newText edits `shouldBe` ["1\n"]
 
 expectTitle :: FilePath -> FilePath -> Position -> T.Text -> T.Text -> IO ()
@@ -880,7 +965,7 @@ expectDisabled fixtureDir file pos title_ =
     actions <- getCodeActions docId (Range pos pos)
     liftIO $ do
       let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == title_ ]
-      length found `shouldBe` 1
+      found `shouldSatisfy` (not . null)
       _disabled (head found) `shouldSatisfy` isJust
       _edit (head found) `shouldBe` Nothing
 
@@ -942,3 +1027,31 @@ definitionSpec dir =
             DidOpenTextDocumentParams { _textDocument = _textDocument }
         diags <- waitForDiagnostics
         liftIO $ diags `shouldBe` []
+    it "keeps document links from the last successful parse" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "GoodLinks.dhall" "dhall"
+        _ <- waitForDiagnostics
+        let replacement =
+#if MIN_VERSION_lsp_types(2,2,0)
+                TextDocumentContentChangeEvent
+                    (InR (TextDocumentContentChangeWholeDocument
+                        "let a = ./lib.dhall\n+1\nlet b = ./lib.dhall\nin a\n"))
+#else
+                TextDocumentContentChangeEvent (InR (#text .== "let a = ./lib.dhall\n+1\nlet b = ./lib.dhall\nin a\n"))
+#endif
+        changeDoc docId [replacement]
+        rsp <- request LSP.SMethod_TextDocumentDocumentLink DocumentLinkParams
+            { _workDoneToken = Nothing
+            , _partialResultToken = Nothing
+            , _textDocument = docId
+            }
+        let links = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
+            shown =
+                [ T.pack (show target)
+                | DocumentLink { _target = Just target } <- links
+                ]
+        liftIO $ do
+            length links `shouldBe` 2
+            shown `shouldSatisfy` all ("lib.dhall" `T.isInfixOf`)
