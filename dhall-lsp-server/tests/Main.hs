@@ -69,6 +69,12 @@ import qualified GHC.IO.Encoding
 import qualified Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Message as LSP
 
+itemLabel :: CompletionItem -> T.Text
+itemLabel = _label
+
+actionTitle :: CodeAction -> T.Text
+actionTitle = _title
+
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
 
@@ -202,7 +208,7 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 2, _character = 35})
         liftIO $ do
           let firstItem = head cs
-          _label firstItem `shouldBe` "Config"
+          itemLabel firstItem `shouldBe` "Config"
           _detail firstItem `shouldBe` Just "Type"
     it "suggests user defined functions"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -211,7 +217,7 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 6, _character = 7})
         liftIO $ do
           let firstItem = head cs
-          _label firstItem `shouldBe` "makeUser"
+          itemLabel firstItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
     it "suggests user defined bindings"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -220,7 +226,7 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 0, _character = 59})
         liftIO $ do
           let firstItem = head cs
-          _label firstItem `shouldBe` "bob"
+          itemLabel firstItem `shouldBe` "bob"
           _detail firstItem `shouldBe` Just "Text"
     it "suggests functions from imports"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -229,8 +235,8 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 0, _character = 33})
         liftIO $ do
           let [ firstItem, secondItem ] = cs
-          _label firstItem `shouldBe` "`make user`"
-          _label secondItem `shouldBe` "makeUser"
+          itemLabel firstItem `shouldBe` "`make user`"
+          itemLabel secondItem `shouldBe` "makeUser"
           _detail firstItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
           _detail secondItem `shouldBe` Just "\8704(user : Text) \8594 { home : Text }"
     it "suggests union alternatives"
@@ -240,8 +246,8 @@ codeCompletionSpec fixtureDir =
         cs <- getCompletions docId (Position {_line = 2, _character = 10})
         liftIO $ do
           let [ firstItem, secondItem ] = cs
-          _label firstItem `shouldBe` "A"
-          _label secondItem `shouldBe` "`B C`"
+          itemLabel firstItem `shouldBe` "A"
+          itemLabel secondItem `shouldBe` "`B C`"
           _detail firstItem `shouldBe` Just "\8704(A : Text) \8594 < A : Text | `B C` >"
           _detail secondItem `shouldBe` Just "< A : Text | `B C` >"
     it "suggests a field of an applied function" $
@@ -249,14 +255,14 @@ codeCompletionSpec fixtureDir =
         docId <- openDoc "RecordApp.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 0, _character = 32})
         liftIO $ do
-          let labels = map _label cs
+          let labels = map itemLabel cs
           labels `shouldContain` ["a"]
     it "suggests constructors of a union expression" $
       runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
         docId <- openDoc "UnionExpr.dhall" "dhall"
         cs <- getCompletions docId (Position {_line = 0, _character = 10})
         liftIO $ do
-          let labels = map _label cs
+          let labels = map itemLabel cs
           labels `shouldContain` ["A", "B"]
 
 diagnosticsSpec :: FilePath -> Spec
@@ -353,7 +359,7 @@ inlaySpec fixtureDir =
         liftIO $ do
             let hint = head hints
                 edits = maybe [] id (_textEdits hint)
-            _label hint `shouldBe` InL ": Natural"
+            _label (hint :: InlayHint) `shouldBe` InL ": Natural"
             map _newText edits `shouldContain` [" : Natural"]
 
 -- | Open a file, replace it, and wait until the new diagnostics arrive.
@@ -462,7 +468,7 @@ organizeSpec fixtureDir = describe "organize imports" $ do
       docId <- openDoc "Duplicate.dhall" "dhall"
       actions <- getCodeActions docId (Range (Position 0 0) (Position 3 0))
       liftIO $ do
-        let found = [ action | InR action <- actions, _title action == "Organize imports" ]
+        let found = [ action | InR action <- actions, actionTitle action == "Organize imports" ]
         length found `shouldBe` 1
         _disabled (head found) `shouldSatisfy` isJust
         _edit (head found) `shouldBe` Nothing
@@ -473,7 +479,7 @@ expectOrganize fixtureDir file expected =
     docId <- openDoc file "dhall"
     actions <- getCodeActions docId (Range (Position 0 0) (Position 5 0))
     liftIO $ do
-      let found = [ action | InR action <- actions, _title action == "Organize imports" ]
+      let found = [ action | InR action <- actions, actionTitle action == "Organize imports" ]
           action = head found
           edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
       map _newText edits `shouldBe` [expected]
@@ -500,7 +506,7 @@ expectTitle fixtureDir file pos title_ expected =
     docId <- openDoc file "dhall"
     actions <- getCodeActions docId (Range pos pos)
     liftIO $ do
-      let found = [ action | InR action <- actions, _title action == title_ ]
+      let found = [ action | InR action <- actions, actionTitle action == title_ ]
           action = head found
           edits = maybe [] concat (fmap Map.elems (_edit action >>= _changes))
       map _newText edits `shouldBe` [expected]
@@ -511,7 +517,7 @@ expectDisabled fixtureDir file pos title_ =
     docId <- openDoc file "dhall"
     actions <- getCodeActions docId (Range pos pos)
     liftIO $ do
-      let found = [ action | InR action <- actions, _title action == title_ ]
+      let found = [ action | InR action <- actions, actionTitle action == title_ ]
       length found `shouldBe` 1
       _disabled (head found) `shouldSatisfy` isJust
       _edit (head found) `shouldBe` Nothing
