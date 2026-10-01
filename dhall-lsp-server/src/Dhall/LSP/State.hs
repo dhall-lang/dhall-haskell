@@ -17,7 +17,7 @@ import Data.Aeson
 import Data.Default                     (Default (def))
 import Data.Dynamic                     (Dynamic)
 import Data.IORef                       (IORef)
-import Data.Map.Strict                  (Map, empty)
+import Data.Map.Strict                  (Map)
 import Data.Text                        (Text)
 import Data.Time.Clock                  (UTCTime)
 import Data.Void                        (Void)
@@ -79,7 +79,10 @@ instance FromJSON ServerConfig where
 
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache
-  , _errors :: Map J.Uri DocErrors  -- ^ Map from dhall files to their errors
+  , _errors :: IORef (Map J.Uri DocErrors)
+  -- ^ Map from dhall files to their errors.  An IORef because didChange
+  --   analysis runs in a background thread on a snapshot of the state; the
+  --   fresh diagnostics must still reach the handlers.
   , _httpManager :: Maybe Dynamic
   -- ^ The http manager used by dhall's import infrastructure
   , _documents :: IORef (Map J.Uri DocSnap)
@@ -127,15 +130,15 @@ data DocSnap = DocSnap
 makeLenses ''ServerState
 
 initialState
-    :: IORef (Map J.Uri DocSnap)
+    :: IORef (Map J.Uri DocErrors)
+    -> IORef (Map J.Uri DocSnap)
     -> IORef (Maybe (LanguageContextEnv ServerConfig))
     -> IORef (Map Text (UTCTime, SomeException))
     -> IORef (Map Text Text)
     -> IORef (Map Text Chained)
     -> IORef (Map FilePath Chained)
     -> ServerState
-initialState _documents _lspEnv _negativeImports _importBodies _importChains _mirrorOrigins = ServerState {..}
+initialState _errors _documents _lspEnv _negativeImports _importBodies _importChains _mirrorOrigins = ServerState {..}
   where
     _importCache = emptyCache
-    _errors = empty
     _httpManager = Nothing

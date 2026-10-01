@@ -1063,7 +1063,8 @@ codeActionHandler _evalSettings =
                 selected = request ^. params . range
             txt <- readUri docUri
             ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-            errorMap <- use errors
+            errorsRef <- use errors
+            errorMap <- liftIO (readIORef errorsRef)
             -- Explain is offered for the client-reported diagnostic under the
             -- cursor (which covers an empty selection on a squiggle), or when
             -- the selection meets a known error range.

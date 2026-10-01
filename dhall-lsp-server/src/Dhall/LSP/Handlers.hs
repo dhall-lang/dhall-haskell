@@ -31,7 +31,7 @@ import Dhall.LSP.Backend.Completion
     , completeLocalImport
     , completeProjections
     , completionQueryAt
-    , completionsFromNormal
+    , expressionBefore
     )
 import Dhall.LSP.Backend.Dhall
     ( FileIdentifier
@@ -66,7 +66,7 @@ import Dhall.LSP.Backend.Freezing
     )
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
-import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, normalizedAt, typeAt)
+import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, typeAt)
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
@@ -235,6 +235,71 @@ rangesOverlap :: Range -> Range -> Bool
 rangesOverlap (Range left1 right1) (Range left2 right2) =
     left1 <= right2 && left2 <= right1
 
+-- | Render a type hover.
+typeToHover :: Int -> Maybe Src -> Expr Src Void -> Hover
+typeToHover maxOutputSize mSrc typ = Hover{ _contents, _range }
+  where
+    _range = fmap (rangeToJSON . rangeFromDhall) mSrc
+    rendered =
+        case Bounded.prettyBounded
+                maxOutputSize
+                (Pretty.prettyCharacterSet Pretty.Unicode typ) of
+            Bounded.Complete text -> text
+            Bounded.Truncated text -> text
+    _contents = InL (mkPlainText rendered)
+
+-- | The source text covered by a range.
+sliceInRange :: Text -> Range -> Text
+sliceInRange source (Range left right) =
+    Text.take (max 0 (to - from)) (Text.drop from source)
+  where
+    from = positionToOffset source left
+    to = positionToOffset source right
+
+-- | Type hover over the last text that parsed, used while the current
+--   buffer has a syntax error.  Only answers when the hovered expression's
+--   source slice is unchanged in the current text, so the type still
+--   describes the code under the cursor.
+lastGoodTypeHover
+    :: EvaluateSettings -> Uri -> (Int, Int) -> Text -> HandlerM (Maybe Hover)
+lastGoodTypeHover settings uri_ pos current = do
+    docs <- use documents
+    snaps <- liftIO (IORef.readIORef docs)
+    case Map.lookup uri_ snaps >>= snapLastGood of
+        Just good | good /= current -> do
+            fileIdentifier <- fileIdentifierFromUri uri_
+            cache <- use importCache
+            case parse good of
+                Left _ ->
+                    return Nothing
+                Right parsed -> do
+                    negative <- use negativeImports
+                    loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
+                    case loaded of
+                        Left _ ->
+                            return Nothing
+                        Right (cache', expr, collected, _)
+                            | not (null collected) ->
+                                return Nothing
+                            | otherwise -> do
+                                assign importCache cache'
+                                case typecheck settings (unsafeCoerce expr) of
+                                    Left _ ->
+                                        return Nothing
+                                    Right (welltyped, _) ->
+                                        case typeAt pos welltyped of
+                                            Left _ ->
+                                                return Nothing
+                                            Right (Just src, typ)
+                                                | let range_ = rangeFromDhall src
+                                                , sliceInRange good range_ == sliceInRange current range_ -> do
+                                                    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
+                                                    return (Just (typeToHover maxOutputSize (Just src) typ))
+                                            _ ->
+                                                return Nothing
+        _ ->
+            return Nothing
+
 hoverHandler :: EvaluateSettings -> Handlers HandlerM
 hoverHandler settings =
     LSP.requestHandler SMethod_TextDocumentHover \request respond -> handleErrorWithDefault respond (InR LSP.Types.Null) do
@@ -242,27 +307,28 @@ hoverHandler settings =
 
         let Position{ _line = fromIntegral -> _line, _character = fromIntegral -> _character } = request^.params.position
 
-        errorMap <- use errors
+        errorsRef <- use errors
+        errorMap <- liftIO (IORef.readIORef errorsRef)
 
         case Map.lookup uri_ errorMap of
             Nothing -> do
-                expr <- loadFile settings uri_
-                (welltyped, _) <- case typecheck settings expr of
-                    Left  _  -> throwE (Info, "Can't infer type; code does not type-check.")
-                    Right wt -> return wt
-                case typeAt (_line, _character) welltyped of
-                    Left err -> throwE (Error, Text.pack err)
-                    Right (mSrc, typ) -> do
-                        let _range = fmap (rangeToJSON . rangeFromDhall) mSrc
-                        ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-                        let rendered =
-                                case Bounded.prettyBounded
-                                        maxOutputSize
-                                        (Pretty.prettyCharacterSet Pretty.Unicode typ) of
-                                    Bounded.Complete text -> text
-                                    Bounded.Truncated text -> text
-                        let _contents = InL (mkPlainText rendered)
-                        respond (Right (InL Hover{ _contents, _range }))
+                txt <- readUri uri_
+                case parse txt of
+                    Right _ -> do
+                        expr <- loadFile settings uri_
+                        (welltyped, _) <- case typecheck settings expr of
+                            Left  _  -> throwE (Info, "Can't infer type; code does not type-check.")
+                            Right wt -> return wt
+                        case typeAt (_line, _character) welltyped of
+                            Left err -> throwE (Error, Text.pack err)
+                            Right (mSrc, typ) -> do
+                                ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
+                                respond (Right (InL (typeToHover maxOutputSize mSrc typ)))
+                    Left _ -> do
+                        -- The analysis has not seen this broken buffer yet;
+                        -- fall back to the last text that parsed.
+                        mHover <- lastGoodTypeHover settings uri_ (_line, _character) txt
+                        respond (Right (maybeToNull mHover))
             Just docErrors -> do
                 let isHovered (Diagnosis _ (Just (Range left right)) _) =
                         left <= (_line, _character) && (_line, _character) <= right
@@ -284,7 +350,16 @@ hoverHandler settings =
 
                         hoverFromDiagnosis explanation
 
-                respond (Right (maybeToNull mHover))
+                case mHover of
+                    Just _ ->
+                        respond (Right (maybeToNull mHover))
+                    Nothing
+                        | null (errParse docErrors) ->
+                            respond (Right (maybeToNull mHover))
+                        | otherwise -> do
+                            txt <- readUri uri_
+                            lastGood <- lastGoodTypeHover settings uri_ (_line, _character) txt
+                            respond (Right (maybeToNull lastGood))
 
 documentLinkHandler :: Handlers HandlerM
 documentLinkHandler =
@@ -565,12 +640,7 @@ survivingErrors txt previous parseStart =
   where
     keeps range_@(Range _ right) =
         right <= parseStart
-            && slice (errSemanticText previous) range_ == slice txt range_
-
-    slice source (Range left right) =
-        let from = positionToOffset source left
-            to = positionToOffset source right
-        in Text.take (max 0 (to - from)) (Text.drop from source)
+            && sliceInRange (errSemanticText previous) range_ == sliceInRange txt range_
 
 -- | The range of the first diagnosis of an error, if it has one.
 errorRange :: DhallError -> Maybe Range
@@ -586,7 +656,8 @@ diagnoseDocument settings _uri txt = do
   modifying importCache (invalidate fileIdentifier)
   cache <- use importCache
 
-  previousErrors <- Map.lookup _uri <$> use errors
+  errorsRef <- use errors
+  previousErrors <- liftIO $ Map.lookup _uri <$> IORef.readIORef errorsRef
 
   (parseErrors, importErrors, typeErrors, semanticText) <- case parse txt of
       Left err -> do
@@ -679,7 +750,7 @@ diagnoseDocument settings _uri txt = do
             _data_ = Nothing
         in Diagnostic {..}
 
-  modifying errors $ \errorMap ->
+  liftIO $ IORef.modifyIORef' errorsRef $ \errorMap ->
       if null parseErrors && null importErrors && null typeErrors
           then Map.delete _uri errorMap
           else Map.insert _uri (DocErrors parseErrors importErrors typeErrors semanticText) errorMap
@@ -1043,9 +1114,9 @@ executeUnfreezeAllImports request = do
   return ()
 
 -- | Complete a record or union that is not a plain dotted name, such as
---   `(f x).` or `{ a = 1 }.`.  The dot and any partial label are removed so
---   the file can typecheck.  Completions come from the type at that
---   position, not from normalizing the expression.
+--   `(f x).` or `{ a = 1 }.`.  The completion target is the balanced
+--   expression before the dot, typechecked in the context of the binders
+--   leading up to it, so the surrounding code does not have to parse.
 completeBeforeDot
     :: EvaluateSettings
     -> Uri
@@ -1055,33 +1126,38 @@ completeBeforeDot
 completeBeforeDot settings uri_ txt (line_, col_) = do
     let off = positionToOffset txt (line_, col_)
         before = Text.take off txt
-        after = Text.drop off txt
         (lead, typed) = Text.breakOnEnd "." before
         baseCol = col_ - fromIntegral (Text.length typed) - 1
     if Text.null lead || Text.any (== '\n') typed || baseCol < 0
         then return []
         else do
-            let baseText = Text.dropEnd (Text.length typed + 1) before <> after
-            fileIdentifier <- fileIdentifierFromUri uri_
-            cache <- use importCache
-            case parse baseText of
-                Left _ ->
+            let beforeDot = Text.dropEnd (Text.length typed + 1) before
+            case expressionBefore beforeDot of
+                Nothing ->
                     return []
-                Right parsed -> do
-                    loaded <- liftIO $ load settings fileIdentifier parsed cache
-                    case loaded of
+                Just (start, targetText) -> do
+                    fileIdentifier <- fileIdentifierFromUri uri_
+                    cache <- use importCache
+                    let bindersExpr = binderExprFromText (Text.take start beforeDot)
+                    loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
+                    case loadedBinders of
                         Left _ ->
                             return []
-                        Right (cache', expr) -> do
-                            assign importCache cache'
-                            case typecheck settings expr of
+                        Right (cache', bindersExpr') ->
+                            case parse targetText of
                                 Left _ ->
                                     return []
-                                Right (wt, _) ->
-                                    return $
-                                        maybe []
-                                            (uncurry completionsFromNormal)
-                                            (normalizedAt (line_, baseCol) wt)
+                                Right targetExpr -> do
+                                    loaded <- liftIO $ load settings fileIdentifier targetExpr cache'
+                                    case loaded of
+                                        Left _ ->
+                                            return []
+                                        Right (cache'', targetExpr') -> do
+                                            assign importCache cache''
+                                            return $
+                                                completeProjections
+                                                    (buildCompletionContext bindersExpr')
+                                                    targetExpr'
 
 completionHandler :: EvaluateSettings -> Handlers HandlerM
 completionHandler settings =
@@ -1220,7 +1296,8 @@ executeExplain request respond = do
         _ ->
             throwE (Error, "Failed to execute command; arguments missing.")
     ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-    errorMap <- use errors
+    errorsRef <- use errors
+    errorMap <- liftIO (IORef.readIORef errorsRef)
     explanations <- case Map.lookup uri_ errorMap of
         Nothing ->
             throwE (Info, "There is no error to explain in this file.")
@@ -1503,7 +1580,8 @@ documentDidCloseHandler =
         let _uri = notification ^. params . textDocument . uri
         docs <- use documents
         liftIO $ IORef.modifyIORef' docs (Map.delete _uri)
-        modifying errors (Map.delete _uri)
+        errorsRef <- use errors
+        liftIO $ IORef.modifyIORef' errorsRef (Map.delete _uri)
         let _version = Nothing
             _diagnostics = []
         liftLSP $

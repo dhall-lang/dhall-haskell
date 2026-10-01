@@ -47,6 +47,108 @@ completionQueryAt text pos = (completionLeadup, completionPrefix)
   (completionPrefix, completionLeadup) =
     breakEnd (`elem` (" \t\n[(,=+*&|}#?>" :: String)) text'
 
+-- | The expression that ends at the end of the input, and the offset where
+--   it starts.
+--
+--   Used to find the completion target before a dot while the surrounding
+--   code does not parse yet.  The scan tracks strings, comments and bracket
+--   nesting; the target starts after the last operator at bracket depth
+--   zero, so @let x = { a = 1 }@ yields @{ a = 1 }@.  Returns 'Nothing' when
+--   the trailing expression is empty or a bracket is still open.
+expressionBefore :: Text -> Maybe (Int, Text)
+expressionBefore raw
+    | Text.null text = Nothing
+    | not (null brackets) = Nothing
+    | Text.null target = Nothing
+    | otherwise = Just (start, target)
+  where
+    text = Text.stripEnd raw
+    (brackets, boundary) = scan 0 Nothing Code [] 0 text
+    dropped = Text.drop boundary text
+    start = boundary + Text.length dropped - Text.length target
+    target = Text.stripStart dropped
+
+    -- Operators that end the trailing expression at bracket depth zero.
+    -- Whitespace is not one: an application like @(f x) 1.@ completes from
+    -- the whole application.
+    separators = "=+*&|?#:,\x2192" :: String
+
+    scan :: Int -> Maybe Char -> ScanMode -> [Char] -> Int -> Text -> ([Char], Int)
+    scan index previous mode brackets boundary rest =
+        case Text.uncons rest of
+            Nothing ->
+                (brackets, boundary)
+            Just (c, cs) ->
+                case mode of
+                    Code
+                        | c == '"' ->
+                            scan (index + 1) (Just c) InString brackets boundary cs
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '\'') InMulti brackets boundary cs'
+                        | c == '-', Just ('-', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '-') InLineComment brackets boundary cs'
+                        | c == '{', Just ('-', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '-') (InBlockComment 1) brackets boundary cs'
+                        | c == '{' ->
+                            scan (index + 1) (Just c) Code ('}' : brackets) boundary cs
+                        | c == '(' ->
+                            scan (index + 1) (Just c) Code (')' : brackets) boundary cs
+                        | c == '[' ->
+                            scan (index + 1) (Just c) Code (']' : brackets) boundary cs
+                        | c == '<' ->
+                            scan (index + 1) (Just c) Code ('>' : brackets) boundary cs
+                        | c == '>', previous == Just '-' ->
+                            -- an arrow, not a union closer
+                            scan (index + 1) (Just c) Code brackets
+                                (if null brackets then index + 1 else boundary) cs
+                        | c `elem` ("})]>" :: String) ->
+                            case brackets of
+                                top : inner
+                                    | top == c ->
+                                        scan (index + 1) (Just c) Code inner boundary cs
+                                [] ->
+                                    -- a stray closer ends the trailing expression
+                                    scan (index + 1) (Just c) Code brackets (index + 1) cs
+                                _ ->
+                                    scan (index + 1) (Just c) Code brackets boundary cs
+                        | null brackets && c `elem` separators ->
+                            scan (index + 1) (Just c) Code brackets (index + 1) cs
+                        | otherwise ->
+                            scan (index + 1) (Just c) Code brackets boundary cs
+                    InString
+                        | c == '\\', Just (_, cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just 'x') InString brackets boundary cs'
+                        | c == '"' ->
+                            scan (index + 1) (Just c) Code brackets boundary cs
+                        | otherwise ->
+                            scan (index + 1) (Just c) InString brackets boundary cs
+                    InMulti
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            case Text.uncons cs' of
+                                -- ''' is an escaped '' inside a multi-line literal
+                                Just ('\'', cs'') ->
+                                    scan (index + 3) (Just '\'') InMulti brackets boundary cs''
+                                _ ->
+                                    scan (index + 2) (Just '\'') Code brackets boundary cs'
+                        | otherwise ->
+                            scan (index + 1) (Just c) InMulti brackets boundary cs
+                    InLineComment
+                        | c == '\n' ->
+                            scan (index + 1) (Just c) Code brackets boundary cs
+                        | otherwise ->
+                            scan (index + 1) (Just c) InLineComment brackets boundary cs
+                    InBlockComment depth
+                        | c == '{', Just ('-', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '-') (InBlockComment (depth + 1)) brackets boundary cs'
+                        | c == '-', Just ('}', cs') <- Text.uncons cs ->
+                            let depth' = depth - 1
+                                mode' = if depth' == 0 then Code else InBlockComment depth'
+                            in scan (index + 2) (Just '}') mode' brackets boundary cs'
+                        | otherwise ->
+                            scan (index + 1) (Just c) (InBlockComment depth) brackets boundary cs
+
+data ScanMode = Code | InString | InMulti | InLineComment | InBlockComment !Int
+
 -- | A completion result, optionally annotated with type information.
 data Completion =
   Completion {

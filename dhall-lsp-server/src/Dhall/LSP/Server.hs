@@ -69,13 +69,14 @@ runWith settings = withLogger $ \ioLogger -> do
 
   let lspLogger = clientLogger <> Colog.hoistLogAction liftIO ioLogger
 
+  errorStore <- IORef.newIORef Map.empty
   documentStore <- IORef.newIORef Map.empty
   envRef <- IORef.newIORef Nothing
   negative <- IORef.newIORef Map.empty
   bodies <- IORef.newIORef Map.empty
   chains <- IORef.newIORef Map.empty
   origins <- IORef.newIORef Map.empty
-  state <- MVar.newMVar (initialState documentStore envRef negative bodies chains origins)
+  state <- MVar.newMVar (initialState errorStore documentStore envRef negative bodies chains origins)
 
   let defaultConfig = def
 

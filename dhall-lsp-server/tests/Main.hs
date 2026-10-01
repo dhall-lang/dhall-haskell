@@ -142,6 +142,30 @@ hoveringSpec dir =
           T.isSuffixOf "…" text `shouldBe` True
           (T.length text <= 16 * 1024 + 1) `shouldBe` True
           (T.length text >= 16 * 1024 - 64) `shouldBe` True
+    -- A trailing syntax error must not take down hover for the part of the
+    -- document that still matches the last good parse.
+    it "reports types on hover while the document has a syntax error"
+      $ runSession "dhall-lsp-server" fullLatestClientCaps dir
+      $ do
+        docId <- openDoc "Types.dhall" "dhall"
+        _ <- waitForDiagnostics
+        let replacement =
+#if MIN_VERSION_lsp_types(2,2,0)
+                TextDocumentContentChangeEvent
+                    (InR (TextDocumentContentChangeWholeDocument
+                        "let User = { name : Text, home : Text }\n\nlet mkUser =\n        \955(_isAdmin : Bool)\n      \8594       if _isAdmin\n\n        then  { name = \"admin\", home = \"/home/admin\" }\n\n        else  { name = \"default\", home = \"/home/user\" }\n\nin  mkUser True : User $\n"))
+#else
+                TextDocumentContentChangeEvent (InR (#text .== "let User = { name : Text, home : Text }\n\nlet mkUser =\n        \955(_isAdmin : Bool)\n      \8594       if _isAdmin\n\n        then  { name = \"admin\", home = \"/home/admin\" }\n\n        else  { name = \"default\", home = \"/home/user\" }\n\nin  mkUser True : User $\n"))
+#endif
+        changeDoc docId [replacement]
+        let waitForParser = do
+                diags <- waitForDiagnostics
+                if any (\d -> _source d == Just "Dhall.Parser") diags
+                    then return ()
+                    else waitForParser
+        waitForParser
+        hover <- getHover docId (Position 0 5)
+        liftIO $ hoverText hover `shouldBe` "Type"
 
 hoverContents :: Maybe Hover -> T.Text
 hoverContents Nothing = error "no hover"
@@ -275,6 +299,27 @@ codeCompletionSpec fixtureDir =
         liftIO $ do
           let labels = map itemLabel cs
           labels `shouldContain` ["A", "B"]
+    it "suggests record fields while the document is incomplete" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "IncompleteRecord.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 18})
+        liftIO $ do
+          let labels = map itemLabel cs
+          labels `shouldContain` ["a"]
+    it "suggests union constructors while the document is incomplete" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "IncompleteUnion.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 18})
+        liftIO $ do
+          let labels = map itemLabel cs
+          labels `shouldContain` ["A", "B"]
+    it "suggests identifiers while the document is incomplete" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "IncompleteBindings.dhall" "dhall"
+        cs <- getCompletions docId (Position {_line = 0, _character = 59})
+        liftIO $ do
+          let labels = map itemLabel cs
+          labels `shouldContain` ["alice"]
 
 diagnosticsSpec :: FilePath -> Spec
 diagnosticsSpec fixtureDir = do
@@ -372,6 +417,43 @@ diagnosticsSpec fixtureDir = do
         liftIO $ do
           let sources = map _source diags
           sources `shouldContain` [Just "Dhall.Parser"]
+          [Diagnostic { _range = keptRange }] <- return
+            [ d | d <- diags, _source d == Just "Dhall.TypeCheck" ]
+          keptRange `shouldBe` assertRange
+    -- Same as above, but the type error is introduced by an edit after a
+    -- clean open.  The background analysis of the first edit must publish
+    -- its result into the shared error state, or the second edit has no
+    -- earlier error to preserve.
+    it "keeps a type error introduced by an edit when a later edit breaks the syntax" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "CleanStart.dhall" "dhall"
+        _ <- waitForDiagnostics
+        let edit1 =
+#if MIN_VERSION_lsp_types(2,2,0)
+                TextDocumentContentChangeEvent
+                    (InR (TextDocumentContentChangeWholeDocument
+                        "let _ = assert : [1, 2] === [1, 1] -- check\n\nin 0\n"))
+#else
+                TextDocumentContentChangeEvent (InR (#text .== "let _ = assert : [1, 2] === [1, 1] -- check\n\nin 0\n"))
+#endif
+        changeDoc docId [edit1]
+        [Diagnostic { _range = assertRange }] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        let edit2 =
+#if MIN_VERSION_lsp_types(2,2,0)
+                TextDocumentContentChangeEvent
+                    (InR (TextDocumentContentChangeWholeDocument
+                        "let _ = assert : [1, 2] === [1, 1] -- check\n\nin 0 $\n"))
+#else
+                TextDocumentContentChangeEvent (InR (#text .== "let _ = assert : [1, 2] === [1, 1] -- check\n\nin 0 $\n"))
+#endif
+        changeDoc docId [edit2]
+        let waitForParser = do
+                diags <- waitForDiagnostics
+                if any (\d -> _source d == Just "Dhall.Parser") diags
+                    then return diags
+                    else waitForParser
+        diags <- waitForParser
+        liftIO $ do
           [Diagnostic { _range = keptRange }] <- return
             [ d | d <- diags, _source d == Just "Dhall.TypeCheck" ]
           keptRange `shouldBe` assertRange
