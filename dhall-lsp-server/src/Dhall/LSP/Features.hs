@@ -641,11 +641,11 @@ foldRanges expr = dedupe (go expr)
             }
 
     dedupe = snd . foldl' keep (Set.empty, [])
-    keep (seen, acc) range
-        | Set.member (range ^. startLine) seen =
+    keep (seen, acc) foldRange
+        | Set.member (foldRange ^. startLine) seen =
             (seen, acc)
         | otherwise =
-            (Set.insert (range ^. startLine) seen, acc ++ [range])
+            (Set.insert (foldRange ^. startLine) seen, acc ++ [foldRange])
 
 semanticTokensHandler :: Handlers HandlerM
 semanticTokensHandler =
@@ -675,7 +675,7 @@ encodeNameTokens = snd . foldl step ((0, 0), [])
         in ((tokenLine, tokenCol), acc ++ piece)
 
 inlayHandler :: EvaluateSettings -> Handlers HandlerM
-inlayHandler settings =
+inlayHandler evalSettings =
     LSP.requestHandler SMethod_TextDocumentInlayHint \request respond ->
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
@@ -687,13 +687,13 @@ inlayHandler settings =
                 Left _ ->
                     respond (Right (InR J.Null))
                 Right parsed -> do
-                    loaded <- liftIO $ load settings fileIdentifier parsed cache
+                    loaded <- liftIO $ load evalSettings fileIdentifier parsed cache
                     case loaded of
                         Left _ ->
                             respond (Right (InR J.Null))
                         Right (cache', expr) -> do
                             assign importCache cache'
-                            case typecheck settings expr of
+                            case typecheck evalSettings expr of
                                 Left _ ->
                                     respond (Right (InR J.Null))
                                 Right (wt, _) -> do
@@ -703,9 +703,9 @@ inlayHandler settings =
                                     respond (Right (InL hints))
 
 hintIn :: J.Range -> J.InlayHint -> Bool
-hintIn (J.Range start end) hint =
+hintIn (J.Range startPos endPos) hint =
     let pos = hint ^. position
-    in start <= pos && pos <= end
+    in startPos <= pos && pos <= endPos
 
 inlayHints :: Int -> WellTyped -> [J.InlayHint]
 inlayHints limit wt =
@@ -715,18 +715,18 @@ inlayHints limit wt =
         let J.Range _ endPos = srcToRange src
             doc = Pretty.prettyCharacterSet Pretty.Unicode ty
             rendered = case Bounded.prettyBounded limit_ doc of
-                Bounded.Complete text -> text
-                Bounded.Truncated text -> text
+                Bounded.Complete typeText -> typeText
+                Bounded.Truncated typeText -> typeText
             short =
                 if Text.length rendered <= 60
                     then rendered
                     else Text.take 59 rendered <> "…"
-            edits = case Bounded.prettyBounded limit_ doc of
-                Bounded.Complete text ->
+            typeEdits = case Bounded.prettyBounded limit_ doc of
+                Bounded.Complete typeText ->
                     Just
                         [ J.TextEdit
                             { _range = J.Range endPos endPos
-                            , _newText = " : " <> text
+                            , _newText = " : " <> typeText
                             }
                         ]
                 Bounded.Truncated _ ->
@@ -735,7 +735,7 @@ inlayHints limit wt =
             { _position = endPos
             , _label = InL (": " <> short)
             , _kind = Just J.InlayHintKind_Type
-            , _textEdits = edits
+            , _textEdits = typeEdits
             , _tooltip = Just (InL rendered)
             , _paddingLeft = Just True
             , _paddingRight = Nothing
@@ -760,10 +760,10 @@ organizeImports txt = do
                 then Nothing
                 else do
                     let ls = Text.lines txt
-                        start = blockStart (head blocks)
-                        end = blockEnd (last blocks)
-                        prefix = take start ls
-                        suffix = drop end ls
+                        firstLine = blockStart (head blocks)
+                        lastLine = blockEnd (last blocks)
+                        prefix = take firstLine ls
+                        suffix = drop lastLine ls
                         imports =
                             sortOn blockName
                                 [ block | block <- blocks, blockImport block, blockUsed block ]
@@ -793,19 +793,19 @@ data LetBlock = LetBlock
 
 topLetBlocks :: Expr Src Import -> [LetBlock]
 topLetBlocks (Core.Note src (Core.Let binding body)) =
-    let Range (startLine, startCol) _ = rangeFromDhall src
-        (endLine, endCol) = case body of
+    let Range (fromLine, startCol) _ = rangeFromDhall src
+        (toLine, endCol) = case body of
             Core.Note bodySrc _ ->
                 let Range left _ = rangeFromDhall bodySrc in left
             _ ->
-                (startLine, startCol)
+                (fromLine, startCol)
         name_ = Core.variable binding
     in LetBlock
         { blockName = name_
         , blockImport = importExpr (Core.value binding)
         , blockUsed = freeIn (V name_ 0) body
-        , blockStart = startLine
-        , blockEnd = endLine
+        , blockStart = fromLine
+        , blockEnd = toLine
         , blockCol = startCol
         , blockNextCol = endCol
         }
@@ -828,24 +828,24 @@ inlineLet txt selected = do
     expr <- either (const Nothing) Just (parse txt)
     (letSrc, binding, body) <- findLetBinder (selectionStart selected) expr
     let name_ = Core.variable binding
-        value = Core.value binding
-        nameSrc = bindingSrc1 binding
-    nameSrc <- nameSrc
-    if containsAssert value
+        letValue = Core.value binding
+        maybeBinder = bindingSrc1 binding
+    binderSrc <- maybeBinder
+    if containsAssert letValue
         then return (Left "The binding contains an assert.")
         else do
             let fragments = scopeFragments expr
                 uses =
                     [ src
-                    | ScopeFragment src (NameUse (NameDecl declSrc usedName _)) <- fragments
-                    , declSrc == nameSrc
+                    | ScopeFragment src (NameUse (NameDecl boundSrc usedName _)) <- fragments
+                    , boundSrc == binderSrc
                     , usedName == name_
                     ]
                 indexed =
                     any (indexedUse name_ body) fragments
             if indexed
                 then return (Left "The body uses a variable of the form name@n.")
-                else if any (captures value body) uses
+                else if any (captures letValue body) uses
                     then return (Left "Inlining would capture a variable.")
                     else do
                         bodySrc <- case body of
@@ -853,18 +853,18 @@ inlineLet txt selected = do
                             _ -> Nothing
                         let Range prefixStart _ = rangeFromDhall letSrc
                             Range prefixEnd _ = rangeFromDhall bodySrc
-                            valueText = case value of
+                            valueText = case letValue of
                                 Core.Note (Src _ _ slice) _ -> slice
-                                _ -> Core.pretty value
+                                _ -> Core.pretty letValue
                             wrapped = parenthesize valueText
-                            edits =
+                            replacements =
                                 (Range prefixStart prefixEnd, "")
                                     : [ (rangeFromDhall src, wrapped) | src <- uses ]
-                        return (Right (applyTextEdits txt edits))
+                        return (Right (applyTextEdits txt replacements))
 
 selectionStart :: J.Range -> (Int, Int)
-selectionStart (J.Range (J.Position line col) _) =
-    (fromIntegral line, fromIntegral col)
+selectionStart (J.Range (J.Position lineNo col) _) =
+    (fromIntegral lineNo, fromIntegral col)
 
 findLetBinder
     :: (Int, Int)
@@ -903,9 +903,9 @@ indexedUse name_ body (ScopeFragment src _) =
             False
 
 captures :: Expr Src Import -> Expr Src Import -> Src -> Bool
-captures value body useSrc =
+captures letValue body useSrc =
     let Range left _ = rangeFromDhall useSrc
-    in not (Set.null (Set.intersection (freeNames value) (enclosed left body)))
+    in not (Set.null (Set.intersection (freeNames letValue) (enclosed left body)))
 
 freeNames :: Expr s a -> Set.Set Text
 freeNames = go Map.empty
@@ -961,8 +961,8 @@ exprContains _ _ = False
 rangeContains :: Src -> Src -> Bool
 rangeContains outer inner =
     let Range left right = rangeFromDhall outer
-        Range start end = rangeFromDhall inner
-    in left <= start && end <= right
+        Range innerLeft innerRight = rangeFromDhall inner
+    in left <= innerLeft && innerRight <= right
 
 srcSlice :: Src -> Text
 srcSlice (Src _ _ slice) = slice
@@ -975,19 +975,19 @@ parenthesize valueText
     | otherwise = valueText
 
 applyTextEdits :: Text -> [(Range, Text)] -> Text
-applyTextEdits txt edits =
+applyTextEdits txt replacements =
     foldl' apply txt (sortOn (Down . startOffset) located)
   where
     located =
-        [ (start, end, new)
-        | (range_, new) <- edits
+        [ (fromOff, toOff, new)
+        | (range_, new) <- replacements
         , let Range left right = range_
-        , let start = positionToOffset txt left
-        , let end = positionToOffset txt right
+        , let fromOff = positionToOffset txt left
+        , let toOff = positionToOffset txt right
         ]
-    startOffset (start, _, _) = start
-    apply acc (start, end, new) =
-        Text.take start acc <> new <> Text.drop end acc
+    startOffset (fromOff, _, _) = fromOff
+    apply acc (fromOff, toOff, new) =
+        Text.take fromOff acc <> new <> Text.drop toOff acc
 
 codeActionHandler :: EvaluateSettings -> Handlers HandlerM
 codeActionHandler _evalSettings =
@@ -1125,15 +1125,15 @@ codeActionHandler _evalSettings =
                     | otherwise = case organizeImports txt of
                         Just (Left reason_) ->
                             [disabledOrganize reason_]
-                        Just (Right newText) ->
-                            [readyOrganize docUri txt newText]
+                        Just (Right replacement) ->
+                            [readyOrganize docUri txt replacement]
                         Nothing ->
                             []
                 inlineAction = case inlineLet txt selected of
                     Just (Left reason_) ->
                         [disabledInline reason_]
-                    Just (Right newText) ->
-                        [readyInline docUri txt newText]
+                    Just (Right replacement) ->
+                        [readyInline docUri txt replacement]
                     Nothing ->
                         []
                 offered =
@@ -1163,10 +1163,10 @@ disabledInline reason_ = J.CodeAction
     }
 
 readyInline :: J.Uri -> Text -> Text -> J.CodeAction
-readyInline docUri txt newText =
+readyInline docUri txt replacement =
     let lineCount = fromIntegral (length (Text.lines txt))
         _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
-        _newText = newText
+        _newText = replacement
     in J.CodeAction
         { _title = "Inline let"
         , _kind = Just J.CodeActionKind_RefactorInline
@@ -1195,10 +1195,10 @@ disabledOrganize reason_ = J.CodeAction
     }
 
 readyOrganize :: J.Uri -> Text -> Text -> J.CodeAction
-readyOrganize docUri txt newText =
+readyOrganize docUri txt replacement =
     let lineCount = fromIntegral (length (Text.lines txt))
         _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
-        _newText = newText
+        _newText = replacement
     in J.CodeAction
         { _title = "Organize imports"
         , _kind = Just J.CodeActionKind_SourceOrganizeImports
