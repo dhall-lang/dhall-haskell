@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790845071898,
+  "lastUpdate": 1790852455780,
   "repoUrl": "https://github.com/dhall-lang/dhall-haskell",
   "entries": {
     "dhall": [
@@ -16891,6 +16891,625 @@ window.BENCHMARK_DATA = {
             "range": "75.8341",
             "unit": "ms",
             "extra": "2*Stdev = 75.8341 ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "winitzki@users.noreply.github.com",
+            "name": "Sergei Winitzki",
+            "username": "winitzki"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5899ea550aba86e78843ed29772864e6ca7ddb34",
+          "message": "Open an imported field at its definition. (#2862)\n\n* Open a field of an imported value at its definition.\n\nGo to definition follows a projection such as Lib.customFunction into source already fetched for typechecking, or into the expression decoded from the semantic cache.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Jump to union constructors in the current file and in imports.\n\nConstructor names are recovered from the union literal source, so T.MyCustomConstructor resolves like a record field without changing the Union syntax.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Drop alpha-normalize from Quick Fix.\n\nRenaming binders in a selection is not a useful edit. The server README now lists the code actions the server actually offers.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Update the docs golden file for union constructor names.\n\ndhall-docs links every name span, and union alternatives are names now.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Open local imports in place and other imports in a read-only view.\n\nA local file is the file itself. A remote or cached import opens a dhall-import view, and later analysis of that view resolves imports from the original location.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Name the import chain type that this module imports.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Rename locals that shadowed language-server lenses.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Mark an unused let on its name and only offer quick fixes that apply.\n\nThe test suite wrote a record update that does not compile without RecordWildCards.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Document that a non-file import opens a dhall-import view and needs a client filesystem.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* fixing the test failure\n\n* fix the crash on missing imports\n\n* Add definition fixtures for nested import placeholder diagnostics.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* removing union navigation for now\n\n---------\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+          "timestamp": "2026-10-01T12:50:43+02:00",
+          "tree_id": "f4ab21dc433e0fd101cf1da7b17c521d49fcc17f",
+          "url": "https://github.com/dhall-lang/dhall-haskell/commit/5899ea550aba86e78843ed29772864e6ca7ddb34"
+        },
+        "date": 1790852454645,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Prelude.issue 412",
+            "value": 0.053837826,
+            "range": "0.00426717",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00426717 ms"
+          },
+          {
+            "name": "Prelude.union performance",
+            "value": 0.052572529,
+            "range": "0.00346996",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00346996 ms"
+          },
+          {
+            "name": "normalize.ChurchEval.typecheck",
+            "value": 0.033790928,
+            "range": "0.00161525",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00161525 ms"
+          },
+          {
+            "name": "normalize.ChurchEval.evaluation",
+            "value": 407.3553184,
+            "range": "16.3853",
+            "unit": "ms",
+            "extra": "2*Stdev = 16.3853 ms"
+          },
+          {
+            "name": "normalize.FunCompose.typecheck",
+            "value": 0.017947877,
+            "range": "0.00174756",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00174756 ms"
+          },
+          {
+            "name": "normalize.FunCompose.evaluation",
+            "value": 334.8140092,
+            "range": "13.0397",
+            "unit": "ms",
+            "extra": "2*Stdev = 13.0397 ms"
+          },
+          {
+            "name": "normalize.Iterate.typecheck",
+            "value": 0.046253673,
+            "range": "0.00317964",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00317964 ms"
+          },
+          {
+            "name": "normalize.Iterate.evaluation",
+            "value": 90.437356,
+            "range": "3.54603",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.54603 ms"
+          },
+          {
+            "name": "normalize.IterateAlt.typecheck",
+            "value": 0.020138673,
+            "range": "0.00192612",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00192612 ms"
+          },
+          {
+            "name": "normalize.IterateAlt.evaluation",
+            "value": 281.419364,
+            "range": "6.06351",
+            "unit": "ms",
+            "extra": "2*Stdev = 6.06351 ms"
+          },
+          {
+            "name": "normalize.IterateAlt2.typecheck",
+            "value": 0.017676595,
+            "range": "0.00154214",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00154214 ms"
+          },
+          {
+            "name": "normalize.IterateAlt2.evaluation",
+            "value": 222.69488,
+            "range": "5.59127",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.59127 ms"
+          },
+          {
+            "name": "normalize.ListBench.typecheck",
+            "value": 0.053635332,
+            "range": "0.00395007",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00395007 ms"
+          },
+          {
+            "name": "normalize.ListBench.evaluation",
+            "value": 194.0648772,
+            "range": "2.95702",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.95702 ms"
+          },
+          {
+            "name": "normalize.ListBenchAlt.typecheck",
+            "value": 0.047707889,
+            "range": "0.00284729",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00284729 ms"
+          },
+          {
+            "name": "normalize.ListBenchAlt.evaluation",
+            "value": 238.2076998,
+            "range": "2.93655",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.93655 ms"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.typecheck",
+            "value": 0.000483907,
+            "range": "4.641e-05",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.641e-05 ms"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.evaluation",
+            "value": 0.010902938,
+            "range": "0.000713052",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.000713052 ms"
+          },
+          {
+            "name": "large1.parse",
+            "value": 170.7849388,
+            "range": "4.28405",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.28405 ms"
+          },
+          {
+            "name": "large1.resolve",
+            "value": 59.8010585,
+            "range": "1.69583",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.69583 ms"
+          },
+          {
+            "name": "large1.typecheck",
+            "value": 73.5227944,
+            "range": "3.75467",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.75467 ms"
+          },
+          {
+            "name": "large1.evaluation",
+            "value": 144.7860166,
+            "range": "5.12072",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.12072 ms"
+          },
+          {
+            "name": "large2.normalize",
+            "value": 162.2061512,
+            "range": "3.40742",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.40742 ms"
+          },
+          {
+            "name": "large2.cbor.encode",
+            "value": 335.4780068,
+            "range": "11.5555",
+            "unit": "ms",
+            "extra": "2*Stdev = 11.5555 ms"
+          },
+          {
+            "name": "large2.cbor.decode",
+            "value": 803.8973638,
+            "range": "30.9757",
+            "unit": "ms",
+            "extra": "2*Stdev = 30.9757 ms"
+          },
+          {
+            "name": "k8s.file3.resolve",
+            "value": 2517.46244935,
+            "range": "56.2918",
+            "unit": "ms",
+            "extra": "2*Stdev = 56.2918 ms"
+          },
+          {
+            "name": "k8s.file3.typecheck",
+            "value": 401.250457,
+            "range": "16.0585",
+            "unit": "ms",
+            "extra": "2*Stdev = 16.0585 ms"
+          },
+          {
+            "name": "k8s.file3.evaluation",
+            "value": 0.654227979,
+            "range": "0.0238424",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0238424 ms"
+          },
+          {
+            "name": "k8s.file4.resolve",
+            "value": 1571.7378262,
+            "range": "36.2244",
+            "unit": "ms",
+            "extra": "2*Stdev = 36.2244 ms"
+          },
+          {
+            "name": "k8s.file4.typecheck",
+            "value": 93.0387148,
+            "range": "4.65239",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.65239 ms"
+          },
+          {
+            "name": "k8s.file4.evaluation",
+            "value": 0.397593056,
+            "range": "0.023737",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.023737 ms"
+          },
+          {
+            "name": "large3.resolve",
+            "value": 2620.2747389,
+            "range": "168.172",
+            "unit": "ms",
+            "extra": "2*Stdev = 168.172 ms"
+          },
+          {
+            "name": "large3.typecheck",
+            "value": 5088.606441,
+            "range": "115.836",
+            "unit": "ms",
+            "extra": "2*Stdev = 115.836 ms"
+          },
+          {
+            "name": "large3.evaluation",
+            "value": 727.797806,
+            "range": "32.1152",
+            "unit": "ms",
+            "extra": "2*Stdev = 32.1152 ms"
+          },
+          {
+            "name": "large3.get_config.resolve",
+            "value": 2642.3387871,
+            "range": "149.242",
+            "unit": "ms",
+            "extra": "2*Stdev = 149.242 ms"
+          },
+          {
+            "name": "large3.get_config.typecheck",
+            "value": 5289.1897918,
+            "range": "41.9632",
+            "unit": "ms",
+            "extra": "2*Stdev = 41.9632 ms"
+          },
+          {
+            "name": "large3.get_config.evaluation",
+            "value": 0.252638121,
+            "range": "0.023544",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.023544 ms"
+          },
+          {
+            "name": "large4.resolve",
+            "value": 313.485057,
+            "range": "15.6756",
+            "unit": "ms",
+            "extra": "2*Stdev = 15.6756 ms"
+          },
+          {
+            "name": "large4.typecheck",
+            "value": 436.2739322,
+            "range": "5.46747",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.46747 ms"
+          },
+          {
+            "name": "large4.evaluation",
+            "value": 1.93842535,
+            "range": "0.11729",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.11729 ms"
+          },
+          {
+            "name": "large5.resolve",
+            "value": 134.097636,
+            "range": "5.13916",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.13916 ms"
+          },
+          {
+            "name": "large5.typecheck",
+            "value": 68.6638086,
+            "range": "3.47978",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.47978 ms"
+          },
+          {
+            "name": "large5.evaluation",
+            "value": 75.9063946,
+            "range": "5.18159",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.18159 ms"
+          },
+          {
+            "name": "large6.slow_parse.resolve",
+            "value": 861.158699,
+            "range": "22.6075",
+            "unit": "ms",
+            "extra": "2*Stdev = 22.6075 ms"
+          },
+          {
+            "name": "large6.slow_parse.typecheck",
+            "value": 0.000213283,
+            "range": "1.5438e-05",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.5438e-05 ms"
+          },
+          {
+            "name": "large6.slow_parse.evaluation",
+            "value": 0.000207969,
+            "range": "1.0618e-05",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.0618e-05 ms"
+          },
+          {
+            "name": "large6.slow_walk.resolve",
+            "value": 416.0098162,
+            "range": "6.093",
+            "unit": "ms",
+            "extra": "2*Stdev = 6.093 ms"
+          },
+          {
+            "name": "large6.slow_walk.typecheck",
+            "value": 1.208735643,
+            "range": "0.0774422",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0774422 ms"
+          },
+          {
+            "name": "large6.slow_walk.evaluation",
+            "value": 2.291469725,
+            "range": "0.225637",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.225637 ms"
+          },
+          {
+            "name": "large6.slow_eval.resolve_cold_cache_on",
+            "value": 1.436495475,
+            "range": "0.108367",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.108367 ms"
+          },
+          {
+            "name": "large6.slow_typecheck.resolve_cold_cache_on",
+            "value": 534.4083812,
+            "range": "18.2015",
+            "unit": "ms",
+            "extra": "2*Stdev = 18.2015 ms"
+          },
+          {
+            "name": "large6.slow_normalize.resolve_cold_cache_on",
+            "value": 485.8867438,
+            "range": "20.6371",
+            "unit": "ms",
+            "extra": "2*Stdev = 20.6371 ms"
+          },
+          {
+            "name": "large6.slow_multi.resolve_cold_cache_on",
+            "value": 386.9664428,
+            "range": "5.62527",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.62527 ms"
+          },
+          {
+            "name": "prelude_import.resolve_cold_cache_on",
+            "value": 340.208717,
+            "range": "16.4295",
+            "unit": "ms",
+            "extra": "2*Stdev = 16.4295 ms"
+          },
+          {
+            "name": "diamond_import.end_to_end_cold",
+            "value": 489.1739646,
+            "range": "9.13355",
+            "unit": "ms",
+            "extra": "2*Stdev = 9.13355 ms"
+          },
+          {
+            "name": "diamond_import_transitive.end_to_end_cold",
+            "value": 491.8184618,
+            "range": "18.6884",
+            "unit": "ms",
+            "extra": "2*Stdev = 18.6884 ms"
+          },
+          {
+            "name": "substitutions.resolve_cold_cache_on",
+            "value": 182.601455,
+            "range": "2.78226",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.78226 ms"
+          },
+          {
+            "name": "substitutions.many_files.resolve_cold_cache_on",
+            "value": 85.40593095,
+            "range": "3.45798",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.45798 ms"
+          },
+          {
+            "name": "substitutions.composer_proxy.end_to_end_cold",
+            "value": 901.8563198,
+            "range": "29.1828",
+            "unit": "ms",
+            "extra": "2*Stdev = 29.1828 ms"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.cold",
+            "value": 368.0223138,
+            "range": "14.3071",
+            "unit": "ms",
+            "extra": "2*Stdev = 14.3071 ms"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.warm",
+            "value": 187.541708,
+            "range": "11.0762",
+            "unit": "ms",
+            "extra": "2*Stdev = 11.0762 ms"
+          },
+          {
+            "name": "substitutions.shift_cost.naive",
+            "value": 20.054547,
+            "range": "1.69261",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.69261 ms"
+          },
+          {
+            "name": "substitutions.shift_cost.optimized",
+            "value": 1.800611862,
+            "range": "0.172256",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.172256 ms"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.full",
+            "value": 51.3865167,
+            "range": "2.41573",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.41573 ms"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.early_abort",
+            "value": 1.379254743,
+            "range": "0.0888342",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0888342 ms"
+          },
+          {
+            "name": "Issue #108.Text",
+            "value": 6.547697343,
+            "range": "0.559327",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.559327 ms"
+          },
+          {
+            "name": "Issue #108.Binary",
+            "value": 0.140147583,
+            "range": "0.0116584",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0116584 ms"
+          },
+          {
+            "name": "Kubernetes/Binary",
+            "value": 293.543371,
+            "range": "2.69168",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.69168 ms"
+          },
+          {
+            "name": "Deeply nested parentheses",
+            "value": 14.114872925,
+            "range": "0.430297",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.430297 ms"
+          },
+          {
+            "name": "Deeply nested brackets",
+            "value": 13.63731245,
+            "range": "0.805418",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.805418 ms"
+          },
+          {
+            "name": "Long variable names",
+            "value": 29.5911618,
+            "range": "2.81456",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.81456 ms"
+          },
+          {
+            "name": "Large number of function arguments",
+            "value": 39.481836,
+            "range": "3.83737",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.83737 ms"
+          },
+          {
+            "name": "Long double-quoted strings (10M chars)",
+            "value": 231.5263404,
+            "range": "5.7738",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.7738 ms"
+          },
+          {
+            "name": "Long single-quoted strings (10M chars)",
+            "value": 199.7054722,
+            "range": "13.3473",
+            "unit": "ms",
+            "extra": "2*Stdev = 13.3473 ms"
+          },
+          {
+            "name": "Large natural number literal (10M digits)",
+            "value": 201.7037704,
+            "range": "7.37102",
+            "unit": "ms",
+            "extra": "2*Stdev = 7.37102 ms"
+          },
+          {
+            "name": "Large hex number literal (10M digits)",
+            "value": 204.3084824,
+            "range": "17.2273",
+            "unit": "ms",
+            "extra": "2*Stdev = 17.2273 ms"
+          },
+          {
+            "name": "Large binary number literal (10M digits)",
+            "value": 204.7540196,
+            "range": "6.94363",
+            "unit": "ms",
+            "extra": "2*Stdev = 6.94363 ms"
+          },
+          {
+            "name": "Large natural number literal (10M digits, forced)",
+            "value": 1632.6817252,
+            "range": "74.9201",
+            "unit": "ms",
+            "extra": "2*Stdev = 74.9201 ms"
+          },
+          {
+            "name": "Large hex number literal (10M digits, forced)",
+            "value": 375.998308,
+            "range": "28.0015",
+            "unit": "ms",
+            "extra": "2*Stdev = 28.0015 ms"
+          },
+          {
+            "name": "Large binary number literal (10M digits, forced)",
+            "value": 292.2135066,
+            "range": "5.68879",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.68879 ms"
+          },
+          {
+            "name": "Whitespace",
+            "value": 21.01465125,
+            "range": "0.518559",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.518559 ms"
+          },
+          {
+            "name": "Line comment",
+            "value": 374.317526,
+            "range": "23.9269",
+            "unit": "ms",
+            "extra": "2*Stdev = 23.9269 ms"
+          },
+          {
+            "name": "Block comment",
+            "value": 337.1311948,
+            "range": "12.4041",
+            "unit": "ms",
+            "extra": "2*Stdev = 12.4041 ms"
+          },
+          {
+            "name": "CPkg.parse",
+            "value": 1194.5982398,
+            "range": "23.4396",
+            "unit": "ms",
+            "extra": "2*Stdev = 23.4396 ms"
+          },
+          {
+            "name": "CPkg.Text",
+            "value": 1249.0908212,
+            "range": "72.1246",
+            "unit": "ms",
+            "extra": "2*Stdev = 72.1246 ms"
           }
         ]
       }
