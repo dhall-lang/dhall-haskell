@@ -12,6 +12,7 @@ module Dhall.LSP.Backend.Diagnostics
   , positionToOffset
   , Range(..)
   , rangeFromDhall
+  , stripTrailingComments
   , subtractPosition
   )
 where
@@ -190,13 +191,102 @@ subtractPosition (x1, y1) (x2, y2) | x1 == x2 = (0, y2 - y1)
                                    | otherwise = (x2 - x1, y2)
 
 -- | Convert a source range from Dhalls @Src@ format. The returned range is
---   "tight", that is, does not contain any trailing whitespace.
+--   "tight", that is, does not contain any trailing whitespace or comments.
 rangeFromDhall :: Src -> Range
 rangeFromDhall (Src left _right text) = Range (x1,y1) (x2,y2)
   where
     (x1,y1) = positionFromMegaparsec left
-    (dx2,dy2) = offsetToPosition text . Text.length $ Text.stripEnd text
+    (dx2,dy2) = offsetToPosition text . Text.length $ stripTrailingComments text
     (x2,y2) = addRelativePosition (x1,y1) (dx2,dy2)
+
+-- | Drop trailing whitespace and comments.  The parser's source spans can
+--   include the whitespace and comments that follow an expression, and
+--   neither should be part of a diagnostic underline.
+stripTrailingComments :: Text -> Text
+stripTrailingComments = loop . Text.stripEnd
+  where
+    loop text =
+        case blockCommentSuffix text of
+            Just before ->
+                loop (Text.stripEnd before)
+            Nothing ->
+                case lineCommentSuffix text of
+                    Just before ->
+                        loop (Text.stripEnd before)
+                    Nothing ->
+                        text
+
+-- | If the text ends with a block comment, return the text before that
+--   comment.  Block comments nest, so the matching opener is found by
+--   counting closers and openers from the end.
+blockCommentSuffix :: Text -> Maybe Text
+blockCommentSuffix text
+    | not ("-}" `Text.isSuffixOf` text) =
+        Nothing
+    | otherwise =
+        scan (Text.length text - 3) (1 :: Int)
+  where
+    scan i depth
+        | i < 0 =
+            Nothing
+        | Text.take 2 (Text.drop i text) == "-}" =
+            scan (i - 1) (depth + 1)
+        | Text.take 2 (Text.drop i text) == "{-" =
+            if depth == 1
+                then Just (Text.take i text)
+                else scan (i - 1) (depth - 1)
+        | otherwise =
+            scan (i - 1) depth
+
+-- | If the last line ends in a @--@ comment, return the text before it.
+lineCommentSuffix :: Text -> Maybe Text
+lineCommentSuffix text = do
+    column <- findLineComment lastLine
+    Just (Text.take (Text.length text - Text.length lastLine + column) text)
+  where
+    lastLine = Text.takeWhileEnd (/= '\n') text
+
+-- | The start of the first @--@ outside a string literal, if any.  String
+--   tracking is single-line only: @${}@ interpolation is not entered, so a
+--   @--@ inside an interpolated string literal can still look like a
+--   comment.
+findLineComment :: Text -> Maybe Int
+findLineComment = scan 0 Normal
+  where
+    scan n state rest =
+        case Text.uncons rest of
+            Nothing ->
+                Nothing
+            Just (c, cs) ->
+                case state of
+                    Normal
+                        | c == '-', Just ('-', _) <- Text.uncons cs ->
+                            Just n
+                        | c == '"' ->
+                            scan (n + 1) InString cs
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            scan (n + 2) InMulti cs'
+                        | otherwise ->
+                            scan (n + 1) Normal cs
+                    InString
+                        | c == '\\', Just (_, cs') <- Text.uncons cs ->
+                            scan (n + 2) InString cs'
+                        | c == '"' ->
+                            scan (n + 1) Normal cs
+                        | otherwise ->
+                            scan (n + 1) InString cs
+                    InMulti
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            case Text.uncons cs' of
+                                -- ''' is an escaped '' inside a multi-line literal
+                                Just ('\'', cs'') ->
+                                    scan (n + 3) InMulti cs''
+                                _ ->
+                                    scan (n + 2) Normal cs'
+                        | otherwise ->
+                            scan (n + 1) InMulti cs
+
+data LineScan = Normal | InString | InMulti
 
 -- Convert a (line,column) position into the corresponding character offset
 -- and back, such that the two are inverses of eachother.

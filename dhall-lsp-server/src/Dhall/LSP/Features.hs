@@ -23,7 +23,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
 import Data.List (foldl', sortOn)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
+import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe, maybeToList)
 import Data.Ord (Down (..))
 #if !MIN_VERSION_lsp_types(2,2,0)
 import Data.Row (Label (..), Rec, type (.==), (.==))
@@ -1063,6 +1063,34 @@ codeActionHandler _evalSettings =
                 selected = request ^. params . range
             txt <- readUri docUri
             ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
+            errorMap <- use errors
+            -- Explain is offered for the client-reported diagnostic under the
+            -- cursor (which covers an empty selection on a squiggle), or when
+            -- the selection meets a known error range.
+            let contextExplainable =
+                    [ diag
+                    | diag@J.Diagnostic { _source = Just source_ } <-
+                        request ^. params . context . diagnostics
+                    , source_ == "Dhall.TypeCheck" || source_ == "Dhall.Parser"
+                    ]
+                explained =
+                    [ diagnosis_
+                    | Just docErrors <- [Map.lookup docUri errorMap]
+                    , err <- errParse docErrors ++ errTypes docErrors
+                    , Just diagnosis_ <- [explain maxOutputSize err]
+                    ]
+                explainTarget =
+                    case contextExplainable of
+                        (diag : _) ->
+                            Just (diag ^. range)
+                        [] ->
+                            case [ rangeToJSON range_
+                                 | Diagnosis _ (Just range_) _ <- explained
+                                 , rangesMeet selected range_
+                                 ] of
+                                (jrange : _) -> Just jrange
+                                [] -> Nothing
+                explainOffered = isJust explainTarget || not (null explained)
             let normalize = J.CodeAction
                     { _title = "Normalize selection"
                     , _kind = Just J.CodeActionKind_RefactorRewrite
@@ -1088,14 +1116,19 @@ codeActionHandler _evalSettings =
                 explainAction = J.CodeAction
                     { _title = "Explain error"
                     , _kind = Just J.CodeActionKind_QuickFix
-                    , _diagnostics = Nothing
+                    , _diagnostics =
+                        if null contextExplainable
+                            then Nothing
+                            else Just contextExplainable
                     , _isPreferred = Nothing
                     , _disabled = Nothing
                     , _edit = Nothing
                     , _command = Just J.Command
                         { _title = "Explain error"
                         , _command = "dhall.server.explain"
-                        , _arguments = Just [Aeson.toJSON docUri]
+                        , _arguments = Just
+                            (Aeson.toJSON docUri
+                                : [ Aeson.toJSON jrange | Just jrange <- [explainTarget] ])
                         }
                     , _data_ = Nothing
                     }
@@ -1116,13 +1149,7 @@ codeActionHandler _evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-            errorMap <- use errors
-            let explainOffered = case Map.lookup docUri errorMap >>= explain maxOutputSize of
-                    Just (Diagnosis _ (Just errRange) _) ->
-                        rangesMeet selected errRange
-                    _ ->
-                        False
-                removeOffered = listToMaybe
+            let removeOffered = listToMaybe
                     [ deleteRange
                     | Right expr <- [parse txt]
                     , (matchRange, deleteRange) <- unusedBindingEdits txt expr

@@ -15,6 +15,8 @@ import Data.Time.Clock             (diffUTCTime, getCurrentTime)
 import Language.LSP.Protocol.Types
     ( ClientCapabilities
     , CodeAction (..)
+    , CodeActionContext (..)
+    , CodeActionParams (..)
     , Command (..)
     , CompletionItem (..)
     , Diagnostic (..)
@@ -69,6 +71,7 @@ import Test.Hspec
 import qualified Data.Aeson         as Aeson
 import qualified Data.Map.Strict    as Map
 import Data.Default               (def)
+import Dhall.LSP.Backend.Diagnostics (stripTrailingComments)
 import Dhall.LSP.State            (ServerConfig (..))
 import Dhall.Pretty               (CharacterSet (..), ChooseCharacterSet (..))
 import System.Environment          (setEnv)
@@ -295,18 +298,83 @@ diagnosticsSpec fixtureDir = do
     it "shows both sides of a failed assertion" $
       runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
         docId <- openDoc "Assert.dhall" "dhall"
-        [diag] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        [diag@Diagnostic { _range = diagRange }] <- waitForDiagnosticsSource "Dhall.TypeCheck"
         hover <- getHover docId (Position 0 10)
+        actions <- getCodeActions docId diagRange
         liftIO $ do
           let diagText = T.unpack (_message diag)
           diagText `shouldContain` "[ 1, 2 ]"
           diagText `shouldContain` "[ 1, 1 ]"
           case toEither (_contents (fromJust hover)) of
             Left content -> do
-              T.unpack (_value content) `shouldContain` "Explain error"
-              T.unpack (_value content) `shouldNotContain` "dhall-explain:"
+              T.unpack (_value content) `shouldContain` "[ 1, 2 ]"
+              T.unpack (_value content) `shouldNotContain` "Explain error"
             Right _ ->
               expectationFailure "expected hover text"
+          let found =
+                [ codeAction
+                | InR codeAction <- actions
+                , actionTitle codeAction == "Explain error"
+                ]
+          length found `shouldBe` 1
+          case head found of
+            CodeAction { _command = Just Command { _arguments = Just (_ : rangeArg : _) } } ->
+              Aeson.fromJSON rangeArg `shouldBe` Aeson.Success diagRange
+            _ ->
+              expectationFailure "Explain error should carry the diagnostic range"
+    it "offers Explain error for the diagnostic under an empty cursor" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "Assert.dhall" "dhall"
+        [diag@Diagnostic { _range = diagRange }] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        let Range start _ = diagRange
+        rsp <- request LSP.SMethod_TextDocumentCodeAction CodeActionParams
+            { _workDoneToken = Nothing
+            , _partialResultToken = Nothing
+            , _textDocument = docId
+            , _range = Range start start
+            , _context = CodeActionContext
+                { _diagnostics = [diag]
+                , _only = Nothing
+                , _triggerKind = Nothing
+                }
+            }
+        let actions = case rsp ^. result of
+                Right (InL xs) -> xs
+                _ -> []
+        liftIO $ do
+          let found =
+                [ codeAction
+                | InR codeAction <- actions
+                , actionTitle codeAction == "Explain error"
+                ]
+          length found `shouldBe` 1
+    it "keeps an earlier type error when a later edit breaks the syntax" $
+      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+        docId <- openDoc "AssertComment.dhall" "dhall"
+        [Diagnostic { _range = assertRange }] <- waitForDiagnosticsSource "Dhall.TypeCheck"
+        -- The trailing comment is not part of the underline.
+        liftIO $ assertRange `shouldBe` Range (Position 0 8) (Position 0 34)
+        let replacement =
+#if MIN_VERSION_lsp_types(2,2,0)
+                TextDocumentContentChangeEvent
+                    (InR (TextDocumentContentChangeWholeDocument
+                        "let _ = assert : [1, 2] === [1, 1] -- check\n\nin 0 $\n"))
+#else
+                TextDocumentContentChangeEvent (InR (#text .== "let _ = assert : [1, 2] === [1, 1] -- check\n\nin 0 $\n"))
+#endif
+        changeDoc docId [replacement]
+        let waitForParser = do
+                diags <- waitForDiagnostics
+                if any (\d -> _source d == Just "Dhall.Parser") diags
+                    then return diags
+                    else waitForParser
+        diags <- waitForParser
+        liftIO $ do
+          let sources = map _source diags
+          sources `shouldContain` [Just "Dhall.Parser"]
+          [Diagnostic { _range = keptRange }] <- return
+            [ d | d <- diags, _source d == Just "Dhall.TypeCheck" ]
+          keptRange `shouldBe` assertRange
   describe "Dhall.Import" $ do
     it "reports invalid imports"
       $ runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir
@@ -376,6 +444,22 @@ configSpec =
         Aeson.Error _ -> return ()
         Aeson.Success c ->
           expectationFailure ("expected a parse error, got " ++ show (c :: ServerConfig))
+
+commentTrimSpec :: Spec
+commentTrimSpec =
+  describe "stripTrailingComments" $ do
+    it "trims trailing whitespace" $
+      stripTrailingComments "1 + 2  \n" `shouldBe` "1 + 2"
+    it "trims a trailing line comment" $
+      stripTrailingComments "1 + 2 -- check" `shouldBe` "1 + 2"
+    it "trims a trailing block comment" $
+      stripTrailingComments "1 + 2 {- check -}" `shouldBe` "1 + 2"
+    it "trims nested comments in sequence" $
+      stripTrailingComments "x {- a {- b -} c -} -- d" `shouldBe` "x"
+    it "keeps -- inside a string" $
+      stripTrailingComments "\"a--b\"" `shouldBe` "\"a--b\""
+    it "keeps -- inside a multi-line string" $
+      stripTrailingComments "'' a--b ''" `shouldBe` "'' a--b ''"
 
 foldingSpec :: FilePath -> Spec
 foldingSpec fixtureDir =
@@ -455,6 +539,7 @@ main = do
   inline <- testSpec "Inline" (inlineSpec (baseDir "inline"))
   stability <- testSpec "Stability" (stabilitySpec (baseDir "diagnostics"))
   config <- testSpec "Config" configSpec
+  commentTrim <- testSpec "Comment trimming" commentTrimSpec
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
@@ -469,7 +554,8 @@ main = do
           organize,
           inline,
           stability,
-          config
+          config,
+          commentTrim
         ]
     )
 

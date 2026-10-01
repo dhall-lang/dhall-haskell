@@ -225,6 +225,16 @@ rangeToJSON (Range (x1,y1) (x2,y2)) =
       (Position (fromIntegral x1) (fromIntegral y1))
       (Position (fromIntegral x2) (fromIntegral y2))
 
+-- helper
+rangeFromJSON :: LSP.Types.Range -> Range
+rangeFromJSON (LSP.Types.Range (Position x1 y1) (Position x2 y2)) =
+    Range (fromIntegral x1, fromIntegral y1) (fromIntegral x2, fromIntegral y2)
+
+-- helper
+rangesOverlap :: Range -> Range -> Bool
+rangesOverlap (Range left1 right1) (Range left2 right2) =
+    left1 <= right2 && left2 <= right1
+
 hoverHandler :: EvaluateSettings -> Handlers HandlerM
 hoverHandler settings =
     LSP.requestHandler SMethod_TextDocumentHover \request respond -> handleErrorWithDefault respond (InR LSP.Types.Null) do
@@ -253,25 +263,24 @@ hoverHandler settings =
                                     Bounded.Truncated text -> text
                         let _contents = InL (mkPlainText rendered)
                         respond (Right (InL Hover{ _contents, _range }))
-            Just err -> do
+            Just docErrors -> do
                 let isHovered (Diagnosis _ (Just (Range left right)) _) =
                         left <= (_line, _character) && (_line, _character) <= right
                     isHovered _ =
                         False
 
-                let hoverFromDiagnosis (Diagnosis doctor_ (Just (Range left right)) diagnosis) = do
+                let hoverFromDiagnosis (Diagnosis _ (Just (Range left right)) diagnosis) = do
                         let _range = Just (rangeToJSON (Range left right))
-                            suffix =
-                                if doctor_ == "Dhall.TypeCheck" || doctor_ == "Dhall.Parser"
-                                    then "\n\nExplain error"
-                                    else ""
-                            _contents = InL (mkPlainText (diagnosis <> suffix))
+                            _contents = InL (mkPlainText diagnosis)
                         Just Hover{ _contents, _range }
                     hoverFromDiagnosis _ =
                         Nothing
 
+                let docDiagnoses =
+                        concatMap diagnose (errParse docErrors ++ errTypes docErrors)
+
                 let mHover = do
-                        explanation <- listToMaybe (filter isHovered (diagnose err))
+                        explanation <- listToMaybe (filter isHovered docDiagnoses)
 
                         hoverFromDiagnosis explanation
 
@@ -541,6 +550,35 @@ topLets (Core.Let Core.Binding { Core.variable = name, Core.annotation = ann, Co
     in ((name, ann, value) : binds, rest)
 topLets expr = ([], expr)
 
+-- | Semantic diagnostics that survive a later parse error: their source
+--   slice is unchanged in the new text and ends before the parse error
+--   starts.
+survivingErrors
+    :: Text                      -- ^ current text
+    -> DocErrors                 -- ^ errors of the previous analysis
+    -> (Int, Int)                -- ^ where the parse error starts
+    -> ([Import.CollectedImportError], [DhallError])
+survivingErrors txt previous parseStart =
+    ( [ err | err <- errImports previous, keeps (rangeFromDhall (Import.collectedSrc err)) ]
+    , [ err | err <- errTypes previous, Just range_ <- [errorRange err], keeps range_ ]
+    )
+  where
+    keeps range_@(Range _ right) =
+        right <= parseStart
+            && slice (errSemanticText previous) range_ == slice txt range_
+
+    slice source (Range left right) =
+        let from = positionToOffset source left
+            to = positionToOffset source right
+        in Text.take (max 0 (to - from)) (Text.drop from source)
+
+-- | The range of the first diagnosis of an error, if it has one.
+errorRange :: DhallError -> Maybe Range
+errorRange err =
+    case diagnose err of
+        Diagnosis _ range_ _ : _ -> range_
+        [] -> Nothing
+
 diagnoseDocument :: EvaluateSettings -> Uri -> Text -> HandlerM ()
 diagnoseDocument settings _uri txt = do
   fileIdentifier <- fileIdentifierFromUri _uri
@@ -548,15 +586,27 @@ diagnoseDocument settings _uri txt = do
   modifying importCache (invalidate fileIdentifier)
   cache <- use importCache
 
-  (importDiagnostics, typeErrors) <- case parse txt of
-      Left err ->
-          return ([], [err])
+  previousErrors <- Map.lookup _uri <$> use errors
+
+  (parseErrors, importErrors, typeErrors, semanticText) <- case parse txt of
+      Left err -> do
+          let parseStart =
+                  case [ left | Diagnosis _ (Just (Range left _)) _ <- diagnose err ] of
+                      [] -> (0, 0)
+                      starts -> minimum starts
+              (keptImports, keptTypes) =
+                  case previousErrors of
+                      Nothing -> ([], [])
+                      Just previous -> survivingErrors txt previous parseStart
+              previousText =
+                  maybe txt errSemanticText previousErrors
+          return ([err], keptImports, keptTypes, previousText)
       Right parsed -> do
           negative <- use negativeImports
           loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
           case loaded of
             Left err ->
-              return ([], [err])
+              return ([], [], [err], txt)
             Right (cache', resolved, collected, sources) -> do
               assign importCache cache'
               bodiesRef <- use importBodies
@@ -574,7 +624,6 @@ diagnoseDocument settings _uri txt = do
                         Map.union old $
                           Map.mapKeys Text.unpack $
                             Map.filterWithKey (\key _ -> '/' `elem` Text.unpack key) chains
-              let importDiags = map (collectedDiagnostic _uri) collected
               docs <- use documents
               previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
               let prevNames = maybe [] snapPrefixNames previousSnap
@@ -594,7 +643,7 @@ diagnoseDocument settings _uri txt = do
                           , snapPrefixContexts = prefixCtxs
                           }
                   in Map.insert _uri snap m
-              return (importDiags, typeErrs)
+              return ([], collected, typeErrs, txt)
 
   let suggestions =
         case parse txt of
@@ -630,11 +679,15 @@ diagnoseDocument settings _uri txt = do
             _data_ = Nothing
         in Diagnostic {..}
 
-  modifying errors (Map.alter (const (listToMaybe typeErrors)) _uri)
+  modifying errors $ \errorMap ->
+      if null parseErrors && null importErrors && null typeErrors
+          then Map.delete _uri errorMap
+          else Map.insert _uri (DocErrors parseErrors importErrors typeErrors semanticText) errorMap
 
   let _version = Nothing
   let _diagnostics =
-              importDiagnostics
+              concatMap (map diagnosisToDiagnostic . diagnose) parseErrors
+              ++ map (collectedDiagnostic _uri) importErrors
               ++ concatMap (map diagnosisToDiagnostic . diagnose) typeErrors
               ++ map suggestionToDiagnostic suggestions
 
@@ -1141,15 +1194,54 @@ completionHandler settings =
 nullHandler :: a -> LspT ServerConfig IO ()
 nullHandler _ = return ()
 
+-- implements dhall.server.explain
+--
+-- The first argument is the document URI.  An optional second argument is
+-- the range of the diagnostic the client wants explained; without it the
+-- first explainable error is used.
 executeExplain
     :: TRequestMessage 'Method_WorkspaceExecuteCommand
     -> (Either a (Value |? Null) -> HandlerM b)
     -> HandlerM ()
 executeExplain request respond = do
-    uri_ <- getCommandArguments request
+    (uri_, wantedRange) <- case request ^. params . arguments of
+        Just [u] ->
+            case Aeson.fromJSON u of
+                Aeson.Success uri_ ->
+                    return (uri_, Nothing)
+                _ ->
+                    throwE (Error, "Failed to execute command; failed to parse arguments.")
+        Just [u, r] ->
+            case (Aeson.fromJSON u, Aeson.fromJSON r) of
+                (Aeson.Success uri_, Aeson.Success range_) ->
+                    return (uri_, Just range_)
+                _ ->
+                    throwE (Error, "Failed to execute command; failed to parse arguments.")
+        _ ->
+            throwE (Error, "Failed to execute command; arguments missing.")
     ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
     errorMap <- use errors
-    explanation <- case Map.lookup uri_ errorMap >>= explain maxOutputSize of
+    explanations <- case Map.lookup uri_ errorMap of
+        Nothing ->
+            throwE (Info, "There is no error to explain in this file.")
+        Just docErrors ->
+            return
+                [ diagnosis_
+                | err <- errParse docErrors ++ errTypes docErrors
+                , Just diagnosis_ <- [explain maxOutputSize err]
+                ]
+    let overlaps wanted (Diagnosis _ (Just range_) _) =
+            rangesOverlap (rangeFromJSON wanted) range_
+        overlaps _ _ =
+            False
+        chosen = case wantedRange of
+            Just wanted ->
+                case filter (overlaps wanted) explanations of
+                    (diagnosis_ : _) -> Just diagnosis_
+                    [] -> listToMaybe explanations
+            Nothing ->
+                listToMaybe explanations
+    explanation <- case chosen of
         Just diagnosis_ -> return diagnosis_
         Nothing -> throwE (Info, "There is no error to explain in this file.")
     let body = diagnosis explanation

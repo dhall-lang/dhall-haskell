@@ -22,7 +22,7 @@ import Data.Text                        (Text)
 import Data.Time.Clock                  (UTCTime)
 import Data.Void                        (Void)
 import Dhall.Core                       (Expr)
-import Dhall.Import                    (Chained)
+import Dhall.Import                    (Chained, CollectedImportError)
 import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
 import Dhall.Parser                     (Src)
 import Dhall.Pretty                     (ChooseCharacterSet(..))
@@ -79,7 +79,7 @@ instance FromJSON ServerConfig where
 
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache
-  , _errors :: Map J.Uri DhallError  -- ^ Map from dhall files to their errors
+  , _errors :: Map J.Uri DocErrors  -- ^ Map from dhall files to their errors
   , _httpManager :: Maybe Dynamic
   -- ^ The http manager used by dhall's import infrastructure
   , _documents :: IORef (Map J.Uri DocSnap)
@@ -94,6 +94,17 @@ data ServerState = ServerState
   -- ^ Chained import for each key in 'importBodies'.
   , _mirrorOrigins :: IORef (Map FilePath Chained)
   -- ^ Cache file or 'dhall-import:' name of a mirror, and the import it came from.
+  }
+
+-- | The errors of one open document, split by analysis stage.  Parse errors
+--   describe the current text.  Import and type errors were computed from
+--   'errSemanticText', the most recent text that parsed, so a later parse
+--   error can keep the ones whose source slice is unchanged.
+data DocErrors = DocErrors
+  { errParse :: [DhallError]
+  , errImports :: [CollectedImportError]
+  , errTypes :: [DhallError]
+  , errSemanticText :: Text
   }
 
 -- | The last analysis of one open document.
