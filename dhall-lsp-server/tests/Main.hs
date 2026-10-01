@@ -69,11 +69,13 @@ import qualified GHC.IO.Encoding
 import qualified Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Message as LSP
 
+inlayLabel (InlayHint { _label = label }) = label
+
 itemLabel :: CompletionItem -> T.Text
-itemLabel = _label
+itemLabel (CompletionItem { _label = label }) = label
 
 actionTitle :: CodeAction -> T.Text
-actionTitle = _title
+actionTitle (CodeAction { _title = title_ }) = title_
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
@@ -359,7 +361,7 @@ inlaySpec fixtureDir =
         liftIO $ do
             let hint = head hints
                 edits = maybe [] id (_textEdits hint)
-            _label (hint :: InlayHint) `shouldBe` InL ": Natural"
+            inlayLabel hint `shouldBe` InL ": Natural"
             map _newText edits `shouldContain` [" : Natural"]
 
 -- | Open a file, replace it, and wait until the new diagnostics arrive.
