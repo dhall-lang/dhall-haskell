@@ -62,7 +62,7 @@ library
     , network-uri          >= 2.6.1.0  && < 2.7
     , prettyprinter        >= 1.7.0    && < 1.8
     , text                 >= 1.2.3.0  && < 2.2
-    , time                 >= 1.8      && < 1.15
+    , time >=1.8 && <1.17
     , text-rope            >= 0.2      && < 0.4
     , transformers         >= 0.5.5.0  && < 0.7
     , unordered-containers >= 0.2.9.0  && < 0.3
@@ -113,6 +113,6 @@ Test-Suite tests
         row-types         >= 1.0      && < 1.2 ,
         tasty-hspec       >= 1.1      && < 1.3 ,
         text              >= 0.11     && < 2.2 ,
-        time              >= 1.8      && < 1.15
+        time >=1.8 && <1.17
     Build-Tool-Depends: dhall-lsp-server:dhall-lsp-server
     Default-Language: Haskell2010
