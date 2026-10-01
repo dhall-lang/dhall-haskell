@@ -16,10 +16,15 @@ module Dhall.LSP.Backend.Dhall (
   load,
   loadCollected,
   typecheck,
-  normalize
+  normalize,
+  importTextKey,
+  indexImportBodies,
+  indexImportChains,
+  fileIdentifierFromChained,
+  identifierChained
  ) where
 
-import Dhall.Core   (Expr)
+import Dhall.Core   (Expr, Import)
 import Dhall.Parser (Src)
 
 import Control.Exception                (SomeException, catch, throwIO, try)
@@ -35,7 +40,8 @@ import Data.Void                        (Void)
 import Dhall                            (EvaluateSettings)
 import Network.URI                      (URI)
 import System.FilePath
-    ( splitDirectories
+    ( normalise
+    , splitDirectories
     , takeDirectory
     , takeFileName
     )
@@ -57,6 +63,14 @@ import qualified Network.URI                 as URI
 
 -- | A @FileIdentifier@ represents either a local file or a remote url.
 newtype FileIdentifier = FileIdentifier Import.Chained
+
+-- | A fetched import, already chained by the loader.
+fileIdentifierFromChained :: Import.Chained -> FileIdentifier
+fileIdentifierFromChained = FileIdentifier
+
+-- | The chained import this identifier resolves from.
+identifierChained :: FileIdentifier -> Import.Chained
+identifierChained (FileIdentifier chained) = chained
 
 -- | Construct a FileIdentifier from a local file path.
 fileIdentifierFromFilePath :: FilePath -> FileIdentifier
@@ -205,6 +219,63 @@ loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negativ
       sources =
             Map.fromList (Dhall.Map.toList (view Import.importSources status'))
   return (Cache graph' cache', expr', errs, sources)
+
+-- | Key under which a fetched import is stored for go-to-definition.
+--
+--   This is the pretty-printer's rendering of the import after it has been
+--   chained onto the file that imported it.  Remote imports do not depend on
+--   that parent.  Local imports do.
+importTextKey :: FileIdentifier -> Import -> Text
+importTextKey (FileIdentifier parent) child =
+    Dhall.pretty (Import.chainedImport parent <> child)
+
+-- | Text to show for each import that was actually fetched.
+--
+--   A semantic-cache hit has no source text here.  The caller decodes that
+--   entry with 'Import.decodeSemanticCache' when the user jumps to it.
+indexImportBodies
+    :: Map Import.Chained Import.ResolvedImportSource
+    -> Map Text Text
+indexImportBodies sources =
+    Map.unions
+        [ Map.fromList (entries chained body source)
+        | (chained, source) <- Map.toList sources
+        , Just body <- [Import.resolvedSourceText source]
+        ]
+  where
+    entries chained body source =
+        let prettyKey = Dhall.pretty (Import.chainedImport chained)
+            location = Import.resolvedLocation source
+            locationKey =
+                [ location
+                , Text.pack (normalise (Text.unpack location))
+                , Text.pack (takeFileName (Text.unpack location))
+                ]
+        in (prettyKey, body) : [(key, body) | key <- locationKey]
+
+-- | Same keys as 'indexImportBodies', pointing at the chained import.
+--
+--   Go-to-definition records one of these so a later 'dhall-import:' buffer
+--   resolves its own imports from that origin.
+indexImportChains
+    :: Map Import.Chained Import.ResolvedImportSource
+    -> Map Text Import.Chained
+indexImportChains sources =
+    Map.unions
+        [ Map.fromList [(key, chained) | key <- keys]
+        | (chained, source) <- Map.toList sources
+        , let keys = chainKeys chained source
+        ]
+  where
+    chainKeys chained source =
+        let prettyKey = Dhall.pretty (Import.chainedImport chained)
+            location = Import.resolvedLocation source
+            locationKey =
+                [ location
+                , Text.pack (normalise (Text.unpack location))
+                , Text.pack (takeFileName (Text.unpack location))
+                ]
+        in prettyKey : locationKey
 
 -- | Skip a remote that failed in the last 30 seconds.
 rememberFailure

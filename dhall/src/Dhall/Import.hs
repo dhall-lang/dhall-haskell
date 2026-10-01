@@ -457,6 +457,18 @@ nextPlaceholderName = do
     State.modify' $ \s -> s { _placeholderCount = _placeholderCount + 1 }
     return (Text.pack ("missing`" ++ show _placeholderCount))
 
+-- | 'True' when the expression contains a placeholder from a failed import.
+--
+--   Those variables are not bound.  A file that inlines one, including from
+--   the in-memory cache, must not be type-checked.
+exprHasPlaceholder :: Expr s a -> Bool
+exprHasPlaceholder expr =
+    case Core.shallowDenote expr of
+        Var (Syntax.V name _) ->
+            Text.isPrefixOf "missing`" name
+        other ->
+            any exprHasPlaceholder (toListOf Syntax.subExpressions other)
+
 -- | Decode a semantic-cache entry by its integrity hash.
 --
 --   The result is the alpha-beta-normal form stored in the cache.  'Nothing'
@@ -982,8 +994,12 @@ cachedImportType chained ImportSemantics { importSemantics = sem } = do
             return typ
         Nothing ->
             case Dhall.TypeCheck.typeOf (Core.renote sem) of
-                Left err ->
-                    liftIO (Exception.throwIO err)
+                -- A placeholder is not a type error to print on stderr.  Wrap
+                -- it like every other import failure so the collector can
+                -- substitute a placeholder instead of killing the process.
+                Left err -> do
+                    Status { _stack } <- State.get
+                    throwMissingImport (Imported _stack err)
                 Right typ -> do
                     zoom importTypes (State.modify (Dhall.Map.insert chained typ))
                     return typ
@@ -1033,62 +1049,59 @@ loadImportWithSemisemanticCache
     (resolvedExpr, twinExpr, _) <- resolveImports parsedImport
     Status { _importErrorMode, _insideImportAlt, _collectedImportErrors = errorsAfter } <-
         State.get
-    -- A nested file that recorded import errors is not type-checked or cached.
-    -- Those errors are already in the list, so this does not add another one.
-    when
-        ( _importErrorMode == CollectErrors
-            && not _insideImportAlt
-            && length errorsAfter /= length errorsBefore
-        )
-        (throwM EnclosingImportFailed)
-    Status {..} <- State.get
-
-    -- Cache key: this file's syntax, hashes of its imports, and hashes of the
-    -- starting context and substitutions. See
-    -- https://github.com/dhall-lang/dhall-haskell/issues/1098
-    semisemanticHash <- computeMerkleSemisemanticHash import_ parsedImport
-
-    zoom merkleHashCache
-        (State.modify (Dhall.Map.insert import_ semisemanticHash))
-
-    mCached <-
-        zoom cacheWarning
-            (fetchFromSemisemanticCache _reportWarning semisemanticHash)
-
-    let hasCustomNormalizer = isJust _normalizer
-
-    importSemantics0 <- case mCached of
-        Just (SemisemanticCachedNF bytesStrict)
-            | not hasCustomNormalizer -> do
-            let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-
-            case Dhall.Binary.decodeExpression bytesLazy of
-                Left err  -> throwMissingImport (Imported _stack err)
-                Right sem -> return
-                    ( ImportSemantics
-                        { importSemantics = sem
-                        , importNormalizationStatus = AlreadyNormalized
-                        }
-                    )
-
-        Just SemisemanticWellTyped -> do
-            substitutedExpr <- applyStatusSubstitutions resolvedExpr
-            rememberSharedTwin import_ twinExpr
-
+    -- A nested file that recorded import errors, or that inlined a placeholder
+    -- from an earlier import, is not type-checked or cached.  Those errors
+    -- are already in the list, so this import becomes a placeholder instead
+    -- of a second message.  Returning it here keeps the sources recorded for
+    -- this import.  The placeholder check matters when the failed import was
+    -- a cache hit: the error list does not grow, but the value is still unbound.
+    if _importErrorMode == CollectErrors
+        && not _insideImportAlt
+        && (length errorsAfter /= length errorsBefore
+            || exprHasPlaceholder resolvedExpr)
+        then do
+            placeholder <- nextPlaceholder
             return
                 ( ImportSemantics
-                    { importSemantics = Core.denote substitutedExpr
+                    { importSemantics = Core.denote placeholder
                     , importNormalizationStatus = TypecheckedOnly
                     }
                 )
+        else do
+            Status {..} <- State.get
 
-        -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
-        _ -> do
-            substitutedExpr <- applyStatusSubstitutions resolvedExpr
-            rememberSharedTwin import_ twinExpr
+            -- Cache key: this file's syntax, hashes of its imports, and hashes of the
+            -- starting context and substitutions. See
+            -- https://github.com/dhall-lang/dhall-haskell/issues/1098
+            semisemanticHash <- computeMerkleSemisemanticHash import_ parsedImport
 
-            case Core.shallowDenote parsedImport of
-                Embed _ ->
+            zoom merkleHashCache
+                (State.modify (Dhall.Map.insert import_ semisemanticHash))
+
+            mCached <-
+                zoom cacheWarning
+                    (fetchFromSemisemanticCache _reportWarning semisemanticHash)
+
+            let hasCustomNormalizer = isJust _normalizer
+
+            importSemantics0 <- case mCached of
+                Just (SemisemanticCachedNF bytesStrict)
+                    | not hasCustomNormalizer -> do
+                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
+
+                    case Dhall.Binary.decodeExpression bytesLazy of
+                        Left err  -> throwMissingImport (Imported _stack err)
+                        Right sem -> return
+                            ( ImportSemantics
+                                { importSemantics = sem
+                                , importNormalizationStatus = AlreadyNormalized
+                                }
+                            )
+
+                Just SemisemanticWellTyped -> do
+                    substitutedExpr <- applyStatusSubstitutions resolvedExpr
+                    rememberSharedTwin import_ twinExpr
+
                     return
                         ( ImportSemantics
                             { importSemantics = Core.denote substitutedExpr
@@ -1096,36 +1109,50 @@ loadImportWithSemisemanticCache
                             }
                         )
 
+                -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
                 _ -> do
-                    checked <- typecheckWithAlreadyCheckedImports _startingContext parsedImport
-                    typ <- case checked of
-                        Just result -> return result
-                        Nothing ->
-                            return (Dhall.TypeCheck.typeWith _startingContext substitutedExpr)
-                    case typ of
-                        Left  err -> throwMissingImport (Imported _stack err)
-                        Right inferred -> do
-                            Status { _stack = stackHere } <- State.get
-                            zoom importTypes
-                                (State.modify'
-                                    (Dhall.Map.insert (NonEmpty.head stackHere) inferred))
-                            return ()
+                    substitutedExpr <- applyStatusSubstitutions resolvedExpr
+                    rememberSharedTwin import_ twinExpr
 
-                    zoom cacheWarning
-                        (writeToSemisemanticCache
-                            _reportWarning
-                            semisemanticHash
-                            SemisemanticWellTyped
-                        )
+                    case Core.shallowDenote parsedImport of
+                        Embed _ ->
+                            return
+                                ( ImportSemantics
+                                    { importSemantics = Core.denote substitutedExpr
+                                    , importNormalizationStatus = TypecheckedOnly
+                                    }
+                                )
 
-                    return
-                        ( ImportSemantics
-                            { importSemantics = Core.denote substitutedExpr
-                            , importNormalizationStatus = TypecheckedOnly
-                            }
-                        )
+                        _ -> do
+                            checked <- typecheckWithAlreadyCheckedImports _startingContext parsedImport
+                            typ <- case checked of
+                                Just result -> return result
+                                Nothing ->
+                                    return (Dhall.TypeCheck.typeWith _startingContext substitutedExpr)
+                            case typ of
+                                Left  err -> throwMissingImport (Imported _stack err)
+                                Right inferred -> do
+                                    Status { _stack = stackHere } <- State.get
+                                    zoom importTypes
+                                        (State.modify'
+                                            (Dhall.Map.insert (NonEmpty.head stackHere) inferred))
+                                    return ()
 
-    return importSemantics0
+                            zoom cacheWarning
+                                (writeToSemisemanticCache
+                                    _reportWarning
+                                    semisemanticHash
+                                    SemisemanticWellTyped
+                                )
+
+                            return
+                                ( ImportSemantics
+                                    { importSemantics = Core.denote substitutedExpr
+                                    , importNormalizationStatus = TypecheckedOnly
+                                    }
+                                )
+
+            return importSemantics0
 
 -- `as Text` and `as Bytes` imports aren't cached since they are well-typed and
 -- normal by construction

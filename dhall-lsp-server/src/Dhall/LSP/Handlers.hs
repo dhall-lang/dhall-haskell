@@ -20,7 +20,7 @@ import Dhall.Core
     , headers
     , pretty
     )
-import Dhall.Import (localToPath)
+import Dhall.Import (chainedImport, localToPath)
 import Dhall.Parser (Src (..))
 
 import Dhall.LSP.Backend.Completion
@@ -39,6 +39,9 @@ import Dhall.LSP.Backend.Dhall
     , invalidate
     , load
     , loadCollected
+    , indexImportBodies
+    , indexImportChains
+    , fileIdentifierFromChained
     , parse
     , parseWithHeader
     , typecheck
@@ -97,7 +100,7 @@ import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types   hiding (Range (..))
 import Language.LSP.Server           (Handlers, LspT)
 import System.Directory              (XdgDirectory (..), createDirectoryIfMissing, getXdgDirectory)
-import System.FilePath               (takeDirectory, (<.>), (</>))
+import System.FilePath               (takeDirectory, takeFileName, (<.>), (</>))
 import System.IO                     (hPutStrLn, stderr)
 import Text.Megaparsec               (SourcePos (..), unPos)
 
@@ -170,13 +173,29 @@ loadFile settings uri_ = do
 
 -- helper
 fileIdentifierFromUri :: Uri -> HandlerM FileIdentifier
-fileIdentifierFromUri uri_ =
-  let mFileIdentifier = fmap fileIdentifierFromFilePath (uriToFilePath uri_)
-                        <|> (do uri' <- (URI.parseURI . Text.unpack . getUri) uri_
-                                fileIdentifierFromURI uri')
-  in case mFileIdentifier of
-    Just fileIdentifier -> return fileIdentifier
-    Nothing -> throwE (Error, getUri uri_ <> " is not a valid name for a dhall file.")
+fileIdentifierFromUri uri_ = do
+  originsRef <- use mirrorOrigins
+  origins <- liftIO (IORef.readIORef originsRef)
+  case listToMaybe [ chained | key <- mirrorKeys uri_, Just chained <- [Map.lookup key origins] ] of
+    Just chained ->
+      return (fileIdentifierFromChained chained)
+    Nothing ->
+      let mFileIdentifier = fmap fileIdentifierFromFilePath (uriToFilePath uri_)
+                            <|> (do uri' <- (URI.parseURI . Text.unpack . getUri) uri_
+                                    fileIdentifierFromURI uri')
+      in case mFileIdentifier of
+        Just fileIdentifier -> return fileIdentifier
+        Nothing -> throwE (Error, getUri uri_ <> " is not a valid name for a dhall file.")
+
+-- | Cache path or 'dhall-import:' file name under which a mirror was published.
+mirrorKeys :: Uri -> [FilePath]
+mirrorKeys uri_
+    | Just rest <- Text.stripPrefix "dhall-import:" (getUri uri_) =
+        [takeFileName (Text.unpack (Text.dropWhile (== '/') rest))]
+    | Just path <- uriToFilePath uri_ =
+        [path]
+    | otherwise =
+        []
 
 -- helper
 rangeToJSON :: Range -> LSP.Types.Range
@@ -249,11 +268,20 @@ documentLinkHandler =
     LSP.requestHandler SMethod_TextDocumentDocumentLink \request respond -> handleErrorWithDefault respond (InL []) do
         let uri_ = request^.params.textDocument.uri
 
-        path <- case uriToFilePath uri_ of
-            Nothing ->
-                throwE (Log, "Could not process document links; failed to convert URI to file path.")
-            Just p ->
+        originsRef <- use mirrorOrigins
+        origins <- liftIO (IORef.readIORef originsRef)
+        let mOrigin = listToMaybe
+                [ chained
+                | key <- mirrorKeys uri_
+                , Just chained <- [Map.lookup key origins]
+                ]
+        path <- case (mOrigin, uriToFilePath uri_) of
+            (Just _, _) ->
+                return "."
+            (_, Just p) ->
                 return p
+            (Nothing, Nothing) ->
+                throwE (Log, "Could not process document links; failed to convert URI to file path.")
 
         txt <- readUri uri_
 
@@ -266,6 +294,15 @@ documentLinkHandler =
         let imports = embedsWithRanges expr :: [(Range, Import)]
 
         let basePath = takeDirectory path
+
+        -- A mirror is the text of some other import.  Links chain onto that
+        -- import, so ./Bool/package.dhall inside the Prelude stays on the
+        -- Prelude's location.
+        let adjust imp = case mOrigin of
+                Just parent ->
+                    chainedImport parent <> imp
+                Nothing ->
+                    imp
 
         let go :: (Range, Import) -> IO [DocumentLink]
             go (range_, Import (ImportHashed _ (Local prefix file)) _) = do
@@ -295,7 +332,7 @@ documentLinkHandler =
 
             go _ = return []
 
-        links <- liftIO $ mapM go imports
+        links <- liftIO $ mapM go (map (\(range_, imp) -> (range_, adjust imp)) imports)
         respond (Right (InL (concat links)))
 
 
@@ -477,9 +514,24 @@ diagnoseDocument settings _uri txt = do
           return ([], [err])
       Right parsed -> do
           negative <- use negativeImports
-          (cache', resolved, collected, _) <-
+          (cache', resolved, collected, sources) <-
               liftIO $ loadCollected settings fileIdentifier parsed cache negative
           assign importCache cache'
+          bodiesRef <- use importBodies
+          chainsRef <- use importChains
+          originsRef <- use mirrorOrigins
+          let chains = indexImportChains sources
+          liftIO $ do
+              IORef.modifyIORef' bodiesRef
+                  (Map.union (indexImportBodies sources))
+              IORef.modifyIORef' chainsRef (Map.union chains)
+              -- Absolute locations only.  A bare file name would collide, and the
+              -- dhall-import name is recorded when the view is published.
+              IORef.modifyIORef' originsRef $
+                  \old ->
+                    Map.union old $
+                      Map.mapKeys Text.unpack $
+                        Map.filterWithKey (\key _ -> '/' `elem` Text.unpack key) chains
           let importDiags = map (collectedDiagnostic _uri) collected
           docs <- use documents
           previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
@@ -920,12 +972,15 @@ executeNormalize request respond = do
         _ -> throwE (Error, "Normalize selection is missing arguments.")
     txt <- readUri uri_
     let selected = textInRange txt range_
+    if Text.null (Text.strip selected)
+        then throwE (Info, "The selection is empty, so there is nothing to normalize.")
+        else return ()
     expr <- case parse selected of
         Right e -> return e
         Left err ->
             throwE
                 ( Warning
-                , "The selection was not normalized due to parsing error:\n"
+                , "The selection was not normalized because it does not parse:\n"
                     <> parseErrorText err
                 )
     ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig

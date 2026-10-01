@@ -13,9 +13,12 @@
 
 module Dhall.LSP.Features (featureHandlers) where
 
+import Control.Applicative ((<|>))
 import Control.Lens (assign, toListOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
-import Data.IORef (readIORef)
+import Data.IORef (modifyIORef', readIORef)
+import Data.Maybe (listToMaybe, maybeToList)
+import Data.Void (Void)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import System.Directory
@@ -24,26 +27,55 @@ import System.Directory
     , getXdgDirectory
     , listDirectory
     )
-import System.FilePath ((</>))
+import System.FilePath (normalise, takeDirectory, takeFileName, (</>))
 import Dhall (EvaluateSettings)
-import Dhall.Core (Binding (..), Expr, Import)
+import Dhall.Import (localToPath)
+import Dhall.Core
+    ( Binding (..)
+    , Expr
+    , FieldSelection (..)
+    , File (..)
+    , FilePrefix (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportType (..)
+    , RecordField (..)
+    , URL (..)
+    , Var (..)
+    , Directory (..)
+    )
 import Dhall.Scope
     ( NameDecl (..)
     , ScopeFragment (..)
     , ScopeKind (..)
+    , makeSrcForLabel
     , scopeFragments
     )
-import Dhall.Parser (Src)
-import Language.LSP.Protocol.Lens
+import Dhall.Parser (Src (..))
+import Language.LSP.Protocol.Lens hiding (length)
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types hiding (Range (..))
 import Language.LSP.Server (Handlers)
 
-import Dhall.LSP.Backend.Dhall (emptyCache, parse)
-import Dhall.LSP.Backend.Diagnostics (Range (..), rangeFromDhall)
-import Dhall.LSP.Backend.Formatting (formatExpr)
+import Dhall.LSP.Backend.Dhall
+    ( FileIdentifier
+    , emptyCache
+    , identifierChained
+    , importTextKey
+    , parse
+    )
+import Dhall.LSP.Backend.Diagnostics
+    ( Diagnosis (Diagnosis)
+    , Range (..)
+    , explain
+    , rangeFromDhall
+    )
+import Dhall.LSP.Backend.Linting (unusedBindingEdits)
+import qualified Dhall.Bounded as Bounded
+import qualified Dhall.Pretty as Pretty
 import Dhall.LSP.Handlers
-    ( handleErrorWithDefault
+    ( fileIdentifierFromUri
+    , handleErrorWithDefault
     , liftLSP
     , rangeToJSON
     , readUri
@@ -54,7 +86,11 @@ import Dhall.LSP.State
 import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
+import qualified Text.Megaparsec.Pos as Pos
+import qualified Data.Text.IO as Text.IO
 import qualified Dhall.Core as Core
+import qualified Dhall.Import as Import
+import qualified Dhall.Map as DMap
 import qualified Language.LSP.Protocol.Types as J
 import qualified Language.LSP.Server as LSP
 
@@ -141,11 +177,324 @@ definitionHandler =
             let docUri = request ^. params . textDocument . uri
                 pos = posOf (request ^. params . position)
             txt <- sourceForNav docUri =<< readUri docUri
-            case declAt (sites txt) pos of
+            imported <- case parse txt of
+                Right expr ->
+                    case importJump expr pos of
+                        Nothing ->
+                            return Nothing
+                        Just (imp, path) ->
+                            openImported docUri imp path
+                Left _ ->
+                    return Nothing
+            case imported of
+                Just loc ->
+                    respond (Right (InL (J.Definition (InL loc))))
                 Nothing ->
-                    respond (Right (InR (InR J.Null)))
-                Just decl ->
-                    respond (Right (InL (J.Definition (InL (locationOf docUri (declSrc decl))))))
+                    case declAt (sites txt) pos of
+                        Nothing ->
+                            respond (Right (InR (InR J.Null)))
+                        Just decl ->
+                            respond (Right (InL (J.Definition (InL (locationOf docUri (declSrc decl))))))
+
+-- | A field projection whose root is an import, and the labels from that
+--   import out to the field under the cursor.
+importJump :: Expr Src Import -> (Int, Int) -> Maybe (Import, [Text])
+importJump root pos = go [] root
+  where
+    go ctx (Core.Note _ expr) =
+        go ctx expr
+    go ctx (Core.Let Binding { Core.variable = boundName, Core.annotation = ann, Core.value = letValue } body) =
+        let inAnn = case ann of
+                Just (_, typ) -> go ctx typ
+                Nothing -> Nothing
+        in inAnn <|> go ctx letValue <|> go ((boundName, letValue) : ctx) body
+    go ctx (Core.Field base (FieldSelection (Just Src { srcEnd = labelStart }) fieldLabel (Just Src { srcStart = labelEnd }))) =
+        let labelSrc = makeSrcForLabel labelStart labelEnd fieldLabel
+        in if srcContains labelSrc pos
+            then do
+                (imp, path) <- resolve ctx base
+                return (imp, path ++ [fieldLabel])
+            else go ctx base
+    go ctx expr =
+        foldr (\child acc -> go ctx child <|> acc) Nothing (toListOf Core.subExpressions expr)
+
+    resolve ctx (Core.Note _ expr) =
+        resolve ctx expr
+    resolve _ (Core.Embed imp) =
+        Just (imp, [])
+    resolve ctx (Core.Annot expr _) =
+        resolve ctx expr
+    resolve ctx (Core.Field expr (FieldSelection _ fieldLabel _)) = do
+        (imp, path) <- resolve ctx expr
+        return (imp, path ++ [fieldLabel])
+    resolve ctx (Core.Var (V varName index)) =
+        resolve ctx =<< lookupBind varName index ctx
+    resolve _ _ =
+        Nothing
+
+    lookupBind varName index ctx =
+        case [letValue | (bound, letValue) <- ctx, bound == varName] of
+            values | index < length values ->
+                Just (values !! index)
+            _ ->
+                Nothing
+
+-- | Where a field path is bound inside an imported file.
+data ImportedField = Landed Src | Deeper Import [Text]
+
+locateField :: Expr Src Import -> [Text] -> Maybe ImportedField
+locateField expr path = go [] expr path
+  where
+    go ctx (Core.Note _ inner) remaining =
+        go ctx inner remaining
+    go ctx (Core.Let Binding { Core.bindingSrc0 = before, Core.variable = boundName, Core.bindingSrc1 = after, Core.value = letValue } body) remaining =
+        go ((boundName, (letValue, binderSrc before after boundName)) : ctx) body remaining
+    go ctx (Core.Annot inner _) remaining =
+        go ctx inner remaining
+    go ctx (Core.RecordLit fields) (fieldLabel : rest) =
+        case DMap.lookup fieldLabel fields of
+            Just RecordField { recordFieldSrc0 = Just Src { srcEnd = labelStart }, recordFieldValue = fieldValue, recordFieldSrc1 = Just Src { srcStart = labelEnd } } ->
+                let keySrc = makeSrcForLabel labelStart labelEnd fieldLabel
+                    landed = case follow ctx fieldValue of
+                        Just found ->
+                            found
+                        Nothing ->
+                            Landed keySrc
+                in if null rest
+                    then Just landed
+                    else case denote fieldValue of
+                        Core.Embed imp ->
+                            Just (Deeper imp rest)
+                        _ ->
+                            go ctx fieldValue rest <|> Just (Landed keySrc)
+            _ ->
+                Nothing
+    go ctx (Core.Var (V varName index)) remaining =
+        case lookupBind varName index ctx of
+            Just (letValue, decl)
+                | null remaining ->
+                    Just (Landed decl)
+                | otherwise ->
+                    go ctx letValue remaining
+            Nothing ->
+                Nothing
+    -- The fetched text is itself an import, such as an environment variable
+    -- whose value is `./lib.dhall`.  Follow that import; if its source was
+    -- not fetched, the caller opens this text instead.
+    go _ (Core.Embed imp) remaining
+        | not (null remaining) =
+            Just (Deeper imp remaining)
+    go _ _ _ =
+        Nothing
+
+    follow ctx followed =
+        case denote followed of
+            Core.Var (V varName index) ->
+                Landed . snd <$> lookupBind varName index ctx
+            _ ->
+                Nothing
+
+    lookupBind varName index ctx =
+        case [found | (bound, found) <- ctx, bound == varName] of
+            values | index < length values ->
+                Just (values !! index)
+            _ ->
+                Nothing
+
+    binderSrc (Just Src { srcEnd = labelStart }) (Just Src { srcStart = labelEnd }) boundName =
+        makeSrcForLabel labelStart labelEnd boundName
+    binderSrc _ _ boundName =
+        Src (Pos.initialPos "<binder>") (Pos.initialPos "<binder>") boundName
+
+    denote (Core.Note _ inner) = denote inner
+    denote other = other
+
+openImported :: J.Uri -> Import -> [Text] -> HandlerM (Maybe J.Location)
+openImported docUri imp path = do
+    parentId <- fileIdentifierFromUri docUri
+    bodiesRef <- use importBodies
+    bodies <- liftIO (readIORef bodiesRef)
+    let parentPath = case uriToFilePath docUri of
+            Just file ->
+                takeDirectory file
+            Nothing ->
+                "."
+    openFrom parentPath parentId imp path bodies
+
+openFrom
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> [Text]
+    -> Map.Map Text Text
+    -> HandlerM (Maybe J.Location)
+openFrom parentPath parentId imp path bodies =
+    let found =
+            listToMaybe
+                [ bodyText
+                | key <- importKeys parentPath parentId imp
+                , Just bodyText <- [Map.lookup key bodies]
+                ]
+    in case found of
+        Nothing ->
+            case imp of
+                Import (ImportHashed (Just hash) _) _ -> do
+                    decoded <- liftIO (Import.decodeSemanticCache hash)
+                    case decoded of
+                        Nothing ->
+                            return Nothing
+                        Just expr ->
+                            showImported parentPath parentId imp (renderDecoded expr) path bodies
+                _ ->
+                    return Nothing
+        Just bodyText ->
+            showImported parentPath parentId imp bodyText path bodies
+
+showImported
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> Text
+    -> [Text]
+    -> Map.Map Text Text
+    -> HandlerM (Maybe J.Location)
+showImported parentPath parentId imp bodyText path bodies =
+    case parse bodyText of
+        Left _ ->
+            return Nothing
+        Right expr ->
+            case locateField expr path of
+                Just (Landed src) ->
+                    Just <$> openLocated parentPath parentId imp bodyText src
+                Just (Deeper nested rest) -> do
+                    nestedLoc <- openFrom parentPath parentId nested rest bodies
+                    case nestedLoc of
+                        Just loc ->
+                            return (Just loc)
+                        Nothing ->
+                            Just <$> openLocated parentPath parentId imp bodyText (startSrc expr)
+                Nothing ->
+                    return Nothing
+
+-- | Keys that may name this import in 'importBodies'.
+importKeys :: FilePath -> FileIdentifier -> Import -> [Text]
+importKeys parentPath parentId imp =
+    importTextKey parentId imp
+        : Core.pretty imp
+        : localKey parentPath imp
+
+localKey :: FilePath -> Import -> [Text]
+localKey parentPath (Import (ImportHashed _ (Local prefix file)) _) =
+    [ Text.pack (normalise (prefixPath prefix </> renderFile file))
+    , Text.pack (takeFileName (renderFile file))
+    ]
+  where
+    prefixPath Absolute =
+        "/"
+    prefixPath Home =
+        parentPath
+    prefixPath Here =
+        parentPath
+    prefixPath Parent =
+        parentPath </> ".."
+localKey _ (Import (ImportHashed _ (Remote url)) _) =
+    [Core.pretty (url { headers = Nothing })]
+localKey _ (Import (ImportHashed _ (Env envName)) _) =
+    ["env:" <> envName]
+localKey _ _ =
+    []
+
+renderFile :: File -> FilePath
+renderFile (File (Directory components) file) =
+    foldl (</>) "" (map Text.unpack (reverse (file : components)))
+
+startSrc :: Expr Src Import -> Src
+startSrc (Core.Note src _) =
+    src
+startSrc _ =
+    Src (Pos.initialPos "<import>") (Pos.initialPos "<import>") ""
+
+-- | A local import opens the file itself.  Anything else opens a read-only
+--   'dhall-import:' view of the fetched text.  The cache file stays, because
+--   the editor reads it through 'dhall/importSource'.
+openLocated
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> Text
+    -> Src
+    -> HandlerM J.Location
+openLocated parentPath parentId imp bodyText src = do
+    mLocal <- liftIO (localImportFile parentPath imp)
+    case mLocal of
+        Just path ->
+            return (locationOf (filePathToUri path) src)
+        Nothing ->
+            publishImport parentPath parentId imp bodyText src
+
+localImportFile :: FilePath -> Import -> IO (Maybe FilePath)
+localImportFile base (Import (ImportHashed _ (Local prefix file)) _) = do
+    rel <- localToPath prefix file
+    return (Just (normalise (base </> rel)))
+localImportFile _ _ =
+    return Nothing
+
+publishImport
+    :: FilePath
+    -> FileIdentifier
+    -> Import
+    -> Text
+    -> Src
+    -> HandlerM J.Location
+publishImport parentPath parentId imp bodyText src = do
+    let key = importTextKey parentId imp
+    dir <- liftIO (getXdgDirectory XdgCache ("dhall-lsp" </> "sources"))
+    liftIO (createDirectoryIfMissing True dir)
+    let mirrorName = fileName key
+        mirrorPath = dir </> mirrorName
+    liftIO (Text.IO.writeFile mirrorPath bodyText)
+    chainsRef <- use importChains
+    originsRef <- use mirrorOrigins
+    chains <- liftIO (readIORef chainsRef)
+    let lookedUp =
+            listToMaybe
+                [ chained
+                | candidate <- importKeys parentPath parentId imp
+                , Just chained <- [Map.lookup candidate chains]
+                ]
+        -- `env:` and `missing` do not keep the directory of the file that
+        -- imported them, so a relative path in the mirror would resolve from
+        -- the server's working directory.  Keep that file as the origin.
+        origin = case imp of
+            Import (ImportHashed _ (Env _)) _ ->
+                Just (identifierChained parentId)
+            Import (ImportHashed _ Missing) _ ->
+                Just (identifierChained parentId)
+            _ ->
+                lookedUp
+    case origin of
+        Just chained ->
+            liftIO $
+                modifyIORef' originsRef $
+                    Map.insert mirrorName chained . Map.insert mirrorPath chained
+        Nothing ->
+            return ()
+    return (locationOf (J.Uri ("dhall-import:///" <> Text.pack mirrorName)) src)
+
+renderDecoded :: Core.Expr Void Void -> Text
+renderDecoded expr =
+    let noted = Core.renote expr :: Expr Src Void
+        doc = Pretty.prettyCharacterSet Pretty.Unicode noted
+    in case Bounded.prettyBounded defaultOutputBytes doc of
+        Bounded.Complete rendered ->
+            rendered
+        Bounded.Truncated rendered ->
+            rendered
+
+fileName :: Text -> FilePath
+fileName key =
+    show (foldl (\n c -> n * 33 + fromEnum c) (5381 :: Int) (Text.unpack key))
+        ++ ".dhall"
 
 referencesHandler :: Handlers HandlerM
 referencesHandler =
@@ -337,13 +686,13 @@ inlayHints = go
     hint _ = []
 
 codeActionHandler :: EvaluateSettings -> Handlers HandlerM
-codeActionHandler evalSettings =
+codeActionHandler _evalSettings =
     LSP.requestHandler SMethod_TextDocumentCodeAction \request respond ->
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
                 selected = request ^. params . range
             txt <- readUri docUri
-            ServerConfig { maxOutputSize, chosenCharacterSet } <- liftLSP LSP.getConfig
+            ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
             let normalize = J.CodeAction
                     { _title = "Normalize selection"
                     , _kind = Just J.CodeActionKind_RefactorRewrite
@@ -363,7 +712,10 @@ codeActionHandler evalSettings =
                     , _data_ = Nothing
                     }
             let selectedText = textInRange txt selected
-                explain = J.CodeAction
+                selectionParses = case parse selectedText of
+                    Right _ -> True
+                    Left _ -> False
+                explainAction = J.CodeAction
                     { _title = "Explain error"
                     , _kind = Just J.CodeActionKind_QuickFix
                     , _diagnostics = Nothing
@@ -394,30 +746,50 @@ codeActionHandler evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-                alphaActions = case parse selectedText of
-                    Left _ -> []
-                    Right expr ->
-                        let _newText' = formatExpr
-                                chosenCharacterSet
-                                (Core.alphaNormalize expr)
-                            action = J.CodeAction
-                                { _title = "Alpha-normalize selection"
-                                , _kind = Just J.CodeActionKind_RefactorRewrite
-                                , _diagnostics = Nothing
-                                , _isPreferred = Nothing
-                                , _disabled = Nothing
-                                , _edit = Just J.WorkspaceEdit
-                                    { _changes = Just
-                                        (Map.singleton docUri [J.TextEdit { _range, _newText = _newText' }])
-                                    , _documentChanges = Nothing
-                                    , _changeAnnotations = Nothing
+            errorMap <- use errors
+            let explainOffered = case Map.lookup docUri errorMap >>= explain of
+                    Just (Diagnosis _ (Just errRange) _) ->
+                        rangesMeet selected errRange
+                    _ ->
+                        False
+                removeOffered = listToMaybe
+                    [ deleteRange
+                    | Right expr <- [parse txt]
+                    , (matchRange, deleteRange) <- unusedBindingEdits txt expr
+                    , rangesMeet selected matchRange
+                    ]
+                removeAction deleteRange = J.CodeAction
+                    { _title = "Remove unused let"
+                    , _kind = Just J.CodeActionKind_QuickFix
+                    , _diagnostics = Nothing
+                    , _isPreferred = Just True
+                    , _disabled = Nothing
+                    , _edit = Just J.WorkspaceEdit
+                        { _changes = Just
+                            (Map.singleton docUri
+                                [ J.TextEdit
+                                    { _range = rangeToJSON deleteRange
+                                    , _newText = ""
                                     }
-                                , _command = Nothing
-                                , _data_ = Nothing
-                                }
-                        in [InR action]
-            let _ = evalSettings
-            respond (Right (InL (InR normalize : InR explain : InR extract : alphaActions)))
+                                ])
+                        , _documentChanges = Nothing
+                        , _changeAnnotations = Nothing
+                        }
+                    , _command = Nothing
+                    , _data_ = Nothing
+                    }
+                offered =
+                    [InR normalize | selectionParses]
+                        ++ [InR extract | selectionParses]
+                        ++ [InR explainAction | explainOffered]
+                        ++ [InR (removeAction deleteRange) | deleteRange <- maybeToList removeOffered]
+            respond (Right (InL offered))
+
+rangesMeet :: J.Range -> Range -> Bool
+rangesMeet (J.Range startPos endPos) (Range left right) =
+    let point (J.Position lineNo col) =
+            (fromIntegral lineNo, fromIntegral col)
+    in point startPos <= right && left <= point endPos
 
 watchedFilesHandler :: Handlers HandlerM
 watchedFilesHandler =

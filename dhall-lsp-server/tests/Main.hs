@@ -7,6 +7,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 import Control.Monad.IO.Class      (liftIO)
+import Data.Int                    (Int32)
 import Data.Maybe                  (fromJust)
 import Data.Time.Clock             (diffUTCTime, getCurrentTime)
 import Language.LSP.Protocol.Types
@@ -16,10 +17,16 @@ import Language.LSP.Protocol.Types
     , DiagnosticSeverity (..)
     , DiagnosticTag (..)
     , Hover (..)
+    , getUri
     , MarkupContent (..)
+    , Definition (..)
+    , Location (..)
     , Position (..)
     , Range (..)
     , TextDocumentContentChangeEvent (..)
+    , TextDocumentItem (..)
+    , DidOpenTextDocumentParams (..)
+    , Uri (..)
     , type (|?) (..)
     , toEither
     )
@@ -43,9 +50,11 @@ import Language.LSP.Test
 import Test.Hspec
 #endif
 
+import System.Environment          (setEnv)
 import qualified Data.Text       as T
 import qualified GHC.IO.Encoding
 import qualified Language.LSP.Protocol.Capabilities
+import qualified Language.LSP.Protocol.Message as LSP
 
 baseDir :: FilePath -> FilePath
 baseDir d = "tests/fixtures/" <> d
@@ -127,8 +136,8 @@ lintingSpec fixtureDir =
         liftIO $ diags `shouldBe`
             [ Diagnostic
                 { _range = Range
-                    {_start = Position { _line = 2, _character = 10 }
-                    , _end = Position { _line = 2, _character = 36 }
+                    {_start = Position { _line = 2, _character = 4 }
+                    , _end = Position { _line = 2, _character = 7 }
                     }
                 , _severity = Just DiagnosticSeverity_Hint
                 , _code = Nothing
@@ -141,8 +150,8 @@ lintingSpec fixtureDir =
                 }
             , Diagnostic
                 { _range = Range
-                    { _start = Position { _line = 4, _character = 11 }
-                    , _end = Position { _line = 4, _character = 38 }
+                    { _start = Position { _line = 4, _character = 4 }
+                    , _end = Position { _line = 4, _character = 8 }
                     }
                 , _severity = Just DiagnosticSeverity_Hint
                 , _code = Nothing
@@ -297,12 +306,73 @@ main = do
   completion <- testSpec "Completion" (codeCompletionSpec (baseDir "completion"))
   hovering <- testSpec "Hovering" (hoveringSpec (baseDir "hovering"))
   replay <- testSpec "Edit replay" (editReplaySpec (baseDir "diagnostics"))
+  definition <- testSpec "Definition" (definitionSpec (baseDir "definition"))
   defaultMain
     ( testGroup "Tests"
         [ diagnostics,
           linting,
           completion,
           hovering,
-          replay
+          replay,
+          definition
         ]
     )
+
+-- | Record fields of an imported value, and import failures met on the way.
+definitionSpec :: FilePath -> Spec
+definitionSpec dir =
+  describe "Dhall.Definition" $ do
+    it "opens a field defined in an import" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "use.dhall" "dhall"
+        _ <- waitForDiagnostics
+        defs <- getDefinitions docId (Position 2 8)
+        liftIO $ case defs of
+          InL (Definition (InL (Location uri (Range (Position line _) _)))) -> do
+            T.unpack (getUri uri) `shouldContain` "lib.dhall"
+            line `shouldBe` 0
+          _ ->
+            expectationFailure "expected a location in the imported source"
+    it "opens a non-file import through dhall-import" $ do
+      setEnv "DHALL_LSP_TEST_LIB" "{ customFunction = 1 }"
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "env-use.dhall" "dhall"
+        _ <- waitForDiagnostics
+        defs <- getDefinitions docId (Position 2 8)
+        liftIO $ case defs of
+          InL (Definition (InL (Location uri _))) ->
+            T.unpack (getUri uri) `shouldContain` "dhall-import:"
+          _ ->
+            expectationFailure "expected a dhall-import location"
+    it "reports a missing import when a later file inlines that placeholder" $
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        _ <- openDoc "placeholder-use.dhall" "dhall"
+        diags <- waitForDiagnostics
+        liftIO $
+          any
+            (\diag -> "no-such-placeholder-file" `T.isInfixOf` _message diag)
+            diags
+            `shouldBe` True
+    it "analyses a mirror from the import it came from" $ do
+      setEnv "DHALL_LSP_TEST_LIB" "./lib.dhall"
+      runSession "dhall-lsp-server" fullLatestClientCaps dir $ do
+        docId <- openDoc "env-use.dhall" "dhall"
+        _ <- waitForDiagnostics
+        defs <- getDefinitions docId (Position 2 8)
+        uri <- liftIO $ case defs of
+          InL (Definition (InL (Location uri _))) -> do
+            T.unpack (getUri uri) `shouldContain` "dhall-import:"
+            return uri
+          _ -> do
+            expectationFailure "expected a dhall-import location"
+            fail "no location"
+        let _textDocument = TextDocumentItem
+              { _uri = uri
+              , _languageId = "dhall"
+              , _version = 1 :: Int32
+              , _text = "./lib.dhall\n"
+              }
+        sendNotification LSP.SMethod_TextDocumentDidOpen
+            DidOpenTextDocumentParams { _textDocument = _textDocument }
+        diags <- waitForDiagnostics
+        liftIO $ diags `shouldBe` []
