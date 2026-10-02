@@ -780,11 +780,12 @@ organizeImports txt = do
                             hoisted =
                                 Text.unlines
                                     (map importText (sortOn importName used))
-                            body = dropImportsBanner remaining
+                            (trivia, rest) = splitLeadingTrivia remaining
+                            header = finalizeHeader (dropBannerLines trivia)
                             rebuilt =
                                 if null used
-                                    then body
-                                    else importsComment <> "\n" <> hoisted <> "in\n" <> body
+                                    then header <> rest
+                                    else header <> importsComment <> "\n" <> hoisted <> "in\n" <> rest
                         if rebuilt == txt
                             then return (Left "Imports are already organized.")
                             else return (Right rebuilt)
@@ -832,14 +833,108 @@ importDeleteRanges txt expr =
 importsComment :: Text
 importsComment = "-- Imports."
 
-dropImportsBanner :: Text -> Text
-dropImportsBanner txt =
-    let stripped = Text.stripStart txt
-    in maybe stripped Text.stripStart (Text.stripPrefix importsComment stripped)
+-- | Dhall whitespace, comments, and shebangs before the first real token.
+splitLeadingTrivia :: Text -> (Text, Text)
+splitLeadingTrivia txt =
+    let (shebangs, afterShebang) = takeShebangs txt
+        (whitespace, rest) = takeWhitespace afterShebang
+    in (shebangs <> whitespace, rest)
+
+takeShebangs :: Text -> (Text, Text)
+takeShebangs txt
+    | "#!" `Text.isPrefixOf` txt =
+        let (shebangLine, after) = takeLine txt
+            (more, rest) = takeShebangs after
+        in (shebangLine <> more, rest)
+    | otherwise =
+        ("", txt)
+
+takeWhitespace :: Text -> (Text, Text)
+takeWhitespace txt
+    | Text.null txt =
+        ("", txt)
+    | Just (c, _) <- Text.uncons txt
+    , c == ' ' || c == '\t' || c == '\n' =
+        let (run, after) = Text.span isHorizontalOrNewline txt
+            (more, rest) = takeWhitespace after
+        in (run <> more, rest)
+    | "\r\n" `Text.isPrefixOf` txt =
+        let (more, rest) = takeWhitespace (Text.drop 2 txt)
+        in ("\r\n" <> more, rest)
+    | "--" `Text.isPrefixOf` txt =
+        let (comment, after) = takeLine txt
+            (more, rest) = takeWhitespace after
+        in (comment <> more, rest)
+    | "{-" `Text.isPrefixOf` txt =
+        case takeBlockComment txt of
+            Nothing ->
+                ("", txt)
+            Just (comment, after) ->
+                let (more, rest) = takeWhitespace after
+                in (comment <> more, rest)
+    | otherwise =
+        ("", txt)
+
+takeLine :: Text -> (Text, Text)
+takeLine txt =
+    let (prefix, after) = Text.break (\c -> c == '\n' || c == '\r') txt
+    in case Text.uncons after of
+        Just ('\n', rest) ->
+            (prefix <> "\n", rest)
+        Just ('\r', rest)
+            | "\n" `Text.isPrefixOf` rest ->
+                (prefix <> "\r\n", Text.drop 1 rest)
+            | otherwise ->
+                (prefix <> "\r", rest)
+        _ ->
+            (prefix, after)
+
+takeBlockComment :: Text -> Maybe (Text, Text)
+takeBlockComment txt
+    | "{-" `Text.isPrefixOf` txt =
+        go (1 :: Int) (Text.drop 2 txt) "{-"
+    | otherwise =
+        Nothing
+  where
+    go n rest acc
+        | n == 0 =
+            Just (acc, rest)
+        | Text.null rest =
+            Nothing
+        | "{-" `Text.isPrefixOf` rest =
+            go (n + 1) (Text.drop 2 rest) (acc <> "{-")
+        | "-}" `Text.isPrefixOf` rest =
+            go (n - 1) (Text.drop 2 rest) (acc <> "-}")
+        | otherwise =
+            case Text.uncons rest of
+                Nothing ->
+                    Nothing
+                Just (c, rest') ->
+                    go n rest' (acc <> Text.singleton c)
+
+isHorizontalOrNewline :: Char -> Bool
+isHorizontalOrNewline c = c == ' ' || c == '\t' || c == '\n'
+
+isDhallSpace :: Char -> Bool
+isDhallSpace c = c == ' ' || c == '\t' || c == '\n' || c == '\r'
+
+isImportsBannerLine :: Text -> Bool
+isImportsBannerLine comment = Text.strip comment == importsComment
+
+dropBannerLines :: Text -> Text
+dropBannerLines =
+    Text.unlines . filter (not . isImportsBannerLine) . Text.lines
+
+finalizeHeader :: Text -> Text
+finalizeHeader trivia =
+    let trimmed = Text.dropWhileEnd isDhallSpace trivia
+    in if Text.null trimmed then "" else trimmed <> "\n"
 
 hasImportsComment :: Text -> Bool
 hasImportsComment txt =
-    importsComment `Text.isPrefixOf` Text.stripStart txt
+    any isImportsBannerLine (Text.lines trivia)
+  where
+    (trivia, _) = splitLeadingTrivia txt
 
 alreadyOrganized :: Text -> Expr Src Import -> [ImportLet] -> [ImportLet] -> Bool
 alreadyOrganized txt expr used unused =

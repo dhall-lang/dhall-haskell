@@ -862,6 +862,12 @@ organizeSpec fixtureDir = describe "organize imports" $ do
   it "leaves a non-bare import in place" $
     expectOrganize fixtureDir "NotBare.dhall"
       "-- Imports.\nlet y = ./b.dhall\nin\nlet x = 1 + ./a.dhall\nin { x, y }\n"
+  it "keeps existing file-header comments above the imports banner" $
+    expectOrganize fixtureDir "Header.dhall"
+      "-- Copyright 2026.\n-- SPDX-License-Identifier: BSD-3-Clause\n-- Imports.\nlet a = ./a.dhall\nlet b = ./b.dhall\nin\n{ a, b }\n"
+  it "keeps a file-header block comment above the imports banner" $
+    expectOrganize fixtureDir "BlockHeader.dhall"
+      "{-|\n    Module docs\n-}\n-- Imports.\nlet a = ./a.dhall\nin\na\n"
   it "refuses a repeated import name" $
     runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
       docId <- openDoc "Duplicate.dhall" "dhall"
@@ -884,6 +890,15 @@ organizeSpec fixtureDir = describe "organize imports" $ do
     runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
       docId <- openDoc "Already.dhall" "dhall"
       actions <- getCodeActions docId (Range (Position 0 0) (Position 4 0))
+      liftIO $ do
+        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
+        found `shouldSatisfy` (not . null)
+        _disabled (head found) `shouldSatisfy` isJust
+        _edit (head found) `shouldBe` Nothing
+  it "refuses when a file-header comment already precedes an organized banner" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "AlreadyHeader.dhall" "dhall"
+      actions <- getCodeActions docId (Range (Position 0 0) (Position 6 0))
       liftIO $ do
         let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
         found `shouldSatisfy` (not . null)
