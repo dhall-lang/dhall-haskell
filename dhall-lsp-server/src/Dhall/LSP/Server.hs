@@ -16,6 +16,7 @@ import Control.Monad.IO.Class        (liftIO)
 import Data.Aeson                    (fromJSON)
 import Data.Default
 import Dhall                         (EvaluateSettings, defaultEvaluateSettings)
+import Dhall.LSP.Backend.Dhall       (emptyCache)
 import Dhall.LSP.Features            (featureHandlers)
 import Dhall.LSP.Handlers
     ( cancelationHandler
@@ -76,7 +77,10 @@ runWith settings = withLogger $ \ioLogger -> do
   bodies <- IORef.newIORef Map.empty
   chains <- IORef.newIORef Map.empty
   origins <- IORef.newIORef Map.empty
-  state <- MVar.newMVar (initialState errorStore documentStore envRef negative bodies chains origins)
+  importCache <- IORef.newIORef emptyCache
+  state <-
+      MVar.newMVar
+          (initialState importCache errorStore documentStore envRef negative bodies chains origins)
 
   let defaultConfig = def
 

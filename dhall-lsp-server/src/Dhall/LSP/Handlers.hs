@@ -34,10 +34,12 @@ import Dhall.LSP.Backend.Completion
     , expressionBefore
     )
 import Dhall.LSP.Backend.Dhall
-    ( FileIdentifier
+    ( Cache
+    , FileIdentifier
     , fileIdentifierFromFilePath
     , fileIdentifierFromURI
     , invalidate
+    , lookupCachedImport
     , load
     , loadCollected
     , indexImportBodies
@@ -67,7 +69,21 @@ import Dhall.LSP.Backend.Freezing
     )
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
-import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, scopedNormalize, typeAtExpr)
+import Dhall.LSP.Backend.Prefix
+    ( bindingValueKeys
+    , resumeTypingContext
+    , singleCodeImport
+    , topLevelPrefixLength
+    , topLets
+    , valueSourceKey
+    )
+import Dhall.LSP.Backend.Typing
+    ( annotateLetExpr
+    , exprAt
+    , scopedNormalize
+    , typeAtExpr
+    , typeAtExprWithContextBounded
+    )
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
@@ -165,7 +181,7 @@ loadFile :: EvaluateSettings -> Uri -> HandlerM (Expr Src Void)
 loadFile settings uri_ = do
   txt <- readUri uri_
   fileIdentifier <- fileIdentifierFromUri uri_
-  cache <- use importCache
+  cache <- readImportCache
 
   expr <- case parse txt of
     Right e -> return e
@@ -180,7 +196,7 @@ loadFile settings uri_ = do
       return (cache', expr', errs)
   -- Update cache. Don't cache current expression because it might not have been
   -- written to disk yet (readUri reads from the VFS).
-  assign importCache cache'
+  writeImportCache cache'
   if null errs
     then return (unsafeCoerce expr')
     else throwE (Error, "Failed to resolve imports." <> importFailureText errs)
@@ -218,16 +234,25 @@ loadForTyping settings uri_ = do
 tryLoadForTyping
     :: EvaluateSettings -> Uri -> Expr Src Import -> HandlerM (Maybe (Expr Src Void))
 tryLoadForTyping settings uri_ parsed = do
-    fileIdentifier <- fileIdentifierFromUri uri_
-    cache <- use importCache
-    negative <- use negativeImports
-    loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
-    case loaded of
-        Left _ ->
-            return Nothing
-        Right (cache', expr, collected, _) -> do
-            assign importCache cache'
-            return (Just (fillImportHoles collected expr))
+    txt <- readUri uri_
+    docs <- use documents
+    snaps <- liftIO (IORef.readIORef docs)
+    case Map.lookup uri_ snaps of
+        Just snap
+            | snapText snap == txt
+            , Just resolved <- snapResolved snap ->
+                return (Just resolved)
+        _ -> do
+            fileIdentifier <- fileIdentifierFromUri uri_
+            cache <- readImportCache
+            negative <- use negativeImports
+            loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
+            case loaded of
+                Left _ ->
+                    return Nothing
+                Right (cache', expr, collected, _) -> do
+                    writeImportCache cache'
+                    return (Just (fillImportHoles collected expr))
 
 -- helper
 fileIdentifierFromUri :: Uri -> HandlerM FileIdentifier
@@ -296,14 +321,25 @@ sliceInRange source (Range left right) =
 -- | Type of the expression at `pos`, when that source slice is unchanged
 --   between `fromText` (the expression's origin) and `current`.
 hoverFromExpr
-    :: Int -> (Int, Int) -> Text -> Text -> Expr Src Void -> Maybe Hover
-hoverFromExpr maxOutputSize pos fromText current expr =
-    case typeAtExpr pos expr of
-        Right (Just src, typ)
+    :: Int
+    -> (Int, Int)
+    -> Text
+    -> Text
+    -> [Text]
+    -> [Text]
+    -> [Text]
+    -> [Core.Expr Void Void]
+    -> [TypeCheck.TypingContext Src]
+    -> Expr Src Void
+    -> Maybe Hover
+hoverFromExpr maxOutputSize pos fromText current prefixNames prevKeys currentKeys prefixValues prefixCtxs expr =
+    let ctx = resumeTypingContext prefixNames prevKeys currentKeys prefixValues prefixCtxs expr
+    in case typeAtExprWithContextBounded (Just maxOutputSize) ctx pos expr of
+        Right (Just src, typ, _)
             | let range_ = rangeFromDhall src
             , sliceInRange fromText range_ == sliceInRange current range_ ->
                 Just (typeToHover maxOutputSize (Just src) typ)
-        Right (Nothing, typ) ->
+        Right (Nothing, typ, _) ->
             Just (typeToHover maxOutputSize Nothing typ)
         _ ->
             Nothing
@@ -318,27 +354,67 @@ lastGoodTypeHover settings uri_ pos current = do
     docs <- use documents
     snaps <- liftIO (IORef.readIORef docs)
     ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-    case Map.lookup uri_ snaps >>= snapLastGood of
-        Just good | good /= current ->
+    case Map.lookup uri_ snaps of
+        Just snap | Just good <- snapLastGood snap, good /= current ->
             case parse good of
                 Left _ ->
                     return Nothing
                 Right parsed -> do
                     loaded <- tryLoadForTyping settings uri_ parsed
-                    return (loaded >>= hoverFromExpr maxOutputSize pos good current)
+                    return
+                        ( loaded
+                            >>= hoverFromExpr
+                                maxOutputSize
+                                pos
+                                good
+                                current
+                                (snapPrefixNames snap)
+                                (snapPrefixValueKeys snap)
+                                (bindingValueKeys good parsed)
+                                (snapPrefixValues snap)
+                                (snapPrefixContexts snap)
+                        )
         _ ->
             return Nothing
 
 currentTypeHover
     :: EvaluateSettings -> Uri -> (Int, Int) -> Text -> HandlerM (Maybe Hover)
-currentTypeHover settings uri_ pos current =
+currentTypeHover settings uri_ pos current = do
+    docs <- use documents
+    snaps <- liftIO (IORef.readIORef docs)
     case parse current of
         Left _ ->
             return Nothing
         Right parsed -> do
             ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
             loaded <- tryLoadForTyping settings uri_ parsed
-            return (loaded >>= hoverFromExpr maxOutputSize pos current current)
+            let prefix = case Map.lookup uri_ snaps of
+                    Just snap ->
+                        ( snapPrefixNames snap
+                        , snapPrefixValueKeys snap
+                        , snapPrefixValues snap
+                        , snapPrefixContexts snap
+                        )
+                    Nothing ->
+                        ([], [], [], [])
+            return
+                ( loaded
+                    >>= hoverFromExpr
+                        maxOutputSize
+                        pos
+                        current
+                        current
+                        (fst4 prefix)
+                        (snd4 prefix)
+                        (bindingValueKeys current parsed)
+                        (thd4 prefix)
+                        (frth4 prefix)
+                )
+  where
+    fst4 (a, _, _, _) = a
+    snd4 (_, b, _, _) = b
+    thd4 (_, _, c, _) = c
+    frth4 (_, _, _, d) = d
 
 hoverHandler :: EvaluateSettings -> Handlers HandlerM
 hoverHandler settings =
@@ -517,25 +593,40 @@ chainText chained = pretty (Import.chainedImport chained)
 typecheckCollected
     :: [Import.CollectedImportError]
     -> Expr Src Import.ImportHole
+    -> Text
+    -> Expr Src Import
+    -> [Text]
     -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
-    -> ([DhallError], [Text], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
-typecheckCollected collected expr prevNames prevValues prevCtxs
+    -> FileIdentifier
+    -> Cache
+    -> ([DhallError], [Text], [Text], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
+typecheckCollected collected expr txt parsed prevNames prevKeys prevValues prevCtxs fileId cache
     | any (\e -> isNothing (Import.collectedKnownType e)) collected =
-        ([], [], [], [])
+        ([], [], [], [], [])
     | any (not . (`Map.member` knownTypes)) (holesIn expr) =
-        ([], [], [], [])
+        ([], [], [], [], [])
     | otherwise =
         let erased = fillImportHoles collected expr
-            (errs, names, values, ctxs) =
+            currentKeys =
+                [ valueSourceKey txt value
+                | (_, _, value) <- fst (topLets erased)
+                ]
+            parsedBinds = alignParsedBinds parsed erased
+            (errs, names, keys, values, ctxs) =
                 checkLets
+                    fileId
+                    cache
+                    parsedBinds
                     prevNames
+                    prevKeys
+                    currentKeys
                     prevValues
                     prevCtxs
                     TypeCheck.emptyTypingContext
                     erased
-        in (map ErrorTypecheck errs, names, values, ctxs)
+        in (map ErrorTypecheck errs, names, keys, values, ctxs)
   where
     holesIn (Core.Embed hole) =
         [hole]
@@ -596,39 +687,63 @@ fillImportHoles collected expr =
                 (Core.FieldSelection Nothing "Missing" Nothing)
                 :: Expr Src Void)
 
+-- | Pair each resolved top-level binding with the corresponding parsed
+--   binding when present.  Import-only files have no parsed lets even though
+--   the resolved expression contains the imported module's bindings.
+alignParsedBinds
+    :: Expr Src Import
+    -> Expr Src Void
+    -> [(Text, Maybe (Maybe Src, Expr Src Import), Expr Src Import)]
+alignParsedBinds parsed erased =
+    let (parsedBinds, _) = topLets parsed
+        (erasedBinds, _) = topLets erased
+    in [ if i < length parsedBinds
+            then parsedBinds !! i
+            else erasedBindAsParsed (erasedBinds !! i)
+       | i <- [0 .. length erasedBinds - 1]
+       ]
+  where
+    erasedBindAsParsed (name, ann, value) =
+        (name, fmap (fmap unsafeCoerce) ann, unsafeCoerce value)
+
 checkLets
-    :: [Text]
+    :: FileIdentifier
+    -> Cache
+    -> [(Text, Maybe (Maybe Src, Expr Src Import), Expr Src Import)]
+    -> [Text]
+    -> [Text]
+    -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
     -> TypeCheck.TypingContext Src
     -> Expr Src Void
     -> ( [TypeCheck.TypeError Src Void]
        , [Text]
+       , [Text]
        , [Core.Expr Void Void]
        , [TypeCheck.TypingContext Src]
        )
-checkLets prevNames prevValues prevCtxs ctx0 expr =
+checkLets fileId cache parsedBinds prevNames prevKeys currentKeys prevValues prevCtxs ctx0 expr =
     let (binds, rest) = topLets expr
-        step (i, accCtx, accNames, accVals, accCtxs, accErrs, accFailed) (name, ann, value)
-            | i < length prevNames
-            , i < length prevValues
-            , i < length prevCtxs
-            , name == prevNames !! i
-            , (Core.denote value :: Core.Expr Void Void) == prevValues !! i =
+        prefixLen = topLevelPrefixLength prevNames prevKeys currentKeys prevValues binds
+        step (i, accCtx, accNames, accKeys, accVals, accCtxs, accErrs, accFailed) ((name, ann, value), key, (_, _, parsedValue))
+            | i < prefixLen =
                 ( i + 1
                 , prevCtxs !! i
                 , name : accNames
+                , prevKeys !! i : accKeys
                 , prevValues !! i : accVals
                 , prevCtxs !! i : accCtxs
                 , accErrs
                 , accFailed
                 )
             | otherwise =
-                case TypeCheck.extendLet name value accCtx of
+                case extendTopLevelLet fileId cache parsedValue name value accCtx of
                     Right ctx' ->
                         ( i + 1
                         , ctx'
                         , name : accNames
+                        , key : accKeys
                         , (Core.denote value :: Core.Expr Void Void) : accVals
                         , ctx' : accCtxs
                         , accErrs
@@ -644,25 +759,34 @@ checkLets prevNames prevValues prevCtxs ctx0 expr =
                                         Left _ -> accCtx
                                 Nothing ->
                                     accCtx
-                        in (i + 1, ctx', accNames, accVals, accCtxs, err : accErrs, True)
-        (_, ctx, names, vals, ctxs, errs, failed) =
-            foldl step (0, ctx0, [], [], [], [], False) binds
+                        in (i + 1, ctx', accNames, accKeys, accVals, accCtxs, err : accErrs, True)
+        (_, ctx, names, keys, vals, ctxs, errs, failed) =
+            foldl
+                step
+                (0, ctx0, [], [], [], [], [], False)
+                (zip3 binds currentKeys parsedBinds)
         errs' =
             if failed
                 then errs
                 else case TypeCheck.typeWithContext ctx rest of
                     Left err -> err : errs
                     Right _ -> errs
-    in (reverse errs', reverse names, reverse vals, reverse ctxs)
+    in (reverse errs', reverse names, reverse keys, reverse vals, reverse ctxs)
 
-topLets
-    :: Expr Src Void
-    -> ([(Text, Maybe (Maybe Src, Expr Src Void), Expr Src Void)], Expr Src Void)
-topLets (Note _ expr) = topLets expr
-topLets (Core.Let Core.Binding { Core.variable = name, Core.annotation = ann, Core.value = value } expr) =
-    let (binds, rest) = topLets expr
-    in ((name, ann, value) : binds, rest)
-topLets expr = ([], expr)
+extendTopLevelLet
+    :: FileIdentifier
+    -> Cache
+    -> Expr Src Import
+    -> Text
+    -> Expr Src Void
+    -> TypeCheck.TypingContext Src
+    -> Either (TypeCheck.TypeError Src Void) (TypeCheck.TypingContext Src)
+extendTopLevelLet fileId cache parsedValue name value accCtx =
+    case singleCodeImport parsedValue >>= lookupCachedImport fileId cache of
+        Just (typ, sem) ->
+            Right (TypeCheck.extendAlreadyChecked name typ sem accCtx)
+        Nothing ->
+            TypeCheck.extendLet name value accCtx
 
 -- | Semantic diagnostics that survive a later parse error: their source
 --   slice is unchanged in the new text and ends before the parse error
@@ -692,8 +816,8 @@ diagnoseDocument :: EvaluateSettings -> Uri -> Text -> HandlerM ()
 diagnoseDocument settings _uri txt = do
   fileIdentifier <- fileIdentifierFromUri _uri
   -- make sure we don't keep a stale version around
-  modifying importCache (invalidate fileIdentifier)
-  cache <- use importCache
+  modifyImportCache (invalidate fileIdentifier)
+  cache <- readImportCache
 
   errorsRef <- use errors
   previousErrors <- liftIO $ Map.lookup _uri <$> IORef.readIORef errorsRef
@@ -718,7 +842,7 @@ diagnoseDocument settings _uri txt = do
             Left err ->
               return ([], [], [err], txt)
             Right (cache', resolved, collected, sources) -> do
-              assign importCache cache'
+              writeImportCache cache'
               bodiesRef <- use importBodies
               chainsRef <- use importChains
               originsRef <- use mirrorOrigins
@@ -737,10 +861,22 @@ diagnoseDocument settings _uri txt = do
               docs <- use documents
               previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
               let prevNames = maybe [] snapPrefixNames previousSnap
+                  prevKeys = maybe [] snapPrefixValueKeys previousSnap
                   prevValues = maybe [] snapPrefixValues previousSnap
                   prevCtxs = maybe [] snapPrefixContexts previousSnap
-                  (typeErrs, prefixNames, prefixValues, prefixCtxs) =
-                      typecheckCollected collected resolved prevNames prevValues prevCtxs
+                  erased = fillImportHoles collected resolved
+                  (typeErrs, prefixNames, prefixValueKeys, prefixValues, prefixCtxs) =
+                      typecheckCollected
+                          collected
+                          resolved
+                          txt
+                          parsed
+                          prevNames
+                          prevKeys
+                          prevValues
+                          prevCtxs
+                          fileIdentifier
+                          cache
               liftIO $ IORef.modifyIORef' docs $ \m ->
                   let previous = Map.lookup _uri m
                       snap = DocSnap
@@ -749,8 +885,10 @@ diagnoseDocument settings _uri txt = do
                           , snapText = txt
                           , snapLastGood = Just txt
                           , snapPrefixNames = prefixNames
+                          , snapPrefixValueKeys = prefixValueKeys
                           , snapPrefixValues = prefixValues
                           , snapPrefixContexts = prefixCtxs
+                          , snapResolved = Just erased
                           }
                   in Map.insert _uri snap m
               return ([], collected, typeErrs, txt)
@@ -913,15 +1051,36 @@ executeAnnotateLet settings request = do
       line_ = fromIntegral (args ^. position . line)
       col_ = fromIntegral (args ^. position . character)
 
-  expr <- loadFile settings uri_
-  (welltyped, _) <- case typecheck settings expr of
-    Left _ -> throwE (Warning, "Failed to annotate let binding; not well-typed.")
-    Right e -> return e
+  txt <- readUri uri_
+  expr <-
+      loadForTyping settings uri_
+          >>= maybe (throwE (Warning, "Failed to annotate let binding; not well-typed.")) return
+
+  docs <- use documents
+  snaps <- liftIO (IORef.readIORef docs)
+  let (prevNames, prevKeys, prevValues, prevCtxs) =
+          case Map.lookup uri_ snaps of
+              Just snap ->
+                  ( snapPrefixNames snap
+                  , snapPrefixValueKeys snap
+                  , snapPrefixValues snap
+                  , snapPrefixContexts snap
+                  )
+              Nothing ->
+                  ([], [], [], [])
+      ctx =
+          resumeTypingContext
+              prevNames
+              prevKeys
+              (bindingValueKeys txt expr)
+              prevValues
+              prevCtxs
+              expr
 
   ServerConfig{..} <- liftLSP LSP.getConfig
 
   (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, annotExpr)
-    <- case annotateLet (line_, col_) welltyped of
+    <- case annotateLetExpr (line_, col_) ctx expr of
       Right x -> return x
       Left msg -> throwE (Warning, Text.pack msg)
 
@@ -961,14 +1120,14 @@ executeFreezeAllImports settings request = do
 
   let importRanges = getAllImportsWithHashPositions expr
   edits_ <- forM importRanges $ \(import_, Range (x1, y1) (x2, y2)) -> do
-    cache <- use importCache
+    cache <- readImportCache
     let importExpr = Embed (stripHash import_)
 
     hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
     (cache', hash) <- case hashResult of
       Right (c, t) -> return (c, t)
       Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
-    assign importCache cache'
+    writeImportCache cache'
 
     let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
     let _newText = " " <> hash
@@ -1016,14 +1175,14 @@ executeFreezeImport settings request = do
       Nothing -> throwE (Error, "Failed to re-parse import!")
 
   fileIdentifier <- fileIdentifierFromUri uri_
-  cache <- use importCache
+  cache <- readImportCache
   let importExpr = Embed (stripHash import_)
 
   hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
   (cache', hash) <- case hashResult of
     Right (c, t) -> return (c, t)
     Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
-  assign importCache cache'
+  writeImportCache cache'
 
   let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
   let _newText = " " <> hash
@@ -1065,13 +1224,13 @@ executeCheckImportHash settings request = do
         throwE (Info, "This import has no hash to check.")
 
   fileIdentifier <- fileIdentifierFromUri uri_
-  cache <- use importCache
+  cache <- readImportCache
   hashResult <-
     liftIO $ computeSemanticHash settings fileIdentifier (Embed (stripHash import_)) cache
   (cache', actual) <- case hashResult of
     Right found -> return found
     Left _ -> throwE (Error, "Could not check import hash; failed to evaluate import.")
-  assign importCache cache'
+  writeImportCache cache'
 
   let expected = "sha256:" <> Text.pack (show digest)
   if actual == expected
@@ -1179,7 +1338,7 @@ completeBeforeDot settings uri_ txt (line_, col_) = do
                     return []
                 Just (start, targetText) -> do
                     fileIdentifier <- fileIdentifierFromUri uri_
-                    cache <- use importCache
+                    cache <- readImportCache
                     let bindersExpr = binderExprFromText (Text.take start beforeDot)
                     loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
                     case loadedBinders of
@@ -1195,7 +1354,7 @@ completeBeforeDot settings uri_ txt (line_, col_) = do
                                         Left _ ->
                                             return []
                                         Right (cache'', targetExpr') -> do
-                                            assign importCache cache''
+                                            writeImportCache cache''
                                             return $
                                                 completeProjections
                                                     (buildCompletionContext bindersExpr')
@@ -1228,7 +1387,7 @@ completionHandler settings =
             let bindersExpr = binderExprFromText completionLeadup
 
             fileIdentifier <- fileIdentifierFromUri uri_
-            cache <- use importCache
+            cache <- readImportCache
             loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
 
             (cache', bindersExpr') <-
@@ -1246,7 +1405,7 @@ completionHandler settings =
                 loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
                 case loaded' of
                   Right (cache'', targetExpr') -> do
-                    assign importCache cache''
+                    writeImportCache cache''
                     return (completeProjections completionContext targetExpr')
                   Left _ -> return []
 
@@ -1255,13 +1414,13 @@ completionHandler settings =
             let bindersExpr = binderExprFromText completionLeadup
 
             fileIdentifier <- fileIdentifierFromUri uri_
-            cache <- use importCache  -- todo save cache afterwards
+            cache <- readImportCache  -- todo save cache afterwards
             loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
 
             bindersExpr' <-
               case loadedBinders of
                 Right (cache', binders) -> do
-                  assign importCache cache'
+                  writeImportCache cache'
                   return binders
                 Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
 
@@ -1496,7 +1655,7 @@ executeShowOriginal settings request respond = do
                     Bounded.Complete text -> text
                     Bounded.Truncated text -> text
     negative <- use negativeImports
-    cache <- use importCache
+    cache <- readImportCache
     fileIdentifier <- fileIdentifierFromUri uri_
     fetched <- liftIO $
         loadCollected settings fileIdentifier (Core.Embed imp) cache negative
@@ -1605,8 +1764,10 @@ textDocumentChangeHandler settings =
                             , snapText = txt
                             , snapLastGood = snapLastGood =<< previous
                             , snapPrefixNames = maybe [] snapPrefixNames previous
+                            , snapPrefixValueKeys = maybe [] snapPrefixValueKeys previous
                             , snapPrefixValues = maybe [] snapPrefixValues previous
                             , snapPrefixContexts = maybe [] snapPrefixContexts previous
+                            , snapResolved = Nothing
                             }
                     in (Map.insert _uri snap m, generation)
                 envRef <- use lspEnv

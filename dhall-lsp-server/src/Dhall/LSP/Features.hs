@@ -1547,7 +1547,7 @@ watchedFilesHandler =
     LSP.notificationHandler SMethod_WorkspaceDidChangeWatchedFiles \_ -> do
         -- A file outside the editor changed. Drop cached imports so the next
         -- analysis reads them again.
-        assign importCache emptyCache
+        modifyImportCache (const emptyCache)
 
 -- | `dhall/importSource`: contents of a decoded cached import, or a directory
 --   listing of the on-disk mirror.  Editors that do not opt into

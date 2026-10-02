@@ -21,6 +21,7 @@ module Dhall.TypeCheck (
     , extendAlreadyChecked
     , bindAlreadyChecked
     , typeWithContext
+    , typeWithContextBounded
     , normalizeWithContext
     , normalizeWithContextBounded
     , checkContext
@@ -249,6 +250,18 @@ typeWithContext
     -> Either (TypeError s X) (Expr s X)
 typeWithContext (TypingContext ctx) expression =
     fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer absurd ctx expression)
+
+-- | Like 'typeWithContext', but stop quoting once the estimated rendered size
+--   reaches @budget@ bytes.  The 'Bool' is 'True' when quoting was cut short.
+typeWithContextBounded
+    :: Int
+    -> TypingContext s
+    -> Expr s X
+    -> Either (TypeError s X) (Expr s X, Bool)
+typeWithContextBounded budget (TypingContext ctx) expression = do
+    typeVal <- infer absurd ctx expression
+    let (quoted, cut) = Eval.quoteBounded budget Eval.EmptyNames typeVal
+    return (Dhall.Core.renote quoted, cut)
 
 -- | Normalize an expression using values already stored in the context.
 --

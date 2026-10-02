@@ -128,7 +128,7 @@ module Dhall.Import (
     , ImportRef (..)
     , ImportHole (..)
     , SemanticCacheMode(..)
-    , Chained
+    , Chained (..)
     , chainedImport
     , chainedFromLocalHere
     , chainedChangeMode
@@ -156,6 +156,9 @@ module Dhall.Import (
     , chainImport
     , dependencyToFile
     , ImportSemantics
+    , importSemantics
+    , importNormalizationStatus
+    , NormalizationStatus (..)
     , HTTPHeader
     , Cycle(..)
     , ReferentiallyOpaque(..)
@@ -2059,35 +2062,42 @@ In any expression `p ? q` the opportunistic caching rule says:
                     | exprHasHole inlined ->
                         return (inlined, shared, copied)
                     | otherwise -> do
-                    Status { _reportWarning, _normalizer } <- State.get
+                    Status { _reportWarning, _normalizer, _verifySemanticHash } <- State.get
 
-                    -- Delayed unhashed Code inlining can leave `inlined`
-                    -- unnormalized. The semantic cache product is still the
-                    -- encoded alpha-beta-normal form.
-                    normalized <-
-                        liftIO
-                            ( Exception.evaluate
-                                (Core.normalizeWith
-                                    _normalizer
-                                    (Core.denote (unsafeCoerce inlined :: Expr Src Void)))
-                            )
+                    -- Opportunistic cache fill normalizes the fallback.  The
+                    -- language server disables hash verification and must not
+                    -- pay that cost here; the @dhall@ executable still fills
+                    -- the cache when verifying hashes.
+                    if not _verifySemanticHash
+                        then return (inlined, shared, copied)
+                        else do
+                            -- Delayed unhashed Code inlining can leave `inlined`
+                            -- unnormalized. The semantic cache product is still the
+                            -- encoded alpha-beta-normal form.
+                            normalized <-
+                                liftIO
+                                    ( Exception.evaluate
+                                        (Core.normalizeWith
+                                            _normalizer
+                                            (Core.denote (unsafeCoerce inlined :: Expr Src Void)))
+                                    )
 
-                    let bytes = encodeExpression (Core.alphaNormalize normalized)
+                            let bytes = encodeExpression (Core.alphaNormalize normalized)
 
-                    let actualHash = Dhall.Crypto.sha256Hash bytes
+                            let actualHash = Dhall.Crypto.sha256Hash bytes
 
-                    if actualHash == hash
-                        then do
-                            zoom cacheWarning
-                                (writeToSemanticCache _reportWarning hash bytes)
+                            if actualHash == hash
+                                then do
+                                    zoom cacheWarning
+                                        (writeToSemanticCache _reportWarning hash bytes)
 
-                            -- A matching fill is the same product a semantic
-                            -- cache hit would return: the alpha-beta-normal
-                            -- form, not the delayed TypecheckedOnly fallback.
-                            let normalForm = asInlined (Core.renote normalized)
-                            return (normalForm, retwin normalForm, False)
-                        else
-                            return (inlined, shared, copied)
+                                    -- A matching fill is the same product a semantic
+                                    -- cache hit would return: the alpha-beta-normal
+                                    -- form, not the delayed TypecheckedOnly fallback.
+                                    let normalForm = asInlined (Core.renote normalized)
+                                    return (normalForm, retwin normalForm, False)
+                                else
+                                    return (inlined, shared, copied)
                 Nothing ->
                     return (inlined, shared, copied)
         where
