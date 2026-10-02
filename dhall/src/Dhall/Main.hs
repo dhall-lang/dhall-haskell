@@ -271,12 +271,12 @@ parseOptions =
     parseMaxOutputSize =
         parseByteLimit
             "max-output-size"
-            "Truncate a rendered normal form after this many bytes"
+            "Truncate rendered normal forms and types after this many bytes"
 
     parseMaxAllocation =
         parseByteLimit
             "max-allocation"
-            "Stop evaluation after it allocates this many bytes"
+            "Stop evaluation after it allocates this many bytes (also applies to dhall repl)"
 
     parseMaxEvaluationTime =
         optional
@@ -285,7 +285,7 @@ parseOptions =
                 (   Options.Applicative.long "max-evaluation-time"
                 <>  Options.Applicative.metavar "SECONDS"
                 <>  Options.Applicative.help
-                        "Stop type-checking, normalization, and rendering after this many seconds"
+                        "Stop type-checking, normalization, and rendering after this many seconds (also applies to dhall repl)"
                 )
             )
 
@@ -1063,16 +1063,55 @@ command (Options {..}) = do
             (resolvedExpression, _, _) <-
                 resolve file semanticCacheMode expression
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
-
             if quiet
                 then return ()
-                else render System.IO.stdout characterSet inferredType
+                else case maxOutputSize of
+                    Nothing -> do
+                        inferredType <-
+                            Dhall.Core.throws
+                                (Dhall.TypeCheck.typeOf resolvedExpression)
+                        render System.IO.stdout characterSet inferredType
+                    Just nbytes -> do
+                        (inferredType, quoteCut) <-
+                            Dhall.Core.throws
+                                (Dhall.TypeCheck.typeWithContextBounded
+                                    nbytes
+                                    Dhall.TypeCheck.emptyTypingContext
+                                    resolvedExpression)
+                        let doc =
+                                Dhall.Pretty.prettyCharacterSet
+                                    characterSet
+                                    inferredType
+                        case prettyBounded nbytes doc of
+                            Truncated text -> do
+                                Data.Text.IO.hPutStrLn System.IO.stdout text
+                                System.IO.hPutStrLn System.IO.stderr
+                                    "Error: type exceeded --max-output-size"
+                                Exit.exitFailure
+                            Complete _
+                                | quoteCut -> do
+                                    render
+                                        System.IO.stdout
+                                        characterSet
+                                        inferredType
+                                    System.IO.hPutStrLn System.IO.stderr
+                                        "Error: type exceeded --max-output-size"
+                                    Exit.exitFailure
+                                | otherwise ->
+                                    render
+                                        System.IO.stdout
+                                        characterSet
+                                        inferredType
 
         Repl ->
             Dhall.Repl.repl
                 (chooseCharsetOrUseDefault Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
                 explain
+                Dhall.Repl.ReplLimits
+                    { replMaxOutputSize = maxOutputSize
+                    , replMaxAllocation = maxAllocation
+                    , replMaxEvaluationTime = maxEvaluationTime
+                    }
 
         Diff {..} -> do
             expression1 <- Dhall.inputExpr expr1
@@ -1106,13 +1145,41 @@ command (Options {..}) = do
         Hash {..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _, _) <-
+            (resolvedExpression, sharedExpression, status) <-
                 resolve file UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
-
-            let normalizedExpression =
-                    Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+            normalizedExpression <-
+                case Dhall.Import.singleCodeImport expression of
+                    Just import_ -> do
+                        maybeSemantics <-
+                            Dhall.Import.lookupCachedImportSemantics status import_
+                        case maybeSemantics of
+                            Just importSemantics ->
+                                Dhall.Import.alphaBetaNormalForIntegrityHash
+                                    Nothing
+                                    importSemantics
+                            Nothing -> do
+                                _ <-
+                                    Dhall.Core.throws
+                                        (Dhall.TypeCheck.typeOf resolvedExpression)
+                                return
+                                    ( Dhall.Core.alphaNormalize
+                                        ( Dhall.Import.normalizeLoaded
+                                            status
+                                            sharedExpression
+                                        )
+                                    )
+                    Nothing -> do
+                        _ <-
+                            Dhall.Core.throws
+                                (Dhall.TypeCheck.typeOf resolvedExpression)
+                        return
+                            ( Dhall.Core.alphaNormalize
+                                ( Dhall.Import.normalizeLoaded
+                                    status
+                                    sharedExpression
+                                )
+                            )
 
             if cache
                 then Dhall.Import.writeExpressionToSemanticCache normalizedExpression

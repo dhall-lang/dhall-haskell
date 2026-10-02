@@ -211,7 +211,8 @@ runAsReplWorker = do
                 Just "0" -> pure False
                 other -> fail ("bad DHALL_REPL_TEST_EXPLAIN: " <> show other)
             mapM_ prepareHandle [stdin, stdout, stderr]
-            withUtf8ConsoleCodePage (Dhall.Repl.repl charset explain)
+            withUtf8ConsoleCodePage
+                (Dhall.Repl.repl charset explain Dhall.Repl.noReplLimits)
             pure True
         _ ->
             pure False

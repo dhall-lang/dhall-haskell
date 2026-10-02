@@ -156,6 +156,10 @@ module Dhall.Import (
     , chainImport
     , dependencyToFile
     , ImportSemantics
+    , NormalizationStatus (..)
+    , alphaBetaNormalForIntegrityHash
+    , singleCodeImport
+    , lookupCachedImportSemantics
     , HTTPHeader
     , Cycle(..)
     , ReferentiallyOpaque(..)
@@ -2439,6 +2443,36 @@ hashExpression = Dhall.Crypto.sha256Hash . encodeExpression
 hashExpressionToCode :: Expr Void Void -> Text
 hashExpressionToCode expr =
     "sha256:" <> Text.pack (show (hashExpression expr))
+
+-- | When an expression is only a code import, return that import.
+singleCodeImport :: Expr Src Import -> Maybe Import
+singleCodeImport (Note _ child) = singleCodeImport child
+singleCodeImport (Embed import_) = Just import_
+singleCodeImport _ = Nothing
+
+-- | Look up cached semantics for an import resolved from the status root.
+lookupCachedImportSemantics :: Status -> Import -> IO (Maybe ImportSemantics)
+lookupCachedImportSemantics status@Status { _stack, _cache } import_ = do
+    let parent = NonEmpty.head _stack
+    (chained, _) <- State.runStateT (chainImport parent import_) status
+    pure (Dhall.Map.lookup chained _cache)
+
+-- | Produce the αβ-normal form required for 'hashExpression'.
+--
+--   Uses 'importNormalizationStatus' to skip redundant normalization when the
+--   import loader already beta-normalized the semantics.
+alphaBetaNormalForIntegrityHash
+    :: Maybe (Core.ReifiedNormalizer Void)
+    -> ImportSemantics
+    -> IO (Expr Void Void)
+alphaBetaNormalForIntegrityHash _ ImportSemantics
+    { importSemantics
+    , importNormalizationStatus = AlreadyNormalized
+    } =
+        pure (Core.alphaNormalize importSemantics)
+alphaBetaNormalForIntegrityHash customNormalizer ImportSemantics { importSemantics } =
+    Exception.evaluate
+        (Core.alphaNormalize (Core.normalizeWith customNormalizer importSemantics))
 
 -- | A call to `assertNoImports` failed because there was at least one import
 data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)
