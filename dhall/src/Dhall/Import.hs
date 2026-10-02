@@ -128,7 +128,7 @@ module Dhall.Import (
     , ImportRef (..)
     , ImportHole (..)
     , SemanticCacheMode(..)
-    , Chained
+    , Chained (..)
     , chainedImport
     , chainedFromLocalHere
     , chainedChangeMode
@@ -157,6 +157,8 @@ module Dhall.Import (
     , dependencyToFile
     , ImportSemantics
     , NormalizationStatus (..)
+    , importSemantics
+    , importNormalizationStatus
     , alphaBetaNormalForIntegrityHash
     , singleCodeImport
     , lookupCachedImportSemantics
