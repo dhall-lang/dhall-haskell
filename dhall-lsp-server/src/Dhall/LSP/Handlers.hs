@@ -165,7 +165,7 @@ loadFile :: EvaluateSettings -> Uri -> HandlerM (Expr Src Void)
 loadFile settings uri_ = do
   txt <- readUri uri_
   fileIdentifier <- fileIdentifierFromUri uri_
-  cache <- use importCache
+  cache <- readImportCache
 
   expr <- case parse txt of
     Right e -> return e
@@ -180,7 +180,7 @@ loadFile settings uri_ = do
       return (cache', expr', errs)
   -- Update cache. Don't cache current expression because it might not have been
   -- written to disk yet (readUri reads from the VFS).
-  assign importCache cache'
+  writeImportCache cache'
   if null errs
     then return (unsafeCoerce expr')
     else throwE (Error, "Failed to resolve imports." <> importFailureText errs)
@@ -219,14 +219,14 @@ tryLoadForTyping
     :: EvaluateSettings -> Uri -> Expr Src Import -> HandlerM (Maybe (Expr Src Void))
 tryLoadForTyping settings uri_ parsed = do
     fileIdentifier <- fileIdentifierFromUri uri_
-    cache <- use importCache
+    cache <- readImportCache
     negative <- use negativeImports
     loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
     case loaded of
         Left _ ->
             return Nothing
         Right (cache', expr, collected, _) -> do
-            assign importCache cache'
+            writeImportCache cache'
             return (Just (fillImportHoles collected expr))
 
 -- helper
@@ -692,8 +692,8 @@ diagnoseDocument :: EvaluateSettings -> Uri -> Text -> HandlerM ()
 diagnoseDocument settings _uri txt = do
   fileIdentifier <- fileIdentifierFromUri _uri
   -- make sure we don't keep a stale version around
-  modifying importCache (invalidate fileIdentifier)
-  cache <- use importCache
+  modifyImportCache (invalidate fileIdentifier)
+  cache <- readImportCache
 
   errorsRef <- use errors
   previousErrors <- liftIO $ Map.lookup _uri <$> IORef.readIORef errorsRef
@@ -718,7 +718,7 @@ diagnoseDocument settings _uri txt = do
             Left err ->
               return ([], [], [err], txt)
             Right (cache', resolved, collected, sources) -> do
-              assign importCache cache'
+              writeImportCache cache'
               bodiesRef <- use importBodies
               chainsRef <- use importChains
               originsRef <- use mirrorOrigins
@@ -961,14 +961,14 @@ executeFreezeAllImports settings request = do
 
   let importRanges = getAllImportsWithHashPositions expr
   edits_ <- forM importRanges $ \(import_, Range (x1, y1) (x2, y2)) -> do
-    cache <- use importCache
+    cache <- readImportCache
     let importExpr = Embed (stripHash import_)
 
     hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
     (cache', hash) <- case hashResult of
       Right (c, t) -> return (c, t)
       Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
-    assign importCache cache'
+    writeImportCache cache'
 
     let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
     let _newText = " " <> hash
@@ -1016,14 +1016,14 @@ executeFreezeImport settings request = do
       Nothing -> throwE (Error, "Failed to re-parse import!")
 
   fileIdentifier <- fileIdentifierFromUri uri_
-  cache <- use importCache
+  cache <- readImportCache
   let importExpr = Embed (stripHash import_)
 
   hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
   (cache', hash) <- case hashResult of
     Right (c, t) -> return (c, t)
     Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
-  assign importCache cache'
+  writeImportCache cache'
 
   let _range = LSP.Types.Range (Position (fromIntegral x1) (fromIntegral y1)) (Position (fromIntegral x2) (fromIntegral y2))
   let _newText = " " <> hash
@@ -1065,13 +1065,13 @@ executeCheckImportHash settings request = do
         throwE (Info, "This import has no hash to check.")
 
   fileIdentifier <- fileIdentifierFromUri uri_
-  cache <- use importCache
+  cache <- readImportCache
   hashResult <-
     liftIO $ computeSemanticHash settings fileIdentifier (Embed (stripHash import_)) cache
   (cache', actual) <- case hashResult of
     Right found -> return found
     Left _ -> throwE (Error, "Could not check import hash; failed to evaluate import.")
-  assign importCache cache'
+  writeImportCache cache'
 
   let expected = "sha256:" <> Text.pack (show digest)
   if actual == expected
@@ -1179,7 +1179,7 @@ completeBeforeDot settings uri_ txt (line_, col_) = do
                     return []
                 Just (start, targetText) -> do
                     fileIdentifier <- fileIdentifierFromUri uri_
-                    cache <- use importCache
+                    cache <- readImportCache
                     let bindersExpr = binderExprFromText (Text.take start beforeDot)
                     loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
                     case loadedBinders of
@@ -1195,7 +1195,7 @@ completeBeforeDot settings uri_ txt (line_, col_) = do
                                         Left _ ->
                                             return []
                                         Right (cache'', targetExpr') -> do
-                                            assign importCache cache''
+                                            writeImportCache cache''
                                             return $
                                                 completeProjections
                                                     (buildCompletionContext bindersExpr')
@@ -1228,7 +1228,7 @@ completionHandler settings =
             let bindersExpr = binderExprFromText completionLeadup
 
             fileIdentifier <- fileIdentifierFromUri uri_
-            cache <- use importCache
+            cache <- readImportCache
             loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
 
             (cache', bindersExpr') <-
@@ -1246,7 +1246,7 @@ completionHandler settings =
                 loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
                 case loaded' of
                   Right (cache'', targetExpr') -> do
-                    assign importCache cache''
+                    writeImportCache cache''
                     return (completeProjections completionContext targetExpr')
                   Left _ -> return []
 
@@ -1255,13 +1255,13 @@ completionHandler settings =
             let bindersExpr = binderExprFromText completionLeadup
 
             fileIdentifier <- fileIdentifierFromUri uri_
-            cache <- use importCache  -- todo save cache afterwards
+            cache <- readImportCache  -- todo save cache afterwards
             loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
 
             bindersExpr' <-
               case loadedBinders of
                 Right (cache', binders) -> do
-                  assign importCache cache'
+                  writeImportCache cache'
                   return binders
                 Left _ -> throwE (Log, "Could not complete projection; failed to load binders expression.")
 
@@ -1496,7 +1496,7 @@ executeShowOriginal settings request respond = do
                     Bounded.Complete text -> text
                     Bounded.Truncated text -> text
     negative <- use negativeImports
-    cache <- use importCache
+    cache <- readImportCache
     fileIdentifier <- fileIdentifierFromUri uri_
     fetched <- liftIO $
         loadCollected settings fileIdentifier (Core.Embed imp) cache negative
