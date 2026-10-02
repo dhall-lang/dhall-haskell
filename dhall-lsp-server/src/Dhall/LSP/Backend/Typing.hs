@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Typing (annotateLet, exprAt, letTypes, normalizedAt, srcAt, typeAt) where
+module Dhall.LSP.Backend.Typing (annotateLet, exprAt, normalizedAt, scopedNormalize, splitMultiLetSrc, srcAt, typeAt, typeAtExpr) where
 
 import Dhall.Core
     ( Binding (..)
@@ -15,13 +15,17 @@ import Dhall.TypeCheck
     , extendBinder
     , extendLet
     , normalizeWithContext
+    , normalizeWithContextBounded
     , typeWithContext
     )
 
 import Control.Applicative ((<|>))
 import Control.Lens        (toListOf)
 import Data.Bifunctor      (first)
+import Data.Text           (Text)
 import Data.Void           (Void)
+
+import qualified Data.Text as Text
 
 import Dhall.LSP.Backend.Dhall       (WellTyped, fromWellTyped)
 import Dhall.LSP.Backend.Diagnostics (Position, Range (..), rangeFromDhall)
@@ -37,8 +41,14 @@ import Dhall.LSP.Backend.Parsing
 --   input expression is well-typed. Also returns the Src descriptor containing
 --   that subexpression if possible.
 typeAt :: Position -> WellTyped -> Either String (Maybe Src, Expr Src Void)
-typeAt pos expr = do
-  expr' <- case splitMultiLetSrc (fromWellTyped expr) of
+typeAt pos expr = typeAtExpr pos (fromWellTyped expr)
+
+-- | Like 'typeAt', but the file need not type-check as a whole.  A
+--   'let' whose value is ill-typed is skipped so later bindings can
+--   still answer.
+typeAtExpr :: Position -> Expr Src Void -> Either String (Maybe Src, Expr Src Void)
+typeAtExpr pos expr = do
+  expr' <- case splitMultiLetSrc expr of
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
@@ -67,7 +77,7 @@ typeAt' pos ctx (Note src (Let (Binding { variable = x, annotation = ann, value 
   | coversAnn pos ann = typeAt' pos ctx (annotationExpr ann)
   | covers pos a = typeAt' pos ctx a
   | pos `inside` src = do
-      ctx' <- extendLet x a ctx
+      let ctx' = extendLetLenient x a ann ctx
       typeAt' pos ctx' e
 
 typeAt' pos ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A} b))
@@ -208,6 +218,54 @@ normalizedAt' pos ctx expr = do
         ((src, e) : _) ->
             normalizedAt' pos ctx (Note src e)
 
+-- | Normalize a selected expression with the values of the let bindings
+--   that enclose it: selecting @a + 1@ in @let a = 2 in a + 1@ gives @3@.
+--
+--   The selection is identified by the smallest subexpression containing
+--   @pos@ whose source text equals @selected@ up to surrounding whitespace.
+--   The 'Int' is the output byte budget for quoting; the returned 'Bool' is
+--   'True' when the normal form was cut short.  'Nothing' when the selection
+--   matches no subexpression or an enclosing binding does not typecheck.
+scopedNormalize
+    :: Int -> Position -> Text -> Expr Src Void -> Maybe (Expr Src Void, Bool)
+scopedNormalize budget pos selected expr = do
+    expr' <- splitMultiLetSrc expr
+    (ctx, found) <- scopedAt pos selected emptyTypingContext expr'
+    return (normalizeWithContextBounded budget ctx found)
+
+scopedAt
+    :: Position
+    -> Text
+    -> TypingContext Src
+    -> Expr Src Void
+    -> Maybe (TypingContext Src, Expr Src Void)
+scopedAt _ selected ctx expr@(Note src _)
+    | Text.strip (srcText src) == Text.strip selected =
+        Just (ctx, expr)
+scopedAt pos selected ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
+    | coversAnn pos ann = scopedAt pos selected ctx (annotationExpr ann)
+    | covers pos a = scopedAt pos selected ctx a
+    | pos `inside` src =
+        scopedAt pos selected (extendLetLenient x a ann ctx) e
+scopedAt pos selected ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A } b))
+    | covers pos _A = scopedAt pos selected ctx _A
+    | pos `inside` src = do
+        ctx' <- either (const Nothing) Just (extendBinder x _A ctx)
+        scopedAt pos selected ctx' b
+scopedAt pos selected ctx (Note src (Pi _ x _A _B))
+    | covers pos _A = scopedAt pos selected ctx _A
+    | pos `inside` src = do
+        ctx' <- either (const Nothing) Just (extendBinder x _A ctx)
+        scopedAt pos selected ctx' _B
+scopedAt pos selected ctx (Note _ expr) =
+    scopedAt pos selected ctx expr
+scopedAt pos selected ctx expr =
+    case [ Note src e | (Note src e) <- toListOf subExpressions expr, pos `inside` src ] of
+        (child : _) ->
+            scopedAt pos selected ctx child
+        [] ->
+            Nothing
+
 -- Make sure all lets in a multilet are annotated with their source information.
 --
 -- A resolved import is still wrapped in the source span of the import path.
@@ -240,45 +298,24 @@ coversAnn :: Position -> Maybe (Maybe Src, Expr Src a) -> Bool
 coversAnn _ Nothing = False
 coversAnn pos (Just (_, expr)) = covers pos expr
 
--- | Binder span and type of each unannotated @let@.
---
---   The walk uses the same context as 'typeAt''.  A file that does not
---   typecheck never reaches this function.
-letTypes :: WellTyped -> [(Src, Expr Src Void)]
-letTypes expr =
-    case splitMultiLetSrc (fromWellTyped expr) of
-        Just expr' ->
-            either (const []) id (letTypes' emptyTypingContext expr')
-        Nothing ->
-            []
-
-letTypes' :: TypingContext Src -> Expr Src Void -> Either (TypeError Src Void) [(Src, Expr Src Void)]
-letTypes' ctx (Note _ (Let (Binding { variable = x, annotation = ann, bindingSrc1 = src, value = a }) e)) = do
-    let here = case (ann, src) of
-            (Nothing, Just binder) ->
-                case typeWithContext ctx a of
-                    Right ty -> [(binder, ty)]
-                    Left _ -> []
-            _ ->
-                []
-    nested <- letTypes' ctx a
-    ctx' <- extendLet x a ctx
-    rest <- letTypes' ctx' e
-    return (here ++ nested ++ rest)
-letTypes' ctx (Note _ (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A } b)) = do
-    nested <- letTypes' ctx _A
-    ctx' <- extendBinder x _A ctx
-    rest <- letTypes' ctx' b
-    return (nested ++ rest)
-letTypes' ctx (Note _ (Pi _ x _A _B)) = do
-    nested <- letTypes' ctx _A
-    ctx' <- extendBinder x _A ctx
-    rest <- letTypes' ctx' _B
-    return (nested ++ rest)
-letTypes' ctx (Note _ expr) =
-    letTypes' ctx expr
-letTypes' ctx expr =
-    fmap concat (mapM (letTypes' ctx) (toListOf subExpressions expr))
+-- Bind a let even when the value is ill-typed: use the annotation if
+-- present, otherwise skip the binding so later names still resolve.
+extendLetLenient
+    :: Text
+    -> Expr Src Void
+    -> Maybe (Maybe Src, Expr Src Void)
+    -> TypingContext Src
+    -> TypingContext Src
+extendLetLenient x a ann ctx =
+    case extendLet x a ctx of
+        Right ctx' -> ctx'
+        Left _ ->
+            case ann of
+                Just (_, typ) ->
+                    case extendBinder x typ ctx of
+                        Right ctx' -> ctx'
+                        Left _ -> ctx
+                Nothing -> ctx
 
 annotationExpr :: Maybe (Maybe Src, Expr Src Void) -> Expr Src Void
 annotationExpr (Just (_, expr)) = expr

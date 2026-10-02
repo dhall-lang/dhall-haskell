@@ -12,7 +12,9 @@ module Dhall.LSP.Backend.Diagnostics
   , positionToOffset
   , Range(..)
   , rangeFromDhall
+  , stripTrailingComments
   , subtractPosition
+  , clipUserText
   )
 where
 
@@ -69,7 +71,7 @@ diagnose (ErrorImportSourced (SourcedException src e)) = [Diagnosis { .. }]
   where
     doctor = "Dhall.Import"
     range = Just (rangeFromDhall src)
-    diagnosis = tshow e
+    diagnosis = clipUserText (tshow e)
 
 diagnose (ErrorTypecheck (TypeError _ expr message)) = [Diagnosis { .. }]
   where
@@ -111,10 +113,19 @@ diagnose (ErrorParse e) =
 
 -- | The two sides of a failed assertion, each cut at 2KiB.
 --
---   The short type error is only a diff.  These are the expressions that
---   differed.  A cut side tells the user to run Explain error.
+--   For a value mismatch the short type error is only a diff.  For a
+--   type mismatch the short message names neither type.  A cut side
+--   tells the user to run Explain error.
 assertionSides :: Pretty a => TypeMessage Src a -> Text
 assertionSides (TypeCheck.AssertionFailed left right) =
+    clippedPair left right
+assertionSides (TypeCheck.EquivalenceTypeMismatch _ tyL _ tyR) =
+    clippedPair tyL tyR
+assertionSides _ =
+    ""
+
+clippedPair :: Pretty a => Expr Src a -> Expr Src a -> Text
+clippedPair left right =
     let (leftText, leftCut) = clipSide left
         (rightText, rightCut) = clipSide right
         clipped =
@@ -122,8 +133,6 @@ assertionSides (TypeCheck.AssertionFailed left right) =
                 then "\n\nRun Explain error to see the rest."
                 else ""
     in "\n\n" <> leftText <> "\n\n" <> rightText <> clipped
-assertionSides _ =
-    ""
 
 clipSide :: Pretty a => Expr Src a -> (Text, Bool)
 clipSide expr =
@@ -133,13 +142,12 @@ clipSide expr =
         Bounded.Truncated text ->
             (text, True)
   where
-    sideBytes = 2 * 1024
+    sideBytes = userTextLimit
 
 -- | Give a detailed explanation for the given error; if no detailed explanation
 --   is available return @Nothing@ instead.
 --
---   The text is capped at the given number of characters, which is what
---   `window/showDocument` puts in a `dhall-explain:` URI.
+--   The text is capped at the given number of characters.
 explain :: Int -> DhallError -> Maybe Diagnosis
 explain limit (ErrorTypecheck e@(TypeError _ expr _)) = Just
   (Diagnosis { .. })
@@ -190,13 +198,102 @@ subtractPosition (x1, y1) (x2, y2) | x1 == x2 = (0, y2 - y1)
                                    | otherwise = (x2 - x1, y2)
 
 -- | Convert a source range from Dhalls @Src@ format. The returned range is
---   "tight", that is, does not contain any trailing whitespace.
+--   "tight", that is, does not contain any trailing whitespace or comments.
 rangeFromDhall :: Src -> Range
 rangeFromDhall (Src left _right text) = Range (x1,y1) (x2,y2)
   where
     (x1,y1) = positionFromMegaparsec left
-    (dx2,dy2) = offsetToPosition text . Text.length $ Text.stripEnd text
+    (dx2,dy2) = offsetToPosition text . Text.length $ stripTrailingComments text
     (x2,y2) = addRelativePosition (x1,y1) (dx2,dy2)
+
+-- | Drop trailing whitespace and comments.  The parser's source spans can
+--   include the whitespace and comments that follow an expression, and
+--   neither should be part of a diagnostic underline.
+stripTrailingComments :: Text -> Text
+stripTrailingComments = loop . Text.stripEnd
+  where
+    loop text =
+        case blockCommentSuffix text of
+            Just before ->
+                loop (Text.stripEnd before)
+            Nothing ->
+                case lineCommentSuffix text of
+                    Just before ->
+                        loop (Text.stripEnd before)
+                    Nothing ->
+                        text
+
+-- | If the text ends with a block comment, return the text before that
+--   comment.  Block comments nest, so the matching opener is found by
+--   counting closers and openers from the end.
+blockCommentSuffix :: Text -> Maybe Text
+blockCommentSuffix text
+    | not ("-}" `Text.isSuffixOf` text) =
+        Nothing
+    | otherwise =
+        scan (Text.length text - 3) (1 :: Int)
+  where
+    scan i depth
+        | i < 0 =
+            Nothing
+        | Text.take 2 (Text.drop i text) == "-}" =
+            scan (i - 1) (depth + 1)
+        | Text.take 2 (Text.drop i text) == "{-" =
+            if depth == 1
+                then Just (Text.take i text)
+                else scan (i - 1) (depth - 1)
+        | otherwise =
+            scan (i - 1) depth
+
+-- | If the last line ends in a @--@ comment, return the text before it.
+lineCommentSuffix :: Text -> Maybe Text
+lineCommentSuffix text = do
+    column <- findLineComment lastLine
+    Just (Text.take (Text.length text - Text.length lastLine + column) text)
+  where
+    lastLine = Text.takeWhileEnd (/= '\n') text
+
+-- | The start of the first @--@ outside a string literal, if any.  String
+--   tracking is single-line only: @${}@ interpolation is not entered, so a
+--   @--@ inside an interpolated string literal can still look like a
+--   comment.
+findLineComment :: Text -> Maybe Int
+findLineComment = scan 0 Normal
+  where
+    scan n state rest =
+        case Text.uncons rest of
+            Nothing ->
+                Nothing
+            Just (c, cs) ->
+                case state of
+                    Normal
+                        | c == '-', Just ('-', _) <- Text.uncons cs ->
+                            Just n
+                        | c == '"' ->
+                            scan (n + 1) InString cs
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            scan (n + 2) InMulti cs'
+                        | otherwise ->
+                            scan (n + 1) Normal cs
+                    InString
+                        | c == '\\', Just (_, cs') <- Text.uncons cs ->
+                            scan (n + 2) InString cs'
+                        | c == '"' ->
+                            scan (n + 1) Normal cs
+                        | otherwise ->
+                            scan (n + 1) InString cs
+                    InMulti
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            case Text.uncons cs' of
+                                -- ''' is an escaped '' inside a multi-line literal
+                                Just ('\'', cs'') ->
+                                    scan (n + 3) InMulti cs''
+                                _ ->
+                                    scan (n + 2) Normal cs'
+                        | otherwise ->
+                            scan (n + 1) InMulti cs
+
+data LineScan = Normal | InString | InMulti
 
 -- Convert a (line,column) position into the corresponding character offset
 -- and back, such that the two are inverses of eachother.
@@ -219,3 +316,15 @@ embedsWithRanges =
   where go :: Expr Src a -> Writer [(Src, a)] ()
         go (Note src (Embed a)) = tell [(src, a)]
         go expr = mapM_ go (toListOf subExpressions expr)
+
+-- | Cap for diagnostic and hover text shown in the editor.
+userTextLimit :: Int
+userTextLimit = 2048
+
+-- | Keep at most 'userTextLimit' characters, with an ellipsis when cut.
+clipUserText :: Text -> Text
+clipUserText text
+    | Text.length text <= userTextLimit =
+        text
+    | otherwise =
+        Text.take userTextLimit text <> "…"

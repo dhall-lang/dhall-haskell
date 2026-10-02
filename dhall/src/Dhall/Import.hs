@@ -145,6 +145,7 @@ module Dhall.Import (
     , Depends(..)
     , graph
     , remote
+    , remoteBytes
     , toHeaders
     , substitutions
     , resolvedSubstitutions

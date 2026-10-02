@@ -9,20 +9,20 @@ import Control.Monad.Trans.Except       (ExceptT)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson
     ( FromJSON (..)
+    , Value (..)
     , withObject
     , (.!=)
-    , (.:)
     , (.:?)
     )
 import Data.Default                     (Default (def))
 import Data.Dynamic                     (Dynamic)
 import Data.IORef                       (IORef)
-import Data.Map.Strict                  (Map, empty)
+import Data.Map.Strict                  (Map)
 import Data.Text                        (Text)
 import Data.Time.Clock                  (UTCTime)
 import Data.Void                        (Void)
 import Dhall.Core                       (Expr)
-import Dhall.Import                    (Chained)
+import Dhall.Import                    (Chained, CollectedImportError)
 import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
 import Dhall.Parser                     (Src)
 import Dhall.Pretty                     (ChooseCharacterSet(..))
@@ -54,7 +54,7 @@ defaultOutputBytes = 16 * 1024
 data ServerConfig = ServerConfig
   { chosenCharacterSet :: ChooseCharacterSet
   , maxOutputSize :: Int
-  } deriving Show
+  } deriving (Eq, Show)
 
 instance Default ServerConfig where
   def = ServerConfig
@@ -63,17 +63,26 @@ instance Default ServerConfig where
     }
 
 -- We need to derive the FromJSON instance manually in order to provide defaults
--- for absent fields.
+-- for absent fields.  JSON null and a missing "vscode-dhall-lsp-server"
+-- section both mean "no settings": use the defaults.
 instance FromJSON ServerConfig where
-  parseJSON = withObject "settings" $ \v -> do
-    s <- v .: "vscode-dhall-lsp-server"
-    flip (withObject "vscode-dhall-lsp-server") s $ \o -> ServerConfig
-      <$> o .:? "character-set" .!= AutoInferCharSet
-      <*> o .:? "maxOutputSize" .!= defaultOutputBytes
+  parseJSON Null = pure def
+  parseJSON value = flip (withObject "settings") value $ \v -> do
+    mSection <- v .:? "vscode-dhall-lsp-server"
+    case mSection of
+      Nothing -> pure def
+      Just Null -> pure def
+      Just section ->
+        flip (withObject "vscode-dhall-lsp-server") section $ \o -> ServerConfig
+          <$> o .:? "character-set" .!= AutoInferCharSet
+          <*> o .:? "maxOutputSize" .!= defaultOutputBytes
 
 data ServerState = ServerState
   { _importCache :: Cache  -- ^ The dhall import cache
-  , _errors :: Map J.Uri DhallError  -- ^ Map from dhall files to their errors
+  , _errors :: IORef (Map J.Uri DocErrors)
+  -- ^ Map from dhall files to their errors.  An IORef because didChange
+  --   analysis runs in a background thread on a snapshot of the state; the
+  --   fresh diagnostics must still reach the handlers.
   , _httpManager :: Maybe Dynamic
   -- ^ The http manager used by dhall's import infrastructure
   , _documents :: IORef (Map J.Uri DocSnap)
@@ -88,6 +97,17 @@ data ServerState = ServerState
   -- ^ Chained import for each key in 'importBodies'.
   , _mirrorOrigins :: IORef (Map FilePath Chained)
   -- ^ Cache file or 'dhall-import:' name of a mirror, and the import it came from.
+  }
+
+-- | The errors of one open document, split by analysis stage.  Parse errors
+--   describe the current text.  Import and type errors were computed from
+--   'errSemanticText', the most recent text that parsed, so a later parse
+--   error can keep the ones whose source slice is unchanged.
+data DocErrors = DocErrors
+  { errParse :: [DhallError]
+  , errImports :: [CollectedImportError]
+  , errTypes :: [DhallError]
+  , errSemanticText :: Text
   }
 
 -- | The last analysis of one open document.
@@ -110,15 +130,15 @@ data DocSnap = DocSnap
 makeLenses ''ServerState
 
 initialState
-    :: IORef (Map J.Uri DocSnap)
+    :: IORef (Map J.Uri DocErrors)
+    -> IORef (Map J.Uri DocSnap)
     -> IORef (Maybe (LanguageContextEnv ServerConfig))
     -> IORef (Map Text (UTCTime, SomeException))
     -> IORef (Map Text Text)
     -> IORef (Map Text Chained)
     -> IORef (Map FilePath Chained)
     -> ServerState
-initialState _documents _lspEnv _negativeImports _importBodies _importChains _mirrorOrigins = ServerState {..}
+initialState _errors _documents _lspEnv _negativeImports _importBodies _importChains _mirrorOrigins = ServerState {..}
   where
     _importCache = emptyCache
-    _errors = empty
     _httpManager = Nothing

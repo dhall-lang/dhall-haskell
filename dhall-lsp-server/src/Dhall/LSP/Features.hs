@@ -22,9 +22,9 @@ import Control.Lens (assign, toListOf, universeOf, use, (^.))
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.IORef (modifyIORef', readIORef)
-import Data.List (foldl', sortOn)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
-import Data.Ord (Down (..))
+import Data.List (foldl', maximumBy, sortOn)
+import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe, maybeToList)
+import Data.Ord (Down (..), comparing)
 #if !MIN_VERSION_lsp_types(2,2,0)
 import Data.Row (Label (..), Rec, type (.==), (.==))
 #endif
@@ -46,6 +46,7 @@ import Dhall.Core
     , FieldSelection (..)
     , FunctionBinding (..)
     , freeIn
+    , wrapInLets
     , File (..)
     , FilePrefix (..)
     , Import (..)
@@ -74,12 +75,9 @@ import Dhall.LSP.Backend.Dhall
     , emptyCache
     , identifierChained
     , importTextKey
-    , load
     , parse
-    , typecheck
-    , WellTyped
     )
-import Dhall.LSP.Backend.Typing (letTypes)
+import Dhall.LSP.Backend.Typing (splitMultiLetSrc)
 import Dhall.LSP.Backend.Diagnostics
     ( Diagnosis (Diagnosis)
     , Range (..)
@@ -87,7 +85,15 @@ import Dhall.LSP.Backend.Diagnostics
     , positionToOffset
     , rangeFromDhall
     )
-import Dhall.LSP.Backend.Linting (unusedBindingEdits)
+import Dhall.LSP.Backend.Linting
+    ( deleteLetRange
+    , exprEnd
+    , exprStart
+    , letChains
+    , letKeyword
+    , unusedBindingEdits
+    )
+import qualified Dhall.LSP.Backend.Linting as Linting
 import qualified Dhall.Bounded as Bounded
 import qualified Dhall.Pretty as Pretty
 import Dhall.LSP.Handlers
@@ -121,7 +127,6 @@ featureHandlers evalSettings = mconcat
     , symbolsHandler
     , foldingHandler
     , semanticTokensHandler
-    , inlayHandler evalSettings
     , codeActionHandler evalSettings
     , watchedFilesHandler
     , importSourceHandler
@@ -610,8 +615,20 @@ foldingHandler =
                     respond (Right (InL (foldRanges expr)))
 
 foldRanges :: Expr Src a -> [J.FoldingRange]
-foldRanges expr = dedupe (go expr)
+foldRanges expr = dedupe (go expr')
   where
+    expr' = fromMaybe expr (splitMultiLetSrc expr)
+
+    go (Core.Note src (Core.Let bind@Binding { annotation = ann, value = bound } rest)) =
+        maybeToList (letValueFold src bind)
+            ++ maybe [] (go . snd) ann
+            ++ go bound
+            ++ go rest
+    go (Core.Let bind@Binding { annotation = ann, value = bound } rest) =
+        maybeToList (letValueFoldFromBinding bind)
+            ++ maybe [] (go . snd) ann
+            ++ go bound
+            ++ go rest
     go (Core.Note src e) =
         [rangeOf src | spansLines src, foldable (Core.shallowDenote e), not (tighter e)]
             ++ childNodes e
@@ -636,7 +653,42 @@ foldRanges expr = dedupe (go expr)
         let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
         in firstLine /= lastLine
 
-    foldable (Core.Let _ _) = True
+    -- Fold `let a = <value>` without swallowing the next `let` or the `in`.
+    letValueFold letSrc Binding { annotation = ann, value = bound } =
+        foldFromTo (srcToRange letSrc) (mapMaybe noteSrc (maybeToList (fmap snd ann) ++ [bound]))
+
+    -- A later binding in a multi-let chain may have no `Note` around the
+    -- `let` itself.  Recover the keyword from the whitespace after `let`.
+    letValueFoldFromBinding Binding { bindingSrc0, annotation = ann, value = bound } = do
+        Src { srcStart = keywordEnd } <- bindingSrc0
+        let keywordRange = srcToRange (Src keywordEnd keywordEnd "")
+            J.Range (J.Position line_ col) _ = keywordRange
+            letStart = J.Range (J.Position line_ (max 0 (col - 3))) (J.Position line_ col)
+        foldFromTo letStart (mapMaybe noteSrc (maybeToList (fmap snd ann) ++ [bound]))
+
+    foldFromTo (J.Range (J.Position firstLine firstCol) _) srcs =
+        case srcs of
+            [] ->
+                Nothing
+            _ ->
+                let J.Range _ (J.Position lastLine lastCol) =
+                        maximumBy (comparing endPos) (map srcToRange srcs)
+                in if firstLine == lastLine
+                    then Nothing
+                    else Just J.FoldingRange
+                        { _startLine = firstLine
+                        , _startCharacter = Just firstCol
+                        , _endLine = lastLine
+                        , _endCharacter = Just lastCol
+                        , _kind = Just J.FoldingRangeKind_Region
+                        , _collapsedText = Just "..."
+                        }
+
+    endPos (J.Range _ pos) = pos
+
+    noteSrc (Core.Note src _) = Just src
+    noteSrc _ = Nothing
+
     foldable (Core.Lam _ _ _) = True
     foldable (Core.Pi _ _ _ _) = True
     foldable (Core.Record _) = True
@@ -649,12 +701,12 @@ foldRanges expr = dedupe (go expr)
     foldable _ = False
 
     rangeOf src =
-        let J.Range (J.Position firstLine _) (J.Position lastLine _) = srcToRange src
+        let J.Range (J.Position firstLine firstCol) (J.Position lastLine lastCol) = srcToRange src
         in J.FoldingRange
             { _startLine = firstLine
-            , _startCharacter = Nothing
+            , _startCharacter = Just firstCol
             , _endLine = lastLine
-            , _endCharacter = Nothing
+            , _endCharacter = Just lastCol
             , _kind = Just J.FoldingRangeKind_Region
             , _collapsedText = Nothing
             }
@@ -693,175 +745,273 @@ encodeNameTokens = snd . foldl step ((0, 0), [])
                 ]
         in ((tokenLine, tokenCol), acc ++ piece)
 
-inlayHandler :: EvaluateSettings -> Handlers HandlerM
-inlayHandler evalSettings =
-    LSP.requestHandler SMethod_TextDocumentInlayHint \request respond ->
-        handleErrorWithDefault respond (InR J.Null) do
-            let docUri = request ^. params . textDocument . uri
-                wanted = request ^. params . range
-            txt <- readUri docUri
-            fileIdentifier <- fileIdentifierFromUri docUri
-            cache <- use importCache
-            case parse txt of
-                Left _ ->
-                    respond (Right (InR J.Null))
-                Right parsed -> do
-                    loaded <- liftIO $ load evalSettings fileIdentifier parsed cache
-                    case loaded of
-                        Left _ ->
-                            respond (Right (InR J.Null))
-                        Right (cache', expr) -> do
-                            assign importCache cache'
-                            case typecheck evalSettings expr of
-                                Left _ ->
-                                    respond (Right (InR J.Null))
-                                Right (wt, _) -> do
-                                    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-                                    let hints =
-                                            filter (hintIn wanted) (inlayHints maxOutputSize wt)
-                                    respond (Right (InL hints))
-
-hintIn :: J.Range -> J.InlayHint -> Bool
-hintIn (J.Range startPos endPos) hint =
-    let pos = hint ^. position
-    in startPos <= pos && pos <= endPos
-
-inlayHints :: Int -> WellTyped -> [J.InlayHint]
-inlayHints limit wt =
-    [ hint limit src ty | (src, ty) <- letTypes wt ]
-  where
-    hint limit_ src ty =
-        let J.Range _ endPos = srcToRange src
-            doc = Pretty.prettyCharacterSet Pretty.Unicode ty
-            rendered = case Bounded.prettyBounded limit_ doc of
-                Bounded.Complete typeText -> typeText
-                Bounded.Truncated typeText -> typeText
-            short =
-                if Text.length rendered <= 60
-                    then rendered
-                    else Text.take 59 rendered <> "…"
-            typeEdits = case Bounded.prettyBounded limit_ doc of
-                Bounded.Complete typeText ->
-                    Just
-                        [ J.TextEdit
-                            { _range = J.Range endPos endPos
-                            , _newText = " : " <> typeText
-                            }
-                        ]
-                Bounded.Truncated _ ->
-                    Nothing
-        in J.InlayHint
-            { _position = endPos
-            , _label = InL (": " <> short)
-            , _kind = Just J.InlayHintKind_Type
-            , _textEdits = typeEdits
-            , _tooltip = Just (InL rendered)
-            , _paddingLeft = Just True
-            , _paddingRight = Nothing
-            , _data_ = Nothing
-            }
-
--- | Reorder and drop unused import bindings in the top-level @let@ chain.
+-- | Hoist every bare-import @let@ (including nested scopes) to a top-level
+--   multi-let, sorted by name, and drop unused import lets.
 --
---   'Nothing' means there is nothing to do, or an import binding does not
---   occupy whole lines.  'Left' is a refusal the editor can show.
+--   A bare import is @let x = ./path@ or @let x = https://…@, not
+--   @let x = 1 + ./path@.  'Nothing' means there is no such binding.  'Left'
+--   is a refusal the editor can show.
 organizeImports :: Text -> Maybe (Either Text Text)
 organizeImports txt = do
     expr <- either (const Nothing) Just (parse txt)
-    let blocks = topLetBlocks expr
-    guard (any blockImport blocks)
-    let names = map blockName blocks
-    if length names /= length (Set.fromList names)
-        then return (Left "A top-level name is bound twice.")
-        else if any indexed (universeOf Core.subExpressions expr)
-            then return (Left "This file uses a variable of the form name@n.")
-            else if not (all wholeLines blocks)
-                then Nothing
-                else do
-                    let ls = Text.lines txt
-                        firstLine = blockStart (head blocks)
-                        lastLine = blockEnd (last blocks)
-                        prefix = take firstLine ls
-                        suffix = drop lastLine ls
-                        imports =
-                            sortOn blockName
-                                [ block | block <- blocks, blockImport block, blockUsed block ]
-                        others = [ block | block <- blocks, not (blockImport block) ]
-                        chunk block =
-                            take (blockEnd block - blockStart block) (drop (blockStart block) ls)
-                        rebuilt =
-                            Text.unlines
-                                (prefix ++ concatMap chunk (imports ++ others) ++ suffix)
-                    guard (rebuilt /= txt)
-                    return (Right rebuilt)
-  where
-    indexed (Core.Var (V _ n)) = n > 0
-    indexed _ = False
+    let importSites = importLetSites txt expr
+        expected =
+            length
+                [ binding
+                | (bindings, _) <- letChains expr
+                , binding <- bindings
+                , importExpr (Core.value binding)
+                ]
+    guard (not (null importSites))
+    let used = [ site | site <- importSites, importUsed site ]
+        unused = [ site | site <- importSites, not (importUsed site) ]
+        usedNames = map importName used
+    if length importSites /= expected
+        then return (Left "Could not locate an import binding in the source.")
+        else if length usedNames /= length (Set.fromList usedNames)
+            then return (Left "An import name is bound twice.")
+            else if importWouldBeCaptured expr used
+                then return (Left "Hoisting this import would be captured by another binder of the same name.")
+                else if alreadyOrganized txt expr used unused
+                    then return (Left "Imports are already organized.")
+                    else do
+                        let remaining =
+                                applyTextEdits txt (map (\r -> (r, "")) (importDeleteRanges txt expr))
+                            hoisted =
+                                Text.unlines
+                                    (map importText (sortOn importName used))
+                            (trivia, rest) = splitLeadingTrivia remaining
+                            header = finalizeHeader (dropBannerLines trivia)
+                            rebuilt =
+                                if null used
+                                    then header <> rest
+                                    else header <> importsComment <> "\n" <> hoisted <> "in\n" <> rest
+                        if rebuilt == txt
+                            then return (Left "Imports are already organized.")
+                            else return (Right rebuilt)
 
-    -- An import binding occupies whole lines when `let` is at column 0 and
-    -- the following expression starts on a later line.  The body after `in`
-    -- is often indented, so its column is not 0.
-    wholeLines block =
-        not (blockImport block)
-            || ( blockCol block == 0
-                    && (blockNextCol block == 0 || blockStart block < blockEnd block)
-               )
-
-data LetBlock = LetBlock
-    { blockName :: Text
-    , blockImport :: Bool
-    , blockUsed :: Bool
-    , blockStart :: Int
-    , blockEnd :: Int
-    , blockCol :: Int
-    , blockNextCol :: Int
+data ImportLet = ImportLet
+    { importName :: Text
+    , importUsed :: Bool
+    , importText :: Text
+    , importBinding :: Binding Src Import
     }
 
-topLetBlocks :: Expr Src Import -> [LetBlock]
-topLetBlocks expr =
-    case collect expr of
-        ([], _) ->
-            []
-        (bindings, bodyPos) ->
-            let nextStarts = map (\(bindingStart, _, _) -> bindingStart) (tail bindings) ++ [bodyPos]
-            in zipWith block bindings nextStarts
+importLetSites :: Text -> Expr Src Import -> [ImportLet]
+importLetSites txt expr =
+    [ ImportLet
+        { importName = Core.variable binding
+        , importUsed = freeIn (V (Core.variable binding) 0) rest
+        , importText = Text.strip (Linting.slice txt startPos endPos)
+        , importBinding = binding
+        }
+    | (bindings, body) <- letChains expr
+    , (index, binding) <- zip [0 ..] bindings
+    , importExpr (Core.value binding)
+    , Just startPos <- [letKeyword binding]
+    , Just endPos <- [exprEnd (Core.value binding)]
+    , let rest = wrapInLets (drop (index + 1) bindings) body
+    ]
+
+importDeleteRanges :: Text -> Expr Src Import -> [Range]
+importDeleteRanges txt expr =
+    concatMap chainDeletes (letChains expr)
   where
-    -- The first @let@ is wrapped in a note that starts at @let@.  Later
-    -- bindings in the same chain are not, so their start is three characters
-    -- before the whitespace that follows @let@.
-    collect (Core.Note src (Core.Let binding body)) =
-        let (rest, endPos) = collect body
-            Range startPos _ = rangeFromDhall src
-        in ((startPos, binding, body) : rest, endPos)
-    collect (Core.Let binding body) =
-        let (rest, endPos) = collect body
-        in ( maybe rest (\bindingStart -> (bindingStart, binding, body) : rest) (keywordPos binding)
-           , endPos
-           )
-    collect (Core.Note src _) =
-        ([], rangeStart src)
-    collect _ =
-        ([], (0, 0))
+    chainDeletes (bindings, body)
+        | not (null bindings) && all (importExpr . Core.value) bindings =
+            maybeToList $ do
+                startPos <- letKeyword (head bindings)
+                endPos <- exprStart body
+                return (Range startPos endPos)
+        | otherwise =
+            [ deleteRange
+            | (index, binding) <- zip [0 ..] bindings
+            , importExpr (Core.value binding)
+            , Just deleteRange <- [deleteLetRange txt bindings body index]
+            ]
 
-    keywordPos binding = do
-        Src { srcStart = keywordEnd } <- Core.bindingSrc0 binding
-        let Range (line_, col) _ = rangeFromDhall (Src keywordEnd keywordEnd "")
-        return (line_, max 0 (col - 3))
+importsComment :: Text
+importsComment = "-- Imports."
 
-    rangeStart src =
-        let Range startPos _ = rangeFromDhall src in startPos
+-- | Dhall whitespace, comments, and shebangs before the first real token.
+splitLeadingTrivia :: Text -> (Text, Text)
+splitLeadingTrivia txt =
+    let (shebangs, afterShebang) = takeShebangs txt
+        (whitespace, rest) = takeWhitespace afterShebang
+    in (shebangs <> whitespace, rest)
 
-    block ((fromLine, startCol), binding, body) (toLine, endCol) =
-        let name_ = Core.variable binding
-        in LetBlock
-            { blockName = name_
-            , blockImport = importExpr (Core.value binding)
-            , blockUsed = freeIn (V name_ 0) body
-            , blockStart = fromLine
-            , blockEnd = toLine
-            , blockCol = startCol
-            , blockNextCol = endCol
-            }
+takeShebangs :: Text -> (Text, Text)
+takeShebangs txt
+    | "#!" `Text.isPrefixOf` txt =
+        let (shebangLine, after) = takeLine txt
+            (more, rest) = takeShebangs after
+        in (shebangLine <> more, rest)
+    | otherwise =
+        ("", txt)
+
+takeWhitespace :: Text -> (Text, Text)
+takeWhitespace txt
+    | Text.null txt =
+        ("", txt)
+    | Just (c, _) <- Text.uncons txt
+    , c == ' ' || c == '\t' || c == '\n' =
+        let (run, after) = Text.span isHorizontalOrNewline txt
+            (more, rest) = takeWhitespace after
+        in (run <> more, rest)
+    | "\r\n" `Text.isPrefixOf` txt =
+        let (more, rest) = takeWhitespace (Text.drop 2 txt)
+        in ("\r\n" <> more, rest)
+    | "--" `Text.isPrefixOf` txt =
+        let (comment, after) = takeLine txt
+            (more, rest) = takeWhitespace after
+        in (comment <> more, rest)
+    | "{-" `Text.isPrefixOf` txt =
+        case takeBlockComment txt of
+            Nothing ->
+                ("", txt)
+            Just (comment, after) ->
+                let (more, rest) = takeWhitespace after
+                in (comment <> more, rest)
+    | otherwise =
+        ("", txt)
+
+takeLine :: Text -> (Text, Text)
+takeLine txt =
+    let (prefix, after) = Text.break (\c -> c == '\n' || c == '\r') txt
+    in case Text.uncons after of
+        Just ('\n', rest) ->
+            (prefix <> "\n", rest)
+        Just ('\r', rest)
+            | "\n" `Text.isPrefixOf` rest ->
+                (prefix <> "\r\n", Text.drop 1 rest)
+            | otherwise ->
+                (prefix <> "\r", rest)
+        _ ->
+            (prefix, after)
+
+takeBlockComment :: Text -> Maybe (Text, Text)
+takeBlockComment txt
+    | "{-" `Text.isPrefixOf` txt =
+        go (1 :: Int) (Text.drop 2 txt) "{-"
+    | otherwise =
+        Nothing
+  where
+    go n rest acc
+        | n == 0 =
+            Just (acc, rest)
+        | Text.null rest =
+            Nothing
+        | "{-" `Text.isPrefixOf` rest =
+            go (n + 1) (Text.drop 2 rest) (acc <> "{-")
+        | "-}" `Text.isPrefixOf` rest =
+            go (n - 1) (Text.drop 2 rest) (acc <> "-}")
+        | otherwise =
+            case Text.uncons rest of
+                Nothing ->
+                    Nothing
+                Just (c, rest') ->
+                    go n rest' (acc <> Text.singleton c)
+
+isHorizontalOrNewline :: Char -> Bool
+isHorizontalOrNewline c = c == ' ' || c == '\t' || c == '\n'
+
+isDhallSpace :: Char -> Bool
+isDhallSpace c = c == ' ' || c == '\t' || c == '\n' || c == '\r'
+
+isImportsBannerLine :: Text -> Bool
+isImportsBannerLine comment = Text.strip comment == importsComment
+
+dropBannerLines :: Text -> Text
+dropBannerLines =
+    Text.unlines . filter (not . isImportsBannerLine) . Text.lines
+
+finalizeHeader :: Text -> Text
+finalizeHeader trivia =
+    let trimmed = Text.dropWhileEnd isDhallSpace trivia
+    in if Text.null trimmed then "" else trimmed <> "\n"
+
+hasImportsComment :: Text -> Bool
+hasImportsComment txt =
+    any isImportsBannerLine (Text.lines trivia)
+  where
+    (trivia, _) = splitLeadingTrivia txt
+
+alreadyOrganized :: Text -> Expr Src Import -> [ImportLet] -> [ImportLet] -> Bool
+alreadyOrganized txt expr used unused =
+    null unused
+        && map Core.variable lead == map importName (sortOn importName used)
+        && not (hasBareImportLet rest)
+        && (null used || hasImportsComment txt)
+  where
+    (lead, rest) = leadingImportLets expr
+
+leadingImportLets :: Expr Src Import -> ([Binding Src Import], Expr Src Import)
+leadingImportLets expr =
+    case stripNotes expr of
+        Core.Let binding body ->
+            let Core.MultiLet bindings rest = Core.multiLet binding body
+                (lead, trailing) = span (importExpr . Core.value) (toList bindings)
+            in (lead, wrapInLets trailing rest)
+        _ ->
+            ([], expr)
+  where
+    stripNotes (Core.Note _ inner) = stripNotes inner
+    stripNotes inner = inner
+
+hasBareImportLet :: Expr Src Import -> Bool
+hasBareImportLet expr =
+    or
+        [ importExpr (Core.value binding)
+        | Core.Let binding _ <- universeOf Core.subExpressions expr
+        ]
+
+importWouldBeCaptured :: Expr Src Import -> [ImportLet] -> Bool
+importWouldBeCaptured expr used =
+    any captured used
+  where
+    fragments = scopeFragments expr
+    remaining = remainingBinders expr
+    captured site =
+        case letName (importBinding site) of
+            Nothing ->
+                False
+            Just nameSrc ->
+                let uses =
+                        [ src
+                        | ScopeFragment src (NameUse (NameDecl boundSrc usedName _)) <- fragments
+                        , boundSrc == nameSrc
+                        , usedName == importName site
+                        ]
+                    sameName (boundName, _) = boundName == importName site
+                in any (\binderSrc -> any (rangeContains binderSrc) uses)
+                    (map snd (filter sameName remaining))
+
+-- Binders that remain after import lets are removed, with a source span that
+-- covers their scope.  A remaining binder of the same name that encloses a
+-- use of a hoisted import would capture it.
+remainingBinders :: Expr Src Import -> [(Text, Src)]
+remainingBinders = go
+  where
+    go (Core.Note src (Core.Lam _ FunctionBinding { functionBindingVariable = n, functionBindingAnnotation = ann } body)) =
+        (n, src) : go ann ++ go body
+    go (Core.Note src (Core.Pi _ n ann body)) =
+        (n, src) : go ann ++ go body
+    go (Core.Note src (Core.Let binding rest)) =
+        let inner =
+                maybe [] (go . snd) (Core.annotation binding)
+                    ++ go (Core.value binding)
+                    ++ go rest
+        in if importExpr (Core.value binding)
+            then inner
+            else (Core.variable binding, src) : inner
+    go (Core.Let binding rest) =
+        maybe [] (go . snd) (Core.annotation binding)
+            ++ go (Core.value binding)
+            ++ go rest
+    go (Core.Note _ inner) =
+        go inner
+    go inner =
+        concatMap go (toListOf Core.subExpressions inner)
 
 importExpr :: Expr Src Import -> Bool
 importExpr (Core.Note _ expr) = importExpr expr
@@ -874,7 +1024,7 @@ importExpr _ = False
 inlineLet :: Text -> J.Range -> Maybe (Either Text Text)
 inlineLet txt selected = do
     expr <- either (const Nothing) Just (parse txt)
-    (letSrc, binding, body) <- findLetBinder (selectionStart selected) expr
+    (letSrc, binding, body) <- findLetBinder selected expr
     let name_ = Core.variable binding
         letValue = Core.value binding
     binderSrc <- letName binding
@@ -909,10 +1059,6 @@ inlineLet txt selected = do
                                     : [ (rangeFromDhall src, wrapped) | src <- uses ]
                         return (Right (applyTextEdits txt replacements))
 
-selectionStart :: J.Range -> (Int, Int)
-selectionStart (J.Range (J.Position lineNo col) _) =
-    (fromIntegral lineNo, fromIntegral col)
-
 -- | The binder name, between the whitespace after @let@ and the whitespace
 --   before @:@ or @=@.
 letName :: Binding Src Import -> Maybe Src
@@ -926,27 +1072,30 @@ letName
 letName _ =
     Nothing
 
+-- | Find the let binder whose name span meets the selection.  Any overlap
+--   counts, so a cursor on either edge of the name or a selection touching
+--   the name qualifies.
 findLetBinder
-    :: (Int, Int)
+    :: J.Range
     -> Expr Src Import
     -> Maybe (Src, Binding Src Import, Expr Src Import)
-findLetBinder pos (Core.Note src (Core.Let binding body))
+findLetBinder selected (Core.Note src (Core.Let binding body))
     | Just nameSrc <- letName binding
-    , srcContains nameSrc pos =
+    , rangesMeet selected (rangeFromDhall nameSrc) =
         Just (src, binding, body)
     | otherwise =
-        findLetBinder pos (Core.value binding) <|> findLetBinder pos body
-findLetBinder pos (Core.Note _ expr) =
-    findLetBinder pos expr
-findLetBinder pos (Core.Let binding body)
+        findLetBinder selected (Core.value binding) <|> findLetBinder selected body
+findLetBinder selected (Core.Note _ expr) =
+    findLetBinder selected expr
+findLetBinder selected (Core.Let binding body)
     | Just nameSrc <- letName binding
-    , srcContains nameSrc pos =
+    , rangesMeet selected (rangeFromDhall nameSrc) =
         Just (fromMaybe nameSrc (Core.bindingSrc0 binding), binding, body)
     | otherwise =
-        findLetBinder pos (Core.value binding) <|> findLetBinder pos body
-findLetBinder pos expr =
+        findLetBinder selected (Core.value binding) <|> findLetBinder selected body
+findLetBinder selected expr =
     listToMaybe
-        (mapMaybe (findLetBinder pos) (toListOf Core.subExpressions expr))
+        (mapMaybe (findLetBinder selected) (toListOf Core.subExpressions expr))
 
 containsAssert :: Expr s a -> Bool
 containsAssert (Core.Assert _) = True
@@ -1061,8 +1210,38 @@ codeActionHandler _evalSettings =
         handleErrorWithDefault respond (InR J.Null) do
             let docUri = request ^. params . textDocument . uri
                 selected = request ^. params . range
+                onlyKinds = request ^. params . context . only
             txt <- readUri docUri
             ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
+            errorsRef <- use errors
+            errorMap <- liftIO (readIORef errorsRef)
+            -- Explain is offered for the client-reported diagnostic under the
+            -- cursor (which covers an empty selection on a squiggle), or when
+            -- the selection meets a known error range.
+            let contextExplainable =
+                    [ diag
+                    | diag@J.Diagnostic { _source = Just source_ } <-
+                        request ^. params . context . diagnostics
+                    , source_ == "Dhall.TypeCheck" || source_ == "Dhall.Parser"
+                    ]
+                explained =
+                    [ diagnosis_
+                    | Just docErrors <- [Map.lookup docUri errorMap]
+                    , err <- errParse docErrors ++ errTypes docErrors
+                    , Just diagnosis_ <- [explain maxOutputSize err]
+                    ]
+                explainTarget =
+                    case contextExplainable of
+                        (diag : _) ->
+                            Just (diag ^. range)
+                        [] ->
+                            case [ rangeToJSON range_
+                                 | Diagnosis _ (Just range_) _ <- explained
+                                 , rangesMeet selected range_
+                                 ] of
+                                (jrange : _) -> Just jrange
+                                [] -> Nothing
+                explainOffered = isJust explainTarget || not (null explained)
             let normalize = J.CodeAction
                     { _title = "Normalize selection"
                     , _kind = Just J.CodeActionKind_RefactorRewrite
@@ -1088,14 +1267,19 @@ codeActionHandler _evalSettings =
                 explainAction = J.CodeAction
                     { _title = "Explain error"
                     , _kind = Just J.CodeActionKind_QuickFix
-                    , _diagnostics = Nothing
+                    , _diagnostics =
+                        if null contextExplainable
+                            then Nothing
+                            else Just contextExplainable
                     , _isPreferred = Nothing
                     , _disabled = Nothing
                     , _edit = Nothing
                     , _command = Just J.Command
                         { _title = "Explain error"
                         , _command = "dhall.server.explain"
-                        , _arguments = Just [Aeson.toJSON docUri]
+                        , _arguments = Just
+                            (Aeson.toJSON docUri
+                                : [ Aeson.toJSON jrange | Just jrange <- [explainTarget] ])
                         }
                     , _data_ = Nothing
                     }
@@ -1116,13 +1300,7 @@ codeActionHandler _evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-            errorMap <- use errors
-            let explainOffered = case Map.lookup docUri errorMap >>= explain maxOutputSize of
-                    Just (Diagnosis _ (Just errRange) _) ->
-                        rangesMeet selected errRange
-                    _ ->
-                        False
-                removeOffered = listToMaybe
+            let removeOffered = listToMaybe
                     [ deleteRange
                     | Right expr <- [parse txt]
                     , (matchRange, deleteRange) <- unusedBindingEdits txt expr
@@ -1148,12 +1326,24 @@ codeActionHandler _evalSettings =
                     , _command = Nothing
                     , _data_ = Nothing
                     }
-                onImport = importUnderCursor txt selected
-                onHashedImport = hashedImportUnderCursor txt selected
+                -- The commands locate the import from the position they are
+                -- given, so pass the start of the overlapped import, not the
+                -- raw selection start: a selection beginning in whitespace
+                -- before the import must still work.
+                metImports = importsMeeting txt selected
+                onImport = not (null metImports)
+                onHashedImport = any (hashedImport . snd) metImports
                 J.Range startPos _ = selected
+                importPosition = case metImports of
+                    [] ->
+                        startPos
+                    _ ->
+                        case fst (last metImports) of
+                            Range (line_, col) _ ->
+                                J.Position (fromIntegral line_) (fromIntegral col)
                 importPos = J.TextDocumentPositionParams
                     { _textDocument = J.TextDocumentIdentifier docUri
-                    , _position = startPos
+                    , _position = importPosition
                     }
                 freezeAction =
                     importCommand "Freeze import" "dhall.server.freezeImport" importPos
@@ -1175,33 +1365,27 @@ codeActionHandler _evalSettings =
                         }
                     , _data_ = Nothing
                     }
-                onLets = case parse txt of
-                    Right expr ->
-                        case topLetBlocks expr of
-                            [] ->
-                                False
-                            blocks ->
-                                rangesMeet
-                                    selected
-                                    (Range (blockStart (head blocks), 0) (blockEnd (last blocks), 0))
-                    Left _ ->
-                        False
-                organizeAction
-                    | not onLets = []
-                    | otherwise = case organizeImports txt of
-                        Just (Left reason_) ->
-                            [disabledOrganize reason_]
-                        Just (Right replacement) ->
-                            [readyOrganize docUri txt replacement]
-                        Nothing ->
-                            []
-                inlineAction = case inlineLet txt selected of
-                    Just (Left reason_) ->
-                        [disabledInline reason_]
-                    Just (Right replacement) ->
-                        [readyInline docUri txt replacement]
-                    Nothing ->
-                        []
+                -- Organize imports is offered for any cursor or selection in
+                -- a file that has a bare-import let, including nested lets.
+                -- The selection does not have to overlap the binding.
+                organizeAction =
+                    [ case outcome of
+                        Left reason_ ->
+                            disabledOrganize kind_ reason_
+                        Right replacement ->
+                            readyOrganize kind_ docUri txt replacement
+                    | outcome <- maybeToList (organizeImports txt)
+                    , kind_ <- actionKinds onlyKinds J.CodeActionKind_SourceOrganizeImports
+                    ]
+                inlineAction =
+                    [ case outcome of
+                        Left reason_ ->
+                            disabledInline kind_ reason_
+                        Right replacement ->
+                            readyInline kind_ docUri txt replacement
+                    | outcome <- maybeToList (inlineLet txt selected)
+                    , kind_ <- actionKinds onlyKinds J.CodeActionKind_RefactorInline
+                    ]
                 offered =
                     [InR normalize | selectionParses]
                         ++ [InR extract | selectionParses]
@@ -1226,10 +1410,39 @@ disabledReason :: Text -> Rec ("reason" .== Text)
 disabledReason reason_ = Label @"reason" .== reason_
 #endif
 
-disabledInline :: Text -> J.CodeAction
-disabledInline reason_ = J.CodeAction
+-- | Lightbulb / Quick Fix asks for `quickfix` (or sends no filter).
+--   Source Action and Shift+Alt+O ask for `source.organizeImports`.
+--   Refactor > Inline asks for `refactor.inline`.  When the client does
+--   not filter, both the canonical kind and Quick Fix are returned so
+--   the action appears in either menu.
+actionKinds :: Maybe [J.CodeActionKind] -> J.CodeActionKind -> [J.CodeActionKind]
+actionKinds Nothing specific =
+    [specific, J.CodeActionKind_QuickFix]
+actionKinds (Just asked) specific =
+    [ k
+    | k <- [specific, J.CodeActionKind_QuickFix]
+    , any (`kindMatches` k) asked
+    ]
+
+kindMatches :: J.CodeActionKind -> J.CodeActionKind -> Bool
+kindMatches asked offered =
+    asked == offered || kindPrefix (kindText asked) (kindText offered)
+
+kindPrefix :: Text -> Text -> Bool
+kindPrefix asked offered =
+    asked == offered
+        || (asked <> ".") `Text.isPrefixOf` (offered <> ".")
+
+kindText :: J.CodeActionKind -> Text
+kindText k =
+    case Aeson.toJSON k of
+        Aeson.String t -> t
+        _ -> ""
+
+disabledInline :: J.CodeActionKind -> Text -> J.CodeAction
+disabledInline kind_ reason_ = J.CodeAction
     { _title = "Inline let: " <> reason_
-    , _kind = Just J.CodeActionKind_RefactorInline
+    , _kind = Just kind_
     , _diagnostics = Nothing
     , _isPreferred = Nothing
     , _disabled = Just (disabledReason reason_)
@@ -1238,14 +1451,14 @@ disabledInline reason_ = J.CodeAction
     , _data_ = Nothing
     }
 
-readyInline :: J.Uri -> Text -> Text -> J.CodeAction
-readyInline docUri txt replacement =
+readyInline :: J.CodeActionKind -> J.Uri -> Text -> Text -> J.CodeAction
+readyInline kind_ docUri txt replacement =
     let lineCount = fromIntegral (length (Text.lines txt))
         _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
         _newText = replacement
     in J.CodeAction
         { _title = "Inline let"
-        , _kind = Just J.CodeActionKind_RefactorInline
+        , _kind = Just kind_
         , _diagnostics = Nothing
         , _isPreferred = Nothing
         , _disabled = Nothing
@@ -1258,10 +1471,10 @@ readyInline docUri txt replacement =
         , _data_ = Nothing
         }
 
-disabledOrganize :: Text -> J.CodeAction
-disabledOrganize reason_ = J.CodeAction
+disabledOrganize :: J.CodeActionKind -> Text -> J.CodeAction
+disabledOrganize kind_ reason_ = J.CodeAction
     { _title = "Organize imports"
-    , _kind = Just J.CodeActionKind_SourceOrganizeImports
+    , _kind = Just kind_
     , _diagnostics = Nothing
     , _isPreferred = Nothing
     , _disabled = Just (disabledReason reason_)
@@ -1270,14 +1483,14 @@ disabledOrganize reason_ = J.CodeAction
     , _data_ = Nothing
     }
 
-readyOrganize :: J.Uri -> Text -> Text -> J.CodeAction
-readyOrganize docUri txt replacement =
+readyOrganize :: J.CodeActionKind -> J.Uri -> Text -> Text -> J.CodeAction
+readyOrganize kind_ docUri txt replacement =
     let lineCount = fromIntegral (length (Text.lines txt))
         _range = J.Range (J.Position 0 0) (J.Position lineCount 0)
         _newText = replacement
     in J.CodeAction
         { _title = "Organize imports"
-        , _kind = Just J.CodeActionKind_SourceOrganizeImports
+        , _kind = Just kind_
         , _diagnostics = Nothing
         , _isPreferred = Nothing
         , _disabled = Nothing
@@ -1306,30 +1519,22 @@ importCommand title_ command_ pos = J.CodeAction
     , _data_ = Nothing
     }
 
-importUnderCursor :: Text -> J.Range -> Bool
-importUnderCursor txt selected =
+-- | Imports whose source span meets the selection, with their ranges.
+--   Nested imports come innermost last.
+importsMeeting :: Text -> J.Range -> [(Range, Import)]
+importsMeeting txt selected =
     case parse txt of
         Left _ ->
-            False
+            []
         Right expr ->
-            not $ null
-                [ ()
-                | Core.Note src (Core.Embed _) <- universeOf Core.subExpressions expr
-                , rangesMeet selected (rangeFromDhall src)
-                ]
+            [ (rangeFromDhall src, imp)
+            | Core.Note src (Core.Embed imp) <- universeOf Core.subExpressions expr
+            , rangesMeet selected (rangeFromDhall src)
+            ]
 
-hashedImportUnderCursor :: Text -> J.Range -> Bool
-hashedImportUnderCursor txt selected =
-    case parse txt of
-        Left _ ->
-            False
-        Right expr ->
-            not $ null
-                [ ()
-                | Core.Note src (Core.Embed (Import (ImportHashed (Just _) _) _)) <-
-                    universeOf Core.subExpressions expr
-                , rangesMeet selected (rangeFromDhall src)
-                ]
+hashedImport :: Import -> Bool
+hashedImport (Import (ImportHashed (Just _) _) _) = True
+hashedImport _ = False
 
 rangesMeet :: J.Range -> Range -> Bool
 rangesMeet (J.Range startPos endPos) (Range left right) =
