@@ -5,11 +5,16 @@ module Dhall.LSP.Backend.Dhall (
   hashNormalToCode,
   WellTyped,
   fromWellTyped,
+  asWellTyped,
   Normal,
   fromNormal,
+  asNormal,
   Cache,
+  cachedImportTypes,
+  cachedSemantics,
   emptyCache,
   invalidate,
+  lookupCachedImport,
   DhallError(..),
   parse,
   parseWithHeader,
@@ -93,8 +98,14 @@ fileIdentifierFromURI _ = Nothing
 -- | A well-typed expression.
 newtype WellTyped = WellTyped {fromWellTyped :: Expr Src Void}
 
+asWellTyped :: Expr Src Void -> WellTyped
+asWellTyped = WellTyped
+
 -- | A fully normalised expression.
 newtype Normal = Normal {fromNormal :: Expr Src Void}
+
+asNormal :: Expr Src Void -> Normal
+asNormal = Normal
 
 -- An import graph, represented by list of import dependencies.
 type ImportGraph = [Import.Depends]
@@ -102,19 +113,34 @@ type ImportGraph = [Import.Depends]
 -- | A cache maps Dhall imports to loaded 'Import.ImportSemantics'. Unhashed
 --   Code imports may be typechecked but not β-normal; hashed Code imports are
 --   β-normal. By reusing caches we can speed up diagnostics etc. significantly!
-data Cache = Cache ImportGraph (Dhall.Map.Map Import.Chained Import.ImportSemantics)
+data Cache =
+    Cache
+        { cacheGraph :: ImportGraph
+        , cacheSemantics :: Dhall.Map.Map Import.Chained Import.ImportSemantics
+        , cacheImportTypes :: Dhall.Map.Map Import.Chained (Expr Src Void)
+        }
+
+cachedSemantics :: Cache -> Dhall.Map.Map Import.Chained Import.ImportSemantics
+cachedSemantics Cache { cacheSemantics = sem } = sem
+
+cachedImportTypes :: Cache -> Dhall.Map.Map Import.Chained (Expr Src Void)
+cachedImportTypes Cache { cacheImportTypes = types } = types
 
 -- | The initial cache.
 emptyCache :: Cache
-emptyCache = Cache [] Dhall.Map.empty
+emptyCache = Cache [] Dhall.Map.empty Dhall.Map.empty
 
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
 --   https://github.com/dhall-lang/dhall-lang/blob/master/standard/imports.md.
 --   Transitively invalidates any imports depending on the changed file.
 invalidate :: FileIdentifier -> Cache -> Cache
-invalidate (FileIdentifier chained) (Cache dependencies cache) =
-  Cache dependencies' $ Dhall.Map.withoutKeys cache invalidImports
+invalidate (FileIdentifier chained) cache@Cache { cacheGraph = dependencies, cacheSemantics = sem, cacheImportTypes = types } =
+  Cache
+      { cacheGraph = dependencies'
+      , cacheSemantics = Dhall.Map.withoutKeys sem invalidImports
+      , cacheImportTypes = Dhall.Map.withoutKeys types invalidImports
+      }
   where
     imports = map Import.parent dependencies ++ map Import.child dependencies
 
@@ -165,7 +191,7 @@ load
     -> Expr Src Dhall.Import
     -> Cache
     -> IO (Either DhallError (Cache, Expr Src Void))
-load settings (FileIdentifier chained) expr (Cache graph cache) = do
+load settings (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, cacheSemantics = sem, cacheImportTypes = types } = do
   let emptyStatus =
              set Import.substitutions   (view Dhall.substitutions settings)
           .  set Import.normalizer      (view Dhall.normalizer settings)
@@ -173,16 +199,21 @@ load settings (FileIdentifier chained) expr (Cache graph cache) = do
           $ Import.emptyStatusWithManager (view Dhall.newManager settings) ""
 
   let status = -- reuse cache and import graph
-               set Import.cache cache .
+               set Import.importTypes types .
+               set Import.cache sem .
                set Import.graph graph .
                set Import.verifySemanticHash False .
                -- set "root import"
                set Import.stack (chained :| [])
                  $ emptyStatus
   (do (expr', status') <- runStateT (Import.loadWith expr) status
-      let cache' = view Import.cache status'
-          graph' = view Import.graph status'
-      return . Right $ (Cache graph' cache', expr'))
+      let cache' =
+              Cache
+                  { cacheGraph = view Import.graph status'
+                  , cacheSemantics = view Import.cache status'
+                  , cacheImportTypes = view Import.importTypes status'
+                  }
+      return . Right $ (cache', expr'))
     `catch` (\e -> return . Left $ ErrorImportSourced e)
     `catch` (\e -> return . Left $ ErrorInternal e)
 
@@ -203,7 +234,7 @@ loadCollected
     -> Cache
     -> IORef (Map Text (UTCTime, SomeException))
     -> IO (Either DhallError (Cache, Expr Src Import.ImportHole, [Import.CollectedImportError], Map Import.Chained Import.ResolvedImportSource))
-loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negative = do
+loadCollected settings (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, cacheSemantics = sem, cacheImportTypes = types } negative = do
   let emptyStatus =
              set Import.substitutions   (view Dhall.substitutions settings)
           .  set Import.normalizer      (view Dhall.normalizer settings)
@@ -213,7 +244,8 @@ loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negativ
   let status =
                set Import.remote (rememberFailure negative (view Import.remote emptyStatus)) .
                set Import.remoteBytes (rememberFailure negative (view Import.remoteBytes emptyStatus)) .
-               set Import.cache cache .
+               set Import.importTypes types .
+               set Import.cache sem .
                set Import.graph graph .
                set Import.stack (chained :| []) .
                set Import.verifySemanticHash False .
@@ -224,12 +256,16 @@ loadCollected settings (FileIdentifier chained) expr (Cache graph cache) negativ
     Left ex ->
       return (Left (ErrorInternal ex))
     Right (expr', status') -> do
-      let cache' = view Import.cache status'
-          graph' = view Import.graph status'
+      let cache' =
+              Cache
+                  { cacheGraph = view Import.graph status'
+                  , cacheSemantics = view Import.cache status'
+                  , cacheImportTypes = view Import.importTypes status'
+                  }
           errs = reverse (view Import.collectedImportErrors status')
           sources =
                 Map.fromList (Dhall.Map.toList (view Import.importSources status'))
-      return (Right (Cache graph' cache', expr', errs, sources))
+      return (Right (cache', expr', errs, sources))
 
 -- | Key under which a fetched import is stored for go-to-definition.
 --
@@ -341,3 +377,16 @@ hashNormalToCode :: Normal -> Text
 hashNormalToCode (Normal expr) =
   Import.hashExpressionToCode (Dhall.denote alphaNormal)
   where alphaNormal = Dhall.alphaNormalize expr
+
+-- | Type and value of a cached import, if both are known.
+lookupCachedImport
+    :: FileIdentifier
+    -> Cache
+    -> Import
+    -> Maybe (Expr Void Void, Expr Void Void)
+lookupCachedImport (FileIdentifier parent) cache imp =
+    let chained = Import.Chained (Import.chainedImport parent <> imp)
+    in do
+        sem <- Dhall.Map.lookup chained (cachedSemantics cache)
+        typ <- Dhall.Map.lookup chained (cachedImportTypes cache)
+        return (Dhall.denote typ, Import.importSemantics sem)
