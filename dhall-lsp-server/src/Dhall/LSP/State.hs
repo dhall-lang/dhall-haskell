@@ -132,6 +132,7 @@ data DocSnap = DocSnap
   , snapPrefixValueKeys :: [Text]
   , snapPrefixValues :: [Expr Void Void]
   , snapPrefixContexts :: [TypingContext Src]
+  , snapResolved :: Maybe (Expr Src Void)
   }
 
 makeLenses ''ServerState
