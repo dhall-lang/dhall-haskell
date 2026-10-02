@@ -1,6 +1,7 @@
 module Dhall.LSP.Backend.Prefix
     ( bindingValueKeys
     , resumeTypingContext
+    , singleCodeImport
     , topLevelPrefixLength
     , topLets
     , valueSourceKey
@@ -12,6 +13,7 @@ import Data.Void (Void)
 import Dhall.Core
     ( Binding (..)
     , Expr (..)
+    , Import
     , denote
     )
 import Dhall.Parser (Src (..))
@@ -87,6 +89,12 @@ useKeys prevNames prevKeys currentKeys =
     not (null prevKeys)
         && length prevKeys == length prevNames
         && length currentKeys == length prevNames
+
+-- | A binding value that is only a code import (modulo source notes).
+singleCodeImport :: Expr Src Import -> Maybe Import
+singleCodeImport (Note _ child) = singleCodeImport child
+singleCodeImport (Embed imp) = Just imp
+singleCodeImport _ = Nothing
 
 -- | Typing context after the longest unchanged top-level @let@ prefix.
 resumeTypingContext

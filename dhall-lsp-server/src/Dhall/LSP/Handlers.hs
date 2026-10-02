@@ -34,10 +34,12 @@ import Dhall.LSP.Backend.Completion
     , expressionBefore
     )
 import Dhall.LSP.Backend.Dhall
-    ( FileIdentifier
+    ( Cache
+    , FileIdentifier
     , fileIdentifierFromFilePath
     , fileIdentifierFromURI
     , invalidate
+    , lookupCachedImport
     , load
     , loadCollected
     , indexImportBodies
@@ -70,6 +72,7 @@ import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
 import Dhall.LSP.Backend.Prefix
     ( bindingValueKeys
     , resumeTypingContext
+    , singleCodeImport
     , topLevelPrefixLength
     , topLets
     , valueSourceKey
@@ -587,8 +590,10 @@ typecheckCollected
     -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
+    -> FileIdentifier
+    -> Cache
     -> ([DhallError], [Text], [Text], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
-typecheckCollected collected expr txt parsed prevNames prevKeys prevValues prevCtxs
+typecheckCollected collected expr txt parsed prevNames prevKeys prevValues prevCtxs fileId cache
     | any (\e -> isNothing (Import.collectedKnownType e)) collected =
         ([], [], [], [], [])
     | any (not . (`Map.member` knownTypes)) (holesIn expr) =
@@ -599,8 +604,12 @@ typecheckCollected collected expr txt parsed prevNames prevKeys prevValues prevC
                 [ valueSourceKey txt value
                 | (_, _, value) <- fst (topLets erased)
                 ]
+            parsedBinds = alignParsedBinds parsed erased
             (errs, names, keys, values, ctxs) =
                 checkLets
+                    fileId
+                    cache
+                    parsedBinds
                     prevNames
                     prevKeys
                     currentKeys
@@ -669,8 +678,30 @@ fillImportHoles collected expr =
                 (Core.FieldSelection Nothing "Missing" Nothing)
                 :: Expr Src Void)
 
+-- | Pair each resolved top-level binding with the corresponding parsed
+--   binding when present.  Import-only files have no parsed lets even though
+--   the resolved expression contains the imported module's bindings.
+alignParsedBinds
+    :: Expr Src Import
+    -> Expr Src Void
+    -> [(Text, Maybe (Maybe Src, Expr Src Import), Expr Src Import)]
+alignParsedBinds parsed erased =
+    let (parsedBinds, _) = topLets parsed
+        (erasedBinds, _) = topLets erased
+    in [ if i < length parsedBinds
+            then parsedBinds !! i
+            else erasedBindAsParsed (erasedBinds !! i)
+       | i <- [0 .. length erasedBinds - 1]
+       ]
+  where
+    erasedBindAsParsed (name, ann, value) =
+        (name, fmap (fmap unsafeCoerce) ann, unsafeCoerce value)
+
 checkLets
-    :: [Text]
+    :: FileIdentifier
+    -> Cache
+    -> [(Text, Maybe (Maybe Src, Expr Src Import), Expr Src Import)]
+    -> [Text]
     -> [Text]
     -> [Text]
     -> [Core.Expr Void Void]
@@ -683,10 +714,10 @@ checkLets
        , [Core.Expr Void Void]
        , [TypeCheck.TypingContext Src]
        )
-checkLets prevNames prevKeys currentKeys prevValues prevCtxs ctx0 expr =
+checkLets fileId cache parsedBinds prevNames prevKeys currentKeys prevValues prevCtxs ctx0 expr =
     let (binds, rest) = topLets expr
         prefixLen = topLevelPrefixLength prevNames prevKeys currentKeys prevValues binds
-        step (i, accCtx, accNames, accKeys, accVals, accCtxs, accErrs, accFailed) ((name, ann, value), key)
+        step (i, accCtx, accNames, accKeys, accVals, accCtxs, accErrs, accFailed) ((name, ann, value), key, (_, _, parsedValue))
             | i < prefixLen =
                 ( i + 1
                 , prevCtxs !! i
@@ -698,7 +729,7 @@ checkLets prevNames prevKeys currentKeys prevValues prevCtxs ctx0 expr =
                 , accFailed
                 )
             | otherwise =
-                case TypeCheck.extendLet name value accCtx of
+                case extendTopLevelLet fileId cache parsedValue name value accCtx of
                     Right ctx' ->
                         ( i + 1
                         , ctx'
@@ -724,7 +755,7 @@ checkLets prevNames prevKeys currentKeys prevValues prevCtxs ctx0 expr =
             foldl
                 step
                 (0, ctx0, [], [], [], [], [], False)
-                (zip binds currentKeys)
+                (zip3 binds currentKeys parsedBinds)
         errs' =
             if failed
                 then errs
@@ -732,6 +763,21 @@ checkLets prevNames prevKeys currentKeys prevValues prevCtxs ctx0 expr =
                     Left err -> err : errs
                     Right _ -> errs
     in (reverse errs', reverse names, reverse keys, reverse vals, reverse ctxs)
+
+extendTopLevelLet
+    :: FileIdentifier
+    -> Cache
+    -> Expr Src Import
+    -> Text
+    -> Expr Src Void
+    -> TypeCheck.TypingContext Src
+    -> Either (TypeCheck.TypeError Src Void) (TypeCheck.TypingContext Src)
+extendTopLevelLet fileId cache parsedValue name value accCtx =
+    case singleCodeImport parsedValue >>= lookupCachedImport fileId cache of
+        Just (typ, sem) ->
+            Right (TypeCheck.extendAlreadyChecked name typ sem accCtx)
+        Nothing ->
+            TypeCheck.extendLet name value accCtx
 
 -- | Semantic diagnostics that survive a later parse error: their source
 --   slice is unchanged in the new text and ends before the parse error
@@ -819,6 +865,8 @@ diagnoseDocument settings _uri txt = do
                           prevKeys
                           prevValues
                           prevCtxs
+                          fileIdentifier
+                          cache
               liftIO $ IORef.modifyIORef' docs $ \m ->
                   let previous = Map.lookup _uri m
                       snap = DocSnap
