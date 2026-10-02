@@ -234,16 +234,25 @@ loadForTyping settings uri_ = do
 tryLoadForTyping
     :: EvaluateSettings -> Uri -> Expr Src Import -> HandlerM (Maybe (Expr Src Void))
 tryLoadForTyping settings uri_ parsed = do
-    fileIdentifier <- fileIdentifierFromUri uri_
-    cache <- readImportCache
-    negative <- use negativeImports
-    loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
-    case loaded of
-        Left _ ->
-            return Nothing
-        Right (cache', expr, collected, _) -> do
-            writeImportCache cache'
-            return (Just (fillImportHoles collected expr))
+    txt <- readUri uri_
+    docs <- use documents
+    snaps <- liftIO (IORef.readIORef docs)
+    case Map.lookup uri_ snaps of
+        Just snap
+            | snapText snap == txt
+            , Just resolved <- snapResolved snap ->
+                return (Just resolved)
+        _ -> do
+            fileIdentifier <- fileIdentifierFromUri uri_
+            cache <- readImportCache
+            negative <- use negativeImports
+            loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
+            case loaded of
+                Left _ ->
+                    return Nothing
+                Right (cache', expr, collected, _) -> do
+                    writeImportCache cache'
+                    return (Just (fillImportHoles collected expr))
 
 -- helper
 fileIdentifierFromUri :: Uri -> HandlerM FileIdentifier
@@ -855,6 +864,7 @@ diagnoseDocument settings _uri txt = do
                   prevKeys = maybe [] snapPrefixValueKeys previousSnap
                   prevValues = maybe [] snapPrefixValues previousSnap
                   prevCtxs = maybe [] snapPrefixContexts previousSnap
+                  erased = fillImportHoles collected resolved
                   (typeErrs, prefixNames, prefixValueKeys, prefixValues, prefixCtxs) =
                       typecheckCollected
                           collected
@@ -878,6 +888,7 @@ diagnoseDocument settings _uri txt = do
                           , snapPrefixValueKeys = prefixValueKeys
                           , snapPrefixValues = prefixValues
                           , snapPrefixContexts = prefixCtxs
+                          , snapResolved = Just erased
                           }
                   in Map.insert _uri snap m
               return ([], collected, typeErrs, txt)
@@ -1735,6 +1746,7 @@ textDocumentChangeHandler settings =
                             , snapPrefixValueKeys = maybe [] snapPrefixValueKeys previous
                             , snapPrefixValues = maybe [] snapPrefixValues previous
                             , snapPrefixContexts = maybe [] snapPrefixContexts previous
+                            , snapResolved = Nothing
                             }
                     in (Map.insert _uri snap m, generation)
                 envRef <- use lspEnv
