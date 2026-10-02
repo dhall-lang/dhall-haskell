@@ -1,4 +1,4 @@
-module Dhall.LSP.Backend.Typing (annotateLet, exprAt, letTypes, normalizedAt, scopedNormalize, splitMultiLetSrc, srcAt, typeAt, typeAtExpr) where
+module Dhall.LSP.Backend.Typing (annotateLet, exprAt, normalizedAt, scopedNormalize, splitMultiLetSrc, srcAt, typeAt, typeAtExpr) where
 
 import Dhall.Core
     ( Binding (..)
@@ -316,46 +316,6 @@ extendLetLenient x a ann ctx =
                         Right ctx' -> ctx'
                         Left _ -> ctx
                 Nothing -> ctx
-
--- | Binder span and type of each unannotated @let@.
---
---   The walk uses the same context as 'typeAt''.  A file that does not
---   typecheck never reaches this function.
-letTypes :: WellTyped -> [(Src, Expr Src Void)]
-letTypes expr =
-    case splitMultiLetSrc (fromWellTyped expr) of
-        Just expr' ->
-            either (const []) id (letTypes' emptyTypingContext expr')
-        Nothing ->
-            []
-
-letTypes' :: TypingContext Src -> Expr Src Void -> Either (TypeError Src Void) [(Src, Expr Src Void)]
-letTypes' ctx (Note _ (Let (Binding { variable = x, annotation = ann, bindingSrc1 = src, value = a }) e)) = do
-    let here = case (ann, src) of
-            (Nothing, Just binder) ->
-                case typeWithContext ctx a of
-                    Right ty -> [(binder, ty)]
-                    Left _ -> []
-            _ ->
-                []
-    nested <- letTypes' ctx a
-    ctx' <- extendLet x a ctx
-    rest <- letTypes' ctx' e
-    return (here ++ nested ++ rest)
-letTypes' ctx (Note _ (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A } b)) = do
-    nested <- letTypes' ctx _A
-    ctx' <- extendBinder x _A ctx
-    rest <- letTypes' ctx' b
-    return (nested ++ rest)
-letTypes' ctx (Note _ (Pi _ x _A _B)) = do
-    nested <- letTypes' ctx _A
-    ctx' <- extendBinder x _A ctx
-    rest <- letTypes' ctx' _B
-    return (nested ++ rest)
-letTypes' ctx (Note _ expr) =
-    letTypes' ctx expr
-letTypes' ctx expr =
-    fmap concat (mapM (letTypes' ctx) (toListOf subExpressions expr))
 
 annotationExpr :: Maybe (Maybe Src, Expr Src Void) -> Expr Src Void
 annotationExpr (Just (_, expr)) = expr

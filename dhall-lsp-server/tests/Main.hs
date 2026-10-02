@@ -29,8 +29,6 @@ import Language.LSP.Protocol.Types
     , FoldingRange (..)
     , FoldingRangeParams (..)
     , Hover (..)
-    , InlayHint (..)
-    , InlayHintParams (..)
     , TextEdit (..)
     , getUri
     , MarkupContent (..)
@@ -655,28 +653,6 @@ foldingSpec fixtureDir =
             let Just endCol = _endCharacter r
             endCol `shouldSatisfy` (< 11)
 
-inlaySpec :: FilePath -> Spec
-inlaySpec fixtureDir =
-  describe "inlay" $
-    it "shows the type of an unannotated let" $
-      runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
-        docId <- openDoc "Let.dhall" "dhall"
-        rsp <- request LSP.SMethod_TextDocumentInlayHint InlayHintParams
-            { _workDoneToken = Nothing
-            , _textDocument = docId
-            , _range = Range (Position 0 0) (Position 1 0)
-            }
-        let hints = case rsp ^. result of
-                Right (InL xs) -> xs
-                _ -> []
-        liftIO $ do
-            let hint = head hints
-                edits = maybe [] id (_textEdits hint)
-                label = case hint of
-                    InlayHint { _label = found } -> found
-            label `shouldBe` InL ": Natural"
-            map _newText edits `shouldContain` [" : Natural"]
-
 -- | Open a file, replace it, and wait until the new diagnostics arrive.
 --   The bound is a tripwire for a stuck analysis, not a performance target.
 editReplaySpec :: FilePath -> Spec
@@ -709,7 +685,6 @@ main = do
   replay <- testSpec "Edit replay" (editReplaySpec (baseDir "diagnostics"))
   definition <- testSpec "Definition" (definitionSpec (baseDir "definition"))
   folding <- testSpec "Folding" (foldingSpec (baseDir "folding"))
-  inlay <- testSpec "Inlay" (inlaySpec (baseDir "inlay"))
   unfreeze <- testSpec "Unfreeze" (unfreezeSpec (baseDir "unfreeze"))
   organize <- testSpec "Organize" (organizeSpec (baseDir "organize"))
   inline <- testSpec "Inline" (inlineSpec (baseDir "inline"))
@@ -729,7 +704,6 @@ main = do
           replay,
           definition,
           folding,
-          inlay,
           unfreeze,
           organize,
           inline,
@@ -875,19 +849,19 @@ organizeSpec :: FilePath -> Spec
 organizeSpec fixtureDir = describe "organize imports" $ do
   it "sorts import bindings by name" $
     expectOrganize fixtureDir "Reorder.dhall"
-      "let a = ./a.dhall\nlet b = ./b.dhall\nin\n{ a, b }\n"
+      "-- Imports.\nlet a = ./a.dhall\nlet b = ./b.dhall\nin\n{ a, b }\n"
   it "drops an unused import binding" $
     expectOrganize fixtureDir "Unused.dhall"
-      "let a = ./a.dhall\nin\na\n"
+      "-- Imports.\nlet a = ./a.dhall\nin\na\n"
   it "hoists nested import lets past local lets" $
     expectOrganize fixtureDir "Nested.dhall"
-      "let x = ./x.dhall\nlet y = ./y.dhall\nin\nlet a = 2\nin\nlet b = 3\nin { x, a, y, b }\n"
+      "-- Imports.\nlet x = ./x.dhall\nlet y = ./y.dhall\nin\nlet a = 2\nin\nlet b = 3\nin { x, a, y, b }\n"
   it "hoists imports interleaved with locals in one multi-let" $
     expectOrganize fixtureDir "Interleaved.dhall"
-      "let x = ./x.dhall\nlet y = ./y.dhall\nin\nlet a = 2\nlet b = 3\nin { x, a, y, b }\n"
+      "-- Imports.\nlet x = ./x.dhall\nlet y = ./y.dhall\nin\nlet a = 2\nlet b = 3\nin { x, a, y, b }\n"
   it "leaves a non-bare import in place" $
     expectOrganize fixtureDir "NotBare.dhall"
-      "let y = ./b.dhall\nin\nlet x = 1 + ./a.dhall\nin { x, y }\n"
+      "-- Imports.\nlet y = ./b.dhall\nin\nlet x = 1 + ./a.dhall\nin { x, y }\n"
   it "refuses a repeated import name" $
     runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
       docId <- openDoc "Duplicate.dhall" "dhall"
@@ -901,6 +875,15 @@ organizeSpec fixtureDir = describe "organize imports" $ do
     runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
       docId <- openDoc "Shadow.dhall" "dhall"
       actions <- getCodeActions docId (Range (Position 0 0) (Position 2 0))
+      liftIO $ do
+        let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
+        found `shouldSatisfy` (not . null)
+        _disabled (head found) `shouldSatisfy` isJust
+        _edit (head found) `shouldBe` Nothing
+  it "refuses when imports are already organized with a banner" $
+    runSession "dhall-lsp-server" fullLatestClientCaps fixtureDir $ do
+      docId <- openDoc "Already.dhall" "dhall"
+      actions <- getCodeActions docId (Range (Position 0 0) (Position 4 0))
       liftIO $ do
         let found = [ codeAction | InR codeAction <- actions, actionTitle codeAction == "Organize imports" ]
         found `shouldSatisfy` (not . null)

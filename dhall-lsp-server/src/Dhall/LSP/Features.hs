@@ -75,12 +75,9 @@ import Dhall.LSP.Backend.Dhall
     , emptyCache
     , identifierChained
     , importTextKey
-    , load
     , parse
-    , typecheck
-    , WellTyped
     )
-import Dhall.LSP.Backend.Typing (letTypes, splitMultiLetSrc)
+import Dhall.LSP.Backend.Typing (splitMultiLetSrc)
 import Dhall.LSP.Backend.Diagnostics
     ( Diagnosis (Diagnosis)
     , Range (..)
@@ -130,7 +127,6 @@ featureHandlers evalSettings = mconcat
     , symbolsHandler
     , foldingHandler
     , semanticTokensHandler
-    , inlayHandler evalSettings
     , codeActionHandler evalSettings
     , watchedFilesHandler
     , importSourceHandler
@@ -749,74 +745,6 @@ encodeNameTokens = snd . foldl step ((0, 0), [])
                 ]
         in ((tokenLine, tokenCol), acc ++ piece)
 
-inlayHandler :: EvaluateSettings -> Handlers HandlerM
-inlayHandler evalSettings =
-    LSP.requestHandler SMethod_TextDocumentInlayHint \request respond ->
-        handleErrorWithDefault respond (InR J.Null) do
-            let docUri = request ^. params . textDocument . uri
-                wanted = request ^. params . range
-            txt <- readUri docUri
-            fileIdentifier <- fileIdentifierFromUri docUri
-            cache <- use importCache
-            case parse txt of
-                Left _ ->
-                    respond (Right (InR J.Null))
-                Right parsed -> do
-                    loaded <- liftIO $ load evalSettings fileIdentifier parsed cache
-                    case loaded of
-                        Left _ ->
-                            respond (Right (InR J.Null))
-                        Right (cache', expr) -> do
-                            assign importCache cache'
-                            case typecheck evalSettings expr of
-                                Left _ ->
-                                    respond (Right (InR J.Null))
-                                Right (wt, _) -> do
-                                    ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-                                    let hints =
-                                            filter (hintIn wanted) (inlayHints maxOutputSize wt)
-                                    respond (Right (InL hints))
-
-hintIn :: J.Range -> J.InlayHint -> Bool
-hintIn (J.Range startPos endPos) hint =
-    let pos = hint ^. position
-    in startPos <= pos && pos <= endPos
-
-inlayHints :: Int -> WellTyped -> [J.InlayHint]
-inlayHints limit wt =
-    [ hint limit src ty | (src, ty) <- letTypes wt ]
-  where
-    hint limit_ src ty =
-        let J.Range _ endPos = srcToRange src
-            doc = Pretty.prettyCharacterSet Pretty.Unicode ty
-            rendered = case Bounded.prettyBounded limit_ doc of
-                Bounded.Complete typeText -> typeText
-                Bounded.Truncated typeText -> typeText
-            short =
-                if Text.length rendered <= 60
-                    then rendered
-                    else Text.take 59 rendered <> "…"
-            typeEdits = case Bounded.prettyBounded limit_ doc of
-                Bounded.Complete typeText ->
-                    Just
-                        [ J.TextEdit
-                            { _range = J.Range endPos endPos
-                            , _newText = " : " <> typeText
-                            }
-                        ]
-                Bounded.Truncated _ ->
-                    Nothing
-        in J.InlayHint
-            { _position = endPos
-            , _label = InL (": " <> short)
-            , _kind = Just J.InlayHintKind_Type
-            , _textEdits = typeEdits
-            , _tooltip = Just (InL rendered)
-            , _paddingLeft = Just True
-            , _paddingRight = Nothing
-            , _data_ = Nothing
-            }
-
 -- | Hoist every bare-import @let@ (including nested scopes) to a top-level
 --   multi-let, sorted by name, and drop unused import lets.
 --
@@ -844,7 +772,7 @@ organizeImports txt = do
             then return (Left "An import name is bound twice.")
             else if importWouldBeCaptured expr used
                 then return (Left "Hoisting this import would be captured by another binder of the same name.")
-                else if alreadyOrganized expr used unused
+                else if alreadyOrganized txt expr used unused
                     then return (Left "Imports are already organized.")
                     else do
                         let remaining =
@@ -852,10 +780,11 @@ organizeImports txt = do
                             hoisted =
                                 Text.unlines
                                     (map importText (sortOn importName used))
+                            body = dropImportsBanner remaining
                             rebuilt =
                                 if null used
-                                    then remaining
-                                    else hoisted <> "in\n" <> Text.stripStart remaining
+                                    then body
+                                    else importsComment <> "\n" <> hoisted <> "in\n" <> body
                         if rebuilt == txt
                             then return (Left "Imports are already organized.")
                             else return (Right rebuilt)
@@ -900,11 +829,24 @@ importDeleteRanges txt expr =
             , Just deleteRange <- [deleteLetRange txt bindings body index]
             ]
 
-alreadyOrganized :: Expr Src Import -> [ImportLet] -> [ImportLet] -> Bool
-alreadyOrganized expr used unused =
+importsComment :: Text
+importsComment = "-- Imports."
+
+dropImportsBanner :: Text -> Text
+dropImportsBanner txt =
+    let stripped = Text.stripStart txt
+    in maybe stripped Text.stripStart (Text.stripPrefix importsComment stripped)
+
+hasImportsComment :: Text -> Bool
+hasImportsComment txt =
+    importsComment `Text.isPrefixOf` Text.stripStart txt
+
+alreadyOrganized :: Text -> Expr Src Import -> [ImportLet] -> [ImportLet] -> Bool
+alreadyOrganized txt expr used unused =
     null unused
         && map Core.variable lead == map importName (sortOn importName used)
         && not (hasBareImportLet rest)
+        && (null used || hasImportsComment txt)
   where
     (lead, rest) = leadingImportLets expr
 
