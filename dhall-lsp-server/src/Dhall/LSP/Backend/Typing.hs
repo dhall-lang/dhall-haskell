@@ -8,6 +8,7 @@ module Dhall.LSP.Backend.Typing
     , typeAt
     , typeAtExpr
     , typeAtExprWithContext
+    , typeAtExprWithContextBounded
     ) where
 
 import Dhall.Core
@@ -27,6 +28,7 @@ import Dhall.TypeCheck
     , normalizeWithContext
     , normalizeWithContextBounded
     , typeWithContext
+    , typeWithContextBounded
     )
 
 import Control.Applicative ((<|>))
@@ -65,60 +67,89 @@ typeAtExprWithContext
     -> Expr Src Void
     -> Either String (Maybe Src, Expr Src Void)
 typeAtExprWithContext ctx pos expr = do
+    (mSrc, typ, _) <- typeAtExprWithContextBounded Nothing ctx pos expr
+    return (mSrc, typ)
+
+typeAtExprWithContextBounded
+    :: Maybe Int
+    -> TypingContext Src
+    -> Position
+    -> Expr Src Void
+    -> Either String (Maybe Src, Expr Src Void, Bool)
+typeAtExprWithContextBounded mBudget ctx pos expr = do
   expr' <- case splitMultiLetSrc expr of
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
-  first show $ typeAt' pos ctx expr'
+  first show $ typeAt' mBudget pos ctx expr'
 
 -- The walk extends a 'TypingContext' as it enters a binder.  It does not
 -- substitute or normalize the bound values.
-typeAt' :: Position -> TypingContext Src -> Expr Src Void -> Either (TypeError Src Void) (Maybe Src, Expr Src Void)
--- the user hovered over the bound name in a let expression
-typeAt' pos ctx (Note src (Let (Binding { value = a }) _)) | pos `inside` getLetIdentifier src = do
-  typ <- typeWithContext ctx a
-  return (Just $ getLetIdentifier src, typ)
+typeAt'
+    :: Maybe Int
+    -> Position
+    -> TypingContext Src
+    -> Expr Src Void
+    -> Either (TypeError Src Void) (Maybe Src, Expr Src Void, Bool)
+typeAt' mBudget pos ctx (Note src (Let (Binding { value = a }) _))
+    | pos `inside` getLetIdentifier src = do
+        (typ, cut) <- inferType mBudget ctx a
+        return (Just $ getLetIdentifier src, typ, cut)
 
 -- "..." in a lambda expression
-typeAt' pos _ctx (Note src (Lam _ FunctionBinding { functionBindingAnnotation = _A} _))
+typeAt' _mBudget pos _ctx (Note src (Lam _ FunctionBinding { functionBindingAnnotation = _A} _))
   | Just src' <- getLamIdentifier src
   , pos `inside` src' =
-  return (Just src', _A)
+  return (Just src', _A, False)
 
 -- "..." in a forall expression
-typeAt' pos _ctx (Note src (Pi _ _ _A _)) | Just src' <- getForallIdentifier src
-                                        , pos `inside` src' =
-  return (Just src', _A)
+typeAt' _mBudget pos _ctx (Note src (Pi _ _ _A _))
+  | Just src' <- getForallIdentifier src
+  , pos `inside` src' =
+  return (Just src', _A, False)
 
-typeAt' pos ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
-  | coversAnn pos ann = typeAt' pos ctx (annotationExpr ann)
-  | covers pos a = typeAt' pos ctx a
+typeAt' mBudget pos ctx (Note src (Let (Binding { variable = x, annotation = ann, value = a }) e))
+  | coversAnn pos ann = typeAt' mBudget pos ctx (annotationExpr ann)
+  | covers pos a = typeAt' mBudget pos ctx a
   | pos `inside` src = do
       let ctx' = extendLetLenient x a ann ctx
-      typeAt' pos ctx' e
+      typeAt' mBudget pos ctx' e
 
-typeAt' pos ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A} b))
-  | covers pos _A = typeAt' pos ctx _A
+typeAt' mBudget pos ctx (Note src (Lam _ FunctionBinding { functionBindingVariable = x, functionBindingAnnotation = _A} b))
+  | covers pos _A = typeAt' mBudget pos ctx _A
   | pos `inside` src = do
       ctx' <- extendBinder x _A ctx
-      typeAt' pos ctx' b
+      typeAt' mBudget pos ctx' b
 
-typeAt' pos ctx (Note src (Pi _ x _A _B))
-  | covers pos _A = typeAt' pos ctx _A
+typeAt' mBudget pos ctx (Note src (Pi _ x _A _B))
+  | covers pos _A = typeAt' mBudget pos ctx _A
   | pos `inside` src = do
       ctx' <- extendBinder x _A ctx
-      typeAt' pos ctx' _B
+      typeAt' mBudget pos ctx' _B
 
 -- peel off a single Note constructor
-typeAt' pos ctx (Note _ expr) = typeAt' pos ctx expr
+typeAt' mBudget pos ctx (Note _ expr) = typeAt' mBudget pos ctx expr
 
 -- catch-all
-typeAt' pos ctx expr = do
+typeAt' mBudget pos ctx expr = do
   let subExprs = toListOf subExpressions expr
   case [ (src, e) | (Note src e) <- subExprs, pos `inside` src ] of
-    [] -> do typ <- typeWithContext ctx expr
-             return (Nothing, typ)
-    ((src, e):_) -> typeAt' pos ctx (Note src e)
+    [] -> do
+        (typ, cut) <- inferType mBudget ctx expr
+        return (Nothing, typ, cut)
+    ((src, e) : _) ->
+        typeAt' mBudget pos ctx (Note src e)
+
+inferType
+    :: Maybe Int
+    -> TypingContext Src
+    -> Expr Src Void
+    -> Either (TypeError Src Void) (Expr Src Void, Bool)
+inferType Nothing ctx a = do
+    typ <- typeWithContext ctx a
+    return (typ, False)
+inferType (Just budget) ctx a =
+    typeWithContextBounded budget ctx a
 
 
 -- | Find the smallest Note-wrapped expression at the given position.
