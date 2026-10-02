@@ -1106,13 +1106,41 @@ command (Options {..}) = do
         Hash {..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _, _) <-
+            (resolvedExpression, sharedExpression, status) <-
                 resolve file UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
-
-            let normalizedExpression =
-                    Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)
+            normalizedExpression <-
+                case Dhall.Import.singleCodeImport expression of
+                    Just import_ -> do
+                        maybeSemantics <-
+                            Dhall.Import.lookupCachedImportSemantics status import_
+                        case maybeSemantics of
+                            Just importSemantics ->
+                                Dhall.Import.alphaBetaNormalForIntegrityHash
+                                    Nothing
+                                    importSemantics
+                            Nothing -> do
+                                _ <-
+                                    Dhall.Core.throws
+                                        (Dhall.TypeCheck.typeOf resolvedExpression)
+                                return
+                                    ( Dhall.Core.alphaNormalize
+                                        ( Dhall.Import.normalizeLoaded
+                                            status
+                                            sharedExpression
+                                        )
+                                    )
+                    Nothing -> do
+                        _ <-
+                            Dhall.Core.throws
+                                (Dhall.TypeCheck.typeOf resolvedExpression)
+                        return
+                            ( Dhall.Core.alphaNormalize
+                                ( Dhall.Import.normalizeLoaded
+                                    status
+                                    sharedExpression
+                                )
+                            )
 
             if cache
                 then Dhall.Import.writeExpressionToSemanticCache normalizedExpression
