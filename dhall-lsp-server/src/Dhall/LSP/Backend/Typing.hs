@@ -1,4 +1,14 @@
-module Dhall.LSP.Backend.Typing (annotateLet, exprAt, normalizedAt, scopedNormalize, splitMultiLetSrc, srcAt, typeAt, typeAtExpr) where
+module Dhall.LSP.Backend.Typing
+    ( annotateLet
+    , exprAt
+    , normalizedAt
+    , scopedNormalize
+    , splitMultiLetSrc
+    , srcAt
+    , typeAt
+    , typeAtExpr
+    , typeAtExprWithContext
+    ) where
 
 import Dhall.Core
     ( Binding (..)
@@ -47,12 +57,19 @@ typeAt pos expr = typeAtExpr pos (fromWellTyped expr)
 --   'let' whose value is ill-typed is skipped so later bindings can
 --   still answer.
 typeAtExpr :: Position -> Expr Src Void -> Either String (Maybe Src, Expr Src Void)
-typeAtExpr pos expr = do
+typeAtExpr pos expr = typeAtExprWithContext emptyTypingContext pos expr
+
+typeAtExprWithContext
+    :: TypingContext Src
+    -> Position
+    -> Expr Src Void
+    -> Either String (Maybe Src, Expr Src Void)
+typeAtExprWithContext ctx pos expr = do
   expr' <- case splitMultiLetSrc expr of
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for typeAt'."
-  first show $ typeAt' pos emptyTypingContext expr'
+  first show $ typeAt' pos ctx expr'
 
 -- The walk extends a 'TypingContext' as it enters a binder.  It does not
 -- substitute or normalize the bound values.

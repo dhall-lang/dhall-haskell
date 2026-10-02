@@ -67,7 +67,18 @@ import Dhall.LSP.Backend.Freezing
     )
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
-import Dhall.LSP.Backend.Typing      (annotateLet, exprAt, scopedNormalize, typeAtExpr)
+import Dhall.LSP.Backend.Prefix
+    ( resumeTypingContext
+    , topLevelPrefixLength
+    , topLets
+    )
+import Dhall.LSP.Backend.Typing
+    ( annotateLet
+    , exprAt
+    , scopedNormalize
+    , typeAtExpr
+    , typeAtExprWithContext
+    )
 import Dhall.LSP.State
 
 import Control.Applicative           ((<|>))
@@ -296,9 +307,18 @@ sliceInRange source (Range left right) =
 -- | Type of the expression at `pos`, when that source slice is unchanged
 --   between `fromText` (the expression's origin) and `current`.
 hoverFromExpr
-    :: Int -> (Int, Int) -> Text -> Text -> Expr Src Void -> Maybe Hover
-hoverFromExpr maxOutputSize pos fromText current expr =
-    case typeAtExpr pos expr of
+    :: Int
+    -> (Int, Int)
+    -> Text
+    -> Text
+    -> [Text]
+    -> [Core.Expr Void Void]
+    -> [TypeCheck.TypingContext Src]
+    -> Expr Src Void
+    -> Maybe Hover
+hoverFromExpr maxOutputSize pos fromText current prefixNames prefixValues prefixCtxs expr =
+    let ctx = resumeTypingContext prefixNames prefixValues prefixCtxs expr
+    in case typeAtExprWithContext ctx pos expr of
         Right (Just src, typ)
             | let range_ = rangeFromDhall src
             , sliceInRange fromText range_ == sliceInRange current range_ ->
@@ -318,27 +338,61 @@ lastGoodTypeHover settings uri_ pos current = do
     docs <- use documents
     snaps <- liftIO (IORef.readIORef docs)
     ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
-    case Map.lookup uri_ snaps >>= snapLastGood of
-        Just good | good /= current ->
+    case Map.lookup uri_ snaps of
+        Just snap | Just good <- snapLastGood snap, good /= current ->
             case parse good of
                 Left _ ->
                     return Nothing
                 Right parsed -> do
                     loaded <- tryLoadForTyping settings uri_ parsed
-                    return (loaded >>= hoverFromExpr maxOutputSize pos good current)
+                    return
+                        ( loaded
+                            >>= hoverFromExpr
+                                maxOutputSize
+                                pos
+                                good
+                                current
+                                (snapPrefixNames snap)
+                                (snapPrefixValues snap)
+                                (snapPrefixContexts snap)
+                        )
         _ ->
             return Nothing
 
 currentTypeHover
     :: EvaluateSettings -> Uri -> (Int, Int) -> Text -> HandlerM (Maybe Hover)
-currentTypeHover settings uri_ pos current =
+currentTypeHover settings uri_ pos current = do
+    docs <- use documents
+    snaps <- liftIO (IORef.readIORef docs)
     case parse current of
         Left _ ->
             return Nothing
         Right parsed -> do
             ServerConfig { maxOutputSize } <- liftLSP LSP.getConfig
             loaded <- tryLoadForTyping settings uri_ parsed
-            return (loaded >>= hoverFromExpr maxOutputSize pos current current)
+            let prefix = case Map.lookup uri_ snaps of
+                    Just snap ->
+                        ( snapPrefixNames snap
+                        , snapPrefixValues snap
+                        , snapPrefixContexts snap
+                        )
+                    Nothing ->
+                        ([], [], [])
+            return
+                ( loaded
+                    >>= hoverFromExpr
+                        maxOutputSize
+                        pos
+                        current
+                        current
+                        (fst3 prefix)
+                        (snd3 prefix)
+                        (thd3 prefix)
+                )
+  where
+    fst3 (a, _, _) = a
+    snd3 (_, b, _) = b
+    thd3 (_, _, c) = c
 
 hoverHandler :: EvaluateSettings -> Handlers HandlerM
 hoverHandler settings =
@@ -609,12 +663,9 @@ checkLets
        )
 checkLets prevNames prevValues prevCtxs ctx0 expr =
     let (binds, rest) = topLets expr
+        prefixLen = topLevelPrefixLength prevNames prevValues binds
         step (i, accCtx, accNames, accVals, accCtxs, accErrs, accFailed) (name, ann, value)
-            | i < length prevNames
-            , i < length prevValues
-            , i < length prevCtxs
-            , name == prevNames !! i
-            , (Core.denote value :: Core.Expr Void Void) == prevValues !! i =
+            | i < prefixLen =
                 ( i + 1
                 , prevCtxs !! i
                 , name : accNames
@@ -654,15 +705,6 @@ checkLets prevNames prevValues prevCtxs ctx0 expr =
                     Left err -> err : errs
                     Right _ -> errs
     in (reverse errs', reverse names, reverse vals, reverse ctxs)
-
-topLets
-    :: Expr Src Void
-    -> ([(Text, Maybe (Maybe Src, Expr Src Void), Expr Src Void)], Expr Src Void)
-topLets (Note _ expr) = topLets expr
-topLets (Core.Let Core.Binding { Core.variable = name, Core.annotation = ann, Core.value = value } expr) =
-    let (binds, rest) = topLets expr
-    in ((name, ann, value) : binds, rest)
-topLets expr = ([], expr)
 
 -- | Semantic diagnostics that survive a later parse error: their source
 --   slice is unchanged in the new text and ends before the parse error
