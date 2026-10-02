@@ -1107,6 +1107,11 @@ command (Options {..}) = do
             Dhall.Repl.repl
                 (chooseCharsetOrUseDefault Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
                 explain
+                Dhall.Repl.ReplLimits
+                    { replMaxOutputSize = maxOutputSize
+                    , replMaxAllocation = maxAllocation
+                    , replMaxEvaluationTime = maxEvaluationTime
+                    }
 
         Diff {..} -> do
             expression1 <- Dhall.inputExpr expr1

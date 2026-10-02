@@ -11,6 +11,8 @@
 module Dhall.Repl
     ( -- * Repl
       repl
+    , ReplLimits (..)
+    , noReplLimits
     ) where
 
 import Control.Exception
@@ -23,9 +25,10 @@ import Control.Monad     (forM_)
 import Control.Monad.Fail (MonadFail)
 #endif
 import Control.Monad.IO.Class              (MonadIO, liftIO)
-import Control.Monad.State.Class           (MonadState, get, modify)
+import Control.Monad.State.Class           (MonadState, get, modify, put)
 import Control.Monad.State.Strict          (evalStateT)
 import Data.Char                           (isSpace)
+import Data.Int                            (Int64)
 import Data.List
     ( dropWhileEnd
     , groupBy
@@ -35,6 +38,13 @@ import Data.List
 import Data.Maybe                          (mapMaybe)
 import Data.Text                           (Text)
 import Data.Void                           (Void)
+import Dhall.Bounded
+    ( Bound (..)
+    , WorkLimit (..)
+    , prettyBounded
+    , runLimited
+    , withAllocationLimit
+    )
 import Dhall.Import                        (hashExpressionToCode)
 import Dhall.Parser                        (Parser (..))
 import Dhall.Pretty                        (CharacterSet (..))
@@ -82,9 +92,25 @@ import qualified System.Console.Haskeline.MonadException
 
 type Repl = Repline.HaskelineT (State.StateT Env IO)
 
+-- | Resource limits from @dhall repl@ command-line flags.
+data ReplLimits = ReplLimits
+    { replMaxOutputSize     :: Maybe Int
+    , replMaxAllocation     :: Maybe Int64
+    , replMaxEvaluationTime :: Maybe Int
+    }
+
+-- | No limits (the default when flags are omitted).
+noReplLimits :: ReplLimits
+noReplLimits =
+    ReplLimits
+        { replMaxOutputSize = Nothing
+        , replMaxAllocation = Nothing
+        , replMaxEvaluationTime = Nothing
+        }
+
 -- | Implementation of the @dhall repl@ subcommand
-repl :: CharacterSet -> Bool -> IO ()
-repl characterSet explain =
+repl :: CharacterSet -> Bool -> ReplLimits -> IO ()
+repl characterSet explain limits =
     if explain then Dhall.detailed io else io
   where
     io =
@@ -99,7 +125,7 @@ repl characterSet explain =
             greeter
             finaliser
         )
-        (emptyEnv { characterSet, explain })
+        (emptyEnv { characterSet, explain, replLimits = limits })
 
     banner = pure . \case
       Repline.SingleLine -> turnstile <> " "
@@ -117,6 +143,7 @@ data Env = Env
   , explain          :: Bool
   , characterSet     :: CharacterSet
   , outputHandle     :: Maybe System.IO.Handle
+  , replLimits       :: ReplLimits
   }
 
 
@@ -129,6 +156,7 @@ emptyEnv =
     , explain = False
     , characterSet = Unicode
     , outputHandle = Just System.IO.stdout
+    , replLimits = noReplLimits
     }
 
 
@@ -156,6 +184,35 @@ parseAndLoad src = do
 
 eval :: ( MonadIO m, MonadState Env m ) => String -> m ()
 eval src = do
+  env <- get
+
+  case replMaxEvaluationTime (replLimits env) of
+    Nothing ->
+      evalUnlimited src
+
+    Just seconds -> do
+      outcome <-
+        liftIO
+          ( runLimited
+              (replMaxAllocation (replLimits env))
+              (Just (secondsToMicros seconds))
+              (State.runStateT (evalUnlimited src) env)
+          )
+
+      case outcome of
+        Left AllocationExceeded ->
+          writeOutputHandle
+            "Error: evaluation exceeded --max-allocation\n"
+
+        Left TimeExceeded ->
+          writeOutputHandle
+            "Error: evaluation exceeded --max-evaluation-time\n"
+
+        Right (_, newEnv) ->
+          put newEnv
+
+evalUnlimited :: ( MonadIO m, MonadState Env m ) => String -> m ()
+evalUnlimited src = do
   loaded <-
     parseAndLoad src
 
@@ -169,12 +226,15 @@ eval src = do
   let (ctx', expr) =
           Dhall.bindAlreadyChecked "it" exprType loaded (envContext env)
 
+  normalized <-
+    normalizeForOutput expr
+
   modify ( \e ->
     e { envIt = Just ( Binding expr exprType )
       , envContext = ctx'
       } )
 
-  output expr
+  output normalized
 
 
 
@@ -183,10 +243,24 @@ typeOf src = do
   loaded <-
     parseAndLoad src
 
-  exprType <-
-    typeCheck loaded
+  env <- get
 
-  output exprType
+  case replMaxOutputSize (replLimits env) of
+    Nothing -> do
+      exprType <-
+        typeCheck loaded
+
+      output exprType
+
+    Just nbytes -> do
+      let wrap = if explain env then Dhall.detailed else id
+
+      (exprType, quoteCut) <-
+        case Dhall.typeWithContextBounded nbytes (envContext env) loaded of
+          Left  e -> liftIO (wrap (throwIO e))
+          Right a -> return a
+
+      outputBounded nbytes quoteCut exprType
 
 
 normalize
@@ -197,6 +271,22 @@ normalize e = do
 
   return (Dhall.normalizeWithContext (envContext env) e)
 
+normalizeForOutput
+  :: MonadState Env m
+  => Dhall.Expr Dhall.Src Void -> m (Dhall.Expr Dhall.Src Void)
+normalizeForOutput e = do
+  env <- get
+
+  case replMaxOutputSize (replLimits env) of
+    Nothing ->
+      return (Dhall.normalizeWithContext (envContext env) e)
+
+    Just nbytes -> do
+      let (normalized, _cut) =
+              Dhall.normalizeWithContextBounded nbytes (envContext env) e
+
+      return normalized
+
 
 typeCheck
   :: ( MonadIO m, MonadState Env m )
@@ -206,9 +296,12 @@ typeCheck expression = do
 
   let wrap = if explain env then Dhall.detailed else id
 
-  case Dhall.typeWithContext (envContext env) expression of
-    Left  e -> liftIO ( wrap (throwIO e) )
-    Right a -> return a
+  let check =
+          case Dhall.typeWithContext (envContext env) expression of
+            Left  e -> wrap (throwIO e)
+            Right a -> return a
+
+  liftIO (withAllocationLimit (replMaxAllocation (replLimits env)) check)
 
 -- Split on the first '=' if there is any
 parseAssignment :: String -> Either String (String, String)
@@ -402,7 +495,7 @@ saveBinding (Right (file, src)) = do
 
   _ <- typeCheck loadedExpression
 
-  normalizedExpression <- normalize loadedExpression
+  normalizedExpression <- normalizeForOutput loadedExpression
 
   env <- get
 
@@ -653,12 +746,47 @@ outputWithoutSpacing
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
   => Dhall.Expr Src a -> m ()
 outputWithoutSpacing expr = do
+  Env { characterSet, outputHandle, replLimits = ReplLimits { replMaxOutputSize } } <- get
+
+  case replMaxOutputSize of
+    Nothing ->
+      renderExpr characterSet outputHandle expr
+
+    Just nbytes ->
+      outputBounded nbytes False expr
+
+outputBounded
+  :: (Pretty.Pretty a, MonadIO m, MonadState Env m)
+  => Int -> Bool -> Dhall.Expr Src a -> m ()
+outputBounded nbytes quoteCut expr = do
   Env { characterSet, outputHandle } <- get
 
+  let doc = Dhall.Pretty.prettyCharacterSet characterSet expr
+
+  case prettyBounded nbytes doc of
+    Truncated text -> do
+      writeOutputHandle text
+      writeOutputHandle "Error: output exceeded --max-output-size\n"
+
+    Complete _ ->
+      if quoteCut
+        then do
+            renderExpr characterSet outputHandle expr
+            writeOutputHandle "Error: output exceeded --max-output-size\n"
+        else
+            renderExpr characterSet outputHandle expr
+
+renderExpr
+  :: (Pretty.Pretty a, MonadIO m)
+  => CharacterSet -> Maybe System.IO.Handle -> Dhall.Expr Src a -> m ()
+renderExpr characterSet outputHandle expr =
   case outputHandle of
-    Nothing     -> pure ()
+    Nothing ->
+      pure ()
+
     Just handle -> do
-      let stream = Dhall.Pretty.layout (Dhall.Pretty.prettyCharacterSet characterSet expr)
+      let stream =
+              Dhall.Pretty.layout (Dhall.Pretty.prettyCharacterSet characterSet expr)
 
       supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
       let ansiStream =
@@ -667,4 +795,13 @@ outputWithoutSpacing expr = do
               else Pretty.unAnnotateS stream
 
       liftIO (Pretty.renderIO handle ansiStream)
-      liftIO (System.IO.hPutStrLn handle "") -- Pretty printing doesn't end with a new line
+      liftIO (System.IO.hPutStrLn handle "")
+
+secondsToMicros :: Int -> Int
+secondsToMicros seconds
+    | seconds <= 0 = 0
+    | otherwise =
+        let micros = toInteger seconds * 1000000
+        in if micros > toInteger (maxBound :: Int)
+            then maxBound
+            else fromInteger micros
