@@ -77,7 +77,7 @@ import Dhall.LSP.Backend.Typing
     , exprAt
     , scopedNormalize
     , typeAtExpr
-    , typeAtExprWithContext
+    , typeAtExprWithContextBounded
     )
 import Dhall.LSP.State
 
@@ -318,12 +318,12 @@ hoverFromExpr
     -> Maybe Hover
 hoverFromExpr maxOutputSize pos fromText current prefixNames prefixValues prefixCtxs expr =
     let ctx = resumeTypingContext prefixNames prefixValues prefixCtxs expr
-    in case typeAtExprWithContext ctx pos expr of
-        Right (Just src, typ)
+    in case typeAtExprWithContextBounded (Just maxOutputSize) ctx pos expr of
+        Right (Just src, typ, _)
             | let range_ = rangeFromDhall src
             , sliceInRange fromText range_ == sliceInRange current range_ ->
                 Just (typeToHover maxOutputSize (Just src) typ)
-        Right (Nothing, typ) ->
+        Right (Nothing, typ, _) ->
             Just (typeToHover maxOutputSize Nothing typ)
         _ ->
             Nothing
