@@ -68,9 +68,11 @@ import Dhall.LSP.Backend.Freezing
 import Dhall.LSP.Backend.Linting     (Suggestion (..), lint, suggest)
 import Dhall.LSP.Backend.Parsing     (binderExprFromText, namesBeingDefined)
 import Dhall.LSP.Backend.Prefix
-    ( resumeTypingContext
+    ( bindingValueKeys
+    , resumeTypingContext
     , topLevelPrefixLength
     , topLets
+    , valueSourceKey
     )
 import Dhall.LSP.Backend.Typing
     ( annotateLet
@@ -312,12 +314,14 @@ hoverFromExpr
     -> Text
     -> Text
     -> [Text]
+    -> [Text]
+    -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
     -> Expr Src Void
     -> Maybe Hover
-hoverFromExpr maxOutputSize pos fromText current prefixNames prefixValues prefixCtxs expr =
-    let ctx = resumeTypingContext prefixNames prefixValues prefixCtxs expr
+hoverFromExpr maxOutputSize pos fromText current prefixNames prevKeys currentKeys prefixValues prefixCtxs expr =
+    let ctx = resumeTypingContext prefixNames prevKeys currentKeys prefixValues prefixCtxs expr
     in case typeAtExprWithContextBounded (Just maxOutputSize) ctx pos expr of
         Right (Just src, typ, _)
             | let range_ = rangeFromDhall src
@@ -353,6 +357,8 @@ lastGoodTypeHover settings uri_ pos current = do
                                 good
                                 current
                                 (snapPrefixNames snap)
+                                (snapPrefixValueKeys snap)
+                                (bindingValueKeys good parsed)
                                 (snapPrefixValues snap)
                                 (snapPrefixContexts snap)
                         )
@@ -373,11 +379,12 @@ currentTypeHover settings uri_ pos current = do
             let prefix = case Map.lookup uri_ snaps of
                     Just snap ->
                         ( snapPrefixNames snap
+                        , snapPrefixValueKeys snap
                         , snapPrefixValues snap
                         , snapPrefixContexts snap
                         )
                     Nothing ->
-                        ([], [], [])
+                        ([], [], [], [])
             return
                 ( loaded
                     >>= hoverFromExpr
@@ -385,14 +392,17 @@ currentTypeHover settings uri_ pos current = do
                         pos
                         current
                         current
-                        (fst3 prefix)
-                        (snd3 prefix)
-                        (thd3 prefix)
+                        (fst4 prefix)
+                        (snd4 prefix)
+                        (bindingValueKeys current parsed)
+                        (thd4 prefix)
+                        (frth4 prefix)
                 )
   where
-    fst3 (a, _, _) = a
-    snd3 (_, b, _) = b
-    thd3 (_, _, c) = c
+    fst4 (a, _, _, _) = a
+    snd4 (_, b, _, _) = b
+    thd4 (_, _, c, _) = c
+    frth4 (_, _, _, d) = d
 
 hoverHandler :: EvaluateSettings -> Handlers HandlerM
 hoverHandler settings =
@@ -571,25 +581,34 @@ chainText chained = pretty (Import.chainedImport chained)
 typecheckCollected
     :: [Import.CollectedImportError]
     -> Expr Src Import.ImportHole
+    -> Text
+    -> Expr Src Import
+    -> [Text]
     -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
-    -> ([DhallError], [Text], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
-typecheckCollected collected expr prevNames prevValues prevCtxs
+    -> ([DhallError], [Text], [Text], [Core.Expr Void Void], [TypeCheck.TypingContext Src])
+typecheckCollected collected expr txt parsed prevNames prevKeys prevValues prevCtxs
     | any (\e -> isNothing (Import.collectedKnownType e)) collected =
-        ([], [], [], [])
+        ([], [], [], [], [])
     | any (not . (`Map.member` knownTypes)) (holesIn expr) =
-        ([], [], [], [])
+        ([], [], [], [], [])
     | otherwise =
         let erased = fillImportHoles collected expr
-            (errs, names, values, ctxs) =
+            currentKeys =
+                [ valueSourceKey txt value
+                | (_, _, value) <- fst (topLets erased)
+                ]
+            (errs, names, keys, values, ctxs) =
                 checkLets
                     prevNames
+                    prevKeys
+                    currentKeys
                     prevValues
                     prevCtxs
                     TypeCheck.emptyTypingContext
                     erased
-        in (map ErrorTypecheck errs, names, values, ctxs)
+        in (map ErrorTypecheck errs, names, keys, values, ctxs)
   where
     holesIn (Core.Embed hole) =
         [hole]
@@ -652,23 +671,27 @@ fillImportHoles collected expr =
 
 checkLets
     :: [Text]
+    -> [Text]
+    -> [Text]
     -> [Core.Expr Void Void]
     -> [TypeCheck.TypingContext Src]
     -> TypeCheck.TypingContext Src
     -> Expr Src Void
     -> ( [TypeCheck.TypeError Src Void]
        , [Text]
+       , [Text]
        , [Core.Expr Void Void]
        , [TypeCheck.TypingContext Src]
        )
-checkLets prevNames prevValues prevCtxs ctx0 expr =
+checkLets prevNames prevKeys currentKeys prevValues prevCtxs ctx0 expr =
     let (binds, rest) = topLets expr
-        prefixLen = topLevelPrefixLength prevNames prevValues binds
-        step (i, accCtx, accNames, accVals, accCtxs, accErrs, accFailed) (name, ann, value)
+        prefixLen = topLevelPrefixLength prevNames prevKeys currentKeys prevValues binds
+        step (i, accCtx, accNames, accKeys, accVals, accCtxs, accErrs, accFailed) ((name, ann, value), key)
             | i < prefixLen =
                 ( i + 1
                 , prevCtxs !! i
                 , name : accNames
+                , prevKeys !! i : accKeys
                 , prevValues !! i : accVals
                 , prevCtxs !! i : accCtxs
                 , accErrs
@@ -680,6 +703,7 @@ checkLets prevNames prevValues prevCtxs ctx0 expr =
                         ( i + 1
                         , ctx'
                         , name : accNames
+                        , key : accKeys
                         , (Core.denote value :: Core.Expr Void Void) : accVals
                         , ctx' : accCtxs
                         , accErrs
@@ -695,16 +719,19 @@ checkLets prevNames prevValues prevCtxs ctx0 expr =
                                         Left _ -> accCtx
                                 Nothing ->
                                     accCtx
-                        in (i + 1, ctx', accNames, accVals, accCtxs, err : accErrs, True)
-        (_, ctx, names, vals, ctxs, errs, failed) =
-            foldl step (0, ctx0, [], [], [], [], False) binds
+                        in (i + 1, ctx', accNames, accKeys, accVals, accCtxs, err : accErrs, True)
+        (_, ctx, names, keys, vals, ctxs, errs, failed) =
+            foldl
+                step
+                (0, ctx0, [], [], [], [], [], False)
+                (zip binds currentKeys)
         errs' =
             if failed
                 then errs
                 else case TypeCheck.typeWithContext ctx rest of
                     Left err -> err : errs
                     Right _ -> errs
-    in (reverse errs', reverse names, reverse vals, reverse ctxs)
+    in (reverse errs', reverse names, reverse keys, reverse vals, reverse ctxs)
 
 -- | Semantic diagnostics that survive a later parse error: their source
 --   slice is unchanged in the new text and ends before the parse error
@@ -779,10 +806,19 @@ diagnoseDocument settings _uri txt = do
               docs <- use documents
               previousSnap <- liftIO $ Map.lookup _uri <$> IORef.readIORef docs
               let prevNames = maybe [] snapPrefixNames previousSnap
+                  prevKeys = maybe [] snapPrefixValueKeys previousSnap
                   prevValues = maybe [] snapPrefixValues previousSnap
                   prevCtxs = maybe [] snapPrefixContexts previousSnap
-                  (typeErrs, prefixNames, prefixValues, prefixCtxs) =
-                      typecheckCollected collected resolved prevNames prevValues prevCtxs
+                  (typeErrs, prefixNames, prefixValueKeys, prefixValues, prefixCtxs) =
+                      typecheckCollected
+                          collected
+                          resolved
+                          txt
+                          parsed
+                          prevNames
+                          prevKeys
+                          prevValues
+                          prevCtxs
               liftIO $ IORef.modifyIORef' docs $ \m ->
                   let previous = Map.lookup _uri m
                       snap = DocSnap
@@ -791,6 +827,7 @@ diagnoseDocument settings _uri txt = do
                           , snapText = txt
                           , snapLastGood = Just txt
                           , snapPrefixNames = prefixNames
+                          , snapPrefixValueKeys = prefixValueKeys
                           , snapPrefixValues = prefixValues
                           , snapPrefixContexts = prefixCtxs
                           }
@@ -1647,6 +1684,7 @@ textDocumentChangeHandler settings =
                             , snapText = txt
                             , snapLastGood = snapLastGood =<< previous
                             , snapPrefixNames = maybe [] snapPrefixNames previous
+                            , snapPrefixValueKeys = maybe [] snapPrefixValueKeys previous
                             , snapPrefixValues = maybe [] snapPrefixValues previous
                             , snapPrefixContexts = maybe [] snapPrefixContexts previous
                             }

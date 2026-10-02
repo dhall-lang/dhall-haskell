@@ -129,6 +129,7 @@ data DocSnap = DocSnap
   --   A later edit reuses a prefix only while both the name and the value
   --   still match.
   , snapPrefixNames :: [Text]
+  , snapPrefixValueKeys :: [Text]
   , snapPrefixValues :: [Expr Void Void]
   , snapPrefixContexts :: [TypingContext Src]
   }
