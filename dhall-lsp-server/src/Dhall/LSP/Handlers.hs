@@ -78,7 +78,7 @@ import Dhall.LSP.Backend.Prefix
     , valueSourceKey
     )
 import Dhall.LSP.Backend.Typing
-    ( annotateLet
+    ( annotateLetExpr
     , exprAt
     , scopedNormalize
     , typeAtExpr
@@ -1051,15 +1051,36 @@ executeAnnotateLet settings request = do
       line_ = fromIntegral (args ^. position . line)
       col_ = fromIntegral (args ^. position . character)
 
-  expr <- loadFile settings uri_
-  (welltyped, _) <- case typecheck settings expr of
-    Left _ -> throwE (Warning, "Failed to annotate let binding; not well-typed.")
-    Right e -> return e
+  txt <- readUri uri_
+  expr <-
+      loadForTyping settings uri_
+          >>= maybe (throwE (Warning, "Failed to annotate let binding; not well-typed.")) return
+
+  docs <- use documents
+  snaps <- liftIO (IORef.readIORef docs)
+  let (prevNames, prevKeys, prevValues, prevCtxs) =
+          case Map.lookup uri_ snaps of
+              Just snap ->
+                  ( snapPrefixNames snap
+                  , snapPrefixValueKeys snap
+                  , snapPrefixValues snap
+                  , snapPrefixContexts snap
+                  )
+              Nothing ->
+                  ([], [], [], [])
+      ctx =
+          resumeTypingContext
+              prevNames
+              prevKeys
+              (bindingValueKeys txt expr)
+              prevValues
+              prevCtxs
+              expr
 
   ServerConfig{..} <- liftLSP LSP.getConfig
 
   (Src (SourcePos _ x1 y1) (SourcePos _ x2 y2) _, annotExpr)
-    <- case annotateLet (line_, col_) welltyped of
+    <- case annotateLetExpr (line_, col_) ctx expr of
       Right x -> return x
       Left msg -> throwE (Warning, Text.pack msg)
 

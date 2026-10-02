@@ -1,5 +1,6 @@
 module Dhall.LSP.Backend.Typing
     ( annotateLet
+    , annotateLetExpr
     , exprAt
     , normalizedAt
     , scopedNormalize
@@ -177,12 +178,19 @@ srcAt pos expr = do Note src _ <- exprAt pos expr
 --   (potentially replacing the existing one). If something goes wrong returns a
 --   textual error message.
 annotateLet :: Position -> WellTyped -> Either String (Src, Expr Src Void)
-annotateLet pos expr = do
-  expr' <- case splitMultiLetSrc (fromWellTyped expr) of
+annotateLet pos expr = annotateLetExpr pos emptyTypingContext (fromWellTyped expr)
+
+annotateLetExpr
+    :: Position
+    -> TypingContext Src
+    -> Expr Src Void
+    -> Either String (Src, Expr Src Void)
+annotateLetExpr pos ctx expr = do
+  expr' <- case splitMultiLetSrc expr of
              Just e -> return e
              Nothing -> Left "The impossible happened: failed to split let\
                               \ blocks when preprocessing for annotateLet'."
-  annotateLet' pos emptyTypingContext expr'
+  annotateLet' pos ctx expr'
 
 
 annotateLet' :: Position -> TypingContext Src -> Expr Src Void
