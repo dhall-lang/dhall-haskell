@@ -276,7 +276,7 @@ parseOptions =
     parseMaxAllocation =
         parseByteLimit
             "max-allocation"
-            "Stop evaluation after it allocates this many bytes (also applies to dhall repl)"
+            "Stop evaluation after it allocates this many bytes (also applies to dhall type and dhall repl)"
 
     parseMaxEvaluationTime =
         optional
@@ -285,7 +285,7 @@ parseOptions =
                 (   Options.Applicative.long "max-evaluation-time"
                 <>  Options.Applicative.metavar "SECONDS"
                 <>  Options.Applicative.help
-                        "Stop type-checking, normalization, and rendering after this many seconds (also applies to dhall repl)"
+                        "Stop type-checking, normalization, and rendering after this many seconds (also applies to dhall type and dhall repl)"
                 )
             )
 
@@ -1063,21 +1063,33 @@ command (Options {..}) = do
             (resolvedExpression, _, _) <-
                 resolve file semanticCacheMode expression
 
-            if quiet
-                then return ()
-                else case maxOutputSize of
+            let reportAllocation = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-allocation"
+                    Exit.exitFailure
+
+                reportTime = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-evaluation-time"
+                    Exit.exitFailure
+
+                inferType = case maxOutputSize of
                     Nothing -> do
                         inferredType <-
                             Dhall.Core.throws
                                 (Dhall.TypeCheck.typeOf resolvedExpression)
+                        return (inferredType, False)
+                    Just nbytes ->
+                        Dhall.Core.throws
+                            (Dhall.TypeCheck.typeWithContextBounded
+                                nbytes
+                                Dhall.TypeCheck.emptyTypingContext
+                                resolvedExpression)
+
+                printType (inferredType, quoteCut) = case maxOutputSize of
+                    Nothing ->
                         render System.IO.stdout characterSet inferredType
                     Just nbytes -> do
-                        (inferredType, quoteCut) <-
-                            Dhall.Core.throws
-                                (Dhall.TypeCheck.typeWithContextBounded
-                                    nbytes
-                                    Dhall.TypeCheck.emptyTypingContext
-                                    resolvedExpression)
                         let doc =
                                 Dhall.Pretty.prettyCharacterSet
                                     characterSet
@@ -1102,6 +1114,32 @@ command (Options {..}) = do
                                         System.IO.stdout
                                         characterSet
                                         inferredType
+
+                produce = do
+                    inferred <- inferType
+                    if quiet
+                        then return ()
+                        else printType inferred
+
+            case maxEvaluationTime of
+                Nothing ->
+                    case maxAllocation of
+                        Nothing ->
+                            produce
+                        Just _ -> do
+                            outcome <-
+                                runLimited maxAllocation Nothing produce
+                            case outcome of
+                                Left AllocationExceeded -> reportAllocation
+                                Left TimeExceeded -> reportTime
+                                Right () -> return ()
+                Just seconds -> do
+                    outcome <-
+                        runLimited maxAllocation (Just (secondsToMicros seconds)) produce
+                    case outcome of
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right () -> return ()
 
         Repl ->
             Dhall.Repl.repl
