@@ -113,6 +113,7 @@ module Dhall.Import (
     , loadWithShared
     , normalizeLoaded
     , normalizeLoadedCapped
+    , withoutImportBodies
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -687,7 +688,7 @@ chainImport (Chained parent) child =
 --   cache already.
 loadImport :: Chained -> StateT Status IO LoadResult
 loadImport import_ = do
-    Status { _cache, _importHoles, _sharedEvaluation } <- State.get
+    Status { _cache, _importHoles, _sharedEvaluation, _keepImportBodies } <- State.get
 
     case Dhall.Map.lookup import_ _importHoles of
         Just hole ->
@@ -709,7 +710,8 @@ loadImport import_ = do
                             zoom cache (State.modify (Dhall.Map.insert import_ sem))
                             when _sharedEvaluation $ do
                                 ref <- ensureImportRef import_
-                                rememberImportBody ref (retwin (Core.renote (importSemantics sem)))
+                                when _keepImportBodies $
+                                    rememberImportBody ref (retwin (Core.renote (importSemantics sem)))
                             return loaded
 
 -- | The reference used for this import in the shared evaluation environment.
@@ -731,12 +733,13 @@ ensureImportRef chained = do
 -- | Record the shared body unless a previous path already chose one.
 rememberImportBody :: ImportRef -> Expr Src ImportRef -> StateT Status IO ()
 rememberImportBody ref body = do
-    Status { _importBodies } <- State.get
+    Status { _importBodies, _keepImportBodies } <- State.get
     case Dhall.Map.lookup ref _importBodies of
         Just _ ->
             return ()
         Nothing ->
-            zoom importBodies (State.modify' (Dhall.Map.insert ref body))
+            when _keepImportBodies
+                (zoom importBodies (State.modify' (Dhall.Map.insert ref body)))
 
 -- | Record the twin, after substitutions, when this load will be evaluated
 --   through 'normalizeLoaded'.  A plain 'loadWith' skips this.
@@ -750,8 +753,15 @@ rememberSharedTwin chained twinExpr = do
 
 -- | Replace the shared body.  Hashed imports do this with the normal form.
 replaceImportBody :: ImportRef -> Expr Src ImportRef -> StateT Status IO ()
-replaceImportBody ref body =
-    zoom importBodies (State.modify' (Dhall.Map.insert ref body))
+replaceImportBody ref body = do
+    Status { _keepImportBodies } <- State.get
+    when _keepImportBodies
+        (zoom importBodies (State.modify' (Dhall.Map.insert ref body)))
+
+-- | Do not keep the shared import bodies.  'normalizeLoaded' cannot be used
+--   with the resulting 'Status'.
+withoutImportBodies :: Status -> Status
+withoutImportBodies status = status { _keepImportBodies = False }
 
 -- | Reuse an import-free expression as a twin.
 --
@@ -2382,7 +2392,7 @@ sharedEnvironment Status { _startingContext, _importBodies } = env
             Just value ->
                 value
             Nothing ->
-                error "sharedEnvironment: shared import has no body"
+                error "sharedEnvironment: shared import has no body (were import bodies dropped with 'withoutImportBodies'?)"
 
 -- | Resolve all imports within an expression
 --

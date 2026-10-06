@@ -233,6 +233,12 @@ data Status = Status
     , _importSources :: Map Chained ResolvedImportSource
     -- ^ Text and location captured when an import was actually fetched.
 
+    , _keepImportBodies :: Bool
+    -- ^ 'False' when the caller will not evaluate through 'normalizeLoaded'
+    --   (for example because it normalizes with a custom normalizer).
+    --   '_importBodies' then stays empty: it would hold a second copy of
+    --   every imported file's syntax.
+
     , _sharedEvaluation :: Bool
     -- ^ 'True' when the caller will evaluate through 'normalizeLoaded'.
     --   'loadWith' leaves this 'False' and does not build a second syntax tree.
@@ -334,6 +340,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _importHoles = Map.empty
 
     _importSources = Map.empty
+
+    _keepImportBodies = True
 
     _sharedEvaluation = False
 

@@ -290,6 +290,10 @@ resolveAndStatusWithSettings settings expression = do
 --
 --   The first expression is the fully inlined tree.  The second refers to each
 --   import by an 'ImportRef', and every use of an import is the same reference.
+--
+--   With a custom normalizer the returned 'Status' keeps no import bodies, so
+--   'Dhall.Import.normalizeLoaded' cannot evaluate the twin.  Normalize the
+--   inlined tree instead, as 'normalizeResolved' does.
 resolveSharedWithSettings
     :: InputSettings
     -> Expr Src Import
@@ -297,7 +301,14 @@ resolveSharedWithSettings
 resolveSharedWithSettings settings expression = do
     let InputSettings{..} = settings
 
-    let status = emptyStatusWithSettings _evaluateSettings _rootDirectory
+    -- With a custom normalizer, 'normalizeResolved' normalizes the inlined
+    -- tree, so the shared bodies would only be a second copy of every import.
+    let keepBodies = case view normalizer settings of
+            Nothing -> id
+            Just _  -> Dhall.Import.withoutImportBodies
+
+    let status =
+            keepBodies (emptyStatusWithSettings _evaluateSettings _rootDirectory)
 
     let expression' =
             Dhall.Substitution.substitute
