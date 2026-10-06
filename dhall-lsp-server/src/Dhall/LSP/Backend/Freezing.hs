@@ -7,6 +7,7 @@ module Dhall.LSP.Backend.Freezing (
 
 import Control.Lens                  (universeOf)
 import Data.Text                     (Text)
+import Data.Void                     (Void)
 import Dhall                         (EvaluateSettings)
 import Dhall.Core
     ( Expr (..)
@@ -18,11 +19,14 @@ import Dhall.LSP.Backend.Dhall
     ( Cache
     , DhallError
     , FileIdentifier
+    , asWellTyped
     , hashNormalToCode
     , load
+    , lookupCachedImport
     , normalize
-    , typecheck
     )
+
+import qualified Dhall.Core as Core
 import Dhall.LSP.Backend.Diagnostics
     ( Range (..)
     , positionFromMegaparsec
@@ -31,6 +35,7 @@ import Dhall.LSP.Backend.Diagnostics
     , subtractPosition
     )
 import Dhall.LSP.Backend.Parsing     (getImportHash)
+import Dhall.LSP.Backend.Prefix      (singleCodeImport)
 import Dhall.Parser                  (Src (..))
 
 
@@ -44,14 +49,37 @@ computeSemanticHash
     -> Expr Src Import
     -> Cache
     -> IO (Either DhallError (Cache, Text))
-computeSemanticHash settings fileid expr cache = do
-  loaded <- load settings fileid expr cache
-  case loaded of
-    Left err -> return (Left err)
-    Right (cache', expr') -> case typecheck settings expr' of
-      Left err -> return (Left err)
-      Right (wt,_) ->
-        return (Right (cache', hashNormalToCode (normalize settings wt)))
+computeSemanticHash settings fileid expr cache =
+    case hashCachedSingleImport settings fileid cache expr of
+        Just hash ->
+            return (Right (cache, hash))
+        Nothing -> do
+            loaded <- load settings fileid expr cache
+            case loaded of
+                Left err ->
+                    return (Left err)
+                Right (cache', expr') ->
+                    return
+                        (Right
+                            ( cache'
+                            , hashNormalToCode (normalize settings (asWellTyped expr'))
+                            ))
+
+-- | When the file is only a code import, reuse cached import semantics.
+hashCachedSingleImport
+    :: EvaluateSettings
+    -> FileIdentifier
+    -> Cache
+    -> Expr Src Import
+    -> Maybe Text
+hashCachedSingleImport settings fileid cache expr =
+    singleCodeImport expr >>= \ imp ->
+        lookupCachedImport fileid cache imp >>= \ (_, sem) ->
+            Just (hashVoidSemantics settings sem)
+
+hashVoidSemantics :: EvaluateSettings -> Expr Void Void -> Text
+hashVoidSemantics settings sem =
+    hashNormalToCode (normalize settings (asWellTyped (Core.renote sem)))
 
 stripHash :: Import -> Import
 stripHash (Import (ImportHashed _ importType) mode) =

@@ -1,10 +1,14 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Dhall.LSP.State where
 
 import Control.Exception                 (SomeException)
+import Control.Lens                     (use)
 import Control.Lens.TH                  (makeLenses)
+import Control.Monad.IO.Class           (MonadIO, liftIO)
+import Control.Monad.State.Class        (MonadState)
 import Control.Monad.Trans.Except       (ExceptT)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson
@@ -16,14 +20,14 @@ import Data.Aeson
     )
 import Data.Default                     (Default (def))
 import Data.Dynamic                     (Dynamic)
-import Data.IORef                       (IORef)
+import Data.IORef                       (IORef, modifyIORef', readIORef, writeIORef)
 import Data.Map.Strict                  (Map)
 import Data.Text                        (Text)
 import Data.Time.Clock                  (UTCTime)
 import Data.Void                        (Void)
 import Dhall.Core                       (Expr)
 import Dhall.Import                    (Chained, CollectedImportError)
-import Dhall.LSP.Backend.Dhall          (Cache, DhallError, emptyCache)
+import Dhall.LSP.Backend.Dhall          (Cache, DhallError)
 import Dhall.Parser                     (Src)
 import Dhall.Pretty                     (ChooseCharacterSet(..))
 import Dhall.TypeCheck                  (TypingContext)
@@ -78,7 +82,9 @@ instance FromJSON ServerConfig where
           <*> o .:? "maxOutputSize" .!= defaultOutputBytes
 
 data ServerState = ServerState
-  { _importCache :: Cache  -- ^ The dhall import cache
+  { _importCache :: IORef Cache
+  -- ^ Shared import cache.  An IORef so background diagnostics and request
+  --   handlers see the same graph after @textDocument/didChange@.
   , _errors :: IORef (Map J.Uri DocErrors)
   -- ^ Map from dhall files to their errors.  An IORef because didChange
   --   analysis runs in a background thread on a snapshot of the state; the
@@ -123,14 +129,32 @@ data DocSnap = DocSnap
   --   A later edit reuses a prefix only while both the name and the value
   --   still match.
   , snapPrefixNames :: [Text]
+  , snapPrefixValueKeys :: [Text]
   , snapPrefixValues :: [Expr Void Void]
   , snapPrefixContexts :: [TypingContext Src]
+  , snapResolved :: Maybe (Expr Src Void)
   }
 
 makeLenses ''ServerState
 
+readImportCache :: (MonadIO m, MonadState ServerState m) => m Cache
+readImportCache = do
+    ref <- use importCache
+    liftIO (readIORef ref)
+
+writeImportCache :: (MonadIO m, MonadState ServerState m) => Cache -> m ()
+writeImportCache cache' = do
+    ref <- use importCache
+    liftIO (writeIORef ref cache')
+
+modifyImportCache :: (MonadIO m, MonadState ServerState m) => (Cache -> Cache) -> m ()
+modifyImportCache f = do
+    ref <- use importCache
+    liftIO (modifyIORef' ref f)
+
 initialState
-    :: IORef (Map J.Uri DocErrors)
+    :: IORef Cache
+    -> IORef (Map J.Uri DocErrors)
     -> IORef (Map J.Uri DocSnap)
     -> IORef (Maybe (LanguageContextEnv ServerConfig))
     -> IORef (Map Text (UTCTime, SomeException))
@@ -138,7 +162,23 @@ initialState
     -> IORef (Map Text Chained)
     -> IORef (Map FilePath Chained)
     -> ServerState
-initialState _errors _documents _lspEnv _negativeImports _importBodies _importChains _mirrorOrigins = ServerState {..}
-  where
-    _importCache = emptyCache
-    _httpManager = Nothing
+initialState
+    importCacheRef
+    errorsRef
+    documentsRef
+    lspEnvRef
+    negativeImportsRef
+    importBodiesRef
+    importChainsRef
+    mirrorOriginsRef =
+    ServerState
+        { _importCache = importCacheRef
+        , _errors = errorsRef
+        , _documents = documentsRef
+        , _lspEnv = lspEnvRef
+        , _negativeImports = negativeImportsRef
+        , _importBodies = importBodiesRef
+        , _importChains = importChainsRef
+        , _mirrorOrigins = mirrorOriginsRef
+        , _httpManager = Nothing
+        }

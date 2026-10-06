@@ -283,7 +283,9 @@ completeProjections (CompletionContext context values) expr =
   in case typeWithA absurd context expr' of
       Left _ -> []
       Right _A ->
-        completionsFromNormal expr' (normalize _A)
+        -- Field and constructor names come from the type spine; full
+        -- normalization of large records is unnecessary here.
+        completionsFromNormal expr' (shallowDenote _A)
 
 -- | Fields of a record type, and constructors of a union type.
 --
